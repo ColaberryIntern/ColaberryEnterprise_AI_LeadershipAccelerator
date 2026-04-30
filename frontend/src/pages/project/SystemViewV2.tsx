@@ -784,6 +784,7 @@ function SystemViewV2Inner() {
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
   const [uiFeedback, setUiFeedback] = useState<any>(null);
   const [selectedPageIdx, setSelectedPageIdx] = useState(0);
+  const [showPreviewSettings, setShowPreviewSettings] = useState(false);
 
   // Page attachment state
   const [pageAttachments, setPageAttachmentsRaw] = useState<Record<string, UIPage[]>>(() => { try { return JSON.parse(localStorage.getItem('system_v2_page_attachments') || '{}'); } catch { return {}; } });
@@ -2984,7 +2985,9 @@ function SystemViewV2Inner() {
                     </div>
                   )}
 
-                  {/* Preview iframe — or settings panel when no URL is configured */}
+                  {/* Preview iframe — or "Open in new tab" surface when only the
+                      direct URL is set (localhost case) — or settings panel when
+                      neither URL is configured. */}
                   {previewUrl ? (
                     <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
                       <div className="d-flex align-items-center justify-content-between p-2" style={{ background: 'var(--color-bg-alt)', borderBottom: '1px solid var(--color-border)' }}>
@@ -3000,6 +3003,34 @@ function SystemViewV2Inner() {
                         </div>
                       </div>
                       <iframe key={`preview-${safeIdx}`} src={previewUrl} title="Page Preview" style={{ width: '100%', height: 500, border: 'none', background: '#fff' }} sandbox="allow-scripts allow-same-origin allow-forms" />
+                    </div>
+                  ) : compDetail?.direct_preview_url ? (
+                    <div className="mb-3 p-4 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff, #ede9fe)', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+                      <i className="bi bi-box-arrow-up-right d-block mb-2" style={{ fontSize: 28, color: '#3b82f6' }}></i>
+                      <h6 className="fw-bold mb-1" style={{ fontSize: 13 }}>Preview ready in a new tab</h6>
+                      <p className="text-muted mb-3" style={{ fontSize: 11 }}>
+                        Iframe preview isn't set (your URL is localhost or doesn't allow framing). Open in a new tab to see the page.
+                      </p>
+                      <a href={compDetail.direct_preview_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ fontSize: 12 }}>
+                        <i className="bi bi-box-arrow-up-right me-1"></i>Open {compDetail.direct_preview_url}
+                      </a>
+                      <div className="mt-3" style={{ fontSize: 10, color: '#64748b' }}>
+                        Want it embedded inline?{' '}
+                        <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10 }} onClick={() => setShowPreviewSettings(true)}>
+                          Set an HTTPS preview URL
+                        </button>
+                      </div>
+                      {showPreviewSettings && (
+                        <div className="mt-3 text-start">
+                          <PreviewUrlPanel
+                            bpName={selectedComponent.name}
+                            route={(currentPage?.route as string) || ''}
+                            currentBase={compDetail?.preview_base_url || ''}
+                            currentDirect={compDetail?.direct_preview_base_url || ''}
+                            onSaved={() => { setShowPreviewSettings(false); loadData(); }}
+                          />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <PreviewUrlPanel
@@ -3983,56 +4014,74 @@ function PreviewUrlPanel({ bpName, route, currentBase, currentDirect, onSaved }:
     <div className="mb-3 p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
       <div className="d-flex align-items-center gap-2 mb-2">
         <i className="bi bi-display" style={{ color: '#3b82f6', fontSize: 16 }}></i>
-        <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}>Configure live preview for {bpName}</h6>
+        <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}>Configure preview for {bpName}</h6>
       </div>
       <p className="text-muted mb-3" style={{ fontSize: 11, lineHeight: 1.5 }}>
-        Tell the portal where your app is running so it can embed{route ? <> <code style={{ fontSize: 10 }}>{route}</code></> : ' your pages'} in an iframe and let you click around the real UI.
+        Tell the portal where your app is running so it can show{route ? <> <code style={{ fontSize: 10 }}>{route}</code></> : ' your pages'}. Pick the option that fits how your app is currently deployed.
       </p>
+
+      {/* Three-option guide */}
+      <div className="mb-3 p-2" style={{ background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 11 }}>
+        <div className="fw-semibold mb-2" style={{ fontSize: 11 }}>Three ways to set this up</div>
+        <ol className="mb-0 ps-3" style={{ fontSize: 11, lineHeight: 1.6 }}>
+          <li className="mb-2">
+            <strong>Quick — localhost only:</strong> leave the iframe URL blank, set Direct URL to{' '}
+            <code style={{ fontSize: 10 }}>http://localhost:5173</code> (or whatever port your dev server runs on). The "Open in new tab" button works; iframe stays blank because browsers block localhost from being embedded by an HTTPS site.
+          </li>
+          <li className="mb-2">
+            <strong>Real iframe — deploy frontend to Vercel:</strong> import your repo at <a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer">vercel.com/new</a>, set <code>frontend/</code> as Root Directory, deploy. Use the <code>https://*.vercel.app</code> URL it gives you for both fields. Iframe will render, but API calls will 404 unless the backend is deployed too.
+          </li>
+          <li>
+            <strong>Full working preview:</strong> deploy frontend (Vercel), backend (Railway / Render / Fly.io), database (Supabase / Neon). Set <code>VITE_API_BASE_URL</code> in Vercel to your deployed API. Most work, but the page actually functions end-to-end.
+          </li>
+        </ol>
+      </div>
 
       <div className="mb-3">
         <label className="form-label fw-medium mb-1" style={{ fontSize: 11 }}>
-          Iframe preview base URL <span className="text-muted">(for embedded preview)</span>
+          Iframe preview base URL <span className="text-muted">(option 2 / 3 — leave blank for option 1)</span>
         </label>
         <input
           type="text"
           className="form-control form-control-sm"
-          placeholder="https://my-app.vercel.app   or   https://staging.example.com"
+          placeholder="https://your-app.vercel.app"
           value={base}
           onChange={e => setBase(e.target.value)}
           style={{ fontFamily: 'monospace', fontSize: 11 }}
         />
         <div className="text-muted mt-1" style={{ fontSize: 10 }}>
-          Must be HTTPS and allow framing (no <code>X-Frame-Options: DENY</code>). Vercel previews and most public deploys work; <code>localhost</code> won't render in the iframe.
+          Must be HTTPS and not block framing. <code>localhost</code> won't render here — use the Direct URL field below for that.
         </div>
       </div>
 
       <div className="mb-3">
         <label className="form-label fw-medium mb-1" style={{ fontSize: 11 }}>
-          Direct URL <span className="text-muted">(for "Open in new tab")</span>
+          Direct URL <span className="text-muted">(any URL — used for "Open in new tab")</span>
         </label>
         <input
           type="text"
           className="form-control form-control-sm"
-          placeholder="http://localhost:3000   or   any URL you can reach in a browser"
+          placeholder="http://localhost:5173"
           value={direct}
           onChange={e => setDirect(e.target.value)}
           style={{ fontFamily: 'monospace', fontSize: 11 }}
         />
         <div className="text-muted mt-1" style={{ fontSize: 10 }}>
-          Used for the "Open in new tab" button so localhost/HTTP servers still work — just opens in your browser, no iframe restrictions.
+          Anything that opens in a browser works here — localhost, ngrok tunnels, Vercel URLs. No iframe restrictions because it just opens in a new tab.
         </div>
       </div>
 
       {previewExample && (
         <div className="mb-3 p-2" style={{ background: '#f1f5f9', borderRadius: 6, fontSize: 10, fontFamily: 'monospace' }}>
-          <span className="text-muted">Preview will load:</span> <strong>{previewExample}</strong>
+          <span className="text-muted">Iframe will load:</span> <strong>{previewExample}</strong>
         </div>
       )}
 
       <div className="d-flex gap-2 align-items-center">
         <button className="btn btn-primary btn-sm" disabled={saving} onClick={save}>
-          {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving…</> : 'Save preview URLs'}
+          {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving…</> : 'Save'}
         </button>
+        <span className="text-muted" style={{ fontSize: 10 }}>You can leave either field blank.</span>
         {error && <span className="text-danger" style={{ fontSize: 11 }}>{error}</span>}
       </div>
     </div>
