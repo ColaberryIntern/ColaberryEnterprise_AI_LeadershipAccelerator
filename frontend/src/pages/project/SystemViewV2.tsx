@@ -2984,15 +2984,31 @@ function SystemViewV2Inner() {
                     </div>
                   )}
 
-                  {/* Preview iframe */}
+                  {/* Preview iframe — or settings panel when no URL is configured */}
                   {previewUrl ? (
                     <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                      <div className="d-flex align-items-center justify-content-between p-2" style={{ background: 'var(--color-bg-alt)', borderBottom: '1px solid var(--color-border)' }}>
+                        <span className="text-muted" style={{ fontSize: 10, fontFamily: 'monospace' }}>
+                          <i className="bi bi-globe me-1"></i>{previewUrl}
+                        </span>
+                        <div className="d-flex gap-2">
+                          {compDetail?.direct_preview_url && (
+                            <a href={compDetail.direct_preview_url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }}>
+                              <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
+                            </a>
+                          )}
+                        </div>
+                      </div>
                       <iframe key={`preview-${safeIdx}`} src={previewUrl} title="Page Preview" style={{ width: '100%', height: 500, border: 'none', background: '#fff' }} sandbox="allow-scripts allow-same-origin allow-forms" />
                     </div>
                   ) : (
-                    <div className="mb-3 p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
-                      <p className="text-muted small mb-0">Preview not available for this page.</p>
-                    </div>
+                    <PreviewUrlPanel
+                      bpName={selectedComponent.name}
+                      route={(currentPage?.route as string) || ''}
+                      currentBase={compDetail?.preview_base_url || ''}
+                      currentDirect={compDetail?.direct_preview_base_url || ''}
+                      onSaved={() => loadData()}
+                    />
                   )}
 
                   {/* When all 3 steps have run, the primary surface flips to a
@@ -3921,6 +3937,104 @@ function UIRoutePicker({ bpId, bpName, onConnected }: { bpId: string; bpName: st
           {error && <div className="alert alert-danger py-2" style={{ fontSize: 12 }}>{error}</div>}
         </>
       )}
+    </div>
+  );
+}
+
+// Preview URL settings panel shown on the UI tab when the BP has a
+// route attached but no preview URL is configured for the project.
+// Lets the user set both the iframe-embeddable base URL and a direct
+// URL for "Open in new tab" (which bypasses iframe restrictions like
+// X-Frame-Options and mixed-content blocking).
+function PreviewUrlPanel({ bpName, route, currentBase, currentDirect, onSaved }: {
+  bpName: string;
+  route: string;
+  currentBase: string;
+  currentDirect: string;
+  onSaved: () => void;
+}) {
+  const [base, setBase] = React.useState(currentBase);
+  const [direct, setDirect] = React.useState(currentDirect);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => { setBase(currentBase); }, [currentBase]);
+  React.useEffect(() => { setDirect(currentDirect); }, [currentDirect]);
+
+  const save = async () => {
+    setSaving(true); setError(null);
+    try {
+      // Both endpoints accept blanks (clears the value).
+      await Promise.all([
+        portalApi.put('/api/portal/project/preview-url', { url: base.trim() }),
+        portalApi.put('/api/portal/project/settings', { direct_preview_url: direct.trim() || null }),
+      ]);
+      onSaved();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const previewExample = base && route ? base.replace(/\/$/, '') + route : '';
+
+  return (
+    <div className="mb-3 p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <i className="bi bi-display" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+        <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}>Configure live preview for {bpName}</h6>
+      </div>
+      <p className="text-muted mb-3" style={{ fontSize: 11, lineHeight: 1.5 }}>
+        Tell the portal where your app is running so it can embed{route ? <> <code style={{ fontSize: 10 }}>{route}</code></> : ' your pages'} in an iframe and let you click around the real UI.
+      </p>
+
+      <div className="mb-3">
+        <label className="form-label fw-medium mb-1" style={{ fontSize: 11 }}>
+          Iframe preview base URL <span className="text-muted">(for embedded preview)</span>
+        </label>
+        <input
+          type="text"
+          className="form-control form-control-sm"
+          placeholder="https://my-app.vercel.app   or   https://staging.example.com"
+          value={base}
+          onChange={e => setBase(e.target.value)}
+          style={{ fontFamily: 'monospace', fontSize: 11 }}
+        />
+        <div className="text-muted mt-1" style={{ fontSize: 10 }}>
+          Must be HTTPS and allow framing (no <code>X-Frame-Options: DENY</code>). Vercel previews and most public deploys work; <code>localhost</code> won't render in the iframe.
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <label className="form-label fw-medium mb-1" style={{ fontSize: 11 }}>
+          Direct URL <span className="text-muted">(for "Open in new tab")</span>
+        </label>
+        <input
+          type="text"
+          className="form-control form-control-sm"
+          placeholder="http://localhost:3000   or   any URL you can reach in a browser"
+          value={direct}
+          onChange={e => setDirect(e.target.value)}
+          style={{ fontFamily: 'monospace', fontSize: 11 }}
+        />
+        <div className="text-muted mt-1" style={{ fontSize: 10 }}>
+          Used for the "Open in new tab" button so localhost/HTTP servers still work — just opens in your browser, no iframe restrictions.
+        </div>
+      </div>
+
+      {previewExample && (
+        <div className="mb-3 p-2" style={{ background: '#f1f5f9', borderRadius: 6, fontSize: 10, fontFamily: 'monospace' }}>
+          <span className="text-muted">Preview will load:</span> <strong>{previewExample}</strong>
+        </div>
+      )}
+
+      <div className="d-flex gap-2 align-items-center">
+        <button className="btn btn-primary btn-sm" disabled={saving} onClick={save}>
+          {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving…</> : 'Save preview URLs'}
+        </button>
+        {error && <span className="text-danger" style={{ fontSize: 11 }}>{error}</span>}
+      </div>
     </div>
   );
 }

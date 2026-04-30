@@ -2957,6 +2957,10 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
         const route = capModel?.frontend_route || '';
         return directBase.replace(/\/$/, '') + route;
       })(),
+      // Base URLs (without route appended) — surfaced so the UI tab can
+      // show what's currently configured and let the user edit them.
+      preview_base_url: (project as any).portfolio_url || null,
+      direct_preview_base_url: projectVars.direct_preview_url || null,
       project_system_prompt: projectVars.system_prompt || '',
       hitl_config: capModel?.hitl_config || null,
       autonomy_level: capModel?.autonomy_level || 'manual',
