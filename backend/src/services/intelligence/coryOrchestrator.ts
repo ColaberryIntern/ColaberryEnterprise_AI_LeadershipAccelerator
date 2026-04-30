@@ -507,7 +507,20 @@ export function getTopTasks(enriched: any, projectMode: string): CoryTask[] {
 export function isFreshProject(enrichedCapabilities: any[]): boolean {
   const real = enrichedCapabilities.filter(c => !isSyntheticBucket(c) && !isInactive(c));
   if (real.length === 0) return true;
-  return real.every(c => !c.last_execution || Object.keys(c.last_execution || {}).length === 0);
+  // A capability counts as "executed" only after the user has pasted a
+  // validation report that verified the promised files. Clicking
+  // "Generate Build Prompt" alone stamps last_execution.status='pending'
+  // — that's a pre-sync placeholder, not a real execution. Only treat
+  // 'complete' and 'verified' as confirmation that work was synced.
+  // Same for completed_steps: only count if the parent execution was
+  // actually verified.
+  return real.every(c => {
+    const le = c.last_execution;
+    if (!le) return true;
+    const status = le.status;
+    if (status === 'complete' || status === 'verified') return false;
+    return true;
+  });
 }
 
 export function buildKickoffTask(): CoryTask {
