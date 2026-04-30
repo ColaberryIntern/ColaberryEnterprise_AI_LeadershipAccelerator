@@ -22,7 +22,7 @@ import ProjectModeSelector from '../../components/project/ProjectModeSelector';
 interface UIPage {
   name: string;
   route: string;
-  source: 'mapped' | 'discovered';
+  source: 'mapped' | 'discovered' | 'pending';
   verified: boolean;
   confidence: number; // 0-100
   bpId: string;
@@ -144,6 +144,11 @@ function transformBPs(bps: any[]): SystemComponent[] {
           agent: u.agent || 'missing',
         },
         ui: {
+          // When a frontend_route is set, surface it as a connected page.
+          // When NOT set but the BP has linked frontend components from a
+          // validation report, surface a placeholder page so the UI tab
+          // still shows up — the user can pick a route from there to
+          // connect, instead of having to bounce back to Define Component.
           pages: bp.frontend_route ? [{
             name: bp.name,
             route: bp.frontend_route,
@@ -151,7 +156,14 @@ function transformBPs(bps: any[]): SystemComponent[] {
             verified: true,
             confidence: 100,
             bpId: bp.id,
-          }] : [],
+          }] : ((bp.linked_frontend_components || []).length > 0 ? [{
+            name: bp.name,
+            route: '',                    // empty route — picker will fill it
+            source: 'pending' as const,   // signals "needs route picked"
+            verified: false,
+            confidence: 0,
+            bpId: bp.id,
+          }] : []),
         },
         userStatus: (bp.user_status || 'in_progress') as 'in_progress' | 'verified' | 'archived',
       };
@@ -2910,6 +2922,14 @@ function SystemViewV2Inner() {
               {workTab === 'ui' && selectedComponent.ui.pages.length > 0 && (() => {
                 const pages = selectedComponent.ui.pages;
                 const safeIdx = Math.min(selectedPageIdx, pages.length - 1);
+                const currentPage = pages[safeIdx];
+                // Pending = BP has linked frontend files but no route is attached yet.
+                // Render a route picker instead of the analysis surface — once the
+                // user picks a route, the page becomes 'mapped' and the rest of the
+                // UI tab works normally.
+                if (currentPage && currentPage.source === 'pending') {
+                  return <UIRoutePicker bpId={selectedComponent.id} bpName={selectedComponent.name} onConnected={() => loadData()} />;
+                }
                 const previewUrl = compDetail?.preview_url || undefined;
                 type UIActionKey = 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
                 const uiActions: Array<{ key: UIActionKey; title: string; explanation: string; feedback: string }> = [
@@ -3765,6 +3785,129 @@ function SystemViewV2Inner() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Route picker shown on the UI tab when a BP has linked frontend
+// components but no frontend_route attached yet. Calls
+// /route-candidates to suggest routes derived from the repo's
+// router config, lets the user pick or type a custom route, then
+// hits /connect-page to attach it.
+function UIRoutePicker({ bpId, bpName, onConnected }: { bpId: string; bpName: string; onConnected: () => void }) {
+  const [candidates, setCandidates] = React.useState<Array<{ route: string; confidence: number; source: string; via: string; from_file: string }>>([]);
+  const [pages, setPages] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [customRoute, setCustomRoute] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await portalApi.get(`/api/portal/project/business-processes/${bpId}/route-candidates`);
+        if (cancelled) return;
+        setCandidates(res.data?.candidates || []);
+        setPages(res.data?.pages || []);
+      } catch {
+        if (!cancelled) setError('Could not load route candidates from the repo.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [bpId]);
+
+  const connect = async (route: string) => {
+    if (!route.trim()) return;
+    setSaving(true); setError(null);
+    try {
+      await portalApi.put(`/api/portal/project/business-processes/${bpId}/connect-page`, { route: route.trim() });
+      onConnected();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to connect route');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="d-flex align-items-center gap-2 mb-3">
+        <i className="bi bi-link-45deg" style={{ color: '#10b981', fontSize: 16 }}></i>
+        <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#059669' }}>Connect a route to {bpName}</h6>
+      </div>
+
+      <div className="alert alert-info py-2 mb-3" style={{ fontSize: 12 }}>
+        <i className="bi bi-info-circle me-1"></i>
+        This BP has frontend code linked but no route attached. Pick the URL where this UI lives so the visual review and iframe preview can open.
+      </div>
+
+      {pages.length > 0 && (
+        <div className="mb-3" style={{ fontSize: 11, color: '#64748b' }}>
+          Frontend files linked to this BP:
+          <ul className="mb-0 mt-1 ps-3" style={{ fontFamily: 'monospace', fontSize: 10 }}>
+            {pages.map((p, i) => <li key={i}>{p}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-3" style={{ fontSize: 12 }}><span className="spinner-border spinner-border-sm me-2"></span>Scanning your router config…</div>
+      ) : (
+        <>
+          {candidates.length > 0 ? (
+            <div className="mb-3">
+              <div className="fw-semibold mb-2" style={{ fontSize: 12 }}>Suggested routes from your router</div>
+              <div className="d-flex flex-column gap-2">
+                {candidates.map((c, i) => (
+                  <button
+                    key={c.route + i}
+                    className="btn btn-outline-primary text-start p-3"
+                    style={{ fontSize: 12, borderRadius: 8 }}
+                    disabled={saving}
+                    onClick={() => connect(c.route)}
+                  >
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="badge" style={{ background: c.confidence >= 0.9 ? '#10b98120' : '#f59e0b20', color: c.confidence >= 0.9 ? '#059669' : '#92400e', fontSize: 9 }}>
+                        {Math.round(c.confidence * 100)}%
+                      </span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{c.route}</span>
+                      <span className="text-muted ms-auto" style={{ fontSize: 10 }}>{c.via} · {c.source.split('/').pop()}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="alert alert-warning py-2 mb-3" style={{ fontSize: 12 }}>
+              <i className="bi bi-exclamation-triangle me-1"></i>
+              We couldn't find this page in your router config. Pick the route manually below.
+            </div>
+          )}
+
+          <div className="mb-3">
+            <div className="fw-semibold mb-2" style={{ fontSize: 12 }}>Or type a custom route</div>
+            <div className="d-flex gap-2">
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                placeholder="/your/route"
+                value={customRoute}
+                onChange={e => setCustomRoute(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <button className="btn btn-primary btn-sm" disabled={!customRoute.trim() || saving} onClick={() => connect(customRoute)}>
+                {saving ? <span className="spinner-border spinner-border-sm"></span> : 'Connect'}
+              </button>
+            </div>
+          </div>
+
+          {error && <div className="alert alert-danger py-2" style={{ fontSize: 12 }}>{error}</div>}
+        </>
       )}
     </div>
   );

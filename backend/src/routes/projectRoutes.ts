@@ -3242,7 +3242,7 @@ router.post('/api/portal/project/business-processes/:id/validation-report', requ
     }
     const { parseValidationReport, applyReportToBP } = await import('../services/validationReportParser');
     const parsed = parseValidationReport(reportText);
-    const result = await applyReportToBP(req.params.id as string, parsed, commitSha);
+    const result = await applyReportToBP(req.params.id as string, parsed, commitSha, req.participant!.sub);
     // Re-enrich BP to get updated metrics
     const { getCapabilityHierarchy } = await import('../services/projectScopeService');
     const hierarchy = await getCapabilityHierarchy(project.id);
@@ -4873,6 +4873,38 @@ router.post('/api/portal/project/discover-pages', requireParticipant, async (req
 // Stamps ui_element_map.user_defined_at so the orchestrator stops treating
 // this Page BP as "unmapped / doesn't exist yet" — until this stamp lands,
 // auto-discovered Page BPs don't surface as Cory recommendations.
+// Return candidate routes for a BP based on its linked frontend
+// components. Used by the UI tab's route picker when a BP has frontend
+// code but no route attached yet — instead of forcing the user back
+// to Define Component, we surface the candidates inline.
+router.get('/api/portal/project/business-processes/:id/route-candidates', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const linked: string[] = (cap as any).linked_frontend_components || [];
+    if (linked.length === 0) { res.json({ candidates: [], pages: [] }); return; }
+    const { detectRouteCandidates } = await import('../services/routeDetectionService');
+    const all: Array<{ route: string; confidence: number; source: string; via: string; from_file: string }> = [];
+    for (const f of linked.slice(0, 10)) {
+      const cands = await detectRouteCandidates(req.participant!.sub, f);
+      for (const c of cands) all.push({ ...c, from_file: f });
+    }
+    // Dedup by route, keep highest confidence
+    const byRoute = new Map<string, typeof all[number]>();
+    for (const c of all) {
+      const ex = byRoute.get(c.route);
+      if (!ex || ex.confidence < c.confidence) byRoute.set(c.route, c);
+    }
+    res.json({
+      candidates: [...byRoute.values()].sort((a, b) => b.confidence - a.confidence),
+      pages: linked,
+    });
+  } catch (err: any) {
+    console.error('[route-candidates]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.put('/api/portal/project/business-processes/:id/connect-page', requireParticipant, async (req: Request, res: Response) => {
   try {
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);

@@ -170,10 +170,13 @@ export async function applyReportToBP(
   capabilityId: string,
   report: ParsedReport,
   commitSha?: string,
+  enrollmentId?: string,
 ): Promise<{
   requirementsVerified: number;
   requirementsTotal: number;
   duplicatesDetected: string[];
+  detectedRoute?: string | null;
+  routeCandidates?: Array<{ route: string; confidence: number; source: string }>;
 }> {
   const allFiles = [...report.filesCreated, ...report.filesModified];
   const allEvidence = [...allFiles, ...report.routes, ...report.database];
@@ -266,9 +269,51 @@ export async function applyReportToBP(
     await cap.save();
   }
 
+  // Auto-detect frontend_route. When the report includes new frontend
+  // pages and the cap doesn't already have a route, scan the repo's
+  // router config for a path that maps to one of those pages. If we
+  // find a high-confidence match, set frontend_route directly so the
+  // UI tab + iframe preview unlock without the user opening Define
+  // Component. If multiple candidates exist or confidence is low,
+  // return them as candidates so the frontend can prompt the user.
+  let detectedRoute: string | null = null;
+  let routeCandidates: Array<{ route: string; confidence: number; source: string }> = [];
+  if (enrollmentId && cap && frontendFiles.length > 0 && !(cap as any).frontend_route) {
+    try {
+      const { detectRouteCandidates } = await import('./routeDetectionService');
+      // Try each frontend file; keep the highest-confidence candidate seen.
+      const allCandidates: Array<{ route: string; confidence: number; source: string }> = [];
+      for (const f of frontendFiles.slice(0, 5)) {
+        const cands = await detectRouteCandidates(enrollmentId, f);
+        for (const c of cands) allCandidates.push({ route: c.route, confidence: c.confidence, source: c.source });
+      }
+      // Dedup by route, keep highest confidence
+      const byRoute = new Map<string, { route: string; confidence: number; source: string }>();
+      for (const c of allCandidates) {
+        const ex = byRoute.get(c.route);
+        if (!ex || ex.confidence < c.confidence) byRoute.set(c.route, c);
+      }
+      routeCandidates = [...byRoute.values()].sort((a, b) => b.confidence - a.confidence);
+
+      // If the top candidate is high-confidence and unique, auto-set it.
+      const top = routeCandidates[0];
+      const second = routeCandidates[1];
+      if (top && top.confidence >= 0.9 && (!second || top.confidence - second.confidence >= 0.1)) {
+        (cap as any).frontend_route = top.route;
+        (cap as any).changed('frontend_route', true);
+        await cap.save();
+        detectedRoute = top.route;
+      }
+    } catch (err: any) {
+      console.warn('[applyReportToBP] route detection failed:', err?.message);
+    }
+  }
+
   return {
     requirementsVerified: verified,
     requirementsTotal: reqs.length,
     duplicatesDetected: report.duplicatesNoted,
+    detectedRoute,
+    routeCandidates,
   };
 }
