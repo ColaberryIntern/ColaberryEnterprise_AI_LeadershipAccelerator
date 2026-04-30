@@ -521,40 +521,88 @@ router.post('/api/portal/project/requirements/expand-questions', requireParticip
     const { idea } = req.body;
     if (!idea || idea.trim().length < 20) { res.status(400).json({ error: 'Idea must be at least 20 characters' }); return; }
 
+    // Nine-phase AI System Discovery Framework. Each phase is a
+    // dimension of system sophistication with three progressive
+    // levels (A=baseline, B=intermediate, C=advanced). The labels
+    // and descriptions are tailored by the LLM to the user's idea
+    // so the choices feel domain-specific instead of abstract.
+    const PHASES = [
+      { phase: 'control',         category: 'Control Model',          axis: 'Who makes decisions — does AI recommend, assist, or execute?' },
+      { phase: 'intelligence',    category: 'Intelligence Depth',     axis: 'How smart is the system — rules-based, adaptive, or self-learning?' },
+      { phase: 'data',            category: 'Data Scope',             axis: 'What does the system see — internal data only, external signals, or a full ecosystem?' },
+      { phase: 'decision',        category: 'Decision Complexity',    axis: 'Thinking depth — basic decisions, multi-variable optimization, or scenario simulation?' },
+      { phase: 'execution',       category: 'Execution Level',        axis: 'Action capability — suggest, trigger workflows, or fully automate?' },
+      { phase: 'agents',          category: 'Agent Structure',        axis: 'How many AI roles — single AI, multiple agents, or a full AI org?' },
+      { phase: 'governance',      category: 'Governance & Trust',     axis: 'Enterprise readiness — basic logs, full auditability, or compliance + explainability?' },
+      { phase: 'strategy',        category: 'Strategy Layer',         axis: 'Reach — operational only, strategic insights, or long-term planning?' },
+      { phase: 'differentiators', category: 'Differentiators',        axis: 'Moat — none yet, simulation/digital twin, or proprietary models?' },
+    ];
+
     const { default: OpenAI } = await import('openai');
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You generate expansion questions for a software system idea. Output ONLY a JSON array of objects with "text" and "category" fields. Each question should be a capability the system COULD have, phrased to complete the sentence "Would you like your system to be able to...". Make questions SPECIFIC to the idea — never generic.' },
-        { role: 'user', content: `Generate 10 expansion questions for this project idea. Each question must be directly derived from what the user described — expand their vision, not replace it.
-
-USER'S IDEA:
+        { role: 'system', content: 'You design multiple-choice discovery questions for a software system idea using the AI System Discovery Framework. For each of the 9 phases provided, write ONE question tailored to the user\'s idea, with THREE options labeled A (baseline), B (intermediate), C (advanced). Each option teaches the user what that level looks like for THEIR project — not abstract definitions. Output strict JSON only.' },
+        { role: 'user', content: `USER'S IDEA:
 ${idea.trim()}
 
-Return JSON array: [{"text": "question text completing 'Would you like your system to be able to...'", "category": "relevant category"}]
+For each phase below, generate one question and three options that are SPECIFIC to the user's idea. The options should teach the user the spectrum of sophistication for that dimension as it applies to their domain.
 
-Examples of GOOD questions for a "utility analytics dashboard":
-- "aggregate data from multiple utility providers in real-time?" (category: "Data Integration")
-- "detect consumption anomalies and alert operators automatically?" (category: "Anomaly Detection")
-- "generate automated reports for regulatory compliance?" (category: "Compliance")
+PHASES:
+${PHASES.map((p, i) => `${i + 1}. ${p.category} — ${p.axis}`).join('\n')}
 
-Examples of BAD (too generic) questions:
-- "predict user behavior?" — too vague
-- "integrate with third-party services?" — not specific to the idea` },
+Return strict JSON in this shape:
+{
+  "questions": [
+    {
+      "phase": "control",
+      "category": "Control Model",
+      "text": "How should your system handle <domain-specific decision>?",
+      "options": [
+        { "letter": "A", "label": "Recommend only", "description": "<one-sentence concrete description for THIS idea>" },
+        { "letter": "B", "label": "Approve before action", "description": "<one-sentence concrete description for THIS idea>" },
+        { "letter": "C", "label": "Execute autonomously", "description": "<one-sentence concrete description for THIS idea>" }
+      ]
+    },
+    ... (one entry per phase, in the same order as the list above)
+  ]
+}
+
+Critical rules:
+- Each option's description MUST reference the user's actual domain — not generic phrasing.
+- Option A = simplest/safest. Option C = most sophisticated. Option B = a sensible middle.
+- Questions are short (under 20 words). Descriptions are one sentence each.
+- Do not invent extra phases. Exactly 9 questions, in the exact phase order listed.` },
       ],
-      temperature: 0.7,
-      max_tokens: 1000,
+      temperature: 0.6,
+      max_tokens: 2400,
       response_format: { type: 'json_object' },
     });
 
     const raw = completion.choices[0]?.message?.content || '{}';
-    let questions: Array<{ text: string; category: string }> = [];
+    let questions: Array<{ phase: string; category: string; text: string; options: Array<{ letter: string; label: string; description: string }> }> = [];
     try {
       const parsed = JSON.parse(raw);
-      questions = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.data || []);
-      questions = questions.filter(q => q.text && q.category && q.text.length > 10).slice(0, 12);
+      const arr = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.data || []);
+      // Normalize: ensure 9 questions in expected phase order, each with 3 options.
+      const byPhase = new Map<string, any>();
+      for (const q of arr) if (q?.phase) byPhase.set(q.phase, q);
+      questions = PHASES.map(p => {
+        const q = byPhase.get(p.phase);
+        if (!q || !Array.isArray(q.options) || q.options.length < 3) return null;
+        return {
+          phase: p.phase,
+          category: p.category,
+          text: String(q.text || `How sophisticated should the ${p.category.toLowerCase()} layer be?`).trim(),
+          options: q.options.slice(0, 3).map((o: any, i: number) => ({
+            letter: o.letter || ['A', 'B', 'C'][i],
+            label: String(o.label || '').trim() || ['Baseline', 'Intermediate', 'Advanced'][i],
+            description: String(o.description || '').trim(),
+          })),
+        };
+      }).filter(Boolean) as any[];
     } catch { /* parsing failed */ }
 
     res.json({ questions });

@@ -28,11 +28,19 @@ interface Props {
   onActivated: () => void;
 }
 
+interface QuestionOption {
+  letter: string;
+  label: string;
+  description: string;
+}
+
 interface Question {
-  text: string;
+  phase: string;
   category: string;
-  answer: 'yes' | 'no' | 'modify' | null;
-  modification?: string;
+  text: string;
+  options: QuestionOption[];
+  selected: string | null;   // option letter (A/B/C) or null
+  note?: string;             // optional follow-up clarification
 }
 
 type WizardStep = 'decision' | 'idea' | 'loading_questions' | 'questions' | 'upload' | 'github' | 'github_for_build' | 'starting_build' | 'activating' | 'complete';
@@ -53,8 +61,8 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
   const [idea, setIdea] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
-  const [modifyText, setModifyText] = useState('');
-  const [showModify, setShowModify] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [showNote, setShowNote] = useState(false);
   const [reqContent, setReqContent] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
   const [accessToken, setAccessToken] = useState('');
@@ -85,56 +93,79 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
     reader.readAsText(file);
   }, []);
 
-  // Submit idea → generate dynamic questions
+  // Normalize the AI System Discovery Framework response from the
+  // backend. Each question has 3 multiple-choice options (A/B/C)
+  // representing baseline → intermediate → advanced sophistication
+  // for one of the 9 framework dimensions.
+  const normalizeQuestions = (raw: any[]): Question[] => raw
+    .filter((q: any) => q && q.text && Array.isArray(q.options) && q.options.length >= 3)
+    .map((q: any) => ({
+      phase: String(q.phase || ''),
+      category: String(q.category || ''),
+      text: String(q.text || ''),
+      options: q.options.slice(0, 3).map((o: any, i: number) => ({
+        letter: String(o.letter || ['A', 'B', 'C'][i]),
+        label: String(o.label || ''),
+        description: String(o.description || ''),
+      })),
+      selected: null,
+    }));
+
   const handleIdeaSubmit = async () => {
     if (idea.trim().length < 30) return;
     setStep('loading_questions');
     setError(null);
     try {
       const res = await portalApi.post('/api/portal/project/requirements/expand-questions', { idea: idea.trim() });
-      const aiQuestions = (res.data.questions || []).filter((q: any) => q.text && q.category && q.text.length > 10);
-      if (aiQuestions.length < 3) throw new Error('Not enough questions');
-      setQuestions(aiQuestions.slice(0, 10).map((q: any) => ({ text: q.text, category: q.category, answer: null })));
+      const normalized = normalizeQuestions(res.data.questions || []);
+      if (normalized.length < 3) throw new Error('Not enough questions');
+      setQuestions(normalized);
+      setCurrentQ(0);
+      setShowNote(false);
+      setNoteText('');
       setStep('questions');
     } catch {
-      // Retry once
       try {
         const res2 = await portalApi.post('/api/portal/project/requirements/expand-questions', { idea: idea.trim() });
-        const q2 = (res2.data.questions || []).filter((q: any) => q.text && q.category);
-        if (q2.length >= 3) { setQuestions(q2.slice(0, 10).map((q: any) => ({ text: q.text, category: q.category, answer: null }))); setStep('questions'); return; }
+        const normalized = normalizeQuestions(res2.data.questions || []);
+        if (normalized.length >= 3) { setQuestions(normalized); setCurrentQ(0); setShowNote(false); setNoteText(''); setStep('questions'); return; }
       } catch {}
       setError('Could not generate questions. Please try again.');
       setStep('idea');
     }
   };
 
-  const handleAnswer = (answer: 'yes' | 'no' | 'modify') => {
-    if (answer === 'modify') { setShowModify(true); return; }
+  const handleSelect = (letter: string) => {
     const updated = [...questions];
-    updated[currentQ] = { ...updated[currentQ], answer };
+    updated[currentQ] = { ...updated[currentQ], selected: letter };
     setQuestions(updated);
-    setShowModify(false);
-    setModifyText('');
+    setShowNote(false);
+    setNoteText(updated[currentQ].note || '');
     if (currentQ < questions.length - 1) setCurrentQ(currentQ + 1);
   };
 
-  const handleModifySubmit = () => {
+  const handleNoteSave = () => {
     const updated = [...questions];
-    updated[currentQ] = { ...updated[currentQ], answer: 'modify', modification: modifyText };
+    updated[currentQ] = { ...updated[currentQ], note: noteText.trim() || undefined };
     setQuestions(updated);
-    setShowModify(false);
-    setModifyText('');
-    if (currentQ < questions.length - 1) setCurrentQ(currentQ + 1);
+    setShowNote(false);
   };
 
-  const answeredCount = questions.filter(q => q.answer !== null).length;
-  const selectedCount = questions.filter(q => q.answer === 'yes' || q.answer === 'modify').length;
+  const answeredCount = questions.filter(q => q.selected !== null).length;
+  // Capabilities flagged as B or C count toward the "selected sophistication"
+  // pill row. A is baseline and isn't surfaced as a selected capability.
+  const selectedCount = questions.filter(q => q.selected === 'B' || q.selected === 'C').length;
 
-  // Build the refined idea from answers
+  // Build the refined idea from selected options. Pass the selected
+  // option's label + description per phase so the downstream
+  // requirements generator has the user's chosen sophistication levels.
   const buildRefinedIdea = (): string => {
-    const caps = questions.filter(q => q.answer === 'yes' || q.answer === 'modify')
-      .map(q => `- [${q.category}] ${q.answer === 'modify' ? q.modification : q.text}`).join('\n');
-    return `${idea.trim()}\n\nDesired Capabilities:\n${caps}`;
+    const lines = questions.filter(q => q.selected).map(q => {
+      const opt = q.options.find(o => o.letter === q.selected);
+      const note = q.note ? ` (note: ${q.note})` : '';
+      return `- [${q.category}] ${opt?.letter}. ${opt?.label} — ${opt?.description}${note}`;
+    }).join('\n');
+    return `${idea.trim()}\n\nSelected Sophistication Levels (AI System Discovery Framework):\n${lines}`;
   };
 
   // Upload requirements + connect GitHub in one step, then activate.
@@ -274,8 +305,11 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
         </div></div>
       )}
 
-      {/* QUESTIONS */}
-      {step === 'questions' && questions.length > 0 && (
+      {/* QUESTIONS — AI System Discovery Framework, multiple choice */}
+      {step === 'questions' && questions.length > 0 && (() => {
+        const q = questions[currentQ];
+        const selectedOpt = q.options.find(o => o.letter === q.selected);
+        return (
         <div>
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body p-4">
@@ -284,44 +318,85 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
                 <div style={{ fontSize: 12, color: '#475569' }}>{idea.length > 100 ? idea.substring(0, 100) + '...' : idea}</div>
               </div>
 
-              <div className="text-muted mb-3" style={{ fontSize: 11 }}>Question {currentQ + 1} of {questions.length} · {answeredCount} answered</div>
+              <div className="text-muted mb-3" style={{ fontSize: 11 }}>
+                Phase {currentQ + 1} of {questions.length} · {answeredCount} answered
+              </div>
 
-              <p className="mb-1" style={{ fontSize: 12, color: '#3b82f6', fontWeight: 500 }}>Based on your idea, would you like your system to be able to...</p>
-              <h6 className="fw-bold mb-1" style={{ fontSize: 16 }}>{questions[currentQ].text}</h6>
-              <span className="badge mb-3" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10 }}>{questions[currentQ].category}</span>
+              <span className="badge mb-2" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10 }}>{q.category}</span>
+              <h6 className="fw-bold mb-3" style={{ fontSize: 16, lineHeight: 1.4 }}>{q.text}</h6>
 
-              {!showModify ? (
-                <div className="d-flex gap-3 mb-2">
-                  <button className="btn flex-grow-1 py-3" style={{ background: '#10b981', color: '#fff', fontWeight: 700, fontSize: 15, borderRadius: 10, border: 'none' }} onClick={() => handleAnswer('yes')}>
-                    <i className="bi bi-check-lg me-2"></i>Yes
-                  </button>
-                  <button className="btn flex-grow-1 py-3" style={{ background: '#ef4444', color: '#fff', fontWeight: 700, fontSize: 15, borderRadius: 10, border: 'none' }} onClick={() => handleAnswer('no')}>
-                    <i className="bi bi-x-lg me-2"></i>No
-                  </button>
+              <div className="d-flex flex-column gap-2 mb-3">
+                {q.options.map(opt => {
+                  const active = q.selected === opt.letter;
+                  return (
+                    <button
+                      key={opt.letter}
+                      className="btn text-start p-3"
+                      style={{
+                        background: active ? '#10b98120' : '#f8fafc',
+                        border: active ? '2px solid #10b981' : '2px solid #e2e8f0',
+                        borderRadius: 10,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                      }}
+                      onClick={() => handleSelect(opt.letter)}
+                    >
+                      <div className="d-flex align-items-start gap-2">
+                        <span
+                          className="badge d-flex align-items-center justify-content-center flex-shrink-0"
+                          style={{ background: active ? '#10b981' : '#94a3b8', color: '#fff', width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, marginTop: 1 }}
+                        >
+                          {opt.letter}
+                        </span>
+                        <div>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 13, color: '#0f172a' }}>{opt.label}</div>
+                          <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{opt.description}</div>
+                        </div>
+                        {active && <i className="bi bi-check-circle-fill ms-auto" style={{ color: '#10b981', fontSize: 16 }}></i>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedOpt && !showNote && !q.note && (
+                <button className="btn btn-link text-muted p-0" style={{ fontSize: 11 }} onClick={() => { setNoteText(''); setShowNote(true); }}>
+                  <i className="bi bi-pencil me-1"></i>Add a clarification (optional)
+                </button>
+              )}
+              {selectedOpt && q.note && !showNote && (
+                <div className="p-2 mb-2" style={{ background: '#fef9c3', borderRadius: 6, fontSize: 11, color: '#713f12' }}>
+                  <i className="bi bi-pencil me-1"></i>Note: {q.note}
+                  <button className="btn btn-link btn-sm p-0 ms-2" style={{ fontSize: 10 }} onClick={() => { setNoteText(q.note || ''); setShowNote(true); }}>edit</button>
                 </div>
-              ) : (
+              )}
+              {showNote && (
                 <div className="mb-2">
-                  <textarea className="form-control mb-2" rows={2} placeholder="How would you modify this?" value={modifyText} onChange={e => setModifyText(e.target.value)} style={{ fontSize: 13, borderRadius: 8 }} />
+                  <textarea className="form-control mb-2" rows={2} placeholder="Anything specific to your project we should capture about this choice?" value={noteText} onChange={e => setNoteText(e.target.value)} style={{ fontSize: 13, borderRadius: 8 }} />
                   <div className="d-flex gap-2">
-                    <button className="btn btn-primary btn-sm" onClick={handleModifySubmit} disabled={!modifyText.trim()}>Save</button>
-                    <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowModify(false)}>Cancel</button>
+                    <button className="btn btn-primary btn-sm" onClick={handleNoteSave}>Save note</button>
+                    <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowNote(false)}>Cancel</button>
                   </div>
                 </div>
               )}
 
-              {!showModify && <button className="btn btn-link text-muted p-0" style={{ fontSize: 11 }} onClick={() => handleAnswer('modify')}><i className="bi bi-pencil me-1"></i>Yes, but modified...</button>}
-
               <div className="d-flex justify-content-between mt-3 pt-2" style={{ borderTop: '1px solid #f1f5f9' }}>
-                <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }} disabled={currentQ === 0} onClick={() => setCurrentQ(currentQ - 1)}><i className="bi bi-arrow-left me-1"></i>Previous</button>
-                <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }} onClick={() => handleAnswer('no')}>Skip <i className="bi bi-arrow-right ms-1"></i></button>
+                <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }} disabled={currentQ === 0} onClick={() => { setCurrentQ(currentQ - 1); setShowNote(false); }}>
+                  <i className="bi bi-arrow-left me-1"></i>Previous
+                </button>
+                <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }} disabled={currentQ >= questions.length - 1} onClick={() => { setCurrentQ(currentQ + 1); setShowNote(false); }}>
+                  Skip <i className="bi bi-arrow-right ms-1"></i>
+                </button>
               </div>
             </div>
           </div>
 
           {selectedCount > 0 && (
             <div className="d-flex flex-wrap gap-1 mb-3">
-              {questions.filter(q => q.answer === 'yes' || q.answer === 'modify').map((q, i) => (
-                <span key={i} className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 10 }}><i className="bi bi-check me-1"></i>{q.category}</span>
+              {questions.filter(qq => qq.selected === 'B' || qq.selected === 'C').map((qq, i) => (
+                <span key={i} className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 10 }}>
+                  <i className="bi bi-check me-1"></i>{qq.category}: {qq.selected}
+                </span>
               ))}
             </div>
           )}
@@ -332,7 +407,8 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
             </button>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* UPLOAD — requirements doc + GitHub repo on the same screen */}
       {step === 'upload' && (
