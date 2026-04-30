@@ -589,19 +589,58 @@ Critical rules:
     try {
       const parsed = JSON.parse(raw);
       const arr = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.data || []);
-      // Normalize: ensure 9 questions in expected phase order, each with 3 options.
-      const byPhase = new Map<string, any>();
-      for (const q of arr) if (q?.phase) byPhase.set(q.phase, q);
-      questions = PHASES.map(p => {
-        const q = byPhase.get(p.phase);
+
+      // Match each LLM question to a framework phase. The LLM sometimes
+      // renames the phase key (e.g. "agents" → "agent_structure", or
+      // capitalizes "Control Model"), which used to drop that phase
+      // entirely. Match by exact phase first, then by category, then
+      // by fuzzy substring on either field, then by positional fallback
+      // so the user reliably gets all 9 dimensions.
+      const lc = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const byKey: Map<string, any> = new Map();
+      for (const q of arr) {
+        if (!q) continue;
+        if (q.phase) byKey.set(lc(q.phase), q);
+        if (q.category) byKey.set(lc(q.category), q);
+      }
+
+      const usedIndexes = new Set<number>();
+      const matchPhase = (p: { phase: string; category: string }, i: number): any | null => {
+        const phaseKey = lc(p.phase);
+        const catKey = lc(p.category);
+        // Exact phase or category match.
+        if (byKey.has(phaseKey)) return byKey.get(phaseKey);
+        if (byKey.has(catKey)) return byKey.get(catKey);
+        // Fuzzy: any LLM question whose phase/category contains either token.
+        for (let j = 0; j < arr.length; j++) {
+          if (usedIndexes.has(j)) continue;
+          const q = arr[j];
+          const qPhase = lc(q?.phase);
+          const qCat = lc(q?.category);
+          if ((qPhase && (qPhase.includes(phaseKey) || phaseKey.includes(qPhase))) ||
+              (qCat && (qCat.includes(catKey) || catKey.includes(qCat)))) {
+            usedIndexes.add(j);
+            return q;
+          }
+        }
+        // Positional fallback: same index in the LLM's array.
+        if (arr[i] && !usedIndexes.has(i)) {
+          usedIndexes.add(i);
+          return arr[i];
+        }
+        return null;
+      };
+
+      questions = PHASES.map((p, i) => {
+        const q = matchPhase(p, i);
         if (!q || !Array.isArray(q.options) || q.options.length < 3) return null;
         return {
           phase: p.phase,
           category: p.category,
           text: String(q.text || `How sophisticated should the ${p.category.toLowerCase()} layer be?`).trim(),
-          options: q.options.slice(0, 3).map((o: any, i: number) => ({
-            letter: o.letter || ['A', 'B', 'C'][i],
-            label: String(o.label || '').trim() || ['Baseline', 'Intermediate', 'Advanced'][i],
+          options: q.options.slice(0, 3).map((o: any, j: number) => ({
+            letter: o.letter || ['A', 'B', 'C'][j],
+            label: String(o.label || '').trim() || ['Baseline', 'Intermediate', 'Advanced'][j],
             description: String(o.description || '').trim(),
           })),
         };

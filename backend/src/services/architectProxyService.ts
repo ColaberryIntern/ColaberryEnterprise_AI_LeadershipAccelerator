@@ -144,6 +144,17 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Get the current status of an Architect build.
+ *
+ * The Architect exposes a JSON status endpoint at
+ * /projects/{slug}/api/auto-build/status that returns the actual phase
+ * and the latest SSE event (which carries chapter_index, percent, etc).
+ * We prefer that over scraping the project page HTML, which used to
+ * leave the user staring at "0/11 chapters" for the full 30-45 minute
+ * build because the architect's HTML never renders an aggregate
+ * chapter counter — chapter status is updated live via SSE/JS only.
+ *
+ * Falls back to HTML scraping if the JSON endpoint is unreachable
+ * (e.g. during pre-chapter_build phases or older architect versions).
  */
 export async function getArchitectStatus(slug: string): Promise<{
   phase: string;
@@ -153,67 +164,132 @@ export async function getArchitectStatus(slug: string): Promise<{
   chapters_total: number;
   message: string;
 }> {
+  // Phase 1: try the JSON status endpoint. Returns immediately and
+  // tells us the current_phase + latest event with structured data.
   try {
-    // Try the project detail page
+    const jsonRes = await fetch(`${ARCHITECT_BASE}/projects/${slug}/api/auto-build/status`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (jsonRes.ok) {
+      const j = await jsonRes.json() as any;
+      const rawPhase = String(j?.phase || '').toLowerCase();
+      const phase = normalizePhase(rawPhase);
+      const complete = phase === 'complete';
+      const ev = j?.latest_event || {};
+
+      // chapter_index: 0 means a document-level event; >0 means a
+      // specific chapter is being processed. Use it as a high-water
+      // mark for chapters_done (each chapter index reaching scoring
+      // means it's been written).
+      const chapters_total = countChaptersFromEvent(ev) || 11;
+      const chapters_done = countDoneChapters(ev, chapters_total);
+
+      const refinedProgress = phase === 'chapter_build' && chapters_total > 0
+        ? 40 + Math.round((chapters_done / chapters_total) * 40)
+        : (typeof ev?.percent === 'number' ? ev.percent : phaseProgress(phase));
+
+      const message = String(ev?.message || phaseMessage(phase, chapters_done, chapters_total));
+      return { phase, progress: refinedProgress, complete, chapters_done, chapters_total, message };
+    }
+  } catch (err: any) {
+    console.warn(`[ArchitectProxy] JSON status failed for ${slug}: ${err.message} — falling back to HTML scrape`);
+  }
+
+  // Phase 2: HTML fallback — used when the JSON endpoint is down or
+  // the architect is in a pre-chapter phase that doesn't expose status.
+  try {
     const res = await fetch(`${ARCHITECT_BASE}/projects/${slug}`);
     if (!res.ok) return { phase: 'unknown', progress: 0, complete: false, chapters_done: 0, chapters_total: 0, message: 'Unable to reach build service' };
 
     const html = await res.text();
     const finalUrl = res.url || '';
-
-    // Definitive completion signal: Architect redirects completed projects to /<slug>/complete
     let phase: string;
     if (/\/complete\/?$/i.test(finalUrl)) {
       phase = 'complete';
     } else {
-      // Extract current phase from the active nav item (Architect's HTML structure)
       const phaseMatch = html.match(/phase-nav-item\s+current[\s\S]{0,500}?phase-nav-label[^>]*>([^<]+)/i)
         || html.match(/current_phase['":\s]+['"](\w+)['"]/i)
         || html.match(/Phase:\s*(\w[\w\s]*?)(?:<|"|')/i);
-      phase = phaseMatch ? phaseMatch[1].trim().toLowerCase().replace(/\s+/g, '_') : 'idea_intake';
+      phase = normalizePhase(phaseMatch ? phaseMatch[1] : 'idea_intake');
     }
 
-    // Normalize phase names
-    if (phase.includes('idea') || phase.includes('intake')) phase = 'idea_intake';
-    else if (phase.includes('feature') || phase.includes('discovery')) phase = 'feature_discovery';
-    else if (phase.includes('outline') && phase.includes('gen')) phase = 'outline_generation';
-    else if (phase.includes('outline') && phase.includes('approv')) phase = 'outline_approval';
-    else if (phase.includes('chapter') || phase.includes('build')) phase = 'chapter_build';
-    else if (phase.includes('quality') || phase.includes('gate')) phase = 'quality_gates';
-    else if (phase.includes('final') || phase.includes('assembly')) phase = 'final_assembly';
-    else if (phase.includes('complete') || phase.includes('done')) phase = 'complete';
-
-    const PHASE_PROGRESS: Record<string, number> = {
-      idea_intake: 8, feature_discovery: 20, outline_generation: 32,
-      outline_approval: 38, chapter_build: 60, quality_gates: 85,
-      final_assembly: 93, complete: 100,
-    };
-
-    const progress = PHASE_PROGRESS[phase] || 0;
     const complete = phase === 'complete';
 
-    const chaptersMatch = html.match(/(\d+)\s*(?:of|\/)\s*(\d+)\s*chapter/i);
-    const chapters_done = chaptersMatch ? parseInt(chaptersMatch[1]) : 0;
-    const chapters_total = chaptersMatch ? parseInt(chaptersMatch[2]) : 11;
+    // Count actual chapter status badges in the HTML so we don't
+    // hand the user 0/11 forever. Each approved chapter renders a
+    // success badge inside the chapters table.
+    const chapterRows = html.match(/<tr[^>]*>[\s\S]{0,400}?chapter-build\/(\d+)[\s\S]{0,400}?<\/tr>/gi) || [];
+    const chapters_total = chapterRows.length || 11;
+    const approvedRows = chapterRows.filter(r => /badge\s+bg-success/i.test(r) && !/Pending/i.test(r));
+    const chapters_done = approvedRows.length;
 
     const refinedProgress = phase === 'chapter_build' && chapters_total > 0
-      ? 40 + Math.round((chapters_done / chapters_total) * 40) : progress;
+      ? 40 + Math.round((chapters_done / chapters_total) * 40)
+      : phaseProgress(phase);
 
-    const PHASE_MESSAGES: Record<string, string> = {
-      idea_intake: 'Analyzing your idea...',
-      feature_discovery: 'Discovering system capabilities...',
-      outline_generation: 'Designing system architecture...',
-      outline_approval: 'Locking requirements structure...',
-      chapter_build: `Writing detailed requirements (${chapters_done}/${chapters_total} chapters)...`,
-      quality_gates: 'Running quality validation...',
-      final_assembly: 'Assembling final blueprint...',
-      complete: 'Your system is ready!',
-    };
-
-    return { phase, progress: refinedProgress, complete, chapters_done, chapters_total, message: PHASE_MESSAGES[phase] || 'Building your system...' };
+    return { phase, progress: refinedProgress, complete, chapters_done, chapters_total, message: phaseMessage(phase, chapters_done, chapters_total) };
   } catch (err: any) {
     return { phase: 'error', progress: 0, complete: false, chapters_done: 0, chapters_total: 0, message: `Build service error: ${err.message}` };
   }
+}
+
+function normalizePhase(p: string): string {
+  const s = String(p || '').toLowerCase().replace(/\s+/g, '_');
+  if (s.includes('idea') || s.includes('intake')) return 'idea_intake';
+  if (s.includes('feature') || s.includes('discovery')) return 'feature_discovery';
+  if (s.includes('outline') && s.includes('gen')) return 'outline_generation';
+  if (s.includes('outline') && s.includes('approv')) return 'outline_approval';
+  if (s.includes('chapter') || s.includes('build')) return 'chapter_build';
+  if (s.includes('quality') || s.includes('gate')) return 'quality_gates';
+  if (s.includes('final') || s.includes('assembly')) return 'final_assembly';
+  if (s.includes('complete') || s.includes('done')) return 'complete';
+  return s || 'idea_intake';
+}
+
+function phaseProgress(phase: string): number {
+  return ({
+    idea_intake: 8, feature_discovery: 20, outline_generation: 32,
+    outline_approval: 38, chapter_build: 60, quality_gates: 85,
+    final_assembly: 93, complete: 100,
+  } as Record<string, number>)[phase] || 0;
+}
+
+function phaseMessage(phase: string, done: number, total: number): string {
+  if (phase === 'chapter_build') return `Writing detailed requirements (${done}/${total} chapters)...`;
+  return ({
+    idea_intake: 'Analyzing your idea...',
+    feature_discovery: 'Discovering system capabilities...',
+    outline_generation: 'Designing system architecture...',
+    outline_approval: 'Locking requirements structure...',
+    quality_gates: 'Running quality validation...',
+    final_assembly: 'Assembling final blueprint...',
+    complete: 'Your system is ready!',
+  } as Record<string, string>)[phase] || 'Building your system...';
+}
+
+function countChaptersFromEvent(ev: any): number {
+  // The architect's events don't always carry chapters_total. The
+  // build is configured for 11 chapters in standard mode but the
+  // user-facing template uses state.chapters length. If the event
+  // happens to expose a total, prefer it; otherwise the caller's
+  // default of 11 stands.
+  const t = ev?.data?.chapters_total || ev?.chapters_total;
+  return typeof t === 'number' && t > 0 ? t : 0;
+}
+
+function countDoneChapters(ev: any, total: number): number {
+  // Use chapter_index as a high-water mark: when an event for chapter
+  // N arrives with event_type='gate' (approved) or 'scoring' (scored),
+  // chapter N is effectively done. The latest event tells us the
+  // furthest chapter we've reached. Pre-chapter events have index 0,
+  // so chapters_done stays at 0 until the first chapter reports back.
+  const idx = Number(ev?.chapter_index || 0);
+  const type = String(ev?.event_type || '');
+  if (idx <= 0) return 0;
+  // For 'chapter' event (writing in progress), the chapter isn't done
+  // yet — count idx-1 done. For 'gate'/'scoring'/'complete', count idx.
+  const done = ['gate', 'scoring', 'complete'].includes(type) ? idx : Math.max(0, idx - 1);
+  return Math.min(done, total);
 }
 
 /**
