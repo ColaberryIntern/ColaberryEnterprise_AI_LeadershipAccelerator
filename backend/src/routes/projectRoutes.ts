@@ -2232,12 +2232,26 @@ Within each phase:
 - Run the tests for the phase before moving on. Fix what breaks.
 - If a phase has work that genuinely cannot be completed in this session, mark it explicitly and keep going — do not block the rest of the phases on it.
 
-## Step 4 — Deliver ONE consolidated report at the very end
+## Step 4 — Commit, then deliver ONE consolidated report
 
-Only after **every phase is either complete or explicitly marked as deferred** do you deliver the final report. The user pastes this back into the portal one time, after the entire build is done. Do not split it across phases.
+Only after **every phase is either complete or explicitly marked as deferred** do you commit and report. Do not split commits or reports across phases — one of each, at the very end.
+
+**First commit everything you built** so the portal can reconcile the report against actual repo state:
+
+\`\`\`
+git add -A
+git commit -m "kickoff: foundation built — phases 1-N"
+git rev-parse HEAD
+\`\`\`
+
+Capture that commit SHA. The \`Commit:\` line below is **required** — without it the portal cannot map the report's claims to real files in the repo, and the kickoff sync degrades to "trust the report blindly" mode.
+
+Then output the report in this format. The user pastes it back into the portal one time, after the entire build is done.
 
 \`\`\`
 # Kickoff Report
+
+Commit: <full SHA you just committed>
 
 ## Phases shipped
 - Phase 1: <name> — ✅ complete | ⏳ partial | ❌ deferred (with reason)
@@ -2245,9 +2259,26 @@ Only after **every phase is either complete or explicitly marked as deferred** d
 - Phase 3: ...
 (one line per phase)
 
-## Files created / modified
-- path/to/file.ts — <one-line purpose>
-(grouped by phase)
+## Capabilities advanced (cross-reference to your build guide's components)
+- <capability or domain name> — <what now exists for it> — files: <key path>
+- <capability or domain name> — <what now exists for it> — files: <key path>
+(one line per business capability the build touches — auth, role-management, etc. The portal uses these to map work to the right BPs.)
+
+## Files Created
+- path/to/file.ts
+- path/to/file2.tsx
+(flat list, one path per line — same flat-list format the per-BP validation parser uses, so the portal can read it directly)
+
+## Files Modified
+- path/to/existing.ts
+(flat list)
+
+## Routes
+- GET /api/...
+- POST /api/...
+
+## Database
+- TableName (if any new or modified)
 
 ## Tests added and passing
 - path/to/test.ts — <what it covers> — ✅ pass | ❌ fail (with reason)
@@ -2265,14 +2296,90 @@ Only after **every phase is either complete or explicitly marked as deferred** d
 - <governance boundary hit, recommendation, what decision is needed>
 
 ## What's left for per-component iteration in the portal
-- <list of capabilities or features that still need depth/polish, suitable for the per-BP task flow that takes over after kickoff>
+- <capability> — <what depth/polish remains>
+
+Status: COMPLETE
 \`\`\`
 
-The user pastes this report back into the portal once. The system stamps progress across every capability the report touched, the kickoff disappears, and the per-component task flow takes over for any remaining depth/polish work.
+After the report, push:
 
-Do not hand-wave. Do not stop at phase 1. Do not stub out features the build guide says should exist. If you cannot build something cleanly, mark it deferred in the report and keep moving — do not leave a half-finished mess.`;
+\`\`\`
+git push origin main
+\`\`\`
+
+The user pastes this report back into the portal once. The system parses your \`Commit:\` SHA, refreshes its view of the repo at that SHA, fans the file evidence out across every capability your work touched, and stamps progress. The kickoff disappears, and the per-component task flow takes over for any remaining depth/polish.
+
+Do not hand-wave. Do not stop at phase 1. Do not stub out features the build guide says should exist. Do not skip the commit. If you cannot build something cleanly, mark it deferred and keep moving — do not leave a half-finished mess.`;
     res.json({ prompt_text: prompt });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Kickoff sync ──────────────────────────────────────────────────
+// User pastes the Kickoff Report back. Unlike per-BP validation,
+// this fans the report's evidence out across every capability whose
+// name, description, or expected file path the report touches.
+// The Commit: SHA in the report ties the claims back to a real
+// repo state that we refresh from origin before scoring matches.
+router.post('/api/portal/project/kickoff-sync', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { reportText } = req.body || {};
+    if (!reportText || typeof reportText !== 'string' || reportText.trim().length < 50) {
+      res.status(400).json({ error: 'reportText is required (paste the full Kickoff Report)' });
+      return;
+    }
+    const { parseValidationReport } = await import('../services/validationReportParser');
+    const parsed = parseValidationReport(reportText);
+    const { applyKickoffReport } = await import('../services/kickoffSyncService');
+    const result = await applyKickoffReport(project.id, req.participant!.sub, parsed);
+
+    // Stamp project-level kickoff state so the orchestrator stops
+    // returning the kickoff task. setup_status.kickoff_synced + the
+    // capabilities now having last_execution.status='complete' both
+    // signal that the project is past the foundation phase.
+    const ss = (project as any).setup_status || {};
+    (project as any).setup_status = {
+      ...ss,
+      kickoff_synced: true,
+      kickoff_synced_at: new Date().toISOString(),
+      kickoff_commit: parsed.commitSha || null,
+    };
+    (project as any).changed('setup_status', true);
+    await project.save();
+
+    res.json({
+      ok: true,
+      commit_sha: result.commitSha,
+      summary: {
+        phases_shipped: result.phasesShipped,
+        phases_partial: result.phasesPartial,
+        phases_deferred: result.phasesDeferred,
+        capabilities_advanced: result.capabilitiesAdvanced,
+        capabilities_total: result.capabilityDeltas.length,
+        files_claimed: result.filesClaimedTotal,
+        files_verified_in_repo: result.filesVerifiedInRepo,
+        files_missing_from_repo: result.filesMissingFromRepo.slice(0, 20),
+      },
+      // Per-capability deltas, sorted by match score so the user sees
+      // what advanced and what was untouched.
+      capability_deltas: result.capabilityDeltas
+        .sort((a, b) => b.matchScore - a.matchScore)
+        .map(d => ({
+          id: d.id,
+          name: d.name,
+          matched: d.matched,
+          match_score: Math.round(d.matchScore * 100),
+          matched_by: d.matchedBy,
+          files_linked: d.filesLinked,
+          requirements_verified: d.requirementsVerified,
+          requirements_total: d.requirementsTotal,
+        })),
+    });
+  } catch (err: any) {
+    console.error('[KickoffSync] failed:', err?.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------------------------------------------------------------------------

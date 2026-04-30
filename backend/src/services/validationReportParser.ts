@@ -21,12 +21,27 @@
 import { Op } from 'sequelize';
 import { RequirementsMap, Capability } from '../models';
 
+export interface ParsedPhase {
+  name: string;        // "Phase 1 — Foundation"
+  status: string;      // "complete" | "partial" | "deferred"
+  body: string;        // raw text of the phase block
+}
+
+export interface ParsedCapabilityClaim {
+  name: string;        // "auth" or "Role Management"
+  description: string; // what the report says was done for it
+  files: string[];     // any file paths mentioned on the line
+}
+
 export interface ParsedReport {
   filesCreated: string[];
   filesModified: string[];
   routes: string[];
   database: string[];
   status: string;
+  commitSha: string | null;          // captured from "Commit: <sha>"
+  phases: ParsedPhase[];             // captured from "## Phases shipped" / Phase N
+  capabilityClaims: ParsedCapabilityClaim[]; // from "## Capabilities advanced"
   rawText: string;
   duplicatesNoted: string[];
 }
@@ -38,6 +53,9 @@ export function parseValidationReport(text: string): ParsedReport {
     routes: [],
     database: [],
     status: 'UNKNOWN',
+    commitSha: null,
+    phases: [],
+    capabilityClaims: [],
     rawText: text,
     duplicatesNoted: [],
   };
@@ -45,18 +63,29 @@ export function parseValidationReport(text: string): ParsedReport {
   if (!text) return result;
 
   const lines = text.split('\n').map(l => l.trim());
-  let section: 'none' | 'files_created' | 'files_modified' | 'routes' | 'database' | 'duplicates' = 'none';
+  let section: 'none' | 'files_created' | 'files_modified' | 'routes' | 'database' | 'duplicates' | 'phases_shipped' | 'capabilities_advanced' = 'none';
 
   for (const line of lines) {
-    const lower = line.toLowerCase();
+    // Top-level metadata lines that can appear anywhere
+    if (/^commit:/i.test(line)) {
+      const sha = line.replace(/^commit:\s*/i, '').trim();
+      // Accept either a real SHA (40 hex / 7+ hex short) or "none"
+      if (/^[0-9a-f]{7,40}$/i.test(sha)) result.commitSha = sha.toLowerCase();
+      continue;
+    }
 
-    // Detect section headers
-    if (/^files?\s*created/i.test(line) || /^new\s*files/i.test(line)) { section = 'files_created'; continue; }
-    if (/^files?\s*modified/i.test(line) || /^changed\s*files/i.test(line) || /^updated\s*files/i.test(line)) { section = 'files_modified'; continue; }
-    if (/^routes?:/i.test(line) || /^api\s*endpoints?/i.test(line)) { section = 'routes'; continue; }
-    if (/^database/i.test(line) || /^tables?/i.test(line) || /^models?:/i.test(line)) { section = 'database'; continue; }
+    // Section headers — markdown ## or plain
+    const heading = line.replace(/^#+\s*/, '');
+    if (/^phases?\s*shipped/i.test(heading)) { section = 'phases_shipped'; continue; }
+    if (/^capabilit(y|ies)\s+advanced/i.test(heading)) { section = 'capabilities_advanced'; continue; }
+    if (/^files?\s*created/i.test(heading) || /^new\s*files/i.test(heading)) { section = 'files_created'; continue; }
+    if (/^files?\s*modified/i.test(heading) || /^changed\s*files/i.test(heading) || /^updated\s*files/i.test(heading)) { section = 'files_modified'; continue; }
+    if (/^routes?:?/i.test(heading) || /^api\s*endpoints?/i.test(heading)) { section = 'routes'; continue; }
+    if (/^database:?/i.test(heading) || /^tables?:?/i.test(heading) || /^models?:?/i.test(heading)) { section = 'database'; continue; }
     if (/^status:/i.test(line)) { result.status = line.replace(/^status:\s*/i, '').trim(); section = 'none'; continue; }
-    if (/^duplicat/i.test(line) || /^already\s*(exist|built|implemented)/i.test(line)) { section = 'duplicates'; continue; }
+    if (/^duplicat/i.test(heading) || /^already\s*(exist|built|implemented)/i.test(heading)) { section = 'duplicates'; continue; }
+    // Other ## headings reset the section so we don't bleed into them
+    if (/^#+\s+/.test(line)) { section = 'none'; continue; }
 
     // Parse bullet items
     const bulletMatch = line.match(/^[-*•]\s+(.+)/);
@@ -64,24 +93,72 @@ export function parseValidationReport(text: string): ParsedReport {
       const item = bulletMatch[1].trim();
       if (!item) continue;
       switch (section) {
-        case 'files_created': result.filesCreated.push(item); break;
-        case 'files_modified': result.filesModified.push(item); break;
+        case 'files_created': result.filesCreated.push(stripPathTrail(item)); break;
+        case 'files_modified': result.filesModified.push(stripPathTrail(item)); break;
         case 'routes': result.routes.push(item); break;
         case 'database': result.database.push(item); break;
         case 'duplicates': result.duplicatesNoted.push(item); break;
+        case 'phases_shipped': {
+          // "Phase N — Name (...) — ✅ complete" or similar
+          const phaseMatch = item.match(/^(phase\s*\d+[^—:]*?)[\s—:-]+([^✅⏳❌]*?)\s*([✅⏳❌])\s*(complete|partial|deferred|done)?(.*)$/i);
+          if (phaseMatch) {
+            const status = (() => {
+              const symbol = phaseMatch[3];
+              const word = (phaseMatch[4] || '').toLowerCase();
+              if (symbol === '✅' || word === 'complete' || word === 'done') return 'complete';
+              if (symbol === '⏳' || word === 'partial') return 'partial';
+              if (symbol === '❌' || word === 'deferred') return 'deferred';
+              return 'unknown';
+            })();
+            result.phases.push({ name: (phaseMatch[1] + (phaseMatch[2] ? ' ' + phaseMatch[2] : '')).trim(), status, body: item });
+          } else {
+            // Fallback: keep the line for downstream matching even if format is loose
+            result.phases.push({ name: item.split(/[—:-]/)[0].trim(), status: 'unknown', body: item });
+          }
+          break;
+        }
+        case 'capabilities_advanced': {
+          // "<name> — <what was done> — files: <path>" or just "<name> — <what>"
+          const parts = item.split(/\s+—\s+/);
+          const name = (parts[0] || '').trim();
+          const description = (parts[1] || '').trim();
+          const filesPart = (parts[2] || '').replace(/^files:\s*/i, '').trim();
+          const files = extractFilePaths(item);
+          if (name) result.capabilityClaims.push({ name, description: description || filesPart, files });
+          break;
+        }
       }
     }
   }
 
-  // Also try to extract files from freeform text (common when users paste less structured output)
+  // Freeform extraction fallback for files
   if (result.filesCreated.length === 0 && result.filesModified.length === 0) {
-    const fileMatches = text.match(/[a-zA-Z0-9_/.-]+\.(ts|tsx|js|jsx|py|go|rs|java|sql|vue|svelte)\b/g);
-    if (fileMatches) {
-      result.filesCreated = [...new Set(fileMatches)].slice(0, 30);
-    }
+    const fileMatches = extractFilePaths(text);
+    if (fileMatches.length > 0) result.filesCreated = fileMatches.slice(0, 200);
   }
 
   return result;
+}
+
+// Many reports embed file paths in narrative lines (e.g.
+// "services/api/src/domains/auth/ — schemas + service + routes").
+// Strip trailing prose so the path is clean for matching.
+function stripPathTrail(item: string): string {
+  // If there's a long-dash separator, take the part before it that looks like a path
+  const dashSplit = item.split(/\s+—\s+/);
+  if (dashSplit.length > 1) {
+    const first = dashSplit[0].trim();
+    if (/[\/.]/.test(first)) return first;
+  }
+  return item;
+}
+
+function extractFilePaths(text: string): string[] {
+  // Reasonable heuristic for file paths: dot-separated extensions + path separators
+  const matches = text.match(/[a-zA-Z0-9_./@-]+\.(ts|tsx|js|jsx|py|go|rs|java|sql|vue|svelte|md|yml|yaml|json|toml|cjs|mjs|html|css)\b/g) || [];
+  // Also catch directory paths ending in / mentioned in narrative
+  const dirMatches = text.match(/[a-zA-Z0-9_/-]+\/(?=\s|$|—)/g) || [];
+  return [...new Set([...matches, ...dirMatches.map(d => d.replace(/\/$/, ''))])];
 }
 
 /**

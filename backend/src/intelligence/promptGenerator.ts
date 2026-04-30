@@ -73,7 +73,47 @@ function buildConstraints(): string {
 }
 
 function buildValidation(processName: string): string {
-  return `\n\n# VALIDATION REPORT (REQUIRED AT END)\n\nAfter implementation, output this EXACT format so the system can sync:\n\n\`\`\`\nVALIDATION REPORT\n\nFiles Created:\n- path/to/file1\n- path/to/file2\n\nRoutes:\n- GET /api/...\n- POST /api/...\n\nDatabase:\n- TableName (if any)\n\nStatus: COMPLETE\n\`\`\`\n\nThen run:\n\`\`\`\ngit add .\ngit commit -m "Implement ${processName}"\ngit push origin main\n\`\`\`\n`;
+  return `\n\n# VALIDATION REPORT (REQUIRED AT END)
+
+**Before** writing the report, commit your work:
+
+\`\`\`
+git add -A
+git commit -m "${processName}"
+\`\`\`
+
+Capture the commit SHA from the commit output (\`git rev-parse HEAD\`). Then output this EXACT format so the portal can sync the report against the actual repo state at that commit:
+
+\`\`\`
+VALIDATION REPORT
+
+Commit: <full SHA you just committed>
+
+Files Created:
+- path/to/file1
+- path/to/file2
+
+Files Modified:
+- path/to/file3
+
+Routes:
+- GET /api/...
+- POST /api/...
+
+Database:
+- TableName (if any)
+
+Status: COMPLETE
+\`\`\`
+
+The \`Commit:\` line is required — without it the portal can't reconcile your claims against the repo. If you couldn't commit (e.g. nothing changed), say \`Commit: none\` and explain why in the report body.
+
+After the report, push:
+
+\`\`\`
+git push origin main
+\`\`\`
+`;
 }
 
 function describeExisting(backend: string[], frontend: string[], agents: string[]): string {

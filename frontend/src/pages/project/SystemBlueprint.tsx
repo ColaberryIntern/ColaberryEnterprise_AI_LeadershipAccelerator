@@ -767,6 +767,19 @@ export default function SystemBlueprint() {
     if (!build.reportText.trim() || demoActive) return;
     setBuild(prev => ({ ...prev, phase: 'validating' }));
     try {
+      // Kickoff reports are project-wide. Per-BP validation would credit
+      // only the recommended BP; fan the report out across every capability
+      // it touches via the project-level kickoff-sync endpoint.
+      const isKickoff = orchestratorTasks[0]?.prompt_target === 'project_kickoff'
+        || orchestratorTasks[0]?.component_id === '__project_kickoff__';
+      if (isKickoff) {
+        const res = await portalApi.post('/api/portal/project/kickoff-sync', {
+          reportText: build.reportText.trim(),
+        });
+        setBuild(prev => ({ ...prev, phase: 'validated', validationResult: { kickoff: res.data } }));
+        await loadData();
+        return;
+      }
       const res = await portalApi.post(`/api/portal/project/business-processes/${comp.id}/validation-report`, {
         reportText: build.reportText.trim(),
       });
@@ -1482,6 +1495,86 @@ export default function SystemBlueprint() {
               <div ref={resultRef}>
                 {build.validationResult.error ? (
                   <div className="alert alert-danger py-2" style={{ fontSize: 12 }}>{build.validationResult.error}</div>
+                ) : build.validationResult.kickoff ? (
+                  // Kickoff-specific summary: project-wide deltas instead of one BP's metrics.
+                  (() => {
+                    const k = build.validationResult.kickoff;
+                    const summary = k.summary || {};
+                    const deltas = (k.capability_deltas || []) as Array<{ id: string; name: string; matched: boolean; match_score: number; matched_by: string[]; files_linked: number; requirements_verified: number; requirements_total: number }>;
+                    const matched = deltas.filter(d => d.matched);
+                    const unmatched = deltas.filter(d => !d.matched);
+                    return (
+                      <div className="p-4 mb-3 celebration-card" style={{ background: 'linear-gradient(135deg, #10b98115, #3b82f615)', borderRadius: 12, border: '1px solid #10b98130' }}>
+                        <div className="d-flex align-items-center gap-2 mb-3">
+                          <i className="bi bi-rocket-takeoff-fill" style={{ color: '#10b981', fontSize: 22 }}></i>
+                          <div>
+                            <h6 className="fw-bold mb-0" style={{ color: '#059669', fontSize: 16 }}>Kickoff Synced</h6>
+                            <span style={{ fontSize: 11, color: '#64748b' }}>
+                              {summary.capabilities_advanced || 0} of {summary.capabilities_total || 0} capabilities advanced
+                              {k.commit_sha ? ` · commit ${String(k.commit_sha).substring(0, 7)}` : ''}
+                            </span>
+                          </div>
+                          <div className="ms-auto d-flex gap-3 text-center">
+                            <span><strong style={{ color: '#059669', fontSize: 16 }}>{summary.phases_shipped || 0}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Phases</span></span>
+                            <span><strong style={{ color: '#3b82f6', fontSize: 16 }}>{summary.files_verified_in_repo || 0}/{summary.files_claimed || 0}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Files in repo</span></span>
+                            <span><strong style={{ color: '#8b5cf6', fontSize: 16 }}>{matched.length}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>BPs matched</span></span>
+                          </div>
+                        </div>
+
+                        {/* Files claimed but missing from repo — call out for the user */}
+                        {(summary.files_missing_from_repo || []).length > 0 && (
+                          <div className="alert alert-warning py-2 mb-3" style={{ fontSize: 11 }}>
+                            <strong><i className="bi bi-exclamation-triangle me-1"></i>{summary.files_missing_from_repo.length} files claimed but not found in your repo.</strong>
+                            <span className="ms-1" style={{ color: '#92400e' }}>Did Claude Code commit and push? Re-run after pushing.</span>
+                            <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#78350f', marginTop: 6 }}>
+                              {summary.files_missing_from_repo.slice(0, 6).map((f: string, i: number) => (
+                                <div key={i}>{f}</div>
+                              ))}
+                              {summary.files_missing_from_repo.length > 6 && <div>…and {summary.files_missing_from_repo.length - 6} more</div>}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Capabilities advanced */}
+                        {matched.length > 0 && (
+                          <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                            <div className="fw-semibold mb-2" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                              <i className="bi bi-check2-circle me-1" style={{ color: '#10b981' }}></i>Capabilities Advanced ({matched.length})
+                            </div>
+                            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                              {matched.map(d => (
+                                <div key={d.id} className="d-flex align-items-center gap-2 py-1" style={{ fontSize: 11, borderBottom: '1px solid #f1f5f9' }}>
+                                  <span className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 9, minWidth: 36, textAlign: 'center' }}>{d.match_score}%</span>
+                                  <span className="flex-grow-1">{d.name}</span>
+                                  <span className="text-muted" style={{ fontSize: 9, fontFamily: 'monospace' }}>
+                                    {d.requirements_verified}/{d.requirements_total} reqs · {d.files_linked} files
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Capabilities not yet covered — flagged for per-BP follow-up */}
+                        {unmatched.length > 0 && (
+                          <div className="mb-2 p-2" style={{ background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
+                            <div className="fw-semibold mb-1" style={{ fontSize: 11, color: '#92400e' }}>
+                              <i className="bi bi-list-task me-1"></i>Not Yet Covered ({unmatched.length})
+                            </div>
+                            <div style={{ fontSize: 11, color: '#78350f' }}>
+                              These capabilities had no matching evidence in the kickoff. They'll surface as per-component tasks.
+                            </div>
+                            <div className="d-flex flex-wrap gap-1 mt-2">
+                              {unmatched.slice(0, 12).map(d => (
+                                <span key={d.id} className="badge" style={{ background: '#fde68a', color: '#78350f', fontSize: 9 }}>{d.name}</span>
+                              ))}
+                              {unmatched.length > 12 && <span className="badge" style={{ background: '#fde68a', color: '#78350f', fontSize: 9 }}>+{unmatched.length - 12} more</span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div>
                     {/* Build Summary Header */}
