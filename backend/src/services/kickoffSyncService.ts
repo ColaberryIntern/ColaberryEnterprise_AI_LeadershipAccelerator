@@ -236,37 +236,33 @@ export async function applyKickoffReport(
       else if (layer === 'model') models.push(f);
     }
 
-    // Foundation work is scaffolding, NOT requirement-level completion.
-    // Don't flip every requirement to 'verified' — that would push
-    // reqCoverage to 100% and make the cap look done when only a
-    // foundation exists. Instead: for high-confidence matches (>= 0.6)
-    // mark requirements as 'matched' (a soft signal — implies the
-    // foundation for this requirement is in place). For lower-confidence
-    // matches, don't touch requirement status at all. 'verified' stays
-    // reserved for explicit per-BP validation reports.
+    // Foundation work is scaffolding, NOT requirement-level evidence.
+    // Don't change req.status at all. Coverage = matched/total counts
+    // both 'matched' and 'verified', so any bump there inflates
+    // completion to 100% when only a foundation exists.
     //
-    // Save each requirement's previous status so the reset endpoint
-    // can restore it cleanly.
+    // Instead, just attach hint files to requirements (without
+    // changing status) so the per-BP build flow has a head start
+    // when the user runs that capability's prompt later. The
+    // requirement still shows 'unmatched' until per-BP validation
+    // explicitly verifies it.
+    //
+    // We still snapshot github_file_paths so the reset endpoint can
+    // unlink the kickoff's hint files cleanly.
     const reqs = await RequirementsMap.findAll({ where: { project_id: projectId, capability_id: capAny.id } });
     const reqSnapshot: Array<{ id: string; prev_status: string; prev_verified_by: string | null; prev_files: string[] }> = [];
     let touched = 0;
-    const shouldSoftMatch = score >= 0.6;
+    const shouldHintFiles = score >= 0.6 && (backend.length + frontend.length + agents.length + models.length) > 0;
     for (const req of reqs) {
       const r = req as any;
       if (r.verified_by === 'manual') continue;
-      // Snapshot for rollback
       reqSnapshot.push({
         id: r.id,
         prev_status: r.status,
         prev_verified_by: r.verified_by || null,
         prev_files: Array.isArray(r.github_file_paths) ? r.github_file_paths : [],
       });
-      if (shouldSoftMatch && r.status !== 'verified') {
-        // Promote unmatched/partial → matched. Don't downgrade verified.
-        if (r.status === 'unmatched' || r.status === 'not_started' || r.status === 'partial') {
-          r.status = 'matched';
-        }
-        // Only attach files we genuinely linked to this cap, by layer.
+      if (shouldHintFiles && (!r.github_file_paths || r.github_file_paths.length === 0)) {
         const reqText = (r.requirement_text || r.requirement_key || '').toLowerCase();
         const isUI = /\b(ui|page|component|display|layout|form|button|screen|view)\b/.test(reqText);
         const isAgent = /\b(agent|automat|monitor|schedule|autonomous|intelligence)\b/.test(reqText);
@@ -275,14 +271,13 @@ export async function applyKickoffReport(
           : isAgent && agents.length ? agents
           : isData && models.length ? models
           : backend.length ? backend
-          : []; // nothing to link if no matching files exist
+          : [];
         if (layered.length > 0) {
           r.github_file_paths = layered.slice(0, 5);
-          r.confidence_score = Math.max(r.confidence_score || 0, 0.6);
-          r.verified_by = 'kickoff_inferred';
+          r.verified_by = 'kickoff_inferred'; // marker only — status untouched
+          await r.save();
+          touched++;
         }
-        await r.save();
-        touched++;
       }
     }
 
