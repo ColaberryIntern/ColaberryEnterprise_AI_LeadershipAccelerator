@@ -2100,9 +2100,9 @@ router.post('/api/portal/project/kickoff-prompt', requireParticipant, async (req
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const projectName = (project as any).name || 'this project';
-    const prompt = `# Project Kickoff — Plan & Build Wave 1
+    const prompt = `# Project Kickoff — Plan & Build the Full Project
 
-You are kicking off ${projectName}. The repo is connected. Your job is to scaffold as much of the build as possible in this first wave so the user only has to come back, paste the report, and then iterate on individual system components.
+You are kicking off ${projectName}. The repo is connected. Your job is to take this project from empty repo to **as close to feature-complete as possible in a single session**, then deliver one consolidated report at the very end. The user will paste that report back into the portal once — not after each phase.
 
 ## Step 1 — Verify the foundation files (PLAN MODE)
 
@@ -2112,38 +2112,55 @@ Enter **plan mode** and DO NOT make any edits in this step.
 2. Confirm a build-guide doc exists at the repo root with \`Build_Guide\` in its filename (e.g. \`*_Build_Guide_v*.md\`). If it doesn't, stop and tell the user. The build guide is the source of truth for what needs to be built.
 3. Read both files end to end. Treat the build guide as the spec; treat CLAUDE.md as the rules of engagement (autonomy boundaries, escalation policy, scope lock, definition of done).
 
-## Step 2 — Plan the sprints (STILL PLAN MODE)
+## Step 2 — Plan ALL phases (STILL PLAN MODE)
 
-Using the build guide as the spec, propose a concrete sprint plan that:
+Using the build guide as the spec, propose a complete sprint plan that covers the **entire project**:
 
-- Breaks the work into 3–6 phases ordered by dependency: **data + schema → core backend services → primary UI surfaces → integrations → polish/observability**.
-- For each phase, lists the exact files/modules you will create or modify, the directives that govern them (per CLAUDE.md), and the tests that prove the phase is done.
-- Identifies what can be safely scaffolded RIGHT NOW vs. what has to wait on the user (third-party credentials, ambiguous business rules, design decisions outside the build guide).
-- Flags every governance boundary you hit per CLAUDE.md (schema redesigns, external paid dependencies, compliance, NFR thresholds). Default to the lowest-blast-radius path and proceed; only escalate the strategic ones.
+- Break the work into 3–6 phases ordered by dependency: **data + schema → core backend services → primary UI surfaces → integrations → polish/observability**.
+- For each phase, list the exact files/modules to create or modify, the directives that govern them (per CLAUDE.md), and the tests that prove the phase is done.
+- Flag every governance boundary you hit per CLAUDE.md (schema redesigns, external paid dependencies, compliance, NFR thresholds). Default to the lowest-blast-radius path and proceed; only escalate the strategic ones.
+- Identify what genuinely needs the user (third-party credentials, ambiguous business rules outside the build guide). Everything else you proceed on.
 
-Show the user the plan. Do not execute yet.
+Show the user the plan. Confirm before executing.
 
-## Step 3 — Execute Wave 1
+## Step 3 — Execute every phase end-to-end
 
-Once the plan looks right, exit plan mode and execute the FIRST wave in one pass:
+Once the plan looks right, exit plan mode and **execute all phases in sequence — phase 1, then phase 2, then phase 3, all the way through**. Do not stop at the end of phase 1 to ask if you should continue. The default is: keep going.
 
-- Build out as much of the project as you can: schemas, models, core services, primary route handlers, primary UI shells, and at least one smoke test per layer. Aim for breadth over depth — get the skeleton standing.
-- Wire CLAUDE.md and the build guide's \`/directives\` references into the code so the directives are reachable from the modules they govern.
-- For anything you have to assume, log the assumption and proceed (CLAUDE.md's Silent Assumption Allowance — up to 5 per iteration, each logged).
-- Skip what you can't safely build without the user. List those at the end as Wave 2 candidates with the specific question the user needs to answer.
+Between phases, you may briefly summarize what just shipped and tell the user the next phase is starting (so they can interrupt if something is off), but **do not wait for confirmation** — proceed automatically. The only reasons to actually pause are:
 
-## Step 4 — Report back
+- A governance boundary that requires the user's strategic decision (per CLAUDE.md's escalation rules).
+- Missing input you genuinely cannot proceed without (a credential, a business rule the build guide doesn't specify).
+- A failing test you cannot resolve after Diagnostic Mode (per CLAUDE.md).
 
-When done, give a structured report the user can paste back into the portal:
+For anything else: assume the lowest-blast-radius path, log the assumption, and continue. CLAUDE.md allows up to 5 silent assumptions per iteration; if you exceed that, enter Diagnostic Mode but still keep moving toward the next phase.
+
+Within each phase:
+
+- Build the real thing — schemas, models, services, route handlers, UI shells, tests. Not stubs.
+- Wire CLAUDE.md and the build guide's \`/directives\` references into the code.
+- Run the tests for the phase before moving on. Fix what breaks.
+- If a phase has work that genuinely cannot be completed in this session, mark it explicitly and keep going — do not block the rest of the phases on it.
+
+## Step 4 — Deliver ONE consolidated report at the very end
+
+Only after **every phase is either complete or explicitly marked as deferred** do you deliver the final report. The user pastes this back into the portal one time, after the entire build is done. Do not split it across phases.
 
 \`\`\`
-# Wave 1 Report
+# Kickoff Report
+
+## Phases shipped
+- Phase 1: <name> — ✅ complete | ⏳ partial | ❌ deferred (with reason)
+- Phase 2: ...
+- Phase 3: ...
+(one line per phase)
 
 ## Files created / modified
 - path/to/file.ts — <one-line purpose>
+(grouped by phase)
 
-## Tests added
-- path/to/test.ts — <what it covers>
+## Tests added and passing
+- path/to/test.ts — <what it covers> — ✅ pass | ❌ fail (with reason)
 
 ## Directives updated
 - /directives/<file>.md — <what changed and why>
@@ -2151,16 +2168,19 @@ When done, give a structured report the user can paste back into the portal:
 ## Assumptions made (with reasoning)
 - <assumption> — <reasoning>
 
-## Wave 2 candidates
-- <item> — <unblocking question for the user>
+## Items that genuinely need the user
+- <item> — <the specific question, credential, or decision needed>
 
 ## Open escalations (if any)
-- <governance boundary hit, recommendation, what you need a decision on>
+- <governance boundary hit, recommendation, what decision is needed>
+
+## What's left for per-component iteration in the portal
+- <list of capabilities or features that still need depth/polish, suitable for the per-BP task flow that takes over after kickoff>
 \`\`\`
 
-The user will paste this report back into the portal to sync progress. After that they will start hitting individual system components one at a time, so make sure Wave 1 leaves a clean handoff: every file you touched should compile and every test you added should pass, even if the feature behind it is only partial.
+The user pastes this report back into the portal once. The system stamps progress across every capability the report touched, the kickoff disappears, and the per-component task flow takes over for any remaining depth/polish work.
 
-Do not hand-wave. Do not stub-out features that the build guide says should exist. If you cannot build something cleanly, list it as a Wave 2 candidate instead of leaving a half-finished mess.`;
+Do not hand-wave. Do not stop at phase 1. Do not stub out features the build guide says should exist. If you cannot build something cleanly, mark it deferred in the report and keep moving — do not leave a half-finished mess.`;
     res.json({ prompt_text: prompt });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
