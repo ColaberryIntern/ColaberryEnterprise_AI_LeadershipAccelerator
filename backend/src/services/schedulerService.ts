@@ -1410,6 +1410,26 @@ function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignT
   if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
   const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
 
+  // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)
+  // and inject a styled button after the body so it's visually prominent rather than buried inline.
+  let primaryCtaButton = '';
+  const ctaMatch = body.match(/https?:\/\/enterprise\.colaberry\.ai\/(pilot\/[a-z0-9-]+|partners|demo|contact|executive-overview|ai-architect|enroll|ai-workforce-designer)(?:\?[^\s"<>]*)?/i);
+  if (ctaMatch) {
+    const ctaUrl = ctaMatch[0];
+    const slug = ctaMatch[1];
+    let label = 'Book Your 30-Minute Strategy Call';
+    if (/pilot\/zero-risk/i.test(slug)) label = 'Start Your Zero-Risk AI Pilot';
+    else if (/pilot\/ai-team/i.test(slug)) label = 'See the AI Team Pilot';
+    else if (/pilot\/exclusive/i.test(slug)) label = 'See the Exclusive Build Program';
+    else if (/partners/i.test(slug)) label = 'Become a Delivery Partner';
+    else if (/ai-workforce-designer/i.test(slug)) label = 'Design Your AI Workforce';
+    else if (/ai-architect/i.test(slug)) label = 'Talk to Our AI Architect';
+    primaryCtaButton = `
+  <div style="text-align: center; margin: 28px 0;">
+    <a href="${ctaUrl}" class="cta" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">${label} &rarr;</a>
+  </div>`;
+  }
+
   return `
 <!DOCTYPE html>
 <html>
@@ -1425,6 +1445,7 @@ function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignT
 </head>
 <body>
   ${body}
+  ${primaryCtaButton}
   <div class="footer">
     <p style="font-size: 13px; margin-top: 12px;"><a href="${advisorUrl}" style="color: #3b82f6; text-decoration: none; font-weight: 600;">Design Your AI Organization in 5 Minutes &rarr;</a></p>
     <p>Colaberry Enterprise AI Division<br>

@@ -40,6 +40,7 @@ import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
 import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
 import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
 import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
+import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
@@ -53,6 +54,7 @@ const adminRoutes = (
         <Route path="/admin/leads" element={<AdminLeadsPage />} />
         <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
         <Route path="/admin/visitors" element={<AdminVisitorsPage />} />
+        <Route path="/admin/funnel" element={<AdminFunnelPage />} />
         <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
         <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
         <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />

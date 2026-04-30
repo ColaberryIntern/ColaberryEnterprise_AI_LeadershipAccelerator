@@ -23,6 +23,7 @@ const adminNavSections: NavSection[] = [
     { path: '/admin/communications', label: 'Communications', icon: 'chat-dots' },
     { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast' },
     { path: '/admin/visitors', label: 'Visitors', icon: 'eye' },
+    { path: '/admin/funnel', label: 'Funnel', icon: 'funnel' },
   ]},
   { label: 'Lead Ingestion', links: [
     { path: '/admin/sources', label: 'Sources', icon: 'cloud-upload' },

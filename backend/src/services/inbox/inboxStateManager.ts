@@ -118,6 +118,33 @@ export async function processNewEmails(): Promise<ProcessResult> {
         },
       });
 
+      // Step 4b: Detect unsubscribe replies and process opt-out
+      // Inbox COS sees Gmail/IMAP replies that bypass the Mandrill webhook handler.
+      // Without this, leads who reply "unsubscribe" stay in the active queue.
+      try {
+        const bodyLower = (email.body_text || '').toLowerCase().trim();
+        const subjectLower = (email.subject || '').toLowerCase().trim();
+        const unsubKeywords = ['unsubscribe', 'remove me', 'opt out', 'opt-out', 'take me off', 'no more emails', 'stop emailing', 'don\'t email', 'dont email', 'don\'t contact', 'dont contact'];
+        const subjectIsUnsub = /^(re:\s*)?unsubscribe\b/i.test(email.subject || '');
+        const bodyHasUnsub = unsubKeywords.some(kw => bodyLower.includes(kw));
+        if (subjectIsUnsub || bodyHasUnsub) {
+          const { Lead } = require('../../models');
+          const lead = await Lead.findOne({
+            where: sequelize.where(sequelize.fn('LOWER', sequelize.col('email')), email.from_address.toLowerCase()),
+          });
+          if (lead) {
+            const { processOptOut } = require('../unsubscribeEnforcementService');
+            const reason = subjectIsUnsub
+              ? `Inbox unsubscribe reply (subject): "${(email.subject || '').substring(0, 100)}"`
+              : `Inbox unsubscribe reply (body): "${bodyLower.substring(0, 100)}"`;
+            await processOptOut(lead.id, 'email', reason, 'inbox_reply');
+            console.log(`${LOG_PREFIX} Auto-unsubscribed lead ${lead.id} (${email.from_address}) via Inbox COS`);
+          }
+        }
+      } catch (unsubErr: any) {
+        console.warn(`${LOG_PREFIX} Unsub detection failed for ${email.id}: ${unsubErr.message}`);
+      }
+
       // Step 5: SMS alerts (VIP + urgent keywords)
       try {
         const sms = require('./smsAlertService');
