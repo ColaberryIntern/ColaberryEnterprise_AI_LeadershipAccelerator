@@ -418,8 +418,11 @@ router.post('/api/portal/project/architect-build', requireParticipant, async (re
   try {
     const { idea, projectName, repoUrl, accessToken } = req.body;
     if (!idea || !repoUrl) { res.status(400).json({ error: 'idea and repoUrl required' }); return; }
-    const project = await getParticipantProject(req.participant!.sub);
-    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    // The AI build flow runs before any project record exists for this
+    // enrollment. Create-or-fetch so the rest of the handler has a
+    // project to attach build state to.
+    const { createProjectForEnrollment } = await import('../services/projectService');
+    const project = await createProjectForEnrollment(req.participant!.sub);
 
     // 1. Save GitHub connection
     const { connectGitHub } = await import('../services/projectSetupService');
@@ -4041,9 +4044,10 @@ router.get('/api/portal/project/steering-history', requireParticipant, async (re
 // ─── Mode: set project target mode + BP mode overrides ────────
 router.put('/api/portal/project/target-mode', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { getProjectByEnrollment } = await import('../services/projectService');
-    const project = await getProjectByEnrollment(req.participant!.sub);
-    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    // Onboarding can call this before a project record exists.
+    // Auto-create so the user's chosen tier is captured up front.
+    const { createProjectForEnrollment } = await import('../services/projectService');
+    const project = await createProjectForEnrollment(req.participant!.sub);
     const { mode, cascade } = req.body;
     const { getProfile } = await import('../intelligence/profiles/executionProfiles');
     const profile = getProfile(mode);
