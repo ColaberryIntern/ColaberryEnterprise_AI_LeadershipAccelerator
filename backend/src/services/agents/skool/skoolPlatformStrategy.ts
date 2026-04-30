@@ -324,12 +324,18 @@ export function getSystemPrompt(category: string): string {
 - End with "- Ali Muwwakkil" sign-off only.`;
       break;
     case 'direct':
-      ctaInstruction = `CTA Level: DIRECT — HIRING POSTS ONLY
-- This is a hiring/for-hire post where the author is explicitly looking for someone to build or partner.
-- You can pitch directly here: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer."
-- End with "DM me if you want to explore this."
-- Do NOT include URLs — community norm is "DM me" only, even in hiring posts.
-- Lead with something specific to the author's situation (their stated goal, the kind of build they need) before the pitch.`;
+      ctaInstruction = `CTA Level: DIRECT — HIRING POSTS, BUT FIRST-PERSON AND PERSONAL
+- This is a hiring/for-hire post. Even here, generic pitches get flagged as "spamming" by the moderators. Verified — happened twice.
+- WRITE IN FIRST PERSON ("I", not "my team" or "we"). The community accepts individuals offering help, not companies pitching services.
+- Open with a SPECIFIC reference to the author's post (their stated goal, the kind of build they need, something they mentioned by name).
+- Mention ONE concrete piece of relevant recent experience in 1 short sentence. Not a service catalog. Examples that work:
+  - "I just shipped a multi-agent voice system for a logistics client last month."
+  - "I built something similar for an HR consultancy — happy to share what worked."
+- Do NOT list services like "AIOS installs, multi-agent orchestration, voice agents, and custom backends" — this catalog pattern is the textbook spam flag.
+- Do NOT say "my team specializes in", "we deploy production AI systems", "across various industries" — all flagged.
+- Soft CTA: "DM me if you want to dig into this" or "Happy to share more in a DM if useful". NOT "Let's explore how we can collaborate effectively" (vendor-speak).
+- Do NOT include URLs.
+- Keep total reply under 100 words. Brevity signals you're not pitching.`;
       break;
   }
 

@@ -121,6 +121,33 @@ export async function runSkoolQualityGate(): Promise<{
         }
       }
 
+      // --- Even in HIRING posts, block boilerplate "spamming" patterns ---
+      // Moderators flagged hiring replies that listed services like "AIOS installs, multi-agent
+      // orchestration, voice agents, and custom backends" or used "we/my team specialize in".
+      // The community accepts personal first-person offers, not company service catalogs.
+      if (isHiringCategory) {
+        const spamPatterns = [
+          /\bmy team specializes? in\b/i,
+          /\bwe (deploy|deploy production|specialize in|build production)\b/i,
+          /\b(across|in) various industries?\b/i,
+          /\bAIOS installs?, multi-agent orchestration\b/i, // The exact catalog phrase
+          /\bproduction AI systems? (across|including)\b/i,
+          /\bLet'?s explore how we can collaborate\b/i,
+          /\bcollaborate effectively\b/i,
+        ];
+        const matched = spamPatterns.find(p => p.test(body));
+        if (matched) {
+          reasons.push(`Contains boilerplate/catalog pitch (${matched.toString()}) - flagged as spam even in hiring posts. Use first-person, post-specific language instead.`);
+          score -= 50;
+        }
+        // Also: if reply is over 120 words in hiring, that's a vendor pitch length.
+        const wordCount = body.split(/\s+/).filter(Boolean).length;
+        if (wordCount > 120) {
+          reasons.push(`Hiring reply too long (${wordCount} words, max 120). Brevity signals personal offer, not vendor pitch.`);
+          score -= 30;
+        }
+      }
+
       // --- Genuine content check (not just a pitch) ---
       // Look for question-answering language, insights, or substance
       const lowerBody = body.toLowerCase();
