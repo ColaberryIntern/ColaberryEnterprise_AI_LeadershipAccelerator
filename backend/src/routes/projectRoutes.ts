@@ -1857,17 +1857,25 @@ function enrichCapability(cap: any) {
       const bCtx = (cap as any).backend_context;
       const ctxHasBackend = bCtx?.api_routes?.length > 0;
       const ctxHasAgents = bCtx?.agents?.length > 0;
-      const ctxHasModels = bCtx?.models?.length > 0;
-      const realBackend = hasBackend || effectiveBackend || ctxHasBackend;
-      const realAgents = hasAgents || effectiveAgents || ctxHasAgents;
-      const realFrontend = (cap as any).frontend_route || (cap as any).source === 'frontend_page';
+      // Per-capability layer signals — STRICT. Don't fall back to
+      // project-level effectiveBackend/Frontend/Agents here. Those
+      // are correct for maturity/quality (project-wide health) but
+      // wrong for usability (does THIS cap have THIS layer). The
+      // fallback was lighting up Frontend/Agents filters for every
+      // capability the moment any frontend/agent code existed
+      // anywhere in the repo.
+      const realBackend = hasBackend || ctxHasBackend;
+      const realAgents = hasAgents || ctxHasAgents;
+      const realFrontend = (cap as any).frontend_route
+        || (cap as any).source === 'frontend_page'
+        || hasFrontend;
 
       if (isPageBP) {
         return { backend: ctxHasBackend ? 'ready' : 'n/a', frontend: realFrontend ? 'ready' : 'missing', agent: ctxHasAgents ? 'ready' : 'n/a', usable: isPageBPComplete, why_not: isPageBPComplete ? [] : ['Connect a frontend route to mark as ready'] };
       }
       return {
         backend: realBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing',
-        frontend: realFrontend ? 'ready' : (hasFrontend || effectiveFrontend) ? 'partial' : 'missing',
+        frontend: realFrontend ? ((cap as any).frontend_route ? 'ready' : 'partial') : 'missing',
         agent: realAgents ? 'ready' : 'missing',
         usable: processComplete,
         why_not,
