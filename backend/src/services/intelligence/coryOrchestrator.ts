@@ -526,8 +526,8 @@ export function isFreshProject(enrichedCapabilities: any[]): boolean {
 export function buildKickoffTask(): CoryTask {
   return {
     id: 'kickoff:project',
-    title: 'Kickoff: plan your sprints and build wave 1',
-    description: 'Verify CLAUDE.md and your Build Guide doc exist, plan sprints in plan mode, then execute as much of the build as possible in one wave. Sync the report back to start working on individual components.',
+    title: 'Kickoff: plan and build the full project in one session',
+    description: 'Verify CLAUDE.md and your Build Guide doc exist, plan all phases in plan mode, then execute every phase end-to-end. One consolidated report at the very end — paste it back to unlock per-component tasks.',
     source: 'build',
     type: 'foundational',
     impact: 100,

@@ -1619,8 +1619,15 @@ export default function SystemBlueprint() {
                 ui: { label: 'UI', bg: '#10b98120', color: '#059669' },
               };
 
-              // Use orchestrator tasks if available, otherwise fall back to coryPlan
-              const upcomingItems = ot.length > 1
+              // When the primary task is the synthetic kickoff, the project
+              // is fresh and the legacy coryPlan items are irrelevant —
+              // they describe per-component build steps that only make
+              // sense once the foundation exists. Hide "Up next" entirely
+              // until the kickoff is synced.
+              const isKickoffPrimary = ot[0]?.component_id === '__project_kickoff__';
+              const upcomingItems = isKickoffPrimary
+                ? []
+                : ot.length > 1
                 ? ot.slice(1).map((t: any) => ({ id: t.id, title: t.title, explanation: t.description, color: t.color, source: t.source, componentId: t.component_id, componentName: t.component_name, promptTarget: t.prompt_target, blocked: t.blocked, trace: t.decision_trace }))
                 : coryPlan.flatMap(p => p.steps.filter(s => !s.done)).slice(1).map(s => ({ id: s.id, title: s.title, explanation: s.explanation, color: s.promptTarget === 'agent_enhancement' ? '#8b5cf6' : s.promptTarget === 'frontend_exposure' ? '#10b981' : '#3b82f6', source: 'build', componentId: s.componentId, componentName: components.find(c => c.id === s.componentId)?.name, promptTarget: s.promptTarget, blocked: false, trace: null }));
 
