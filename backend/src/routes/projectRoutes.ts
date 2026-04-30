@@ -2382,6 +2382,32 @@ router.post('/api/portal/project/kickoff-sync', requireParticipant, async (req: 
   }
 });
 
+// Reset every capability that a prior kickoff sync touched. Used to
+// undo contaminated state from earlier sync runs (auto-verified
+// requirements, polluted linked_*_components arrays). Idempotent —
+// safe to call multiple times.
+router.post('/api/portal/project/kickoff-sync/reset', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { resetKickoffSync } = await import('../services/kickoffSyncService');
+    const result = await resetKickoffSync(project.id);
+
+    // Roll back the project-level kickoff_synced flag so the kickoff
+    // task can re-surface and the user can re-run cleanly.
+    const ss = (project as any).setup_status || {};
+    const { kickoff_synced, kickoff_synced_at, kickoff_commit, ...rest } = ss;
+    (project as any).setup_status = rest;
+    (project as any).changed('setup_status', true);
+    await project.save();
+
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    console.error('[KickoffSync] reset failed:', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Enhancement Plan
 // ---------------------------------------------------------------------------

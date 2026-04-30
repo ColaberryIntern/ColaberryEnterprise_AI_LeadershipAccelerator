@@ -213,21 +213,22 @@ export async function applyKickoffReport(
     }
 
     // Pick relevant files for this capability: any claimed file whose path
-    // contains a name-variant of the capability. Then classify by layer.
+    // contains a name-variant of the capability. **Strict** — no fallback
+    // to "first 8 of all claimed files". Linking unrelated files makes
+    // u.frontend / u.backend lie about layer presence and lights up
+    // filters (Frontend, Backend, Agents) for capabilities that don't
+    // actually have that layer. Better to link nothing than to pollute.
     const nameVariants = normalizeForPath(capName).filter(v => v.length >= 4);
     const relevantFiles = allClaimedFiles.filter(f => {
       const fl = f.toLowerCase();
       return nameVariants.some(v => fl.includes(v));
     });
-    // If no name-matched files, fall back to layer-balanced subset of claims
-    // so the cap still gets evidence linked.
-    const filesToLink = relevantFiles.length > 0 ? relevantFiles : allClaimedFiles.slice(0, 8);
 
     const backend: string[] = [];
     const frontend: string[] = [];
     const agents: string[] = [];
     const models: string[] = [];
-    for (const f of filesToLink) {
+    for (const f of relevantFiles) {
       const layer = classifyFile(f);
       if (layer === 'backend') backend.push(f);
       else if (layer === 'frontend') frontend.push(f);
@@ -235,30 +236,61 @@ export async function applyKickoffReport(
       else if (layer === 'model') models.push(f);
     }
 
-    // Mark requirements as verified
+    // Foundation work is scaffolding, NOT requirement-level completion.
+    // Don't flip every requirement to 'verified' — that would push
+    // reqCoverage to 100% and make the cap look done when only a
+    // foundation exists. Instead: for high-confidence matches (>= 0.6)
+    // mark requirements as 'matched' (a soft signal — implies the
+    // foundation for this requirement is in place). For lower-confidence
+    // matches, don't touch requirement status at all. 'verified' stays
+    // reserved for explicit per-BP validation reports.
+    //
+    // Save each requirement's previous status so the reset endpoint
+    // can restore it cleanly.
     const reqs = await RequirementsMap.findAll({ where: { project_id: projectId, capability_id: capAny.id } });
-    let verified = 0;
+    const reqSnapshot: Array<{ id: string; prev_status: string; prev_verified_by: string | null; prev_files: string[] }> = [];
+    let touched = 0;
+    const shouldSoftMatch = score >= 0.6;
     for (const req of reqs) {
       const r = req as any;
       if (r.verified_by === 'manual') continue;
-      r.status = 'verified';
-      const reqText = (r.requirement_text || r.requirement_key || '').toLowerCase();
-      const isUI = /\b(ui|page|component|display|layout|form|button|screen|view)\b/.test(reqText);
-      const isAgent = /\b(agent|automat|monitor|schedule|autonomous|intelligence)\b/.test(reqText);
-      const isData = /\b(model|database|table|schema|migration|persist|store)\b/.test(reqText);
-      const layered = isUI && frontend.length ? frontend
-        : isAgent && agents.length ? agents
-        : isData && models.length ? models
-        : backend.length ? backend
-        : filesToLink;
-      r.github_file_paths = layered.slice(0, 5);
-      r.confidence_score = 1.0;
-      r.verified_by = 'kickoff_sync';
-      await r.save();
-      verified++;
+      // Snapshot for rollback
+      reqSnapshot.push({
+        id: r.id,
+        prev_status: r.status,
+        prev_verified_by: r.verified_by || null,
+        prev_files: Array.isArray(r.github_file_paths) ? r.github_file_paths : [],
+      });
+      if (shouldSoftMatch && r.status !== 'verified') {
+        // Promote unmatched/partial → matched. Don't downgrade verified.
+        if (r.status === 'unmatched' || r.status === 'not_started' || r.status === 'partial') {
+          r.status = 'matched';
+        }
+        // Only attach files we genuinely linked to this cap, by layer.
+        const reqText = (r.requirement_text || r.requirement_key || '').toLowerCase();
+        const isUI = /\b(ui|page|component|display|layout|form|button|screen|view)\b/.test(reqText);
+        const isAgent = /\b(agent|automat|monitor|schedule|autonomous|intelligence)\b/.test(reqText);
+        const isData = /\b(model|database|table|schema|migration|persist|store)\b/.test(reqText);
+        const layered = isUI && frontend.length ? frontend
+          : isAgent && agents.length ? agents
+          : isData && models.length ? models
+          : backend.length ? backend
+          : []; // nothing to link if no matching files exist
+        if (layered.length > 0) {
+          r.github_file_paths = layered.slice(0, 5);
+          r.confidence_score = Math.max(r.confidence_score || 0, 0.6);
+          r.verified_by = 'kickoff_inferred';
+        }
+        await r.save();
+        touched++;
+      }
     }
 
-    // Stamp last_execution + accumulate linked files
+    // Stamp last_execution. Status is 'foundation_built', not 'complete'
+    // — so isProcessComplete won't fire on this cap from the kickoff
+    // alone. The cap is no longer fresh (has last_execution) but its
+    // completion still tracks reqCoverage, which is no longer 100% just
+    // from kickoff sync.
     const prevExec = capAny.last_execution || {};
     const prevBackend = capAny.linked_backend_services || [];
     const prevFrontend = capAny.linked_frontend_components || [];
@@ -276,9 +308,10 @@ export async function applyKickoffReport(
         matchScore: score,
         matchedBy: signals,
         filesLinked: { backend, frontend, agents, models },
-        requirementsVerified: verified,
+        requirementsTouched: touched,
+        reqSnapshot, // for the reset endpoint
       },
-      status: 'complete',
+      status: 'foundation_built',
       completed_steps: [...new Set([...(prevExec.completed_steps || []), 'kickoff_sync_applied'])],
     };
     capAny.changed('last_execution', true);
@@ -295,7 +328,7 @@ export async function applyKickoffReport(
       matchScore: score,
       matchedBy: signals,
       filesLinked: backend.length + frontend.length + agents.length + models.length,
-      requirementsVerified: verified,
+      requirementsVerified: touched,
       requirementsTotal: reqs.length,
     });
   }
@@ -311,4 +344,83 @@ export async function applyKickoffReport(
     capabilitiesAdvanced: advanced,
     capabilityDeltas: deltas,
   };
+}
+
+/**
+ * Reset every capability that was touched by a previous kickoff sync.
+ *
+ * Used to undo the contaminated state from earlier kickoff runs that:
+ *  - flipped requirements to 'verified' (inflating reqCoverage to 100%)
+ *  - dumped unrelated files into linked_*_components (lighting up
+ *    the wrong layer filters)
+ *  - stamped last_execution.status='complete'
+ *
+ * For each affected cap:
+ *  - Restores requirement statuses from the per-cap reqSnapshot.
+ *  - Strips the kickoff_sync's contributed files from each layer's
+ *    linked_*_components array (using filesLinked we recorded).
+ *  - Clears last_execution.validation_report and resets status.
+ *  - Removes 'kickoff_sync_applied' from completed_steps.
+ */
+export async function resetKickoffSync(projectId: string): Promise<{
+  capabilitiesReset: number;
+  requirementsRestored: number;
+  filesUnlinked: number;
+}> {
+  const caps = await Capability.findAll({ where: { project_id: projectId } });
+  let capsReset = 0;
+  let reqsRestored = 0;
+  let filesUnlinked = 0;
+
+  for (const cap of caps) {
+    const capAny = cap as any;
+    const le = capAny.last_execution || {};
+    const vr = le.validation_report;
+    if (!vr || vr.source !== 'kickoff_sync') continue;
+
+    // 1. Restore requirements from snapshot
+    const snapshot = Array.isArray(vr.reqSnapshot) ? vr.reqSnapshot : [];
+    for (const snap of snapshot) {
+      const req = await RequirementsMap.findByPk(snap.id);
+      if (!req) continue;
+      const r = req as any;
+      // Only roll back if we're the ones that touched it (don't clobber
+      // a later manual or per-BP validation).
+      if (r.verified_by === 'kickoff_inferred' || r.verified_by === 'kickoff_sync') {
+        r.status = snap.prev_status;
+        r.verified_by = snap.prev_verified_by;
+        r.github_file_paths = Array.isArray(snap.prev_files) ? snap.prev_files : [];
+        await r.save();
+        reqsRestored++;
+      }
+    }
+
+    // 2. Strip kickoff-contributed files from linked layers
+    const linked = vr.filesLinked || {};
+    const stripFrom = (existing: string[], toRemove: string[]): string[] => {
+      const remove = new Set(toRemove || []);
+      const kept = (existing || []).filter((f: string) => !remove.has(f));
+      filesUnlinked += (existing || []).length - kept.length;
+      return kept;
+    };
+    capAny.linked_backend_services = stripFrom(capAny.linked_backend_services, [...(linked.backend || []), ...(linked.models || [])]);
+    capAny.linked_frontend_components = stripFrom(capAny.linked_frontend_components, linked.frontend || []);
+    capAny.linked_agents = stripFrom(capAny.linked_agents, linked.agents || []);
+
+    // 3. Clear the validation_report and rewind the status / step list
+    const completedSteps = (le.completed_steps || []).filter((s: string) => s !== 'kickoff_sync_applied');
+    const { validation_report, status, ...restExec } = le;
+    capAny.last_execution = (Object.keys(restExec).length > 0 || completedSteps.length > 0)
+      ? { ...restExec, completed_steps: completedSteps }
+      : null;
+
+    capAny.changed('last_execution', true);
+    capAny.changed('linked_backend_services', true);
+    capAny.changed('linked_frontend_components', true);
+    capAny.changed('linked_agents', true);
+    await cap.save();
+    capsReset++;
+  }
+
+  return { capabilitiesReset: capsReset, requirementsRestored: reqsRestored, filesUnlinked };
 }

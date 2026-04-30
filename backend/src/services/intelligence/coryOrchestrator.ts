@@ -518,7 +518,10 @@ export function isFreshProject(enrichedCapabilities: any[]): boolean {
     const le = c.last_execution;
     if (!le) return true;
     const status = le.status;
-    if (status === 'complete' || status === 'verified') return false;
+    // 'foundation_built' is the kickoff-applied marker — once any
+    // capability has it, the kickoff has already run and shouldn't
+    // re-surface even if no per-BP validation has happened yet.
+    if (status === 'complete' || status === 'verified' || status === 'foundation_built') return false;
     return true;
   });
 }
