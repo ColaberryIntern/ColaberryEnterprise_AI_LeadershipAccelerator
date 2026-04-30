@@ -4881,15 +4881,43 @@ router.get('/api/portal/project/business-processes/:id/route-candidates', requir
   try {
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+
+    // Collect frontend page files: explicitly linked + repo-scanned by
+    // name stems (the same way enrichCapability decides which frontend
+    // files belong to this cap). The user might have linked nothing
+    // explicitly but their build still produced a page file whose name
+    // contains the BP's name.
     const linked: string[] = (cap as any).linked_frontend_components || [];
-    if (linked.length === 0) { res.json({ candidates: [], pages: [] }); return; }
+    let scanned: string[] = [];
+    try {
+      const { getFileTree } = await import('../services/githubService');
+      const tree = await getFileTree(req.participant!.sub);
+      const allFiles: string[] = (tree?.tree || [])
+        .filter((t: any) => t.type === 'blob')
+        .map((t: any) => t.path);
+      const STOP = new Set(['and', 'or', 'the', 'of', 'a', 'an', 'for', 'to', 'in', 'on',
+        'system', 'service', 'page', 'pages', 'feature', 'module', 'domain', 'management']);
+      const stems = (cap as any).name.toLowerCase()
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .split(/\s+/)
+        .filter((s: string) => s.length >= 4 && !STOP.has(s));
+      scanned = allFiles.filter(f => {
+        const name = (f.split('/').pop() || '').toLowerCase();
+        if (!/\.(tsx?|jsx?|vue|svelte)$/.test(name)) return false;
+        if (!(f.toLowerCase().includes('frontend/') || f.toLowerCase().includes('/pages/') || f.toLowerCase().includes('/views/') || f.toLowerCase().includes('/screens/') || f.toLowerCase().includes('/app/'))) return false;
+        return stems.some((stem: string) => name.includes(stem));
+      });
+    } catch { /* repo scan optional */ }
+
+    const pages = [...new Set([...linked, ...scanned])];
+    if (pages.length === 0) { res.json({ candidates: [], pages: [] }); return; }
+
     const { detectRouteCandidates } = await import('../services/routeDetectionService');
     const all: Array<{ route: string; confidence: number; source: string; via: string; from_file: string }> = [];
-    for (const f of linked.slice(0, 10)) {
+    for (const f of pages.slice(0, 10)) {
       const cands = await detectRouteCandidates(req.participant!.sub, f);
       for (const c of cands) all.push({ ...c, from_file: f });
     }
-    // Dedup by route, keep highest confidence
     const byRoute = new Map<string, typeof all[number]>();
     for (const c of all) {
       const ex = byRoute.get(c.route);
@@ -4897,7 +4925,7 @@ router.get('/api/portal/project/business-processes/:id/route-candidates', requir
     }
     res.json({
       candidates: [...byRoute.values()].sort((a, b) => b.confidence - a.confidence),
-      pages: linked,
+      pages,
     });
   } catch (err: any) {
     console.error('[route-candidates]', err?.message);

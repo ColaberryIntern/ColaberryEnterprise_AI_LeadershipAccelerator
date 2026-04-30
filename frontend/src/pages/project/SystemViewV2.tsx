@@ -145,25 +145,37 @@ function transformBPs(bps: any[]): SystemComponent[] {
         },
         ui: {
           // When a frontend_route is set, surface it as a connected page.
-          // When NOT set but the BP has linked frontend components from a
-          // validation report, surface a placeholder page so the UI tab
-          // still shows up — the user can pick a route from there to
+          // When NOT set but the BP has frontend code (either via
+          // linked_frontend_components from a validation report, OR
+          // detected by the per-BP repo scan that drives usability.frontend
+          // to 'partial'/'ready'), surface a placeholder page so the UI
+          // tab still shows up — the user can pick a route from there to
           // connect, instead of having to bounce back to Define Component.
-          pages: bp.frontend_route ? [{
-            name: bp.name,
-            route: bp.frontend_route,
-            source: 'mapped' as const,
-            verified: true,
-            confidence: 100,
-            bpId: bp.id,
-          }] : ((bp.linked_frontend_components || []).length > 0 ? [{
-            name: bp.name,
-            route: '',                    // empty route — picker will fill it
-            source: 'pending' as const,   // signals "needs route picked"
-            verified: false,
-            confidence: 0,
-            bpId: bp.id,
-          }] : []),
+          pages: ((): UIPage[] => {
+            if (bp.frontend_route) {
+              return [{
+                name: bp.name,
+                route: bp.frontend_route,
+                source: 'mapped',
+                verified: true,
+                confidence: 100,
+                bpId: bp.id,
+              }];
+            }
+            const hasLinked = (bp.linked_frontend_components || []).length > 0;
+            const hasFrontendLayer = u.frontend === 'partial' || u.frontend === 'ready';
+            if ((hasLinked || hasFrontendLayer) && !isPageBP) {
+              return [{
+                name: bp.name,
+                route: '',
+                source: 'pending',
+                verified: false,
+                confidence: 0,
+                bpId: bp.id,
+              }];
+            }
+            return [];
+          })(),
         },
         userStatus: (bp.user_status || 'in_progress') as 'in_progress' | 'verified' | 'archived',
       };
