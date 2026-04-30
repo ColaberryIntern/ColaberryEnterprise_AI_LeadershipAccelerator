@@ -122,28 +122,46 @@ export async function runSkoolQualityGate(): Promise<{
       }
 
       // --- Even in HIRING posts, block boilerplate "spamming" patterns ---
-      // Moderators flagged hiring replies that listed services like "AIOS installs, multi-agent
-      // orchestration, voice agents, and custom backends" or used "we/my team specialize in".
-      // The community accepts personal first-person offers, not company service catalogs.
+      // Moderators flag hiring replies that read like vendor catalogs.
+      // Verified across 5+ moderation strikes — the pattern is consistent.
       if (isHiringCategory) {
         const spamPatterns = [
-          /\bmy team specializes? in\b/i,
-          /\bwe (deploy|deploy production|specialize in|build production)\b/i,
-          /\b(across|in) various industries?\b/i,
-          /\bAIOS installs?, multi-agent orchestration\b/i, // The exact catalog phrase
-          /\bproduction AI systems? (across|including)\b/i,
-          /\bLet'?s explore how we can collaborate\b/i,
+          // Service-catalog language (any form)
+          /\b(my team|we)\s+(specializes?|specialise|build|builds|deploy|deploys|offer|offers|provide|handles?|act\s+as)/i,
+          /\bproduction AI systems?\b/i,
+          /\bmulti[- ]agent orchestration\b/i,
+          /\bAIOS installs?\b/i,
+          /\bvoice agents? and custom backends?\b/i,
+          /\bcustom backends?\b/i,
+          // "Delivery team" framing — became its own catalog phrase
+          /\bdelivery side (for|of) (agency|agencies)\b/i,
+          /\bbuild and maintain (the |it )?(system|systems)? ?on retainer\b/i,
+          /\bwe('?| a)?(re)? the delivery (side|team)\b/i,
+          // Vendor closers
           /\bcollaborate effectively\b/i,
+          /\bLet'?s (discuss|explore) how (we|my team)\b/i,
+          /\bbring your (project|strategy|vision) to life\b/i,
+          /\b(various|multiple) industries\b/i,
+          /\bideal for your (expanding|growing) needs\b/i,
+          // Generic "you handle X, we handle Y" framing
+          /\byou (close|handle) the deals?,? (and )?we (build|handle|deliver)\b/i,
         ];
         const matched = spamPatterns.find(p => p.test(body));
         if (matched) {
-          reasons.push(`Contains boilerplate/catalog pitch (${matched.toString()}) - flagged as spam even in hiring posts. Use first-person, post-specific language instead.`);
+          reasons.push(`Contains boilerplate/catalog pitch (${matched.toString()}) - flagged as spam by moderators. Use first-person ("I", not "we/my team"), post-specific language with one concrete recent build.`);
           score -= 50;
         }
-        // Also: if reply is over 120 words in hiring, that's a vendor pitch length.
+        // Strict word cap — vendor pitches are long, peer offers are short
         const wordCount = body.split(/\s+/).filter(Boolean).length;
-        if (wordCount > 120) {
-          reasons.push(`Hiring reply too long (${wordCount} words, max 120). Brevity signals personal offer, not vendor pitch.`);
+        if (wordCount > 90) {
+          reasons.push(`Hiring reply too long (${wordCount} words, max 90). Brevity signals peer offer, not vendor pitch.`);
+          score -= 30;
+        }
+        // Require first-person voice — count "I" vs "we/my team" mentions
+        const firstPersonCount = (body.match(/\bI\b/g) || []).length;
+        const teamCount = (body.match(/\b(we|my team|our team|us)\b/gi) || []).length;
+        if (teamCount > firstPersonCount + 1) {
+          reasons.push(`Reply uses too much "we/my team" (${teamCount}) vs first-person "I" (${firstPersonCount}). Hiring replies must read as personal, not corporate.`);
           score -= 30;
         }
       }
