@@ -2099,10 +2099,10 @@ router.post('/api/portal/project/kickoff-prompt', requireParticipant, async (req
   try {
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
-    const projectName = (project as any).name || 'this project';
-    const prompt = `# Project Kickoff — Plan & Build the Full Project
+    const projectName = (project as any).organization_name || (project as any).name || 'this project';
+    const prompt = `# Project Kickoff — Plan & Build the Foundation
 
-You are kicking off ${projectName}. The repo is connected. Your job is to take this project from empty repo to **as close to feature-complete as possible in a single session**, then deliver one consolidated report at the very end. The user will paste that report back into the portal once — not after each phase.
+You are kicking off ${projectName}. The repo is connected. Your job is to take this project from empty repo to **a complete, working foundation in a single session** — every load-bearing layer scaffolded with real code, real tests, and the directives wired in — then deliver one consolidated report at the very end. The user will paste that report back into the portal once — not after each phase.
 
 ## Step 1 — Verify the foundation files (PLAN MODE)
 
@@ -2112,9 +2112,9 @@ Enter **plan mode** and DO NOT make any edits in this step.
 2. Confirm a build-guide doc exists at the repo root with \`Build_Guide\` in its filename (e.g. \`*_Build_Guide_v*.md\`). If it doesn't, stop and tell the user. The build guide is the source of truth for what needs to be built.
 3. Read both files end to end. Treat the build guide as the spec; treat CLAUDE.md as the rules of engagement (autonomy boundaries, escalation policy, scope lock, definition of done).
 
-## Step 2 — Plan ALL phases (STILL PLAN MODE)
+## Step 2 — Plan ALL foundation phases (STILL PLAN MODE)
 
-Using the build guide as the spec, propose a complete sprint plan that covers the **entire project**:
+Using the build guide as the spec, propose a complete sprint plan that lays down the **full foundation** of the project:
 
 - Break the work into 3–6 phases ordered by dependency: **data + schema → core backend services → primary UI surfaces → integrations → polish/observability**.
 - For each phase, list the exact files/modules to create or modify, the directives that govern them (per CLAUDE.md), and the tests that prove the phase is done.

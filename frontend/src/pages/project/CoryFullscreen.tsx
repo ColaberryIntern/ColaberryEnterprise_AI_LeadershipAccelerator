@@ -26,7 +26,7 @@ interface Message {
 // about it — and would default to muttering about unmatched requirements.
 const KICKOFF_LEARN_TEXT = `## What "Project Kickoff" actually is
 
-This is your **first action** on a brand-new project — a one-time pass that builds **as much of your system as possible in a single session**, end to end. Not just a skeleton. The goal is to come out of the kickoff with most of the project actually built, so the per-component flow afterwards is about depth and polish, not scaffolding.
+This is your **first action** on a brand-new project — a one-time pass that builds **the entire foundation in a single session**, end to end. Not just a skeleton. The goal is to come out of the kickoff with every load-bearing layer in place, so the per-component flow afterwards is about depth and polish, not scaffolding.
 
 It is **not** a regular task. It only ever appears once: the moment you sync the kickoff report, the kickoff disappears and the per-component task list takes over.
 
@@ -35,7 +35,7 @@ It is **not** a regular task. It only ever appears once: the moment you sync the
 A Claude Code prompt is copied to your clipboard. When you paste it into Claude Code, it runs four steps:
 
 1. **Plan mode — verify foundation files.** Claude confirms \`CLAUDE.md\` and your \`*Build_Guide*.md\` exist at the repo root and reads them end to end. CLAUDE.md is your operating contract. The build guide is the spec.
-2. **Plan mode — propose all phases.** A complete sprint plan covering the *whole* project: 3–6 phases ordered by dependency (data → backend → UI → integrations → polish). Each phase lists files, tests, and any governance boundaries it would cross. You confirm the plan once.
+2. **Plan mode — propose all foundation phases.** A complete sprint plan covering the *whole foundation*: 3–6 phases ordered by dependency (data → backend → UI → integrations → polish). Each phase lists files, tests, and any governance boundaries it would cross. You confirm the plan once.
 3. **Execute every phase end to end.** Claude executes phase 1, then phase 2, then phase 3, all the way through. It may briefly tell you what just shipped and that the next phase is starting, but it does **not** wait for your confirmation between phases. It only stops for genuine blockers — a governance boundary that needs your decision, a credential it can't fabricate, or a failing test it cannot resolve. Otherwise it keeps moving.
 4. **One consolidated report at the end.** Once every phase is either complete or explicitly marked deferred, Claude returns a single report covering the whole build. You paste that back into the portal **once** — not after each phase.
 
@@ -43,7 +43,7 @@ A Claude Code prompt is copied to your clipboard. When you paste it into Claude 
 
 A fresh project has no foundation. Asking you to "Improve UI for Value Proposition" before there's a frontend, or "Build Backend Services for Customer Acquisition" before there's a database — that's busywork. You'd open Claude Code 29 times to build 29 BPs from scratch instead of running it once for the whole thing.
 
-The kickoff buys you the entire build in one session. The per-component flow that takes over afterwards is for sharpening, not scaffolding.
+The kickoff buys you the entire foundation in one session. The per-component flow that takes over afterwards is for sharpening, not scaffolding.
 
 ## You can interrupt — but the default is "keep going"
 

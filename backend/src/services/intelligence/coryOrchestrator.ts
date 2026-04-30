@@ -526,8 +526,8 @@ export function isFreshProject(enrichedCapabilities: any[]): boolean {
 export function buildKickoffTask(): CoryTask {
   return {
     id: 'kickoff:project',
-    title: 'Kickoff: plan and build the full project in one session',
-    description: 'Verify CLAUDE.md and your Build Guide doc exist, plan all phases in plan mode, then execute every phase end-to-end. One consolidated report at the very end — paste it back to unlock per-component tasks.',
+    title: 'Kickoff: plan and build the foundation in one session',
+    description: 'Verify CLAUDE.md and your Build Guide doc exist, plan all phases in plan mode, then execute every foundation phase end-to-end. One consolidated report at the very end — paste it back to unlock per-component tasks.',
     source: 'build',
     type: 'foundational',
     impact: 100,
