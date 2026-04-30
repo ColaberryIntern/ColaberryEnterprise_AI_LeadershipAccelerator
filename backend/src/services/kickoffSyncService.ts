@@ -378,14 +378,13 @@ export async function resetKickoffSync(projectId: string): Promise<{
     const vr = le.validation_report;
     if (!vr || vr.source !== 'kickoff_sync') continue;
 
-    // 1. Restore requirements from snapshot
+    // 1. Restore requirements from snapshot when present.
     const snapshot = Array.isArray(vr.reqSnapshot) ? vr.reqSnapshot : [];
+    const snapshotIds = new Set(snapshot.map((s: any) => s.id));
     for (const snap of snapshot) {
       const req = await RequirementsMap.findByPk(snap.id);
       if (!req) continue;
       const r = req as any;
-      // Only roll back if we're the ones that touched it (don't clobber
-      // a later manual or per-BP validation).
       if (r.verified_by === 'kickoff_inferred' || r.verified_by === 'kickoff_sync') {
         r.status = snap.prev_status;
         r.verified_by = snap.prev_verified_by;
@@ -393,6 +392,25 @@ export async function resetKickoffSync(projectId: string): Promise<{
         await r.save();
         reqsRestored++;
       }
+    }
+
+    // 1b. Snapshot-less fallback: caps from prior kickoff runs (before
+    // the snapshot field existed) won't have one. For those, find any
+    // requirement on the cap whose verified_by came from the kickoff
+    // and roll it back to 'unmatched' — the safe default. This loses
+    // the original prev_status detail but cleans up the pollution.
+    const orphanReqs = await RequirementsMap.findAll({
+      where: { project_id: projectId, capability_id: capAny.id, verified_by: { [Op.in]: ['kickoff_sync', 'kickoff_inferred'] } as any } as any,
+    });
+    for (const req of orphanReqs) {
+      const r = req as any;
+      if (snapshotIds.has(r.id)) continue; // already handled above
+      r.status = 'unmatched';
+      r.verified_by = null;
+      r.github_file_paths = [];
+      r.confidence_score = 0;
+      await r.save();
+      reqsRestored++;
     }
 
     // 2. Strip kickoff-contributed files from linked layers
