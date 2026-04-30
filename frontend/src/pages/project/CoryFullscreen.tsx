@@ -9,7 +9,8 @@
  * Sessions persist in ArchitectSession table
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import portalApi from '../../utils/portalApi';
 
 interface Message {
@@ -19,11 +20,62 @@ interface Message {
   timestamp: number;
 }
 
+// Hardcoded explanation rendered when the user clicks "Learn About This"
+// on the synthetic Project Kickoff task. The kickoff isn't a real BP, so
+// the normal architect/learn endpoint has nothing meaningful to say
+// about it — and would default to muttering about unmatched requirements.
+const KICKOFF_LEARN_TEXT = `## What "Project Kickoff" actually is
+
+This is your **first action** on a brand-new project — a one-time pass that scaffolds as much of your system as possible *before* you start working on individual business processes.
+
+It is **not** a regular task. It will only ever appear once: the moment you sync your first validation report, the kickoff disappears and the per-component task list takes over.
+
+## What happens when you click "Generate Build Prompt"
+
+A Claude Code prompt is copied to your clipboard. When you paste it into Claude Code, it runs four steps:
+
+1. **Plan mode — verify foundation files.** Claude confirms \`CLAUDE.md\` and your \`*Build_Guide*.md\` exist at the repo root and reads them end to end. CLAUDE.md is your operating contract. The build guide is the spec.
+2. **Plan mode — propose sprint phases.** 3–6 phases ordered by dependency (data → backend → UI → integrations → polish). Each phase lists files, tests, and any governance boundaries it would cross.
+3. **Execute Wave 1.** Exits plan mode and scaffolds the skeleton in one pass: schemas, models, core services, primary route handlers, primary UI shells, smoke tests. Aim is breadth over depth.
+4. **Report back.** A structured report listing files touched, tests added, assumptions made, and Wave 2 candidates.
+
+You paste that report back into the portal. The system parses it, stamps progress on the affected capabilities, and the kickoff goes away.
+
+## Why we do it this way
+
+A fresh project has no foundation. Asking you to "Improve UI for Value Proposition" before there's a frontend, or "Build Backend Services for Customer Acquisition" before there's a database — that's busywork. You'd open Claude Code 29 times to build 29 BPs from scratch instead of running it once for everything.
+
+The kickoff buys you breadth in one shot. After Wave 1, you're refining real code instead of staring at a blank slate.
+
+## What unlocks after the kickoff syncs
+
+The full per-component recommendation flow:
+
+- **Build** tasks for capabilities still missing layers
+- **Health** tasks for things the build guide says should exist but the code doesn't show
+- **Improve** tasks for capabilities at low maturity
+- **UI** tasks routed through the UI Advisor for layout / usability / mobile responsiveness
+
+Each one targets exactly one business process at a time, with its own focused Claude Code prompt.
+
+## What you should do right now
+
+Close this and click **Generate Build Prompt** on the kickoff task. Run it in Claude Code, then paste the report back. That's the entire first-day flow.`;
+
 export default function CoryFullscreen() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const mode = searchParams.get('mode') || 'build';
   const componentId = searchParams.get('componentId');
   const stepName = searchParams.get('stepName') || '';
+
+  // Close goes back to wherever the user was. window.history is the
+  // most accurate signal — if there's something to go back to, use it;
+  // otherwise fall back to the Blueprint.
+  const handleClose = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/portal/project/blueprint');
+  };
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -43,6 +95,23 @@ export default function CoryFullscreen() {
     setInitialized(true);
 
     const init = async () => {
+      // Special case: the synthetic kickoff "component" doesn't exist
+      // in the DB. Skip the API entirely and render a kickoff-specific
+      // explanation. Without this, Cory's learn endpoint would 404 (or
+      // worse, find nothing and ramble about unmatched requirements).
+      if (mode === 'learn' && componentId === '__project_kickoff__') {
+        setMessages([{
+          role: 'cory',
+          text: KICKOFF_LEARN_TEXT,
+          buttons: [
+            { label: 'Generate the kickoff prompt', prompt: '__navigate__/portal/project/blueprint' },
+            { label: 'What happens after Wave 1?', prompt: 'After I run the kickoff prompt and paste my report back, what does the system look like and what tasks come next? Walk me through the post-kickoff flow.' },
+            { label: 'Why not just build one BP at a time from the start?', prompt: 'Why does the kickoff scaffold the whole project in one wave instead of letting me build one business process at a time from day one? What problem is this solving?' },
+          ],
+          timestamp: Date.now(),
+        }]);
+        return;
+      }
       try {
         // Start a new ArchitectChat session
         const startRes = await portalApi.post('/api/portal/project/architect/start');
@@ -139,6 +208,20 @@ export default function CoryFullscreen() {
     }
   };
 
+  // Escape closes Cory regardless of focus location. Inline the
+  // navigation so the effect's dep list stays stable (production
+  // eslint config doesn't ship react-hooks/exhaustive-deps and a
+  // disable comment would break the build).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (window.history.length > 1) navigate(-1);
+      else navigate('/portal/project/blueprint');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navigate]);
+
   const handleButtonClick = (button: { label: string; prompt: string }) => {
     if (button.prompt.startsWith('__navigate__')) {
       window.location.href = button.prompt.replace('__navigate__', '');
@@ -162,13 +245,23 @@ export default function CoryFullscreen() {
             </span>
           </div>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 align-items-center">
           <Link to="/portal/project/blueprint" className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }}>
             <i className="bi bi-arrow-left me-1"></i>Blueprint
           </Link>
           <Link to="/portal/project/system-v2" className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }}>
             <i className="bi bi-grid me-1"></i>System View
           </Link>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            style={{ fontSize: 10 }}
+            onClick={handleClose}
+            title="Close Cory (Esc)"
+            aria-label="Close Cory"
+          >
+            <i className="bi bi-x-lg me-1"></i>Close
+          </button>
         </div>
       </div>
 
@@ -178,23 +271,45 @@ export default function CoryFullscreen() {
           <div key={i} className={`d-flex ${msg.role === 'user' ? 'justify-content-end' : 'justify-content-start'} mb-3`}>
             <div style={{
               maxWidth: '85%',
-              padding: '12px 16px',
+              padding: '14px 18px',
               borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
               background: msg.role === 'user' ? 'var(--color-primary)' : '#fff',
               color: msg.role === 'user' ? '#fff' : 'var(--color-text)',
-              fontSize: 13,
-              lineHeight: 1.6,
+              fontSize: msg.role === 'cory' ? 15 : 14,
+              lineHeight: 1.65,
               boxShadow: msg.role === 'cory' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
               border: msg.role === 'cory' ? '1px solid var(--color-border)' : 'none',
-              whiteSpace: 'pre-line',
             }}>
               {msg.role === 'cory' && (
                 <div className="d-flex align-items-center gap-1 mb-2">
-                  <i className="bi bi-robot" style={{ fontSize: 11, color: '#3b82f6' }}></i>
-                  <span style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600 }}>Cory</span>
+                  <i className="bi bi-robot" style={{ fontSize: 12, color: '#3b82f6' }}></i>
+                  <span style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600 }}>Cory</span>
                 </div>
               )}
-              {msg.text}
+              {msg.role === 'cory' ? (
+                <div className="cory-md">
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => <h4 style={{ fontSize: 19, fontWeight: 700, color: 'var(--color-primary)', marginTop: 8, marginBottom: 10 }}>{children}</h4>,
+                      h2: ({ children }) => <h5 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-primary)', marginTop: 14, marginBottom: 8 }}>{children}</h5>,
+                      h3: ({ children }) => <h6 style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-primary)', marginTop: 12, marginBottom: 6 }}>{children}</h6>,
+                      p: ({ children }) => <p style={{ fontSize: 15, lineHeight: 1.65, marginBottom: 10 }}>{children}</p>,
+                      strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--color-text)' }}>{children}</strong>,
+                      em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
+                      ul: ({ children }) => <ul style={{ fontSize: 15, lineHeight: 1.65, paddingLeft: 22, marginBottom: 10 }}>{children}</ul>,
+                      ol: ({ children }) => <ol style={{ fontSize: 15, lineHeight: 1.65, paddingLeft: 22, marginBottom: 10 }}>{children}</ol>,
+                      li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
+                      code: ({ children }) => <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontSize: 13, fontFamily: 'monospace' }}>{children}</code>,
+                      blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #cbd5e1', paddingLeft: 12, marginLeft: 0, color: '#475569', fontStyle: 'italic' }}>{children}</blockquote>,
+                      a: ({ href, children }) => <a href={href} style={{ color: 'var(--color-primary-light)', textDecoration: 'underline' }} target="_blank" rel="noopener noreferrer">{children}</a>,
+                    }}
+                  >
+                    {msg.text}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <span style={{ whiteSpace: 'pre-line' }}>{msg.text}</span>
+              )}
 
               {/* Continuation buttons */}
               {msg.buttons && msg.buttons.length > 0 && (

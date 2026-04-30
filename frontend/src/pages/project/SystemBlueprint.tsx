@@ -1360,7 +1360,21 @@ export default function SystemBlueprint() {
                   <i className={`bi ${isUIAdvisor ? 'bi-magic' : 'bi-terminal'} me-1`}></i>
                   {isUIAdvisor ? 'Run UI Advisor' : 'Generate Build Prompt'}
                 </button>
-                <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(buttonComp)}>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  style={{ fontSize: 12 }}
+                  onClick={() => {
+                    // Kickoff isn't tied to a real BP — buttonComp falls
+                    // back to whatever capability happened to be top-scored,
+                    // which would have Cory explain that unrelated thing.
+                    // Route to the kickoff explanation directly instead.
+                    if (primaryTarget === 'project_kickoff') {
+                      navigate('/portal/project/cory?mode=learn&componentId=__project_kickoff__&stepName=Project%20Kickoff');
+                      return;
+                    }
+                    handleLearnAbout(buttonComp);
+                  }}
+                >
                   <i className="bi bi-book me-1"></i>Learn About This
                 </button>
               </div>
