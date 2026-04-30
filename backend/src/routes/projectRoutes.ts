@@ -2078,10 +2078,90 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
     const enriched = hierarchy.map(enrichCapability);
     const { getProjectTopTasks } = require('../services/intelligence/coryOrchestrator');
     const tasks = getProjectTopTasks(enriched, projectMode);
-    // Attach component names for display
+    // Attach component names for display. The synthetic kickoff task
+    // gets a project-level label since it isn't tied to any single BP.
     const nameMap = new Map(enriched.map((c: any) => [c.id, c.name]));
-    const tasksWithNames = tasks.map((t: any) => ({ ...t, component_name: nameMap.get(t.component_id) || 'Unknown' }));
+    const tasksWithNames = tasks.map((t: any) => ({
+      ...t,
+      component_name: t.component_id === '__project_kickoff__' ? 'Project Kickoff' : (nameMap.get(t.component_id) || 'Unknown'),
+    }));
     res.json({ tasks: tasksWithNames, total_components: enriched.length, mode: projectMode });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Kickoff prompt ──────────────────────────────────────────────────
+// Returns the Claude Code prompt the user should run as their very
+// first task on a brand-new project. Plan-mode foundation check, then
+// sprint plan, then a single execution wave that builds out as much
+// as possible. Pasted validation report flips last_execution and the
+// regular per-BP tasks take over from there.
+router.post('/api/portal/project/kickoff-prompt', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const projectName = (project as any).name || 'this project';
+    const prompt = `# Project Kickoff — Plan & Build Wave 1
+
+You are kicking off ${projectName}. The repo is connected. Your job is to scaffold as much of the build as possible in this first wave so the user only has to come back, paste the report, and then iterate on individual system components.
+
+## Step 1 — Verify the foundation files (PLAN MODE)
+
+Enter **plan mode** and DO NOT make any edits in this step.
+
+1. Confirm \`CLAUDE.md\` exists at the repo root. If it doesn't, stop and tell the user — do not proceed without it. CLAUDE.md is the operating contract for this codebase.
+2. Confirm a build-guide doc exists at the repo root with \`Build_Guide\` in its filename (e.g. \`*_Build_Guide_v*.md\`). If it doesn't, stop and tell the user. The build guide is the source of truth for what needs to be built.
+3. Read both files end to end. Treat the build guide as the spec; treat CLAUDE.md as the rules of engagement (autonomy boundaries, escalation policy, scope lock, definition of done).
+
+## Step 2 — Plan the sprints (STILL PLAN MODE)
+
+Using the build guide as the spec, propose a concrete sprint plan that:
+
+- Breaks the work into 3–6 phases ordered by dependency: **data + schema → core backend services → primary UI surfaces → integrations → polish/observability**.
+- For each phase, lists the exact files/modules you will create or modify, the directives that govern them (per CLAUDE.md), and the tests that prove the phase is done.
+- Identifies what can be safely scaffolded RIGHT NOW vs. what has to wait on the user (third-party credentials, ambiguous business rules, design decisions outside the build guide).
+- Flags every governance boundary you hit per CLAUDE.md (schema redesigns, external paid dependencies, compliance, NFR thresholds). Default to the lowest-blast-radius path and proceed; only escalate the strategic ones.
+
+Show the user the plan. Do not execute yet.
+
+## Step 3 — Execute Wave 1
+
+Once the plan looks right, exit plan mode and execute the FIRST wave in one pass:
+
+- Build out as much of the project as you can: schemas, models, core services, primary route handlers, primary UI shells, and at least one smoke test per layer. Aim for breadth over depth — get the skeleton standing.
+- Wire CLAUDE.md and the build guide's \`/directives\` references into the code so the directives are reachable from the modules they govern.
+- For anything you have to assume, log the assumption and proceed (CLAUDE.md's Silent Assumption Allowance — up to 5 per iteration, each logged).
+- Skip what you can't safely build without the user. List those at the end as Wave 2 candidates with the specific question the user needs to answer.
+
+## Step 4 — Report back
+
+When done, give a structured report the user can paste back into the portal:
+
+\`\`\`
+# Wave 1 Report
+
+## Files created / modified
+- path/to/file.ts — <one-line purpose>
+
+## Tests added
+- path/to/test.ts — <what it covers>
+
+## Directives updated
+- /directives/<file>.md — <what changed and why>
+
+## Assumptions made (with reasoning)
+- <assumption> — <reasoning>
+
+## Wave 2 candidates
+- <item> — <unblocking question for the user>
+
+## Open escalations (if any)
+- <governance boundary hit, recommendation, what you need a decision on>
+\`\`\`
+
+The user will paste this report back into the portal to sync progress. After that they will start hitting individual system components one at a time, so make sure Wave 1 leaves a clean handoff: every file you touched should compile and every test you added should pass, even if the feature behind it is only partial.
+
+Do not hand-wave. Do not stub-out features that the build guide says should exist. If you cannot build something cleanly, list it as a Wave 2 candidate instead of leaving a half-finished mess.`;
+    res.json({ prompt_text: prompt });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

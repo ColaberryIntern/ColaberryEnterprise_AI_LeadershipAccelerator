@@ -703,6 +703,25 @@ export default function SystemBlueprint() {
       navigate(`/portal/project/system-v2?componentId=${comp.id}&tab=ui&autorun=${opts.uiStepKey}`);
       return;
     }
+    // project_kickoff is the synthetic first-wave task on fresh projects.
+    // It isn't tied to any BP, so we hit the project-level kickoff endpoint
+    // instead of /business-processes/:id/prompt.
+    if (target === 'project_kickoff') {
+      setBuild(prev => ({ ...prev, phase: 'generating', prompt: null, validationResult: null, beforeMetrics: { coverage: 0, maturityLevel: 0, readiness: 0 }, pasteDetected: false }));
+      try {
+        const res = await portalApi.post('/api/portal/project/kickoff-prompt', {});
+        const promptText = res.data?.prompt_text || '';
+        await copyText(promptText);
+        showToast('Kickoff prompt copied — paste into Claude Code');
+        setBuild(prev => ({ ...prev, phase: 'waiting_for_execution', prompt: promptText }));
+        setShowPrompt(false);
+        prevReportLen.current = 0;
+      } catch {
+        showToast('Failed to generate kickoff prompt', '#ef4444');
+        setBuild(prev => ({ ...prev, phase: 'idle' }));
+      }
+      return;
+    }
     const beforeMetrics = { coverage: comp.completion, maturityLevel: comp.maturityLevel, readiness: comp.completion };
     setBuild(prev => ({ ...prev, phase: 'generating', prompt: null, validationResult: null, beforeMetrics, pasteDetected: false }));
     try {

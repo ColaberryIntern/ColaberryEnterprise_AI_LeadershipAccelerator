@@ -496,10 +496,57 @@ export function getTopTasks(enriched: any, projectMode: string): CoryTask[] {
   return result;
 }
 
+// ─── PROJECT KICKOFF DETECTION ────────────────────────────────────────────
+// A project is "fresh" until at least one capability has had its first
+// validation report synced (last_execution set). For fresh projects we
+// replace the entire task list with a single kickoff task that asks
+// Claude Code to plan + scaffold as much of the build as possible in
+// one pass. After the user pastes their first validation report,
+// last_execution gets stamped and the regular per-BP tasks take over.
+
+export function isFreshProject(enrichedCapabilities: any[]): boolean {
+  const real = enrichedCapabilities.filter(c => !isSyntheticBucket(c) && !isInactive(c));
+  if (real.length === 0) return true;
+  return real.every(c => !c.last_execution || Object.keys(c.last_execution || {}).length === 0);
+}
+
+export function buildKickoffTask(): CoryTask {
+  return {
+    id: 'kickoff:project',
+    title: 'Kickoff: plan your sprints and build wave 1',
+    description: 'Verify CLAUDE.md and your Build Guide doc exist, plan sprints in plan mode, then execute as much of the build as possible in one wave. Sync the report back to start working on individual components.',
+    source: 'build',
+    type: 'foundational',
+    impact: 100,
+    urgency: 100,
+    confidence: 100,
+    blocking: true,
+    blocked: false,
+    dependencies: [],
+    system_layer: 'backend',
+    mode_relevance: { mvp: 1, production: 1, enterprise: 1, autonomous: 1 },
+    color: '#3b82f6',
+    prompt_target: 'project_kickoff',
+    component_id: '__project_kickoff__',
+    priority: 999,
+    decision_trace: {
+      reason: 'Fresh project — no capability has been executed yet. Plan and scaffold the build in one pass before working on individual components.',
+      inputs: { coverage: 0, readiness: 0, quality: 0, mode: 'kickoff', layer_status: 'fresh' },
+      confidence: 100,
+    },
+  };
+}
+
 // ─── PROJECT-WIDE ORCHESTRATOR (for Blueprint) ─────────────────────────────
 // Runs getTopTasks across ALL enriched capabilities and returns the global Top 5
 
 export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: string): CoryTask[] {
+  // Fresh project — return only the kickoff task. The user shouldn't
+  // be hitting individual BPs until the first wave has been built.
+  if (isFreshProject(enrichedCapabilities)) {
+    return [buildKickoffTask()];
+  }
+
   const allTasks: CoryTask[] = [];
 
   for (const enriched of enrichedCapabilities) {
