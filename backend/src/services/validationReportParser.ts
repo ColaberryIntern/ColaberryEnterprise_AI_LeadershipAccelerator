@@ -99,22 +99,18 @@ export function parseValidationReport(text: string): ParsedReport {
         case 'database': result.database.push(item); break;
         case 'duplicates': result.duplicatesNoted.push(item); break;
         case 'phases_shipped': {
-          // "Phase N — Name (...) — ✅ complete" or similar
-          const phaseMatch = item.match(/^(phase\s*\d+[^—:]*?)[\s—:-]+([^✅⏳❌]*?)\s*([✅⏳❌])\s*(complete|partial|deferred|done)?(.*)$/i);
-          if (phaseMatch) {
-            const status = (() => {
-              const symbol = phaseMatch[3];
-              const word = (phaseMatch[4] || '').toLowerCase();
-              if (symbol === '✅' || word === 'complete' || word === 'done') return 'complete';
-              if (symbol === '⏳' || word === 'partial') return 'partial';
-              if (symbol === '❌' || word === 'deferred') return 'deferred';
-              return 'unknown';
-            })();
-            result.phases.push({ name: (phaseMatch[1] + (phaseMatch[2] ? ' ' + phaseMatch[2] : '')).trim(), status, body: item });
-          } else {
-            // Fallback: keep the line for downstream matching even if format is loose
-            result.phases.push({ name: item.split(/[—:-]/)[0].trim(), status: 'unknown', body: item });
-          }
+          // Loose-match status: any of the emoji or status words anywhere
+          // in the line counts. The earlier regex was too strict — em-dashes
+          // in the parenthetical body (e.g. "Phase 1 — Foundation (...) — ✅
+          // complete") broke the lazy-quantifier walk and dropped the line.
+          const status = /✅|\bcomplete\b|\bdone\b/i.test(item) ? 'complete'
+            : /⏳|\bpartial\b|\bin progress\b/i.test(item) ? 'partial'
+            : /❌|\bdeferred\b|\bskipped\b|\bblocked\b/i.test(item) ? 'deferred'
+            : 'unknown';
+          // Name is the part before the first em-dash / colon / hyphen
+          // (after the optional "Phase N" prefix).
+          const name = item.split(/\s+[—:-]\s+/)[0].trim() || item.trim();
+          result.phases.push({ name, status, body: item });
           break;
         }
         case 'capabilities_advanced': {
