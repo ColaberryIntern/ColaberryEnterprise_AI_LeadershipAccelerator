@@ -125,6 +125,16 @@ router.get('/api/portal/project/setup/activation-progress', requireParticipant, 
   const enrollmentId = req.participant!.sub;
   const progress = activationProgress.get(enrollmentId);
 
+  // If activation has already finished, that wins. Don't fall back to
+  // the cluster-level marker — a stale "processing" cluster marker
+  // (e.g. from a prior run that didn't clean up) would otherwise keep
+  // the frontend spinner alive even though the build is done.
+  if (progress && (progress.status === 'complete' || progress.status === 'failed')) {
+    res.json(progress);
+    setTimeout(() => { activationProgress.delete(enrollmentId); }, 300000);
+    return;
+  }
+
   // Check clustering-level progress for granular updates
   const { clusteringProgress } = await import('../services/requirementClusteringService');
   const clusterProg = clusteringProgress.get(enrollmentId);

@@ -206,7 +206,11 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           }
         } catch {}
       }, 3000);
-      setTimeout(() => { clearInterval(pollInterval); setStep('complete'); setTimeout(() => onActivated(), 500); }, 180000);
+      // Hard cutoff: 10 minutes. Real builds (large repos, many
+       // requirements) can exceed 3 minutes — we used to give up too
+       // early and the spinner ran forever in the user's eyes even
+       // though backend activation eventually finished.
+       setTimeout(() => { clearInterval(pollInterval); setStep('complete'); setTimeout(() => onActivated(), 500); }, 600000);
     } catch (err: any) { setError(err.response?.data?.error || 'Activation failed'); setStep('github'); }
   };
 

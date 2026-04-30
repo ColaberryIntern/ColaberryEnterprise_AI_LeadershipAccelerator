@@ -176,6 +176,12 @@ export async function clusterRequirements(projectId: string, parsedReqs: ParsedR
         features: [{ name: s.name, description: `All ${s.name} requirements`, success_criteria: `All ${s.requirements.length} requirements implemented`, requirement_keys: s.requirements.map(r => r.key) }],
       })),
     };
+  } finally {
+    // Clear the clustering progress marker so the activation-progress
+    // endpoint stops short-circuiting to "processing" forever. Without
+    // this, the polling loop never sees the activation-level "complete"
+    // status and the frontend spinner runs until its 3-minute timeout.
+    if (enrollmentId) clusteringProgress.delete(enrollmentId);
   }
 }
 
