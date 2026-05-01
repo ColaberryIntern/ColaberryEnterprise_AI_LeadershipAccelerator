@@ -1836,7 +1836,34 @@ export default function SystemBlueprint() {
             </div>
           </div>
           <div className="row g-3 mb-4">
-            {components.map(comp => {
+            {(() => {
+              // Order the grid by Cory's priority: BPs Cory recommends first,
+              // in the same order they appear in his task list, then everything
+              // else (already-complete or not-yet-prioritized BPs) after.
+              // Verified/archived BPs stay at the bottom regardless. This way
+              // the top-left card is the one Cory's "Your Next Step" card
+              // points at, with the next 4 across the row matching "Up next".
+              const taskOrder = new Map<string, number>();
+              orchestratorTasks.forEach((t: any, i: number) => {
+                if (t?.component_id && !taskOrder.has(t.component_id)) {
+                  taskOrder.set(t.component_id, i);
+                }
+              });
+              const verifiedRank = (c: SystemComponent) =>
+                c.userStatus === 'verified' || c.userStatus === 'archived' ? 1 : 0;
+              const corySorted = [...components].sort((a, b) => {
+                // Verified/archived sink to the bottom
+                const va = verifiedRank(a);
+                const vb = verifiedRank(b);
+                if (va !== vb) return va - vb;
+                // Cory-recommended next, in his order
+                const ai = taskOrder.has(a.id) ? taskOrder.get(a.id)! : Infinity;
+                const bi = taskOrder.has(b.id) ? taskOrder.get(b.id)! : Infinity;
+                if (ai !== bi) return ai - bi;
+                // Tiebreak: lower completion first (more work pending = closer to top)
+                return (a.completion || 0) - (b.completion || 0);
+              });
+              return corySorted.map(comp => {
               const ss = STATUS_COLORS[comp.status];
               const mc = MATURITY_COLORS[comp.maturityLevel] || '#9ca3af';
               const cc = completionColor(comp.completion);
@@ -1874,7 +1901,8 @@ export default function SystemBlueprint() {
                   </div>
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
         </>
       )}
