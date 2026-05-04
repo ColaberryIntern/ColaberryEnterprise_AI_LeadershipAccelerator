@@ -7,7 +7,7 @@ const RESPONSES = JSON.parse(fs.readFileSync(path.join(__dirname, '.skool_at_ris
 const SKOOL_EMAIL = process.env.SKOOL_EMAIL || 'ali_muwwakkil@hotmail.com';
 const SKOOL_PASSWORD = process.env.SKOOL_PASSWORD || 'ali00250025';
 
-function stripUrls(body) {
+function stripUrls(body, category) {
   // Strategy: keep ONLY the personal opener (first 1-2 sentences that reference the author),
   // strip everything that smells like a vendor pitch, append brief peer close + sign-off.
   // Also covers URL stripping (legacy) since boilerplate triggers come first.
@@ -30,6 +30,19 @@ function stripUrls(body) {
     /\bdelivery side\b/i,
     /\bon retainer\b/i,
     /\byou (close|handle) the deal/i,
+    // Company case-study fingerprints (any of these tie back to our company)
+    /\$1\.?2\s*M(illion)?/i,
+    /\b200\+?\s+vehicles?\b/i,
+    /\b200\s+invoices?\s+in\s+4\s+minutes?\b/i,
+    /\b97%\s+accuracy\b/i,
+    /\b42,?000\s+members\b/i,
+    /\b60%\s+fewer\s+(inbound\s+)?calls\b/i,
+    // Reach-out CTAs (same intent as DM me) — match bare "reach out" too
+    /\b(feel free to |please |you can )?reach out\b/i,
+    /\bcontact me directly\b/i,
+    /\bif you (want|need|'?d like|have)[^.]*?(reach out|guidance|help|info|chat|questions)/i,
+    /\bI have a tool that\b/i,
+    /\bI use that might help\b/i,
     // Vendor closers
     /\bcollaborate effectively\b/i,
     /\bLet'?s (discuss|explore) how/i,
@@ -79,7 +92,10 @@ function stripUrls(body) {
     head = 'Sounds like an interesting project.';
   }
 
-  return `${head} Happy to share more in a DM if useful. ${SIGNOFF}`;
+  // Category-aware close: only hiring posts get the "Happy to share more in a DM" CTA.
+  // For dev-help / leads-help / builds / intros / announcements, end clean with the sign-off only.
+  const close = category === 'hiring' ? 'Happy to share more in a DM if useful.' : '';
+  return close ? `${head} ${close} ${SIGNOFF}` : `${head} ${SIGNOFF}`;
 }
 
 async function login(page) {
@@ -257,7 +273,7 @@ async function main() {
   let failed = 0;
 
   for (const r of RESPONSES) {
-    const newBody = stripUrls(r.body);
+    const newBody = stripUrls(r.body, r.category);
     if (newBody === r.body) {
       console.log(`\n=== ${r.id} ===\n  No change after stripping (skip)`);
       continue;

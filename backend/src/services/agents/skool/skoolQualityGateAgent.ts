@@ -116,8 +116,11 @@ export async function runSkoolQualityGate(): Promise<{
           /\bDM me\b/i,
           /\bdive deeper\b/i,
           /\bhappy to (chat|share|discuss|connect)\b/i,
-          /\b(feel free to |please )?(reach out to me|reach out directly|contact me directly)\b/i,
-          /\bif you (want|need|'?d like) (more|further|detailed) (guidance|help|info)/i,
+          /\b(feel free to |please |you can )?reach out\b/i,
+          /\bcontact me directly\b/i,
+          /\bif you (want|need|'?d like|have)[^.]*?(reach out|guidance|help|info|chat|questions)/i,
+          /\bI have a tool that\b/i,
+          /\bI use that might help\b/i,
           // Company case-study fingerprints — these dollar figures and counts uniquely identify our work
           /\$1\.?2\s*M(illion)?\b/i,
           /\b200\+?\s+vehicles?\b/i,
