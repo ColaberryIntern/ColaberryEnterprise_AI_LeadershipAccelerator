@@ -102,21 +102,33 @@ export async function runSkoolQualityGate(): Promise<{
         score -= 50; // Heavy penalty - auto-reject
       }
 
-      // --- Block "my team specializes" / pitch language in non-hiring categories ---
-      // Verified: moderators flag self-promo language in dev-help/builds/intros even without URLs.
+      // --- Block pitch language AND case-study fingerprints in non-hiring categories ---
+      // Verified: moderators flag self-promo language AND specific company numbers ($1.2M, 200 vehicles, 97% accuracy)
+      // in dev-help/builds/intros even without URLs.
       const isHiringCategory = response.category === 'hiring';
       if (!isHiringCategory) {
         const pitchPatterns = [
+          // Team / service framing
           /\bmy team\b/i,
           /\bwe\s+(build|specialize|offer|deliver|provide)\b/i,
+          /\bteam (specializes|builds|offers)\b/i,
+          // CTAs to take it private (any phrasing)
           /\bDM me\b/i,
           /\bdive deeper\b/i,
           /\bhappy to (chat|share|discuss|connect)\b/i,
-          /\bteam (specializes|builds|offers)\b/i,
+          /\b(feel free to |please )?(reach out to me|reach out directly|contact me directly)\b/i,
+          /\bif you (want|need|'?d like) (more|further|detailed) (guidance|help|info)/i,
+          // Company case-study fingerprints — these dollar figures and counts uniquely identify our work
+          /\$1\.?2\s*M(illion)?\b/i,
+          /\b200\+?\s+vehicles?\b/i,
+          /\b200\s+invoices?\s+in\s+4\s+minutes?\b/i,
+          /\b97%\s+accuracy\b/i,
+          /\b42,?000\s+members\b/i,
+          /\b60%\s+fewer\s+(inbound\s+)?calls\b/i,
         ];
         const matched = pitchPatterns.find(p => p.test(body));
         if (matched) {
-          reasons.push(`Contains pitch language (${matched.toString()}) outside hiring category - moderators flag this as self-promotion`);
+          reasons.push(`Contains pitch language or company case-study fingerprint (${matched.toString()}) outside hiring category - moderators flag this as self-promotion`);
           score -= 50; // Heavy penalty - auto-reject
         }
       }

@@ -292,35 +292,44 @@ export function getSystemPrompt(category: string): string {
   const toneInstruction = config ? TONE_INSTRUCTIONS[config.tone] || '' : '';
   const ctaLevel = config ? config.ctaLevel : 'minimal';
 
-  const caseStudyBlock = CASE_STUDIES.map(
-    (cs) => `  - ${cs.name}: ${cs.stat} (${cs.detail})`,
-  ).join('\n');
+  // Only expose case studies to the LLM in HIRING-category replies. In any other category,
+  // referencing the specific dollar amounts / vehicle counts / accuracy stats fingerprints
+  // the company and gets the comment moderated as self-promotion.
+  const caseStudyBlock = category === 'hiring'
+    ? CASE_STUDIES.map((cs) => `  - ${cs.name}: ${cs.stat} (${cs.detail})`).join('\n')
+    : '  (No case studies available for this category. Answer with general knowledge / abstract examples only. Do NOT invent or recall specific dollar amounts, percentages, or vehicle counts — even from memory of the case-study list. The moderators flag any branded number as self-promotion.)';
 
   const bannedWordBlock = BANNED_WORDS.map((w) => `  - "${w}"`).join('\n');
 
   let ctaInstruction = '';
   switch (ctaLevel) {
     case 'minimal':
-      ctaInstruction = `CTA Level: MINIMAL — PURE HELP ONLY, NO PROMOTION
+      ctaInstruction = `CTA Level: MINIMAL — PURE HELP ONLY, NO PROMOTION, NO CASE STUDIES
 - This is a community help/intro post. Answer the question and stop.
 - Do NOT mention "my team", "we", "I've built", or anything that hints at services you offer.
-- Do NOT add a "DM me" CTA. Do NOT include any URLs or links.
+- Do NOT cite the company case studies (no "$1.2M", no "200 vehicles", no "200 invoices in 4 minutes", no "97% accuracy"). These numbers are a fingerprint that reads as self-promotion.
+- Do NOT add a "DM me" CTA. Do NOT say "feel free to reach out", "reach out to me directly", "happy to share more" — same intent, same flag.
+- Do NOT include any URLs or links.
 - The sign-off "- Ali Muwwakkil" is the only identification. People who want to find you can click your profile.
 - Moderators flag any promotional layer in dev-help, intros, builds, or announcements.`;
       break;
     case 'subtle':
-      ctaInstruction = `CTA Level: SUBTLE — TECHNICAL HELP ONLY, NO PROMOTION
+      ctaInstruction = `CTA Level: SUBTLE — TECHNICAL HELP ONLY, NO PROMOTION, NO CASE STUDIES
 - This is a dev-help / technical question. Provide a thorough, useful technical answer.
 - Do NOT mention "my team specializes in...", "we build...", "DM me", or any team/service framing.
-- A self-promotional line at the end (e.g. "My team specializes in building these systems. DM me if you want to dive deeper.") will get the comment moderated as self-promotion. Verified — this is exactly what got us flagged.
-- Just answer the question well, sign off "- Ali Muwwakkil", and stop.
-- Do NOT include any URLs or links.`;
+- Do NOT cite the company case studies (no "$1.2M annual savings", no "200 vehicles", no "200 invoices in 4 minutes", no "97% accuracy", no specific dollar amounts or stats from our case study list). These numbers are a fingerprint that ties back to our company and reads as self-promotion in a help context.
+- Do NOT say "feel free to reach out to me", "reach out to me directly", "happy to chat", "happy to share more". Same intent as "DM me", same flag.
+- A self-promotional line at the end will get the comment moderated as self-promotion. Verified — happened multiple times.
+- Just answer the question well using general knowledge / abstract examples (NOT branded numbers), sign off "- Ali Muwwakkil", and stop.
+- Do NOT include any URLs or links.
+- Aim for 3-5 sentences. Long answers with case-study fingerprints look like vendor blog posts, which is what gets flagged.`;
       break;
     case 'moderate':
-      ctaInstruction = `CTA Level: MODERATE — HELPFUL FIRST, LIGHT PERSONAL TOUCH
+      ctaInstruction = `CTA Level: MODERATE — HELPFUL FIRST, LIGHT PERSONAL TOUCH, NO BRANDED NUMBERS
 - This is a leads-help post. Provide genuine advice based on your experience.
 - You may share a brief first-person experience ("I've worked on a similar workflow and one thing that helped was...") — keep it as personal experience, not a team pitch.
-- Do NOT use "my team specializes in" or pitch services. Do NOT include "DM me" CTAs. Do NOT include URLs.
+- Do NOT use "my team specializes in" or pitch services. Do NOT include "DM me" or "reach out to me" CTAs. Do NOT include URLs.
+- Do NOT cite the company case studies (no "$1.2M", no "200 vehicles", no "200 invoices in 4 minutes", no "97% accuracy"). These numbers fingerprint the company and read as self-promotion.
 - End with "- Ali Muwwakkil" sign-off only.`;
       break;
     case 'direct':
