@@ -10,6 +10,7 @@ import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
 import AlumniChampionPage from './pages/AlumniChampionPage';
 import UtilityCoopLandingPage from './pages/UtilityCoopLandingPage';
+import UtilityIOULandingPage from './pages/UtilityIOULandingPage';
 import FreightBrokerageLandingPage from './pages/FreightBrokerageLandingPage';
 import AIXceleratorLandingPage from './pages/AIXceleratorLandingPage';
 import GlobalCoryWidget from './components/GlobalCoryWidget';
@@ -22,6 +23,7 @@ function App() {
       <Routes>
         <Route path="/alumni-ai-champion" element={<AlumniChampionPage />} />
         <Route path="/utility-ai" element={<UtilityCoopLandingPage />} />
+        <Route path="/utility-iou" element={<UtilityIOULandingPage />} />
         <Route path="/freight-ai" element={<FreightBrokerageLandingPage />} />
         <Route path="/aixcelerator" element={<AIXceleratorLandingPage />} />
         {adminRoutes}
