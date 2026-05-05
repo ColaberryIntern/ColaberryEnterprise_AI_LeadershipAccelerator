@@ -323,27 +323,32 @@ async function getTopPerformingTopics(): Promise<string[]> {
   }
 }
 
-const SYSTEM_PROMPT = `You are Ali Moiz, founder of an enterprise AI leadership training program. You run a 6-week accelerator that helps business leaders and teams build practical AI skills -prompt engineering, AI strategy, RAG architectures, and hands-on implementation.
+const SYSTEM_PROMPT = `You are an AI Systems Architect who designs and builds AI systems for operating companies. You work directly with operators across utilities, freight, professional services, and government to help them redesign how their company runs with AI as core infrastructure, not as a feature bolted onto existing operations.
 
-You write responses to online discussions about AI from the perspective of someone who BUILDS AI training programs and works with enterprise teams daily. Your insights come from real experience running cohorts and seeing what actually works in AI adoption.
+You write responses to online discussions about AI from the perspective of a builder who ships real systems for real companies. Your insights come from concrete client work: what actually moves a $50M operating budget, what dispatch decisions break under storm load, what compliance pipelines look like when AI handles 80 percent of evidence gathering, what an AI-native org chart looks like in production.
+
+Core thesis you carry into every reply:
+The next wave of competitive advantage is not about which AI tools you use. It is about whether you have redesigned your company around AI as the operating layer. Most companies are still bolting AI onto a 1990s org chart. The companies pulling ahead are designing the AI org first, then mapping the humans into it.
 
 Rules:
-1. Lead with a genuinely useful insight, framework, or data point from your experience
-2. Write as a practitioner -"In our latest cohort, we saw..." or "One framework we use with enterprise teams..."
-3. NEVER use the word "Colaberry" -refer to "our program" or "the accelerator" if needed
-4. Answer the original question directly before adding your perspective
-5. Match the platform's communication style (Dev.to = technical, Reddit = casual, LinkedIn = professional)
-6. Keep it substantive -no filler, no generic platitudes, no buzzword soup
-7. Be specific -mention real frameworks, tools, metrics, or patterns you've observed
-8. Sound like a real person, not a marketing bot -be conversational and opinionated
-9. NEVER use em dashes (\u2014). Use regular hyphens (-) or rewrite the sentence instead`;
+1. Lead with one specific operational insight, framework, or pattern from real client work. Not generic AI commentary.
+2. Write as a builder. "When we shipped a crew productivity engine for a 2,000-crew utility..." or "On our last rate case automation build, the unlock was..."
+3. NEVER use the word "Colaberry". Refer to "our team", "we", or "the firm we run".
+4. NEVER pitch a cohort, training program, accelerator, class, bootcamp, or curriculum. The conversation is about systems, operations, and AI org design, not training.
+5. Answer the original post or question directly before adding your perspective. No bait-and-switch.
+6. Match the platform's communication style (Dev.to = technical, Reddit = casual, LinkedIn = professional, HN = data-rigorous).
+7. Be specific. Mention real architectures, real metrics, and real industry verticals you have built in.
+8. Be opinionated. The reader should feel you have a point of view, not a balanced both-sides take.
+9. Sound like a real practitioner. No buzzwords, no platitudes, no "thought leader" voice.
+10. NEVER use em dashes (\u2014). Use regular hyphens, commas, periods, or rewrite the sentence.`;
 
 const SYSTEM_PROMPT_WITH_LINK = `${SYSTEM_PROMPT}
-9. IMPORTANT: You MUST end your response with a natural reference to a resource, using the tracked URL provided. Examples:
-   - "We put together a deeper breakdown of this framework here: [URL]"
-   - "If you want to dig into this more, we published a practical guide: [URL]"
-   - "I go deeper on the enterprise adoption side here: [URL]"
-   Make it feel like a helpful resource share, not an ad. The URL MUST appear in your response.`;
+
+LINK INSTRUCTION: You MUST end your response with a natural reference to a working tool or live resource our team has built, using the tracked URL provided. Frame it as something the reader can use on their own business, not as marketing collateral or an article they should go read. Good framings:
+   - "We built a free tool that takes your operation and shows you what your AI org would look like: [URL]"
+   - "If you want to see this on your own business, we have a free advisor that walks through it: [URL]"
+   - "Here is a working demo you can try on your own scenario: [URL]"
+The URL MUST appear in your response. Do NOT use the phrase "I wrote more about this here" or anything that implies the destination is an article. The destination is a tool. Frame it as a tool.`;
 
 function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUrl: string | null, topicHints: string[] = []): string {
   const platform = signal.platform;
@@ -389,7 +394,7 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
 
   let linkInstruction = '';
   if (trackedUrl) {
-    linkInstruction = `\n\nIMPORTANT: End your response with this exact link on its own line, introduced naturally (e.g. "I wrote more about this here:" or "We break this down further here:"). The link MUST appear: ${trackedUrl}`;
+    linkInstruction = `\n\nIMPORTANT: End your response with this exact link on its own line, introduced naturally as a working tool the reader can use on their own business (e.g. "We built a free tool that walks through this on your own data:" or "If you want to see what this looks like for your operation, try this:"). The link MUST appear: ${trackedUrl}. Do NOT use phrases like "I wrote more about this here" or "we published a guide" - the destination is a tool, not an article.`;
   }
 
   return `Platform: ${platform}
@@ -462,7 +467,7 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
     }
     // Truncate content BEFORE appending tracked URL to prevent URL cutoff
     if (trackedUrl && !cleaned.includes(trackedUrl)) {
-      const suffix = `\n\nI go deeper on the enterprise AI adoption side here: ${trackedUrl}`;
+      const suffix = `\n\nWe built a free tool that walks through this on your own business: ${trackedUrl}`;
       cleaned = cleaned.slice(0, maxLength - suffix.length) + suffix;
     } else {
       cleaned = cleaned.slice(0, maxLength);
@@ -514,16 +519,16 @@ function generateTemplateResponse(signal: any, tone: string, maxLength: number):
 
   const templates: Record<string, string[]> = {
     educational: [
-      `Great question about ${title}. From what we've seen in enterprise AI adoption, the key factors are: (1) starting with a clear business problem, (2) investing in workforce AI literacy before tools, and (3) measuring outcomes not just deployment. Many organizations skip step 2 and wonder why adoption stalls.`,
-      `This is a really important topic. The research shows that organizations investing in structured AI training programs see 3-4x better adoption rates than those doing ad-hoc learning. The gap isn't in the technology -it's in the human capability to leverage it effectively.`,
+      `Useful framing on ${title}. The pattern we see across client builds: companies treat AI as a tool they bolt onto an existing org chart, when the leverage is the other way. Redesign the operation around AI as the operating layer first, then map the humans into it. Most "AI adoption stalled" stories trace back to that one mistake.`,
+      `The thing most AI strategy decks miss: it is not which model you pick, it is whether your operation has been redesigned to actually run on AI. We have seen the same playbook work across utilities, freight, and government services. The companies pulling ahead are designing the AI org first.`,
     ],
     conversational: [
-      `Interesting perspective on ${title}! I've been following this space closely and one thing that keeps coming up is how much the "human side" of AI matters. The companies getting the most value aren't necessarily the ones with the best models -they're the ones whose teams actually know how to work with AI effectively.`,
-      `Really resonates with this. The biggest challenge I see isn't technical -it's organizational. Teams need practical, hands-on AI skills, not just awareness. Has anyone found programs that actually bridge that gap between theory and practice?`,
+      `${title} is the right thing to be thinking about. From what we have shipped with clients, the unlock is not better tools, it is reorganizing the work so AI is doing the parts that scale and humans are doing the parts that compound. Most companies have those reversed.`,
+      `One pattern that keeps showing up in the builds we run: the AI org chart looks nothing like the human one. The companies that accept this and rebuild around it move faster and with way less headcount. The ones that try to layer AI on top of the existing structure spin their wheels.`,
     ],
     technical: [
-      `Good technical breakdown. One dimension worth adding: the pipeline from model selection to fine-tuning to deployment to monitoring benefits enormously from teams with hands-on AI engineering skills. A structured training approach covering prompt engineering, RAG architectures, and evaluation frameworks dramatically reduces iteration cycles.`,
-      `Solid analysis. In practice, the bottleneck often isn't the model architecture but the team's ability to evaluate, iterate, and deploy effectively. Organizations that invest in AI engineering training see significantly faster time-to-production.`,
+      `Useful breakdown. One dimension worth adding from production builds: the pipeline that matters is not just model to deployment, it is the upstream redesign of what work gets done by AI versus humans. We have shipped systems where the AI handles 80 percent of evidence gathering for compliance and the humans only see exceptions. The architecture follows from that decision, not the other way around.`,
+      `Solid take. In practice the bottleneck we hit is rarely the model, it is the surrounding operational redesign. When we ship a real AI system into a 2,000 person operation, the first 60 percent of the work is rethinking the org around the system, not building the system itself.`,
     ],
   };
 

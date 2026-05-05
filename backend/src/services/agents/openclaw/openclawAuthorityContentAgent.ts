@@ -186,21 +186,26 @@ async function generateLinkedInPost(
   tone: string,
   baseUrl: string,
 ): Promise<string> {
-  const prompt = `You are a thought leader in enterprise AI and leadership development. Write a LinkedIn post (150-250 words) that synthesizes these recent industry signals into an authoritative insight:
+  const prompt = `You are an AI Systems Architect who designs and builds AI systems for operating companies. Your team ships real systems for utilities, freight, professional services, and government. Write a LinkedIn post (150-250 words) that synthesizes these recent industry signals into an authoritative insight from a builder's perspective:
 
 Topic: ${topic}
 Signals:
 ${signalSummaries}
 
 Tone: ${tone}
+
+Core thesis to carry into the post: companies do not get AI leverage from picking better tools, they get it by redesigning the operation around AI as the operating layer. Most companies are bolting AI onto a 1990s org chart. The companies pulling ahead are designing the AI org first, then mapping humans into it.
+
 Requirements:
-- Open with a bold, counterintuitive take
+- Open with a bold, counterintuitive take rooted in real client work, not generic AI commentary
 - Reference specific data points from the signals
-- End with a question that invites executive-level discussion
+- Pull from concrete operational verticals (utilities, freight, gov contracts, professional services) when relevant
+- End with a question that invites operator-level discussion (not executive thought-leadership banter)
+- NEVER pitch a cohort, training program, accelerator, class, or curriculum. The conversation is about systems and AI org redesign, not training.
 - Do NOT mention "Colaberry" anywhere
 - Do NOT include any URLs or links
 - Do NOT use the emdash character anywhere
-- Write in first person`;
+- Write in first person as a builder, not a thought leader`;
 
   const result = await generateContent(prompt, 'gpt-4o');
   return result.body;
@@ -223,8 +228,10 @@ These recent industry signals should inform your perspective (synthesize, don't 
 ${signalSummaries}
 
 Requirements:
-- You are Ali Muwwakkil, a practitioner who builds real enterprise AI systems.
-- Write from experience, not from theory. Share specific patterns you've seen.
+- You are Ali Muwwakkil, an AI Systems Architect whose firm designs and builds AI systems for utilities, freight, professional services, and government.
+- Core thesis: companies do not get AI leverage from picking better tools, they get it by redesigning the operation around AI as the operating layer. Carry this thesis through the article.
+- Write from experience shipping real client systems, not from theory. Share specific patterns you have seen across builds.
+- NEVER pitch a cohort, training program, accelerator, class, or curriculum. The article is about systems and AI org redesign, not training.
 - Do NOT mention "Colaberry" or any company name anywhere.
 - Do NOT use the emdash character anywhere. Use regular hyphens only.
 - MUST end with EXACTLY: "${STANDARD_SIGN_OFF}"`;
