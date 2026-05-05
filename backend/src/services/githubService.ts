@@ -23,10 +23,18 @@ export async function connectRepo(
     } as any,
   });
 
-  if (connection.repo_url !== repoUrl) {
+  // Always normalize owner/name so blank values from older malformed
+  // rows get repaired on next connect. Earlier rows landed with
+  // empty owner/name even when the URL was set, which broke every
+  // downstream call (file tree sync, brownfield discovery, etc.)
+  // because they all check repo_owner.
+  const needsUpdate = connection.repo_url !== repoUrl
+    || (!connection.repo_owner && repoOwner)
+    || (!connection.repo_name && repoName);
+  if (needsUpdate) {
     connection.repo_url = repoUrl;
-    connection.repo_owner = repoOwner;
-    connection.repo_name = repoName;
+    if (repoOwner) connection.repo_owner = repoOwner;
+    if (repoName) connection.repo_name = repoName;
     if (accessToken) connection.access_token_encrypted = accessToken;
     await connection.save();
   }
