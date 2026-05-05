@@ -12,6 +12,39 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CLAUDE.md Production Hardening Frameworks Added (2026-05-05)
+- [x] Modular Composition Rule (size targets, composition rules, imports as dependency declarations)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 63, no original section removed
+- [x] Contract Enforcement Layer (TypeScript/Zod/typed boundaries, breaking-contract = failing build)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 90
+- [x] Test Strategy Framework (70/20/10 pyramid, risk-based prioritization, mandatory test types)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 236
+- [x] Idempotency & Replayability (NON-NEGOTIABLE) (concrete patterns table for Mandrill, Basecamp, webhooks, briefings)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 271
+- [x] Failure-First Design (4 mandatory questions, external boundary table, forbidden patterns)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 298
+- [x] Production Readiness Principles (12-Factor Adapted) (9-row principle/application table)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 327
+- [x] Security Enforcement Layer (input validation, secrets, external calls, dependencies, authn/authz)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 347
+- [x] Build-Break-Harden Loop (CORE EXECUTION MODEL) (3-phase rhythm, completion rule)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 384
+- [x] Observability Framework (structured JSON logs, metrics, correlation IDs, error classification)
+  - Date: 2026-05-05
+  - Verification: Grep confirms section present at line 494
+- [x] All 14 original sections preserved verbatim, no contradictions, no removals
+  - Date: 2026-05-05
+  - Verification: Section header inventory matches pre-change list; commit `0adf814` is +282 lines, 0 deletions
+  - Note: Net file change 382 -> 664 lines. Cross-references between new sections (Failure-First → Idempotency, Observability → structured logs, Security → Contract Enforcement) added intentionally and consistently.
+
 ### CLAUDE.md v2 Reality Alignment (2026-05-05)
 - [x] Adopted v2 structural improvements (Autonomy Model merge, Confidence/Diagnostic/Stall merge, hardened PROGRESS.md gate, end-of-session audit, autonomy log target)
   - Date: 2026-05-05
@@ -343,3 +376,4 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 | `backend/src/services/agents/openclaw/openclawMarketSignalAgent.ts` | Removed Medium RSS scanner case (2026-05-05) |
 | `backend/src/routes/admin/openclawRoutes.ts` | Auto-publish returns HTTP 410 for Medium (2026-05-05) |
 | `CLAUDE.md` | v2 reality alignment: actual paths, advisor walkthrough section removed, autonomy_log gate softened (2026-05-05) |
+| `CLAUDE.md` | +9 production hardening sections (Modular Composition, Contract Enforcement, Test Strategy, Idempotency, Failure-First, Production Readiness, Security, Build-Break-Harden, Observability) (2026-05-05) |
