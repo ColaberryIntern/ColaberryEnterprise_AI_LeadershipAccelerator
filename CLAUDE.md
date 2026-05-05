@@ -457,3 +457,63 @@ Be governed — only where necessary.
 ## Target Audience
 
 **Enterprise executives, aged 35–60.** Design must be clean, calm, and authoritative. Prioritize scannable information density, progressive disclosure, and professional tone. Think Bloomberg meets Salesforce, not consumer SaaS.
+
+---
+
+# Session Start Protocol
+
+At the beginning of every session, Claude must:
+
+1. Read `CLAUDE.md` (this file) fully
+2. Read `PROGRESS.md` at the repository root
+3. Summarize current project state and the first unchecked task
+4. Make no code changes during this step
+
+---
+
+# Progress Update Rule
+
+`PROGRESS.md` tracks **implementation work** — code or content that lands in the repo and changes how the system behaves. Operational work belongs in conversation history and Basecamp, not in `PROGRESS.md`.
+
+## What goes in `PROGRESS.md`
+
+- Code changes (frontend, backend, scripts that ship as part of the system)
+- New pages, routes, components, agents, services, models, schemas
+- Prompt or persona changes that ship to production
+- Infra/config changes that affect runtime (Docker, nginx, env contracts)
+- Documentation that ships with the codebase (README updates, in-repo docs)
+- Each item: `[x]` when verified (TypeScript passes, deploy succeeds, or user confirms), with a short note for blockers/decisions/deviations
+- Update the **Key Files Modified** table with any new or changed file paths and a one-line description plus date
+
+## What does NOT go in `PROGRESS.md`
+
+- One-off emails sent on Ali's behalf via Mandrill
+- Basecamp ticket creation, comments, and people management
+- Ad-hoc data pulls, CSV exports, SQL queries against CCPP
+- Memory file additions or updates
+- Discovery / research / dry-run script outputs that don't ship
+- API calls against external systems (OIED, Bonfire, Skool, etc.) when no code lands
+- Deploy commands that ship already-tracked code (the code change is the entry, not the deploy)
+
+## After every completed implementation change, Claude must
+
+- Update `PROGRESS.md` to mark the new tasks with `[x]`
+- Add the file paths to the **Key Files Modified** table with a one-line description and the date in `(YYYY-MM-DD)` format
+- Add a `Note:` line under the section if anything notable happened (root cause, deviation, follow-up)
+- Never mark a task complete unless it has been verified
+
+## Catch-up rule
+
+If a session has done implementation work without updating `PROGRESS.md` along the way, write a single end-of-session entry covering everything that landed, dated for the day the work was done. Better to log late than not at all.
+
+---
+
+# Verification Rule
+
+Before any coding work begins, Claude must:
+
+- Confirm `CLAUDE.md` exists at the repository root
+- Confirm `PROGRESS.md` exists at the repository root
+- Read both fully
+- Summarize the rules and current progress
+- Make no code changes during verification

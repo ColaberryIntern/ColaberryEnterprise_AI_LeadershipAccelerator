@@ -12,6 +12,45 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Medium Platform Deactivation (2026-05-05)
+- [x] Removed `'medium'` from `ARTICLE_PLATFORMS` in `openclawAuthorityContentAgent.ts` — no more Medium articles generated
+- [x] Removed `medium` rows from `PLATFORM_STRATEGY` and `PLATFORM_EXECUTION` maps in `openclawPlatformStrategy.ts`
+- [x] Removed `medium` from `isLinkAllowed` article-platform allowlist
+- [x] Guarded `postToMedium()` with immediate throw in `openclawPlatformPostingService.ts`; removed `'medium'` from `hasPlatformCredentials`
+- [x] Removed `'medium'` from `hasBrowserSupport` allowlist and dispatcher in `openclawBrowserPostingService.ts`
+- [x] Removed `case 'medium':` and `postToMedium` import from `openclawBrowserWorkerAgent.ts`; dropped Medium from `useHeadless` lists
+- [x] Removed `'medium'` from circuit breaker platform list in `openclawCircuitBreaker.ts`
+- [x] Removed Medium RSS scanner case from `openclawMarketSignalAgent.ts`
+- [x] Admin auto-publish route in `openclawRoutes.ts` now returns HTTP 410 for Medium
+- [x] Deployed (commit `7c650dc`, backend container rebuilt on VPS)
+  - Note: Medium permanently banned the Colaberry account (Trust & Safety confirmed not eligible for restoration). Implementation code (`postToMedium`, `postToMediumBrowser`) left intact as dead reference; historical DB records and existing tracked URLs untouched.
+
+### OpenClaw Outreach Persona Realignment (2026-05-05)
+- [x] Rewrote `SYSTEM_PROMPT` and `SYSTEM_PROMPT_WITH_LINK` in `openclawContentResponseAgent.ts` from "founder of 6-week accelerator" to "AI Systems Architect who designs and builds AI systems for operating companies"
+- [x] Replaced "I wrote more about this here" link framing with "working tool" framing pointing at `advisor.colaberry.ai/advisory`
+- [x] Added explicit no-cohort/no-class/no-curriculum rule across all outreach prompts
+- [x] Rewrote fallback templates in `openclawContentResponseAgent.ts` to match new positioning
+- [x] Updated `openclawLinkedInCommentMonitorAgent.ts` reply persona and rules
+- [x] Updated `openclawAuthorityContentAgent.ts` LinkedIn post + article generation prompts with AI-org-redesign thesis
+- [x] Removed "Join our next cohort" example CTA from `AUTHORITY_BROADCAST` strategy in `openclawPlatformStrategy.ts`
+- [x] Deployed (commit `5eb0804`, backend container rebuilt on VPS)
+  - Note: Triggered by Dhee flagging that posts said "I wrote more about this here" and linked to a suspended Medium account. Core thesis is now "companies do not get AI leverage from picking better tools, they get it by redesigning the operation around AI as the operating layer."
+
+### Investor-Owned Utility (IOU) Landing Page (2026-05-04)
+- [x] Created `frontend/src/pages/UtilityIOULandingPage.tsx` — parallel of `UtilityCoopLandingPage` reframed for IOUs (Duke, Oncor, Exelon)
+- [x] Audience reframed: Wall Street pressure, PUC scrutiny, rate-case defendability, IBEW/union sensitivity
+- [x] Scale shifted: $50–500M field-ops budgets (vs $8–25M co-op), $25M+ savings on $250M base
+- [x] Tech stack mentions: Oracle CIS, SAP, Maximo, OSI Monarch OMS, GE Smallworld, AMI head-ends, data lake
+- [x] Compliance: NERC CIP, SOX, SOC 2, FERC/PUC reporting
+- [x] Funding hook: IRA Section 45 grid program, DOE GRIP/GRP, grid resilience tax credits (replaced USDA RUS)
+- [x] "Capability Build" / "Managed Delivery" path labels for enterprise procurement vocabulary
+- [x] `IOU_SCENARIO_LABELS` map overrides title/description/KPI for member-services, storm-response, smart-metering, rate-case, regulatory-compliance scenarios
+- [x] Role-personalized variants via `?role=ceo|cio|cfo|ops` URL param
+- [x] Presenter mode via `?presenter` URL param (5 narration pause points)
+- [x] Booking attribution: `pageOrigin: '/utility-iou'` for clean funnel separation
+- [x] Route registered in `frontend/src/App.tsx`
+  - Note: Built in response to David Lahme's IOU prospect requests (Duke, Oncor, Exelon connections). 4-bullet talking script per demo also delivered to David for the walkthrough team.
+
 ### Enhancement Prompt Builder (2026-04-20)
 - [x] Extended `DetectedGap` with `suggested_agent` field in `gapDetectionEngine.ts`
 - [x] Autonomy gaps included eagerly in BP detail response (`projectRoutes.ts`)
@@ -267,3 +306,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 | `docs/ACCELERATOR_PORTAL_SYSTEM.md` | Created — comprehensive system documentation |
 | `CLAUDE.md` | Added Session Start Protocol + Progress Update Rule |
 | `PROGRESS.md` | Created (this file) |
+| `frontend/src/pages/UtilityIOULandingPage.tsx` | Created — IOU landing page parallel to co-op page (2026-05-04) |
+| `frontend/src/App.tsx` | Registered `/utility-iou` route (2026-05-04) |
+| `backend/src/services/agents/openclaw/openclawContentResponseAgent.ts` | Rewrote system prompt + link framing for AI Systems Architect persona (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawLinkedInCommentMonitorAgent.ts` | Updated reply persona to AI Systems Architect (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawAuthorityContentAgent.ts` | Realigned post/article prompts + Medium removed from `ARTICLE_PLATFORMS` (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawPlatformStrategy.ts` | Replaced cohort CTA + removed Medium routing (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawPlatformPostingService.ts` | Guarded `postToMedium` with throw + removed Medium from credential check (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawBrowserPostingService.ts` | Removed Medium from browser-support list and dispatcher (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawBrowserWorkerAgent.ts` | Removed Medium dispatcher case + import + headless flag (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawCircuitBreaker.ts` | Removed Medium from rate-limit tracking list (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawMarketSignalAgent.ts` | Removed Medium RSS scanner case (2026-05-05) |
+| `backend/src/routes/admin/openclawRoutes.ts` | Auto-publish returns HTTP 410 for Medium (2026-05-05) |
