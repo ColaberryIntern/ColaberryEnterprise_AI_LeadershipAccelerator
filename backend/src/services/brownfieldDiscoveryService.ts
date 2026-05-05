@@ -92,6 +92,14 @@ const NOISE_STEMS = new Set([
 
 function isInterestingFile(path: string): boolean {
   if (NOISE_PATHS.some(re => re.test(path))) return false;
+  const lower = path.toLowerCase();
+  // Skip tests, fixtures, mocks, snapshots — they show up as candidates
+  // and produce caps like "Adminroutestest", "Associationstest". Test
+  // coverage is real but it's a quality signal per cap, not a cap.
+  if (/\.(test|spec)\.(t|j)sx?$/.test(lower)) return false;
+  if (/\/__tests__\//.test(lower) || /\/__mocks__\//.test(lower) || /\/__snapshots__\//.test(lower)) return false;
+  if (/\/tests?\//.test(lower) && /\.(t|j)sx?$/.test(lower)) return false;
+  if (/\/fixtures?\//.test(lower)) return false;
   const name = (path.split('/').pop() || '').toLowerCase();
   if (NOISE_FILES.has(name)) return false;
   return /\.(ts|tsx|js|jsx|py|go|rs|java|sql|vue|svelte|md|json|yml|yaml|toml|html|css|prisma)$/i.test(name);
