@@ -261,6 +261,80 @@ function extractCandidates(allFiles: string[]): RawCandidate[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Read PROGRESS.md (if present) and return its full content.
+ * Used both as additional domain context for the LLM AND as a
+ * source of "what's already done" signals that feed evidence-
+ * based completion percentages on discovered caps.
+ */
+async function loadProgressMd(enrollmentId: string, allFiles: string[]): Promise<string> {
+  const { readFileFromRepo } = await import('./githubService');
+  for (const path of ['PROGRESS.md', 'progress.md', 'Progress.md']) {
+    if (allFiles.includes(path)) {
+      const content = await readFileFromRepo(enrollmentId, path).catch(() => null);
+      if (content && content.length > 100) return content;
+    }
+  }
+  return '';
+}
+
+/**
+ * Count how many times a capability's name (or its key word stems)
+ * appears in PROGRESS.md text. Used as a "is this already
+ * implemented?" signal — caps with many PROGRESS.md mentions had
+ * real work shipped against them.
+ */
+function countProgressMentions(capName: string, progressMd: string): number {
+  if (!progressMd) return 0;
+  const lower = progressMd.toLowerCase();
+  const stems = capName.toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter(s => s.length >= 4 && !['management', 'service', 'system', 'page', 'and', 'the', 'for'].includes(s));
+  if (stems.length === 0) return 0;
+  let mentions = 0;
+  for (const stem of stems) {
+    const matches = lower.match(new RegExp(`\\b${stem}\\b`, 'g'));
+    if (matches) mentions += matches.length;
+  }
+  return mentions;
+}
+
+/**
+ * Compute an evidence-based completion percentage for a brownfield-
+ * discovered cap that has no requirements doc to measure against.
+ *
+ * Signals:
+ *   - layers_covered (0-4): how many of backend/frontend/agents/models have linked files
+ *   - file_count: total linked files
+ *   - progress_md_mentions: how often this cap's name appears in PROGRESS.md
+ *
+ * Cap at 90% — we never claim 100% from heuristics alone. The user
+ * has to explicitly mark a cap verified to push it to 100%.
+ */
+function computeEvidenceCompletion(layers: { backend: number; frontend: number; agents: number; models: number }, progressMentions: number): number {
+  const layersCovered = Object.values(layers).filter(v => v > 0).length;
+  const totalFiles = Object.values(layers).reduce((s, v) => s + v, 0);
+
+  // Layer presence is the dominant signal.
+  let pct = 0;
+  if (layersCovered === 0) pct = 10;          // shouldn't happen but defensive
+  else if (layersCovered === 1) pct = totalFiles >= 3 ? 45 : 30;
+  else if (layersCovered === 2) pct = 60;
+  else if (layersCovered === 3) pct = 75;
+  else pct = 85;                              // 4 layers
+
+  // PROGRESS.md mention bonus: each mention adds 2%, cap +15%.
+  if (progressMentions > 0) {
+    pct += Math.min(15, progressMentions * 2);
+  }
+
+  // File count bonus: large feature with 8+ linked files gets +5%.
+  if (totalFiles >= 8) pct += 5;
+
+  return Math.min(90, Math.max(15, pct));
+}
+
+/**
  * Read CLAUDE.md, README.md, package.json description, and up to 5
  * directives/*.md files. Caps total at ~15K chars so the LLM has
  * domain language without burning all the context budget.
@@ -811,9 +885,10 @@ export async function discoverBrownfieldCapabilities(
   const candidates = extractCandidates(allFiles);
   console.log(`[Brownfield] Extracted ${candidates.length} raw candidates`);
 
-  // Step 2: load domain context
+  // Step 2: load domain context + PROGRESS.md
   const domainContext = await loadDomainContext(enrollmentId, allFiles);
-  console.log(`[Brownfield] Domain context: ${domainContext.length} chars`);
+  const progressMd = await loadProgressMd(enrollmentId, allFiles);
+  console.log(`[Brownfield] Domain context: ${domainContext.length} chars; PROGRESS.md: ${progressMd.length} chars`);
 
   // Step 3: Two-pass LLM (domains → capabilities)
   const discovery = await twoPassDiscovery(
@@ -863,6 +938,18 @@ export async function discoverBrownfieldCapabilities(
       continue;
     }
 
+    // Compute evidence-based completion %. Brownfield caps don't have
+    // requirements to measure against, so we infer from layer coverage,
+    // total file count, and PROGRESS.md mentions of the cap's name.
+    const layerCounts = {
+      backend: backend.length,
+      frontend: frontend.length,
+      agents: agents.length,
+      models: models.length,
+    };
+    const progressMentions = countProgressMentions(cap.name, progressMd);
+    const evidenceCompletionPct = computeEvidenceCompletion(layerCounts, progressMentions);
+
     const newCap = await Capability.create({
       project_id: projectId,
       name: cap.name,
@@ -876,6 +963,8 @@ export async function discoverBrownfieldCapabilities(
         source: 'brownfield_discovery',
         appliedAt: new Date().toISOString(),
         completed_steps: ['brownfield_discovered'],
+        evidence_completion_pct: evidenceCompletionPct,
+        progress_md_mentions: progressMentions,
       },
       linked_backend_services: [...new Set([...backend, ...models])],
       linked_frontend_components: [...new Set(frontend)],

@@ -1840,7 +1840,17 @@ function enrichCapability(cap: any) {
     // Page BPs use visual-review tick count as their displayed completion.
     // Non-Page BPs use requirement coverage as before. user_status='verified'
     // overrides everything (handled in is_complete below).
-    completion_pct: isPageBP ? pageVisualCompletionPct : reqCoverage,
+    // Brownfield caps come from a code-discovery scan, not a requirements
+    // doc — they have totalR === 0 so reqCoverage is 0/0 = 0, which made
+    // every brownfield cap show 0% on the grid even when its files clearly
+    // exist. Fall back to the evidence_completion_pct stamped at discovery
+    // time (computed from layer coverage + file count + PROGRESS.md mentions).
+    completion_pct: (() => {
+      if (isPageBP) return pageVisualCompletionPct;
+      if (totalR > 0) return reqCoverage;
+      const evidence = (cap as any).last_execution?.evidence_completion_pct;
+      return typeof evidence === 'number' ? evidence : 0;
+    })(),
     metrics: {
       requirements_coverage: isPageBP ? pageVisualCompletionPct : reqCoverage,
       system_readiness: readiness,
