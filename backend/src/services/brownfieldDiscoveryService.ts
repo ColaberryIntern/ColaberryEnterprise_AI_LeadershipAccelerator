@@ -62,7 +62,8 @@ export interface BrownfieldDiscoverySummary {
   }>;
   totalFilesAnalyzed: number;
   detectedStack: string[];
-  candidatesIdentified: number;        // new: how many raw candidates were found
+  candidatesIdentified: number;
+  pageBpsCreated: number;              // Page BPs created from frontend/src/pages/ scan
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +368,314 @@ function buildCandidatesBlock(candidates: RawCandidate[]): string {
   return block;
 }
 
+// ---------------------------------------------------------------------------
+// PHASE 3: Bucket clustering + two-pass LLM
+// ---------------------------------------------------------------------------
+
+interface CandidateBucket {
+  key: string;                  // e.g. "services/api/domains" or "frontend/pages/admin"
+  label: string;                // human-readable
+  candidates: RawCandidate[];
+  total_files: number;
+}
+
+/**
+ * Cluster candidates into buckets by their canonical "home path" so
+ * the LLM in pass 1 sees ~15-25 logical chunks instead of a flat list
+ * of 1000+ stems. Bucket key: top-level dir + 1-2 levels of sub-folder
+ * if recognizable (services/api/domains, frontend/pages/admin).
+ */
+function clusterCandidatesIntoBuckets(candidates: RawCandidate[]): CandidateBucket[] {
+  const map = new Map<string, CandidateBucket>();
+
+  for (const cand of candidates) {
+    // Pick a representative file to derive the bucket key
+    const sampleFile = cand.files[0] || '';
+    const parts = sampleFile.toLowerCase().split('/');
+
+    // Walk down to a meaningful bucket path
+    let bucketKey = parts[0] || 'root';
+
+    // Special-case well-known nested layouts
+    if (parts.length >= 3) {
+      // services/api/src/domains/auth/auth.routes.ts → services/api/domains/auth
+      const idx = parts.indexOf('domains');
+      if (idx >= 0 && idx + 1 < parts.length) {
+        bucketKey = `${parts.slice(0, idx).join('/')}/domains/${parts[idx + 1]}`;
+      } else if (parts[0] === 'frontend' && parts[1] === 'src' && parts[2] === 'pages' && parts.length >= 5) {
+        // frontend/src/pages/admin/AdminPage.tsx → frontend/pages/admin
+        bucketKey = `frontend/pages/${parts[3]}`;
+      } else if (parts[0] === 'frontend' && parts[1] === 'src' && parts[2] === 'pages') {
+        bucketKey = 'frontend/pages';
+      } else if (parts[0] === 'backend' && parts[1] === 'src' && parts.length >= 4) {
+        // backend/src/services/X.ts → backend/services
+        bucketKey = `backend/${parts[2]}`;
+      } else if (parts[0] === 'services' && parts.length >= 3) {
+        bucketKey = `services/${parts[1]}`;
+      }
+    } else if (parts.length === 2) {
+      bucketKey = `${parts[0]}/${parts[1].replace(/\.[^.]+$/, '')}`;
+    }
+
+    if (!map.has(bucketKey)) {
+      map.set(bucketKey, { key: bucketKey, label: bucketKey, candidates: [], total_files: 0 });
+    }
+    const b = map.get(bucketKey)!;
+    b.candidates.push(cand);
+    b.total_files += cand.files.length;
+  }
+
+  // Merge tiny buckets (< 3 candidates) into a "misc" bucket per top-level dir
+  const buckets = [...map.values()];
+  const merged: Record<string, CandidateBucket> = {};
+  for (const b of buckets) {
+    if (b.candidates.length >= 3) {
+      merged[b.key] = b;
+    } else {
+      // Find a parent bucket (same top-level dir) to merge into
+      const top = b.key.split('/')[0];
+      const parentKey = `${top}/_misc`;
+      if (!merged[parentKey]) {
+        merged[parentKey] = { key: parentKey, label: `${top} (other)`, candidates: [], total_files: 0 };
+      }
+      merged[parentKey].candidates.push(...b.candidates);
+      merged[parentKey].total_files += b.total_files;
+    }
+  }
+
+  return Object.values(merged).sort((a, b) => b.candidates.length - a.candidates.length);
+}
+
+interface DomainGroup {
+  name: string;          // "Lead Pipeline" or "Authentication & Identity"
+  description: string;
+  bucket_keys: string[];
+}
+
+interface DomainPass1Result {
+  domains: DomainGroup[];
+}
+
+/**
+ * Pass 1: ask the LLM to identify the 8-15 top-level domains in the
+ * project, mapping each to one or more candidate buckets.
+ */
+async function identifyDomains(
+  buckets: CandidateBucket[],
+  domainContext: string,
+  detectedStack: string[],
+  totalFiles: number,
+): Promise<DomainPass1Result> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const bucketsBlock = buckets.map(b => {
+    const sampleStems = b.candidates.slice(0, 8).map(c => c.display_name).join(', ');
+    return `- ${b.key} — ${b.candidates.length} candidates, ${b.total_files} files. Examples: ${sampleStems}`;
+  }).join('\n');
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    response_format: { type: 'json_object' },
+    temperature: 0.2,
+    max_tokens: 3000,
+    messages: [
+      {
+        role: 'system',
+        content: `You are organizing an existing codebase. Identify 8-15 top-level domains (functional areas) and map the supplied candidate buckets to them. Use the project's own domain language. Output JSON only.`,
+      },
+      {
+        role: 'user',
+        content: `PROJECT: ${totalFiles} files, stack: ${detectedStack.join(', ') || 'unknown'}.
+
+DOMAIN CONTEXT (use this language for domain names):
+${domainContext || '(no domain docs found)'}
+
+CANDIDATE BUCKETS (each bucket groups candidates by their home path):
+${bucketsBlock}
+
+Identify 8-15 TOP-LEVEL DOMAINS in this codebase. Each domain bundles 1-N buckets. A domain is a coherent functional area (e.g. "Lead Pipeline", "Authentication", "Cory Orchestration", "Marketing Site").
+
+Output strict JSON:
+{
+  "domains": [
+    {
+      "name": "Domain Name (using project's own terms)",
+      "description": "1-sentence description of what this domain covers in this codebase",
+      "bucket_keys": ["bucket1/key", "bucket2/key"]
+    }
+  ]
+}
+
+Rules:
+- Output 8-15 domains. Don't merge unrelated areas.
+- Every bucket should appear in at least one domain (cover the whole tree).
+- A bucket can appear in multiple domains if it spans them.
+- Domain names should reflect actual functionality, not generic SaaS labels.`,
+      },
+    ],
+  });
+
+  const raw = completion.choices[0]?.message?.content || '{}';
+  try {
+    const parsed = JSON.parse(raw);
+    const domains = Array.isArray(parsed) ? parsed : (parsed.domains || []);
+    return {
+      domains: domains
+        .filter((d: any) => d && d.name && Array.isArray(d.bucket_keys))
+        .map((d: any) => ({
+          name: String(d.name || '').trim(),
+          description: String(d.description || '').trim(),
+          bucket_keys: d.bucket_keys.filter((k: any) => typeof k === 'string'),
+        })),
+    };
+  } catch (err) {
+    console.warn('[Brownfield] Pass 1 (domains) parse failed:', (err as Error).message);
+    return { domains: [] };
+  }
+}
+
+/**
+ * Pass 2: for one domain, enumerate 2-7 capabilities within it.
+ * Runs per-domain in parallel.
+ */
+async function enumerateCapabilitiesForDomain(
+  domain: DomainGroup,
+  candidates: RawCandidate[],
+  domainContext: string,
+): Promise<DiscoveredCapability[]> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const candidatesBlock = candidates.map(c => {
+    const hits = Object.entries(c.layer_hits)
+      .filter(([, v]) => v > 0)
+      .map(([k, v]) => `${k}:${v}`)
+      .join(', ');
+    const sample = c.files.slice(0, 5).join(', ');
+    return `- "${c.display_name}" (stem=${c.stem}) [${hits}] e.g. ${sample}`;
+  }).join('\n');
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    response_format: { type: 'json_object' },
+    temperature: 0.3,
+    max_tokens: 2500,
+    messages: [
+      {
+        role: 'system',
+        content: `Enumerate the capabilities within a single domain of an existing codebase. Be exhaustive — output 2-7 distinct capabilities per domain, even if some only have 2-3 files. Use project's own domain language. JSON only.`,
+      },
+      {
+        role: 'user',
+        content: `DOMAIN: ${domain.name}
+${domain.description}
+
+DOMAIN CONTEXT (use this language):
+${domainContext.substring(0, 5000)}
+
+CANDIDATES IN THIS DOMAIN:
+${candidatesBlock}
+
+Output 2-7 capabilities within this domain. Each is a coherent feature you can develop or improve as a unit. Don't roll multiple distinct features into one cap just to keep the count low.
+
+Output strict JSON:
+{
+  "capabilities": [
+    {
+      "name": "Specific Capability Name",
+      "description": "1-2 sentences specific to what this does in THIS codebase",
+      "key_files": ["path/to/file1.ts", "path/to/file2.tsx"],
+      "tech_layers": { "backend": true, "frontend": false, "agents": false, "models": true }
+    }
+  ]
+}
+
+Each capability needs 2-10 key_files (the canonical ones). Don't invent files — only use ones from the candidate list above.`,
+      },
+    ],
+  });
+
+  const raw = completion.choices[0]?.message?.content || '{}';
+  try {
+    const parsed = JSON.parse(raw);
+    const caps = Array.isArray(parsed) ? parsed : (parsed.capabilities || []);
+    return caps
+      .filter((c: any) => c && c.name && Array.isArray(c.key_files))
+      .map((c: any) => ({
+        name: String(c.name || '').trim(),
+        description: String(c.description || '').trim(),
+        key_files: c.key_files.filter((f: any) => typeof f === 'string').slice(0, 12),
+        tech_layers: {
+          backend: !!c.tech_layers?.backend,
+          frontend: !!c.tech_layers?.frontend,
+          agents: !!c.tech_layers?.agents,
+          models: !!c.tech_layers?.models,
+        },
+      }));
+  } catch (err) {
+    console.warn(`[Brownfield] Pass 2 (${domain.name}) parse failed:`, (err as Error).message);
+    return [];
+  }
+}
+
+/**
+ * Two-pass discovery: domains first, then capabilities per-domain in parallel.
+ * Returns the merged + de-duplicated capability list.
+ */
+async function twoPassDiscovery(
+  candidates: RawCandidate[],
+  domainContext: string,
+  detectedStack: string[],
+  totalFiles: number,
+): Promise<DiscoveryResult> {
+  const buckets = clusterCandidatesIntoBuckets(candidates);
+  console.log(`[Brownfield] Clustered into ${buckets.length} candidate buckets`);
+
+  const pass1 = await identifyDomains(buckets, domainContext, detectedStack, totalFiles);
+  console.log(`[Brownfield] Pass 1 identified ${pass1.domains.length} domains`);
+
+  if (pass1.domains.length === 0) {
+    return { capabilities: [] };
+  }
+
+  const bucketMap = new Map(buckets.map(b => [b.key, b]));
+
+  // Run pass 2 per domain in parallel
+  const domainResults = await Promise.all(
+    pass1.domains.map(async (domain) => {
+      const domainCandidates: RawCandidate[] = [];
+      const seen = new Set<string>();
+      for (const key of domain.bucket_keys) {
+        const bucket = bucketMap.get(key);
+        if (!bucket) continue;
+        for (const c of bucket.candidates) {
+          if (seen.has(c.stem)) continue;
+          seen.add(c.stem);
+          domainCandidates.push(c);
+        }
+      }
+      if (domainCandidates.length === 0) return [];
+      return enumerateCapabilitiesForDomain(domain, domainCandidates, domainContext);
+    })
+  );
+
+  const allCaps = domainResults.flat();
+  console.log(`[Brownfield] Pass 2 produced ${allCaps.length} raw capabilities across all domains`);
+
+  // De-dup by name (case-insensitive)
+  const byName = new Map<string, DiscoveredCapability>();
+  for (const cap of allCaps) {
+    const key = cap.name.toLowerCase().trim();
+    if (!byName.has(key)) byName.set(key, cap);
+    else {
+      // Merge key_files into existing
+      const existing = byName.get(key)!;
+      existing.key_files = [...new Set([...existing.key_files, ...cap.key_files])];
+    }
+  }
+
+  return { capabilities: [...byName.values()] };
+}
+
 async function identifyCapabilities(
   candidates: RawCandidate[],
   treeSummary: string,
@@ -498,16 +807,14 @@ export async function discoverBrownfieldCapabilities(
   const domainContext = await loadDomainContext(enrollmentId, allFiles);
   console.log(`[Brownfield] Domain context: ${domainContext.length} chars`);
 
-  // Step 3: LLM consolidation
-  const treeSummary = buildTreeSummary(allFiles);
-  const discovery = await identifyCapabilities(
+  // Step 3: Two-pass LLM (domains → capabilities)
+  const discovery = await twoPassDiscovery(
     candidates,
-    treeSummary,
     domainContext,
     detectedStack,
     allFiles.length,
   );
-  console.log(`[Brownfield] LLM returned ${discovery.capabilities.length} consolidated capabilities`);
+  console.log(`[Brownfield] Two-pass returned ${discovery.capabilities.length} consolidated capabilities`);
 
   // Persist
   const created: BrownfieldDiscoverySummary['capabilities'] = [];
@@ -581,11 +888,25 @@ export async function discoverBrownfieldCapabilities(
     });
   }
 
+  // Step 4: auto-create Page BPs for any frontend pages not already
+  // covered by a discovered cap's frontend_route. Each becomes a
+  // first-class Page BP with its own visual review surface.
+  let pageBpsCreated = 0;
+  try {
+    const { processOrphanedPages } = await import('./frontendPageDiscovery');
+    const pageResult = await processOrphanedPages({ projectId, fileTree: allFiles });
+    pageBpsCreated = pageResult.created_bps;
+    console.log(`[Brownfield] Page BP scan: ${pageResult.total_pages} pages, ${pageResult.mapped_pages} mapped, ${pageResult.created_bps} new Page BPs`);
+  } catch (err: any) {
+    console.warn('[Brownfield] Page BP scan failed:', err?.message);
+  }
+
   return {
     capabilitiesCreated: created.length,
     capabilities: created,
     totalFilesAnalyzed: allFiles.length,
     detectedStack,
     candidatesIdentified: candidates.length,
+    pageBpsCreated,
   };
 }
