@@ -42,7 +42,8 @@ function randomDelay(min: number, max: number): Promise<void> {
  * Check which platforms support browser-based posting.
  */
 export function hasBrowserSupport(platform: string): boolean {
-  return ['devto', 'medium', 'facebook_groups', 'reddit'].includes(platform);
+  // medium removed 2026-05-05 (permanent ban, not eligible for restoration)
+  return ['devto', 'facebook_groups', 'reddit'].includes(platform);
 }
 
 /**
@@ -59,9 +60,7 @@ export async function postViaBrowser(
   if (platform === 'devto') {
     return postToDevtoBrowser(articleUrl, commentBody, config);
   }
-  if (platform === 'medium') {
-    return postToMediumBrowser(articleUrl, commentBody, config);
-  }
+  // medium dispatcher removed 2026-05-05 (permanent ban). postToMediumBrowser kept as dead reference.
   if (platform === 'facebook_groups') {
     return postToFacebookGroupBrowser(articleUrl, commentBody, config);
   }

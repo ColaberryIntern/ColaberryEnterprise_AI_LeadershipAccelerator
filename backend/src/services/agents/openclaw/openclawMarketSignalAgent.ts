@@ -260,52 +260,7 @@ async function scanPlatform(
       break;
     }
 
-    case 'medium': {
-      // Medium tag RSS feeds -parse XML for article discovery
-      const mediumTags = ['artificial-intelligence', 'machine-learning', 'ai-leadership'];
-      for (const tag of mediumTags.slice(0, 2)) {
-        try {
-          const resp = await axios.get(`https://medium.com/feed/tag/${tag}`, {
-            headers: { 'User-Agent': 'OpenclawBot/1.0', Accept: 'application/rss+xml,application/xml' },
-            timeout: 15000,
-          });
-          const xml: string = resp.data;
-          // Simple RSS item extraction -no XML parser dependency needed
-          const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-          let match;
-          while ((match = itemRegex.exec(xml)) !== null && results.length < maxResults) {
-            const item = match[1];
-            const getTag = (tag: string) => {
-              const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
-              return m ? (m[1] || m[2] || '').trim() : '';
-            };
-            const link = getTag('link');
-            const title = getTag('title');
-            const creator = getTag('dc:creator');
-            const pubDate = getTag('pubDate');
-            // Extract categories
-            const cats: string[] = [];
-            const catRegex = /<category[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/category>/g;
-            let catMatch;
-            while ((catMatch = catRegex.exec(item)) !== null) cats.push(catMatch[1].trim());
-
-            if (link) {
-              results.push({
-                platform: 'medium',
-                source_url: link.split('?')[0], // strip query params
-                author: creator,
-                title,
-                content_excerpt: '', // RSS doesn't include clean excerpts
-                details: { published_at: pubDate, categories: cats },
-              });
-            }
-          }
-        } catch (err: any) {
-          console.warn(`[OpenClaw] Medium tag "${tag}" scan failed:`, err?.message?.slice(0, 200));
-        }
-      }
-      break;
-    }
+    // case 'medium': deactivated 2026-05-05 (permanent ban, not eligible for restoration). Scanner removed so we no longer surface Medium signals for engagement.
 
     case 'discourse': {
       // Scan configured Discourse forums for AI discussions

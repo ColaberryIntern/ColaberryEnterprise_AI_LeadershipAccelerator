@@ -1761,12 +1761,8 @@ router.post(`${BASE}/authority-content/:id/publish`, async (req: Request, res: R
         ['artificial-intelligence', 'machine-learning'],
       );
     } else if (platform === 'medium') {
-      const { postToMedium } = require('../../services/agents/openclaw/openclawPlatformPostingService');
-      postResult = await postToMedium(
-        post.title.replace(/ - Article$/, ''),
-        post.content,
-        ['artificial-intelligence', 'ai', 'machine-learning', 'leadership'],
-      );
+      // Medium deactivated 2026-05-05 (permanent ban, not eligible for restoration)
+      return res.status(410).json({ error: 'Medium platform is permanently deactivated. Choose a different platform or mark-posted manually.' });
     } else {
       return res.status(400).json({ error: `Platform "${platform}" does not support auto-publish. Use mark-posted for manual platforms.` });
     }

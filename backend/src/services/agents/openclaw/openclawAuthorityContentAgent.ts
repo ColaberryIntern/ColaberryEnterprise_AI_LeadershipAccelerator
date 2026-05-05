@@ -7,7 +7,7 @@ import { ARTICLE_PROMPT_INSTRUCTIONS, STANDARD_SIGN_OFF, supportsArticles } from
 import type { AgentExecutionResult, AgentAction } from '../types';
 import crypto from 'crypto';
 
-const ARTICLE_PLATFORMS = ['devto', 'medium', 'hashnode'];
+const ARTICLE_PLATFORMS = ['devto', 'hashnode'];
 const LINKEDIN_POST_PLATFORM = 'linkedin';
 
 /**
@@ -16,7 +16,9 @@ const LINKEDIN_POST_PLATFORM = 'linkedin';
  *
  * Generates content for multiple platforms:
  * - LinkedIn: short-form posts (150-250 words) with tracked links
- * - Dev.to, Medium, Hashnode: long-form articles (600-1200 words)
+ * - Dev.to, Hashnode: long-form articles (600-1200 words)
+ *
+ * Medium was deactivated 2026-05-05 (permanent ban, not eligible for restoration).
  *
  * Schedule: 0 8 * * * (daily 8am UTC)
  */

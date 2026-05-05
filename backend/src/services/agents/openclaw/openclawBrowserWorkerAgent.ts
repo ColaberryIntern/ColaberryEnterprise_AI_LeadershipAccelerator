@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSignal } from '../../../models';
-import { postToDevTo, postToHashnode, postToMedium, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
+import { postToDevTo, postToHashnode, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
 import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
 import { getStrategy, isPostCreationAllowed, isHumanExecution } from './openclawPlatformStrategy';
 import { checkCircuitBreaker } from './openclawCircuitBreaker';
@@ -262,8 +262,9 @@ async function attemptPosting(
       // Try browser fallback if available
       if (hasBrowserSupport(response.platform) && signal?.source_url) {
         try {
-          // Medium requires non-headless (Cloudflare blocks headless) — use Xvfb virtual display
-          const useHeadless = ['medium', 'facebook_groups'].includes(response.platform) ? false : (config.headless ?? true);
+          // facebook_groups requires non-headless — use Xvfb virtual display
+          // (medium removed 2026-05-05, permanent ban)
+          const useHeadless = ['facebook_groups'].includes(response.platform) ? false : (config.headless ?? true);
           if (!useHeadless) process.env.DISPLAY = process.env.DISPLAY || ':99';
           const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
             headless: useHeadless,
@@ -379,11 +380,7 @@ async function postToPlatform(
       if (!postId) throw new Error('No Hashnode post ID in signal details');
       return postToHashnode(postId, response.content, signal?.source_url);
     }
-    case 'medium': {
-      const title = signal?.title || 'AI Insight';
-      const tags = signal?.topic_tags?.slice(0, 5) || ['artificial-intelligence', 'ai'];
-      return postToMedium(title, response.content, tags);
-    }
+    // case 'medium': deactivated 2026-05-05 (permanent ban, not eligible for restoration)
     case 'discourse': {
       const topicId = signal?.details?.topic_id;
       const forumUrl = signal?.details?.forum_url;

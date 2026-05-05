@@ -38,7 +38,7 @@ export const PLATFORM_STRATEGY: Record<string, PlatformStrategyType> = {
 
   // AUTHORITY -you control the narrative, content-first
   linkedin: 'AUTHORITY_BROADCAST',
-  medium: 'AUTHORITY_BROADCAST',
+  // medium: deactivated 2026-05-05 (permanent ban, not eligible for restoration)
   youtube: 'AUTHORITY_BROADCAST',
 };
 
@@ -57,7 +57,7 @@ export const PLATFORM_EXECUTION: Record<string, PlatformExecutionType> = {
   youtube: 'API_POSTING',
 
   // API_POSTING (browser) -auto-post via browser with quality gate review
-  medium: 'API_POSTING',
+  // medium: deactivated 2026-05-05 (permanent ban, not eligible for restoration)
   facebook_groups: 'API_POSTING',
 
   // API_POSTING (browser) -auto-post via browser with cookie auth, quality gate review
@@ -84,7 +84,7 @@ export function getStrategy(platform: string): PlatformStrategyType {
 // ─── Link Control ────────────────────────────────────────────────────────────
 
 export function isLinkAllowed(platform: string): boolean {
-  // Allow links on AUTHORITY_BROADCAST (LinkedIn, Medium, YouTube) and
+  // Allow links on AUTHORITY_BROADCAST (LinkedIn, YouTube) and
   // HYBRID_ENGAGEMENT platforms that support articles (Dev.to, Hashnode).
   // Articles from our own account can include a CTA link without being
   // flagged as spam. Comments on other people's posts stay link-free.
@@ -92,7 +92,7 @@ export function isLinkAllowed(platform: string): boolean {
   if (strategy === 'AUTHORITY_BROADCAST') return true;
   if (strategy === 'HYBRID_ENGAGEMENT') {
     // These platforms support articles where links are acceptable
-    const articlePlatforms = ['devto', 'hashnode', 'medium'];
+    const articlePlatforms = ['devto', 'hashnode'];
     return articlePlatforms.includes(platform);
   }
   return false;

@@ -146,6 +146,8 @@ export async function postToMedium(
   contentMarkdown: string,
   tags: string[] = ['artificial-intelligence', 'ai', 'machine-learning'],
 ): Promise<PostResult> {
+  throw new Error('Medium platform deactivated 2026-05-05 (permanent ban, not eligible for restoration). Do not call postToMedium.');
+  // eslint-disable-next-line no-unreachable
   const token = process.env.MEDIUM_INTEGRATION_TOKEN;
   if (!token) throw new Error('MEDIUM_INTEGRATION_TOKEN not configured');
 
@@ -562,8 +564,7 @@ export function hasPlatformCredentials(platform: string): boolean {
       return !!process.env.DEVTO_API_KEY;
     case 'hashnode':
       return !!process.env.HASHNODE_ACCESS_TOKEN;
-    case 'medium':
-      return !!process.env.MEDIUM_INTEGRATION_TOKEN;
+    // medium: deactivated 2026-05-05 (permanent ban, not eligible for restoration)
     case 'discourse':
       return !!process.env.DISCOURSE_API_KEY;
     case 'twitter':

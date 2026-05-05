@@ -183,7 +183,8 @@ export async function checkCircuitBreaker(platform: string): Promise<CircuitStat
 export async function getAllCircuitStatus(): Promise<CircuitStatus[]> {
   const platforms = [
     'reddit', 'hackernews', 'devto', 'hashnode', 'discourse',
-    'twitter', 'bluesky', 'youtube', 'producthunt', 'medium',
+    'twitter', 'bluesky', 'youtube', 'producthunt',
+    // medium: deactivated 2026-05-05 (permanent ban, not eligible for restoration)
     'quora', 'facebook_groups', 'linkedin_comments', 'linkedin',
   ];
 
