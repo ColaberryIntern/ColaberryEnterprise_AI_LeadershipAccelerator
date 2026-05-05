@@ -1829,7 +1829,7 @@ function enrichCapability(cap: any) {
 
   return {
     ...cap,
-    source: isPageBP ? 'frontend_page' : 'requirements',
+    source: isPageBP ? 'frontend_page' : ((cap as any).source || 'requirements'),
     is_page_bp: isPageBP,
     total_requirements: totalR,
     matched_requirements: allReqsFlat.filter((r: any) => r.status === 'matched' || r.status === 'auto_verified' || r.status === 'verified').length,
