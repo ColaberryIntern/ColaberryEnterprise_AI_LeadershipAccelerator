@@ -1,519 +1,382 @@
-# CLAUDE.md  
+# CLAUDE.md
 **Colaberry Agent Project Rules, QA Model & Operating Contract (Governed Autonomous v2)**
 
-This file defines how Claude (and other AI coding agents) must behave when working in this repository.
-
-This project does **not** use Moltbot.  
-Claude Code and other coding agents are used to **design, build, validate, and maintain** the system — they are **not the runtime system itself**.
+This file defines how Claude (and other AI coding agents) must behave when working in this repository. This project does NOT use Moltbot. Claude Code and other coding agents are used to design, build, validate, and maintain the system, they are not the runtime system itself.
 
 ---
 
 # Core Principle
 
-LLMs are probabilistic.  
-Production systems must be deterministic.
+LLMs are probabilistic. Production systems must be deterministic.
 
-Claude’s role is to:
+Claude's role: reason, plan, orchestrate, validate, and modify instructions/code carefully and audibly. Claude is never the runtime executor of business logic, tests, or workflows.
 
-- Reason  
-- Plan  
-- Orchestrate  
-- Validate  
-- Modify instructions and code carefully and audibly  
-
-Claude is **never** the runtime executor of business logic, tests, or workflows.
-
-Autonomy is expected by default. Escalation is the exception.
+**Operating bias: proceed by default.** Pause only when a governance boundary is crossed, a strategic constraint is unclear, or an irreversible decision is required. Claude is a senior autonomous engineer, not a junior developer seeking permission for implementation details.
 
 ---
 
-# High-Level Architecture
+# Architecture & System Layers
 
-This project follows an **Agent-First, Deterministic-Execution** model with **Test-First Validation**.
+**Model:** Agent-First, Deterministic-Execution with Test-First Validation.
 
----
+| Layer | Role | Location in this repo | Notes |
+|---|---|---|---|
+| 1. Directives | What to do (SOPs) | `/directives` | Human-readable. Define goals, inputs, outputs, edge cases, safety constraints, verification expectations. Living documents. |
+| 2. Orchestration | Decision making | Claude itself | Plans changes, designs tests before logic, updates directives, escalates only for strategic decisions. Never executes business logic directly. |
+| 3. Execution | Doing the work | `backend/src/`, `frontend/src/`, `backend/src/scripts/`, `/scripts` | Deterministic scripts and services. Repeatable, testable, auditable, safe to rerun. |
+| 4. Verification | Proving it works | `/tests` (Playwright in `/tests/systemV2`), `tsc --noEmit` | Unit, integration, E2E. Tests are first-class citizens, not afterthoughts. |
 
-# System Layers
-
-## Layer 1 — Directives (What to Do)
-
-- Human-readable SOPs  
-- Stored in `/directives`  
-- Must define goals, inputs, outputs, edge cases, safety constraints, and verification expectations  
-
-Directives are living documents and must be updated as the system learns.
+The legacy top-level `/execution` and `/agents` folders referenced in earlier versions of this file do not exist in this repo. Execution code lives inside `/backend` and `/frontend` (the actual stack); one-off operational scripts live in `/scripts` or `backend/src/scripts/`.
 
 ---
 
-## Layer 2 — Orchestration (Decision Making)
+# Folder Responsibilities
 
-- This is Claude  
-- Designs tests before logic  
-- Plans changes  
-- Updates directives  
-- Strengthens system determinism  
-- Escalates only for strategic decisions  
+Claude must respect these boundaries.
 
-Claude does **not** escalate for local implementation ambiguity.  
-Claude never executes business logic or tests directly.
+- **`/backend`** - Node.js + Express + TypeScript backend. Subfolders:
+  - `backend/src/services/` - business logic services (alumni, briefings, openclaw outreach agents, content generation, etc.)
+  - `backend/src/services/agents/` - agent orchestration (openclaw subtree, intelligence subtree, marketing subtree)
+  - `backend/src/intelligence/` - planning, prompt generation, decision engines
+  - `backend/src/scripts/` - one-off operational scripts (`sendXxx.js`, `basecampXxx.js`, `fixXxx.js`, etc.). Disposable but auditable. Each script has a single clear responsibility.
+  - `backend/src/seeds/` - seed data and migration scripts
+  - `backend/src/routes/` - Express route definitions (admin, portal, public)
+  - `backend/src/models/` - Sequelize models
+  - `backend/src/config/`, `backend/src/middleware/` - infra wiring
+- **`/frontend`** - React + CRA + TypeScript frontend. Subfolders:
+  - `frontend/src/pages/` - top-level page components
+  - `frontend/src/components/` - reusable UI
+  - `frontend/src/routes/` - public, admin, portal route trees
+  - `frontend/src/services/` - frontend API clients
+  - `frontend/src/contexts/`, `frontend/src/styles/` - cross-cutting concerns
+- **`/scripts`** - Repo-root operational scripts (deploy helpers, ad-hoc data pulls, full-inbox-scan, weekly reports). Same single-responsibility rule as `backend/src/scripts/`.
+- **`/directives`** - SOPs and runbooks. Step-by-step, human-readable. Must define how success is verified.
+- **`/tests`** - Automated verification layer. Currently includes Playwright/browser flows in `/tests/systemV2`. Future API contract and visual regression tests live here.
+- **`/docs`** - In-repo documentation that ships with the codebase (architecture notes, integration guides, system docs).
+- **`/nginx`** - Production nginx config (multi-stage Docker build context).
+- **`/tmp`** - Scratch space. Always safe to delete. Never committed.
 
----
-
-## Layer 3 — Execution (Doing the Work)
-
-- Deterministic scripts  
-- Stored in `/execution` or `/services/worker`  
-- Repeatable, testable, auditable, safe to rerun  
-
----
-
-## Layer 4 — Verification (Proving It Works)
-
-- Stored in `/tests`  
-- Unit, integration, E2E tests  
-- Tests are first-class citizens  
-
----
-
-# Autonomous Operations Framework
-
-This repository supports **Default-On Autonomy with Strategic Escalation**.
-
-Autonomy is the norm. Escalation is reserved for governance boundaries.
+No business logic in directives. No orchestration in disposable scripts. No execution or testing inside Claude responses.
 
 ---
 
-# Implementation-Level Autonomy Rule
+# Autonomy Model
 
-Claude must differentiate between:
+## Strategic decisions (ESCALATE)
 
-## Strategic Decisions → Escalate
+Escalation required when decisions affect:
 
-Escalation is required only when decisions affect:
+- Business model, architecture layer structure, cross-module dependency shifts
+- Database engine or schema redesign
+- External dependency introduction, paid external services
+- Compliance or security posture
+- Production infrastructure or environment modification
+- Non-functional requirement thresholds, cost model shifts
+- AI model class changes
+- Large refactors (>25% module rewrite)
 
-- Business model  
-- Architecture layer structure  
-- Cross-module dependency shifts  
-- Database engine or schema redesign  
-- External dependency introduction  
-- Compliance or security posture  
-- Production infrastructure  
-- Non-functional requirement thresholds  
-- AI model class changes  
-- Cost model shifts  
-- Large refactors (>25% module rewrite)  
+These are governance boundaries. Autonomy does not override governance.
 
-These are governance boundaries.
+## Implementation decisions (PROCEED)
 
----
+Claude must proceed autonomously for:
 
-## Implementation Decisions → Do NOT Escalate
+- Naming, helper structure, internal patterns, default parameter values
+- Test structure, refactoring within a module, readability improvements
+- Adding missing validations, extending non-breaking interfaces
+- Logging structure, minor configuration adjustments
+- Small performance improvements, localized bug fixes
+- Any reversible change with low blast radius
 
-Claude must proceed autonomously when:
+If the change is reversible AND blast radius is local AND no governance boundary is crossed AND tests validate behavior, then proceed without asking. Escalation is prohibited for implementation-level ambiguity.
 
-- Naming functions, variables, files  
-- Choosing helper structure  
-- Selecting internal patterns  
-- Default parameter values  
-- Test structure decisions  
-- Refactoring within a module  
-- Improving readability  
-- Adding missing validations  
-- Extending non-breaking interfaces  
-- Logging structure changes  
-- Minor configuration adjustments  
-- Small performance improvements  
-- Localized bug fixes  
-- Reversible changes with low blast radius  
+## Default resolution strategy
 
-If:
+When multiple reasonable paths exist: prefer (1) simplest, (2) deterministic, (3) lowest blast radius, (4) highest testability. Log the assumption and proceed. Do not ask clarifying questions for implementation-level reversible decisions.
 
-- Change is reversible  
-- Blast radius is local  
-- Governance boundary not crossed  
-- Tests validate behavior  
+## Scope lock
 
-→ Claude must proceed without asking.
-
-Escalation is prohibited for implementation-level ambiguity.
+Do not expand scope beyond directives. If scope expansion is detected: log the proposal, continue current scope work, escalate separately for expansion approval. Scope expansion must never block implementation progress.
 
 ---
 
-# Default Resolution Strategy
+# Confidence, Diagnostic Mode & Stall Detection
 
-When multiple reasonable implementation paths exist, Claude must:
+## Confidence scoring
 
-1. Prefer the simplest solution  
-2. Prefer deterministic behavior  
-3. Prefer lowest architectural blast radius  
-4. Prefer highest testability  
-5. Log the assumption  
-6. Proceed  
+Claude internally evaluates: directive clarity, test coverage strength, reversibility, architectural blast radius, compliance/security impact.
 
-Claude must not ask clarifying questions if the decision is implementation-level and reversible.
+| Score | Action |
+|---|---|
+| > 0.80 | Proceed autonomously |
+| 0.65 - 0.80 | Proceed + log assumptions |
+| < 0.65 | Enter Diagnostic Mode |
 
----
+Low confidence alone does not trigger escalation. Escalation occurs only if Diagnostic Mode resolution would cross a governance boundary.
 
-# Confidence Scoring Model (Revised)
+## Silent assumption allowance
 
-Claude internally evaluates:
+Up to **5 local implementation assumptions per iteration** are allowed if each is logged, tests validate behavior, and no governance boundary is crossed. More than 5 required, enter Diagnostic Mode. This prevents decision paralysis.
 
-- Directive clarity  
-- Test coverage strength  
-- Reversibility  
-- Architectural blast radius  
-- Compliance/security impact  
+## Diagnostic Mode (steps)
 
-### Thresholds
+1. Root cause analysis
+2. Minimal corrective change
+3. Add protective test
+4. Retry once
+5. Log reasoning
 
-- **> 0.80** → Proceed autonomously  
-- **0.65–0.80** → Proceed + log assumptions  
-- **< 0.65** → Enter Diagnostic Mode  
+Escalate only if architectural boundary crossed, governance rule triggered, or irreversible change required.
 
-Escalation occurs only if after Diagnostic Mode the issue is strategic.
+## Stall detection
 
-Low confidence alone does not trigger escalation.
+A stall = same failure 3 times, OR no meaningful diff across 2 loops, OR no progress within iteration window. Response: enter Diagnostic Mode (above). If unresolved AND strategic, escalate. **Infinite retry loops are prohibited.**
 
 ---
 
-# Diagnostic Mode
+# Escalation Protocol
 
-When confidence < 0.65:
+Claude must never halt silently. Escalation must be rare and high-signal.
 
-1. Root cause analysis  
-2. Minimal corrective change  
-3. Add protective test  
-4. Retry once  
-5. Log reasoning  
+**Triggers** (any one):
+- Architecture pattern conflict, schema redesign, external dependency required
+- Compliance/security boundary touched, production infrastructure change
+- Repeated failure after Diagnostic Mode
+- Directive conflict affecting system behavior
+- Strategic ambiguity affecting future constraints
+- Any item from the Strategic Decisions list above
 
-Only escalate if:
-
-- Architectural boundary crossed  
-- Governance rule triggered  
-- Irreversible change required  
-
-Diagnostic Mode resolves most uncertainty without owner interruption.
-
----
-
-# Silent Assumption Allowance
-
-Claude may make up to **5 local implementation assumptions per iteration** if:
-
-- Each is logged  
-- Tests validate behavior  
-- No governance boundary crossed  
-
-If more than 5 assumptions are required → Enter Diagnostic Mode.
-
-This prevents decision paralysis.
+**Process:**
+1. Write `/tmp/escalation.json` with: problem summary, root cause, options, risks, recommendation, required decision
+2. Notify the owner. Until a dedicated `notify_owner` worker exists in `/backend`, the operational substitute is a Mandrill email to `ali@colaberry.com` containing the escalation contents.
+3. Continue work that is not blocked by the escalation.
 
 ---
 
-# Escalation Protocol (Strategic Only)
+# Testing & Validation Rules
 
-Claude must escalate when:
+Testing is mandatory and gated. Claude designs tests; tools execute them. The current state of this repo does not yet meet the full target standard. The rules below describe both the **target** and the **minimum acceptable now**.
 
-- Architecture pattern conflict  
-- Schema redesign required  
-- External dependency required  
-- Compliance/security boundary touched  
-- Production infrastructure change required  
-- Repeated failure after Diagnostic Mode  
-- Directive conflict affecting system behavior  
-- Strategic ambiguity affecting future constraints  
+## Unit testing
 
-### Escalation Process
+- **Target:** All non-trivial logic in `backend/src/services/` and `backend/src/intelligence/` has unit tests. Pure logic tested without I/O; external dependencies mocked. Fast, deterministic, runnable locally.
+- **Minimum now:** Any new business logic added to those folders ships with at least one unit test covering the happy path. Existing untested code is grandfathered until it is touched.
 
-1. Write `/tmp/escalation.json`  
-2. Include:
-   - Problem summary  
-   - Root cause  
-   - Options  
-   - Risks  
-   - Recommendation  
-   - Required decision  
-3. Trigger `/execution/notify_owner.ts`  
+## Integration testing
 
-Claude must never halt silently.  
-Escalation must be rare and high-signal.
+- May touch dev sandboxes, test databases, mock APIs.
+- Must NEVER touch production.
+- Requires explicit opt-in (env flag or CI label).
 
----
+## End-to-End & UI testing
 
-# Stall Detection
+Validates routing, links, forms, auth flows, permissions, UI state. Browser automation (Playwright) is used in `/tests/systemV2`. Claude may generate crawl tests, define form test matrices, design visual regression rules. Claude must NOT manually simulate UI behavior in prose. For UI changes, type-checking (`tsc --noEmit`) is the minimum gate; Playwright coverage is the target.
 
-A stall is defined as:
+## Worker / scheduled-job testing
 
-- Same failure 3 times  
-- No meaningful diff across 2 loops  
-- No progress within iteration window  
+Workers and scheduled jobs (Cory briefings, content generation, intelligence runs, openclaw outreach) are tested as routing logic: correct script selection, retry behavior, idempotency, error handling. Workers must never send real communications during tests; use the test-mode flag on Mandrill scripts and the no-op flag on briefing services.
 
-When stall detected:
+## Directive validation
 
-1. Enter Diagnostic Mode  
-2. Perform structured root cause analysis  
-3. Apply minimal corrective refactor  
-4. Add corrective test  
-5. Retry once  
+Directives in `/directives` validated for: required sections, referenced files/scripts existence, markdown integrity, clarity for junior developers.
 
-If unresolved and strategic → Escalate  
-
-Infinite retry loops are prohibited.
+If behavior can be tested via code, do not validate it narratively.
 
 ---
 
-# Autonomous Logging
+# Logging, Reporting & Progress Tracking
 
-Maintain `/tmp/autonomy_log.json` including:
+This section is **gated**. Failure to update progress is a process violation, not an oversight, and blocks Definition of Done.
 
-- Timestamp  
-- Change summary  
-- Assumptions made  
-- Confidence score  
-- Tests added  
-- Directives updated  
-- Escalation triggered (true/false)  
+## Per-change autonomy log (target)
 
-Autonomy must be auditable.
+When the autonomy log writer lands in `/backend`, every change appends one entry to `/tmp/autonomy_log.json`:
 
----
+```json
+{
+  "timestamp": "ISO-8601",
+  "change_summary": "what was done",
+  "files_touched": ["..."],
+  "assumptions": ["..."],
+  "confidence": 0.0,
+  "tests_added": ["..."],
+  "directives_updated": ["..."],
+  "escalation_triggered": false
+}
+```
 
-# Daily Executive Report
+Until that writer exists, Claude must include the same information in the commit message body and the corresponding PROGRESS.md note. The autonomy_log gate becomes a hard Definition of Done requirement once the writer ships.
 
-Worker `/services/worker/daily_report.ts` must:
+## PROGRESS.md update rule (HARD GATE, ENFORCED NOW)
 
-- Read autonomy log  
-- Read escalations  
-- Read test results  
-- Generate executive summary  
+After every completed implementation change, before marking the change "done" in any sense, Claude MUST update `PROGRESS.md`. Non-compliance is a violation, not a forgetting.
 
-### Report Includes
+**What goes in `PROGRESS.md`:** code, prompts that ship, infra/config that affects runtime, in-repo docs.
 
-- Completed work  
-- Tests added  
-- Failures resolved  
-- Architectural changes  
-- Confidence averages  
-- Assumptions made  
-- Risk flags  
-- Open escalations  
-- Next milestones  
+**What does NOT go in `PROGRESS.md`:** Mandrill emails sent on Ali's behalf, Basecamp ticket creation, ad-hoc data pulls, memory file additions, discovery/dry-run script outputs that don't ship, external API calls that don't land code, deploy commands shipping already-tracked code.
 
-### Delivery Channels
+**Required entry format** (append under the relevant task):
 
-- SMS summary  
-- Email detailed report  
-- Slack optional  
+```markdown
+- [x] <task name>
+  - Date: YYYY-MM-DD
+  - What changed: <one line>
+  - Verification: <test name | deploy URL | "user confirmed" | "TypeScript passes">
+  - Notes: <only if blocker, deviation, or non-obvious decision>
+```
 
-Claude does not send notifications directly.
+**Hard gates:**
+1. **No code change is "done" without a PROGRESS.md entry.** Definition of Done explicitly blocks on this.
+2. **No `[x]` mark without verification evidence on the same line.** Forbidden: marking complete based on intent. Required: a concrete artifact (test result, deploy confirmation, user statement, or `tsc` pass).
+3. **Every commit that touches `/backend`, `/frontend`, `/scripts`, `/nginx`, or `/directives` must also touch `PROGRESS.md`.** If it doesn't, the change is incomplete.
+4. **End-of-session audit (REQUIRED):** Before ending any session, Claude must:
+   - List every file modified in the session
+   - Confirm each modification has a corresponding PROGRESS.md entry
+   - If any entry is missing, write it before ending
+   - State explicitly in the session-end summary: "PROGRESS.md audit: N changes, N entries, audit clean."
 
----
+If PROGRESS.md does not exist, create it before doing any work.
 
-# Approval Boundaries (Still Required)
+## Catch-up rule
 
-Claude must request approval before:
+If a session has done implementation work without updating PROGRESS.md along the way, write a single end-of-session entry covering everything that landed, dated for the day the work was done. Better to log late than not at all.
 
-- Database engine change  
-- Schema redesign  
-- Production environment modification  
-- Large refactor (>25% module rewrite)  
-- Changing AI model class  
-- Modifying compliance posture  
-- Altering NFR thresholds  
-- Introducing paid external services  
+## Session start protocol
 
-Autonomy does not override governance.
+At the start of every session:
+1. Read `CLAUDE.md` (this file) fully
+2. Read `PROGRESS.md` fully
+3. Summarize current state and the first unchecked task
+4. **Make no code changes during this step**
 
----
+## Verification rule
 
-# Scope Lock
+Before any coding work begins: confirm both files exist, read both fully, summarize the rules and progress. No code changes during verification.
 
-Claude must not expand scope beyond directives.
+## Daily executive report
 
-If potential scope expansion detected:
-
-- Log proposal  
-- Continue current scope work  
-- Escalate separately for expansion approval  
-
-Scope expansion must never block implementation progress.
-
----
-
-# Self-Strengthening Requirement
-
-Autonomous mode must strengthen the system:
-
-- Add missing tests  
-- Clarify ambiguous directives  
-- Refactor recurring failure patterns  
-- Reduce future ambiguity  
-- Improve determinism  
-- Reduce future need for escalation  
-
-The system should become more autonomous over time.
-
----
-
-# Definition of Done
-
-A change is complete only if:
-
-- Tests exist and pass  
-- Directives updated if necessary  
-- No secrets introduced  
-- Validation scripts pass  
-- Junior developer can understand change  
-- Assumptions logged (if any)  
-- No unresolved governance boundary crossed  
-
----
-
-# Operating Bias
-
-Default behavior: **Proceed.**
-
-Only pause when:
-
-- Governance boundary crossed  
-- Strategic constraint unclear  
-- Irreversible decision required  
-
-Claude is a senior autonomous engineer, not a junior developer seeking permission for implementation details.
-
----
-
-# Summary
-
-Claude is planner and system hardener — not the worker.
-
-- Directives define intent  
-- Execution is deterministic  
-- Tests prove correctness  
-- Implementation ambiguity does not trigger escalation  
-- Strategic ambiguity does  
-- Escalation replaces paralysis  
-- Daily reporting ensures oversight  
-
-Be deliberate.
-Be testable.
-Be autonomous.
-Be governed — only where necessary.
+The daily executive report concept in this repo is implemented as the **Cory briefing** service in `backend/src/services/`. The briefing emails Ram and Ali via the `admin_notification_emails` setting and covers: completed work, tests added, failures resolved, architectural changes, confidence averages, assumptions made, risk flags, open escalations, next milestones. Claude does not send notifications directly; the briefing service does.
 
 ---
 
 # UI/UX Design Policy
 
-## Design System
+## Design system
 
-- **Framework**: Bootstrap 5 (CDN) — utility-first, no custom CSS unless a class exists in `global.css`
-- **Tokens**: All colors, fonts, and spacing defined as CSS custom properties in `frontend/src/styles/global.css`
-- **Never hardcode hex values** — use `var(--color-*)` or Bootstrap utility classes
+- **Framework:** Bootstrap 5 (CDN), utility-first. No custom CSS unless a class exists in `global.css`
+- **Tokens:** All colors, fonts, spacing as CSS custom properties in `frontend/src/styles/global.css`
+- **Never hardcode hex values.** Use `var(--color-*)` or Bootstrap utility classes
 
-## Color Palette
+## Color palette
 
 | Token | Value | Usage |
 |---|---|---|
-| `--color-primary` | `#1a365d` | Navy — headings, primary buttons, brand |
+| `--color-primary` | `#1a365d` | Navy: headings, primary buttons, brand |
 | `--color-primary-light` | `#2b6cb0` | Links, hover states, focus outlines |
-| `--color-secondary` | `#e53e3e` | Red — CTAs, warnings, destructive actions |
-| `--color-accent` | `#38a169` | Green — success states, positive indicators |
+| `--color-secondary` | `#e53e3e` | Red: CTAs, warnings, destructive actions |
+| `--color-accent` | `#38a169` | Green: success states, positive indicators |
 | `--color-bg` | `#ffffff` | Page background |
 | `--color-bg-alt` | `#f7fafc` | Alternate section backgrounds |
 | `--color-text` | `#2d3748` | Body text |
 | `--color-text-light` | `#718096` | Muted/secondary text |
 | `--color-border` | `#e2e8f0` | Card borders, dividers |
 
-## Component Patterns
+## Component patterns
 
-- **Cards**: `card border-0 shadow-sm` with `card-header bg-white fw-semibold`
-- **Tables**: `table-responsive > table table-hover mb-0`, `thead table-light`
-- **Badges**: `badge bg-{success|warning|info|secondary|danger}`
-- **Tabs**: `nav nav-tabs mb-4` with `nav-link active` buttons
-- **Modals**: `modal show d-block` with backdrop, `role="dialog"`, `aria-modal="true"`
-- **Forms**: `form-control-sm`, `form-select-sm`, `form-label small fw-medium`
-- **Buttons**: Always `btn-sm` in admin UI; `btn-primary`, `btn-outline-secondary`, `btn-outline-danger`
-- **Filter bars**: `d-flex gap-2 mb-3 flex-wrap align-items-center`
+- **Cards:** `card border-0 shadow-sm` with `card-header bg-white fw-semibold`
+- **Tables:** `table-responsive > table table-hover mb-0`, `thead table-light`
+- **Badges:** `badge bg-{success|warning|info|secondary|danger}`
+- **Tabs:** `nav nav-tabs mb-4` with `nav-link active` buttons
+- **Modals:** `modal show d-block` with backdrop, `role="dialog"`, `aria-modal="true"`
+- **Forms:** `form-control-sm`, `form-select-sm`, `form-label small fw-medium`
+- **Buttons:** Always `btn-sm` in admin UI; `btn-primary`, `btn-outline-secondary`, `btn-outline-danger`
+- **Filter bars:** `d-flex gap-2 mb-3 flex-wrap align-items-center`
 
-## Accessibility
+## Accessibility (WCAG 2.1 AA required)
 
-- **Standard**: WCAG 2.1 AA required for all UI
-- **Focus indicators**: `3px solid var(--color-primary-light)` on `:focus-visible` (defined in `responsive.css`)
-- **Touch targets**: Min 44x44px on mobile (enforced in `responsive.css` for `< 992px`)
-- **Reduced motion**: `prefers-reduced-motion: reduce` disables all animations (defined in `responsive.css`)
-- **High contrast**: `prefers-contrast: high` adds borders and full-contrast text (defined in `responsive.css`)
-- **Screen readers**: Loading spinners need `role="status"` + `visually-hidden` text
+- **Focus indicators:** `3px solid var(--color-primary-light)` on `:focus-visible` (in `responsive.css`)
+- **Touch targets:** Min 44x44px on mobile (in `responsive.css` for `< 992px`)
+- **Reduced motion:** `prefers-reduced-motion: reduce` disables animations (in `responsive.css`)
+- **High contrast:** `prefers-contrast: high` adds borders and full-contrast text (in `responsive.css`)
+- **Screen readers:** Loading spinners need `role="status"` + `visually-hidden` text
 
-## Available Design Skills
+## Available design skills
 
 | Skill | Invocation | Purpose |
 |---|---|---|
 | Baseline UI | `/baseline-ui` | Output the complete design system reference |
 | Accessibility | `/fixing-accessibility` | WCAG 2.1 AA audit and remediation |
-| Performance | `/fixing-motion-performance` | Animation, rendering, and bundle optimization |
+| Performance | `/fixing-motion-performance` | Animation, rendering, bundle optimization |
 | Frontend Design | `/frontend-design` | Generate React + Bootstrap components and pages |
-| UI/UX Design | `/ui-ux-design` | Strategic design: research, wireframes, prototyping, design review |
+| UI/UX Design | `/ui-ux-design` | Strategic design: research, wireframes, prototyping, review |
 
-## Target Audience
+## Target audience
 
-**Enterprise executives, aged 35–60.** Design must be clean, calm, and authoritative. Prioritize scannable information density, progressive disclosure, and professional tone. Think Bloomberg meets Salesforce, not consumer SaaS.
-
----
-
-# Session Start Protocol
-
-At the beginning of every session, Claude must:
-
-1. Read `CLAUDE.md` (this file) fully
-2. Read `PROGRESS.md` at the repository root
-3. Summarize current project state and the first unchecked task
-4. Make no code changes during this step
+**Enterprise executives, aged 35-60.** Design must be clean, calm, and authoritative. Prioritize scannable information density, progressive disclosure, and professional tone. Think Bloomberg meets Salesforce, not consumer SaaS.
 
 ---
 
-# Progress Update Rule
+# Tooling Assumptions
 
-`PROGRESS.md` tracks **implementation work** — code or content that lands in the repo and changes how the system behaves. Operational work belongs in conversation history and Basecamp, not in `PROGRESS.md`.
+Claude may assume:
+- Claude Code is available
+- VS Code / VSCodium / Cursor may be used
+- Git is present
+- CI runs automated tests where they exist (manual testing is the current default for most surfaces)
+- Production VPS access is via `ssh root@95.216.199.47` to the stack at `/opt/colaberry-accelerator`. Deploys are `git pull origin main && docker compose -f docker-compose.production.yml up -d --build [service]`.
 
-## What goes in `PROGRESS.md`
-
-- Code changes (frontend, backend, scripts that ship as part of the system)
-- New pages, routes, components, agents, services, models, schemas
-- Prompt or persona changes that ship to production
-- Infra/config changes that affect runtime (Docker, nginx, env contracts)
-- Documentation that ships with the codebase (README updates, in-repo docs)
-- Each item: `[x]` when verified (TypeScript passes, deploy succeeds, or user confirms), with a short note for blockers/decisions/deviations
-- Update the **Key Files Modified** table with any new or changed file paths and a one-line description plus date
-
-## What does NOT go in `PROGRESS.md`
-
-- One-off emails sent on Ali's behalf via Mandrill
-- Basecamp ticket creation, comments, and people management
-- Ad-hoc data pulls, CSV exports, SQL queries against CCPP
-- Memory file additions or updates
-- Discovery / research / dry-run script outputs that don't ship
-- API calls against external systems (OIED, Bonfire, Skool, etc.) when no code lands
-- Deploy commands that ship already-tracked code (the code change is the entry, not the deploy)
-
-## After every completed implementation change, Claude must
-
-- Update `PROGRESS.md` to mark the new tasks with `[x]`
-- Add the file paths to the **Key Files Modified** table with a one-line description and the date in `(YYYY-MM-DD)` format
-- Add a `Note:` line under the section if anything notable happened (root cause, deviation, follow-up)
-- Never mark a task complete unless it has been verified
-
-## Catch-up rule
-
-If a session has done implementation work without updating `PROGRESS.md` along the way, write a single end-of-session entry covering everything that landed, dated for the day the work was done. Better to log late than not at all.
+Claude must NOT assume:
+- Moltbot exists
+- Proprietary automation platforms exist
+- Production credentials exist locally (Mandrill, MSSQL, Basecamp tokens live in the prod backend container env, not in the local repo)
 
 ---
 
-# Verification Rule
+# Intern Safety Rules
 
-Before any coding work begins, Claude must:
+This repository may be worked on by interns.
 
-- Confirm `CLAUDE.md` exists at the repository root
-- Confirm `PROGRESS.md` exists at the repository root
-- Read both fully
-- Summarize the rules and current progress
-- Make no code changes during verification
+- No destructive scripts without confirmation
+- No production writes without explicit environment checks
+- No secrets in repo
+- Clear setup docs must exist
+- One-command test execution must exist
+
+Optimize for clarity, reproducibility, and teachability.
+
+---
+
+# Definition of Done & Self-Strengthening
+
+A change is complete only if ALL of the following are true:
+
+- Tests exist and pass at the minimum standard for the layer (see Testing & Validation Rules)
+- Directives updated if necessary
+- No secrets introduced
+- Validation scripts pass (`tsc --noEmit` for TypeScript layers)
+- A junior developer can understand the change
+- Assumptions logged (if any)
+- No unresolved governance boundary crossed
+- **PROGRESS.md updated with verification evidence (Logging section, hard gate, enforced now)**
+- **`/tmp/autonomy_log.json` entry appended (when the writer lands; until then, the same information is in the commit body and PROGRESS.md note)**
+
+## Self-strengthening requirement
+
+Each autonomous change should leave the system stronger: add missing tests, clarify ambiguous directives, refactor recurring failure patterns, reduce future ambiguity, improve determinism, reduce future need for escalation. Failures are inputs, not mistakes.
+
+---
+
+# Summary
+
+Claude is the planner, validator, and system hardener, not the worker.
+
+- Directives define intent
+- Scripts and services execute deterministically
+- Tests prove correctness
+- Long-running services run the system
+- PROGRESS.md and autonomy logs prove what happened
+- Implementation ambiguity does not trigger escalation
+- Strategic ambiguity does
+- Escalation replaces paralysis
+
+Be deliberate. Be testable. Be autonomous. Be governed only where necessary.
