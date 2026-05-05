@@ -89,6 +89,53 @@ router.post('/api/portal/project/setup/github', requireParticipant, async (req: 
   }
 });
 
+// ─── Brownfield setup ──────────────────────────────────────────────
+// For projects pointed at an existing mature codebase. Skips the
+// Architect → requirements → clustering pipeline. Connects the repo
+// (if not already connected), runs LLM-driven capability discovery
+// from the file tree, and creates Capability rows tagged
+// source='brownfield_discovered' with last_execution.status =
+// 'foundation_built' so Cory's fresh-project heuristic doesn't fire.
+router.post('/api/portal/project/setup/brownfield-discover', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { repo_url, access_token } = req.body || {};
+
+    // Auto-create the project if missing (parallel to architect-build flow)
+    const { createProjectForEnrollment } = await import('../services/projectService');
+    const project = await createProjectForEnrollment(enrollmentId);
+
+    // Connect GitHub if a repo_url was provided. If not, assume already
+    // connected (the user might be running brownfield discovery on an
+    // existing repo connection).
+    if (repo_url && typeof repo_url === 'string' && repo_url.trim()) {
+      const { connectGitHub } = await import('../services/projectSetupService');
+      await connectGitHub(enrollmentId, repo_url.trim(), access_token);
+    }
+
+    const { discoverBrownfieldCapabilities } = await import('../services/brownfieldDiscoveryService');
+    const result = await discoverBrownfieldCapabilities(enrollmentId, project.id);
+
+    // Stamp project with brownfield flag so the orchestrator and the
+    // wizard know this project skipped the Architect path.
+    const ss = (project as any).setup_status || {};
+    (project as any).setup_status = {
+      ...ss,
+      github_connected: true,
+      brownfield: true,
+      brownfield_discovered_at: new Date().toISOString(),
+      activated: true, // brownfield projects are immediately "active"
+    };
+    (project as any).changed('setup_status', true);
+    await project.save();
+
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    console.error('[BrownfieldDiscover] failed:', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // In-memory activation progress tracker
 const activationProgress: Map<string, { status: string; message: string; batch?: number; total_batches?: number; capabilities?: number; error?: string }> = new Map();
 

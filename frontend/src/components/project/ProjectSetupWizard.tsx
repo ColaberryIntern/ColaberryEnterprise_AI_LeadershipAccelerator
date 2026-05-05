@@ -43,7 +43,20 @@ interface Question {
   note?: string;             // optional follow-up clarification
 }
 
-type WizardStep = 'decision' | 'idea' | 'loading_questions' | 'questions' | 'upload' | 'github' | 'github_for_build' | 'starting_build' | 'activating' | 'complete';
+type WizardStep = 'decision' | 'idea' | 'loading_questions' | 'questions' | 'upload' | 'github' | 'github_for_build' | 'starting_build' | 'activating' | 'complete' | 'brownfield_connect' | 'brownfield_discovering' | 'brownfield_review';
+
+interface BrownfieldDiscoveryResult {
+  capabilitiesCreated: number;
+  capabilities: Array<{
+    id: string;
+    name: string;
+    description: string;
+    file_count: number;
+    layers: { backend: number; frontend: number; agents: number; models: number };
+  }>;
+  totalFilesAnalyzed: number;
+  detectedStack: string[];
+}
 
 export default function ProjectSetupWizard({ initialStatus, onActivated }: Props) {
   const init = initialStatus || { requirements_loaded: false, claude_md_loaded: false, github_connected: false, activated: false };
@@ -77,6 +90,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
   // tiers (Enterprise, Autonomous) add layers and don't gate the lower ones —
   // those become enhancement suggestions after 100%.
   const [targetMode, setTargetMode] = useState<ProjectMode>('production');
+  const [brownfieldResult, setBrownfieldResult] = useState<BrownfieldDiscoveryResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Persist the chosen target_mode before kicking off activation/build so
@@ -185,6 +199,24 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
     finally { setSaving(false); }
   };
 
+  // Brownfield: connect repo + run discovery in one shot.
+  const handleBrownfieldDiscover = async () => {
+    if (!repoUrl.trim()) return;
+    setStep('brownfield_discovering'); setError(null);
+    try {
+      await persistTargetMode();
+      const res = await portalApi.post('/api/portal/project/setup/brownfield-discover', {
+        repo_url: repoUrl.trim(),
+        access_token: accessToken.trim() || undefined,
+      });
+      setBrownfieldResult(res.data);
+      setStep('brownfield_review');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Discovery failed');
+      setStep('brownfield_connect');
+    }
+  };
+
   // Connect GitHub (legacy path — used when requirements were already
   // saved in a prior session and only the repo is missing).
   const handleConnectGithub = async () => {
@@ -264,14 +296,19 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
       {/* DECISION */}
       {step === 'decision' && (
         <div className="text-center">
-          <h5 className="fw-bold mb-4" style={{ fontSize: 18 }}>Do you already have a Requirements document?</h5>
-          <div className="d-flex flex-column gap-3" style={{ maxWidth: 400, margin: '0 auto' }}>
-            <button className="btn py-3" style={{ background: 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none' }} onClick={() => setStep('upload')}>
-              <i className="bi bi-file-earmark-check me-2"></i>Yes, I Have One
+          <h5 className="fw-bold mb-4" style={{ fontSize: 18 }}>How would you like to start?</h5>
+          <div className="d-flex flex-column gap-3" style={{ maxWidth: 460, margin: '0 auto' }}>
+            <button className="btn py-3 text-start" style={{ background: 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', paddingLeft: 20, paddingRight: 20 }} onClick={() => setStep('upload')}>
+              <i className="bi bi-file-earmark-check me-2"></i>I have a Requirements document
+              <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Upload your build guide and connect your repo</div>
             </button>
-            <button className="btn py-3" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)' }} onClick={() => setStep('idea')}>
-              <i className="bi bi-lightning-charge-fill me-2"></i>No, Build It With AI
-              <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Cory will design your system in minutes</div>
+            <button className="btn py-3 text-start" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)', paddingLeft: 20, paddingRight: 20 }} onClick={() => setStep('idea')}>
+              <i className="bi bi-lightning-charge-fill me-2"></i>Build it with AI
+              <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Cory will design your system from your idea</div>
+            </button>
+            <button className="btn py-3 text-start" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.25)', paddingLeft: 20, paddingRight: 20 }} onClick={() => setStep('brownfield_connect')}>
+              <i className="bi bi-git me-2"></i>I have an existing codebase
+              <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Point at a mature repo — we'll discover what's already built</div>
             </button>
           </div>
         </div>
@@ -435,6 +472,120 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
               <button className="btn btn-outline-secondary btn-sm" onClick={() => setStep('decision')}><i className="bi bi-arrow-left me-1"></i>Back</button>
               <button className="btn btn-primary" style={{ fontWeight: 600 }} onClick={handleUploadRequirements} disabled={saving || !reqContent.trim() || !repoUrl.trim()}>
                 {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving...</> : <>Continue <i className="bi bi-arrow-right ms-1"></i></>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BROWNFIELD: Connect existing repo */}
+      {step === 'brownfield_connect' && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body p-4">
+            <h6 className="fw-bold mb-2" style={{ fontSize: 16 }}>
+              <i className="bi bi-git me-2" style={{ color: '#10b981' }}></i>Point at your existing codebase
+            </h6>
+            <p className="text-muted mb-3" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              We'll read your repo's file tree and let an LLM identify the business capabilities that already exist (e.g. authentication, lead pipeline, reporting). They'll be created as Business Processes marked <strong>Foundation Built</strong> — Cory will then recommend ways to <em>improve, verify, or extend</em> what's there instead of asking you to build from scratch.
+            </p>
+
+            <div className="alert alert-info py-2 mb-3" style={{ fontSize: 11 }}>
+              <i className="bi bi-info-circle me-1"></i>
+              Best for repos with at least 30+ source files and a recognizable structure (services/, components/, routes/, models/). Smaller projects, use one of the other options.
+            </div>
+
+            <label className="form-label fw-medium mb-1" style={{ fontSize: 12 }}>GitHub repository URL</label>
+            <input type="text" className="form-control mb-2" placeholder="https://github.com/your-org/your-repo" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+
+            <label className="form-label fw-medium mb-1" style={{ fontSize: 12 }}>Access token <span className="text-muted">(required for private repos)</span></label>
+            <input type="password" className="form-control mb-3" placeholder="ghp_..." value={accessToken} onChange={e => setAccessToken(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+
+            {renderTargetTierPicker(targetMode, setTargetMode)}
+
+            {error && <div className="alert alert-danger small py-2 mb-3">{error}</div>}
+
+            <div className="d-flex justify-content-between">
+              <button className="btn btn-outline-secondary btn-sm" onClick={() => setStep('decision')}>
+                <i className="bi bi-arrow-left me-1"></i>Back
+              </button>
+              <button
+                className="btn py-2"
+                style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontWeight: 600, fontSize: 13, borderRadius: 8, border: 'none' }}
+                disabled={!repoUrl.trim()}
+                onClick={handleBrownfieldDiscover}
+              >
+                <i className="bi bi-search me-1"></i>Discover existing capabilities
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BROWNFIELD: Discovering (spinner) */}
+      {step === 'brownfield_discovering' && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body py-5 text-center">
+            <div className="spinner-border text-success mb-3" style={{ width: 48, height: 48 }}></div>
+            <h5 className="fw-bold mb-1">Reading your codebase</h5>
+            <p className="text-muted mb-3" style={{ fontSize: 13, lineHeight: 1.5 }}>
+              Pulling the file tree, scanning for feature boundaries, and identifying business capabilities. This usually takes 30-60 seconds.
+            </p>
+            <div className="text-muted small" style={{ fontSize: 11 }}>
+              <i className="bi bi-arrow-repeat me-1"></i>Connecting to GitHub<br />
+              <i className="bi bi-arrow-repeat me-1"></i>Reading file tree<br />
+              <i className="bi bi-arrow-repeat me-1"></i>Asking the LLM to group files into capabilities
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BROWNFIELD: Review discovered capabilities */}
+      {step === 'brownfield_review' && brownfieldResult && (
+        <div className="card border-0 shadow-sm" style={{ maxWidth: 720, margin: '0 auto' }}>
+          <div className="card-body p-4">
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 22 }}></i>
+              <h5 className="fw-bold mb-0">Discovery complete</h5>
+            </div>
+            <p className="text-muted mb-3" style={{ fontSize: 13 }}>
+              Found <strong>{brownfieldResult.capabilitiesCreated} capabilities</strong> across {brownfieldResult.totalFilesAnalyzed.toLocaleString()} files.
+              {brownfieldResult.detectedStack.length > 0 && (
+                <> Detected stack: {brownfieldResult.detectedStack.map((s, i) => <span key={i} className="badge bg-secondary ms-1" style={{ fontSize: 9 }}>{s}</span>)}</>
+              )}
+            </p>
+
+            <div className="mb-3" style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+              {brownfieldResult.capabilities.map((c, i) => (
+                <div key={c.id} className="p-3" style={{ borderBottom: i < brownfieldResult.capabilities.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                  <div className="d-flex align-items-center justify-content-between mb-1">
+                    <div className="fw-semibold" style={{ fontSize: 13 }}>{c.name}</div>
+                    <div className="d-flex gap-1">
+                      {c.layers.backend > 0 && <span className="badge" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 9 }}>Backend ({c.layers.backend})</span>}
+                      {c.layers.frontend > 0 && <span className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 9 }}>Frontend ({c.layers.frontend})</span>}
+                      {c.layers.agents > 0 && <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 9 }}>Agents ({c.layers.agents})</span>}
+                      {c.layers.models > 0 && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>Models ({c.layers.models})</span>}
+                    </div>
+                  </div>
+                  {c.description && <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.5 }}>{c.description}</div>}
+                </div>
+              ))}
+            </div>
+
+            <div className="alert alert-success py-2 mb-3" style={{ fontSize: 11 }}>
+              <i className="bi bi-info-circle me-1"></i>
+              These capabilities are marked <strong>Foundation Built</strong>. Cory will recommend <em>improve / verify / extend</em> tasks for them, not <em>build-from-scratch</em>.
+            </div>
+
+            <div className="d-flex justify-content-between">
+              <button className="btn btn-outline-secondary btn-sm" onClick={() => { setBrownfieldResult(null); setStep('brownfield_connect'); }}>
+                <i className="bi bi-arrow-clockwise me-1"></i>Re-run discovery
+              </button>
+              <button
+                className="btn py-2"
+                style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontWeight: 600, fontSize: 13, borderRadius: 8, border: 'none' }}
+                onClick={() => onActivated()}
+              >
+                <i className="bi bi-arrow-right me-1"></i>Open the Blueprint
               </button>
             </div>
           </div>
