@@ -12,6 +12,30 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CLAUDE.md v2 Reality Alignment (2026-05-05)
+- [x] Adopted v2 structural improvements (Autonomy Model merge, Confidence/Diagnostic/Stall merge, hardened PROGRESS.md gate, end-of-session audit, autonomy log target)
+  - Date: 2026-05-05
+  - Verification: User confirmed Option B; commit `a772233` pushed
+- [x] Rewrote Architecture & Folder Responsibilities sections to match actual repo layout (`/backend`, `/frontend`, `/scripts`, `/docs`, `/directives`, `/tests`, `/nginx`)
+  - Date: 2026-05-05
+  - Verification: `ls` confirmed described folders match what exists; `/agents`, `/services/worker`, `/config` references removed
+- [x] Removed Visual-Changes Walkthrough Workflow section (transplant from advisor.colaberry.ai repo, references walkthrough scripts and AI Pathway personas not in this repo)
+  - Date: 2026-05-05
+  - Verification: `walkthrough_report.py` confirmed not present; advisor repo memory `reference_advisor_repo.md` confirms it lives in separate Python/FastAPI repo
+- [x] Reframed Daily Executive Report to point at the Cory briefing service in `backend/src/services/` instead of nonexistent `/services/worker/daily_report.ts`
+  - Date: 2026-05-05
+  - Verification: User confirmed Cory briefing already implemented (per prior PROGRESS.md entry "Confirmed Ram on daily Cory briefing emails")
+- [x] Softened `/tmp/autonomy_log.json` gate to "when writer lands"; stop-gap is commit body + PROGRESS.md note
+  - Date: 2026-05-05
+  - Verification: User confirmed Option B accepted this softening so DoD doesn't block on missing infrastructure
+- [x] Added explicit "minimum now" tier to Testing & Validation Rules so DoD doesn't block on infrastructure that doesn't exist yet
+  - Date: 2026-05-05
+  - Verification: TypeScript still passes; PROGRESS.md hard gates retained verbatim
+- [x] Pointed Escalation notify step at Mandrill email to ali@colaberry.com until `/backend` `notify_owner` worker exists
+  - Date: 2026-05-05
+  - Verification: Memory `reference_send_email_as_ali.md` confirms Mandrill backend transporter is the working notification path
+  - Note: Net change 473 -> 382 lines (commit `a772233`). Same governance posture, accurate paths. PROGRESS.md catch-up rule and end-of-session audit retained verbatim from v2 paste.
+
 ### Medium Platform Deactivation (2026-05-05)
 - [x] Removed `'medium'` from `ARTICLE_PLATFORMS` in `openclawAuthorityContentAgent.ts` — no more Medium articles generated
 - [x] Removed `medium` rows from `PLATFORM_STRATEGY` and `PLATFORM_EXECUTION` maps in `openclawPlatformStrategy.ts`
@@ -318,3 +342,4 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 | `backend/src/services/agents/openclaw/openclawCircuitBreaker.ts` | Removed Medium from rate-limit tracking list (2026-05-05) |
 | `backend/src/services/agents/openclaw/openclawMarketSignalAgent.ts` | Removed Medium RSS scanner case (2026-05-05) |
 | `backend/src/routes/admin/openclawRoutes.ts` | Auto-publish returns HTTP 410 for Medium (2026-05-05) |
+| `CLAUDE.md` | v2 reality alignment: actual paths, advisor walkthrough section removed, autonomy_log gate softened (2026-05-05) |
