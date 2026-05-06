@@ -12,6 +12,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### IOU Demo De-Coopification Pass 1: Vertical-Neutral Demo Content (2026-05-06)
+- [x] Stripped 54 co-op-specific language tokens from `frontend/src/config/demoScenarios.json` so the same library serves both co-op and IOU landing pages cleanly
+  - Date: 2026-05-06
+  - Verification: `node -e "JSON.parse(...)"` confirms JSON validity post-edit; zero residual matches for `cooperative|co-op|member service|member satisfaction`; commit `46cef7c` deployed via nginx rebuild
+  - Note: David Lahme flagged that the IOU page's demo content (agent dialogue, narration, simulation steps) still mentioned cooperatives/members on the inside even though the page is branded IOU. Root cause: the demoScenarios.json was authored co-op-first; IOU_SCENARIO_LABELS in UtilityIOULandingPage only renamed the cards, not the demo content. Pass 1 is the broad-strokes neutralization. Pass 2 (IOU-specific narration overlay for the 4 priority scenarios: Crew Productivity, Outage Prediction, Storm Response, Rate Case Automation) is committed for end-of-week and requires architectural change to InlineDemoPlayer to accept per-scenario narration overrides.
+- [x] Patch is idempotent and re-runnable via `backend/src/scripts/stripCoopFromDemoScenarios.js`
+  - Date: 2026-05-06
+  - Verification: re-running on already-clean JSON produces 0 replacements
+
 ### Behavioral Trigger Activation: Audit + Page Categorization Fix + Draft Campaigns (2026-05-06)
 - [x] Audit script `auditBehavioralTriggers.js` written and run against prod Postgres
   - Date: 2026-05-06
@@ -409,3 +418,5 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 | `backend/src/services/visitorTrackingService.ts` | categorizePagePath extended with 7 vertical/pilot landing pages mapped to 'pricing' category (2026-05-06) |
 | `backend/src/scripts/auditBehavioralTriggers.js` | New read-only audit script for behavioral_trigger campaign coverage and signal firing (2026-05-06) |
 | `backend/src/scripts/seedBehavioralTriggerCampaigns.js` | New idempotent seed script creating 3 draft behavioral_trigger campaigns wired to existing sequences (2026-05-06) |
+| `frontend/src/config/demoScenarios.json` | Stripped co-op-specific language (cooperative, members, Member Service Bot, etc.) so the shared scenario library serves both IOU and co-op pages cleanly (2026-05-06) |
+| `backend/src/scripts/stripCoopFromDemoScenarios.js` | New idempotent script that performs the de-coopification replacements (2026-05-06) |
