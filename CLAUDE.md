@@ -598,6 +598,22 @@ Every caught exception is tagged with a stable `error_class` string before being
 
 ---
 
+# Outreach Byline Policy
+
+The "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)" byline appended to outbound social content is conditional on platform strategy. It is NOT universal.
+
+| Strategy | Examples | Byline behavior |
+|---|---|---|
+| `PASSIVE_SIGNAL` (cross-platform comments) | Reddit, Quora, Hacker News, Facebook Groups, LinkedIn comments on others' posts | Append byline. Reader cannot natively tell the commenter is Ali. |
+| `HYBRID_ENGAGEMENT` (engagement-first, light posting) | Dev.to, Hashnode, Twitter, Bluesky, ProductHunt, Discourse | Append byline (short form for char-limited platforms). |
+| `AUTHORITY_BROADCAST` (Ali's own channel) | LinkedIn native posts, YouTube | **STRIP byline.** The platform identifies the author inherently; a manual sign-off reads as redundant ("Hi I'm Ali, and also I'm Ali") and looks LLM-generated. |
+
+The deterministic enforcement lives in `enforceSignOff()` in `openclawPlatformStrategy.ts`. It appends the byline for non-AUTHORITY platforms and actively strips it from AUTHORITY_BROADCAST output, regardless of what the LLM (or a human drafter) emitted.
+
+When hand-drafting LinkedIn-native posts (e.g., for Dhee or another assistant to publish on Ali's profile), follow the same rule: no byline.
+
+---
+
 # Tooling Assumptions
 
 Claude may assume:

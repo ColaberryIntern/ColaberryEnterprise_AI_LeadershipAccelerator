@@ -515,12 +515,27 @@ export function getSignOff(platform: string): string | null {
 
 /**
  * Ensure content ends with the correct sign-off.
- * Appends if missing. Returns content unchanged if sign-off already present
- * or if platform is AUTHORITY_BROADCAST.
+ *
+ * Behavior by platform strategy:
+ *  - AUTHORITY_BROADCAST (LinkedIn native posts, YouTube): STRIP any byline.
+ *    The post appears on Ali's own owned channel; the platform itself shows
+ *    his name and handle, so a manual "- Ali Muwwakkil (ali-muwwakkil on
+ *    LinkedIn)" byline reads as redundant ("Hi I'm Ali, and also I'm Ali")
+ *    and looks LLM-generated.
+ *  - Everything else: append the standard sign-off if missing. Cross-platform
+ *    comments need the byline because the platform does not natively identify
+ *    the commenter as Ali.
  */
 export function enforceSignOff(content: string, platform: string): string {
   const signOff = getSignOff(platform);
-  if (!signOff) return content; // AUTHORITY_BROADCAST -no sign-off needed
+
+  if (!signOff) {
+    // AUTHORITY_BROADCAST: strip any byline the LLM (or upstream copy) may have added
+    return content
+      .replace(/\s*\n+\s*[-–—]?\s*Ali\s*Muwwakkil\s*\(\s*ali-muwwakkil\s+on\s+LinkedIn\s*\)\s*$/i, '')
+      .replace(/\s*\n+\s*[-–—]?\s*Ali\s*M\.\s*\(\s*LinkedIn\s*:\s*ali-muwwakkil\s*\)\s*$/i, '')
+      .trimEnd();
+  }
 
   // Check if any form of sign-off is already present
   if (content.includes('ali-muwwakkil on LinkedIn') || content.includes('LinkedIn: ali-muwwakkil')) {
