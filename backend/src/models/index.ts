@@ -52,6 +52,7 @@ import AiCompany from './AiCompany';
 import CompanyGoal from './CompanyGoal';
 import DepartmentKpi from './DepartmentKpi';
 import CompanyBudget from './CompanyBudget';
+import SystemStateSnapshot from './SystemStateSnapshot';
 import CompanyDirective from './CompanyDirective';
 import CompanyAuditLog from './CompanyAuditLog';
 import Initiative from './Initiative';
@@ -967,6 +968,7 @@ export {
   SkoolResponse,
   SkoolTask,
   SkoolEngagement,
+  SystemStateSnapshot,
 };
 
 // --- AI Company Layer associations ---

@@ -555,6 +555,14 @@ export function buildKickoffTask(): CoryTask {
 
 // ─── PROJECT-WIDE ORCHESTRATOR (for Blueprint) ─────────────────────────────
 // Runs getTopTasks across ALL enriched capabilities and returns the global Top 5
+//
+// LEGACY: this function is being migrated to the SystemStateEngine. It still
+// runs (for backward compatibility) but new code should call the engine via
+// getProjectTopTasksFromEngine() below. Once all callers are migrated, the
+// implementation here will become a thin adapter that just calls the engine
+// and converts AuthoritativeTask → CoryTask for legacy callers.
+//
+// TODO(systemStateEngine-migration): replace internals with engine call.
 
 export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: string): CoryTask[] {
   // Fresh project — return only the kickoff task. The user shouldn't
@@ -601,4 +609,78 @@ export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: str
   }
 
   return result;
+}
+
+// ─── ENGINE-BACKED ORCHESTRATOR ──────────────────────────────────────────
+//
+// New entry point that delegates to the SystemStateEngine. Returns the
+// same CoryTask[] shape so callers don't have to change immediately.
+//
+// Once every consumer is migrated, this becomes the only path and the
+// legacy getProjectTopTasks above is removed.
+
+export async function getProjectTopTasksFromEngine(projectId: string): Promise<CoryTask[]> {
+  const { buildAuthoritativeState } = await import('../../intelligence/systemStateEngine');
+  const state = await buildAuthoritativeState(projectId, { persist: false });
+
+  // Convert AuthoritativeTask[] → CoryTask[] for legacy consumers.
+  // Take the top 5 (matching the legacy contract).
+  return state.queue.slice(0, 5).map(task => ({
+    id: task.id,
+    title: task.title,
+    description: task.description || '',
+    source: mapTaskTypeToSource(task.type),
+    type: task.type === 'foundation' ? 'foundational'
+        : task.type === 'optimization' ? 'enhancement'
+        : task.type === 'ui_review' ? 'experience'
+        : 'fix',
+    impact: task.priority_score,
+    urgency: task.blocking_score,
+    confidence: task.confidence_score,
+    blocking: task.blocking_score >= 80,
+    blocked: task.state === 'blocked',
+    block_reason: task.state === 'blocked' ? task.reasoning.join('; ') : undefined,
+    dependencies: [...task.dependencies],
+    system_layer: mapTaskTypeToLayer(task.type),
+    mode_relevance: { mvp: 1, production: 1, enterprise: 1, autonomous: 1 },
+    color: '#3b82f6',
+    prompt_target: task.type === 'foundation' ? 'project_kickoff' : undefined,
+    component_id: task.bp_id,
+    priority: -task.calculated_rank,        // engine uses lower-is-better; CoryTask uses higher-is-better
+    decision_trace: {
+      reason: task.reasoning.join('; '),
+      inputs: {
+        coverage: 0,
+        readiness: 0,
+        quality: 0,
+        mode: 'engine',
+        layer_status: task.type,
+      },
+      confidence: task.confidence_score,
+      scoring_breakdown: {
+        impact_score: task.priority_score,
+        urgency_score: task.blocking_score,
+        confidence_score: task.confidence_score,
+        blocking_bonus: task.state === 'ready' ? 25 : 0,
+        mode_weight: 1,
+        total: -task.calculated_rank,
+      },
+    },
+  }));
+}
+
+function mapTaskTypeToSource(t: string): 'build' | 'health' | 'improve' | 'ui' {
+  if (t === 'ui_review') return 'ui';
+  if (t === 'optimization') return 'improve';
+  if (t === 'validation' || t === 'testing') return 'health';
+  return 'build';
+}
+
+function mapTaskTypeToLayer(t: string): 'backend' | 'frontend' | 'agents_backend' | 'agents_frontend' | 'data' | 'observability' {
+  if (t === 'backend') return 'backend';
+  if (t === 'frontend' || t === 'ui_review') return 'frontend';
+  if (t === 'database') return 'data';
+  if (t === 'intelligence') return 'agents_backend';
+  if (t === 'optimization' || t === 'testing') return 'observability';
+  return 'backend';
 }
