@@ -12,6 +12,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### LinkedIn Byline Policy: Strip on AUTHORITY_BROADCAST (2026-05-06)
+- [x] `enforceSignOff()` in `openclawPlatformStrategy.ts` now actively strips the "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)" byline (and the SHORT_SIGN_OFF variant) from AUTHORITY_BROADCAST output, instead of merely skipping the append step
+  - Date: 2026-05-06
+  - Verification: `tsc --noEmit` passes; commit `ab64d8a` deployed to prod backend
+- [x] CLAUDE.md gains an "Outreach Byline Policy" section codifying when to append the byline (PASSIVE_SIGNAL, HYBRID_ENGAGEMENT) vs strip it (AUTHORITY_BROADCAST)
+  - Date: 2026-05-06
+  - Verification: Section visible at line 600 of CLAUDE.md
+  - Note: Triggered by Dhee flagging the byline on a LinkedIn-native post draft. Root cause: hand-drafted post yesterday included the byline (carried over from cross-platform-comment template). The deterministic gate now ensures any future hand-drafted or LLM-drafted content destined for an owned channel gets the byline stripped before publishing.
+
 ### CLAUDE.md Production Hardening Frameworks Added (2026-05-05)
 - [x] Modular Composition Rule (size targets, composition rules, imports as dependency declarations)
   - Date: 2026-05-05
@@ -377,3 +386,5 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 | `backend/src/routes/admin/openclawRoutes.ts` | Auto-publish returns HTTP 410 for Medium (2026-05-05) |
 | `CLAUDE.md` | v2 reality alignment: actual paths, advisor walkthrough section removed, autonomy_log gate softened (2026-05-05) |
 | `CLAUDE.md` | +9 production hardening sections (Modular Composition, Contract Enforcement, Test Strategy, Idempotency, Failure-First, Production Readiness, Security, Build-Break-Harden, Observability) (2026-05-05) |
+| `backend/src/services/agents/openclaw/openclawPlatformStrategy.ts` | enforceSignOff actively strips byline for AUTHORITY_BROADCAST destinations (2026-05-06) |
+| `CLAUDE.md` | Outreach Byline Policy section: append byline for cross-platform comments, strip for AUTHORITY_BROADCAST (2026-05-06) |
