@@ -89,7 +89,16 @@ const ROLE_HEROES: Record<string, { badge: string; headline: string; subhead: st
   },
 };
 
-function UtilityIOULandingPage() {
+interface UtilityIOULandingPageProps {
+  // When true, presenter mode is forced ON regardless of URL params.
+  // Used by the /iou-demo route so prospects do not need to know the ?presenter param.
+  forcePresenter?: boolean;
+  // When set, used as the role if no ?role= URL param is present.
+  // Used by the /iou-demo route to default to a CEO-level executive frame.
+  defaultRole?: string;
+}
+
+function UtilityIOULandingPage({ forcePresenter, defaultRole }: UtilityIOULandingPageProps = {}) {
   const [showBooking, setShowBooking] = useState(false);
   const [demoKey, setDemoKey] = useState(0);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
@@ -97,8 +106,9 @@ function UtilityIOULandingPage() {
   const [showPicker, setShowPicker] = useState(false);
   const advisoryUrl = getAdvisoryUrl();
 
-  // Detect role from URL param. Default (no param) shows the standard ops page.
-  const role = new URLSearchParams(window.location.search).get('role') || '';
+  // Detect role from URL param. Falls back to defaultRole prop, then to ops.
+  const urlRole = new URLSearchParams(window.location.search).get('role') || '';
+  const role = urlRole || defaultRole || '';
   const heroContent = role && ROLE_HEROES[role] ? ROLE_HEROES[role] : ROLE_HEROES.ops;
 
   const ROLE_DEFAULT_DEMOS: Record<string, string[]> = {
@@ -243,7 +253,7 @@ function UtilityIOULandingPage() {
             trackContext="utility_iou_landing"
             onDemoComplete={onDemoComplete}
             autoPlay={!!selectedScenario}
-            presenterMode={new URLSearchParams(window.location.search).has('presenter')}
+            presenterMode={forcePresenter || new URLSearchParams(window.location.search).has('presenter')}
           />
 
           {showPicker && (

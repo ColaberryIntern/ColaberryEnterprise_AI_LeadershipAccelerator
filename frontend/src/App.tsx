@@ -24,6 +24,7 @@ function App() {
         <Route path="/alumni-ai-champion" element={<AlumniChampionPage />} />
         <Route path="/utility-ai" element={<UtilityCoopLandingPage />} />
         <Route path="/utility-iou" element={<UtilityIOULandingPage />} />
+        <Route path="/iou-demo" element={<UtilityIOULandingPage forcePresenter defaultRole="ceo" />} />
         <Route path="/freight-ai" element={<FreightBrokerageLandingPage />} />
         <Route path="/aixcelerator" element={<AIXceleratorLandingPage />} />
         {adminRoutes}
