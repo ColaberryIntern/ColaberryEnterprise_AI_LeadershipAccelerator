@@ -24,7 +24,11 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 - [x] Three draft behavioral_trigger campaigns created in prod Postgres via `seedBehavioralTriggerCampaigns.js`
   - Date: 2026-05-06
   - Verification: Campaign IDs returned and confirmed: Hot Lead Personal Reach `8bfb08cb-df15-44ac-850e-900c7451eda0` (intent>=75 → Ali Personal Outreach Sequence, 168h cooldown); Advisory Page Deep Engagement `1fc821b3-916f-4de8-a41c-7759b3f0b018` (advisory_page_visit + long_session, intent>=40 → AI Workforce Designer Entry, 72h cooldown); Returning Engaged Visitor `8466f6fd-97e8-4f42-8411-3b20a45a45f2` (return_visit>=2, intent>=35 → Inbound Warm Lead Nurture Sequence, 96h cooldown)
-  - Note: All three created with status=draft. Activation (status flip to active) requires explicit user approval. No leads have been enrolled yet. Seed script is idempotent (skips by name on re-run).
+  - Note: All three created with status=draft initially. Seed script is idempotent (skips by name on re-run).
+- [x] Hot Lead Personal Reach campaign activated (status: draft → active)
+  - Date: 2026-05-06
+  - Verification: SQL UPDATE confirmed (`8bfb08cb-df15-44ac-850e-900c7451eda0`, started_at=2026-05-06T14:50:20Z); Ram informed via email message-id `5c14b217-02b9-1774-abc6-828260ef6dab@colaberry.com`
+  - Note: First of the three trigger campaigns now live. Will catch the 25 hot leads currently scored intent>=75 and enroll them in Ali Personal Outreach (max 5 leads/cycle, 9-5 weekdays). Other two campaigns held in draft pending observation of first wave's conversion.
 
 ### LinkedIn Byline Policy: Strip on AUTHORITY_BROADCAST (2026-05-06)
 - [x] `enforceSignOff()` in `openclawPlatformStrategy.ts` now actively strips the "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)" byline (and the SHORT_SIGN_OFF variant) from AUTHORITY_BROADCAST output, instead of merely skipping the append step
