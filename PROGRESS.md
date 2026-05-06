@@ -12,6 +12,20 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Behavioral Trigger Activation: Audit + Page Categorization Fix + Draft Campaigns (2026-05-06)
+- [x] Audit script `auditBehavioralTriggers.js` written and run against prod Postgres
+  - Date: 2026-05-06
+  - Verification: Read-only audit returned: 0 active behavioral_trigger campaigns, 6 signal types firing in last 7d (return_visit 66/22 unique, advisory_page_visit 55/19, long_session 28/15, multi_page_session 22/11, cta_click_other 6/6, form_started 1/1), 25 visitors hot (>=75) and 4 warm (50-74) sitting unactioned
+  - Note: Headline finding was that the signal layer is functional but routes nowhere because no campaigns are wired to it
+- [x] `categorizePagePath` in `visitorTrackingService.ts` extended with 7 commercial-intent pages (`/utility-iou`, `/utility-ai`, `/freight-ai`, `/aixcelerator`, `/pilot-zero-risk`, `/pilot-ai-team`, `/pilot-exclusive`) categorized as `pricing`
+  - Date: 2026-05-06
+  - Verification: `tsc --noEmit` passes; commit `7b2b89d` deployed to prod backend container
+  - Note: Root cause for pricing_visit signal under-firing — those pages were falling through to category `other`, generating only weak signals (multi_page_session at strength 15) instead of pricing_visit at strength 35
+- [x] Three draft behavioral_trigger campaigns created in prod Postgres via `seedBehavioralTriggerCampaigns.js`
+  - Date: 2026-05-06
+  - Verification: Campaign IDs returned and confirmed: Hot Lead Personal Reach `8bfb08cb-df15-44ac-850e-900c7451eda0` (intent>=75 → Ali Personal Outreach Sequence, 168h cooldown); Advisory Page Deep Engagement `1fc821b3-916f-4de8-a41c-7759b3f0b018` (advisory_page_visit + long_session, intent>=40 → AI Workforce Designer Entry, 72h cooldown); Returning Engaged Visitor `8466f6fd-97e8-4f42-8411-3b20a45a45f2` (return_visit>=2, intent>=35 → Inbound Warm Lead Nurture Sequence, 96h cooldown)
+  - Note: All three created with status=draft. Activation (status flip to active) requires explicit user approval. No leads have been enrolled yet. Seed script is idempotent (skips by name on re-run).
+
 ### LinkedIn Byline Policy: Strip on AUTHORITY_BROADCAST (2026-05-06)
 - [x] `enforceSignOff()` in `openclawPlatformStrategy.ts` now actively strips the "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)" byline (and the SHORT_SIGN_OFF variant) from AUTHORITY_BROADCAST output, instead of merely skipping the append step
   - Date: 2026-05-06
@@ -388,3 +402,6 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 | `CLAUDE.md` | +9 production hardening sections (Modular Composition, Contract Enforcement, Test Strategy, Idempotency, Failure-First, Production Readiness, Security, Build-Break-Harden, Observability) (2026-05-05) |
 | `backend/src/services/agents/openclaw/openclawPlatformStrategy.ts` | enforceSignOff actively strips byline for AUTHORITY_BROADCAST destinations (2026-05-06) |
 | `CLAUDE.md` | Outreach Byline Policy section: append byline for cross-platform comments, strip for AUTHORITY_BROADCAST (2026-05-06) |
+| `backend/src/services/visitorTrackingService.ts` | categorizePagePath extended with 7 vertical/pilot landing pages mapped to 'pricing' category (2026-05-06) |
+| `backend/src/scripts/auditBehavioralTriggers.js` | New read-only audit script for behavioral_trigger campaign coverage and signal firing (2026-05-06) |
+| `backend/src/scripts/seedBehavioralTriggerCampaigns.js` | New idempotent seed script creating 3 draft behavioral_trigger campaigns wired to existing sequences (2026-05-06) |
