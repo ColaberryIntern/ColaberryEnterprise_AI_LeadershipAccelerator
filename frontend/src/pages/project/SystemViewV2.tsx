@@ -98,10 +98,12 @@ function transformBPs(bps: any[]): SystemComponent[] {
       const coverage = bp.metrics?.requirements_coverage || 0;
       const readiness = bp.metrics?.system_readiness || 0;
       const maturityLevel = bp.maturity?.level || 0;
-      // Canonical completion check: trust the backend's is_complete (which now
-      // honors user_status === 'verified'). Stop second-guessing it on the
-      // frontend with parallel coverage/readiness OR-gates — that's what
-      // produced the "100% complete + no backend" contradiction.
+      // Prefer the backend's already-computed completion_pct (which falls
+      // back to evidence_completion_pct for brownfield caps with no
+      // requirements). metrics.requirements_coverage is literally
+      // requirements coverage — it's 0 for brownfield caps even when their
+      // file evidence shows 60-90% built.
+      const apiCompletion = typeof bp.completion_pct === 'number' ? bp.completion_pct : coverage;
       const userVerified = bp.user_status === 'verified';
       const isComplete = userVerified || bp.is_complete === true;
       const isPageBP = bp.source === 'frontend_page' || bp.is_page_bp === true;
@@ -111,13 +113,10 @@ function transformBPs(bps: any[]): SystemComponent[] {
 
       let status: 'complete' | 'in_progress' | 'not_started';
       if (isComplete) status = 'complete';
-      else if (coverage > 0 || maturityLevel >= 1) status = 'in_progress';
+      else if (apiCompletion > 0 || maturityLevel >= 1) status = 'in_progress';
       else status = 'not_started';
 
-      // Completion percent: actual requirement coverage. Don't inflate with
-      // file-tree-derived readiness — that produced 100% badges on BPs with
-      // 0% real coverage.
-      const completion = userVerified ? 100 : Math.round(coverage);
+      const completion = userVerified ? 100 : Math.round(apiCompletion);
       const firstStep = (bp.execution_plan || []).find((s: any) => !s.blocked);
 
       const isPendingDefinition = isUndefinedPageBPRow(bp);

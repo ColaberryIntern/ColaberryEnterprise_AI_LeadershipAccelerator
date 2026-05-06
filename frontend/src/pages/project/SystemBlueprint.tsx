@@ -375,18 +375,21 @@ function transformCapabilities(bps: any[]): SystemComponent[] {
       const coverage = bp.metrics?.requirements_coverage || 0;
       const readiness = bp.metrics?.system_readiness || 0;
       const maturityLevel = bp.maturity?.level || 0;
-      // Trust the backend's is_complete (now honors user_status='verified').
-      // Drop the parallel coverage>=90 && readiness>=90 OR-gate that produced
-      // "100% complete + no backend" contradictions.
+      // Prefer the backend's already-computed completion_pct (which falls
+      // back to evidence_completion_pct for brownfield caps with no
+      // requirements). Earlier we read metrics.requirements_coverage
+      // directly — that's literally requirements coverage, which is 0
+      // for brownfield caps even when their evidence shows 60-90% built.
+      const apiCompletion = typeof bp.completion_pct === 'number' ? bp.completion_pct : coverage;
       const userVerified = bp.user_status === 'verified';
       const isComplete = userVerified || bp.is_complete === true;
       const isPageBP = bp.source === 'frontend_page' || bp.is_page_bp === true;
       const u = bp.usability || {};
       let status: 'complete' | 'in_progress' | 'not_started';
       if (isComplete) status = 'complete';
-      else if (coverage > 0 || maturityLevel >= 1) status = 'in_progress';
+      else if (apiCompletion > 0 || maturityLevel >= 1) status = 'in_progress';
       else status = 'not_started';
-      const completion = userVerified ? 100 : Math.round(coverage);
+      const completion = userVerified ? 100 : Math.round(apiCompletion);
       const firstStep = (bp.execution_plan || []).find((s: any) => !s.blocked);
       return {
         id: bp.id, name: bp.name, description: bp.description || '', status, completion,
