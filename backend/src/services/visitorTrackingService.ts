@@ -34,6 +34,15 @@ export function categorizePagePath(path: string): string {
     '/ai-architect/instructor': 'ai_architect',
     '/about': 'homepage',
     '/referrals/login': 'referrals',
+    // Vertical landing pages: commercial intent, treat as pricing for signal-strength purposes
+    '/utility-iou': 'pricing',
+    '/utility-ai': 'pricing',
+    '/freight-ai': 'pricing',
+    // Cohort and pilot offer pages
+    '/aixcelerator': 'pricing',
+    '/pilot-zero-risk': 'pricing',
+    '/pilot-ai-team': 'pricing',
+    '/pilot-exclusive': 'pricing',
   };
 
   // Prefix-based matching
