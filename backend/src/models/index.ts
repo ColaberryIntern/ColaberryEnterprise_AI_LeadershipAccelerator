@@ -53,6 +53,26 @@ import CompanyGoal from './CompanyGoal';
 import DepartmentKpi from './DepartmentKpi';
 import CompanyBudget from './CompanyBudget';
 import SystemStateSnapshot from './SystemStateSnapshot';
+import BuildManifest from './BuildManifest';
+import QueueHistoryEntry from './QueueHistoryEntry';
+import BuildSession from './BuildSession';
+import VisualReviewSession from './VisualReviewSession';
+import VisualCritiqueItem from './VisualCritiqueItem';
+import VisualAISuggestion from './VisualAISuggestion';
+import VisualChangeDecision from './VisualChangeDecision';
+import BehavioralEvent from './BehavioralEvent';
+import DOMSnapshot from './DOMSnapshot';
+import CognitionEvent from './CognitionEvent';
+import CognitiveIncident from './CognitiveIncident';
+import IncidentDispatchLog from './IncidentDispatchLog';
+import CognitivePattern from './CognitivePattern';
+import RemediationOutcome from './RemediationOutcome';
+import LearningPolicySnapshot from './LearningPolicySnapshot';
+import UXRemediationOutcome from './UXRemediationOutcome';
+import RemediationTierTransition from './RemediationTierTransition';
+import GovernanceRecommendation from './GovernanceRecommendation';
+import PreparedRemediationPlan from './PreparedRemediationPlan';
+import GovernanceAuditEntry from './GovernanceAuditEntry';
 import CompanyDirective from './CompanyDirective';
 import CompanyAuditLog from './CompanyAuditLog';
 import Initiative from './Initiative';
@@ -969,6 +989,26 @@ export {
   SkoolTask,
   SkoolEngagement,
   SystemStateSnapshot,
+  BuildManifest,
+  QueueHistoryEntry,
+  BuildSession,
+  VisualReviewSession,
+  VisualCritiqueItem,
+  VisualAISuggestion,
+  VisualChangeDecision,
+  BehavioralEvent,
+  DOMSnapshot,
+  CognitionEvent,
+  CognitiveIncident,
+  IncidentDispatchLog,
+  CognitivePattern,
+  RemediationOutcome,
+  LearningPolicySnapshot,
+  UXRemediationOutcome,
+  RemediationTierTransition,
+  GovernanceRecommendation,
+  PreparedRemediationPlan,
+  GovernanceAuditEntry,
 };
 
 // --- AI Company Layer associations ---

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colaberry.ai/schemas/validation_result.schema.json",
+  "title": "ValidationResult",
+  "description": "Machine-readable validation evidence for a build operation.",
+  "type": "object",
+  "required": [
+    "validation_version",
+    "result_id",
+    "project_id",
+    "executed_at",
+    "verification_status",
+    "confidence_score"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "validation_version": { "type": "string", "enum": ["1.0"] },
+    "result_id": { "type": "string", "format": "uuid" },
+    "project_id": { "type": "string", "format": "uuid" },
+    "task_id": { "type": ["string", "null"], "format": "uuid" },
+    "bp_id": { "type": ["string", "null"], "format": "uuid" },
+    "manifest_id": { "type": ["string", "null"], "format": "uuid" },
+
+    "executed_at": { "type": "string", "format": "date-time" },
+
+    "executed_tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["task_id", "outcome"],
+        "additionalProperties": false,
+        "properties": {
+          "task_id": { "type": "string" },
+          "title": { "type": "string" },
+          "outcome": { "type": "string", "enum": ["completed", "partial", "failed"] }
+        }
+      },
+      "default": []
+    },
+
+    "verification_status": {
+      "type": "string",
+      "enum": ["verified", "partial", "failed", "skipped"]
+    },
+
+    "test_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "outcome"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "type": "string", "enum": ["tsc", "jest", "playwright", "build", "lint", "manual"] },
+          "command": { "type": ["string", "null"] },
+          "outcome": { "type": "string", "enum": ["pass", "fail", "skipped"] },
+          "passed": { "type": "integer", "minimum": 0 },
+          "failed": { "type": "integer", "minimum": 0 },
+          "duration_ms": { "type": "integer", "minimum": 0 },
+          "log_excerpt": { "type": "string", "maxLength": 2048 }
+        }
+      },
+      "default": []
+    },
+
+    "screenshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["type_error", "test_failure", "build_error", "runtime_error", "missing_evidence"] },
+          "message": { "type": "string", "minLength": 1 },
+          "location": { "type": ["string", "null"] }
+        }
+      },
+      "default": []
+    },
+
+    "unresolved_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["issue_id", "summary", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "issue_id": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "severity": { "type": "string", "enum": ["info", "warning", "error"] }
+        }
+      },
+      "default": []
+    },
+
+    "confidence_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "confidence_basis": { "type": "string", "maxLength": 200 }
+  }
+}

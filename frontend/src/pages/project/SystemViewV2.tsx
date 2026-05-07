@@ -14,6 +14,22 @@ import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import SystemIntelligencePanel from '../../components/project/SystemIntelligencePanel';
 import ProjectModeSelector from '../../components/project/ProjectModeSelector';
+// Phase 10.5 — UX remediation intelligence surfaces. Slotted additively
+// into the UI tab; nothing existing is removed.
+import { IssueClusterView } from '../../components/remediation/IssueClusterView';
+import { RemediationConfidenceBadge } from '../../components/remediation/RemediationConfidenceBadge';
+import { RegressionRiskOverlay } from '../../components/remediation/RegressionRiskOverlay';
+import { BeforeAfterReplayView } from '../../components/remediation/BeforeAfterReplayView';
+import { RemediationImpactPanel } from '../../components/remediation/RemediationImpactPanel';
+import { RealtimeRemediationDashboard } from '../../components/remediation/RealtimeRemediationDashboard';
+import { OperatorCognitionDashboard } from '../../components/operator/OperatorCognitionDashboard';
+import { AutonomousExecutionDashboard } from '../../components/operator/AutonomousExecutionDashboard';
+// Phase 11 — switch to Live variant so the report auto-refetches on SSE events,
+// add the replay + adaptive prompt hooks for the See Replay CTA + adaptive
+// prompt activation in handleFixAllStepIssues.
+import { useLiveRemediationIntelligence } from '../../hooks/useLiveRemediationIntelligence';
+import { useRemediationReplay } from '../../hooks/useRemediationReplay';
+import { useAdaptiveRemediationPrompt } from '../../hooks/useAdaptiveRemediationPrompt';
 
 // ---------------------------------------------------------------------------
 // Types (reused from SystemBlueprint pattern)
@@ -81,6 +97,47 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   in_progress: { bg: '#f59e0b20', text: '#92400e', label: 'In Progress' },
   not_started: { bg: '#e2e8f020', text: '#9ca3af', label: 'Not Started' },
 };
+
+/**
+ * Phase 11 — pure helper for the adaptive prompt decision. Mirrors the
+ * useAdaptiveRemediationPrompt hook's logic but callable from inside an
+ * event handler (where hooks can't run). Returns target='ui_fix_adaptive'
+ * + per-cluster context when the report covers the active step; else
+ * falls back to 'ui_fix_bulk'.
+ */
+function pickAdaptiveDecision(report: any, stepKey: string, issues: any[]): { target: 'ui_fix_adaptive' | 'ui_fix_bulk'; adaptiveContext: any } {
+  if (!report || !Array.isArray(report.clusters) || report.clusters.length === 0) {
+    return { target: 'ui_fix_bulk', adaptiveContext: undefined };
+  }
+  const issueSignatures = new Set<string>();
+  for (const i of issues) { if (i.cluster_signature) issueSignatures.add(i.cluster_signature); }
+  let candidates = report.clusters.filter((c: any) => issueSignatures.has(c.cluster.cluster_signature));
+  if (candidates.length === 0 && stepKey) {
+    candidates = report.clusters.filter((c: any) =>
+      stepKey === 'layout_hierarchy' && c.cluster.cluster_type === 'hierarchy'
+      || stepKey === 'usability' && (c.cluster.cluster_type === 'workflow' || c.cluster.cluster_type === 'accessibility')
+      || stepKey === 'mobile_responsiveness' && (c.cluster.cluster_type === 'spacing' || c.cluster.cluster_type === 'workflow'));
+  }
+  if (candidates.length === 0) return { target: 'ui_fix_bulk', adaptiveContext: undefined };
+
+  const seqByKey = new Map((report.sequence?.ordered_clusters || []).map((p: any) => [p.cluster_signature, p]));
+  const total = (report.sequence?.ordered_clusters || []).length;
+  const adaptiveClusters = candidates.map((c: any) => {
+    const regressionForThisCluster = (report.regression_prone || []).filter((p: any) => p.cluster_signature === c.cluster.cluster_signature);
+    const seq: any = seqByKey.get(c.cluster.cluster_signature);
+    return {
+      cluster_type: c.cluster.cluster_type,
+      historical_success_rate: c.historical_success_rate,
+      regression_prone_patterns: regressionForThisCluster.map((p: any) => ({
+        cluster_signature: p.cluster_signature,
+        recommended_alternative: p.recommended_alternative,
+      })),
+      sequence_position: seq ? { position: seq.position, total, reason: seq.reason } : null,
+      confidence: { confidence: c.confidence.confidence, tier: c.confidence.tier, reasons: c.confidence.reasons },
+    };
+  });
+  return { target: 'ui_fix_adaptive', adaptiveContext: { clusters: adaptiveClusters } };
+}
 
 function isUndefinedPageBPRow(bp: any): boolean {
   const isPage = bp.source === 'frontend_page' || bp.is_page_bp === true;
@@ -997,6 +1054,28 @@ function SystemViewV2Inner() {
       .catch(() => {});
   }, [selectedId, compDetail, uiFeedback]);
 
+  // Phase 10.5 — remediation intelligence + replay state at component top
+  // level so the UI tab can render the IssueClusterView, badges, and
+  // BeforeAfterReplayView without per-render hook re-entry.
+  // Phase 11 — swapped to Live variant so the report auto-refetches when
+  // remediation events arrive on the SSE stream (debounced + deduped
+  // inside the hook). Replay state lifted into useRemediationReplay so
+  // the See Replay CTA can find the latest outcome per step in O(1).
+  const remediationIntel = useLiveRemediationIntelligence(selectedId);
+  const replayState = useRemediationReplay(selectedId);
+  const [replayOutcomeId, setReplayOutcomeId] = useState<string | null>(null);
+  // Wire the replay loader: when a caller calls setReplayOutcomeId(id),
+  // we kick off the manifest fetch. selectedId+replayOutcomeId combine into
+  // a stable "fetch key" so the effect fires once per (BP, outcome) pair.
+  const replayFetchKey = replayOutcomeId && selectedId ? `${selectedId}:${replayOutcomeId}` : null;
+  const replayLoaderRef = useRef(replayState.openReplay);
+  replayLoaderRef.current = replayState.openReplay;
+  useEffect(() => {
+    if (!replayFetchKey) return;
+    const [, outcome] = replayFetchKey.split(':');
+    void replayLoaderRef.current(outcome);
+  }, [replayFetchKey]);
+
   const loadData = useCallback(() => {
     return Promise.all([
       portalApi.get('/api/portal/project'),
@@ -1481,8 +1560,27 @@ function SystemViewV2Inner() {
           portalApi.put(`/api/portal/project/element-feedback/${i.id}`, { status: 'in_progress' }).catch(() => null),
         ),
       );
+
+      // Phase 10.5 — capture before-snapshot for each cluster signature
+      // present in this batch. Best-effort and fire-and-forget — failure
+      // here doesn't block the prompt-generation flow. Backend dedupes
+      // per cluster_signature on the BP's ui_element_map.
+      const clusterSignatures = new Set<string>();
+      for (const i of issues) {
+        if (i.cluster_signature) clusterSignatures.add(i.cluster_signature);
+      }
+      for (const sig of clusterSignatures) {
+        portalApi.post(`/api/portal/project/business-processes/${compId}/remediation/snapshot-before`, { cluster_signature: sig })
+          .catch(() => null);
+      }
+
+      // Phase 11 — derive adaptive prompt decision from the live remediation
+      // intelligence report. When clusters cover the active step, switch
+      // target to 'ui_fix_adaptive' and inject per-cluster context.
+      // Otherwise fall back to 'ui_fix_bulk' (cold-project safe).
+      const adaptiveDecision = pickAdaptiveDecision(remediationIntel.report, stepKey, issues);
       const res = await portalApi.post(`/api/portal/project/business-processes/${compId}/prompt`, {
-        target: 'ui_fix_bulk',
+        target: adaptiveDecision.target,
         stepKey,
         uiIssues: issues.map(i => ({
           id: i.id,
@@ -1491,7 +1589,10 @@ function SystemViewV2Inner() {
           suggestion: i.suggestion,
           severity: i.severity,
           element_id: i.element_id,
+          cluster_signature: i.cluster_signature,
+          cluster_type: i.cluster_type,
         })),
+        adaptiveRemediation: adaptiveDecision.adaptiveContext,
       });
       const text = res.data?.prompt_text || '';
       setBuildPrompt(text);
@@ -3131,6 +3232,33 @@ function SystemViewV2Inner() {
                     );
                     return (
                     <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                      {/* Phase 10.5 — remediation intelligence surfaces. Cluster
+                          cards + project-wide impact panel slot here above
+                          the existing per-step timeline so the cluster view
+                          and the per-step view together form one coherent
+                          remediation narrative. Both auto-hide when there's
+                          no data yet. */}
+                      {remediationIntel.report && remediationIntel.report.clusters.length > 0 && (
+                        <IssueClusterView clusters={remediationIntel.report.clusters} />
+                      )}
+                      <RemediationImpactPanel report={remediationIntel.report} defaultCollapsed={true} />
+                      {/* Phase 11 — live remediation dashboard. Defaults
+                          collapsed; opens to a streaming view of pressure +
+                          outcomes + regressions. State is lifted (report
+                          passed in as prop) so we don't double-fetch. */}
+                      <RealtimeRemediationDashboard bpId={selectedComponent.id} report={remediationIntel.report} defaultCollapsed={true} />
+                      {/* Phase 12 — operator cognition dashboard. Project-level
+                          surface (no bpId needed) showing recommendations,
+                          automation confidence, prepared plans, recent
+                          overrides. Defaults collapsed; opens to a live
+                          stream of governance signals. */}
+                      <OperatorCognitionDashboard defaultCollapsed={true} />
+                      {/* Phase 13 — autonomous execution dashboard. Project-
+                          level surface alongside the operator cognition
+                          dashboard. Defaults collapsed; expanding fetches
+                          recent autonomy decisions + trust + confidence. */}
+                      <AutonomousExecutionDashboard defaultCollapsed={true} />
+
                       <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
                         <i className="bi bi-list-ol me-1" style={{ fontSize: 11 }}></i>Step status
                       </div>
@@ -3178,7 +3306,41 @@ function SystemViewV2Inner() {
                                 {ran ? <i className={`bi ${iconClass}`} style={{ fontSize: 10 }}></i> : numericIdx + 1}
                               </span>
                               <div className="flex-grow-1">
-                                <div className="fw-medium" style={{ fontSize: 11 }}>{a.title}</div>
+                                <div className="d-flex align-items-center gap-2">
+                                  <div className="fw-medium" style={{ fontSize: 11 }}>{a.title}</div>
+                                  {/* Phase 10.5 — confidence + regression
+                                      badges per step row. Confidence picks
+                                      the worst (lowest) cluster confidence
+                                      among clusters whose source step matches.
+                                      Regression badge is shown when ANY
+                                      cluster on this step is regression-prone. */}
+                                  {(() => {
+                                    if (!remediationIntel.report) return null;
+                                    const stepClusters = remediationIntel.report.clusters.filter(c => {
+                                      // cluster_type alone doesn't map 1:1 to step;
+                                      // any cluster on this BP whose presence the user
+                                      // would care about while looking at this step.
+                                      return true;
+                                    });
+                                    if (stepClusters.length === 0) return null;
+                                    const worst = stepClusters.reduce((acc, c) => c.confidence.confidence < acc.confidence.confidence ? c : acc, stepClusters[0]);
+                                    const regression = stepClusters.find(c => c.is_regression_prone);
+                                    const recurrenceCount = regression
+                                      ? remediationIntel.report?.regression_prone.find(rp => rp.cluster_signature === regression.cluster.cluster_signature)?.recurrence_count ?? 3
+                                      : 0;
+                                    return (
+                                      <>
+                                        <RemediationConfidenceBadge confidence={worst.confidence.confidence} tier={worst.confidence.tier} reasons={worst.confidence.reasons} />
+                                        {regression && (
+                                          <RegressionRiskOverlay
+                                            recurrenceCount={recurrenceCount}
+                                            recommendedAlternative={remediationIntel.report?.regression_prone.find(rp => rp.cluster_signature === regression.cluster.cluster_signature)?.recommended_alternative}
+                                          />
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                                 <div className="text-muted" style={{ fontSize: 9 }}>
                                   {ranAllResolved && meta?.run_at && `Last run ${relTime(meta.run_at)} · all issues resolved`}
                                   {ranWithOpen && meta?.run_at && (
@@ -3206,6 +3368,23 @@ function SystemViewV2Inner() {
                                     <i className={`bi ${expanded ? 'bi-chevron-up' : 'bi-chevron-down'}`}></i>
                                   </button>
                                 )}
+                                {/* Phase 11 — See Replay CTA. Visible on
+                                    rows where a recent bulk-resolve happened
+                                    AND the outcome list has an entry for
+                                    this step. Click loads the manifest +
+                                    opens BeforeAfterReplayView. */}
+                                {(() => {
+                                  if (!(meta as any)?.last_resolved_at) return null;
+                                  const outcome = replayState.findLatestOutcomeForStep(a.key);
+                                  if (!outcome || !outcome.has_replay) return null;
+                                  return (
+                                    <button className="btn btn-sm btn-link p-0" style={{ fontSize: 10, color: '#0284c7' }}
+                                      onClick={() => setReplayOutcomeId(outcome.id)}
+                                      title="See before/after replay for this step's last resolution">
+                                      <i className="bi bi-eye me-1"></i>Replay
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   className={`btn btn-sm ${ran ? 'btn-link text-muted' : 'btn-outline-success'}`}
                                   style={{ fontSize: ran ? 9 : 8, padding: '1px 6px' }}
@@ -3283,6 +3462,15 @@ function SystemViewV2Inner() {
                 </div>
                 );
               })()}
+
+              {/* Phase 10.5 — Before/After replay modal. Mounted at the UI
+                  tab root so it overlays the whole tab when open. Triggered
+                  by future "see replay" CTAs (and from the impact panel
+                  once outcome listing surfaces); stays mounted but invisible
+                  when manifest is null. */}
+              {replayState.manifest && (
+                <BeforeAfterReplayView manifest={replayState.manifest} onClose={() => { replayState.closeReplay(); setReplayOutcomeId(null); }} />
+              )}
 
               {/* ── REPORTING TABS ── */}
 

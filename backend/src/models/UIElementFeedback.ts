@@ -24,6 +24,14 @@ interface UIElementFeedbackAttributes {
   source?: string;
   confidence?: number;
   source_step?: string;
+  // Phase 10.5 — UX remediation intelligence. cluster_signature is a readable
+  // string ("hierarchy:capId:/route") so the regression detector + reranker
+  // group rows by stable identity. Persisted at create time so heuristic
+  // changes don't silently shift cluster identity for historical rows.
+  cluster_signature?: string;
+  cluster_type?: string;
+  first_seen_at?: Date;
+  last_regressed_at?: Date;
 }
 
 class UIElementFeedback extends Model<UIElementFeedbackAttributes> implements UIElementFeedbackAttributes {
@@ -49,6 +57,10 @@ class UIElementFeedback extends Model<UIElementFeedbackAttributes> implements UI
   declare source: string;
   declare confidence: number;
   declare source_step: string;
+  declare cluster_signature: string;
+  declare cluster_type: string;
+  declare first_seen_at: Date;
+  declare last_regressed_at: Date;
 }
 
 UIElementFeedback.init(
@@ -80,6 +92,18 @@ UIElementFeedback.init(
     // continue to work — the frontend treats them as "untagged" and groups
     // them in a separate section.
     source_step: { type: DataTypes.STRING(40), allowNull: true },
+    // Phase 10.5 cluster identity. Stamped at createFeedback time after a
+    // one-shot classification call into issueClusterEngine.classifyRow().
+    // Nullable so legacy rows continue to work — issueClusterEngine handles
+    // null cluster_signature by classifying them lazily on read.
+    cluster_signature: { type: DataTypes.STRING(120), allowNull: true },
+    cluster_type: { type: DataTypes.STRING(40), allowNull: true },
+    // first_seen_at is set on createFeedback ONLY when the row is genuinely
+    // new (no prior resolved row with the same feedback_hash exists). When a
+    // resolved-then-recreated row is detected, last_regressed_at is stamped
+    // and first_seen_at is copied from the earlier resolved row.
+    first_seen_at: { type: DataTypes.DATE, allowNull: true },
+    last_regressed_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,
@@ -91,6 +115,9 @@ UIElementFeedback.init(
       { fields: ['capability_id', 'element_id'] },
       { fields: ['capability_id', 'status'] },
       { unique: true, fields: ['capability_id', 'feedback_hash'], name: 'ui_feedback_dedup' },
+      // Phase 10.5 hot paths: cluster reranker, regression detector.
+      { fields: ['cluster_signature'] },
+      { fields: ['cluster_type'] },
     ],
   }
 );

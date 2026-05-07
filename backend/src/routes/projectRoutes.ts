@@ -129,6 +129,12 @@ router.post('/api/portal/project/setup/brownfield-discover', requireParticipant,
     (project as any).changed('setup_status', true);
     await project.save();
 
+    // PHASE 2: refresh authoritative state after brownfield discovery
+    try {
+      const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+      refreshSystemState(project.id, 'brownfield_discovery');
+    } catch { /* fire-and-forget */ }
+
     res.json({ ok: true, ...result });
   } catch (err: any) {
     console.error('[BrownfieldDiscover] failed:', err?.message);
@@ -1438,6 +1444,20 @@ router.get('/api/portal/project/workstation-context', requireParticipant, async 
 // ---------------------------------------------------------------------------
 
 // ─── Shared enrichment for business processes ────────────────────────────────
+//
+// PHASE 2 NOTE (System Intelligence Unification):
+// enrichCapability remains the per-cap UI-shape builder (gap detection, vision,
+// usability hints, implementation links, page review state, etc.). Its SCORING
+// fields (metrics.system_readiness, metrics.requirements_coverage,
+// metrics.quality_score, maturity.level, completion_pct) are now considered
+// LEGACY HEURISTICS and are overlaid by engine-authoritative values via
+// `overlayEngineScores()` whenever a system-state snapshot is available.
+//
+// No consumer should compute readiness / coverage / maturity / queue order
+// independently. Read from /api/portal/project/system-state. Per-cap surfaces
+// that need both UI shape AND scoring should call `enrichCapabilityWithEngine`
+// which composes enrichCapability + the engine overlay.
+// ────────────────────────────────────────────────────────────────────────────
 const NOISE_FILES_SET = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md', 'package-lock.json']);
 function enrichCapability(cap: any) {
   const features = cap.features || [];
@@ -1975,6 +1995,56 @@ function enrichCapability(cap: any) {
   };
 }
 
+// ─── PHASE 2: engine-augmented adapter ──────────────────────────────────────
+// Overlays authoritative engine scores on top of a legacy enrichCapability
+// payload. The legacy heuristic values are preserved on `_legacy_metrics` for
+// debugging — but the canonical metrics surface is engine-derived.
+//
+// `engineState` is the AuthoritativeSystemState; we look up the per-cap score
+// row and replace readiness, coverage, maturity, quality_score, and the
+// derived completion_pct / mode_completion / maturity blocks.
+function overlayEngineScores(enriched: any, engineState: any): any {
+  if (!engineState || !engineState.scores || !Array.isArray(engineState.scores.per_capability)) {
+    return enriched;
+  }
+  const row = engineState.scores.per_capability.find((r: any) => r.capability_id === enriched.id);
+  if (!row) return enriched;
+
+  const legacyMetrics = enriched.metrics || {};
+  const legacyMaturity = enriched.maturity || {};
+  const legacyCompletion = enriched.completion_pct;
+
+  // Engine maturity_level is 0-4. Legacy maturity.label preserved if engine
+  // doesn't provide one (the level number stays canonical from the engine).
+  return {
+    ...enriched,
+    metrics: {
+      requirements_coverage: row.coverage,
+      system_readiness: row.readiness,
+      quality_score: row.health,
+    },
+    maturity: {
+      ...legacyMaturity,
+      level: row.maturity_level ?? legacyMaturity.level,
+    },
+    // For coverage_pct surface used by the grid — engine coverage is the
+    // canonical "how much of this BP exists" number.
+    completion_pct: row.coverage ?? legacyCompletion,
+    _engine_authoritative: true,
+    _engine_generated_at: engineState.generated_at,
+    _legacy_metrics: legacyMetrics,
+    _legacy_completion_pct: legacyCompletion,
+  };
+}
+
+// Composes enrichCapability + engine overlay. Use this anywhere a list/detail
+// endpoint needs both the rich UI shape AND authoritative scores. If no engine
+// state is available, falls back gracefully to legacy enrichCapability output.
+function enrichCapabilityWithEngine(cap: any, engineState: any | null): any {
+  const base = enrichCapability(cap);
+  return engineState ? overlayEngineScores(base, engineState) : base;
+}
+
 router.get('/api/portal/project/business-processes', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { getProjectByEnrollment } = await import('../services/projectService');
@@ -2052,7 +2122,17 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       return capMinLevel <= currentProjectModeLevel;
     });
 
-    const enriched = modeFilteredHierarchy.map(enrichCapability);
+    // PHASE 2: read authoritative state once; overlay engine scores on each
+    // enriched cap so coverage / readiness / maturity are engine-canonical.
+    let engineState: any = null;
+    try {
+      const { readOrRebuild } = await import('../intelligence/systemStateEngine');
+      engineState = await readOrRebuild(project.id);
+    } catch (engineErr: any) {
+      console.warn('[BP list] engine read failed, falling back to legacy scores:', engineErr?.message);
+    }
+
+    const enriched = modeFilteredHierarchy.map((cap: any) => enrichCapabilityWithEngine(cap, engineState));
     // Track how many were filtered out
     const filteredOutCount = hierarchy.length - modeFilteredHierarchy.length;
 
@@ -2185,62 +2265,2939 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
 });
 
 // ─── Cory Orchestrator: project-wide top tasks (for Blueprint) ────────
+// ─── Cory tasks (Phase 2: now consumes the SystemStateEngine) ──────────────
+//
+// Engine output is authoritative. Frontend rendering layer flattens the
+// AuthoritativeTask shape into the legacy CoryTask shape so existing
+// consumers don't break — once they migrate to read /system-state directly,
+// this endpoint becomes unnecessary.
 router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Request, res: Response) => {
   try {
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
-    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
-    const hierarchy = await getCapabilityHierarchy(project.id);
 
-    // Inject the same context the list and detail endpoints inject so project-level
-    // layer detection (projectHasBackend / projectHasFrontend / etc.) works here too.
-    // Without this, BPs with no per-BP file matches always look "no backend detected"
-    // and Cory keeps recommending "Build Backend Services" even when the project
-    // already has a backend.
-    let repoFileTree: string[] = [];
-    try {
-      const { getConnection } = await import('../services/githubService');
-      const conn = await getConnection(req.participant!.sub);
-      if (conn?.file_tree_json?.tree) {
-        repoFileTree = conn.file_tree_json.tree
-          .filter((t: any) => t.type === 'blob')
-          .map((t: any) => t.path);
-      }
-    } catch { /* file tree is optional */ }
+    const { buildAuthoritativeState } = await import('../intelligence/systemStateEngine');
+    const state = await buildAuthoritativeState(project.id, { persist: false });
+
     const { Capability: CapModel } = await import('../models');
-    const capModels = await CapModel.findAll({
-      where: { project_id: project.id },
-      attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at', 'ui_element_map'],
+    const allCaps = await CapModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'name'] });
+    const nameMap = new Map(allCaps.map((c: any) => [c.id, c.name]));
+
+    // Adapt AuthoritativeTask → legacy CoryTask shape. The frontend's
+    // existing render code reads CoryTask, so we preserve it during
+    // the cutover; the engine's full output is exposed at /system-state.
+    const tasksWithNames = state.queue.slice(0, 5).map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.description || '',
+      source: t.type === 'ui_review' ? 'ui'
+            : t.type === 'optimization' ? 'improve'
+            : t.type === 'validation' || t.type === 'testing' ? 'health'
+            : 'build',
+      type: t.type === 'foundation' ? 'foundational'
+          : t.type === 'optimization' ? 'enhancement'
+          : t.type === 'ui_review' ? 'experience'
+          : 'fix',
+      impact: t.priority_score,
+      urgency: t.blocking_score,
+      confidence: t.confidence_score,
+      blocking: t.blocking_score >= 80,
+      blocked: t.state === 'blocked',
+      block_reason: t.state === 'blocked' ? t.reasoning.join('; ') : undefined,
+      dependencies: [...t.dependencies],
+      system_layer: t.type === 'frontend' || t.type === 'ui_review' ? 'frontend'
+                  : t.type === 'database' ? 'data'
+                  : t.type === 'intelligence' ? 'agents_backend'
+                  : t.type === 'optimization' || t.type === 'testing' ? 'observability'
+                  : 'backend',
+      mode_relevance: { mvp: 1, production: 1, enterprise: 1, autonomous: 1 },
+      color: '#3b82f6',
+      prompt_target: t.type === 'foundation' ? 'project_kickoff' : undefined,
+      component_id: t.bp_id || (t.type === 'foundation' ? '__project_kickoff__' : undefined),
+      priority: -t.calculated_rank,
+      decision_trace: t.decision_trace ? {
+        reason: t.reasoning.join('; '),
+        inputs: {
+          coverage: t.decision_trace.coverage_inputs.current,
+          readiness: t.decision_trace.readiness_inputs.current,
+          quality: 0,
+          mode: 'engine',
+          layer_status: t.type,
+        },
+        confidence: t.confidence_score,
+        scoring_breakdown: {
+          impact_score: t.priority_score,
+          urgency_score: t.blocking_score,
+          confidence_score: t.confidence_score,
+          blocking_bonus: t.state === 'ready' ? 25 : 0,
+          mode_weight: 1,
+          total: -t.calculated_rank,
+        },
+        // Phase 2: full engine trace for explainability panel
+        formulas_used: [...t.decision_trace.formulas_used],
+        reasoning_chain: [...t.decision_trace.reasoning_chain],
+        readiness_inputs: t.decision_trace.readiness_inputs,
+        coverage_inputs: t.decision_trace.coverage_inputs,
+        maturity_inputs: t.decision_trace.maturity_inputs,
+        dependency_inputs: t.decision_trace.dependency_inputs,
+        blocking_inputs: t.decision_trace.blocking_inputs,
+        confidence_inputs: t.decision_trace.confidence_inputs,
+      } : undefined,
+      component_name: t.bp_id ? (nameMap.get(t.bp_id) || 'Unknown')
+                              : (t.type === 'foundation' ? 'Project Kickoff' : 'Project'),
+    }));
+
+    res.json({
+      tasks: tasksWithNames,
+      total_components: state.scores.per_capability.length,
+      mode: (project as any).target_mode || 'production',
+      // Phase 2: indicate the engine is the source so consumers can adopt
+      _source: 'system_state_engine',
+      _generated_at: state.generated_at,
     });
-    const execMap = new Map(capModels.map((c: any) => [c.id, c]));
-    const projectMode = (project as any).target_mode || 'production';
-    hierarchy.forEach((cap: any) => {
-      cap._repoFileTree = repoFileTree;
-      cap._projectMode = projectMode;
-      const extra = execMap.get(cap.id);
-      if (extra) {
-        cap.last_execution = (extra as any).last_execution;
-        cap.mode_override = (extra as any).mode_override;
-        cap.applicability_status = (extra as any).applicability_status || 'active';
-        if ((extra as any).frontend_route) cap.frontend_route = (extra as any).frontend_route;
-        if ((extra as any).backend_context) cap.backend_context = (extra as any).backend_context;
-        cap.user_status = (extra as any).user_status || 'in_progress';
-        cap.user_status_set_at = (extra as any).user_status_set_at || null;
-        cap.ui_element_map = (extra as any).ui_element_map || null;
-      }
+  } catch (err: any) {
+    console.error('[cory-tasks]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 2: AUTHORITATIVE SYSTEM STATE ──────────────────────────────────
+//
+// The single endpoint that returns the complete engine output. New
+// frontend consumers should read from here instead of patching together
+// data from cory-tasks + business-processes + progress.
+//
+// Query params:
+//   ?fresh=true    — force rebuild (skip snapshot cache, re-run engine)
+//   default        — read snapshot if recent, rebuild if stale (>5 min)
+router.get('/api/portal/project/system-state', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const fresh = req.query.fresh === 'true' || req.query.fresh === '1';
+    const t0 = Date.now();
+
+    let state;
+    let source: 'snapshot' | 'fresh_build';
+    if (fresh) {
+      const { buildAuthoritativeState } = await import('../intelligence/systemStateEngine');
+      state = await buildAuthoritativeState(project.id, { persist: true });
+      source = 'fresh_build';
+    } else {
+      const { readOrRebuild } = await import('../intelligence/systemStateEngine');
+      state = await readOrRebuild(project.id);
+      source = 'snapshot';   // readOrRebuild returns the snapshot if fresh enough
+    }
+
+    res.json({
+      ...state,
+      _meta: {
+        source,
+        elapsed_ms: Date.now() - t0,
+      },
+    });
+  } catch (err: any) {
+    console.error('[system-state]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 2: TASK EXPLAINABILITY ──────────────────────────────────────────
+//
+// "Why is this task next?" panel. Returns the full decision_trace for
+// a specific task in the current queue, plus the project's contradictions
+// and blockers that contributed to the ranking.
+router.get('/api/portal/project/system-state/explain/:taskId', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine');
+    const state = await readOrRebuild(project.id);
+    const task = state.queue.find(t => t.id === req.params.taskId);
+    if (!task) { res.status(404).json({ error: 'Task not found in current queue' }); return; }
+
+    const relatedContradictions = state.contradictions.filter(c =>
+      c.task_id === task.id || (task.bp_id && c.capability_id === task.bp_id)
+    );
+
+    res.json({
+      task,
+      decision_trace: task.decision_trace,
+      reasoning: task.reasoning,
+      related_contradictions: relatedContradictions,
+      blocked_by: task.dependencies,
+      generated_at: state.generated_at,
+    });
+  } catch (err: any) {
+    console.error('[system-state/explain]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 3: Telemetry endpoints ──────────────────────────────────────
+// POST /telemetry — ingest a build manifest emitted by Claude Code.
+router.post('/api/portal/project/telemetry', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    // Force project_id to the participant's project so a manifest can't
+    // target a different project even if its body says so.
+    const payload = { ...(req.body || {}), project_id: project.id };
+
+    const { ingestManifest } = await import('../intelligence/systemStateEngine');
+    const out = await ingestManifest(payload);
+    if (!out.ok) {
+      res.status(out.status).json({ error: 'manifest_validation_failed', details: out.errors });
+      return;
+    }
+    res.status(201).json({ manifest_id: out.manifest_id, project_id: out.project_id });
+  } catch (err: any) {
+    console.error('[telemetry/ingest]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /telemetry — recent manifests + summary metadata.
+router.get('/api/portal/project/telemetry', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { loadManifestsForProject, scoreFreshnessForProject } = await import('../intelligence/systemStateEngine');
+    const limit = Number(req.query.limit) || 50;
+    const manifests = await loadManifestsForProject(project.id, { limit });
+    const freshness = await scoreFreshnessForProject(project.id);
+
+    res.json({
+      project_id: project.id,
+      manifests,
+      manifest_count: manifests.length,
+      freshness,
+    });
+  } catch (err: any) {
+    console.error('[telemetry/list]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /telemetry/health — telemetry health summary (no full manifest list).
+router.get('/api/portal/project/telemetry/health', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { readOrRebuild, scoreFreshnessForProject } = await import('../intelligence/systemStateEngine');
+    const state = await readOrRebuild(project.id);
+    const freshness = await scoreFreshnessForProject(project.id);
+
+    const telemetryDimensions = {
+      manifest_freshness: state.sync_health.dimensions.manifest_freshness,
+      missing_build_manifests: state.sync_health.dimensions.missing_build_manifests,
+      conflicting_manifests: state.sync_health.dimensions.conflicting_manifests,
+      undocumented_db_changes: state.sync_health.dimensions.undocumented_db_changes,
+      ui_drift: state.sync_health.dimensions.ui_drift,
+      graph_drift: state.sync_health.dimensions.graph_drift,
+      missing_validation_telemetry: state.sync_health.dimensions.missing_validation_telemetry,
+    };
+
+    res.json({
+      project_id: project.id,
+      generated_at: state.generated_at,
+      sync_health_score: state.sync_health.score,
+      telemetry_dimensions: telemetryDimensions,
+      freshness,
+      contradiction_count: state.sync_health.contradiction_count,
+      contradictions_by_kind: countByKind(state.contradictions),
+    });
+  } catch (err: any) {
+    console.error('[telemetry/health]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function countByKind(contradictions: ReadonlyArray<{ kind: string }>) {
+  const out: Record<string, number> = {};
+  for (const c of contradictions) out[c.kind] = (out[c.kind] || 0) + 1;
+  return out;
+}
+
+// GET /graph — current state graph (telemetry-merged).
+router.get('/api/portal/project/graph', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine');
+    const state = await readOrRebuild(project.id);
+    res.json({
+      project_id: project.id,
+      generated_at: state.generated_at,
+      graph: state.graph,
+      node_count: state.graph.nodes.length,
+      edge_count: state.graph.edges.length,
+    });
+  } catch (err: any) {
+    console.error('[graph]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /database-map — declared DB topology for the project.
+router.get('/api/portal/project/database-map', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { buildDatabaseMapForProject } = await import('../intelligence/systemStateEngine');
+    const map = await buildDatabaseMapForProject(project.id);
+    res.json(map);
+  } catch (err: any) {
+    console.error('[database-map]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /ui-map — declared UI topology for the project.
+router.get('/api/portal/project/ui-map', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { buildUIMapForProject } = await import('../intelligence/systemStateEngine');
+    const map = await buildUIMapForProject(project.id);
+    res.json(map);
+  } catch (err: any) {
+    console.error('[ui-map]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 4: Self-synchronizing execution endpoints ──────────────────
+//
+// Auto-generate a manifest draft from a parsed validation report or git diff.
+// Caller can review + post via POST /telemetry, or post directly with the
+// `?ingest=1` flag.
+router.post('/api/portal/project/telemetry/auto-generate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { generateManifestDraft, suggestRepairs } = await import('../intelligence/systemStateEngine/execution/autoManifestGenerator');
+    const { task_id, bp_id, diff_stdout, parsed_validation_report, task_type, ingest } = req.body || {};
+    if (!task_id) { res.status(400).json({ error: 'task_id required' }); return; }
+
+    const draft = generateManifestDraft({
+      task_id,
+      bp_id: bp_id ?? null,
+      project_id: project.id,
+      diff_stdout,
+      parsed_validation_report,
     });
 
-    const enriched = hierarchy.map(enrichCapability);
-    const { getProjectTopTasks } = require('../services/intelligence/coryOrchestrator');
-    const tasks = getProjectTopTasks(enriched, projectMode);
-    // Attach component names for display. The synthetic kickoff task
-    // gets a project-level label since it isn't tied to any single BP.
-    const nameMap = new Map(enriched.map((c: any) => [c.id, c.name]));
-    const tasksWithNames = tasks.map((t: any) => ({
-      ...t,
-      component_name: t.component_id === '__project_kickoff__' ? 'Project Kickoff' : (nameMap.get(t.component_id) || 'Unknown'),
+    const repairs = task_type ? suggestRepairs(draft.manifest, task_type) : [];
+
+    if (ingest === true || ingest === 'true' || ingest === 1) {
+      const { ingestManifest } = await import('../intelligence/systemStateEngine');
+      const out = await ingestManifest(draft.manifest);
+      if (!out.ok) {
+        res.status(out.status).json({ error: 'manifest_validation_failed', details: out.errors, draft: draft.manifest });
+        return;
+      }
+      res.status(201).json({
+        manifest_id: out.manifest_id,
+        project_id: out.project_id,
+        draft: draft.manifest,
+        source_summary: draft.source_summary,
+        repair_suggestions: repairs,
+      });
+      return;
+    }
+
+    res.json({
+      draft: draft.manifest,
+      source_summary: draft.source_summary,
+      repair_suggestions: repairs,
+    });
+  } catch (err: any) {
+    console.error('[telemetry/auto-generate]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Score a manifest's completeness for a given task_type. Read-only — does
+// not ingest. Useful for the UI to show the user what's missing before they
+// submit.
+router.post('/api/portal/project/telemetry/completeness', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { manifest, task_type } = req.body || {};
+    if (!manifest) { res.status(400).json({ error: 'manifest required' }); return; }
+    if (!task_type) { res.status(400).json({ error: 'task_type required' }); return; }
+
+    const { validateManifestShape } = await import('../intelligence/systemStateEngine');
+    const shape = validateManifestShape(manifest);
+    if (!shape.ok) {
+      res.status(400).json({ error: 'manifest_shape_invalid', details: shape.errors });
+      return;
+    }
+    const { checkManifestCompleteness } = await import('../intelligence/systemStateEngine/execution/manifestCompletenessChecker');
+    const report = checkManifestCompleteness(task_type, shape.value);
+    res.json(report);
+  } catch (err: any) {
+    console.error('[telemetry/completeness]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Build session: start a new session.
+router.post('/api/portal/project/build-session/start', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { task_id, bp_id, task_type } = req.body || {};
+    if (!task_id) { res.status(400).json({ error: 'task_id required' }); return; }
+    if (!task_type) { res.status(400).json({ error: 'task_type required' }); return; }
+
+    const { startSession } = await import('../intelligence/systemStateEngine/execution/buildSessionService');
+    const result = await startSession({
+      project_id: project.id,
+      task_id,
+      bp_id: bp_id ?? null,
+      task_type,
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    console.error('[build-session/start]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Build session: complete with manifest. Runs the full execution pipeline.
+router.post('/api/portal/project/build-session/:id/complete', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const sessionId = req.params.id as string;
+    const { manifest, task_type, enforce_completeness } = req.body || {};
+    if (!manifest) { res.status(400).json({ error: 'manifest required' }); return; }
+    if (!task_type) { res.status(400).json({ error: 'task_type required' }); return; }
+
+    // Force project_id to the participant's project
+    const finalManifest = { ...manifest, project_id: project.id };
+
+    const { runExecutionPipeline } = await import('../intelligence/systemStateEngine/execution/executionTelemetryPipeline');
+    const { completeSession } = await import('../intelligence/systemStateEngine/execution/buildSessionService');
+
+    const outcome = await runExecutionPipeline({
+      manifest: finalManifest,
+      task_type,
+      enforce_completeness: enforce_completeness !== false,
+    });
+
+    if (!outcome.ok) {
+      await completeSession({
+        session_id: sessionId,
+        status: 'rejected',
+        manifest_id: null,
+        telemetry_validated: outcome.error !== 'manifest_ingestion_failed',
+        validation_passed: false,
+        rejection_reason: outcome.error,
+        rejection_details: outcome.details ?? null,
+      });
+      res.status(outcome.status).json({
+        error: outcome.error,
+        details: outcome.details,
+        session_id: sessionId,
+        session_status: 'rejected',
+      });
+      return;
+    }
+
+    await completeSession({
+      session_id: sessionId,
+      status: 'completed',
+      manifest_id: outcome.manifest_id,
+      telemetry_validated: true,
+      validation_passed: outcome.completion.accepted,
+      contradictions_detected: outcome.state.contradictions.length,
+      queue_changes_triggered: 1,
+    });
+    res.json({
+      session_id: sessionId,
+      session_status: 'completed',
+      manifest_id: outcome.manifest_id,
+      completion_score: outcome.completion.score,
+      warnings: outcome.completion.report.warnings,
+      sync_health_score: outcome.state.sync_health.score,
+      contradictions_detected: outcome.state.contradictions.length,
+      state_elapsed_ms: outcome.state_elapsed_ms,
+    });
+  } catch (err: any) {
+    console.error('[build-session/complete]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Build session: list recent for the project.
+router.get('/api/portal/project/build-sessions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { listProjectSessions } = await import('../intelligence/systemStateEngine/execution/buildSessionService');
+    const limit = Number(req.query.limit) || 50;
+    const sessions = await listProjectSessions(project.id, { limit });
+    res.json({ sessions, count: sessions.length });
+  } catch (err: any) {
+    console.error('[build-sessions]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// History: queue evolution.
+router.get('/api/portal/project/history/queue', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { readQueueHistory } = await import('../intelligence/systemStateEngine/execution/queueHistoryWriter');
+    const limit = Number(req.query.limit) || 200;
+    const sinceMs = req.query.since_hours ? Number(req.query.since_hours) * 60 * 60 * 1000 : undefined;
+    const entries = await readQueueHistory(project.id, { limit, sinceMs });
+    res.json({ entries, count: entries.length });
+  } catch (err: any) {
+    console.error('[history/queue]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// History: scores over time (sourced from snapshot rows directly).
+router.get('/api/portal/project/history/scores', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { default: SystemStateSnapshot } = await import('../models/SystemStateSnapshot');
+    const limit = Number(req.query.limit) || 100;
+    const rows = await SystemStateSnapshot.findAll({
+      where: { project_id: project.id },
+      attributes: ['id', 'generated_at', 'readiness_score', 'coverage_score', 'maturity_score', 'health_score', 'sync_health_score'],
+      order: [['generated_at', 'DESC']],
+      limit,
+    });
+    const entries = rows.map((r: any) => ({
+      snapshot_id: r.id,
+      generated_at: new Date(r.generated_at).toISOString(),
+      readiness: r.readiness_score,
+      coverage: r.coverage_score,
+      maturity: r.maturity_score,
+      health: r.health_score,
+      sync_health: r.sync_health_score,
     }));
-    res.json({ tasks: tasksWithNames, total_components: enriched.length, mode: projectMode });
+    res.json({ entries, count: entries.length });
+  } catch (err: any) {
+    console.error('[history/scores]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// History: contradictions seen across recent snapshots.
+router.get('/api/portal/project/history/contradictions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { default: SystemStateSnapshot } = await import('../models/SystemStateSnapshot');
+    const limit = Number(req.query.limit) || 50;
+    const rows = await SystemStateSnapshot.findAll({
+      where: { project_id: project.id },
+      attributes: ['id', 'generated_at', 'contradiction_flags'],
+      order: [['generated_at', 'DESC']],
+      limit,
+    });
+    const entries = rows.map((r: any) => ({
+      snapshot_id: r.id,
+      generated_at: new Date(r.generated_at).toISOString(),
+      contradictions: r.contradiction_flags || [],
+      count: (r.contradiction_flags || []).length,
+    }));
+    res.json({ entries, count: entries.length });
+  } catch (err: any) {
+    console.error('[history/contradictions]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 5: Visual Review / Operational UX Intelligence ──────────────
+// Open a new visual review session. Returns the session id; subsequent
+// critique items / suggestions / decisions reference it.
+router.post('/api/portal/project/visual-review/session', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { bp_id, page_route, primary_screenshot_path, notes } = req.body || {};
+    if (!page_route) { res.status(400).json({ error: 'page_route required' }); return; }
+
+    const { openSession } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const result = await openSession({
+      project_id: project.id,
+      bp_id: bp_id ?? null,
+      page_route,
+      participant_sub: req.participant!.sub,
+      primary_screenshot_path: primary_screenshot_path ?? null,
+      notes: notes ?? null,
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    console.error('[visual-review/session]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List recent visual review sessions for the project.
+router.get('/api/portal/project/visual-review/sessions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { listProjectSessions } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const sessions = await listProjectSessions(project.id, { limit: Number(req.query.limit) || 50 });
+    res.json({ sessions, count: sessions.length });
+  } catch (err: any) {
+    console.error('[visual-review/sessions]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Single session detail (with critiques, suggestions, decisions).
+router.get('/api/portal/project/visual-review/session/:id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getSession, listCritiques, listSuggestions, listDecisions } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const sessionId = req.params.id as string;
+    const session = await getSession(sessionId);
+    if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+    if (session.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+
+    const [critiques, suggestions, decisions] = await Promise.all([
+      listCritiques(sessionId),
+      listSuggestions(sessionId),
+      listDecisions(sessionId),
+    ]);
+    res.json({ session, critiques, suggestions, decisions });
+  } catch (err: any) {
+    console.error('[visual-review/session detail]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add a critique to a session and (optionally) auto-generate AI suggestions.
+router.post('/api/portal/project/visual-review/session/:id/critique', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { kind, severity, description, region, target_selector, workflow_id, expected_outcome, generate_suggestions } = req.body || {};
+    if (!kind || !severity || !description) {
+      res.status(400).json({ error: 'kind, severity, description required' });
+      return;
+    }
+    const { addCritique, recordSuggestion } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const critique = await addCritique({
+      session_id: req.params.id as string,
+      project_id: project.id,
+      kind, severity, description, region, target_selector, workflow_id, expected_outcome,
+      created_by: req.participant!.sub,
+    });
+
+    let suggestions: any[] = [];
+    if (generate_suggestions !== false) {
+      const { generateSuggestionsFromCritique } = await import('../intelligence/systemStateEngine/visual/visualCritiqueEngine');
+      const drafts = generateSuggestionsFromCritique({
+        id: critique.id,
+        kind, severity, description, target_selector, expected_outcome,
+      });
+      for (const d of drafts) {
+        const s = await recordSuggestion({
+          session_id: req.params.id as string,
+          critique_id: critique.id,
+          project_id: project.id,
+          kind: d.kind, title: d.title, body: d.body, rationale: d.rationale,
+          confidence: d.confidence, expected_ux_impact: d.expected_ux_impact,
+          source: 'rule_based',
+          source_metadata: { generated_at: new Date().toISOString() },
+        });
+        suggestions.push({ id: s.id, ...d });
+      }
+    }
+    res.status(201).json({ critique_id: critique.id, suggestions });
+  } catch (err: any) {
+    console.error('[visual-review/critique]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Record a verdict on an AI suggestion or critique item.
+router.post('/api/portal/project/visual-review/session/:id/decision', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { suggestion_id, critique_id, verdict, rationale } = req.body || {};
+    if (!verdict) { res.status(400).json({ error: 'verdict required' }); return; }
+    if (!suggestion_id && !critique_id) { res.status(400).json({ error: 'suggestion_id or critique_id required' }); return; }
+    const { recordDecision } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const result = await recordDecision({
+      session_id: req.params.id as string,
+      project_id: project.id,
+      suggestion_id: suggestion_id ?? null,
+      critique_id: critique_id ?? null,
+      verdict, rationale,
+      decided_by: req.participant!.sub,
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    console.error('[visual-review/decision]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generate a Claude-ready prompt from accepted suggestions in this session.
+router.post('/api/portal/project/visual-review/session/:id/generate-prompt', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { getSession, listCritiques, listSuggestions, listDecisions, persistGeneratedPrompt }
+      = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const sessionId = req.params.id as string;
+    const session = await getSession(sessionId);
+    if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+    if (session.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+
+    const [critiques, suggestions, decisions] = await Promise.all([
+      listCritiques(sessionId),
+      listSuggestions(sessionId),
+      listDecisions(sessionId),
+    ]);
+
+    const acceptedSuggestionIds = new Set(
+      decisions.filter(d => d.verdict === 'accepted' && d.suggestion_id).map(d => d.suggestion_id),
+    );
+    const acceptedSuggestions = suggestions.filter(s => acceptedSuggestionIds.has(s.id));
+
+    const { generateVisualChangePackage } = await import('../intelligence/systemStateEngine/visual/visualPromptGenerator');
+    const pkg = generateVisualChangePackage({
+      session_id: sessionId,
+      project_id: project.id,
+      bp_id: session.bp_id,
+      page_route: session.page_route,
+      critiques: critiques.map((c: any) => ({
+        id: c.id, kind: c.kind, severity: c.severity, description: c.description,
+        target_selector: c.target_selector, expected_outcome: c.expected_outcome,
+      })),
+      accepted_suggestions: acceptedSuggestions.map((s: any) => ({
+        id: s.id, kind: s.kind, title: s.title, body: s.body, rationale: s.rationale,
+        expected_ux_impact: s.expected_ux_impact,
+      })),
+      affected_components: req.body?.affected_components,
+      screenshot_path: session.primary_screenshot_path,
+    });
+
+    await persistGeneratedPrompt(sessionId, pkg.generated_prompt);
+    res.json(pkg);
+  } catch (err: any) {
+    console.error('[visual-review/generate-prompt]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UX debt summary for the project.
+router.get('/api/portal/project/visual-review/ux-debt', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { loadVisualTelemetry } = await import('../intelligence/systemStateEngine/visual/visualTelemetrySynchronizer');
+    const bundle = await loadVisualTelemetry(project.id);
+    res.json({
+      ux_debt: bundle.ux_debt,
+      open_critique_count: bundle.open_critique_count,
+      resolved_critique_count: bundle.resolved_critique_count,
+      visual_tasks_count: bundle.visual_tasks.length,
+    });
+  } catch (err: any) {
+    console.error('[visual-review/ux-debt]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Workflow friction report for the project.
+router.get('/api/portal/project/visual-review/workflow-friction', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { loadVisualTelemetry } = await import('../intelligence/systemStateEngine/visual/visualTelemetrySynchronizer');
+    const bundle = await loadVisualTelemetry(project.id);
+    res.json({
+      friction_score: bundle.workflow_friction.friction_score,
+      findings: bundle.workflow_friction.findings,
+    });
+  } catch (err: any) {
+    console.error('[visual-review/workflow-friction]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 6: Visual Cognition + Behavioral Telemetry ─────────────────
+
+// Ingest a sanitized DOM snapshot for a route.
+router.post('/api/portal/project/vision/dom', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { route, bp_id, dom_tree, viewport_width, viewport_height, screenshot_path, captured_at } = req.body || {};
+    if (!route) { res.status(400).json({ error: 'route required' }); return; }
+    if (!dom_tree) { res.status(400).json({ error: 'dom_tree required' }); return; }
+
+    const { default: DOMSnapshot } = await import('../models/DOMSnapshot');
+    const { runVisionAnalysis } = await import('../intelligence/systemStateEngine/vision/visionAnalysisEngine');
+    const cached = runVisionAnalysis({
+      dom: dom_tree,
+      viewport: viewport_width && viewport_height ? { width: viewport_width, height: viewport_height } : undefined,
+    });
+    const row = await DOMSnapshot.create({
+      project_id: project.id,
+      bp_id: bp_id ?? null,
+      route,
+      dom_tree,
+      screenshot_path: screenshot_path ?? null,
+      viewport_width: viewport_width ?? null,
+      viewport_height: viewport_height ?? null,
+      cached_vision_report: cached,
+      captured_at: captured_at ? new Date(captured_at) : new Date(),
+    } as any);
+    res.status(201).json({ snapshot_id: (row as any).id, vision_report: cached });
+  } catch (err: any) {
+    console.error('[vision/dom]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get the latest vision cognition report per route.
+router.get('/api/portal/project/vision/cognition', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { loadVisionTelemetry } = await import('../intelligence/systemStateEngine/vision/visionTelemetrySynchronizer');
+    const bundle = await loadVisionTelemetry(project.id);
+    res.json({
+      worst_route: bundle.worst_route,
+      worst_cognition_score: bundle.worst_cognition_score,
+      contradiction_count: bundle.contradictions.length,
+      contradictions: bundle.contradictions.slice(0, 50),
+      regression_count: bundle.regressions.length,
+      snapshot_count: bundle.snapshot_count,
+      behavioral_event_count: bundle.behavioral_event_count,
+    });
+  } catch (err: any) {
+    console.error('[vision/cognition]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get visual contradictions only.
+router.get('/api/portal/project/vision/contradictions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { loadVisionTelemetry } = await import('../intelligence/systemStateEngine/vision/visionTelemetrySynchronizer');
+    const bundle = await loadVisionTelemetry(project.id);
+    res.json({ contradictions: bundle.contradictions, count: bundle.contradictions.length });
+  } catch (err: any) {
+    console.error('[vision/contradictions]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get UX regressions across snapshots.
+router.get('/api/portal/project/vision/regressions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { loadVisionTelemetry } = await import('../intelligence/systemStateEngine/vision/visionTelemetrySynchronizer');
+    const bundle = await loadVisionTelemetry(project.id);
+    res.json({ regressions: bundle.regressions });
+  } catch (err: any) {
+    console.error('[vision/regressions]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Predict UX impact for a candidate suggestion.
+router.post('/api/portal/project/vision/predict-impact', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { suggestion, route } = req.body || {};
+    if (!suggestion || !suggestion.kind) { res.status(400).json({ error: 'suggestion.kind required' }); return; }
+
+    const { default: DOMSnapshot } = await import('../models/DOMSnapshot');
+    const snap = route
+      ? await DOMSnapshot.findOne({ where: { project_id: project.id, route }, order: [['captured_at', 'DESC']] })
+      : null;
+    let visionReport: any = null;
+    if (snap) visionReport = (snap as any).cached_vision_report;
+    if (!visionReport) {
+      // No DOM snapshot for the route — return a neutral prediction
+      const { predictUXImpact } = await import('../intelligence/systemStateEngine/vision/uxImpactPredictor');
+      const prediction = predictUXImpact(suggestion, {
+        hierarchy: { hierarchy_score: 50, weight_tiers: 1, competing_primaries: 0, heading_path: [], findings: [] },
+        density: { action_count: 0, viewport_area: 0, density_per_100k_px: 0, density_health: 50, category: 'comfortable', findings: [] },
+        cta: { primary_label: null, primary_weight: 0, primary_position: 'unknown', is_dominant: false, cta_score: 50, findings: [] },
+        dom_semantic: { action_count: 0, primary_action_candidates: [], heading_levels: {}, focusable_count: 0, missing_aria_labels: [], nav_landmarks: 0, form_count: 0, nested_action_zones: [], semantic_warnings: [] },
+        screenshot: null,
+        cognition_score: 50,
+        summary: 'No DOM snapshot available — neutral baseline.',
+      } as any);
+      res.json({ prediction, basis: 'no DOM snapshot for route' });
+      return;
+    }
+
+    const { predictUXImpact } = await import('../intelligence/systemStateEngine/vision/uxImpactPredictor');
+    const { loadVisionTelemetry } = await import('../intelligence/systemStateEngine/vision/visionTelemetrySynchronizer');
+    const bundle = await loadVisionTelemetry(project.id);
+    const prediction = predictUXImpact(suggestion, visionReport, { friction_pressure: bundle.behavioral.project_friction_pressure });
+    res.json({ prediction });
+  } catch (err: any) {
+    console.error('[vision/predict-impact]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ingest a behavioral event (one or more).
+router.post('/api/portal/project/behavioral/event', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const events = Array.isArray(req.body?.events) ? req.body.events : [req.body];
+    if (events.length === 0) { res.status(400).json({ error: 'events required' }); return; }
+
+    const { default: BehavioralEvent } = await import('../models/BehavioralEvent');
+    const rows = events
+      .filter((e: any) => e && e.route && e.kind && e.session_id)
+      .map((e: any) => ({
+        project_id: project.id,
+        bp_id: e.bp_id ?? null,
+        route: e.route,
+        session_id: e.session_id,
+        kind: e.kind,
+        target_selector: e.target_selector ?? null,
+        target_x: e.target_x ?? null,
+        target_y: e.target_y ?? null,
+        duration_ms: e.duration_ms ?? null,
+        metadata: e.metadata ?? {},
+        observed_at: e.observed_at ? new Date(e.observed_at) : new Date(),
+      }));
+    if (rows.length === 0) { res.status(400).json({ error: 'No valid events in payload' }); return; }
+    await BehavioralEvent.bulkCreate(rows as any[]);
+    res.status(201).json({ inserted: rows.length });
+  } catch (err: any) {
+    console.error('[behavioral/event]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User flow intelligence + behavioral aggregates.
+router.get('/api/portal/project/behavioral/flow', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { loadVisionTelemetry } = await import('../intelligence/systemStateEngine/vision/visionTelemetrySynchronizer');
+    const bundle = await loadVisionTelemetry(project.id);
+    res.json({
+      behavioral: bundle.behavioral,
+      user_flow: bundle.user_flow,
+    });
+  } catch (err: any) {
+    console.error('[behavioral/flow]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 7: Multimodal cognition + adaptive orchestration ────────────
+
+// Run multimodal vision analysis on a screenshot. Caller supplies route +
+// screenshot path; engine wires through prompt builder + provider + cache.
+router.post('/api/portal/project/multimodal/analyze', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { route, screenshot_path, comparison_screenshot_path, viewport, user_intent, focus_regions, known_critical_actions, known_workflows, comparing } = req.body || {};
+    if (!route) { res.status(400).json({ error: 'route required' }); return; }
+    if (!screenshot_path) { res.status(400).json({ error: 'screenshot_path required' }); return; }
+
+    const { analyzeImage } = await import('../intelligence/systemStateEngine/multimodal/multimodalVisionEngine');
+    const result = await analyzeImage({
+      route, screenshot_path, comparison_screenshot_path,
+      viewport, user_intent, focus_regions, known_critical_actions, known_workflows, comparing,
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('[multimodal/analyze]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Compute the visual diff between two snapshots of the same route.
+router.post('/api/portal/project/multimodal/diff', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { route } = req.body || {};
+    if (!route) { res.status(400).json({ error: 'route required' }); return; }
+    const { default: DOMSnapshot } = await import('../models/DOMSnapshot');
+    const snaps = await DOMSnapshot.findAll({
+      where: { project_id: project.id, route },
+      order: [['captured_at', 'DESC']],
+      limit: 2,
+    });
+    if (snaps.length < 2) { res.status(404).json({ error: 'Need at least 2 snapshots for the route' }); return; }
+    const [curr, prev] = snaps;
+    const { analyzeVisualDiff } = await import('../intelligence/systemStateEngine/multimodal/visualDiffAnalyzer');
+    const diff = analyzeVisualDiff(
+      (prev as any).cached_vision_report,
+      (curr as any).cached_vision_report,
+    );
+    res.json({ diff, prev_snapshot_id: (prev as any).id, current_snapshot_id: (curr as any).id });
+  } catch (err: any) {
+    console.error('[multimodal/diff]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get the current UX pressure escalation report.
+router.get('/api/portal/project/orchestration/pressure', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { loadVisionTelemetry } = await import('../intelligence/systemStateEngine/vision/visionTelemetrySynchronizer');
+    const { computeWeightFactor, applyAdaptiveWeighting } = await import('../intelligence/systemStateEngine/multimodal/adaptivePriorityWeighting');
+    const { computeUXPressure } = await import('../intelligence/systemStateEngine/multimodal/uxPressureEscalation');
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine');
+
+    const [bundle, state] = await Promise.all([
+      loadVisionTelemetry(project.id),
+      readOrRebuild(project.id),
+    ]);
+
+    const rageRoutes = bundle.behavioral.per_route.filter(r => r.rage_clicks > 0).length;
+    const loopRoutes = bundle.behavioral.per_route.filter(r => r.nav_loops > 0).length;
+    const abandonRoutes = bundle.behavioral.per_route.filter(r => r.form_abandons > 0).length;
+    const unresolvedHigh = state.contradictions.filter(c => c.severity === 'error' || c.severity === 'warning').length;
+    const inputs = {
+      friction_pressure: bundle.behavioral.project_friction_pressure,
+      worst_cognition_score: bundle.worst_cognition_score,
+      has_recent_regression: bundle.regressions.length > 0,
+      unresolved_high_contradictions: unresolvedHigh,
+      rage_routes: rageRoutes,
+      loop_routes: loopRoutes,
+      abandon_routes: abandonRoutes,
+    };
+    const factor = computeWeightFactor(inputs);
+    const pressure = computeUXPressure(inputs, factor);
+    const adaptive = applyAdaptiveWeighting(state.queue as any, inputs);
+
+    res.json({
+      pressure,
+      inputs,
+      adjustments: adaptive.adjustments.slice(0, 20),
+      affected_task_count: adaptive.adjustments.length,
+    });
+  } catch (err: any) {
+    console.error('[orchestration/pressure]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Replay: list all DOM snapshots for a route in chronological order
+// (oldest first) for the visual replay UI.
+router.get('/api/portal/project/multimodal/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const route = String(req.query.route ?? '').trim();
+    if (!route) { res.status(400).json({ error: 'route required' }); return; }
+    const limit = Number(req.query.limit) || 50;
+    const { default: DOMSnapshot } = await import('../models/DOMSnapshot');
+    const snaps = await DOMSnapshot.findAll({
+      where: { project_id: project.id, route },
+      order: [['captured_at', 'ASC']],
+      limit,
+      attributes: ['id', 'route', 'captured_at', 'screenshot_path', 'viewport_width', 'viewport_height', 'cached_vision_report'],
+    });
+    const entries = snaps.map((s: any) => ({
+      id: s.id,
+      captured_at: new Date(s.captured_at).toISOString(),
+      screenshot_path: s.screenshot_path,
+      viewport: s.viewport_width && s.viewport_height ? { width: s.viewport_width, height: s.viewport_height } : null,
+      cognition_score: s.cached_vision_report?.cognition_score ?? null,
+      hierarchy_score: s.cached_vision_report?.hierarchy?.hierarchy_score ?? null,
+      cta_score: s.cached_vision_report?.cta?.cta_score ?? null,
+    }));
+    res.json({ route, entries, count: entries.length });
+  } catch (err: any) {
+    console.error('[multimodal/replay]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Multi-viewport intelligence — compares latest snapshots per viewport.
+router.get('/api/portal/project/multimodal/viewport', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const route = String(req.query.route ?? '').trim();
+    if (!route) { res.status(400).json({ error: 'route required' }); return; }
+    const { default: DOMSnapshot } = await import('../models/DOMSnapshot');
+    const snaps = await DOMSnapshot.findAll({
+      where: { project_id: project.id, route },
+      order: [['captured_at', 'DESC']],
+      limit: 30,
+    });
+    // Group by viewport label heuristically (by width)
+    const labelOf = (w: number | null): 'desktop' | 'tablet' | 'mobile' => {
+      if (!w) return 'desktop';
+      if (w <= 480) return 'mobile';
+      if (w <= 900) return 'tablet';
+      return 'desktop';
+    };
+    const latestByVp = new Map<string, any>();
+    for (const s of snaps as any[]) {
+      const lbl = labelOf(s.viewport_width);
+      if (!latestByVp.has(lbl)) latestByVp.set(lbl, s);
+    }
+    const reports = Array.from(latestByVp.entries()).map(([viewport, s]) => ({
+      viewport,
+      heuristic: s.cached_vision_report,
+      multimodal: null,
+    })).filter(r => r.heuristic);
+    if (reports.length === 0) { res.status(404).json({ error: 'No snapshots with cached_vision_report' }); return; }
+    const { compareViewports } = await import('../intelligence/systemStateEngine/multimodal/viewportIntelligence');
+    const result = compareViewports(reports as any);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[multimodal/viewport]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Capture a screenshot via the Puppeteer-based service (graceful fallback if dep missing).
+router.post('/api/portal/project/multimodal/capture', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { url, viewports, output_dir, cookie_string } = req.body || {};
+    if (!url) { res.status(400).json({ error: 'url required' }); return; }
+    if (!output_dir) { res.status(400).json({ error: 'output_dir required' }); return; }
+    const requestedViewports = Array.isArray(viewports) && viewports.length > 0 ? viewports : ['desktop'];
+    const { captureRouteAcrossViewports } = await import('../intelligence/systemStateEngine/capture/routeSnapshotScheduler');
+    const outcome = await captureRouteAcrossViewports({
+      url, viewports: requestedViewports, output_dir, cookie_string,
+    });
+    res.json(outcome);
+  } catch (err: any) {
+    console.error('[multimodal/capture]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Vision cache stats (for monitoring cost controls).
+router.get('/api/portal/project/multimodal/cache-stats', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getCacheStats } = await import('../intelligence/systemStateEngine/multimodal/visionResultCache');
+    res.json(getCacheStats());
+  } catch (err: any) {
+    console.error('[multimodal/cache-stats]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 8: Persistent Real-time Operational Awareness ────────────
+
+// Generic SSE stream — fans out cognitive events for the participant's project.
+router.get('/api/portal/project/awareness/stream', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { openSSEStream } = await import('../intelligence/systemStateEngine/realtime/sseTransport');
+    const kindsParam = String(req.query.kinds ?? '').trim();
+    const kinds = kindsParam ? kindsParam.split(',').map(k => k.trim()).filter(Boolean) : undefined;
+    openSSEStream(req, res, { project_id: project.id, kinds: kinds as any });
+  } catch (err: any) {
+    console.error('[awareness/stream]', err?.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// Pressure-only stream (convenience filter)
+router.get('/api/portal/project/awareness/pressure/stream', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { openSSEStream } = await import('../intelligence/systemStateEngine/realtime/sseTransport');
+    openSSEStream(req, res, {
+      project_id: project.id,
+      kinds: ['pressure.changed', 'pressure.escalated', 'pressure.decayed'] as any,
+    });
+  } catch (err: any) {
+    console.error('[awareness/pressure/stream]', err?.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// Queue-only stream
+router.get('/api/portal/project/awareness/queue/stream', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { openSSEStream } = await import('../intelligence/systemStateEngine/realtime/sseTransport');
+    openSSEStream(req, res, {
+      project_id: project.id,
+      kinds: ['queue.reranked'] as any,
+    });
+  } catch (err: any) {
+    console.error('[awareness/queue/stream]', err?.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// Contradictions stream
+router.get('/api/portal/project/awareness/contradictions/stream', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { openSSEStream } = await import('../intelligence/systemStateEngine/realtime/sseTransport');
+    openSSEStream(req, res, {
+      project_id: project.id,
+      kinds: ['contradiction.detected', 'contradiction.resolved', 'regression.detected'] as any,
+    });
+  } catch (err: any) {
+    console.error('[awareness/contradictions/stream]', err?.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// List autonomous incidents
+router.get('/api/portal/project/awareness/incidents', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: CognitiveIncident } = await import('../models/CognitiveIncident');
+    const stateFilter = String(req.query.state ?? '').trim();
+    const where: any = { project_id: project.id };
+    if (stateFilter) where.state = stateFilter;
+    const limit = Number(req.query.limit) || 50;
+    const rows = await CognitiveIncident.findAll({ where, order: [['opened_at', 'DESC']], limit });
+    res.json({
+      incidents: rows.map((r: any) => ({
+        id: r.id,
+        type: r.type,
+        severity: r.severity,
+        state: r.state,
+        affected_routes: r.affected_routes,
+        cognition_impact: r.cognition_impact,
+        recommended_actions: r.recommended_actions,
+        opened_at: new Date(r.opened_at).toISOString(),
+        last_seen_at: new Date(r.last_seen_at).toISOString(),
+        resolved_at: r.resolved_at ? new Date(r.resolved_at).toISOString() : null,
+        occurrence_count: r.occurrence_count,
+      })),
+      count: rows.length,
+    });
+  } catch (err: any) {
+    console.error('[awareness/incidents]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Acknowledge / resolve an incident
+router.put('/api/portal/project/awareness/incidents/:id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { state, acknowledged_by } = req.body || {};
+    if (!['acknowledged', 'resolved', 'expired'].includes(state)) {
+      res.status(400).json({ error: 'state must be one of: acknowledged, resolved, expired' });
+      return;
+    }
+    const { default: CognitiveIncident } = await import('../models/CognitiveIncident');
+    const updates: any = { state };
+    if (state === 'resolved') updates.resolved_at = new Date();
+    if (state === 'acknowledged' && acknowledged_by) updates.acknowledged_by = acknowledged_by;
+    await CognitiveIncident.update(updates, { where: { id: req.params.id, project_id: project.id } });
+
+    const { publishCognitiveEvent } = await import('../intelligence/systemStateEngine/realtime/cognitiveEventBus');
+    publishCognitiveEvent({
+      kind: state === 'resolved' ? 'incident.resolved' : 'incident.updated',
+      project_id: project.id,
+      payload: { incident_id: req.params.id, state },
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[awareness/incidents/update]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cognitive replay (read persistent memory)
+router.get('/api/portal/project/awareness/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readReplay } = await import('../intelligence/systemStateEngine/realtime/cognitiveReplayStore');
+    const sinceMs = req.query.since_hours ? Number(req.query.since_hours) * 3600 * 1000 : 24 * 3600 * 1000;
+    const kindsParam = String(req.query.kinds ?? '').trim();
+    const kinds = kindsParam ? kindsParam.split(',').map(k => k.trim()).filter(Boolean) : undefined;
+    const entries = await readReplay({
+      project_id: project.id,
+      since_ms: sinceMs,
+      kinds,
+      limit: Number(req.query.limit) || 500,
+    });
+    res.json({ entries, count: entries.length });
+  } catch (err: any) {
+    console.error('[awareness/replay]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cost governance report
+router.get('/api/portal/project/awareness/cost-governance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getCostGovernanceReport } = await import('../intelligence/systemStateEngine/realtime/operationalCostGovernance');
+    res.json(getCostGovernanceReport());
+  } catch (err: any) {
+    console.error('[awareness/cost-governance]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual retention sweep trigger (admin / cron)
+router.post('/api/portal/project/awareness/retention-sweep', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { sweepAwareness } = await import('../intelligence/systemStateEngine/realtime/awarenessRetentionManager');
+    const result = await sweepAwareness();
+    res.json(result);
+  } catch (err: any) {
+    console.error('[awareness/retention-sweep]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Live pressure state (snapshot of the per-project rolling pressure)
+router.get('/api/portal/project/awareness/pressure', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getPressureState } = await import('../intelligence/systemStateEngine/realtime/livePressureEngine');
+    res.json(getPressureState(project.id));
+  } catch (err: any) {
+    console.error('[awareness/pressure]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 9: Distributed Cognitive Orchestration ──────────────────────
+
+// Unified cognitive health index for the project
+router.get('/api/portal/project/cognitive/health-index', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { computeCognitiveHealthIndexForProject } = await import('../intelligence/systemStateEngine/health/cognitiveHealthIndex');
+    const idx = await computeCognitiveHealthIndexForProject(project.id);
+    res.json(idx);
+  } catch (err: any) {
+    console.error('[cognitive/health-index]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Predictive pressure forecast (linear regression on pressure history)
+router.get('/api/portal/project/cognitive/forecast/pressure', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const horizonMin = Number(req.query.horizon_min) || 30;
+    const { Op } = await import('sequelize');
+    const { default: CognitionEvent } = await import('../models/CognitionEvent');
+    const since = new Date(Date.now() - 6 * 60 * 60 * 1000);   // last 6h
+    const events = await CognitionEvent.findAll({
+      where: {
+        project_id: project.id,
+        kind: { [Op.in]: ['pressure.changed', 'pressure.escalated', 'pressure.decayed'] },
+        emitted_at: { [Op.gte]: since },
+      },
+      order: [['emitted_at', 'ASC']],
+      limit: 200,
+    });
+    const history = events
+      .map((e: any) => ({
+        timestamp_ms: new Date(e.emitted_at).getTime(),
+        pressure: typeof e.payload?.pressure === 'number' ? e.payload.pressure : null,
+      }))
+      .filter((s: any): s is { timestamp_ms: number; pressure: number } => typeof s.pressure === 'number');
+
+    const { forecastPressure } = await import('../intelligence/systemStateEngine/prediction/predictivePressureForecaster');
+    const forecast = forecastPressure(history, horizonMin);
+    res.json({ forecast, history_size: history.length, window_hours: 6 });
+  } catch (err: any) {
+    console.error('[cognitive/forecast/pressure]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Predict an incident's likely escalation based on history
+router.post('/api/portal/project/cognitive/predict-incident', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { type, severity, affected_routes, cognition_impact, occurrence_count } = req.body || {};
+    if (!type || !severity) { res.status(400).json({ error: 'type and severity required' }); return; }
+
+    const { predictForIncident } = await import('../intelligence/systemStateEngine/prediction/incidentClassifier');
+    const prediction = await predictForIncident({
+      type, severity,
+      affected_routes: affected_routes ?? [],
+      cognition_impact: cognition_impact ?? null,
+      occurrence_count: occurrence_count ?? 1,
+      opened_at: new Date(),
+    });
+    res.json(prediction);
+  } catch (err: any) {
+    console.error('[cognitive/predict-incident]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Federated pattern listing (cross-project)
+router.get('/api/portal/project/cognitive/patterns', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { listTopPatterns } = await import('../intelligence/systemStateEngine/learning/federatedPatternRegistry');
+    const patterns = await listTopPatterns({
+      limit: Number(req.query.limit) || 25,
+      pattern_kind: req.query.kind ? String(req.query.kind) : undefined,
+    });
+    res.json({ patterns, count: patterns.length });
+  } catch (err: any) {
+    console.error('[cognitive/patterns]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Organizational learning insights
+router.get('/api/portal/project/cognitive/learning', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { generateOrganizationalLearningInsights } = await import('../intelligence/systemStateEngine/learning/organizationalLearning');
+    const insights = await generateOrganizationalLearningInsights({
+      window_days: Number(req.query.window_days) || 30,
+    });
+    res.json(insights);
+  } catch (err: any) {
+    console.error('[cognitive/learning]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dispatch an incident to all registered subscribers (manual trigger or
+// auto-fire by orchestrator). Body: { incident_id }
+router.post('/api/portal/project/cognitive/incidents/:id/dispatch', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    const { default: CognitiveIncident } = await import('../models/CognitiveIncident');
+    const inc = await CognitiveIncident.findByPk(req.params.id as string);
+    if (!inc) { res.status(404).json({ error: 'Incident not found' }); return; }
+    if ((inc as any).project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+
+    const { fanOutIncident, persistDispatchLog } = await import('../intelligence/systemStateEngine/incidents/incidentFanoutEngine');
+    const r = inc as any;
+    const payload = {
+      incident_id: r.id,
+      project_id: r.project_id,
+      type: r.type,
+      severity: r.severity,
+      state: r.state,
+      affected_routes: r.affected_routes ?? [],
+      cognition_impact: r.cognition_impact,
+      recommended_actions: r.recommended_actions ?? [],
+      opened_at: new Date(r.opened_at).toISOString(),
+      occurrence_count: r.occurrence_count ?? 1,
+      summary: `${r.type} on ${(r.affected_routes ?? []).slice(0, 2).join(', ') || '(no routes)'}`,
+      evidence: r.metadata?.evidence ?? {},
+    };
+    const result = await fanOutIncident(payload);
+    await persistDispatchLog(payload, result);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[cognitive/incidents/dispatch]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dispatch log
+router.get('/api/portal/project/cognitive/dispatch-log', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: IncidentDispatchLog } = await import('../models/IncidentDispatchLog');
+    const rows = await IncidentDispatchLog.findAll({
+      where: { project_id: project.id },
+      order: [['dispatched_at', 'DESC']],
+      limit: Number(req.query.limit) || 50,
+    });
+    res.json({
+      entries: rows.map((r: any) => ({
+        id: r.id,
+        incident_id: r.incident_id,
+        severity: r.severity,
+        type: r.type,
+        attempted_subscribers: r.attempted_subscribers,
+        succeeded: r.succeeded,
+        failed: r.failed,
+        elapsed_ms: r.elapsed_ms,
+        outcomes: r.outcomes,
+        dispatched_at: new Date(r.dispatched_at).toISOString(),
+      })),
+      count: rows.length,
+    });
+  } catch (err: any) {
+    console.error('[cognitive/dispatch-log]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Distributed bus status (debug)
+router.get('/api/portal/project/cognitive/distributed-status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { redisBusStats } = await import('../intelligence/systemStateEngine/distributed/redisCognitiveBus');
+    const { bridgeStatus } = await import('../intelligence/systemStateEngine/distributed/distributedEventBridge');
+    res.json({
+      redis: redisBusStats(),
+      bridge: bridgeStatus(),
+    });
+  } catch (err: any) {
+    console.error('[cognitive/distributed-status]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PHASE 10: Self-Learning Adaptive Orchestration ─────────────────────
+
+// Get current cognitive policy (weights, thresholds, guardrails)
+router.get('/api/portal/project/learning/policy', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getPolicy, recentDriftFor, consecutiveWorseOutcomesFor } = await import('../intelligence/systemStateEngine/policy/cognitivePolicyEngine');
+    res.json({
+      policy: getPolicy(project.id),
+      recent_drift: recentDriftFor(project.id),
+      consecutive_worse_outcomes: consecutiveWorseOutcomesFor(project.id),
+    });
+  } catch (err: any) {
+    console.error('[learning/policy]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Run a learning tick (read outcomes → propose → guardrail → apply)
+router.post('/api/portal/project/learning/tick', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { runLearningTick } = await import('../intelligence/systemStateEngine/learning/orchestrationLearningEngine');
+    const result = await runLearningTick(project.id);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[learning/tick]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Aggregate remediation outcomes
+router.get('/api/portal/project/learning/remediation-outcomes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { aggregateOutcomes } = await import('../intelligence/systemStateEngine/learning/remediationOutcomeLearner');
+    const aggregate = await aggregateOutcomes({
+      project_id: project.id,
+      since_days: Number(req.query.since_days) || 30,
+    });
+    res.json(aggregate);
+  } catch (err: any) {
+    console.error('[learning/remediation-outcomes]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Record a remediation outcome (closes the feedback loop)
+router.post('/api/portal/project/learning/remediation-outcomes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { incident_id, pattern_signature, remediation_action, accepted, implemented, resolved, pressure_delta, cognition_delta, recurred_within_7d, notes } = req.body || {};
+    if (!incident_id || !remediation_action) {
+      res.status(400).json({ error: 'incident_id + remediation_action required' });
+      return;
+    }
+    const { default: RemediationOutcome } = await import('../models/RemediationOutcome');
+    const row = await RemediationOutcome.create({
+      project_id: project.id,
+      incident_id,
+      pattern_signature: pattern_signature ?? null,
+      remediation_action,
+      accepted: !!accepted,
+      implemented: !!implemented,
+      resolved: !!resolved,
+      pressure_delta: typeof pressure_delta === 'number' ? pressure_delta : null,
+      cognition_delta: typeof cognition_delta === 'number' ? cognition_delta : null,
+      recurred_within_7d: !!recurred_within_7d,
+      notes: notes ?? null,
+      observed_at: new Date(),
+    } as any);
+    res.status(201).json({ outcome_id: (row as any).id });
+  } catch (err: any) {
+    console.error('[learning/remediation-outcomes/post]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Calibrate operational confidence
+router.get('/api/portal/project/learning/confidence', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { aggregateOutcomes } = await import('../intelligence/systemStateEngine/learning/remediationOutcomeLearner');
+    const { calibrateOperationalConfidence } = await import('../intelligence/systemStateEngine/learning/operationalConfidenceCalibrator');
+    const aggregate = await aggregateOutcomes({ project_id: project.id, since_days: 30 });
+    const confidence = calibrateOperationalConfidence({
+      sample_count: aggregate.total_attempts,
+      prediction_accuracy: aggregate.total_attempts > 0
+        ? aggregate.resolved_count / aggregate.total_attempts
+        : 0.5,
+      contradiction_churn_per_hour: 0,
+      policy_changes_last_24h: 0,
+      historical_pattern_matches: 0,
+      recent_remediation_success_rate: aggregate.total_attempts > 0
+        ? aggregate.resolved_count / aggregate.total_attempts
+        : 0,
+    });
+    res.json(confidence);
+  } catch (err: any) {
+    console.error('[learning/confidence]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Simulate a queue ordering
+router.post('/api/portal/project/learning/simulate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { initial_pressure, initial_cognition, tasks } = req.body || {};
+    if (!Array.isArray(tasks)) { res.status(400).json({ error: 'tasks array required' }); return; }
+    const { simulateQueue } = await import('../intelligence/systemStateEngine/simulation/orchestrationSimulationEngine');
+    const result = simulateQueue({
+      initial_pressure: initial_pressure ?? 0,
+      initial_cognition: initial_cognition ?? 100,
+      tasks,
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('[learning/simulate]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Compare two queue orderings
+router.post('/api/portal/project/learning/compare-orderings', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { initial_pressure, initial_cognition, ordering_a, ordering_b } = req.body || {};
+    if (!Array.isArray(ordering_a) || !Array.isArray(ordering_b)) {
+      res.status(400).json({ error: 'ordering_a and ordering_b arrays required' });
+      return;
+    }
+    const { compareQueueOrderings } = await import('../intelligence/systemStateEngine/simulation/orchestrationSimulationEngine');
+    const result = compareQueueOrderings(initial_pressure ?? 0, initial_cognition ?? 100, ordering_a, ordering_b);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[learning/compare-orderings]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cross-project shared remediations
+router.get('/api/portal/project/learning/shared-remediations', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { fetchSharedRemediations } = await import('../intelligence/systemStateEngine/transfer/crossProjectLearning');
+    const recs = await fetchSharedRemediations({
+      pattern_kind: req.query.kind ? String(req.query.kind) : undefined,
+      min_projects: Number(req.query.min_projects) || 2,
+      min_attempts: Number(req.query.min_attempts) || 2,
+      limit: Number(req.query.limit) || 25,
+    });
+    res.json({ recommendations: recs, count: recs.length });
+  } catch (err: any) {
+    console.error('[learning/shared-remediations]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Governance advice for a candidate deployment
+router.post('/api/portal/project/governance/advice', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { computeCognitiveHealthIndexForProject } = await import('../intelligence/systemStateEngine/health/cognitiveHealthIndex');
+    const { getPressureState } = await import('../intelligence/systemStateEngine/realtime/livePressureEngine');
+    const { default: CognitiveIncident } = await import('../models/CognitiveIncident');
+    const { Op } = await import('sequelize');
+    const { adviseDeploymentGovernance } = await import('../intelligence/systemStateEngine/transfer/governanceFoundation');
+
+    const [healthIdx, pressure, openIncidents] = await Promise.all([
+      computeCognitiveHealthIndexForProject(project.id),
+      Promise.resolve(getPressureState(project.id)),
+      CognitiveIncident.findAll({
+        where: { project_id: project.id, state: { [Op.in]: ['open', 'acknowledged'] } },
+        attributes: ['severity', 'type', 'affected_routes'],
+      }),
+    ]);
+
+    const advice = adviseDeploymentGovernance({
+      cognitive_health_score: healthIdx.score,
+      cognitive_health_tier: healthIdx.tier,
+      pressure_tier: pressure.tier as any,
+      unresolved_incidents: (openIncidents as any[]).map(i => ({
+        severity: i.severity, type: i.type, affected_routes: i.affected_routes ?? [],
+      })),
+      prediction_confidence: healthIdx.prediction_confidence,
+      recent_regression_count: 0,    // wired when regression history endpoint surfaces this
+    });
+    res.json(advice);
+  } catch (err: any) {
+    console.error('[governance/advice]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Policy snapshot history (replay)
+router.get('/api/portal/project/learning/policy-history', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: LearningPolicySnapshot } = await import('../models/LearningPolicySnapshot');
+    const rows = await LearningPolicySnapshot.findAll({
+      where: { project_id: project.id },
+      order: [['recorded_at', 'DESC']],
+      limit: Number(req.query.limit) || 100,
+    });
+    res.json({
+      snapshots: rows.map((r: any) => ({
+        id: r.id,
+        trigger: r.trigger,
+        confidence: r.confidence,
+        deltas: r.deltas,
+        policy: r.policy,
+        recorded_at: new Date(r.recorded_at).toISOString(),
+      })),
+      count: rows.length,
+    });
+  } catch (err: any) {
+    console.error('[learning/policy-history]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Phase 10.5: UX remediation intelligence ────────────────────────────
+//
+// Routes are organized by surface they back:
+//   - per-BP: clusters / sequence / confidence / intelligence (full report)
+//   - per-BP: snapshot-before, replay manifest
+//   - project-wide: health-index, regression-prone, policy, pressure
+//
+// The validate-build flow stays in the existing /validation-report
+// handler (extended below); these routes are the read + admin surface.
+
+router.get('/api/portal/project/business-processes/:id/remediation/intelligence', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { buildRemediationIntelligenceReport } = await import('../intelligence/systemStateEngine/remediation/remediationIntelligenceEngine');
+    const report = await buildRemediationIntelligenceReport({ project_id: cap.project_id, capability_id: cap.id });
+    res.json(report);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/business-processes/:id/remediation/clusters', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { buildRemediationIntelligenceReport } = await import('../intelligence/systemStateEngine/remediation/remediationIntelligenceEngine');
+    const report = await buildRemediationIntelligenceReport({ project_id: cap.project_id, capability_id: cap.id });
+    res.json({ clusters: report.clusters });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/business-processes/:id/remediation/sequence', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { buildRemediationIntelligenceReport } = await import('../intelligence/systemStateEngine/remediation/remediationIntelligenceEngine');
+    const report = await buildRemediationIntelligenceReport({ project_id: cap.project_id, capability_id: cap.id });
+    res.json({ sequence: report.sequence });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/business-processes/:id/remediation/confidence', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { buildRemediationIntelligenceReport } = await import('../intelligence/systemStateEngine/remediation/remediationIntelligenceEngine');
+    const report = await buildRemediationIntelligenceReport({ project_id: cap.project_id, capability_id: cap.id });
+    res.json({
+      overall_confidence: report.overall_confidence,
+      per_cluster: report.clusters.map(c => ({
+        cluster_signature: c.cluster.cluster_signature,
+        cluster_type: c.cluster.cluster_type,
+        confidence: c.confidence,
+      })),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/business-processes/:id/remediation/snapshot-before', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const cluster_signature = (req.body?.cluster_signature || '') as string;
+    if (!cluster_signature) { res.status(400).json({ error: 'cluster_signature required' }); return; }
+
+    // Stamp before-snapshot metadata into ui_element_map. The actual screenshot
+    // capture is best-effort (Puppeteer is optional); if it fails we record the
+    // intent so the validate-build flow can still attempt the after-snapshot
+    // and infer "no before available" from the absence of a path.
+    const map = ((cap as any).ui_element_map || {}) as any;
+    const snapshots = map.remediation_snapshots || {};
+    const previewUrl = (cap as any).preview_url || (cap as any).direct_preview_url || null;
+    let beforePath: string | null = null;
+    if (previewUrl) {
+      try {
+        const { capture } = await import('../intelligence/systemStateEngine/capture/screenshotCaptureService');
+        const out = await capture({
+          url: previewUrl,
+          viewport: { width: 1280, height: 800, device_scale_factor: 1, is_mobile: false, label: 'desktop' },
+          output_dir: '/tmp/remediation-snapshots',
+          settle_ms: 800,
+        });
+        if (out.ok) beforePath = out.screenshot_path;
+      } catch { /* puppeteer not installed in this env — record intent only */ }
+    }
+    // Phase 11 — capture before_metrics alongside before_path. The
+    // analyzer in recordPhase10_5Outcomes will compare these to fresh
+    // after-metrics to derive real cognition/ux_debt/behavioral/friction
+    // deltas instead of the Phase 10.5 null placeholders.
+    const before_metrics = await collectBeforeAfterMetrics(cap.project_id, cap.id, (cap as any).frontend_route || null);
+
+    snapshots[cluster_signature] = {
+      before_at: new Date().toISOString(),
+      before_path: beforePath,
+      preview_url: previewUrl,
+      before_metrics,
+    };
+    map.remediation_snapshots = snapshots;
+    (cap as any).ui_element_map = { ...map };
+    (cap as any).changed('ui_element_map', true);
+    await cap.save();
+    res.json({ ok: true, before_path: beforePath, captured: !!beforePath, metrics_captured: !!before_metrics });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * Phase 11 — collect the 6-dimension BeforeAfterMetrics snapshot for a BP.
+ * Fail-soft: each dimension defaults to null on missing data so the
+ * analyzer's existing null-handling does the right thing.
+ */
+async function collectBeforeAfterMetrics(projectId: string, capabilityId: string, route: string | null): Promise<any> {
+  try {
+    const { getMemoizedVisionTelemetry, getMemoizedVisualTelemetry } = await import('../intelligence/systemStateEngine/realtime/telemetryMemoizationCache');
+    const { analyzeBehavioralSignals } = await import('../intelligence/systemStateEngine/behavioral/behavioralSignalAnalyzer');
+    const [vision, visual] = await Promise.all([
+      getMemoizedVisionTelemetry(projectId),
+      getMemoizedVisualTelemetry(projectId),
+    ]);
+    let behavioral_pressure: number | null = null;
+    if (route) {
+      try {
+        const { default: BehavioralEvent } = await import('../models/BehavioralEvent');
+        const { Op } = await import('sequelize');
+        const recentEvents: any[] = await BehavioralEvent.findAll({
+          where: { project_id: projectId, route, created_at: { [Op.gte]: new Date(Date.now() - 24 * 3600 * 1000) } },
+          limit: 1000,
+        });
+        const report = analyzeBehavioralSignals(recentEvents.map(e => ({
+          route: e.route,
+          kind: e.event_kind,
+          ts: new Date(e.created_at).getTime(),
+        }) as any));
+        const perRoute = report.per_route?.find((r: any) => r.route === route);
+        behavioral_pressure = perRoute?.friction_pressure ?? report.project_friction_pressure ?? null;
+      } catch { /* behavioral telemetry optional */ }
+    }
+    return {
+      cognition_score: vision?.worst_cognition_score ?? null,
+      ux_debt_score: visual?.ux_debt?.total_debt ?? null,
+      behavioral_pressure,
+      workflow_friction: visual?.workflow_friction?.friction_score ?? null,
+      cta_prominence: vision?.aggregated?.cta_score ?? null,
+      hierarchy_clarity: vision?.aggregated?.hierarchy_score ?? null,
+    };
+  } catch (err: any) {
+    console.warn('[collectBeforeAfterMetrics] failed:', err?.message);
+    return null;
+  }
+}
+
+// Phase 11 — list recent UXRemediationOutcomes for a BP. Powers the
+// "See Replay" CTA on resolved-step rows in SystemViewV2 (the frontend
+// needs an outcome ID to load the replay manifest).
+router.get('/api/portal/project/business-processes/:id/remediation/outcomes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const aggregate = req.query.aggregate === 'true';
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+    const { default: UXRemediationOutcome } = await import('../models/UXRemediationOutcome');
+    const rows: any[] = await UXRemediationOutcome.findAll({
+      where: { capability_id: cap.id },
+      order: [['observed_at', 'DESC']],
+      limit,
+    });
+    if (aggregate) {
+      const { aggregateUXOutcomes } = await import('../intelligence/systemStateEngine/remediation/remediationEffectivenessAnalyzer');
+      const agg = await aggregateUXOutcomes({ project_id: cap.project_id, capability_id: cap.id });
+      res.json({ outcomes: rows.map(serializeOutcome), aggregate: agg });
+      return;
+    }
+    res.json({ outcomes: rows.map(serializeOutcome) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+function serializeOutcome(r: any): any {
+  return {
+    id: r.id,
+    cluster_signature: r.cluster_signature,
+    cluster_type: r.cluster_type,
+    step_key: r.step_key,
+    issues_resolved_count: r.issues_resolved_count,
+    issues_regressed_count: r.issues_regressed_count,
+    cognition_delta: r.cognition_delta,
+    ux_debt_delta: r.ux_debt_delta,
+    behavioral_delta: r.behavioral_delta,
+    friction_delta: r.friction_delta,
+    observed_at: r.observed_at instanceof Date ? r.observed_at.toISOString() : r.observed_at,
+    has_replay: !!(r.before_screenshot_path || r.after_screenshot_path || (r.semantic_regions && r.semantic_regions.length > 0)),
+    pre_pressure_tier: r.pre_pressure_tier,
+    prompt_target_used: r.prompt_target_used,
+  };
+}
+
+// Phase 11 — governance insights (5 categories).
+router.get('/api/portal/project/remediation/governance-insights', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { generateGovernanceInsights } = await import('../intelligence/systemStateEngine/remediation/remediationGovernanceInsights');
+    const insights = await generateGovernanceInsights({ project_id: project.id });
+    res.json(insights);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Phase 11 — strategy learner (best per cluster_type).
+router.get('/api/portal/project/remediation/strategies', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { learnRemediationStrategies } = await import('../intelligence/systemStateEngine/remediation/remediationStrategyLearner');
+    const r = await learnRemediationStrategies({ project_id: project.id });
+    res.json(r);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Phase 11 — confidence evolution for a single cluster_signature.
+router.get('/api/portal/project/business-processes/:id/remediation/confidence-evolution', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const cluster_signature = (req.query.cluster_signature || '') as string;
+    if (!cluster_signature) { res.status(400).json({ error: 'cluster_signature required' }); return; }
+    const { trackClusterConfidence } = await import('../intelligence/systemStateEngine/remediation/confidenceEvolutionTracker');
+    const r = await trackClusterConfidence({ project_id: cap.project_id, cluster_signature });
+    res.json(r);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/business-processes/:id/remediation/replay/:outcomeId', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { default: UXRemediationOutcome } = await import('../models/UXRemediationOutcome');
+    const outcome: any = await UXRemediationOutcome.findByPk(req.params.outcomeId as string);
+    if (!outcome || outcome.capability_id !== cap.id) { res.status(404).json({ error: 'Outcome not found' }); return; }
+
+    const { buildReplayManifest } = await import('../intelligence/systemStateEngine/visual/uxRemediationReplay');
+    const manifest = buildReplayManifest({
+      outcome_id: outcome.id,
+      capability_id: cap.id,
+      cluster_signature: outcome.cluster_signature,
+      before_screenshot_url: outcome.before_screenshot_path ? `/api/portal/project/remediation/screenshots/${encodeURIComponent(outcome.before_screenshot_path)}` : null,
+      after_screenshot_url: outcome.after_screenshot_path ? `/api/portal/project/remediation/screenshots/${encodeURIComponent(outcome.after_screenshot_path)}` : null,
+      captured_at: outcome.observed_at,
+      // Phase 11 — read persisted regions when present (computed once at
+      // outcome write time so replay stays deterministic). Fall back to
+      // a placeholder when the row predates Phase 11.
+      semantic_regions: Array.isArray(outcome.semantic_regions) && outcome.semantic_regions.length > 0
+        ? outcome.semantic_regions
+        : [{
+            cluster_signature: outcome.cluster_signature,
+            cluster_type: outcome.cluster_type,
+            bbox: null,
+            resolved: outcome.issues_resolved_count > 0,
+            regressed: outcome.issues_regressed_count > 0,
+          }],
+      delta_summary: {
+        cognition_delta: outcome.cognition_delta,
+        ux_debt_delta: outcome.ux_debt_delta,
+        behavioral_delta: outcome.behavioral_delta,
+        friction_delta: outcome.friction_delta,
+        issues_resolved_count: outcome.issues_resolved_count,
+        issues_regressed_count: outcome.issues_regressed_count,
+      },
+    });
+    res.json(manifest);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/remediation/health-index', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { computeRemediationHealthIndex } = await import('../intelligence/systemStateEngine/health/remediationHealthIndex');
+    const r = await computeRemediationHealthIndex(project.id);
+    res.json(r);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/remediation/regression-prone', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { detectRegressionPronePatterns } = await import('../intelligence/systemStateEngine/remediation/regressionProneFixDetector');
+    const r = await detectRegressionPronePatterns({ project_id: project.id });
+    res.json(r);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/remediation/policy', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getRemediationPolicy } = await import('../intelligence/systemStateEngine/policy/remediationPolicy');
+    const policy = await getRemediationPolicy(project.id);
+    res.json(policy);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/api/portal/project/remediation/policy', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { setRemediationPolicy } = await import('../intelligence/systemStateEngine/policy/remediationPolicy');
+    const updated = setRemediationPolicy(project.id, req.body || {});
+    res.json(updated);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/remediation/pressure', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getRemediationPressure } = await import('../intelligence/systemStateEngine/remediation/remediationPressureEngine');
+    const r = getRemediationPressure(project.id);
+    res.json(r);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 12 — governed decision automation ──────────────────────────────
+// 14 endpoints covering recommendations, automation confidence, prepared
+// plans, timeline, explainability, operator overrides, audit, and admin
+// policy. All operator-facing routes use requireParticipant; the admin
+// policy endpoints would normally use requireAdmin (added in adminRoutes).
+
+router.get('/api/portal/project/governance/recommendations', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const status = (req.query.status as string) || 'pending';
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+    const { default: GovernanceRecommendation } = await import('../models/GovernanceRecommendation');
+    const rows = await GovernanceRecommendation.findAll({
+      where: { project_id: project.id, status },
+      order: [['priority', 'ASC'], ['created_at', 'DESC']],
+      limit,
+    });
+    res.json({ recommendations: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/recommendations/:id/decision', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const decision = (req.body?.decision || '') as 'accepted' | 'rejected';
+    if (decision !== 'accepted' && decision !== 'rejected') {
+      res.status(400).json({ error: 'decision must be "accepted" or "rejected"' });
+      return;
+    }
+    const reason = (req.body?.reason || '') as string;
+    const { default: GovernanceRecommendation } = await import('../models/GovernanceRecommendation');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const rec: any = await GovernanceRecommendation.findByPk(req.params.id as string);
+    if (!rec || rec.project_id !== project.id) { res.status(404).json({ error: 'Recommendation not found' }); return; }
+    if (rec.status !== 'pending') { res.status(409).json({ error: `Recommendation already ${rec.status}` }); return; }
+    rec.status = decision;
+    rec.operator_decision_at = new Date();
+    rec.operator_id = req.participant!.sub;
+    rec.decision_reason = reason || null;
+    await rec.save();
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: decision === 'accepted' ? 'recommendation_accepted' : 'recommendation_rejected',
+      subject_id: rec.id,
+      payload: { type: rec.type, reason },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+
+    // Phase 12 — decided event + governance memory hooks. Storm detection
+    // fires here when an operator rejects a recommendation; if storm trips
+    // we flip automation_mode to supervised and pause new recommendations.
+    try {
+      const { publishCognitiveEvent } = await import('../intelligence/systemStateEngine/realtime/cognitiveEventBus');
+      publishCognitiveEvent({
+        kind: 'governance.recommendation.decided',
+        project_id: project.id,
+        severity: 'info',
+        payload: { recommendation_id: rec.id, type: rec.type, decision, operator_id: req.participant!.sub },
+      });
+      const { noteRecommendationDecided } = await import('../intelligence/systemStateEngine/governance/governanceTaskShaper');
+      noteRecommendationDecided(project.id, { type: rec.type, cluster_signature: (rec.supporting_evidence || {}).cluster_signature || null });
+      if (decision === 'rejected') {
+        const { recordOperatorOverride } = await import('../intelligence/systemStateEngine/governance/governanceMemory');
+        const r = recordOperatorOverride(project.id);
+        if (r.storm_triggered) {
+          // Flip mode + pause + audit
+          const { setAutomationMode } = await import('../intelligence/systemStateEngine/governance/decisionAutomationEngine');
+          setAutomationMode(project.id, 'supervised');
+          await GovernanceAuditEntry.create({
+            project_id: project.id,
+            kind: 'override_storm_detected',
+            subject_id: null,
+            payload: { velocity: r.velocity, action: 'flipped_to_supervised_paused_30m' },
+            operator_id: req.participant!.sub,
+            recorded_at: new Date(),
+          } as any);
+          publishCognitiveEvent({
+            kind: 'governance.escalation_dispatched',
+            project_id: project.id,
+            severity: 'warning',
+            payload: { reason: 'override_storm', velocity: r.velocity, suspended_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() },
+          });
+        }
+      }
+    } catch { /* fire-and-forget */ }
+    res.json(rec);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/automation-confidence', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildDecisionAutomationReport } = await import('../intelligence/systemStateEngine/governance/decisionAutomationEngine');
+    const r = await buildDecisionAutomationReport({ project_id: project.id });
+    res.json({
+      automation_confidence: r.automation_confidence,
+      automation_mode: r.automation_mode,
+      governance_summary: r.governance_summary,
+      generated_at: r.generated_at,
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/prepared-plans', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const status = req.query.status as string | undefined;
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const where: any = { project_id: project.id };
+    if (status) where.status = status;
+    const rows = await PreparedRemediationPlan.findAll({ where, order: [['created_at', 'DESC']], limit: 50 });
+    res.json({ plans: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/prepared-plans', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { capability_id, cluster_signature, plan_payload, projected_outcome, confidence } = req.body || {};
+    if (!capability_id || !cluster_signature) { res.status(400).json({ error: 'capability_id and cluster_signature required' }); return; }
+    const row = await PreparedRemediationPlan.create({
+      project_id: project.id,
+      capability_id,
+      cluster_signature,
+      plan_payload: plan_payload || {},
+      projected_outcome: projected_outcome || {},
+      confidence: typeof confidence === 'number' ? confidence : 50,
+      status: 'draft',
+    } as any);
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: 'plan_prepared',
+      subject_id: row.id,
+      payload: { capability_id, cluster_signature },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    try {
+      const { publishCognitiveEvent } = await import('../intelligence/systemStateEngine/realtime/cognitiveEventBus');
+      publishCognitiveEvent({
+        kind: 'remediation.plan.prepared',
+        project_id: project.id,
+        severity: 'info',
+        payload: { plan_id: row.id, capability_id, cluster_signature },
+      });
+    } catch { /* fire-and-forget */ }
+    res.json(row);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/prepared-plans/:id/decision', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const decision = req.body?.decision as 'approved' | 'rejected';
+    if (decision !== 'approved' && decision !== 'rejected') {
+      res.status(400).json({ error: 'decision must be "approved" or "rejected"' });
+      return;
+    }
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const plan: any = await PreparedRemediationPlan.findByPk(req.params.id as string);
+    if (!plan || plan.project_id !== project.id) { res.status(404).json({ error: 'Plan not found' }); return; }
+    if (plan.status !== 'draft') { res.status(409).json({ error: `Plan already ${plan.status}` }); return; }
+    plan.status = decision;
+    plan.operator_id = req.participant!.sub;
+    plan.decided_at = new Date();
+    await plan.save();
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: decision === 'approved' ? 'plan_approved' : 'plan_rejected',
+      subject_id: plan.id,
+      payload: { cluster_signature: plan.cluster_signature },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    res.json(plan);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/prepared-plans/:id/rollback', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { buildRollbackPromptBody } = await import('../intelligence/systemStateEngine/governance/autonomousRemediationPreparer');
+    const plan: any = await PreparedRemediationPlan.findByPk(req.params.id as string);
+    if (!plan || plan.project_id !== project.id) { res.status(404).json({ error: 'Plan not found' }); return; }
+    if (plan.status !== 'approved') { res.status(409).json({ error: `Plan must be approved before rollback (current: ${plan.status})` }); return; }
+    const promptBody = buildRollbackPromptBody(plan.plan_payload);
+    plan.status = 'rolled_back';
+    await plan.save();
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: 'plan_rolled_back',
+      subject_id: plan.id,
+      payload: { has_reference_snapshot: !!promptBody, cluster_signature: plan.cluster_signature },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    res.json({ plan, rollback_prompt_body: promptBody });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/timeline', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    // Composite: events (per-event resolution) + snapshots (state-at-T)
+    const { Op } = await import('sequelize');
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [eventsRaw, snapshotsRaw] = await Promise.all([
+      (async () => {
+        try {
+          const { default: CognitionEvent } = await import('../models/CognitionEvent');
+          return await CognitionEvent.findAll({
+            where: { project_id: project.id, emitted_at: { [Op.gte]: since } },
+            order: [['emitted_at', 'DESC']],
+            limit,
+          });
+        } catch { return []; }
+      })(),
+      (async () => {
+        try {
+          const { default: SystemStateSnapshot } = await import('../models/SystemStateSnapshot');
+          return await SystemStateSnapshot.findAll({
+            where: { project_id: project.id, generated_at: { [Op.gte]: since } },
+            order: [['generated_at', 'DESC']],
+            limit: 25,
+          });
+        } catch { return []; }
+      })(),
+    ]);
+    res.json({ events: eventsRaw, state_snapshots: snapshotsRaw });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/explain/:event_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { explainDecision } = await import('../intelligence/systemStateEngine/governance/decisionExplainabilityEngine');
+    const chain = await explainDecision({ project_id: project.id, event_id: req.params.event_id as string });
+    res.json(chain);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/operator-overrides', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { Op } = await import('sequelize');
+    const rows = await GovernanceAuditEntry.findAll({
+      where: { project_id: project.id, kind: { [Op.in]: ['operator_override', 'recommendation_rejected', 'plan_rejected'] } },
+      order: [['recorded_at', 'DESC']],
+      limit: 50,
+    });
+    res.json({ overrides: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/operator-overrides', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { recordOperatorOverride } = await import('../intelligence/systemStateEngine/governance/governanceMemory');
+    const reason = (req.body?.reason || '') as string;
+    const subject_id = (req.body?.subject_id || null) as string | null;
+    const row = await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: 'operator_override',
+      subject_id,
+      payload: { reason },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    const r = recordOperatorOverride(project.id);
+    res.json({ override: row, storm_triggered: r.storm_triggered, velocity: r.velocity });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/audit', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    const where: any = { project_id: project.id };
+    if (req.query.kind) where.kind = req.query.kind;
+    const rows = await GovernanceAuditEntry.findAll({ where, order: [['recorded_at', 'DESC']], limit });
+    res.json({ entries: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/decision-report', requireParticipant, async (req: Request, res: Response) => {
+  // Operator-triggered build of the full decision automation report.
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildDecisionAutomationReport } = await import('../intelligence/systemStateEngine/governance/decisionAutomationEngine');
+    const r = await buildDecisionAutomationReport({ project_id: project.id });
+    res.json(r);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 13 — supervised autonomous decision approval ─────────────────
+
+router.get('/api/portal/project/governance/autonomy/decisions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { Op } = await import('sequelize');
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+    const rows = await GovernanceAuditEntry.findAll({
+      where: {
+        project_id: project.id,
+        kind: { [Op.in]: ['autonomy_execution_prepared', 'autonomy_execution_approved', 'autonomy_execution_blocked', 'autonomy_execution_applied', 'autonomy_execution_rolled_back'] },
+      },
+      order: [['recorded_at', 'DESC']],
+      limit,
+    });
+    res.json({ decisions: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/autonomy/dry-run', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { plan_id } = req.body || {};
+    if (!plan_id) { res.status(400).json({ error: 'plan_id required' }); return; }
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const plan: any = await PreparedRemediationPlan.findByPk(plan_id);
+    if (!plan || plan.project_id !== project.id) { res.status(404).json({ error: 'Plan not found' }); return; }
+    const { runSandboxValidation } = await import('../intelligence/systemStateEngine/autonomy/safeExecutionGuardrails');
+    const sandbox = runSandboxValidation({
+      cluster_signature: plan.cluster_signature,
+      cluster_type: (plan.plan_payload?.adaptiveRemediation?.clusters?.[0]?.cluster_type) || 'workflow',
+      issue_count: (plan.plan_payload?.uiIssues?.length) || 1,
+      historical_success_rate: 70,
+      initial_pressure: 50,
+      initial_cognition: 60,
+    });
+    res.json({ sandbox });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/autonomy/:plan_id/rollback', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { prepareRollback } = await import('../intelligence/systemStateEngine/autonomy/rollbackPreparationEngine');
+    const { recordExecutionRollback } = await import('../intelligence/systemStateEngine/autonomy/autonomyTrustState');
+    const plan: any = await PreparedRemediationPlan.findByPk(req.params.plan_id as string);
+    if (!plan || plan.project_id !== project.id) { res.status(404).json({ error: 'Plan not found' }); return; }
+    if (plan.status !== 'approved' && plan.status !== 'rolled_back') {
+      res.status(409).json({ error: `Plan not eligible for rollback (status: ${plan.status})` });
+      return;
+    }
+    const post_execution_change_set = (req.body?.post_execution_change_set as string) || null;
+    const rollback = prepareRollback({
+      plan_payload: plan.plan_payload,
+      post_execution_change_set,
+      rollback_replay_checkpoint_snapshot_id: null,
+      sandbox_passed: true,
+      trust_score: 60,
+    });
+    plan.status = 'rolled_back';
+    plan.rollback_ready = true;
+    await plan.save();
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: 'autonomy_execution_rolled_back',
+      subject_id: plan.id,
+      payload: { has_reference: !!rollback.rollback_prompt, change_set_provided: !!post_execution_change_set },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    recordExecutionRollback(project.id, 'autonomous_safe');
+    res.json({ plan, rollback });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/autonomy/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readTrustProfile, executionSuccessRate, rollbackFrequency } = await import('../intelligence/systemStateEngine/autonomy/autonomyTrustState');
+    const trust = readTrustProfile(project.id);
+    res.json({
+      trust,
+      execution_success_rate: executionSuccessRate(project.id),
+      rollback_frequency: rollbackFrequency(project.id),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/autonomy/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const { default: CognitionEvent } = await import('../models/CognitionEvent');
+    const { Op } = await import('sequelize');
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [audits, plans, events] = await Promise.all([
+      GovernanceAuditEntry.findAll({
+        where: { project_id: project.id, kind: { [Op.like]: 'autonomy_%' }, recorded_at: { [Op.gte]: since } },
+        order: [['recorded_at', 'DESC']],
+        limit,
+      }),
+      PreparedRemediationPlan.findAll({
+        where: { project_id: project.id, auto_executed_at: { [Op.gte]: since } },
+        order: [['auto_executed_at', 'DESC']],
+        limit: 50,
+      }),
+      CognitionEvent.findAll({
+        where: { project_id: project.id, kind: { [Op.like]: 'autonomy.%' }, emitted_at: { [Op.gte]: since } },
+        order: [['emitted_at', 'DESC']],
+        limit,
+      }),
+    ]);
+    res.json({ audits, plans, events });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/autonomy/policy', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getPolicy } = await import('../intelligence/systemStateEngine/policy/cognitivePolicyEngine');
+    const policy = getPolicy(project.id);
+    res.json({ policy });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/api/portal/project/governance/autonomy/policy', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { updatePolicy } = await import('../intelligence/systemStateEngine/policy/cognitivePolicyEngine');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const updated = await updatePolicy(project.id, (req.body || {}) as any, { persist: true });
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: 'policy_changed',
+      subject_id: null,
+      payload: { update: req.body, scope: 'autonomy' },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    res.json({ policy: updated });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Admin kill switch — flips all projects to 'frozen', writes audit row
+// per project. Operator-only path; lifting back to autonomous requires
+// per-project mode change.
+router.post('/api/admin/governance/autonomy/emergency-freeze', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    // Use participant gate for now; if a separate admin gate exists, swap it in.
+    const { default: Project } = await import('../models/Project');
+    const { setAutomationMode } = await import('../intelligence/systemStateEngine/governance/decisionAutomationEngine');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const projects: any[] = await Project.findAll();
+    let frozen = 0;
+    for (const p of projects) {
+      try {
+        setAutomationMode(p.id, 'frozen');
+        await GovernanceAuditEntry.create({
+          project_id: p.id,
+          kind: 'autonomy_execution_blocked',
+          subject_id: null,
+          payload: { reason: 'emergency_freeze', triggered_by: req.participant!.sub },
+          operator_id: req.participant!.sub,
+          recorded_at: new Date(),
+        } as any);
+        frozen++;
+      } catch { /* continue across projects */ }
+    }
+    res.json({ frozen, total_projects: projects.length });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 14 — Autonomous handoff + closed-loop verification ──────
+// Recent handoff records (audit-row backed) + cancel + manual verify +
+// active isolations + admin lift-isolation.
+router.get('/api/portal/project/governance/autonomy/handoffs', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { Op } = await import('sequelize');
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const rows: any[] = await GovernanceAuditEntry.findAll({
+      where: {
+        project_id: project.id,
+        kind: { [Op.in]: ['autonomy_execution_started', 'autonomy_execution_verified', 'autonomy_execution_failed', 'autonomy_rollback_started', 'autonomy_rollback_completed'] },
+        recorded_at: { [Op.gte]: since },
+      } as any,
+      order: [['recorded_at', 'DESC']],
+      limit,
+    });
+    res.json({ handoffs: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/autonomy/:plan_id/verify', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const plan: any = await PreparedRemediationPlan.findByPk(req.params.plan_id as string);
+    if (!plan || plan.project_id !== project.id) { res.status(404).json({ error: 'Plan not found' }); return; }
+    if (!plan.cluster_signature) { res.status(409).json({ error: 'Plan missing cluster_signature' }); return; }
+    const { _testRunVerification } = await import('../intelligence/systemStateEngine/autonomy/executionVerificationListener');
+    await _testRunVerification(plan, plan.cluster_signature);
+    const updated: any = await PreparedRemediationPlan.findByPk(plan.id);
+    res.json({ plan: updated });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/autonomy/isolations', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getActiveIsolations } = await import('../intelligence/systemStateEngine/autonomy/isolationRegistry');
+    const isolations = await getActiveIsolations(project.id);
+    res.json({ isolations });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/autonomy/:plan_id/cancel-handoff', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: PreparedRemediationPlan } = await import('../models/PreparedRemediationPlan');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const plan: any = await PreparedRemediationPlan.findByPk(req.params.plan_id as string);
+    if (!plan || plan.project_id !== project.id) { res.status(404).json({ error: 'Plan not found' }); return; }
+    // Only cancellable if the handoff hasn't fired yet OR is pending verification.
+    if (plan.execution_verification_status && plan.execution_verification_status !== 'pending') {
+      res.status(409).json({ error: `Plan already ${plan.execution_verification_status}` });
+      return;
+    }
+    plan.status = 'rolled_back';
+    plan.execution_verification_status = 'failed';
+    await plan.save();
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: 'autonomy_execution_failed',
+      subject_id: plan.id,
+      payload: { reason: 'operator_cancelled_handoff', operator: req.participant!.sub },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    res.json({ plan });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/governance/autonomy/lift-isolation/:cluster_signature', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { liftIsolation } = await import('../intelligence/systemStateEngine/autonomy/isolationRegistry');
+    await liftIsolation(project.id, req.params.cluster_signature as string, req.participant!.sub);
+    res.json({ lifted: true, cluster_signature: req.params.cluster_signature });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 15 — governed direct autonomous mutation ────────────────
+// Recent envelopes (audit-row-backed) + operator rollback + per-intent
+// trust profile + active containment + admin freeze.
+router.get('/api/portal/project/governance/mutation/envelopes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { Op } = await import('sequelize');
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const rows: any[] = await GovernanceAuditEntry.findAll({
+      where: {
+        project_id: project.id,
+        kind: { [Op.in]: ['mutation_envelope_created', 'mutation_executed', 'mutation_verified', 'mutation_failed', 'mutation_rolled_back', 'mutation_contained'] },
+        recorded_at: { [Op.gte]: since },
+      } as any,
+      order: [['recorded_at', 'DESC']],
+      limit,
+    });
+    res.json({ envelopes: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/mutation/:mutation_id/rollback', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const { Op } = await import('sequelize');
+    // Find the most recent envelope row for this mutation_id.
+    const row: any = await GovernanceAuditEntry.findOne({
+      where: {
+        project_id: project.id,
+        subject_id: req.params.mutation_id as string,
+        kind: { [Op.in]: ['mutation_executed', 'mutation_envelope_created', 'mutation_verified', 'mutation_failed'] },
+      } as any,
+      order: [['recorded_at', 'DESC']],
+    });
+    if (!row || !row.payload) { res.status(404).json({ error: 'Mutation envelope not found' }); return; }
+    const { executeRollback } = await import('../intelligence/systemStateEngine/mutation/mutationRollbackCoordinator');
+    const mode = ((req.body?.mode as string) || 'full') as any;
+    const partial_count = req.body?.partial_count;
+    const reason = (req.body?.reason as string) || 'operator_initiated';
+    const result = await executeRollback({
+      envelope: row.payload,
+      mode,
+      partial_count,
+      operator_id: req.participant!.sub,
+      reason,
+    });
+    res.json({ rollback: result });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/mutation/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readMutationTrustProfile, avgMutationTrust } = await import('../intelligence/systemStateEngine/mutation/mutationTrustCalibrator');
+    const profile = readMutationTrustProfile(project.id);
+    res.json({ profile, avg_trust: avgMutationTrust(project.id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/mutation/containment', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readContainmentSnapshot } = await import('../intelligence/systemStateEngine/mutation/mutationContainmentEngine');
+    res.json({ containment: readContainmentSnapshot(project.id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/governance/mutation/freeze-class/:intent_class', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { freezeIntentClass } = await import('../intelligence/systemStateEngine/mutation/mutationTrustCalibrator');
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const intent = req.params.intent_class as any;
+    freezeIntentClass(project.id, intent);
+    await GovernanceAuditEntry.create({
+      project_id: project.id,
+      kind: 'mutation_trust_changed',
+      subject_id: null,
+      payload: { action: 'freeze_intent_class', intent_class: intent, operator: req.participant!.sub },
+      operator_id: req.participant!.sub,
+      recorded_at: new Date(),
+    } as any);
+    res.json({ frozen: true, intent_class: intent });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 16 — causality replay + distributed validation ──────────
+//
+// All Phase 16 endpoints share a small helper that assembles the
+// `OperationalLineageGraph` for a project from the last 7d of audit
+// rows. Mutation envelopes, contradiction flags, and rollback events
+// become lineage nodes. The helper is inline (not a shared utility)
+// because it's only used by these 5 routes.
+
+async function buildProjectLineageGraph(projectId: string, limit = 200): Promise<any> {
+  const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+  const { Op } = await import('sequelize');
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const rows: any[] = await GovernanceAuditEntry.findAll({
+    where: {
+      project_id: projectId,
+      kind: { [Op.in]: ['mutation_envelope_created', 'mutation_executed', 'mutation_verified', 'mutation_failed', 'mutation_rolled_back', 'mutation_contained', 'autonomy_execution_failed', 'autonomy_self_heal_triggered'] },
+      recorded_at: { [Op.gte]: since },
+    } as any,
+    order: [['recorded_at', 'DESC']],
+    limit,
+  });
+
+  // Translate audit rows into LineageNodes.
+  const seen = new Set<string>();
+  const nodes: any[] = [];
+  for (const r of rows) {
+    const env = r.payload || {};
+    const nodeId = r.subject_id || `${r.kind}-${new Date(r.recorded_at).getTime()}`;
+    if (seen.has(nodeId)) continue;
+    seen.add(nodeId);
+    const kind = (r.kind === 'mutation_rolled_back' ? 'rollback'
+      : r.kind === 'mutation_contained' ? 'stabilization'
+      : r.kind === 'autonomy_execution_failed' ? 'mutation'
+      : r.kind === 'autonomy_self_heal_triggered' ? 'governance_decision'
+      : 'mutation') as any;
+    nodes.push({
+      node_id: nodeId,
+      kind,
+      project_id: projectId,
+      subject_id: env.scope?.subject_id ?? env.cluster_signature ?? null,
+      timestamp: new Date(r.recorded_at).toISOString(),
+      summary: env.mutation_intent ?? r.kind,
+      severity: r.kind.includes('failed') ? 'error' : r.kind.includes('contained') ? 'warning' : 'info',
+      payload: env,
+    });
+  }
+
+  const { buildLineageGraph } = await import('../intelligence/systemStateEngine/causality/mutationLineageGraph');
+  return buildLineageGraph({ project_id: projectId, nodes });
+}
+
+router.get('/api/portal/project/governance/causality/lineage', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const limit = Math.max(10, Math.min(500, Number(req.query.limit) || 200));
+    const graph = await buildProjectLineageGraph(project.id, limit);
+    res.json({ graph });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/causality/root-cause/:mutation_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const graph = await buildProjectLineageGraph(project.id);
+    const { buildContradictionPropagationProfile } = await import('../intelligence/systemStateEngine/causality/contradictionPropagationTracker');
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine/snapshotReader');
+    const state = await readOrRebuild(project.id).catch(() => null);
+    const propagation = buildContradictionPropagationProfile({
+      project_id: project.id,
+      contradictions: (state?.contradictions ?? []) as any,
+    });
+    const { analyzeRootCauses } = await import('../intelligence/systemStateEngine/causality/rootCauseAnalyzer');
+    const analysis = analyzeRootCauses({
+      graph,
+      target_node_id: req.params.mutation_id as string,
+      propagation,
+    });
+    res.json({ analysis });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/causality/propagation', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine/snapshotReader');
+    const state = await readOrRebuild(project.id).catch(() => null);
+    const { buildContradictionPropagationProfile } = await import('../intelligence/systemStateEngine/causality/contradictionPropagationTracker');
+    const profile = buildContradictionPropagationProfile({
+      project_id: project.id,
+      contradictions: (state?.contradictions ?? []) as any,
+    });
+    res.json({ profile });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/causality/validators/:mutation_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: GovernanceAuditEntry } = await import('../models/GovernanceAuditEntry');
+    const row: any = await GovernanceAuditEntry.findOne({
+      where: { project_id: project.id, subject_id: req.params.mutation_id as string } as any,
+      order: [['recorded_at', 'DESC']],
+    });
+    if (!row || !row.payload) { res.status(404).json({ error: 'Envelope not found' }); return; }
+    const { runAllValidators } = await import('../intelligence/systemStateEngine/causality/distributedValidationHarness');
+    const { arbitrate } = await import('../intelligence/systemStateEngine/causality/validationArbitrationEngine');
+    const { mutationTrustScore, avgMutationTrust, isClassContained } = await import('../intelligence/systemStateEngine/index');
+    const { isIntentFrozen } = await import('../intelligence/systemStateEngine/mutation/mutationTrustCalibrator');
+    const env = row.payload;
+    const verdicts = runAllValidators({
+      envelope: env,
+      current_trust_score: mutationTrustScore(project.id, env.mutation_class),
+      is_contained: isClassContained(project.id, env.mutation_class),
+      is_frozen: isIntentFrozen(project.id, env.mutation_class),
+      avg_project_trust: avgMutationTrust(project.id),
+    });
+    const arbitration = arbitrate({ mutation_id: env.mutation_id, verdicts });
+    const { recordArbitration, persistDisagreementAudit, readValidatorTrustProfile } = await import('../intelligence/systemStateEngine/causality/validatorTrustCalibrator');
+    recordArbitration(project.id, arbitration);
+    await persistDisagreementAudit(project.id, arbitration, env.mutation_id);
+    res.json({ verdicts, arbitration, validator_trust: readValidatorTrustProfile(project.id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/causality/epidemiology', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const graph = await buildProjectLineageGraph(project.id);
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine/snapshotReader');
+    const state = await readOrRebuild(project.id).catch(() => null);
+    const { buildContradictionPropagationProfile } = await import('../intelligence/systemStateEngine/causality/contradictionPropagationTracker');
+    const propagation = buildContradictionPropagationProfile({
+      project_id: project.id,
+      contradictions: (state?.contradictions ?? []) as any,
+    });
+    const { readContainmentSnapshot } = await import('../intelligence/systemStateEngine/mutation/mutationContainmentEngine');
+    const containment = readContainmentSnapshot(project.id);
+    const { buildOperationalEpidemiologyMap } = await import('../intelligence/systemStateEngine/causality/operationalEpidemiologyEngine');
+    const map = buildOperationalEpidemiologyMap({
+      graph,
+      propagation,
+      already_contained_subjects: containment.contained_classes,
+      frozen_subjects: containment.frozen_classes,
+    });
+    res.json({ map });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2441,6 +5398,10 @@ router.post('/api/portal/project/kickoff-sync', requireParticipant, async (req: 
           requirements_total: d.requirementsTotal,
         })),
     });
+
+    // PHASE 2: refresh authoritative state after kickoff sync
+    const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+    refreshSystemState(project.id, 'kickoff_sync');
   } catch (err: any) {
     console.error('[KickoffSync] failed:', err?.message);
     res.status(500).json({ error: err.message });
@@ -2465,6 +5426,12 @@ router.post('/api/portal/project/kickoff-sync/reset', requireParticipant, async 
     (project as any).setup_status = rest;
     (project as any).changed('setup_status', true);
     await project.save();
+
+    // PHASE 2: refresh authoritative state after kickoff reset
+    try {
+      const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+      refreshSystemState(project.id, 'kickoff_reset');
+    } catch { /* fire-and-forget */ }
 
     res.json({ ok: true, ...result });
   } catch (err: any) {
@@ -3331,6 +6298,11 @@ router.post('/api/portal/project/business-processes/:id/validation-report', requ
         console.warn('[Validation] Auto-mark verified failed:', markErr?.message);
       }
     }
+    // PHASE 2: refresh authoritative state after validation report applied
+    try {
+      const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+      refreshSystemState(project.id, 'validation_report');
+    } catch { /* fire-and-forget */ }
     res.json({
       ...result,
       parsed: {
@@ -4344,6 +7316,12 @@ router.put('/api/portal/project/target-mode', requireParticipant, async (req: Re
       }
     }
 
+    // PHASE 2: refresh authoritative state after target-mode change
+    try {
+      const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+      refreshSystemState(project.id, 'target_mode_change');
+    } catch { /* fire-and-forget */ }
+
     res.json({
       target_mode: mode,
       previous_mode: prevMode,
@@ -4375,6 +7353,14 @@ router.put('/api/portal/project/business-processes/:id/mode', requireParticipant
       (cap as any).applicability_status = applicability_status;
     }
     await cap.save();
+    // PHASE 2: refresh authoritative state after mode/applicability mutation
+    try {
+      const project = await getParticipantProject(req.participant!.sub);
+      if (project) {
+        const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+        refreshSystemState(project.id, 'lifecycle_change');
+      }
+    } catch { /* fire-and-forget */ }
     res.json({ mode_override: (cap as any).mode_override, applicability_status: (cap as any).applicability_status });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -4409,6 +7395,14 @@ router.put('/api/portal/project/business-processes/:id/user-status', requirePart
       }
     }
     await cap.save();
+    // PHASE 2: refresh authoritative state after user_status mutation
+    try {
+      const project = await getParticipantProject(req.participant!.sub);
+      if (project) {
+        const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+        refreshSystemState(project.id, 'user_status_change');
+      }
+    } catch { /* fire-and-forget */ }
     res.json({
       id: cap.id,
       user_status: (cap as any).user_status,
@@ -4478,6 +7472,12 @@ router.post('/api/portal/project/business-processes/bulk-verify', requirePartici
       { user_status: 'verified', user_status_set_at: now, user_status_set_by: setBy } as any,
       { where: { id: eligibleIds } as any },
     );
+
+    // PHASE 2: refresh authoritative state after bulk verify
+    try {
+      const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+      refreshSystemState(project.id, 'user_status_change');
+    } catch { /* fire-and-forget */ }
 
     res.json({
       verified: eligibleIds.length,
@@ -4834,6 +7834,14 @@ router.post('/api/portal/project/business-processes/:id/analyze-page', requirePa
       (cap as any).changed('ui_element_map', true);
       await cap.save();
     }
+    // PHASE 2: refresh authoritative state after visual review (analyze-page)
+    try {
+      const project = await getParticipantProject(req.participant!.sub);
+      if (project) {
+        const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+        refreshSystemState(project.id, 'visual_review');
+      }
+    } catch { /* fire-and-forget */ }
     res.json({
       rules: ruleResult,
       llm: llmResult,
@@ -4898,9 +7906,189 @@ router.put('/api/portal/project/business-processes/:id/element-feedback/bulk-res
       (cap as any).changed('ui_element_map', true);
       await cap.save();
     }
+    // PHASE 2: refresh authoritative state after bulk-resolve
+    try {
+      const project = await getParticipantProject(req.participant!.sub);
+      if (project) {
+        const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+        refreshSystemState(project.id, 'visual_review');
+      }
+    } catch { /* fire-and-forget */ }
+
+    // ── Phase 10.5: persist UXRemediationOutcome rows per resolved cluster ──
+    // Fire-and-forget — failure here MUST NOT block the user-facing
+    // bulk-resolve response. The remediation intelligence layer is
+    // additive observability over the existing flow.
+    void recordPhase10_5Outcomes(cap, out.bySourceStep, req.participant!.sub).catch(err => {
+      console.warn('[bulk-resolve] phase10.5 outcome write failed:', err?.message);
+    });
+
     res.json({ resolved: out.resolved, bySourceStep: out.bySourceStep });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
+
+// Helper: persists a UXRemediationOutcome per (cluster_signature, step_key)
+// that just had at least one issue resolved.
+//
+// Phase 11 changes:
+//   - reads stashed before_metrics from /snapshot-before
+//   - captures fresh after_metrics inline via the same loaders
+//   - deploy-freshness gate: skip after-screenshot capture if the preview
+//     hasn't been re-crawled since fix-kickoff (no fresh DOMSnapshot)
+//   - persists semantic_regions on the outcome row at write time so replay
+//     stays deterministic forever
+//   - records a tier transition for the cluster after recompute
+//   - tags rows with prompt_target_used + pre_pressure_tier for the
+//     strategy learner
+async function recordPhase10_5Outcomes(cap: any, bySourceStep: Record<string, number>, resolvedBy: string): Promise<void> {
+  const { default: UIElementFeedback } = await import('../models/UIElementFeedback');
+  const { default: UXRemediationOutcome } = await import('../models/UXRemediationOutcome');
+  const { default: DOMSnapshot } = await import('../models/DOMSnapshot');
+  const { Op } = await import('sequelize');
+  const { capture } = await import('../intelligence/systemStateEngine/capture/screenshotCaptureService');
+  const { analyzeBeforeAfterImpact } = await import('../intelligence/systemStateEngine/remediation/beforeAfterImpactAnalyzer');
+  const { publishCognitiveEvent } = await import('../intelligence/systemStateEngine/realtime/cognitiveEventBus');
+  const { resolveSemanticRegions } = await import('../intelligence/systemStateEngine/remediation/semanticRegionResolver');
+  const { invalidateTelemetryCache } = await import('../intelligence/systemStateEngine/realtime/telemetryMemoizationCache');
+  const { recordConfidenceRecompute } = await import('../intelligence/systemStateEngine/remediation/confidenceEvolutionTracker');
+  const { computeRemediationConfidence } = await import('../intelligence/systemStateEngine/remediation/remediationConfidenceEngine');
+  const { getRemediationPressure } = await import('../intelligence/systemStateEngine/remediation/remediationPressureEngine');
+
+  const map = ((cap as any).ui_element_map || {}) as any;
+  const snapshots = map.remediation_snapshots || {};
+  const previewUrl = (cap as any).preview_url || (cap as any).direct_preview_url || null;
+  const route = (cap as any).frontend_route || null;
+  const bulkResolveAt = Date.now();
+
+  // Phase 11 deploy-freshness gate. If no DOMSnapshot for this BP+route was
+  // captured AFTER bulkResolveAt - 30s, the preview hasn't been re-crawled
+  // since the fix landed — measuring "after" against the stale UI would
+  // produce zero-delta noise. Skip after-snapshot capture; persist the
+  // outcome with after metrics = null.
+  let previewIsFresh = false;
+  try {
+    if (route) {
+      const recentSnap: any = await DOMSnapshot.findOne({
+        where: { bp_id: cap.id, route, captured_at: { [Op.gte]: new Date(bulkResolveAt - 30_000) } },
+      });
+      previewIsFresh = !!recentSnap;
+    }
+  } catch { /* fail-soft */ }
+
+  let afterPath: string | null = null;
+  let after_metrics: any = null;
+  if (previewUrl && previewIsFresh) {
+    try {
+      const out = await capture({
+        url: previewUrl,
+        viewport: { width: 1280, height: 800, device_scale_factor: 1, is_mobile: false, label: 'desktop' },
+        output_dir: '/tmp/remediation-snapshots',
+        settle_ms: 800,
+      });
+      if (out.ok) afterPath = out.screenshot_path;
+    } catch { /* puppeteer optional */ }
+    after_metrics = await collectBeforeAfterMetrics(cap.project_id, cap.id, route);
+  }
+
+  // Pull rows just-resolved (within last 60s) so we can group by cluster_signature.
+  const since = new Date(Date.now() - 60_000);
+  const justResolved: any[] = await UIElementFeedback.findAll({
+    where: { capability_id: cap.id, status: 'resolved', resolved_at: { [Op.gte]: since } },
+  });
+  if (justResolved.length === 0) return;
+
+  const grouped = new Map<string, { cluster_signature: string; cluster_type: string; step_key: string; resolved_count: number; page_route: string }>();
+  for (const r of justResolved) {
+    if (!r.cluster_signature) continue;
+    const g = grouped.get(r.cluster_signature) || {
+      cluster_signature: r.cluster_signature,
+      cluster_type: r.cluster_type || 'workflow',
+      step_key: r.source_step || 'untagged',
+      resolved_count: 0,
+      page_route: r.page_route || route || '/',
+    };
+    g.resolved_count++;
+    grouped.set(r.cluster_signature, g);
+  }
+
+  // Pre-fix pressure tier (read once for the whole batch — fits the
+  // strategy learner's axis).
+  const prePressure = getRemediationPressure(cap.project_id);
+
+  for (const g of grouped.values()) {
+    const beforeMeta = snapshots[g.cluster_signature] || {};
+    const before_metrics = beforeMeta.before_metrics || { cognition_score: null, ux_debt_score: null, behavioral_pressure: null, workflow_friction: null, cta_prominence: null, hierarchy_clarity: null };
+    const impact = analyzeBeforeAfterImpact({
+      before: before_metrics,
+      after: after_metrics ?? { cognition_score: null, ux_debt_score: null, behavioral_pressure: null, workflow_friction: null, cta_prominence: null, hierarchy_clarity: null },
+      before_screenshot_path: beforeMeta.before_path || null,
+      after_screenshot_path: afterPath,
+    });
+
+    // Compute + persist semantic regions ONCE here. Replay reads them back
+    // unchanged — no analyzer re-run, no DOMSnapshot drift.
+    const semantic_regions = await resolveSemanticRegions({
+      capability_id: cap.id,
+      cluster_signature: g.cluster_signature,
+      cluster_type: g.cluster_type as any,
+      page_route: g.page_route,
+      resolved: true,
+      regressed: false,
+    });
+
+    await UXRemediationOutcome.create({
+      project_id: cap.project_id,
+      capability_id: cap.id,
+      step_key: g.step_key,
+      cluster_signature: g.cluster_signature,
+      cluster_type: g.cluster_type,
+      issues_resolved_count: g.resolved_count,
+      issues_regressed_count: 0,
+      cognition_delta: impact.cognition_delta,
+      ux_debt_delta: impact.ux_debt_delta,
+      behavioral_delta: impact.behavioral_delta,
+      friction_delta: impact.friction_delta,
+      before_screenshot_path: beforeMeta.before_path || null,
+      after_screenshot_path: afterPath,
+      validation_session_id: null,
+      observed_at: new Date(),
+      semantic_regions,
+      prompt_target_used: 'ui_fix_bulk', // updated to ui_fix_adaptive when frontend opts in
+      pre_pressure_tier: prePressure.tier,
+    } as any);
+
+    // Recompute confidence + record tier transition if it shifted.
+    const conf = computeRemediationConfidence({
+      historical_success_rate: 60 + (impact.net_delta || 0) * 0.3,
+      regression_risk: 30,
+      cognition_stability: impact.cognition_delta != null ? Math.max(0, Math.min(100, 50 + impact.cognition_delta)) : 50,
+      behavioral_improvement: impact.ux_debt_delta != null ? Math.max(0, Math.min(100, 50 + impact.ux_debt_delta)) : 50,
+      unresolved_related_count: 0,
+    });
+    await recordConfidenceRecompute({
+      project_id: cap.project_id,
+      cluster_signature: g.cluster_signature,
+      trigger: 'outcome_recorded',
+      current_confidence: conf,
+    });
+
+    publishCognitiveEvent({
+      kind: 'remediation.cluster.resolved',
+      project_id: cap.project_id,
+      severity: 'info',
+      payload: {
+        capability_id: cap.id,
+        cluster_signature: g.cluster_signature,
+        cluster_type: g.cluster_type,
+        resolved_count: g.resolved_count,
+        resolved_by: resolvedBy,
+      },
+    });
+  }
+  // Phase 11 — invalidate the telemetry cache so the next snapshot-before
+  // sees fresh deltas instead of values from before this resolve cycle.
+  invalidateTelemetryCache(cap.project_id);
+}
 
 router.put('/api/portal/project/element-feedback/:feedbackId', requireParticipant, async (req: Request, res: Response) => {
   try {
@@ -5057,6 +8245,14 @@ router.put('/api/portal/project/business-processes/:id/frontend-route', requireP
     // legitimate hash routes (/#/security) and custom paths.
     const { setFrontendRoute } = await import('../services/frontendRouteMapper');
     await setFrontendRoute(cap.id, route || null);
+    // PHASE 2: refresh authoritative state after route attachment
+    try {
+      const project = await getParticipantProject(req.participant!.sub);
+      if (project) {
+        const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+        refreshSystemState(project.id, 'frontend_route_change');
+      }
+    } catch { /* fire-and-forget */ }
     res.json({ frontend_route: route || null });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -5216,6 +8412,12 @@ router.post('/api/portal/project/business-processes/add', requireParticipant, as
       reqCount++;
     }
 
+    // PHASE 2: refresh authoritative state after manual capability add
+    try {
+      const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+      refreshSystemState(project.id, 'capability_added');
+    } catch { /* fire-and-forget */ }
+
     res.json({ success: true, id: cap.id, name: parsed.name, description: parsed.description, requirements_count: reqCount });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -5229,6 +8431,14 @@ router.put('/api/portal/project/business-processes/:id/lifecycle', requirePartic
     if (!['active', 'deferred', 'future'].includes(status)) { res.status(400).json({ error: 'Invalid status' }); return; }
     cap.lifecycle_status = status;
     await cap.save();
+    // PHASE 2: refresh authoritative state after lifecycle change
+    try {
+      const project = await getParticipantProject(req.participant!.sub);
+      if (project) {
+        const { refreshSystemState } = await import('../intelligence/systemStateEngine');
+        refreshSystemState(project.id, 'lifecycle_change');
+      }
+    } catch { /* fire-and-forget */ }
     res.json({ success: true, lifecycle_status: status });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

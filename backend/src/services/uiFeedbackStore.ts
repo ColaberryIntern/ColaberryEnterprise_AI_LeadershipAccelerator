@@ -43,6 +43,13 @@ export interface CreateFeedbackInput {
 /**
  * Create feedback if not already exists (dedup by hash).
  * Returns the feedback item (existing or new).
+ *
+ * Phase 10.5: classify the row into a UX cluster (cluster_signature +
+ * cluster_type) at create time so the regression detector + reranker
+ * group by stable identity. Also detects reappearance of a previously-
+ * resolved hash and stamps last_regressed_at + carries first_seen_at
+ * forward, even though we deliberately leave the resolved row in place
+ * (count of resolved rows with the same hash IS the regression count).
  */
 export async function createFeedback(input: CreateFeedbackInput): Promise<{ item: UIElementFeedback; isNew: boolean }> {
   const hash = feedbackHash(input.elementId, input.issueType, input.description);
@@ -58,6 +65,49 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<{ item
 
   if (existing) return { item: existing, isNew: false };
 
+  // Reappearance check — find the most recent RESOLVED row with the same
+  // hash. If one exists, this is a regression: the user fixed it, and now
+  // it's back. Carry first_seen_at forward, stamp last_regressed_at on
+  // the new row.
+  const lastResolved = await UIElementFeedback.findOne({
+    where: {
+      capability_id: input.capabilityId,
+      feedback_hash: hash,
+      status: 'resolved',
+    },
+    order: [['resolved_at', 'DESC']],
+  });
+
+  // Phase 10.5 cluster classification — best-effort. If the classifier
+  // can't infer a type (and source_step + issue_type don't fall through
+  // to a fallback), cluster_signature stays null and the row is treated
+  // as untagged by the cluster engine.
+  let cluster_signature: string | undefined;
+  let cluster_type: string | undefined;
+  try {
+    const { classifyRow } = await import('../intelligence/systemStateEngine/remediation/issueClusterEngine');
+    const cls = classifyRow(
+      {
+        issue_type: input.issueType,
+        title: input.title,
+        description: input.description,
+        suggestion: input.suggestion ?? null,
+        source_step: input.sourceStep ?? null,
+        element_type: input.elementType ?? null,
+        element_text: input.elementText ?? null,
+      },
+      input.capabilityId,
+      input.pageRoute || '/',
+    );
+    if (cls) {
+      cluster_signature = cls.cluster_signature;
+      cluster_type = cls.cluster_type;
+    }
+  } catch (err: any) {
+    console.warn('[uiFeedbackStore] cluster classification failed:', err?.message);
+  }
+
+  const now = new Date();
   const item = await UIElementFeedback.create({
     capability_id: input.capabilityId,
     project_id: input.projectId,
@@ -76,9 +126,24 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<{ item
     source: input.source || 'rule',
     confidence: input.confidence ?? 1.0,
     source_step: input.sourceStep,
+    cluster_signature,
+    cluster_type,
+    first_seen_at: (lastResolved && (lastResolved as any).first_seen_at) || now,
+    last_regressed_at: lastResolved ? now : undefined,
   });
 
   return { item, isNew: true };
+}
+
+/**
+ * Phase 10.5 — derived regression count for a feedback hash. We deliberately
+ * do not store this as a column (the dedup+create flow makes it brittle).
+ * Returns count of resolved rows with the same hash on the same capability.
+ */
+export async function getRegressionCount(capabilityId: string, hash: string): Promise<number> {
+  return UIElementFeedback.count({
+    where: { capability_id: capabilityId, feedback_hash: hash, status: 'resolved' },
+  });
 }
 
 /**

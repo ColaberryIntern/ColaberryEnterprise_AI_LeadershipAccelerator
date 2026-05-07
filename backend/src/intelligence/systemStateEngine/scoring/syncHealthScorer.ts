@@ -28,15 +28,38 @@ import type {
   SyncHealthResult,
 } from '../types/systemState.types';
 
+/**
+ * Phase 3: optional telemetry-aware inputs. When provided, the scorer fills
+ * the new dimensions; when absent, those dimensions default to a neutral
+ * 100 (no penalty), which preserves backward compatibility for callers that
+ * don't yet pass telemetry data.
+ */
+export interface TelemetrySyncInputs {
+  readonly manifest_freshness?: Score0to100;
+  readonly bps_with_manifest?: number;       // count
+  readonly bps_total?: number;               // count
+  readonly conflict_count?: number;          // resolver conflicts
+  readonly undocumented_db_changes?: number; // count
+  readonly ui_drift_count?: number;          // count
+  readonly graph_drift_count?: number;       // count
+  readonly manifests_without_validation?: number; // count
+  readonly recent_manifests_count?: number;
+  // Phase 5: UX-derived health inputs
+  readonly ux_debt_total?: number;          // 0-100 (debt) — health = 100 - this
+  readonly workflow_friction_score?: number; // 0-100 (friction) — health = 100 - this
+}
+
 export interface SyncHealthInput {
   readonly project: EngineProjectInput;
   readonly capabilities: ReadonlyArray<EngineCapabilityInput>;
   readonly contradictions: ReadonlyArray<ContradictionFlag>;
   readonly lastSyncAt?: Date | null;
   readonly latestCommitSha?: string | null;
+  readonly telemetry?: TelemetrySyncInputs;
 }
 
 export function scoreSyncHealth(input: SyncHealthInput): SyncHealthResult {
+  const t = input.telemetry || {};
   const dimensions: SyncHealthDimensions = {
     telemetry_freshness: scoreTelemetryFreshness(input.lastSyncAt),
     contradictory_calculations: scoreContradictions(input.contradictions),
@@ -48,6 +71,19 @@ export function scoreSyncHealth(input: SyncHealthInput): SyncHealthResult {
     queue_inconsistency: scoreQueueInconsistency(input.contradictions),
     frontend_backend_mismatch: scoreFrontendBackendMismatch(input.capabilities),
     missing_dependency_references: scoreMissingDependencies(input.capabilities, input.contradictions),
+
+    // Phase 3 telemetry dimensions
+    manifest_freshness: typeof t.manifest_freshness === 'number' ? clamp(t.manifest_freshness) : 100,
+    missing_build_manifests: scoreMissingBuildManifests(t.bps_with_manifest, t.bps_total),
+    conflicting_manifests: scoreConflictingManifests(t.conflict_count),
+    undocumented_db_changes: scoreUndocumentedDbChanges(t.undocumented_db_changes),
+    ui_drift: scoreUiDrift(t.ui_drift_count),
+    graph_drift: scoreGraphDrift(t.graph_drift_count),
+    missing_validation_telemetry: scoreMissingValidationTelemetry(t.manifests_without_validation, t.recent_manifests_count),
+
+    // Phase 5: UX dimensions
+    ux_debt_health: typeof t.ux_debt_total === 'number' ? clamp(100 - t.ux_debt_total) : 100,
+    workflow_friction_health: typeof t.workflow_friction_score === 'number' ? clamp(100 - t.workflow_friction_score) : 100,
   };
 
   const score = Math.round(
@@ -196,6 +232,48 @@ function scoreMissingDependencies(
   const missing = contradictions.filter(c => c.kind === 'missing_bp_reference').length;
   if (missing === 0) return 100;
   return clamp(100 - missing * 15);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 telemetry-dimension scorers
+// ---------------------------------------------------------------------------
+
+function scoreMissingBuildManifests(bpsWithManifest?: number, bpsTotal?: number): Score0to100 {
+  if (bpsTotal === undefined || bpsWithManifest === undefined) return 100;
+  if (bpsTotal === 0) return 100;
+  const ratio = Math.min(1, bpsWithManifest / bpsTotal);
+  return clamp(ratio * 100);
+}
+
+function scoreConflictingManifests(count?: number): Score0to100 {
+  if (count === undefined) return 100;
+  if (count === 0) return 100;
+  return clamp(100 - count * 8);
+}
+
+function scoreUndocumentedDbChanges(count?: number): Score0to100 {
+  if (count === undefined) return 100;
+  if (count === 0) return 100;
+  return clamp(100 - count * 5);
+}
+
+function scoreUiDrift(count?: number): Score0to100 {
+  if (count === undefined) return 100;
+  if (count === 0) return 100;
+  return clamp(100 - count * 6);
+}
+
+function scoreGraphDrift(count?: number): Score0to100 {
+  if (count === undefined) return 100;
+  if (count === 0) return 100;
+  return clamp(100 - count * 7);
+}
+
+function scoreMissingValidationTelemetry(missing?: number, total?: number): Score0to100 {
+  if (missing === undefined || total === undefined) return 100;
+  if (total === 0) return 100;
+  const ratio = Math.min(1, missing / total);
+  return clamp(100 - ratio * 100);
 }
 
 function clamp(n: number): Score0to100 {

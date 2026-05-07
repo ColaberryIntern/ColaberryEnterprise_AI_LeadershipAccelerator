@@ -30,6 +30,7 @@ import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketing
 import AdminCommunicationsPage from '../pages/admin/AdminCommunicationsPage';
 import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
 import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
+import AdminGovernancePolicyPage from '../pages/admin/AdminGovernancePolicyPage';
 import AdminProjectOverview from '../pages/admin/AdminProjectOverview';
 import InboxCOSPage from '../pages/admin/inbox/InboxCOSPage';
 import ContentQueuePage from '../pages/admin/ContentQueuePage';
@@ -76,6 +77,7 @@ const adminRoutes = (
         <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
+        <Route path="/admin/governance-policy" element={<AdminGovernancePolicyPage />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />

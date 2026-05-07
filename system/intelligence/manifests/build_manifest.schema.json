@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colaberry.ai/schemas/build_manifest.schema.json",
+  "title": "BuildManifest",
+  "description": "Authoritative telemetry emitted by Claude Code after a build operation completes.",
+  "type": "object",
+  "required": [
+    "manifest_version",
+    "task_id",
+    "project_id",
+    "execution_timestamp",
+    "telemetry_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "manifest_version": { "type": "string", "enum": ["1.0"] },
+    "telemetry_version": { "type": "string", "enum": ["1.0"] },
+    "task_id": { "type": "string", "format": "uuid" },
+    "bp_id": { "type": ["string", "null"], "format": "uuid" },
+    "project_id": { "type": "string", "format": "uuid" },
+    "execution_timestamp": { "type": "string", "format": "date-time" },
+
+    "files_created": { "type": "array", "items": { "$ref": "#/$defs/repoPath" }, "default": [] },
+    "files_modified": { "type": "array", "items": { "$ref": "#/$defs/repoPath" }, "default": [] },
+    "files_deleted": { "type": "array", "items": { "$ref": "#/$defs/repoPath" }, "default": [] },
+
+    "database_changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["table", "operation"],
+        "additionalProperties": false,
+        "properties": {
+          "table": { "type": "string", "minLength": 1 },
+          "schema": { "type": "string" },
+          "operation": {
+            "type": "string",
+            "enum": ["create_table", "drop_table", "add_column", "drop_column", "alter_column", "add_index", "drop_index", "add_fk", "drop_fk", "data_migration"]
+          },
+          "details": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+
+    "apis_added": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["method", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+          "path": { "type": "string", "minLength": 1 },
+          "handler_file": { "$ref": "#/$defs/repoPath" },
+          "auth": { "type": "string", "enum": ["public", "session", "admin", "participant", "machine"] }
+        }
+      },
+      "default": []
+    },
+    "apis_modified": { "type": "array", "items": { "$ref": "#/properties/apis_added/items" }, "default": [] },
+
+    "frontend_routes_added": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["route"],
+        "additionalProperties": false,
+        "properties": {
+          "route": { "type": "string", "minLength": 1 },
+          "component_file": { "$ref": "#/$defs/repoPath" },
+          "is_public": { "type": "boolean" }
+        }
+      },
+      "default": []
+    },
+
+    "ui_components_added": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "file"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "file": { "$ref": "#/$defs/repoPath" },
+          "category": { "type": "string", "enum": ["page", "widget", "form", "modal", "layout"] }
+        }
+      },
+      "default": []
+    },
+    "ui_components_modified": { "type": "array", "items": { "$ref": "#/properties/ui_components_added/items" }, "default": [] },
+
+    "tests_added": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "file": { "$ref": "#/$defs/repoPath" },
+          "type": { "type": "string", "enum": ["unit", "integration", "e2e", "smoke"] },
+          "coverage_target": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+    "tests_modified": { "type": "array", "items": { "$ref": "#/properties/tests_added/items" }, "default": [] },
+
+    "validation_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "check": { "type": "string", "enum": ["tsc", "jest", "playwright", "build", "lint", "manual"] },
+          "status": { "type": "string", "enum": ["pass", "fail", "skipped"] },
+          "details": { "type": "string" },
+          "evidence_file": { "type": ["string", "null"] }
+        }
+      },
+      "default": []
+    },
+
+    "dependencies_added": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "version": { "type": "string" },
+          "scope": { "type": "string", "enum": ["runtime", "dev", "peer"] }
+        }
+      },
+      "default": []
+    },
+    "packages_added": { "type": "array", "items": { "$ref": "#/properties/dependencies_added/items" }, "default": [] },
+
+    "system_impacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["increases_readiness", "increases_coverage", "increases_maturity", "blocks_dependency", "resolves_contradiction", "introduces_contradiction"]
+          },
+          "target_id": { "type": "string" },
+          "delta": { "type": "number" }
+        }
+      },
+      "default": []
+    },
+
+    "decision_trace": { "type": "object" }
+  },
+  "$defs": {
+    "repoPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\.\\./)[A-Za-z0-9._\\-/]+$",
+      "description": "POSIX repo-relative path. No leading slash, no `..` traversal."
+    }
+  }
+}

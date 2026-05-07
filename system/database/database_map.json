@@ -1,0 +1,10 @@
+{
+  "db_version": "2.0",
+  "project_id": null,
+  "generated_at": null,
+  "source": "discovered",
+  "note": "Reference copy of the merged database map for the live project. Auto-maintained by databaseSynchronizer. The authoritative copy is in the latest snapshot's state_graph (database_object nodes).",
+  "tables": [],
+  "orphan_tables": [],
+  "undocumented_tables": []
+}

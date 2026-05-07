@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colaberry.ai/schemas/visual_review.schema.json",
+  "title": "VisualReview",
+  "description": "Visual critique of a UI surface — items, AI suggestions, accept/reject decisions.",
+  "type": "object",
+  "required": ["review_version", "review_id", "project_id", "page_route", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "review_version": { "type": "string", "enum": ["1.0"] },
+    "review_id": { "type": "string", "format": "uuid" },
+    "project_id": { "type": "string", "format": "uuid" },
+    "page_route": { "type": "string", "minLength": 1 },
+    "screenshot_path": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "critique_summary": { "type": "string", "maxLength": 1000 },
+
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item_id", "kind", "severity", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "item_id": { "type": "string", "minLength": 1 },
+          "kind": {
+            "type": "string",
+            "enum": ["spacing", "alignment", "color", "typography", "interaction", "accessibility", "hierarchy", "responsiveness"]
+          },
+          "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+          "description": { "type": "string", "minLength": 1 },
+          "ai_suggestion": { "type": ["string", "null"] },
+          "decision": { "type": "string", "enum": ["pending", "accepted", "rejected", "deferred"], "default": "pending" },
+          "decided_at": { "type": ["string", "null"], "format": "date-time" },
+          "decided_by": { "type": ["string", "null"] }
+        }
+      },
+      "default": []
+    },
+
+    "ux_priorities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    }
+  }
+}

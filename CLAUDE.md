@@ -15,6 +15,64 @@ Claude's role: reason, plan, orchestrate, validate, and modify instructions/code
 
 ---
 
+# Telemetry Synchronization Contract (Phase 3)
+
+The portal no longer reverse-engineers projects. It consumes **authoritative telemetry** emitted during builds. Claude Code is one half of a synchronized intelligence system; the SystemStateEngine is the other half.
+
+## Required emissions (after every non-trivial build operation)
+
+After Claude Code completes a build (a feature, a fix, a refactor) it MUST emit a `BuildManifest` that conforms to [`/system/intelligence/manifests/build_manifest.schema.json`](system/intelligence/manifests/build_manifest.schema.json). The contract: [`/system/intelligence/contracts/BUILD_MANIFEST_CONTRACT.md`](system/intelligence/contracts/BUILD_MANIFEST_CONTRACT.md).
+
+Required fields:
+- `manifest_version: "1.0"`, `telemetry_version: "1.0"`
+- `task_id`, `project_id` (UUIDs); `bp_id` if the build targeted a specific BP
+- `execution_timestamp` (ISO-8601)
+- Whatever changed: `files_created`, `files_modified`, `files_deleted`, `database_changes`, `apis_added`, `apis_modified`, `frontend_routes_added`, `ui_components_added`, `ui_components_modified`, `tests_added`, `validation_results`, `dependencies_added`
+- `system_impacts` (qualitative deltas)
+- Optionally: `decision_trace` (why the build chose this approach)
+
+POST to `/api/portal/project/telemetry`. The portal validates, ingests, and triggers a state rebuild — fire-and-forget.
+
+## Strict rules
+
+- **Manifest authority:** When telemetry exists, the engine prefers it over repo heuristics. Do not assume the engine will "figure it out from the file tree" — emit the manifest.
+- **No secrets in manifests.** The validator scans for AWS keys, GitHub PATs, OpenAI keys, JWTs, and private key blocks. A manifest that contains any will be rejected at ingest with status 400. Redact before emitting.
+- **No `..` traversal in paths.** Repo-relative POSIX only. The validator rejects leading `/` and `../`.
+- **Append-only.** Never modify or delete an emitted manifest. To correct a stale state, emit a new one with a later `execution_timestamp` — the resolver picks the later one as the winner.
+- **Validation results are first-class.** Emit `validation_results` with every manifest when a check ran (`tsc`, `jest`, `playwright`, `build`, `lint`). Manifests without validation results contribute to the `missing_validation_telemetry` health score.
+- **Database, API, UI changes flow through the manifest.** Do not assume out-of-band documentation will catch up. The manifest IS the documentation.
+- **Decision tracing.** Where Claude Code's build choices were non-obvious (alternative approach considered, trade-off accepted, dependency surfaced), include a `decision_trace` block — even a short one. This is what powers the "Why is this next?" panel.
+
+## What the portal owns (do NOT duplicate)
+
+- The state graph: `system/intelligence/state_graph.json` — auto-maintained by `graphSynchronizer`. Manual edits will be overwritten.
+- The DB map: `system/database/database_map.json` — auto-maintained by `databaseSynchronizer`.
+- The UI map: `system/ui/ui_map.json` — auto-maintained by `uiSynchronizer`.
+- The queue: read via `GET /api/portal/project/system-state` — never invent a parallel queue.
+
+## What Claude Code owns
+
+- `BuildManifest` emission for every non-trivial build.
+- Updating `PROGRESS.md` (the human-readable log — required by Phase 1's gate).
+- Updating directives in `/directives` when scope changes.
+- Updating `CLAUDE.md` itself for new operational rules.
+
+The portal **never** writes to PROGRESS.md or directives. Claude Code **never** writes to the maps in `/system/`.
+
+## Reading state
+
+If you need to understand the current project state during a build, read:
+- `GET /api/portal/project/system-state` (full state)
+- `GET /api/portal/project/system-state/explain/:taskId` (Why is this task next?)
+- `GET /api/portal/project/telemetry` (recent manifests)
+- `GET /api/portal/project/telemetry/health` (telemetry health summary)
+- `GET /api/portal/project/graph` (state graph)
+- `GET /api/portal/project/database-map` / `/ui-map` (declared topology)
+
+Do not re-read the codebase to derive state when an endpoint already answers the question.
+
+---
+
 # Architecture & System Layers
 
 **Model:** Agent-First, Deterministic-Execution with Test-First Validation.

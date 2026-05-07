@@ -31,3 +31,45 @@ export const getSystemPromptDraft = () => portalApi.get('/api/portal/project/sys
 export const saveSystemPrompt = (system_prompt: string) => portalApi.put('/api/portal/project/system-prompt', { system_prompt });
 export const bulkResolveFeedback = (id: string) =>
   portalApi.put(`/api/portal/project/business-processes/${id}/element-feedback/bulk-resolve`, {});
+
+// ─── PHASE 2: Authoritative System State ────────────────────────────────
+// Single source of truth for readiness, coverage, maturity, queue, and
+// next-action. Every consumer (dashboards, Blueprint, Cory, system view)
+// reads from this endpoint instead of re-deriving locally.
+export const getSystemState = (opts?: { fresh?: boolean }) =>
+  portalApi.get('/api/portal/project/system-state', { params: opts?.fresh ? { fresh: '1' } : {} });
+
+// "Why is this next?" panel — fetches the full DecisionTrace for a task.
+export const explainSystemTask = (taskId: string) =>
+  portalApi.get(`/api/portal/project/system-state/explain/${encodeURIComponent(taskId)}`);
+
+// ─── PHASE 4: Self-synchronizing execution helpers ────────────────────
+export const autoGenerateManifest = (payload: {
+  task_id: string;
+  bp_id?: string | null;
+  diff_stdout?: string;
+  parsed_validation_report?: any;
+  task_type?: string;
+  ingest?: boolean;
+}) => portalApi.post('/api/portal/project/telemetry/auto-generate', payload);
+
+export const checkManifestCompleteness = (manifest: any, task_type: string) =>
+  portalApi.post('/api/portal/project/telemetry/completeness', { manifest, task_type });
+
+export const startBuildSession = (payload: { task_id: string; bp_id?: string | null; task_type: string }) =>
+  portalApi.post('/api/portal/project/build-session/start', payload);
+
+export const completeBuildSession = (sessionId: string, payload: { manifest: any; task_type: string; enforce_completeness?: boolean }) =>
+  portalApi.post(`/api/portal/project/build-session/${encodeURIComponent(sessionId)}/complete`, payload);
+
+export const listBuildSessions = (limit: number = 50) =>
+  portalApi.get('/api/portal/project/build-sessions', { params: { limit } });
+
+export const getQueueHistory = (opts: { limit?: number; since_hours?: number } = {}) =>
+  portalApi.get('/api/portal/project/history/queue', { params: opts });
+
+export const getScoreHistory = (limit: number = 100) =>
+  portalApi.get('/api/portal/project/history/scores', { params: { limit } });
+
+export const getContradictionHistory = (limit: number = 50) =>
+  portalApi.get('/api/portal/project/history/contradictions', { params: { limit } });

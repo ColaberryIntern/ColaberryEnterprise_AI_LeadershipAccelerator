@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colaberry.ai/schemas/database_map.schema.json",
+  "title": "DatabaseMap",
+  "description": "Declared topology of the project's database — tables, columns, relationships, consumers.",
+  "type": "object",
+  "required": ["db_version", "project_id", "generated_at", "source", "tables"],
+  "additionalProperties": false,
+  "properties": {
+    "db_version": { "type": "string", "enum": ["2.0"] },
+    "project_id": { "type": "string", "format": "uuid" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "enum": ["manifest", "declared", "discovered", "merged"] },
+
+    "tables": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/table" }
+    },
+
+    "orphan_tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "schema": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+
+    "undocumented_tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "schema": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "table": {
+      "type": "object",
+      "required": ["name", "columns"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "type": "string", "default": "public" },
+        "name": { "type": "string", "minLength": 1 },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "type": { "type": "string", "minLength": 1 },
+              "nullable": { "type": "boolean", "default": true },
+              "is_pk": { "type": "boolean", "default": false },
+              "is_unique": { "type": "boolean", "default": false },
+              "default_value": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "columns"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "columns": { "type": "array", "items": { "type": "string" } },
+              "unique": { "type": "boolean", "default": false }
+            }
+          },
+          "default": []
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "to_table", "from_column"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "type": "string", "enum": ["fk", "implied"] },
+              "to_table": { "type": "string" },
+              "to_column": { "type": "string" },
+              "from_column": { "type": "string" }
+            }
+          },
+          "default": []
+        },
+        "row_count_estimate": { "type": "integer", "minimum": 0 },
+        "documented": { "type": "boolean", "default": false },
+        "consumers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apis": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "bps": { "type": "array", "items": { "type": "string", "format": "uuid" }, "default": [] },
+            "frontend_components": { "type": "array", "items": { "type": "string" }, "default": [] }
+          }
+        }
+      }
+    }
+  }
+}

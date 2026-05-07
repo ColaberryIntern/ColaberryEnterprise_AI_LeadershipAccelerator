@@ -401,6 +401,11 @@ function transformCapabilities(bps: any[]): SystemComponent[] {
       };
     })
     .sort((a, b) => {
+      // PHASE 2: a.priority and b.priority come from `bp.priority_rank` which is
+      // assigned by the backend's BP list endpoint AFTER it overlays
+      // engine-authoritative scores. We do NOT re-derive priority here —
+      // we only stable-order by completion status (verified/complete sinks
+      // to the bottom) and the rank the engine produced.
       if (a.status === 'complete' && b.status !== 'complete') return 1;
       if (a.status !== 'complete' && b.status === 'complete') return -1;
       return a.priority - b.priority;

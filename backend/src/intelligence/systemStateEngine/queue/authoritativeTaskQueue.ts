@@ -19,9 +19,12 @@ import type {
   AuthoritativeTaskState,
   AuthoritativeTaskType,
   CapabilityScores,
+  DecisionTrace,
   EngineCapabilityInput,
   EngineProjectInput,
 } from '../types/systemState.types';
+import { scoreCoverage } from '../scoring/coverageScorer';
+import { scoreMaturity } from '../scoring/maturityScorer';
 import { resolveDependencies } from './dependencyResolver';
 import { rankTasks } from './priorityRanker';
 
@@ -93,6 +96,24 @@ function buildFoundationTask(project: EngineProjectInput): AuthoritativeTask {
       'Project is fresh — no capability has been built yet.',
       'Kickoff covers all foundation phases in one Claude Code session.',
     ]),
+    decision_trace: Object.freeze({
+      readiness_inputs: { current: 0, target: 60, gap: 60 },
+      coverage_inputs: { current: 0, source: 'no_signal' as const, target: 60, gap: 60 },
+      maturity_inputs: { current_level: 0 as const, target_level: 1 as const, next_level_gap: 'No capability has been executed yet — kickoff scaffolds everything.' },
+      dependency_inputs: { count: 0, unmet: Object.freeze([]), cycles: Object.freeze([]) },
+      blocking_inputs: { is_blocking: true, downstream_count: project.capabilities.length, reason: 'No per-BP work can start until the foundation is in place.' },
+      confidence_inputs: { confidence: 100, basis: 'Foundation tasks always run with full confidence.' },
+      formulas_used: Object.freeze([
+        'priority_score=100 (foundation tasks always max-priority)',
+        'blocking_score=100 (everything downstream depends on this)',
+        'composite = priority*0.30 + blocking*0.25 + ... - cost*0.20',
+      ]),
+      reasoning_chain: Object.freeze([
+        'Project has no executed capabilities (isFreshProject() === true).',
+        'Foundation task is the only valid next-step on fresh projects.',
+        'All other per-BP tasks would be premature.',
+      ]),
+    }),
   };
 }
 
@@ -127,6 +148,7 @@ function generateCapTasks(
         `${cap.name} maturity is L${score.maturity_level}`,
         'No backend files linked',
       ],
+      cap, cap_score: score,
     }));
   }
 
@@ -149,6 +171,7 @@ function generateCapTasks(
       reasons: [
         'Backend layer present, frontend missing',
       ],
+      cap, cap_score: score,
     }));
   }
 
@@ -171,6 +194,7 @@ function generateCapTasks(
         confidence_score: 80,
         execution_cost: Math.min(80, 20 + unmatched * 4),
         reasons: [`${unmatched} requirements unmatched`],
+        cap, cap_score: score,
       }));
     }
   }
@@ -196,6 +220,7 @@ function generateCapTasks(
         confidence_score: 75,
         execution_cost: 20,
         reasons: [`${unrun.length} UI Advisor steps pending`],
+        cap, cap_score: score,
       }));
     }
   }
@@ -217,6 +242,7 @@ function generateCapTasks(
       confidence_score: 95,
       execution_cost: 5,
       reasons: [`Coverage at ${score.coverage}% — ready to verify`],
+      cap, cap_score: score,
     }));
   }
 
@@ -238,6 +264,7 @@ function generateCapTasks(
       confidence_score: 70,
       execution_cost: 30,
       reasons: [`Health at ${score.health}, ${mentions} PROGRESS.md mentions`],
+      cap, cap_score: score,
     }));
   }
 
@@ -261,6 +288,9 @@ interface TaskShortInput {
   reasons: string[];
   dependencies?: string[];
   state?: AuthoritativeTaskState;
+  // Optional: provide cap context to populate decision_trace.
+  cap?: EngineCapabilityInput;
+  cap_score?: CapabilityScores;
 }
 
 function makeTask(input: TaskShortInput): AuthoritativeTask {
@@ -282,7 +312,110 @@ function makeTask(input: TaskShortInput): AuthoritativeTask {
     calculated_rank: 0,
     state: input.state || 'pending',
     reasoning: Object.freeze(input.reasons),
+    decision_trace: input.cap ? buildDecisionTrace(input) : undefined,
   };
+}
+
+function buildDecisionTrace(input: TaskShortInput): DecisionTrace {
+  const cap = input.cap!;
+  const score = input.cap_score;
+  const coverage = scoreCoverage(cap);
+  const maturity = scoreMaturity(cap);
+
+  const targetReadiness = input.readiness_gain + (score?.readiness || 0);
+  const targetCoverage = input.maturity_gain + (score?.coverage || 0);
+
+  const reasoningChain: string[] = [];
+  reasoningChain.push(`${cap.name} is at maturity L${maturity.level}.`);
+  reasoningChain.push(`Coverage source: ${coverage.source} → ${coverage.value}%.`);
+  if (input.priority_score >= 80) reasoningChain.push('High priority — gap is concrete and addressable.');
+  if (input.blocking_score >= 60) reasoningChain.push('Blocking score is high — other work waits on this.');
+  if (input.execution_cost >= 70) reasoningChain.push(`Higher execution cost (${input.execution_cost}) — non-trivial Claude Code session.`);
+  for (const r of input.reasons) reasoningChain.push(r);
+
+  const formulas: string[] = [
+    `composite = priority_score*0.30 + blocking_score*0.25 + maturity_gain*0.15 + readiness_gain*0.15 + dependency_score*0.10 + confidence_score*0.05 - execution_cost*0.20`,
+    `state_adjustment: ready=+25, in_progress=+50, blocked=-100, failed=-100`,
+    `calculated_rank = -composite (lower = earlier)`,
+  ];
+  if (coverage.source === 'evidence_based') {
+    formulas.push('coverage = evidence_completion_pct (brownfield path — no requirements doc)');
+  } else if (coverage.source === 'requirements_coverage') {
+    formulas.push('coverage = matched_requirements / total_requirements * 100');
+  } else if (coverage.source === 'page_visual_review') {
+    formulas.push('coverage = verified_categories / 5 * 100 (Page BP visual review)');
+  }
+
+  // Phase 3: explicit explainability payload.
+  const score_breakdown: Record<string, number> = {
+    priority: Math.round(input.priority_score * 0.30),
+    blocking: Math.round(input.blocking_score * 0.25),
+    maturity_gain: Math.round(input.maturity_gain * 0.15),
+    readiness_gain: Math.round(input.readiness_gain * 0.15),
+    dependency: Math.round(input.dependency_score * 0.10),
+    confidence: Math.round(input.confidence_score * 0.05),
+    execution_cost_penalty: -Math.round(input.execution_cost * 0.20),
+  };
+  const projectedLevel = Math.min(4, maturity.level + 1) as 0 | 1 | 2 | 3 | 4;
+
+  // Telemetry sources used: heuristic baseline always; manifest/validation
+  // labels added by the engine when those layers contributed (engine sets the
+  // hint via global state — Phase 4 will thread this through cleanly).
+  const telemetry_sources_used: Array<'manifest' | 'validation' | 'declared_map' | 'repo_evidence'> = ['repo_evidence'];
+
+  // expected_outcomes: short, action-oriented bullets the UI can render.
+  const expected_outcomes: string[] = [];
+  if (input.readiness_gain > 0) expected_outcomes.push(`+${input.readiness_gain} readiness`);
+  if (input.maturity_gain > 0) expected_outcomes.push(`closer to L${projectedLevel} maturity`);
+  if (input.blocking_score >= 60) expected_outcomes.push('unblocks downstream work');
+
+  return Object.freeze({
+    readiness_inputs: {
+      current: score?.readiness || 0,
+      target: Math.min(100, targetReadiness),
+      gap: Math.max(0, targetReadiness - (score?.readiness || 0)),
+    },
+    coverage_inputs: {
+      current: coverage.value,
+      source: coverage.source,
+      target: Math.min(100, targetCoverage),
+      gap: Math.max(0, targetCoverage - coverage.value),
+    },
+    maturity_inputs: {
+      current_level: maturity.level,
+      target_level: projectedLevel,
+      next_level_gap: maturity.next_level_gap,
+    },
+    dependency_inputs: {
+      count: (input.dependencies || []).length,
+      unmet: Object.freeze([]),    // resolveDependencies populates these later
+      cycles: Object.freeze([]),
+    },
+    blocking_inputs: {
+      is_blocking: input.blocking_score >= 60,
+      downstream_count: 0,         // could be filled by future graph analysis
+      reason: input.blocking_score >= 60 ? 'Score >=60 — gates downstream work.' : undefined,
+    },
+    confidence_inputs: {
+      confidence: input.confidence_score,
+      basis: input.reasons.join('; '),
+    },
+    formulas_used: Object.freeze(formulas),
+    reasoning_chain: Object.freeze(reasoningChain),
+
+    // Phase 3 explainability payload
+    score_breakdown: Object.freeze(score_breakdown),
+    dependency_chain: Object.freeze([...(input.dependencies || [])]),
+    missing_requirements: Object.freeze([]),       // populated by Phase 4 telemetry inspection
+    expected_outcomes: Object.freeze(expected_outcomes),
+    projected_maturity_gain: Object.freeze({
+      current_level: maturity.level,
+      projected_level: projectedLevel,
+      delta: projectedLevel - maturity.level,
+    }),
+    affected_systems: Object.freeze(cap ? [`bp:${cap.id}`] : []),
+    telemetry_sources_used: Object.freeze(telemetry_sources_used),
+  });
 }
 
 function clamp(n: number): number {

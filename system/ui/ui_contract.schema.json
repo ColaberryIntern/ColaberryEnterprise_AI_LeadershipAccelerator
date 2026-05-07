@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colaberry.ai/schemas/ui_contract.schema.json",
+  "title": "UIMap",
+  "description": "Declared inventory of project UI surface (pages, components, actions, debt).",
+  "type": "object",
+  "required": ["ui_version", "project_id", "generated_at", "source", "pages"],
+  "additionalProperties": false,
+  "properties": {
+    "ui_version": { "type": "string", "enum": ["1.0"] },
+    "project_id": { "type": "string", "format": "uuid" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "enum": ["manifest", "declared", "discovered", "merged"] },
+
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["route"],
+        "additionalProperties": false,
+        "properties": {
+          "route": { "type": "string", "minLength": 1 },
+          "component_file": { "type": "string" },
+          "title": { "type": "string" },
+          "category": { "type": "string", "enum": ["admin", "public", "portal", "internal"] },
+          "bp_id": { "type": ["string", "null"], "format": "uuid" },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "kind"],
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "label": { "type": "string" },
+                "kind": { "type": "string", "enum": ["button", "form", "link", "modal_trigger", "tab"] },
+                "handler": { "type": "string" }
+              }
+            },
+            "default": []
+          },
+          "critical_workflows": { "type": "array", "items": { "type": "string" }, "default": [] },
+          "accessibility_warnings": { "type": "array", "items": { "type": "string" }, "default": [] },
+          "ux_debt": { "type": "array", "items": { "type": "string" }, "default": [] }
+        }
+      }
+    },
+
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "file"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "file": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "enum": ["page", "widget", "form", "modal", "layout"] },
+          "used_by_pages": { "type": "array", "items": { "type": "string" }, "default": [] }
+        }
+      },
+      "default": []
+    },
+
+    "visual_reviews": {
+      "type": "array",
+      "items": { "$ref": "visual_reviews/visual_review.schema.json" },
+      "default": []
+    }
+  }
+}

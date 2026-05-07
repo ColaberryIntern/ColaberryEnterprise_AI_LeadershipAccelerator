@@ -1,0 +1,8 @@
+{
+  "graph_version": "1.0",
+  "project_id": null,
+  "generated_at": null,
+  "note": "This is the reference copy of the latest authoritative state graph for the live project. It is rebuilt by graphSynchronizer.persistReferenceCopy() and is NOT the source of truth (the snapshot row is). Edit by hand only for one-off declarative overrides; manual edits will be overwritten on next rebuild.",
+  "nodes": [],
+  "edges": []
+}

@@ -490,3 +490,116 @@ describe('buildAuthoritativeStateFromInputs', () => {
     expect(a.queue.length).toBe(b.queue.length);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2: decision_trace explainability
+// ---------------------------------------------------------------------------
+
+describe('decision_trace (Phase 2 explainability)', () => {
+  it('every per-cap task carries a decision_trace', () => {
+    const cap = mkCap({
+      total_requirements: 5,
+      matched_requirements: 2,
+      linked_backend_services: ['a.ts'],
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const perCapTasks = state.queue.filter(t => t.bp_id === cap.id);
+    expect(perCapTasks.length).toBeGreaterThan(0);
+    for (const task of perCapTasks) {
+      expect(task.decision_trace).toBeDefined();
+      expect(task.decision_trace?.readiness_inputs).toBeDefined();
+      expect(task.decision_trace?.coverage_inputs).toBeDefined();
+      expect(task.decision_trace?.maturity_inputs).toBeDefined();
+      expect(task.decision_trace?.formulas_used.length).toBeGreaterThan(0);
+      expect(task.decision_trace?.reasoning_chain.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('decision_trace.readiness_inputs.gap reflects target - current', () => {
+    const cap = mkCap({
+      total_requirements: 5,
+      matched_requirements: 2,
+      linked_backend_services: ['a.ts'],
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const task = state.queue.find(t => t.bp_id === cap.id);
+    expect(task).toBeDefined();
+    if (task?.decision_trace) {
+      const r = task.decision_trace.readiness_inputs;
+      expect(r.gap).toBe(r.target - r.current);
+    }
+  });
+
+  it('decision_trace.dependency_inputs.unmet matches what the dependency resolver flagged', () => {
+    // BP with backend missing → backend foundation task is upstream of UI tasks
+    const cap = mkCap({
+      total_requirements: 5,
+      matched_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const blocked = state.queue.filter(t => t.state === 'blocked');
+    for (const task of blocked) {
+      expect(task.decision_trace?.dependency_inputs.unmet.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2: queue immutability + ordering invariants
+// ---------------------------------------------------------------------------
+
+describe('queue invariants (Phase 2)', () => {
+  it('queue[0] always corresponds to next_task', () => {
+    const cap = mkCap({
+      total_requirements: 5,
+      matched_requirements: 1,
+      linked_backend_services: ['a.ts'],
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    if (state.queue.length > 0 && state.next_task) {
+      expect(state.next_task.id).toBe(state.queue[0].id);
+    }
+  });
+
+  it('next_bp_id matches next_task.bp_id when next_task targets a BP', () => {
+    const cap = mkCap({
+      total_requirements: 5,
+      matched_requirements: 1,
+      linked_backend_services: ['a.ts'],
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    if (state.next_task?.bp_id) {
+      expect(state.next_bp_id).toBe(state.next_task.bp_id);
+    }
+  });
+
+  it('queue ranks are monotonic non-decreasing', () => {
+    const caps = [
+      mkCap({ id: 'c1', total_requirements: 10, matched_requirements: 1, linked_backend_services: ['a.ts'] }),
+      mkCap({ id: 'c2', name: 'Cap 2', total_requirements: 5, matched_requirements: 4, linked_backend_services: ['b.ts'], linked_frontend_components: ['c.tsx'] }),
+      mkCap({ id: 'c3', name: 'Cap 3', total_requirements: 3, matched_requirements: 0 }),
+    ];
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: caps }),
+      capabilities: caps,
+    });
+    for (let i = 1; i < state.queue.length; i++) {
+      expect(state.queue[i].calculated_rank).toBeGreaterThanOrEqual(state.queue[i - 1].calculated_rank);
+    }
+  });
+});

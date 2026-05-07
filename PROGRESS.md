@@ -12,6 +12,114 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Phase 16 — Causality Replay + Distributed Validation Cognition (2026-05-07)
+- [x] 11 new backend modules under `backend/src/intelligence/systemStateEngine/causality/`: `causalityTypes.ts`, `mutationLineageGraph.ts`, `contradictionPropagationTracker.ts`, `causalTrustPropagation.ts`, `distributedValidationHarness.ts`, `validationArbitrationEngine.ts`, `validatorTrustCalibrator.ts`, `rootCauseAnalyzer.ts`, `causalStabilizationEngine.ts`, `operationalEpidemiologyEngine.ts`, `causalityReplayEngine.ts`, `causalitySummaryCounters.ts`
+  - Date: 2026-05-07
+  - Verification: backend `npx tsc --noEmit` exit 0; full systemStateEngine jest suite **646 tests passing across 16 suites** including 56 new Phase 16 tests; sample script via temp `_phase16Sample.ts` exercised every module + the frozen-intent veto path on synthetic inputs (deleted post-run)
+  - Note: Architectural commitment held per stress-test — validators are pure scoring algorithms inside the engine (NOT separate processes/agents/sub-Claudes), epidemiology is honest temporal+spatial clustering (NOT an SIR model), root-cause TARGETING is shipped but autonomous ancestor rollback is deferred to Phase 17, replay is a structured backend trace (NOT a graph viz library). Hard architectural caps: depth 5, decay 0.5/gen, replay trace 200 nodes, 30-min temporal window.
+- [x] First-class `CausalConfidenceAttribution` payload on every root-cause result (`root_cause_confidence`, `supporting_evidence` array, `propagation_strength`, `contradiction_density`, `validator_agreement`, `lineage_depth_penalty`); root-cause analyzer returns top-5 surfaced roots with stabilization recommendations + rollback targeting suggestions
+  - Date: 2026-05-07
+  - Verification: 5 root-cause tests cover target-as-root + ancestry-with-penalty + supporting_evidence + rollback_targeting suggestion + confidence floor sanity
+- [x] 5 distributed-cognition validators (`mutation_validator`, `rollback_validator`, `trust_validator`, `containment_validator`, `blast_radius_validator`) each returning `ValidatorVerdict` with rationale + disagreement_flags + propagation_concerns + stabilization_recommendations; arbitration engine produces consensus + `confidence_range:{min,max}` + minority_warning + arbitration_risk + escalation_required
+  - Date: 2026-05-07
+  - Verification: 7 validator tests + 6 arbitration tests; one test caught an early bug where containment_validator's "reject" couldn't outvote 4 "apply" verdicts even on a frozen intent — fixed by adding a hard veto rule (containment confidence ≤ 20 forces consensus to reject)
+- [x] `ValidatorDisagreementProfile` persistence with per-pair disagreement_rate + topics + confidence_divergence + arbitration_frequency + escalation_rate; per-validator drift signal classification (`stable` / `over_triggering` / `under_detecting` / `inconsistent`)
+  - Date: 2026-05-07
+  - Verification: 5 validator-trust-calibrator tests cover cold-start + agreement-raises-trust + disagreement profiles + extractDisagreements + drift signal classification
+- [x] `OperationalSpreadClassification` (6 classes: localized / branching / cascading / recurrent / isolated / suppressed) on every stabilization priority and every epidemiology entry; `StabilizationPriorityScore` composite of propagation_risk + contradiction_density + validator_consensus + trust_decay_impact
+  - Date: 2026-05-07
+  - Verification: 3 stabilization tests + 3 epidemiology tests cover classification logic, action recommendations, and diffusion score bounds
+- [x] Causal trust propagation with hard depth cap (5) + decay factor (0.5/gen); a single weak ancestor 5 generations back contributes ≤ 1/32 of its weakness to descendants
+  - Date: 2026-05-07
+  - Verification: 4 trust-propagation tests verify decay constant, single-root zero decay, 1-gen halving math, and depth-cap enforcement on a 10-node chain
+- [x] Phase 16 enums: 5 new `GovernanceAuditEntry.kind` values, 7 new `CognitiveEventKind` values, 2 new `RefreshTriggerKind` values, optional `causality_summary` block on `AuthoritativeSystemState`; populated synchronously in `buildAuthoritativeStateFromInputs` from in-memory counters (no DB read)
+  - Date: 2026-05-07
+  - Verification: 3 surface-population tests confirm counter reflection + zero state + per-project isolation; `tsc --noEmit` clean across all consumers
+- [x] 5 new endpoints in `projectRoutes.ts`: `GET /governance/causality/lineage`, `GET /governance/causality/root-cause/:mutation_id`, `GET /governance/causality/propagation`, `GET /governance/causality/validators/:mutation_id`, `GET /governance/causality/epidemiology` — each composes the new engines on demand from up to 7 days of audit rows
+  - Date: 2026-05-07
+  - Verification: backend `tsc --noEmit` clean; all routes reuse the inline `buildProjectLineageGraph` helper that translates audit rows into lineage nodes
+- [x] 6 new frontend hooks: `useOperationalLineage`, `useContradictionPropagation`, `useCausalTrust`, `useValidatorArbitration`, `useRootCauseAnalysis`, `useCausalityReplay` (last one composes the lineage hook with a client-side BFS walk, also depth-capped at 5)
+  - Date: 2026-05-07
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `AutonomousExecutionDashboard.tsx` extended in place (no parallel component) with three new sections: Causal lineage (root/leaf badges + max-depth + node/edge counts), Contradiction propagation hotspots (top 5 ranked), Causal trust propagation alerts (latest decay events with effective-trust display)
+  - Date: 2026-05-07
+  - Verification: frontend tsc clean; lifted-state + collapse pattern preserved across all Phase 13-16 surfaces
+- [x] `docs/PHASE_16_CAUSALITY_REPLAY_DISTRIBUTED_VALIDATION_VALIDATION_REPORT.md` written covering all 14 sections (files created/modified, lineage status with real edges, contradiction propagation with real hotspots, causal trust with real decay propagation through 4-node chain, root-cause attribution shape, distributed validation status with real verdicts, arbitration status with frozen-veto example, epidemiology status with classification table, replay status, performance, test results, gaps, next phase recommendation)
+  - Date: 2026-05-07
+  - Verification: doc exists at the documented path; matches the Phase 13-15 validation-report format; cross-references real sample-run outputs
+
+### Phase 15 — Governed Direct Autonomous Mutation (2026-05-07)
+- [x] 8 new backend modules under `backend/src/intelligence/systemStateEngine/mutation/`: `mutationTypes.ts`, `mutationProvenanceChain.ts`, `mutationBlastRadiusForecaster.ts`, `mutationVerificationEngine.ts`, `mutationTrustCalibrator.ts`, `mutationRollbackCoordinator.ts`, `mutationContainmentEngine.ts`, `directMutationEngine.ts`, `mutationSummaryCounters.ts`
+  - Date: 2026-05-07
+  - Verification: backend `npx tsc --noEmit` exit 0; full systemStateEngine jest suite **590 tests passing across 15 suites** including 53 new Phase 15 tests; sample script via temp `_phase15Sample.ts` exercised every module on synthetic inputs and produced expected outputs (deleted post-run)
+  - Note: Architectural commitment held — Phase 15 still does NOT mutate user code, run Claude Code in-process, or attempt screenshot/DOM-diff verification. It mutates the platform's own operational cognition state (queue/policy/trust/isolation/automation-mode) via a first-class `MutationEnvelope` abstraction and verifies empirically through telemetry + BuildManifest cross-check.
+- [x] First-class `MutationEnvelope` primitive with 7 mutation intent classes (QUEUE_STABILIZATION, PRESSURE_REBALANCE, ISOLATION_CONTAINMENT, AUTOMATION_DEESCALATION, TRUST_RECALIBRATION, POLICY_NUDGE, SELF_HEALING_ACTION); each envelope carries scope + reversibility + rollback chain + blast forecast + per-intent trust + provenance lineage + audit/replay
+  - Date: 2026-05-07
+  - Verification: 53 Phase 15 tests cover envelope shape, gates, all 7 outcome branches in `directMutationEngine`, and surface presence in `AuthoritativeSystemState.mutation_summary`
+- [x] Empirical verification engine triangulating 3 signals: UXRemediationOutcome telemetry deltas (Phase 11) + BuildManifest cross-check (Phase 3) + Phase 14 net_delta scorer; surface-touching intents get manifest cross-check, pure operational intents (TRUST_RECALIBRATION, POLICY_NUDGE) verify on cognition signal alone
+  - Date: 2026-05-07
+  - Verification: 6 verification-engine tests cover verified/regression/null-outcome/operational-only paths; one bug caught + fixed during testing — initial logic incorrectly treated absence of manifest evidence as confirmed failure (tightened to: rollback only on regression OR no positive cognition signal)
+- [x] 5-mode rollback coordinator (full/staged/partial/replay_aware/containment) walking envelope rollback_chain in reverse; 7 step kinds with discriminated dispatch + exhaustiveness guard
+  - Date: 2026-05-07
+  - Verification: 5 rollback-coordinator tests cover all modes; counter integration verified via mutationSummaryCounters bumps
+- [x] `containMutationCascade(input)` orchestrated workflow bundling automation_mode→supervised + isolation entry + 30-min cooldown gate + intent freeze + audit chain + event emission; idempotent on repeat invocation
+  - Date: 2026-05-07
+  - Verification: 5 containment tests cover cascade, idempotency, lift, snapshot, lift-on-uncontained edge case
+- [x] Per-intent-class trust calibrator (cold-start 70, formula `success / (success + rollback + 0.5×verify_failure) × 100 − 5×contained`); freeze/unfreeze; `autonomy_recommended_intent` picks highest-trust non-frozen class with at least one success
+  - Date: 2026-05-07
+  - Verification: 11 trust-calibrator tests cover cold-start, success/rollback/containment/verification-failure math, freeze/unfreeze, recommendation logic, avg-trust averaging
+- [x] Phase 15 enums: 7 new `GovernanceAuditEntry.kind` values, 8 new `CognitiveEventKind` values, 4 new `RefreshTriggerKind` values, optional `mutation_summary` block on `AuthoritativeSystemState`; populated synchronously in `buildAuthoritativeStateFromInputs` from in-memory counters + trust profile + containment snapshot
+  - Date: 2026-05-07
+  - Verification: 3 surface-population tests confirm counters reflect into the engine state; `tsc --noEmit` clean across all consumers
+- [x] `cognitiveHealthIndex` extended to a 3-leg `operational_stability` blend: `round((80 + autonomy_health + mutation_health) / 3)`. Same denominator (operational_stability weight 1.0 unchanged from Phase 13) — zero churn on prior 537 systemStateEngine tests
+  - Date: 2026-05-07
+  - Verification: 2 health-index Phase 15 tests confirm output bounds + degradation reflects; existing health-index tests stay green
+- [x] 5 new endpoints in `projectRoutes.ts`: `GET /governance/mutation/envelopes`, `POST /governance/mutation/:mutation_id/rollback`, `GET /governance/mutation/trust`, `GET /governance/mutation/containment`, `POST /admin/governance/mutation/freeze-class/:intent_class`
+  - Date: 2026-05-07
+  - Verification: backend `tsc --noEmit` clean; routes follow the existing requireParticipant pattern from Phase 12-14
+- [x] 5 new frontend hooks: `useAutonomousMutations`, `useEmpiricalValidation`, `useMutationContainment`, `useMutationTrust`, `useAutonomousRecovery` (recovery hook unifies Phase 14 self-heal + Phase 15 containment/rollback events)
+  - Date: 2026-05-07
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `AutonomousExecutionDashboard.tsx` extended in place (no parallel component) with three new sections: Direct mutations (with rollback button), Mutation containment (contained/frozen badges), Mutation trust by intent class
+  - Date: 2026-05-07
+  - Verification: frontend tsc clean; lifted-state + collapse pattern preserved; recommended-intent surface visible in header
+- [x] `docs/PHASE_15_GOVERNED_OPERATIONAL_MUTATION_VALIDATION_REPORT.md` written covering all 14 sections (files created/modified, mutation status with real envelopes, empirical validation triangulation, 5-mode rollback, blast forecasts, containment workflow, trust evolution, autonomous recovery, execution streams, performance, test results, gaps, next phase recommendation)
+  - Date: 2026-05-07
+  - Verification: doc exists at the documented path; matches the Phase 13/14 validation-report format; cross-references the actual modules + sample-run outputs
+
+### Phase 14 — Autonomous Handoff + Closed-Loop Verification (2026-05-07)
+- [x] 6 new backend modules under `backend/src/intelligence/systemStateEngine/autonomy/`: `autonomousHandoffEngine.ts`, `executionVerificationListener.ts`, `autonomousRollbackEngine.ts`, `selfHealingOrchestrator.ts`, `isolationRegistry.ts`, `executionSummaryCounters.ts`
+  - Date: 2026-05-07
+  - Verification: backend `npx tsc --noEmit` exit 0; full systemStateEngine jest suite **537 tests passing across 14 suites** including 42 new Phase 14 tests; sample script via temp `_phase14Sample.ts` exercised every module on synthetic inputs and produced expected outputs (deleted post-run)
+  - Note: Architectural commitment unchanged — Phase 14 still does NOT execute Claude Code in-process and does NOT directly mutate user-facing files. It removes the operator click between "auto-approved" and "prompt issued to handoff queue." Stress-test corrections folded in: scope renamed from "Direct Autonomous Execution" to "Autonomous Handoff", `execution/` directory collision avoided (Phase 4 owns it), `AutonomousExecutionLog` table dropped in favor of `GovernanceAuditEntry` reuse, isolation manager dropped in favor of `decideByMode` block_reasons + audit-row helpers, module count 5→3+2, frontend hooks 6→4, routes 9→5, refresh triggers 6→4, self-heal branches 4→2.
+- [x] PreparedRemediationPlan extended with `direct_executed_at` (DATE) + `execution_verification_status` (STRING(25), enum `pending|verified|failed|verification_timeout`); GovernanceAuditEntry kind union extended with 7 new values; CognitiveEventKind extended with 7 new values; refreshTriggers added 4 new reasons
+  - Date: 2026-05-07
+  - Verification: `tsc --noEmit` clean; existing PreparedRemediationPlan / GovernanceAuditEntry consumers unaffected; no schema migration required for existing rows (additive nullable columns only)
+- [x] `safeExecutionGuardrails.ts` extended with `assessBlastRadius` + `evaluateBlastRadiusGate` (heuristic composite blast_score with 4 risk factors; high tier hard-blocks autonomous handoff regardless of confidence)
+  - Date: 2026-05-07
+  - Verification: 5 unit tests in `phase14.test.ts` cover low/moderate/high tier inputs and gate decisions; sample run produced blast_score 100/100 → reject for the worst-case input
+- [x] `autonomyTrustState.ts` extended with verification counters + `verificationSuccessRate` (cold-start returns 100); `cognitiveHealthIndex.ts` enriched so `autonomy_health = trust × success_rate × verification_success_rate × (1 - rollback_freq)`. Same denominator (operational_stability weight 1.0 unchanged) — zero churn on prior 495 systemStateEngine tests
+  - Date: 2026-05-07
+  - Verification: existing health-index tests pass; 4 new verification-counter tests cover cold-start, all-success, mixed, all-failure
+- [x] `AuthoritativeSystemState.execution_summary` block added (sync, in-memory only) populated in `buildAuthoritativeStateFromInputs` from counters + verification rate + sync isolation count
+  - Date: 2026-05-07
+  - Verification: 2 tests confirm counters reflect into `execution_summary`; missing-counter case returns zero-state without crash
+- [x] `systemStateEngine/index.ts` re-exports all Phase 14 modules and auto-starts `executionVerificationListener` + `selfHealingOrchestrator` on first import (idempotent guards; mirror of Phase 11 listener pattern)
+  - Date: 2026-05-07
+  - Verification: tsc clean; jest passes for all 14 suites with no double-start side effects
+- [x] 5 new endpoints in `projectRoutes.ts`: `GET /governance/autonomy/handoffs`, `POST /governance/autonomy/:plan_id/verify`, `GET /governance/autonomy/isolations`, `POST /governance/autonomy/:plan_id/cancel-handoff`, `POST /admin/governance/autonomy/lift-isolation/:cluster_signature`
+  - Date: 2026-05-07
+  - Verification: `tsc --noEmit` clean; routes follow the existing requireParticipant pattern from Phase 12/13 endpoints
+- [x] 4 new frontend hooks: `useAutonomousHandoffs`, `useExecutionVerification`, `useIsolationZones`, `useSelfHealingActivity` (SSE auto-refresh on the relevant `autonomy.*` event kinds via `useRealtimeAwareness`)
+  - Date: 2026-05-07
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `AutonomousExecutionDashboard.tsx` extended in place (no parallel component) with three new sections: Handoffs feed (with cancel), Isolation zones (with admin lift), Self-healing activity (with by_action summary)
+  - Date: 2026-05-07
+  - Verification: frontend tsc clean; lifted-state + collapse pattern preserved
+- [x] `docs/PHASE_14_AUTONOMOUS_HANDOFF_VERIFICATION_VALIDATION_REPORT.md` written covering all 14 sections (files created/modified, handoff flow, verification flow, rollback flow, blast radius gate, isolation registry, self-heal branches, engine surface, health index, tests, stress-test corrections, risk register, out-of-scope deferrals)
+  - Date: 2026-05-07
+  - Verification: doc exists at the documented path; matches the Phase 13 validation-report format; cross-references the actual modules and test counts shipped
+
 ### IOU Demo De-Coopification Pass 1: Vertical-Neutral Demo Content (2026-05-06)
 - [x] Stripped 54 co-op-specific language tokens from `frontend/src/config/demoScenarios.json` so the same library serves both co-op and IOU landing pages cleanly
   - Date: 2026-05-06
