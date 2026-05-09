@@ -72,7 +72,7 @@ const CoryHome: React.FC = () => {
 
   if (!state) return null;
 
-  const greetingName = state.project.organization_name || 'there';
+  const greetingName = shortenOrgName(state.project.organization_name);
   const queueTotal = state.queue.length;
   const blockerCount = state.blockers.length;
   const oneLineStatus = buildOneLineStatus(queueTotal, blockerCount);
@@ -106,6 +106,7 @@ const CoryHome: React.FC = () => {
         <div className="col-md-4">
           <Tile
             label="Readiness"
+            sublabel="how prepared the project is"
             value={`${state.readiness.score}%`}
             valueColor={readinessC.fg}
             footer={readinessC.label}
@@ -116,6 +117,7 @@ const CoryHome: React.FC = () => {
         <div className="col-md-4">
           <Tile
             label="Coverage"
+            sublabel="requirements with implementation"
             value={state.coverage.requirements_total > 0
               ? `${state.coverage.score}%`
               : '—'}
@@ -129,18 +131,19 @@ const CoryHome: React.FC = () => {
         <div className="col-md-4">
           <Tile
             label="Health"
+            sublabel="system stability today"
             value={`${state.health.score}%`}
             valueColor={state.health.score >= 80 ? 'var(--color-success)' : state.health.score >= 60 ? 'var(--color-warning)' : 'var(--color-danger)'}
-            footer={state.health.regressions_24h === 0 ? 'No regressions in 24h' : `${state.health.regressions_24h} regression(s) in 24h`}
+            footer={state.health.regressions_24h === 0 ? 'Stable' : `${state.health.regressions_24h} regression(s) in 24h`}
             footerColor="var(--color-text-light)"
           />
         </div>
       </div>
 
-      {/* Critical blockers — only when present */}
+      {/* Things to address — only when present (less alarming than "Critical blockers") */}
       {blockerCount > 0 && (
         <section className="mb-3">
-          <SectionHeader title="Critical blockers" badge={`${blockerCount}`} />
+          <SectionHeader title="Things to address" badge={`${blockerCount}`} aside="lifted from Cory's signals" />
           <div style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden' }}>
             {state.blockers.map((b, i) => (
               <div
@@ -396,12 +399,13 @@ const SectionHeader: React.FC<{ title: string; badge?: string; aside?: string }>
 
 const Tile: React.FC<{
   label: string;
+  sublabel?: string;
   value: string;
   valueColor: string;
   footer: string;
   footerColor: string;
   tooltip?: string;
-}> = ({ label, value, valueColor, footer, footerColor, tooltip }) => (
+}> = ({ label, sublabel, value, valueColor, footer, footerColor, tooltip }) => (
   <div
     style={{
       background: 'white',
@@ -415,6 +419,11 @@ const Tile: React.FC<{
     <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)', fontWeight: 600 }}>
       {label}
     </div>
+    {sublabel && (
+      <div style={{ fontSize: 10, color: 'var(--color-text-light)', marginTop: 2, fontStyle: 'italic' }}>
+        {sublabel}
+      </div>
+    )}
     <div style={{ fontSize: 28, fontWeight: 600, color: valueColor, marginTop: 4, lineHeight: 1.1 }}>{value}</div>
     <div style={{ fontSize: 11, color: footerColor, marginTop: 4 }}>{footer}</div>
   </div>
@@ -434,6 +443,24 @@ function greetingFor(d: Date): string {
   if (h < 12) return 'Good morning';
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
+}
+
+/**
+ * Trim verbose org names for the greeting line so it doesn't wrap awkwardly.
+ * Strategy:
+ *   - Falsy → "there"
+ *   - Length ≤ 20 → use as-is
+ *   - Otherwise → first word if it's standalone-meaningful (≥ 4 chars + not generic),
+ *     else first 22 chars + ellipsis
+ */
+function shortenOrgName(raw: string | null | undefined): string {
+  if (!raw) return 'there';
+  const trimmed = raw.trim();
+  if (trimmed.length <= 20) return trimmed;
+  const firstWord = trimmed.split(/\s+/)[0];
+  const generic = new Set(['the', 'a', 'an', 'inc', 'inc.', 'llc', 'corp', 'corp.', 'co', 'co.']);
+  if (firstWord.length >= 4 && !generic.has(firstWord.toLowerCase())) return firstWord;
+  return trimmed.slice(0, 22) + '…';
 }
 
 function buildOneLineStatus(queueTotal: number, blockers: number): string {

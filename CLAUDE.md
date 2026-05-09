@@ -672,6 +672,76 @@ When hand-drafting LinkedIn-native posts (e.g., for Dhee or another assistant to
 
 ---
 
+# Required Review Screenshot Protocol
+
+Every sprint that touches the user-facing portal must end with a review HTML doc that **embeds real production screenshots**, not CSS mockups. Stakeholders should be able to verify "yes, this is what shipped" without logging in or running a dev server.
+
+## When this protocol applies
+
+Required for any sprint that:
+- Changes a route, page, or component visible at `enterprise.colaberry.ai/portal/*`
+- Adds a new surface (Cory Home, ExecutionLane, SystemView, Critique, Setup, etc.)
+- Modifies UnifiedProjectState or other state surfaced on Cory Home
+- Touches navigation, layout, or a verdict-bearing surface
+
+Not required for:
+- Backend-only changes that don't surface to the user (governance memory, Phase 16-32 plumbing, etc.)
+- Internal scripts in `backend/src/scripts/` or `scripts/`
+
+## How to capture
+
+The capture script lives at `scripts/captureProductionScreenshots.js`. It uses Playwright (already in root `package.json`) + a JWT token at `scripts/.ali_jwt.txt` (gitignored — never commit) to authenticate against `enterprise.colaberry.ai` and screenshot every primary surface.
+
+```
+node scripts/captureProductionScreenshots.js
+```
+
+Output lands in `docs/screenshots/<YYYY-MM-DD>-deploy/` as full-page PNGs at retina quality (1440×900 viewport, deviceScaleFactor=2). Override base URL with `CAPTURE_BASE` env, override token with `CAPTURE_TOKEN` env, override output dir with `CAPTURE_OUT`.
+
+If the token expires (the JWT has an `exp` claim), grab a fresh one from the operator's authenticated browser:
+1. F12 → Console (type `allow pasting` first to bypass Chrome's anti-XSS warning)
+2. `copy(localStorage.getItem('participant_token'))`
+3. Paste the result into `scripts/.ali_jwt.txt` (replace the file contents)
+
+## What every review HTML must include
+
+For each user-facing change shipped in the sprint:
+
+1. **The live screenshot embedded inline** — wrapped in a dark frame card with the URL caption + "open full size" link to the underlying PNG. Use the existing `.screenshot` CSS pattern in `docs/POST_DEPLOY_WALKTHROUGH.html` for consistency.
+2. **Before/after pairs** when the change is a redesign (legacy on the left or top, new on the right or bottom).
+3. **A clear caption** stating what the user is looking at.
+
+The review HTML structure should follow the per-stop pattern:
+- `① See it` — the screenshot card + a "Open in new tab" button to the live URL
+- `② What shipped here` — bullet list of the change
+- `③ Possible changes` — pre-flagged issues with checkboxes for the operator to investigate
+- `④ Your verdict + notes` — 👍/⚠/✕ radio + free-form textarea
+
+## What every review HTML must support
+
+- **Inline critique** — every section ends with a real `<textarea>` so the operator can leave notes without leaving the doc
+- **Compile button** — at the bottom of the page, a button that gathers all checkbox + radio + textarea state into a single Markdown prompt the operator pastes back to start the next sprint
+- **Reset button** — a way to clear all the state and start fresh
+
+The compile-prompt mechanism is reference-implemented in `docs/POST_DEPLOY_WALKTHROUGH.html` — copy that pattern.
+
+## Naming + location
+
+- Walkthroughs: `docs/<SPRINT>_REVIEW.html` — one per sprint
+- Screenshots: `docs/screenshots/<YYYY-MM-DD>-<context>/<NN>-<slug>.png`
+- Token (gitignored): `scripts/.ali_jwt.txt`
+- Capture script: `scripts/captureProductionScreenshots.js`
+
+The screenshot folder may be committed if the operator decides; the token file may NOT.
+
+## Why this exists
+
+Two failure modes the protocol prevents:
+1. **CSS mockups drift from reality.** Stakeholders look at a CSS wireframe in a review doc, sign off, then discover production looks subtly different. Real screenshots eliminate that drift.
+2. **Setup friction blocks review.** Without embedded screenshots, every reviewer needs the dev environment running OR a production login to verify the change. With them, the review HTML is self-contained and shareable.
+
+---
+
 # Tooling Assumptions
 
 Claude may assume:

@@ -60,8 +60,8 @@ export async function buildUnifiedProjectState(input: BuildInput): Promise<Unifi
       source: 'next_action',
       title: nextActionRow.title,
       reason: nextActionRow.reason || 'Top action from the next-action engine.',
-      raw_priority: typeof nextActionRow.priority_score === 'number' ? nextActionRow.priority_score : 80,
-      confidence: typeof nextActionRow.confidence_score === 'number' ? nextActionRow.confidence_score : 70,
+      raw_priority: normalizePriorityScore(nextActionRow.priority_score),
+      confidence: normalizeConfidenceScore(nextActionRow.confidence_score),
       time_est_minutes: estimateTimeFromActionType(nextActionRow.action_type),
       blast_radius: blastFromActionType(nextActionRow.action_type),
       target_route: '/portal/project/blueprint',
@@ -79,8 +79,8 @@ export async function buildUnifiedProjectState(input: BuildInput): Promise<Unifi
       source: 'next_action',
       title: row.title,
       reason: row.reason || 'Recent pending action.',
-      raw_priority: typeof row.priority_score === 'number' ? row.priority_score * 0.85 : 65,
-      confidence: typeof row.confidence_score === 'number' ? row.confidence_score : 60,
+      raw_priority: Math.round(normalizePriorityScore(row.priority_score) * 0.85),
+      confidence: normalizeConfidenceScore(row.confidence_score),
       time_est_minutes: estimateTimeFromActionType(row.action_type),
       blast_radius: blastFromActionType(row.action_type),
       target_route: '/portal/project/blueprint',
@@ -111,7 +111,7 @@ export async function buildUnifiedProjectState(input: BuildInput): Promise<Unifi
 
   const blockers: BlockerEntry[] = buildBlockers(readiness, coverage, candidates);
   const verification: VerificationStateProfile = buildVerification();
-  const active_build: ActiveBuildProfile | null = null;
+  const active_build: ActiveBuildProfile | null = buildActiveBuild(recentActionRows);
 
   return {
     project: {
@@ -345,25 +345,91 @@ function scoreToBand(score: number): 'red' | 'amber' | 'green' {
 
 function estimateTimeFromActionType(action_type: string | undefined): number | null {
   switch (action_type) {
+    // ─── canonical types emitted by nextAction/actionGeneratorService ───
+    case 'create_artifact': return 25;     // create a new artifact entry — moderate scoping work
+    case 'update_artifact': return 20;     // refine/submit an existing artifact
+    case 'build_feature':   return 60;     // implement code for a documented requirement
+    case 'fix_issue':       return 30;     // patch partial implementation
+    // ─── future-compat types (legacy / other engines) ───
     case 'build_capability': return 45;
     case 'wire_integration': return 30;
-    case 'add_validation': return 20;
-    case 'fix_bug': return 25;
-    case 'verify': return 10;
-    case 'review': return 15;
+    case 'add_validation':   return 20;
+    case 'fix_bug':          return 25;
+    case 'verify':           return 10;
+    case 'review':           return 15;
     default: return null;
   }
 }
 
 function blastFromActionType(action_type: string | undefined): BlastRadiusProfile {
   switch (action_type) {
+    // ─── canonical types ───
+    case 'create_artifact': return { band: 'low', reason: 'New artifact definition — low blast.' };
+    case 'update_artifact': return { band: 'low', reason: 'Artifact submission/refinement — low blast.' };
+    case 'build_feature':   return { band: 'medium', reason: 'New feature code may affect users.' };
+    case 'fix_issue':       return { band: 'medium', reason: 'Patches existing implementation.' };
+    // ─── future-compat ───
     case 'build_capability': return { band: 'medium', reason: 'New capability surface affects users.' };
     case 'wire_integration': return { band: 'medium', reason: 'External integration may have side effects.' };
-    case 'fix_bug': return { band: 'low', reason: 'Localized fix.' };
-    case 'add_validation': return { band: 'low', reason: 'Defensive only.' };
-    case 'verify': return { band: 'low', reason: 'Read-only verification.' };
+    case 'fix_bug':          return { band: 'low', reason: 'Localized fix.' };
+    case 'add_validation':   return { band: 'low', reason: 'Defensive only.' };
+    case 'verify':           return { band: 'low', reason: 'Read-only verification.' };
     default: return { band: 'low' };
   }
+}
+
+/**
+ * Convert the next-action engine's `confidence_score` into a 0..100 display
+ * value. The engine emits confidence as a 0..1 fraction (e.g. 0.9 = "90%
+ * confident"); historic clamping treated it as already-percentage and turned
+ * 0.9 into 1%. Detection: any value ≤ 1 is treated as a fraction.
+ */
+function normalizeConfidenceScore(raw: number | undefined): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 60;
+  return raw <= 1 ? Math.round(raw * 100) : Math.round(raw);
+}
+
+/**
+ * Convert the next-action engine's `priority_score` into a 0..100 display
+ * value. The engine emits priority as `statusWeight × dependencyWeight ×
+ * systemRuleWeight` — typically integers in the 2..14 range. Historic
+ * clamping showed `3` as `3%`, which underrepresents importance.
+ *
+ * Strategy: any value already > 14 (or already a fraction ≤ 1, in which
+ * case it's a different upstream emitter) is normalized differently.
+ *   - 0..1 fraction → multiply by 100
+ *   - 2..14 raw → scale linearly to ~14..98 with a multiplier of 7
+ *   - > 14 → clamp directly
+ */
+function normalizePriorityScore(raw: number | undefined): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 50;
+  if (raw <= 1) return Math.round(raw * 100);
+  if (raw <= 14) return Math.round(raw * 7);
+  return Math.round(raw);
+}
+
+/**
+ * Wire active_build from the most recent NextAction row that is accepted
+ * but not yet completed. This is the canonical "in flight" signal:
+ *   - operator clicked "Mark accepted" on a Cory action
+ *   - operator has not yet clicked "Complete" or had it auto-completed
+ *
+ * No new persistence — uses the existing NextAction lifecycle.
+ */
+function buildActiveBuild(recentActions: any[]): ActiveBuildProfile | null {
+  if (!recentActions || recentActions.length === 0) return null;
+  // Find the most recent accepted-but-not-completed action.
+  const inFlight = recentActions.find(r => r.status === 'accepted');
+  if (!inFlight) return null;
+  const reqKey = inFlight.metadata?.requirement_key;
+  return {
+    source: 'next_action',
+    title: inFlight.title,
+    started_at: (inFlight.updated_at || inFlight.created_at || new Date()).toISOString
+      ? (inFlight.updated_at || inFlight.created_at || new Date()).toISOString()
+      : new Date().toISOString(),
+    target_ref: reqKey || inFlight.action_type || 'unknown',
+  };
 }
 
 function stripRank(entry: any): NextActionProfile {
