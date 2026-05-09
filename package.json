@@ -20,5 +20,8 @@
   },
   "dependencies": {
     "playwright": "^1.58.2"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.5.17"
   }
 }
