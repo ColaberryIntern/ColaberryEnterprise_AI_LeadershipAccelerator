@@ -1,0 +1,359 @@
+/**
+ * SystemView — the L4 understanding surface.
+ *
+ * System View Restructure Sprint, 2026-05-09.
+ *
+ * Replaces the 4,295-line SystemViewV2 as the user-facing target of
+ * `/portal/project/system-v2`. The legacy SystemViewV2 surface is
+ * preserved at `/portal/project/system-v2-legacy` for rollback only.
+ *
+ * Hard rule: this surface EXPLAINS. It does NOT decide, prioritize,
+ * rank, recommend, or orchestrate. Cory at Home owns authority;
+ * Critique improves; Blueprint executes; Verify confirms; System
+ * understands. Anything that violates that boundary belongs in another
+ * surface.
+ *
+ * Layout: 5 tabs. CORE tabs (Components default · Architecture · BPs)
+ * load eagerly; ADVANCED tabs (Operations · Cognition) lazy-mount on
+ * first click and use their own progressive disclosure.
+ *
+ * Tab persistence: `?tab=components|architecture|bps|operations|cognition`.
+ */
+import React, { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import CapabilityGrid from '../../components/project/CapabilityGrid';
+import PortalBusinessProcessesTab from '../../components/project/PortalBusinessProcessesTab';
+import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
+import { OperatorCognitionDashboard } from '../../components/operator/OperatorCognitionDashboard';
+import { AutonomousExecutionDashboard } from '../../components/operator/AutonomousExecutionDashboard';
+
+type TabKey = 'components' | 'architecture' | 'bps' | 'operations' | 'cognition';
+
+interface TabSpec {
+  key: TabKey;
+  label: string;
+  icon: string;
+  advanced?: boolean;
+  description: string;
+}
+
+const TABS: TabSpec[] = [
+  { key: 'components', label: 'Components', icon: 'bi-grid-3x3-gap', description: 'What exists in the system.' },
+  { key: 'architecture', label: 'Architecture', icon: 'bi-diagram-3', description: 'How the system is connected.' },
+  { key: 'bps', label: 'BPs', icon: 'bi-list-ul', description: 'Business processes and their structure.' },
+  { key: 'operations', label: 'Operations', icon: 'bi-activity', advanced: true, description: 'Advanced runtime visibility.' },
+  { key: 'cognition', label: 'Cognition', icon: 'bi-cpu', advanced: true, description: 'Advanced intelligence visibility.' },
+];
+
+const DEFAULT_TAB: TabKey = 'components';
+
+const SystemView: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as TabKey) || DEFAULT_TAB;
+  const [active, setActive] = useState<TabKey>(
+    TABS.some(t => t.key === initialTab) ? initialTab : DEFAULT_TAB,
+  );
+
+  // Lazy-mount tracker so advanced tabs don't load until first viewed.
+  const [hasMounted, setHasMounted] = useState<Record<TabKey, boolean>>({
+    components: true,
+    architecture: false,
+    bps: false,
+    operations: false,
+    cognition: false,
+  });
+
+  const setTab = (key: TabKey) => {
+    setActive(key);
+    setHasMounted(prev => ({ ...prev, [key]: true }));
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', key);
+    setSearchParams(next, { replace: true });
+  };
+
+  const activeSpec = useMemo(() => TABS.find(t => t.key === active)!, [active]);
+
+  return (
+    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '1.25rem 1rem 4rem' }}>
+
+      {/* ─── Surface intent reminder ─────────────────────────── */}
+      <header style={{ marginBottom: '1.25rem' }}>
+        <div style={{
+          fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+          color: 'var(--color-text-light)', fontWeight: 600,
+        }}>
+          System
+        </div>
+        <h2 style={{
+          fontSize: 22, fontWeight: 600, color: 'var(--color-primary)',
+          letterSpacing: '-0.01em', marginTop: 4, marginBottom: 4,
+        }}>
+          Understand the system.
+        </h2>
+        <div style={{ fontSize: 13, color: 'var(--color-text-light)' }}>
+          This surface explains topology, components, and relationships. It does not rank or recommend &mdash;
+          <Link to="/portal/home" style={{ color: 'var(--color-primary-light)', marginLeft: 4 }}>Cory at Home</Link> decides what's next.
+        </div>
+      </header>
+
+      {/* ─── Tab strip ─────────────────────────── */}
+      <div
+        role="tablist"
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid var(--color-border)',
+          marginBottom: '1.25rem',
+          gap: 4,
+          overflowX: 'auto',
+        }}
+      >
+        {TABS.map(tab => {
+          const isActive = tab.key === active;
+          return (
+            <button
+              key={tab.key}
+              role="tab"
+              type="button"
+              onClick={() => setTab(tab.key)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                borderBottom: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
+                padding: '0.55rem 0.95rem',
+                marginBottom: -1,
+                fontSize: 13,
+                fontWeight: isActive ? 600 : 500,
+                color: isActive ? 'var(--color-primary)' : 'var(--color-text-light)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <i className={`bi ${tab.icon}`}></i>
+              {tab.label}
+              {tab.advanced && (
+                <span style={{
+                  fontSize: 9,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  background: 'var(--color-purple-bg, rgba(99,102,241,0.08))',
+                  color: 'var(--color-purple, #6366f1)',
+                  padding: '0.1rem 0.35rem',
+                  borderRadius: 3,
+                  fontWeight: 600,
+                  marginLeft: 2,
+                }}>advanced</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ─── Active tab subtitle ─────────────────────────── */}
+      <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginBottom: '1.25rem' }}>
+        {activeSpec.description}
+      </div>
+
+      {/* ─── Tab panels — keep mounted once shown to preserve scroll ─── */}
+      <div role="tabpanel" hidden={active !== 'components'}>
+        {hasMounted.components && <ComponentsTab />}
+      </div>
+      <div role="tabpanel" hidden={active !== 'architecture'}>
+        {hasMounted.architecture && <ArchitectureTab />}
+      </div>
+      <div role="tabpanel" hidden={active !== 'bps'}>
+        {hasMounted.bps && <BPsTab />}
+      </div>
+      <div role="tabpanel" hidden={active !== 'operations'}>
+        {hasMounted.operations && <OperationsTab />}
+      </div>
+      <div role="tabpanel" hidden={active !== 'cognition'}>
+        {hasMounted.cognition && <CognitionTab />}
+      </div>
+
+      {/* ─── Footer meta — quiet legacy fallback ─────────── */}
+      <div style={{
+        fontSize: 11, color: 'var(--color-text-light)', textAlign: 'center',
+        marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)',
+      }}>
+        Need the full operator dashboard?{' '}
+        <Link to="/portal/project/system-v2-legacy" style={{ color: 'var(--color-text-light)', textDecoration: 'underline' }}>
+          Open the legacy view
+        </Link>.
+      </div>
+    </div>
+  );
+};
+
+// ──────────────────────────────────────────────────────────────────
+// Tabs — kept thin. Each tab wraps an existing component or two.
+// ──────────────────────────────────────────────────────────────────
+
+const ComponentsTab: React.FC = () => (
+  <section>
+    <TabIntro
+      title="Components"
+      blurb="Every capability the system contains, with completion and feature counts. Toggle scope here; execute via Blueprint."
+    />
+    <CapabilityGrid />
+  </section>
+);
+
+const ArchitectureTab: React.FC = () => (
+  <section>
+    <TabIntro
+      title="Architecture"
+      blurb="How the layers fit together — backend, frontend, agents, data."
+    />
+    <SystemArchitectureCard />
+    <div style={{
+      marginTop: '1rem',
+      padding: '0.75rem 0.95rem',
+      background: 'var(--color-bg-alt)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 6,
+      fontSize: 12,
+      color: 'var(--color-text-light)',
+    }}>
+      <i className="bi bi-info-circle me-2" style={{ color: 'var(--color-info)' }}></i>
+      For a per-BP visual flow (frontend / API / services / agents / database), open the
+      <strong style={{ color: 'var(--color-text)' }}> BPs</strong> tab and pick a process.
+    </div>
+  </section>
+);
+
+const BPsTab: React.FC = () => (
+  <section>
+    <TabIntro
+      title="Business Processes"
+      blurb="Process structure, status, and dependencies. This tab explains — Cory drives execution from Home."
+    />
+    <PortalBusinessProcessesTab />
+  </section>
+);
+
+const OperationsTab: React.FC = () => (
+  <section>
+    <TabIntro
+      title="Operations"
+      blurb="Advanced runtime visibility — autonomous execution lanes, governance handoffs, recovery archetypes. Collapsed by default; expand only if you need to inspect."
+      advanced
+    />
+    <div style={{
+      background: 'var(--color-bg-alt)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 6,
+      padding: '0.85rem 1rem',
+      fontSize: 12,
+      color: 'var(--color-text-light)',
+      marginBottom: '1rem',
+    }}>
+      <i className="bi bi-info-circle me-2" style={{ color: 'var(--color-info)' }}></i>
+      Sections below come from the operator dashboard. They surface advanced operational state across all
+      32 backend phases. <strong>You don't need to read these to use the platform.</strong>
+    </div>
+    <AutonomousExecutionDashboard defaultCollapsed={true} />
+  </section>
+);
+
+const CognitionTab: React.FC = () => (
+  <section>
+    <TabIntro
+      title="Cognition"
+      blurb="Advanced intelligence visibility — reasoning continuity, governance memory, federation, archaeology. Collapsed by default."
+      advanced
+    />
+    <div style={{
+      background: 'var(--color-bg-alt)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 6,
+      padding: '0.85rem 1rem',
+      fontSize: 12,
+      color: 'var(--color-text-light)',
+      marginBottom: '1rem',
+    }}>
+      <i className="bi bi-info-circle me-2" style={{ color: 'var(--color-info)' }}></i>
+      The cognition layer below is how the platform reasons about itself over time.
+      It's hidden infrastructure — surfaced here for transparency, not because you need to act on it.
+    </div>
+    <OperatorCognitionDashboard defaultCollapsed={true} />
+  </section>
+);
+
+// ──────────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────────
+
+const TabIntro: React.FC<{ title: string; blurb: string; advanced?: boolean }> = ({ title, blurb, advanced }) => (
+  <header style={{ marginBottom: '1.1rem' }}>
+    <h3 style={{
+      fontSize: 16, fontWeight: 600, color: 'var(--color-primary)', margin: 0,
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      {title}
+      {advanced && (
+        <span style={{
+          fontSize: 9,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          background: 'var(--color-purple-bg, rgba(99,102,241,0.08))',
+          color: 'var(--color-purple, #6366f1)',
+          padding: '0.1rem 0.4rem',
+          borderRadius: 3,
+          fontWeight: 600,
+        }}>advanced</span>
+      )}
+    </h3>
+    <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginTop: 4 }}>
+      {blurb}
+    </div>
+  </header>
+);
+
+const Disclosure: React.FC<{
+  title: string;
+  subtitle?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}> = ({ title, subtitle, open, onToggle, children }) => (
+  <div style={{
+    border: '1px solid var(--color-border)',
+    borderRadius: 6,
+    marginTop: '1rem',
+    overflow: 'hidden',
+  }}>
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        width: '100%',
+        background: 'var(--color-bg-alt)',
+        border: 'none',
+        padding: '0.7rem 0.95rem',
+        textAlign: 'left',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: 13,
+      }}
+      aria-expanded={open}
+    >
+      <i className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ color: 'var(--color-text-light)' }}></i>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, color: 'var(--color-text)' }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginTop: 2 }}>{subtitle}</div>}
+      </div>
+    </button>
+    {open && (
+      <div style={{ padding: '0.95rem 1rem', background: 'white' }}>
+        {children}
+      </div>
+    )}
+  </div>
+);
+
+export default SystemView;

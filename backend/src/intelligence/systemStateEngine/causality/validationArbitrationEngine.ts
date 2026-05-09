@@ -39,6 +39,14 @@ const ROLE_WEIGHTS: Record<ValidatorRole, number> = {
 export interface ArbitrateInput {
   readonly mutation_id: string;
   readonly verdicts: ReadonlyArray<ValidatorVerdict>;
+  /**
+   * Phase 17: optional adaptive weight overrides. When supplied, the
+   * arbitration engine uses these per-validator weights for the normal
+   * vote tally. Hard architectural vetoes (containment_validator
+   * confidence ≤ 20 → forced reject) IGNORE these overrides — vetoes
+   * are absolute, not voting. Missing roles fall back to static defaults.
+   */
+  readonly weight_overrides?: Partial<Record<ValidatorRole, number>>;
 }
 
 export function arbitrate(input: ArbitrateInput): ValidationArbitrationResult {
@@ -70,10 +78,18 @@ export function arbitrate(input: ArbitrateInput): ValidationArbitrationResult {
     }
   }
 
-  // Weighted vote tally per recommendation.
+  // Weighted vote tally per recommendation. Phase 17: when
+  // weight_overrides are supplied, they replace the static ROLE_WEIGHTS
+  // for the normal vote tally. Hard vetoes already short-circuited
+  // above and don't consult these weights.
+  const overrides = input.weight_overrides ?? {};
+  const effectiveWeight = (role: ValidatorRole): number => {
+    const override = overrides[role];
+    return typeof override === 'number' ? override : (ROLE_WEIGHTS[role] ?? 1.0);
+  };
   const tally = new Map<ValidatorRecommendation, number>();
   for (const v of verdicts) {
-    const weight = ROLE_WEIGHTS[v.validator_type] ?? 1.0;
+    const weight = effectiveWeight(v.validator_type);
     tally.set(v.recommendation, (tally.get(v.recommendation) ?? 0) + weight);
   }
   // Pick the recommendation with the highest weight; ties go to the more
@@ -89,13 +105,14 @@ export function arbitrate(input: ArbitrateInput): ValidationArbitrationResult {
     }
   }
 
-  // Weighted confidence average.
+  // Weighted confidence average uses the same effective weights so the
+  // adaptive overrides influence the consensus_confidence + range too.
   let weightSum = 0;
   let weightedTotal = 0;
   let minConf = 100;
   let maxConf = 0;
   for (const v of verdicts) {
-    const w = ROLE_WEIGHTS[v.validator_type] ?? 1.0;
+    const w = effectiveWeight(v.validator_type);
     weightSum += w;
     weightedTotal += v.confidence * w;
     if (v.confidence < minConf) minConf = v.confidence;

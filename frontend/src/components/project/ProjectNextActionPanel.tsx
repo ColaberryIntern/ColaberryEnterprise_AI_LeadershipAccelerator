@@ -1,6 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
+/**
+ * ProjectNextActionPanel — presentation panel for Cory's top action.
+ *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   - Was: direct fetch of `/api/portal/project/next-action` + local state.
+ *   - Is now: PRESENTATION ONLY over `useUnifiedProjectState`. The unified
+ *     synthesizer is the canonical authority for "what's next?".
+ *
+ * Mutations (accept / complete) still POST to the underlying engine
+ * endpoints, then call the unified hook's `refresh()` so every other
+ * surface (Cory Home, Blueprint banner, etc.) sees the new state at the
+ * same time.
+ *
+ * Local prioritization is forbidden. Local readiness/coverage is
+ * forbidden. If you need a value not exposed here, add it to
+ * `UnifiedProjectState` — never compute it inside this component.
+ */
+import React, { useState, useMemo } from 'react';
 import portalApi from '../../utils/portalApi';
 import GuidedExecutionPanel from './GuidedExecutionPanel';
+import { useUnifiedProjectState } from '../../hooks/useUnifiedProjectState';
 
 interface NextActionData {
   id: string;
@@ -30,42 +48,42 @@ const ACTION_TYPE_BADGES: Record<string, { label: string; className: string }> =
 };
 
 function ProjectNextActionPanel() {
-  const [action, setAction] = useState<NextActionData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // CANONICAL source of truth — Cory's authority via the unified synthesizer.
+  // The component never computes priority or sorts locally; it just renders.
+  const { state, loading, refresh } = useUnifiedProjectState();
   const [acting, setActing] = useState<'accepting' | 'completing' | null>(null);
-  const [noAction, setNoAction] = useState(false);
   const [showGuidance, setShowGuidance] = useState(false);
   const [verificationGaps, setVerificationGaps] = useState<string[] | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [progressionResult, setProgressionResult] = useState<any>(null);
 
-  const fetchAction = useCallback(() => {
-    setLoading(true);
-    portalApi.get('/api/portal/project/next-action')
-      .then(res => {
-        if (res.data.action) {
-          setAction(res.data.action);
-          setNoAction(false);
-        } else {
-          setAction(null);
-          setNoAction(true);
-        }
-      })
-      .catch(() => {
-        setAction(null);
-        setNoAction(true);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  // Map UnifiedProjectState's NextActionProfile shape into the panel's
+  // pre-existing NextActionData shape so the render code below is unchanged.
+  const action: NextActionData | null = useMemo(() => {
+    const next = state?.next_action;
+    if (!next) return null;
+    if (next.source !== 'next_action') return null; // panel only renders Cory next-action items
+    return {
+      id: next.source_id || '',
+      title: next.title,
+      action_type: (next.metadata?.action_type as string) || 'build_feature',
+      reason: next.reason,
+      priority_score: next.priority_score,
+      confidence_score: next.confidence_score,
+      status: 'pending',
+      metadata: next.metadata as any,
+    };
+  }, [state?.next_action]);
 
-  useEffect(() => { fetchAction(); }, [fetchAction]);
+  const noAction = !loading && !action;
 
   const handleAccept = async () => {
     if (!action) return;
     setActing('accepting');
     try {
-      const res = await portalApi.post('/api/portal/project/next-action/accept', { action_id: action.id });
-      setAction(res.data.action);
+      await portalApi.post('/api/portal/project/next-action/accept', { action_id: action.id });
+      // Refresh the unified state so every surface sees the new status.
+      await refresh();
       setShowGuidance(true);
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to accept action');
@@ -90,13 +108,9 @@ function ProjectNextActionPanel() {
         // Show gaps from learning injection
         setVerificationGaps(result.learning_injection.actions.slice(0, 3));
       } else if (result.action_completed) {
-        // Action was completed by progression engine — refresh
+        // Action was completed by progression engine — refresh from canonical source.
         setShowGuidance(false);
-        if (result.next_action) {
-          setAction(result.next_action);
-        } else {
-          fetchAction();
-        }
+        await refresh();
       }
     } catch (err: any) {
       // Fallback: complete manually if progression fails
@@ -104,7 +118,7 @@ function ProjectNextActionPanel() {
         setActing('completing');
         setShowGuidance(false);
         await portalApi.post('/api/portal/project/next-action/complete', { action_id: action.id });
-        fetchAction();
+        await refresh();
       } catch (fallbackErr: any) {
         alert(fallbackErr.response?.data?.error || 'Failed to complete action');
       }

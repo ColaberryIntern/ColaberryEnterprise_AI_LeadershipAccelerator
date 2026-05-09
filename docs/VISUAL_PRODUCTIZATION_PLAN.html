@@ -1,0 +1,1586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visual Productization Plan — Pivot from Backend Cognition to Product Experience</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white;
+    padding: 2.5rem 0;
+    margin-bottom: 2rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .doc-header .subtitle { font-size: 1rem; opacity: 0.92; max-width: 980px; }
+  .doc-header .meta {
+    margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.6rem;
+    font-size: 0.82rem;
+  }
+  .doc-header .meta-item {
+    background: rgba(255, 255, 255, 0.13);
+    padding: 0.4rem 0.85rem;
+    border-radius: 4px;
+  }
+  .container-narrow { max-width: 1280px; }
+
+  /* TOC */
+  .toc {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.6rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.82rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* Sections */
+  .section {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.4rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.85rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.95rem; color: var(--color-text-light);
+    margin-bottom: 1.25rem; padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.6rem;
+    color: var(--color-text);
+  }
+
+  /* Critique annotations — readers add notes inline */
+  .critique-zone {
+    margin-top: 1rem; padding: 0.75rem 1rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border);
+    border-radius: 4px;
+    font-size: 0.78rem; color: var(--color-text-light);
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.7rem; color: var(--color-text-light); margin-bottom: 0.35rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* Pain-point cards */
+  .pain-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 0.85rem; margin-bottom: 1rem;
+  }
+  .pain-card {
+    background: var(--color-danger-bg);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-left: 4px solid var(--color-danger);
+    border-radius: 5px;
+    padding: 0.85rem 1rem;
+  }
+  .pain-card h4 {
+    font-size: 0.88rem; font-weight: 600; color: var(--color-danger);
+    margin-bottom: 0.35rem; display: flex; align-items: baseline; gap: 0.5rem;
+  }
+  .pain-card h4 .pid {
+    background: var(--color-danger); color: white;
+    font-size: 0.62rem; padding: 0.1rem 0.42rem; border-radius: 2px;
+    font-weight: 500; letter-spacing: 0.04em;
+  }
+  .pain-card .body { font-size: 0.78rem; color: var(--color-text); line-height: 1.45; }
+  .pain-card .evidence {
+    margin-top: 0.5rem; font-size: 0.72rem; color: var(--color-text-light);
+    padding-top: 0.4rem; border-top: 1px solid rgba(239, 68, 68, 0.15);
+    font-family: 'Consolas', 'Monaco', monospace;
+  }
+
+  /* Principle cards */
+  .principle-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.85rem;
+  }
+  .principle-card {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-primary-light);
+    border-radius: 5px;
+    padding: 0.85rem 1rem;
+  }
+  .principle-card .num {
+    font-size: 0.65rem; letter-spacing: 0.1em;
+    color: var(--color-primary-light); font-weight: 600;
+  }
+  .principle-card h4 { font-size: 0.92rem; font-weight: 600; margin: 0.2rem 0 0.4rem; }
+  .principle-card p { font-size: 0.78rem; margin: 0; color: var(--color-text); line-height: 1.5; }
+
+  /* Mockups (CSS-only wireframes) */
+  .mockup {
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 0.85rem;
+    margin: 1rem 0 0.5rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  }
+  .mockup-frame {
+    background: var(--color-bg);
+    border-radius: 4px;
+    overflow: hidden;
+    min-height: 360px;
+    display: flex;
+  }
+  .mockup-caption {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.72rem;
+    padding: 0.55rem 0.4rem 0.15rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .mockup-caption .url { background: rgba(255,255,255,0.12); padding: 0.15rem 0.55rem; border-radius: 3px; }
+
+  /* Visual workspace mockup specifics */
+  .vw-sidebar {
+    width: 280px; background: var(--color-bg-alt); border-right: 1px solid var(--color-border);
+    padding: 0.85rem; font-size: 0.74rem;
+  }
+  .vw-sidebar h5 {
+    font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); margin: 0.6rem 0 0.35rem; font-weight: 600;
+  }
+  .vw-sidebar .bp-pill {
+    background: white; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; margin-bottom: 0.3rem; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .vw-sidebar .bp-pill.active {
+    background: var(--color-primary); color: white; border-color: var(--color-primary);
+  }
+  .vw-sidebar .bp-pill .badge { font-size: 0.6rem; }
+  .vw-canvas { flex: 1; display: flex; flex-direction: column; }
+  .vw-toolbar {
+    background: white; border-bottom: 1px solid var(--color-border);
+    padding: 0.55rem 0.85rem; display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.78rem;
+  }
+  .vw-toolbar .left { display: flex; gap: 0.5rem; align-items: center; }
+  .vw-toolbar .url-bar {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.25rem 0.6rem; font-family: 'Consolas', monospace; font-size: 0.74rem;
+    color: var(--color-text-light); min-width: 280px;
+  }
+  .vw-stage {
+    flex: 1; background: var(--color-bg-alt); padding: 1rem; position: relative;
+    display: flex; align-items: stretch; gap: 0.85rem;
+  }
+  .vw-iframe-wrapper {
+    flex: 1; background: white; border-radius: 4px; border: 1px solid var(--color-border);
+    position: relative; min-height: 320px;
+    background-image: linear-gradient(45deg, #f9fafb 25%, transparent 25%, transparent 75%, #f9fafb 75%),
+                      linear-gradient(45deg, #f9fafb 25%, transparent 25%, transparent 75%, #f9fafb 75%);
+    background-size: 18px 18px;
+    background-position: 0 0, 9px 9px;
+  }
+  .vw-iframe-wrapper::before {
+    content: 'live page renders here'; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-text-light); font-size: 0.78rem; font-family: 'Consolas', monospace;
+    background: white; padding: 0.4rem 0.85rem; border-radius: 3px; border: 1px solid var(--color-border);
+  }
+  .vw-pin {
+    position: absolute; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--color-secondary); color: white; font-size: 0.7rem; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(229, 62, 62, 0.4); cursor: pointer;
+    border: 2px solid white;
+  }
+  .vw-critique-panel {
+    width: 320px; background: white; border-radius: 4px; border: 1px solid var(--color-border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .vw-critique-panel .header {
+    background: var(--color-primary); color: white;
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .vw-critique-panel .pin-list { flex: 1; padding: 0.5rem; overflow-y: auto; }
+  .vw-pin-card {
+    border: 1px solid var(--color-border); border-radius: 3px; padding: 0.55rem 0.65rem;
+    margin-bottom: 0.5rem; font-size: 0.74rem;
+  }
+  .vw-pin-card .pin-head {
+    display: flex; align-items: baseline; gap: 0.45rem; margin-bottom: 0.25rem;
+  }
+  .vw-pin-card .pin-num {
+    background: var(--color-secondary); color: white;
+    font-size: 0.62rem; padding: 0.05rem 0.4rem; border-radius: 50%; font-weight: 600;
+  }
+  .vw-pin-card .pin-region { color: var(--color-text-light); font-size: 0.68rem; }
+  .vw-pin-card .pin-text { font-size: 0.74rem; color: var(--color-text); }
+  .vw-pin-card .pin-actions {
+    margin-top: 0.4rem; display: flex; gap: 0.3rem;
+  }
+  .vw-pin-card .pin-actions button {
+    font-size: 0.68rem; padding: 0.18rem 0.5rem; border: 1px solid var(--color-border);
+    background: var(--color-bg-alt); color: var(--color-text); border-radius: 3px; cursor: pointer;
+  }
+  .vw-prompt-bar {
+    background: var(--color-primary); color: white;
+    padding: 0.55rem 0.75rem; display: flex; gap: 0.45rem; align-items: center;
+    font-size: 0.78rem;
+  }
+  .vw-prompt-bar .group-info { flex: 1; opacity: 0.9; font-size: 0.74rem; }
+  .vw-prompt-bar button {
+    background: white; color: var(--color-primary); border: none;
+    padding: 0.3rem 0.7rem; font-size: 0.74rem; font-weight: 600; border-radius: 3px; cursor: pointer;
+  }
+
+  /* Cory home mockup */
+  .cory-home { width: 100%; padding: 1rem 1.25rem; }
+  .cory-greeting {
+    font-size: 1.15rem; font-weight: 600; color: var(--color-primary); margin-bottom: 0.2rem;
+  }
+  .cory-subtitle { font-size: 0.78rem; color: var(--color-text-light); margin-bottom: 1rem; }
+  .cory-next-card {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; border-radius: 6px; padding: 1.1rem 1.25rem; margin-bottom: 1rem;
+  }
+  .cory-next-card .label {
+    font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em;
+    opacity: 0.8; margin-bottom: 0.3rem;
+  }
+  .cory-next-card .title { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.35rem; }
+  .cory-next-card .reason { font-size: 0.78rem; opacity: 0.92; margin-bottom: 0.65rem; }
+  .cory-next-card .actions { display: flex; gap: 0.45rem; }
+  .cory-next-card button {
+    background: white; color: var(--color-primary); border: none;
+    padding: 0.35rem 0.75rem; font-size: 0.78rem; font-weight: 600; border-radius: 3px; cursor: pointer;
+  }
+  .cory-next-card button.ghost {
+    background: transparent; color: white; border: 1px solid rgba(255,255,255,0.4);
+  }
+  .cory-row {
+    display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;
+  }
+  .cory-tile {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.7rem 0.85rem;
+  }
+  .cory-tile .label {
+    font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .cory-tile .value { font-size: 1.4rem; font-weight: 600; color: var(--color-primary); }
+  .cory-tile .delta { font-size: 0.7rem; color: var(--color-text-light); }
+  .cory-queue {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    overflow: hidden;
+  }
+  .cory-queue .head {
+    background: var(--color-bg-alt); padding: 0.5rem 0.75rem;
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); font-weight: 600; border-bottom: 1px solid var(--color-border);
+  }
+  .cory-queue .row {
+    padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--color-border);
+    display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;
+  }
+  .cory-queue .row:last-child { border-bottom: none; }
+  .cory-queue .row .pos {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--color-bg-alt); color: var(--color-text-light);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 600; margin-right: 0.55rem;
+  }
+  .cory-queue .row.first .pos { background: var(--color-primary); color: white; }
+
+  /* Build center mockup */
+  .bc-stage { padding: 1rem 1.25rem; width: 100%; }
+  .bc-context-strip {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.7rem 0.9rem; margin-bottom: 0.85rem; display: flex; gap: 1.5rem;
+    font-size: 0.74rem;
+  }
+  .bc-context-strip .item .k { color: var(--color-text-light); font-size: 0.68rem; }
+  .bc-context-strip .item .v { font-weight: 600; color: var(--color-primary); }
+  .bc-prompt-block {
+    background: #0f172a; color: #e2e8f0; border-radius: 5px;
+    padding: 0.85rem 1rem; font-family: 'Consolas', monospace; font-size: 0.74rem;
+    line-height: 1.55; margin-bottom: 0.75rem; max-height: 220px; overflow-y: auto;
+  }
+  .bc-prompt-block .k { color: #fbbf24; }
+  .bc-prompt-block .s { color: #86efac; }
+  .bc-actions {
+    display: flex; gap: 0.45rem; margin-bottom: 0.85rem;
+  }
+  .bc-actions button {
+    border: 1px solid var(--color-border); background: white; color: var(--color-text);
+    padding: 0.4rem 0.85rem; font-size: 0.78rem; border-radius: 3px; cursor: pointer; font-weight: 500;
+  }
+  .bc-actions button.primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+  .bc-checklist {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.7rem 0.9rem; font-size: 0.78rem;
+  }
+  .bc-checklist .item { padding: 0.3rem 0; display: flex; gap: 0.5rem; align-items: baseline; }
+  .bc-checklist .item .check { color: var(--color-success); font-weight: 600; }
+  .bc-checklist .item .pending { color: var(--color-text-light); }
+
+  /* Verification workspace mockup */
+  .ver-stage { padding: 1rem 1.25rem; width: 100%; display: grid; grid-template-columns: 2fr 1fr; gap: 0.85rem; }
+  .ver-runs {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    overflow: hidden;
+  }
+  .ver-runs .head {
+    background: var(--color-bg-alt); padding: 0.55rem 0.85rem;
+    font-size: 0.78rem; font-weight: 600; border-bottom: 1px solid var(--color-border);
+  }
+  .ver-runs .row {
+    padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--color-border);
+    display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;
+  }
+  .ver-runs .row .check-name { font-family: 'Consolas', monospace; font-size: 0.74rem; }
+  .ver-runs .row .status.pass { color: var(--color-success); font-weight: 600; }
+  .ver-runs .row .status.fail { color: var(--color-danger); font-weight: 600; }
+  .ver-runs .row .status.skip { color: var(--color-text-light); }
+
+  /* Before / after comparison */
+  .before-after {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;
+  }
+  .ba-col {
+    border: 1px solid var(--color-border); border-radius: 5px; overflow: hidden;
+  }
+  .ba-col .ba-head {
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ba-col.before .ba-head { background: var(--color-danger-bg); color: var(--color-danger); }
+  .ba-col.after .ba-head { background: var(--color-success-bg); color: var(--color-success); }
+  .ba-col .ba-body { padding: 0.7rem 0.9rem; font-size: 0.8rem; line-height: 1.55; background: white; }
+  .ba-col ul { margin: 0.3rem 0 0 1.1rem; padding: 0; }
+  .ba-col ul li { margin-bottom: 0.25rem; }
+
+  /* Roadmap */
+  .roadmap-track {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-top: 0.5rem;
+  }
+  .roadmap-step {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.85rem 0.9rem; position: relative;
+  }
+  .roadmap-step .num {
+    position: absolute; top: -0.6rem; left: 0.85rem;
+    background: var(--color-primary); color: white;
+    font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.55rem; border-radius: 3px;
+  }
+  .roadmap-step h5 {
+    font-size: 0.85rem; font-weight: 600; margin: 0.4rem 0 0.4rem;
+  }
+  .roadmap-step .deliverables { font-size: 0.74rem; color: var(--color-text); }
+  .roadmap-step .deliverables li { margin-bottom: 0.18rem; }
+  .roadmap-step .est {
+    margin-top: 0.5rem; font-size: 0.7rem; color: var(--color-text-light);
+    padding-top: 0.4rem; border-top: 1px solid var(--color-border);
+  }
+
+  /* Inline glossary keys */
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+  .pill {
+    display: inline-block; background: var(--color-purple-bg); color: var(--color-purple);
+    border-radius: 3px; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.bad { background: var(--color-danger-bg); color: var(--color-danger); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.6rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.88rem; margin: 0.85rem 0;
+  }
+
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.7rem 0.9rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.45rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.8rem; }
+  .anti-list ul li { margin-bottom: 0.18rem; }
+
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 2rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>Visual Productization Plan</h1>
+    <div class="subtitle">
+      Pivot from backend governance phases to a unified, visually trustworthy product experience.
+      Backend cognition is mature (Phases 1&ndash;32, 1,732 tests). The bottleneck has moved to
+      product clarity, operational simplicity, and execution confidence.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> Plan &mdash; awaiting critique</span>
+      <span class="meta-item"><strong>Author:</strong> Claude (planner) for Ali</span>
+      <span class="meta-item"><strong>Pivot from:</strong> Phase 33+ governance</span>
+      <span class="meta-item"><strong>Pivot to:</strong> Visual product experience</span>
+      <span class="meta-item"><strong>Iteration loop:</strong> HTML &rarr; critique &rarr; prompt &rarr; rebuild</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields &mdash;
+    type in them, then "Save as" the page (Ctrl+S) or print to PDF to capture annotations. Or just
+    paste your critique back into Claude Code in plain text referencing section numbers.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">Why we're pivoting</a></li>
+      <li><a href="#s2">Current UX pain points</a></li>
+      <li><a href="#s3">Unified UX philosophy</a></li>
+      <li><a href="#s4">One Chef &mdash; Cory as single authority</a></li>
+      <li><a href="#s5">Proposed navigation</a></li>
+      <li><a href="#s6">Unified Cory Home (mockup)</a></li>
+      <li><a href="#s7">Visual Engineering Workspace (mockup)</a></li>
+      <li><a href="#s8">Build Center (mockup)</a></li>
+      <li><a href="#s9">Verification Workspace (mockup)</a></li>
+      <li><a href="#s10">UnifiedProjectState</a></li>
+      <li><a href="#s11">Critique &rarr; prompt workflow</a></li>
+      <li><a href="#s12">Before / after operational flow</a></li>
+      <li><a href="#s13">Implementation roadmap (5 priorities)</a></li>
+      <li><a href="#s14">Structured intelligence files</a></li>
+      <li><a href="#s15">CLAUDE.md evolution</a></li>
+      <li><a href="#s16">Out of scope &amp; explicit non-goals</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> Why we're pivoting</h2>
+    <div class="lead">
+      The backend cognition substrate is sufficiently advanced. The next bottleneck is human confidence,
+      not system correctness.
+    </div>
+
+    <div class="quote">
+      "Is it truly a much better system &mdash; something I can take to the market?" Honest answer:
+      the architecture is excellent enterprise plumbing, but the user-facing surface has not kept pace.
+      Stop adding governance layers; pivot to product.
+    </div>
+
+    <h3>What we have</h3>
+    <ul>
+      <li><strong>32 backend phases shipped</strong> &mdash; 1,732 tests passing across 32 suites, zero regressions.</li>
+      <li><strong>Hard architectural vetoes hold</strong> &mdash; cross-org isolation, no operator profiling, no autonomous mutation outside Phase 27/28 envelope+quota lane, deterministic replay everywhere.</li>
+      <li><strong>~150+ frontend components</strong> &mdash; many overlapping, several over the 500-line ceiling, multiple competing "next action" surfaces.</li>
+    </ul>
+
+    <h3>What's blocking market readiness</h3>
+    <ul>
+      <li>The user lands on a page and cannot tell what to do next without explanation.</li>
+      <li>Multiple surfaces show different "priority" rankings for the same project.</li>
+      <li>"Build" buttons appear in 6+ places, each with subtly different prompt assembly.</li>
+      <li>Advanced cognition (archaeology, topology, federation, replay) is rendered as foreground UI &mdash; intimidating, not reassuring.</li>
+      <li>No fast loop for visual critique &rarr; structured prompt &rarr; rebuild.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything to add/cut/correct in the framing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> Current UX pain points (grounded in code)</h2>
+    <div class="lead">
+      Each pain point cites concrete evidence from the current frontend codebase &mdash; not theoretical.
+    </div>
+
+    <div class="pain-grid">
+
+      <div class="pain-card">
+        <h4><span class="pid">P1</span>Bloated dashboards</h4>
+        <div class="body">
+          Three top-level surfaces have grown past the 500-line CLAUDE.md ceiling. Reading them
+          end-to-end takes minutes; finding any one feature takes scrolling.
+        </div>
+        <div class="evidence">
+          SystemViewV2.tsx &mdash; 4,280 lines<br>
+          ProjectDashboard.tsx &mdash; 1,715 lines<br>
+          AutonomousExecutionDashboard.tsx &mdash; 1,645 lines
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P2</span>Competing &ldquo;next action&rdquo; surfaces</h4>
+        <div class="body">
+          Four panels claim to tell the user what to do next. They draw from different signal sources
+          and disagree. The user has to triangulate.
+        </div>
+        <div class="evidence">
+          ProjectNextActionPanel.tsx<br>
+          WhyIsThisNextPanel.tsx<br>
+          SteeringPanel.tsx<br>
+          GuidedExecutionPanel.tsx
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P3</span>Overlapping intelligence panels</h4>
+        <div class="body">
+          Three panels each present a partial view of system intelligence. Users see the same insight
+          in three different framings on the same screen.
+        </div>
+        <div class="evidence">
+          ProjectIntelligencePanel.tsx<br>
+          SystemIntelligencePanel.tsx<br>
+          ProjectMentorPanel.tsx
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P4</span>Distributed build buttons</h4>
+        <div class="body">
+          "Build" or "Run prompt" or "Generate" actions live on cards, in modals, in sidebars, in tabs.
+          Each one composes context slightly differently. There is no single execution lane.
+        </div>
+        <div class="evidence">
+          EnhancementPromptBuilder + CapabilityDetail + WorkstationLauncher + AIFeatureBuilder + GuidedExecutionPanel + Cory chat
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P5</span>32 phase sections in one operator dashboard</h4>
+        <div class="body">
+          Every governance phase added a section to a single dashboard. The result reads as a changelog,
+          not a product. Most sections show ".0 in last 24h" because nothing has happened yet.
+        </div>
+        <div class="evidence">
+          AutonomousExecutionDashboard.tsx now contains Phase 13&ndash;32 sections inline
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P6</span>Local recalculation drift</h4>
+        <div class="body">
+          Components compute readiness, coverage, and progress locally from raw inputs. The same project
+          shows 73% in one tab and 81% in another because the formulas diverged.
+        </div>
+        <div class="evidence">
+          ProjectMaturityGauge / ArtifactMaturityChart / ExecutiveReadinessCard / RequirementsStatusCard each derive their own numbers
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P7</span>Inconsistent BP detail tabs</h4>
+        <div class="body">
+          BP detail pages, capability detail, project dashboard, and system view each ship a different
+          tab structure. Users learn one and re-learn another every time they navigate.
+        </div>
+        <div class="evidence">
+          PortalBusinessProcessDetail / CapabilityDetail / ProjectDashboard / SystemViewV2 &mdash; no shared tab spec
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P8</span>Visual review exists but is shallow</h4>
+        <div class="body">
+          A VisualReviewWorkspace page already exists. It can embed a page but cannot pin critique,
+          group changes, or compile prompts. The bones are there; it needs to become the product
+          acceleration engine.
+        </div>
+        <div class="evidence">
+          frontend/src/pages/project/VisualReviewWorkspace.tsx &mdash; 292 lines, no annotation overlay wired
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P9</span>Foregrounded cognition jargon</h4>
+        <div class="body">
+          UI surfaces phase numbers, "boundary proof chain," "operator continuity," "stabilization timeline"
+          to non-technical executives. Powerful internally, alarming externally.
+        </div>
+        <div class="evidence">
+          AutonomousExecutionDashboard section headings expose Phase 27/28/29/30/31/32 names directly
+        </div>
+      </div>
+
+      <div class="pain-card">
+        <h4><span class="pid">P10</span>System intelligence misses changes</h4>
+        <div class="body">
+          When backend code lands, the system map / DB map / route registry are not always in sync.
+          Synchronizers exist but the inputs (manifests + decision traces) are inconsistent.
+        </div>
+        <div class="evidence">
+          system/intelligence/state_graph.json + system/database/database_map.json drift relative to recent migrations
+        </div>
+      </div>
+
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="Pain points to add, downgrade, or recategorize?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> Unified UX philosophy</h2>
+    <div class="lead">
+      Eight principles. Every product decision must trace to one of these. If a screen, a button, or a metric
+      doesn't, cut it.
+    </div>
+
+    <div class="principle-grid">
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 01</div>
+        <h4>Calm UI</h4>
+        <p>Reduce clutter, competing actions, duplicate navigation, fragmented flows. Premium feel: deterministic, trustworthy, operationally stable.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 02</div>
+        <h4>One execution lane</h4>
+        <p>The user never builds from cards, groups, or random tabs. All execution routes through Build Center: prompt prep + context assembly + validation + execution coordination.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 03</div>
+        <h4>One next step</h4>
+        <p>Cory exposes one prioritized operational queue. If a BP is next, it must be first everywhere. Every surface agrees. No competing rankings.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 04</div>
+        <h4>One calculation system</h4>
+        <p>UnifiedProjectState is the authoritative state object. All readiness, coverage, confidence, health, priority derives from it. No local recalculation, ever.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 05</div>
+        <h4>Consistent navigation</h4>
+        <p>Every BP, component, and page uses the same six tabs: Summary, Tasks, Build, Verification, Intelligence, History. No variation.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 06</div>
+        <h4>Hide advanced complexity</h4>
+        <p>Archaeology, topology, federation, governance replay, distributed runtime, stabilization &mdash; all become background intelligence, not foreground UX. Invisible but powerful.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 07</div>
+        <h4>Critique &rarr; prompt</h4>
+        <p>The Visual Engineering Workspace is a prompt compiler, not a review page. Critique structures requests; the workspace generates Claude Code prompts the user pastes and runs.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">PRINCIPLE 08</div>
+        <h4>Synchronized intelligence</h4>
+        <p>Structured registry files (system map, DB map, route registry, BP registry, component registry) are the canonical truth and stay in sync via build manifests &mdash; no more drift.</p>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Are these the right 8? Any to cut or reword?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> One Chef &mdash; Cory as single operational authority</h2>
+    <div class="lead">
+      Cory becomes <em>the</em> ranking, readiness, coverage, and execution engine. Every other system
+      becomes context, archaeology, evidence &mdash; never competing authority.
+    </div>
+
+    <div class="before-after">
+      <div class="ba-col before">
+        <div class="ba-head">Today &mdash; many cooks</div>
+        <div class="ba-body">
+          <ul>
+            <li>4 panels rank "what's next"</li>
+            <li>3 components compute readiness</li>
+            <li>2+ services derive coverage</li>
+            <li>Build buttons in 6+ surfaces</li>
+            <li>SystemStateEngine, BP planner, mentor agent, Cory chat all suggesting next steps</li>
+          </ul>
+        </div>
+      </div>
+      <div class="ba-col after">
+        <div class="ba-head">Tomorrow &mdash; one chef</div>
+        <div class="ba-body">
+          <ul>
+            <li><strong>Cory</strong> owns the queue (rank, reason, ETA, blockers)</li>
+            <li><strong>Cory</strong> owns readiness/coverage/health (sourced from UnifiedProjectState)</li>
+            <li>SystemStateEngine becomes Cory's <em>sensor pool</em>, not a parallel authority</li>
+            <li>Mentor / archaeology / replay become <em>evidence drawers</em> Cory cites</li>
+            <li>Every "build" button is a deep-link into Build Center pre-loaded with that BP's context</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="anti-list">
+      <h4>Non-goals (reject if these appear)</h4>
+      <ul>
+        <li>Building "Cory v2" as a new service. Cory already exists; this is a re-anchoring.</li>
+        <li>Removing the SystemStateEngine. It stays; it just stops competing for authority surface.</li>
+        <li>Hiding governance entirely. Cory cites it when relevant; it doesn't lead the UI.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="Does &ldquo;Cory as single chef&rdquo; ring true? What does it own that this misses?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> Proposed navigation structure</h2>
+    <div class="lead">
+      Five top-level destinations. Every other page is a deep-link inside one of these.
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md">
+        <div class="principle-card" style="border-left-color: var(--color-primary);">
+          <div class="num">01 &middot; HOME</div>
+          <h4>Cory Home</h4>
+          <p>One-screen daily entry: today's priority, project tiles, queue. No tabs. Calm.</p>
+        </div>
+      </div>
+      <div class="col-md">
+        <div class="principle-card" style="border-left-color: var(--color-secondary);">
+          <div class="num">02 &middot; CRITIQUE</div>
+          <h4>Visual Workspace</h4>
+          <p>Embed any page, pin critique, group changes, compile a prompt.</p>
+        </div>
+      </div>
+      <div class="col-md">
+        <div class="principle-card" style="border-left-color: var(--color-accent);">
+          <div class="num">03 &middot; BUILD</div>
+          <h4>Build Center</h4>
+          <p>The one execution surface. Prompt prep + context + paste-ready.</p>
+        </div>
+      </div>
+      <div class="col-md">
+        <div class="principle-card" style="border-left-color: var(--color-info);">
+          <div class="num">04 &middot; VERIFY</div>
+          <h4>Verification</h4>
+          <p>One place to see what passed, what regressed, what's still pending.</p>
+        </div>
+      </div>
+      <div class="col-md">
+        <div class="principle-card" style="border-left-color: var(--color-purple);">
+          <div class="num">05 &middot; SYSTEM</div>
+          <h4>System Map</h4>
+          <p>The synchronized view: BPs, components, routes, DB, intelligence drawers.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>Mapped from today's pages</h3>
+    <table class="table table-sm" style="font-size:0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Today</th><th>Tomorrow</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>ProjectDashboard.tsx</td><td>Cory Home</td><td>Slim down 1,715 lines &rarr; ~250</td></tr>
+        <tr><td>SystemViewV2.tsx</td><td>System Map</td><td>Slim down 4,280 lines &rarr; ~400 (modular tabs as separate components)</td></tr>
+        <tr><td>VisualReviewWorkspace.tsx</td><td>Visual Workspace</td><td>Evolve 292 lines into the prompt compiler &mdash; the marquee feature</td></tr>
+        <tr><td>WorkstationLauncher / GuidedExecutionPanel / EnhancementPromptBuilder</td><td>Build Center</td><td>Consolidate three surfaces into one</td></tr>
+        <tr><td>AutonomousExecutionDashboard.tsx</td><td>System &gt; Operations drawer</td><td>Phase sections become collapsible drawers; not foreground</td></tr>
+        <tr><td>OperatorCognitionDashboard.tsx</td><td>System &gt; Cognition drawer</td><td>Same &mdash; advanced surface, available, not lead</td></tr>
+        <tr><td>CoryFullscreen.tsx</td><td>Cory Home (default)</td><td>Make it the landing; everyone starts with Cory</td></tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Is the 5-destination model right? Cuts/adds?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> Unified Cory Home (mockup)</h2>
+    <div class="lead">
+      Single landing screen. Greeting, the one next thing, three project tiles, queue. No tabs.
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-caption">
+        <span>Cory Home &middot; landing screen</span>
+        <span class="url">/portal/home</span>
+      </div>
+      <div class="mockup-frame">
+        <div class="cory-home">
+          <div class="cory-greeting">Good morning, Ali.</div>
+          <div class="cory-subtitle">3 projects active. 1 thing needs you today. Everything else is on track.</div>
+
+          <div class="cory-next-card">
+            <div class="label">Today's one priority</div>
+            <div class="title">CES &middot; Wire campaign attribution to the new Pilot funnel</div>
+            <div class="reason">
+              Why: telemetry shows 14 leads landed on Pilot pages with no UTM &mdash; campaign source unrecoverable.
+              UnifiedProjectState rates this <strong>blast radius: medium, reversibility: high, time est: 35 min</strong>.
+            </div>
+            <div class="actions">
+              <button>Open in Build Center &rarr;</button>
+              <button class="ghost">Critique the page first</button>
+              <button class="ghost">Snooze</button>
+            </div>
+          </div>
+
+          <div class="cory-row">
+            <div class="cory-tile">
+              <div class="label">Active projects</div>
+              <div class="value">3</div>
+              <div class="delta">CES &middot; Accelerator portal &middot; OpenClaw</div>
+            </div>
+            <div class="cory-tile">
+              <div class="label">Verified today</div>
+              <div class="value">7</div>
+              <div class="delta">+3 vs yesterday</div>
+            </div>
+            <div class="cory-tile">
+              <div class="label">Operational health</div>
+              <div class="value">98<span style="font-size:0.85rem;color:var(--color-text-light);">%</span></div>
+              <div class="delta">no regressions in 24h</div>
+            </div>
+          </div>
+
+          <div class="cory-queue">
+            <div class="head">Operational queue &mdash; ranked by Cory</div>
+            <div class="row first">
+              <span><span class="pos">1</span>CES &mdash; Wire campaign attribution to Pilot funnel</span>
+              <span class="pill warn">35m &middot; medium blast</span>
+            </div>
+            <div class="row">
+              <span><span class="pos">2</span>Accelerator &mdash; Verify Phase 32 dashboard reads in production</span>
+              <span class="pill info">10m &middot; verification</span>
+            </div>
+            <div class="row">
+              <span><span class="pos">3</span>OpenClaw &mdash; Re-issue Medium browser session token</span>
+              <span class="pill">15m &middot; ops</span>
+            </div>
+            <div class="row">
+              <span><span class="pos">4</span>CES &mdash; Add field validation to Pilot signup form</span>
+              <span class="pill good">25m &middot; low blast</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:0.82rem; color: var(--color-text-light); margin-top: 0.7rem;">
+      Notice what's <em>not</em> here: no phase badges, no boundary-proof-chain hashes, no readiness dial,
+      no "what does Cory think" panel. Cory just thinks &mdash; and tells you.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="What's missing from the home screen? What should be cut?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> Visual Engineering Workspace (mockup)</h2>
+    <div class="lead">
+      The marquee feature. Open any page in the platform, pin critique to regions, group requests,
+      compile a Claude Code prompt, paste, rebuild. This becomes the product acceleration engine.
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-caption">
+        <span>Visual Workspace &middot; pinning critique on a real page</span>
+        <span class="url">/portal/critique?target=/portal/project/ces</span>
+      </div>
+      <div class="mockup-frame">
+        <div class="vw-sidebar">
+          <h5>Active project</h5>
+          <div class="bp-pill active">CES <span class="badge bg-light text-dark">3 pins</span></div>
+          <h5>Pages in this project</h5>
+          <div class="bp-pill">Pilot landing <span class="badge bg-secondary">live</span></div>
+          <div class="bp-pill">Inbound nurture <span class="badge bg-secondary">live</span></div>
+          <div class="bp-pill">Admin lead view <span class="badge bg-warning text-dark">draft</span></div>
+          <h5>Critique groups</h5>
+          <div class="bp-pill">Header refinement <span class="badge bg-light text-dark">2</span></div>
+          <div class="bp-pill">CTA copy <span class="badge bg-light text-dark">1</span></div>
+        </div>
+        <div class="vw-canvas">
+          <div class="vw-toolbar">
+            <div class="left">
+              <span class="pill info">PIN MODE</span>
+              <span class="url-bar">https://enterprise.colaberry.ai/pilot/ai-team</span>
+            </div>
+            <div>
+              <button class="btn btn-sm btn-outline-secondary">Reload</button>
+              <button class="btn btn-sm btn-primary">Compile prompt &rarr;</button>
+            </div>
+          </div>
+          <div class="vw-stage">
+            <div class="vw-iframe-wrapper">
+              <div class="vw-pin" style="top: 18%; left: 22%;">1</div>
+              <div class="vw-pin" style="top: 42%; left: 58%;">2</div>
+              <div class="vw-pin" style="top: 70%; left: 32%;">3</div>
+            </div>
+            <div class="vw-critique-panel">
+              <div class="header">
+                <span>Pinned critique</span>
+                <span style="font-size:0.7rem;opacity:0.85;">3 pins &middot; 1 group</span>
+              </div>
+              <div class="pin-list">
+                <div class="vw-pin-card">
+                  <div class="pin-head">
+                    <span class="pin-num">1</span>
+                    <span class="pin-region">header / nav</span>
+                  </div>
+                  <div class="pin-text">CTA "Deploy a Real AI System in 14 Days" wraps to 3 lines on mobile. Tighten to 2.</div>
+                  <div class="pin-actions">
+                    <button>AI suggest &rarr;</button>
+                    <button>Group</button>
+                    <button>Resolve</button>
+                  </div>
+                </div>
+                <div class="vw-pin-card">
+                  <div class="pin-head">
+                    <span class="pin-num">2</span>
+                    <span class="pin-region">hero copy</span>
+                  </div>
+                  <div class="pin-text">"AI Systems Architect" reads internal. Use plain "Build a real AI system in 14 days, not a prototype" instead.</div>
+                  <div class="pin-actions">
+                    <button>AI suggest &rarr;</button>
+                    <button>Group</button>
+                    <button>Resolve</button>
+                  </div>
+                </div>
+                <div class="vw-pin-card">
+                  <div class="pin-head">
+                    <span class="pin-num">3</span>
+                    <span class="pin-region">trust strip</span>
+                  </div>
+                  <div class="pin-text">Add 3 logos under fold. Currently empty area looks unfinished.</div>
+                  <div class="pin-actions">
+                    <button>AI suggest &rarr;</button>
+                    <button>Group</button>
+                    <button>Resolve</button>
+                  </div>
+                </div>
+              </div>
+              <div class="vw-prompt-bar">
+                <div class="group-info">3 pins ready to compile into one Claude Code prompt</div>
+                <button>Compile &rarr;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3>What "Compile prompt" does</h3>
+    <ol style="font-size:0.85rem;">
+      <li>Reads the target file path from the page route registry (system intelligence file).</li>
+      <li>Pulls the relevant component source via the component registry.</li>
+      <li>Bundles the pinned critiques + region hints + suggested edits into a single Claude Code prompt.</li>
+      <li>Adds verification scaffolding (ask Claude to run <kbd>tsc --noEmit</kbd>, screenshot the result).</li>
+      <li>Opens the prompt in a new tab with one-click copy. User pastes into Claude Code; rebuild starts immediately.</li>
+    </ol>
+
+    <h3>Why this is the acceleration engine</h3>
+    <p style="font-size:0.85rem;">
+      Today's loop: see issue &rarr; describe in chat &rarr; explain location &rarr; explain context &rarr;
+      wait for clarifying questions &rarr; rebuild. <strong>~10&ndash;25 minutes per change.</strong>
+    </p>
+    <p style="font-size:0.85rem;">
+      Visual Workspace loop: see issue &rarr; click &rarr; type &rarr; group &rarr; compile &rarr; paste &rarr; rebuild.
+      <strong>~2&ndash;4 minutes per change. 5&ndash;6&times; speedup on QA cycles.</strong>
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="What does the Visual Workspace need that this mockup misses? Any cut?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> Build Center (mockup)</h2>
+    <div class="lead">
+      The one execution surface. Every "build" link in the product deep-links here, pre-loaded with
+      the BP's context. The user reviews the assembled prompt, sees the verification checklist, and ships.
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-caption">
+        <span>Build Center &middot; one execution lane</span>
+        <span class="url">/portal/build?bp=ces-pilot-attribution</span>
+      </div>
+      <div class="mockup-frame">
+        <div class="bc-stage">
+          <div class="bc-context-strip">
+            <div class="item"><div class="k">PROJECT</div><div class="v">CES</div></div>
+            <div class="item"><div class="k">BP</div><div class="v">Pilot &mdash; campaign attribution wiring</div></div>
+            <div class="item"><div class="k">BLAST RADIUS</div><div class="v" style="color:var(--color-warning);">medium</div></div>
+            <div class="item"><div class="k">REVERSIBILITY</div><div class="v" style="color:var(--color-success);">high</div></div>
+            <div class="item"><div class="k">EST</div><div class="v">35 min</div></div>
+          </div>
+
+          <div class="bc-prompt-block">
+<span class="k">## Task</span>
+Wire the Pilot landing page funnel into <span class="s">campaignAttributionService.ts</span> so leads
+captured at <span class="s">/pilot/ai-team</span>, <span class="s">/pilot/zero-risk</span>,
+<span class="s">/pilot/exclusive</span> carry the campaign source through to the lead row.
+
+<span class="k">## Context</span>
+- Existing service: <span class="s">backend/src/services/campaignAttributionService.ts</span>
+- Pages: <span class="s">frontend/src/pages/Pilot{ZeroRisk,AITeam,Exclusive}Page.tsx</span>
+- Lead capture API: <span class="s">POST /api/public/lead</span>
+
+<span class="k">## Verification</span>
+- Run <span class="s">npx tsc --noEmit</span> in <span class="s">backend/</span> and <span class="s">frontend/</span>
+- Submit one test lead via each Pilot page; confirm <span class="s">leads.source</span> contains <span class="s">campaign:&lt;id&gt;</span>
+- Emit BuildManifest with files_modified + apis_modified + validation_results
+          </div>
+
+          <div class="bc-actions">
+            <button class="primary">Copy prompt &rarr; open Claude Code</button>
+            <button>Open in new tab</button>
+            <button>Customize prompt</button>
+            <button>Show full context</button>
+          </div>
+
+          <div class="bc-checklist">
+            <div class="item"><span class="check">&#10003;</span><span>Context loaded from UnifiedProjectState</span></div>
+            <div class="item"><span class="check">&#10003;</span><span>Files identified via component + route registries</span></div>
+            <div class="item"><span class="pending">&deg;</span><span class="pending">Awaiting Claude Code execution &amp; manifest emission</span></div>
+            <div class="item"><span class="pending">&deg;</span><span class="pending">Verification will auto-run on manifest receipt</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:0.82rem; color: var(--color-text-light); margin-top: 0.7rem;">
+      Same Build Center is used whether the trigger came from Cory Home, the Visual Workspace
+      "Compile prompt" button, or a deep-link in the System Map. <strong>One lane, one prompt format,
+      one verification handoff.</strong>
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="What does Build Center need that this misses?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> Verification Workspace (mockup)</h2>
+    <div class="lead">
+      One place to see what's verified, what regressed, what's pending. Replaces the verification
+      surface scattered across BP detail, capability cards, and project dashboard.
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-caption">
+        <span>Verification Workspace</span>
+        <span class="url">/portal/verify?project=ces</span>
+      </div>
+      <div class="mockup-frame">
+        <div class="ver-stage">
+          <div>
+            <div class="ver-runs">
+              <div class="head">Last 24h verification runs &middot; CES</div>
+              <div class="row">
+                <span class="check-name">tsc &mdash; backend</span>
+                <span class="status pass">pass &middot; 18s</span>
+              </div>
+              <div class="row">
+                <span class="check-name">tsc &mdash; frontend</span>
+                <span class="status pass">pass &middot; 24s</span>
+              </div>
+              <div class="row">
+                <span class="check-name">jest &mdash; campaignAttribution</span>
+                <span class="status pass">pass &middot; 8/8 tests</span>
+              </div>
+              <div class="row">
+                <span class="check-name">playwright &mdash; pilot funnel</span>
+                <span class="status fail">FAIL &middot; UTM not propagating</span>
+              </div>
+              <div class="row">
+                <span class="check-name">manifest emission &mdash; last build</span>
+                <span class="status pass">received &middot; 2m ago</span>
+              </div>
+              <div class="row">
+                <span class="check-name">visual regression &mdash; pilot pages</span>
+                <span class="status skip">not run yet</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="cory-tile" style="margin-bottom: 0.6rem;">
+              <div class="label">Verification health</div>
+              <div class="value" style="color: var(--color-warning);">86%</div>
+              <div class="delta">1 failing check</div>
+            </div>
+            <div class="cory-tile" style="margin-bottom: 0.6rem;">
+              <div class="label">Regressions in 24h</div>
+              <div class="value" style="color: var(--color-success);">0</div>
+              <div class="delta">no surface drift</div>
+            </div>
+            <div class="cory-tile">
+              <div class="label">Cory says</div>
+              <div style="font-size:0.8rem; color: var(--color-text); margin-top:0.35rem;">
+                Pilot Playwright failure relates directly to your top-of-queue task.
+                Recommend fixing attribution wiring first &mdash; check should pass after.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="What does Verification need? Should it auto-rerun on manifest receipt?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> UnifiedProjectState &mdash; one calculation system</h2>
+    <div class="lead">
+      The single authoritative state object for a project. All UI calculation derives from this; nothing
+      recalculates locally.
+    </div>
+
+    <h3>Shape (sketch)</h3>
+    <pre class="bc-prompt-block" style="max-height: none;">
+<span class="k">interface UnifiedProjectState</span> {
+  project_id: string;
+  display_name: string;
+  active_bp_count: number;
+
+  <span class="k">// Cory's queue &mdash; ONE prioritized list</span>
+  next_action: NextAction;
+  queue: QueueEntry[];
+
+  <span class="k">// Calculations &mdash; derived once, consumed everywhere</span>
+  readiness: { score: 0..100; band: 'red' | 'amber' | 'green'; reasons: string[] };
+  coverage: { score: 0..100; bps_covered: number; bps_total: number };
+  health: { score: 0..100; regressions_24h: number; verification_pass_rate: number };
+  confidence: { score: 0..100; sources: string[] };
+
+  <span class="k">// References to background intelligence &mdash; available, not foregrounded</span>
+  intelligence_drawer_refs: {
+    operations_summary_url: string;
+    cognition_summary_url: string;
+    governance_summary_url: string;
+  };
+
+  built_at: string;
+}
+    </pre>
+
+    <h3>Rules</h3>
+    <ul style="font-size:0.85rem;">
+      <li>One backend endpoint produces it (<kbd>GET /api/portal/project/:id/unified-state</kbd>).</li>
+      <li>One frontend hook consumes it (<kbd>useUnifiedProjectState(projectId)</kbd>).</li>
+      <li>Components <em>display</em> values; they never recompute. Lint rule: any local <kbd>readinessScore = </kbd> in a component is a violation.</li>
+      <li>Backend derivation re-uses existing engines (SystemStateEngine, BP planner) as <em>inputs</em> &mdash; this is the synthesizer, not a replacement.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="What's missing from the state shape? Anything to remove?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> Critique &rarr; prompt workflow</h2>
+    <div class="lead">
+      The full loop, end to end. This is the operating tempo we're optimizing for.
+    </div>
+
+    <ol style="font-size:0.88rem;">
+      <li><strong>Open a page.</strong> User picks any page in the platform from Visual Workspace sidebar.</li>
+      <li><strong>Page renders embedded.</strong> Iframe loads the live URL with annotation overlay enabled.</li>
+      <li><strong>User clicks regions.</strong> Each click drops a numbered pin and opens a critique input.</li>
+      <li><strong>Optional: AI suggests.</strong> "AI suggest" reads the pinned region's source HTML and proposes a refined edit.</li>
+      <li><strong>User groups pins.</strong> Related pins get grouped into a single change request (e.g. "Header refinement").</li>
+      <li><strong>Compile.</strong> "Compile prompt" assembles a Claude Code prompt: file paths (from registry), pinned critiques, suggested edits, verification scaffolding.</li>
+      <li><strong>Open / copy.</strong> Prompt opens in a new tab with one-click copy. User pastes into Claude Code.</li>
+      <li><strong>Claude Code rebuilds.</strong> Files modified, manifest emitted, verification kicked off.</li>
+      <li><strong>Manifest received.</strong> Verification Workspace auto-reruns relevant checks; UnifiedProjectState refreshes.</li>
+      <li><strong>Visual workspace re-renders.</strong> User reloads the iframe; pins resolve automatically when source matches the requested edit.</li>
+    </ol>
+
+    <p style="font-size:0.85rem; color: var(--color-text-light);">
+      Per-cycle target: <strong>2&ndash;4 minutes</strong> from spotted issue to verified rebuild.
+      Today's equivalent loop: <strong>10&ndash;25 minutes</strong>.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="Where does the loop break in practice? What's the riskiest step?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> Before / after operational flow</h2>
+
+    <div class="before-after">
+      <div class="ba-col before">
+        <div class="ba-head">Today</div>
+        <div class="ba-body">
+          <ul>
+            <li>Land on ProjectDashboard. Scroll. Find one of the four "next action" panels.</li>
+            <li>Click into a BP. New tab structure. Re-orient.</li>
+            <li>See "build" buttons in three places. Pick one (guess which is current).</li>
+            <li>Open chat / WorkstationLauncher / EnhancementPromptBuilder. Compose context manually.</li>
+            <li>Paste into Claude Code. Wait for clarifying questions.</li>
+            <li>Rebuild. Run <kbd>tsc</kbd> manually. Check production manually.</li>
+            <li>Update progress in 3 places (PROGRESS.md, ticket, mental model).</li>
+            <li><strong>Total: 30&ndash;60 min per QA loop.</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="ba-col after">
+        <div class="ba-head">Tomorrow</div>
+        <div class="ba-body">
+          <ul>
+            <li>Land on Cory Home. Today's one priority is at the top.</li>
+            <li>Click "Critique the page first" &rarr; Visual Workspace opens with that page embedded.</li>
+            <li>Pin critique. Group. Compile. Paste. Run.</li>
+            <li>Verification Workspace auto-reruns on manifest receipt.</li>
+            <li>Cory Home updates with the next priority.</li>
+            <li><strong>Total: 4&ndash;8 min per QA loop.</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="What does today still cost that this misses?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> Implementation roadmap (5 priorities)</h2>
+    <div class="lead">
+      Sequenced for fastest perceived value. No new backend cognition phases. Each step is shippable
+      in days, not weeks &mdash; HTML &rarr; critique &rarr; prompt is the loop now.
+    </div>
+
+    <div class="roadmap-track">
+      <div class="roadmap-step">
+        <div class="num">P1</div>
+        <h5>Visual Engineering Workspace</h5>
+        <ul class="deliverables">
+          <li><kbd>features/visualWorkspace/</kbd></li>
+          <li>Embed iframe + click overlay</li>
+          <li>Pin model + critique panel</li>
+          <li>Group + compile prompt</li>
+          <li>Page registry lookup</li>
+        </ul>
+        <div class="est">Est: 3&ndash;5 days</div>
+      </div>
+      <div class="roadmap-step">
+        <div class="num">P2</div>
+        <h5>Unified Cory Home</h5>
+        <ul class="deliverables">
+          <li>Replace ProjectDashboard landing</li>
+          <li>Greeting + 1 priority + queue</li>
+          <li>Strip competing panels</li>
+          <li>Reads from UnifiedProjectState</li>
+        </ul>
+        <div class="est">Est: 2&ndash;3 days</div>
+      </div>
+      <div class="roadmap-step">
+        <div class="num">P3</div>
+        <h5>Build Center</h5>
+        <ul class="deliverables">
+          <li>One <kbd>/build?bp=...</kbd> route</li>
+          <li>Context strip + prompt block</li>
+          <li>Copy / new-tab / customize</li>
+          <li>Deep-link from everywhere</li>
+        </ul>
+        <div class="est">Est: 2&ndash;4 days</div>
+      </div>
+      <div class="roadmap-step">
+        <div class="num">P4</div>
+        <h5>Verification Workspace</h5>
+        <ul class="deliverables">
+          <li><kbd>/verify?project=...</kbd></li>
+          <li>Last-24h check feed</li>
+          <li>Manifest auto-rerun</li>
+          <li>Cory commentary</li>
+        </ul>
+        <div class="est">Est: 2&ndash;3 days</div>
+      </div>
+      <div class="roadmap-step">
+        <div class="num">P5</div>
+        <h5>UnifiedProjectState</h5>
+        <ul class="deliverables">
+          <li>Backend synthesizer</li>
+          <li>One endpoint, one hook</li>
+          <li>Lint rule against local recompute</li>
+          <li>Migrate consumers</li>
+        </ul>
+        <div class="est">Est: 4&ndash;6 days</div>
+      </div>
+    </div>
+
+    <p style="font-size:0.82rem; color: var(--color-text-light); margin-top: 1.25rem;">
+      <strong>Total ~13&ndash;21 days of focused work.</strong> P5 (UnifiedProjectState) ships in parallel with
+      P1&ndash;P4 because P1&ndash;P4 can stub the state initially and migrate when P5 lands.
+    </p>
+
+    <h3>What we explicitly DO NOT build</h3>
+    <div class="anti-list">
+      <ul>
+        <li>Phase 33 governance layer of any kind.</li>
+        <li>A new chat agent, mentor agent, or orchestration layer.</li>
+        <li>"AI co-pilot" panels that compete with Cory.</li>
+        <li>Visual graph editors for system topology, federation, etc.</li>
+        <li>Any new replay / archaeology / cognition surface.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Reorder priorities? Cut/add a step?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s14" class="section">
+    <h2><span class="num">14</span> Structured intelligence files</h2>
+    <div class="lead">
+      Five canonical registries. Auto-maintained by the existing build manifest pipeline. No more
+      drift between code reality and system map.
+    </div>
+
+    <table class="table table-sm" style="font-size:0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Owns</th><th>Updated by</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>system/intelligence/system_map.md</kbd></td>
+          <td>Top-level architecture: layers, modules, dependencies</td>
+          <td>graphSynchronizer (existing) + manifest <kbd>system_impacts</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>system/database/database_map.md</kbd></td>
+          <td>Tables, columns, FKs, indexes, recent migrations</td>
+          <td>databaseSynchronizer (existing) + manifest <kbd>database_changes</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>system/intelligence/route_registry.md</kbd></td>
+          <td>Every Express route + every React route, owner, contract</td>
+          <td>NEW &mdash; routeSynchronizer reads <kbd>apis_added</kbd> + <kbd>frontend_routes_added</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>system/intelligence/bp_registry.md</kbd></td>
+          <td>Every BP, status, owner, related capabilities, telemetry</td>
+          <td>NEW &mdash; bpSynchronizer reads existing capability records + manifests</td>
+        </tr>
+        <tr>
+          <td><kbd>system/intelligence/component_registry.md</kbd></td>
+          <td>Every React component, file path, line count, exported props, parent pages</td>
+          <td>NEW &mdash; componentSynchronizer scans <kbd>frontend/src/</kbd> on manifest receipt</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size:0.85rem;">
+      Visual Workspace <strong>requires</strong> the route registry and component registry to compile prompts
+      &mdash; that's why it's listed alongside the other registries (P1 cannot ship without them).
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 14</div>
+      <textarea placeholder="Are these the right 5 registries?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s15" class="section">
+    <h2><span class="num">15</span> CLAUDE.md evolution</h2>
+    <div class="lead">
+      CLAUDE.md becomes the <em>System Synchronization Contract</em>. Not just rules &mdash; the structured
+      output spec that keeps registries in sync.
+    </div>
+
+    <h3>Sections to add</h3>
+    <ul style="font-size:0.85rem;">
+      <li><strong>BuildManifest required structure</strong> &mdash; expand current contract with <kbd>component_registry_diff</kbd>, <kbd>route_registry_diff</kbd>, <kbd>bp_registry_diff</kbd> fields.</li>
+      <li><strong>Verification synchronization</strong> &mdash; every manifest must include <kbd>validation_results</kbd> for any check that ran. Define the canonical schema explicitly.</li>
+      <li><strong>Visual workspace prompt format</strong> &mdash; the structured prompt the Visual Workspace compiles needs a contract Claude Code can rely on.</li>
+      <li><strong>Replay-safe operation requirements</strong> &mdash; restate the idempotency rules in terms of the new product surfaces (Build Center, Verification).</li>
+      <li><strong>Structured outputs</strong> &mdash; define the YAML/JSON shapes Claude Code emits for: pin-resolution proofs, BP completion proofs, component registry updates.</li>
+      <li><strong>Synchronization standards</strong> &mdash; explicit table of "what writes to what registry."</li>
+    </ul>
+
+    <h3>Sections to revise</h3>
+    <ul style="font-size:0.85rem;">
+      <li>Telemetry Synchronization Contract &rarr; expand with the 3 new registries.</li>
+      <li>Folder Responsibilities &rarr; add <kbd>frontend/src/features/visualWorkspace/</kbd>.</li>
+      <li>Definition of Done &rarr; "PROGRESS.md updated AND component/route/BP registry diffs emitted."</li>
+    </ul>
+
+    <h3>Sections to remove</h3>
+    <ul style="font-size:0.85rem;">
+      <li>Anything implying Phase 33+ is the next direction.</li>
+      <li>Operating bias toward "deeper backend cognition phases."</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 15</div>
+      <textarea placeholder="What needs to change in CLAUDE.md that this misses?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s16" class="section">
+    <h2><span class="num">16</span> Out of scope &amp; explicit non-goals</h2>
+    <div class="lead">
+      Listed so future Claude doesn't drift back into governance phase territory.
+    </div>
+
+    <div class="anti-list">
+      <h4>Strictly out of scope for this productization arc</h4>
+      <ul>
+        <li><strong>Phase 33 or any subsequent governance phase.</strong> Backend is mature enough.</li>
+        <li><strong>New cognition subsystems.</strong> Archaeology / topology / federation / replay are background-only from now on.</li>
+        <li><strong>Removing existing governance.</strong> Phases 1&ndash;32 stay; they just stop owning UI surface.</li>
+        <li><strong>Renaming Cory.</strong> Cory is the brand of operational authority; no rebrand.</li>
+        <li><strong>Multi-platform UI rewrite.</strong> Stay on React+Bootstrap; no migration to a new framework.</li>
+        <li><strong>Mobile-native app.</strong> Web responsive only.</li>
+        <li><strong>"AI agent marketplace."</strong> Not yet; product clarity first.</li>
+        <li><strong>Replacing PROGRESS.md.</strong> It works; keep it as the human log.</li>
+      </ul>
+    </div>
+
+    <h3>Risks &amp; how we mitigate</h3>
+    <table class="table table-sm" style="font-size:0.82rem;">
+      <thead style="background: var(--color-bg-alt);"><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Iframe embedding blocked by same-origin / CSP</td>
+          <td>Visual Workspace runs from the same origin as the embedded portal; for external pages, use puppeteer-screenshot fallback</td>
+        </tr>
+        <tr>
+          <td>UnifiedProjectState becomes a god-object</td>
+          <td>Strict size cap; derived calculations only, no raw event data; computed on demand, not stored</td>
+        </tr>
+        <tr>
+          <td>Build Center context too large for a single prompt</td>
+          <td>Truncation with priority order; "Show full context" button reveals everything if needed</td>
+        </tr>
+        <tr>
+          <td>Cory queue conflicts with existing planner output</td>
+          <td>Cory's queue subscribes to the planner's signals; the planner is the sensor, Cory is the synthesizer</td>
+        </tr>
+        <tr>
+          <td>Pin resolution detection (auto-resolve on rebuild) is unreliable</td>
+          <td>Manual "Resolve" button is always available; auto-resolution is an enhancement, not a requirement</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 16</div>
+      <textarea placeholder="Risks we're missing? Out-of-scope items to lift back in?"></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    Visual Productization Plan &middot; Colaberry Enterprise AI Leadership Accelerator &middot; 2026-05-09<br>
+    Pivot from backend cognition (Phases 1&ndash;32) to product experience &middot; Plan v1, awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

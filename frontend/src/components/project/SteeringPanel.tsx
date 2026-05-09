@@ -1,7 +1,19 @@
+/**
+ * SteeringPanel — operator steering input that nudges the next-action engine.
+ *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   This panel does NOT compete with Cory's authority. It is an INPUT
+ *   surface where the operator can type a steering hint that biases the
+ *   underlying engine. The operational queue + next action remain the
+ *   responsibility of `UnifiedProjectState`. After this panel posts a
+ *   steering hint, parents should call `useUnifiedProjectState().refresh()`
+ *   so Cory Home reflects the new bias immediately.
+ */
 import React, { useState } from 'react';
 import portalApi from '../../utils/portalApi';
 
 interface Props {
+  /** Called after a steering hint is applied — caller should refresh unified state. */
   onAction: () => void;
 }
 

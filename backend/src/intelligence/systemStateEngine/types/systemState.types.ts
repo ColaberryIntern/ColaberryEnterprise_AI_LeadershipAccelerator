@@ -406,6 +406,401 @@ export interface AuthoritativeSystemState {
     readonly contradiction_clusters: number;
     readonly last_updated: string;
   };
+
+  /**
+   * Phase 17 — adaptive validator intelligence + causal governance
+   * evolution surface. Sync, in-memory read only. Reflects validator
+   * drift, specialization, forecasts, recovery chains, and ancestry
+   * rollback recommendations from the adaptive engines.
+   */
+  readonly adaptive_governance_summary?: {
+    readonly drifting_validators: number;
+    readonly suppressed_validators: number;
+    readonly active_forecasts: number;
+    readonly active_recovery_chains: number;
+    readonly ancestry_rollbacks_recommended: number;
+    readonly worst_validator_tier: 'stable' | 'cautionary' | 'drifting' | 'unstable' | 'suppressed';
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 18 — operator-calibrated governance evolution surface. Sync,
+   * in-memory read only. Reflects pending calibration proposals,
+   * recent operator decisions, active recovery sessions, forecast
+   * tuning state, routing stability, and 5 governance health scores.
+   */
+  readonly governance_evolution_summary?: {
+    readonly pending_calibration_proposals: number;
+    readonly approved_calibrations_24h: number;
+    readonly rejected_calibrations_24h: number;
+    readonly active_recovery_sessions: number;
+    readonly forecast_signals_widened: number;
+    readonly routing_stability: 'stable' | 'adaptive' | 'volatile' | 'suppressed' | 'overridden';
+    readonly health_scores: {
+      readonly calibration_stability: Score0to100;
+      readonly routing_stability: Score0to100;
+      readonly recovery_optimization: Score0to100;
+      readonly forecast_reliability: Score0to100;
+      readonly governance_transparency: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 19 — federated organizational governance intelligence
+   * surface. Sync, in-memory read only. Reflects federation consent
+   * tier, archetype share/consume volume, active anomalies, drift
+   * detection counters, and 5 federation health scores.
+   */
+  readonly federation_summary?: {
+    readonly federation_enabled: boolean;
+    readonly isolation_tier: 'isolated' | 'local_only' | 'organizational' | 'restricted' | 'visibility_limited';
+    readonly archetypes_shared_24h: number;
+    readonly archetypes_consumed_24h: number;
+    readonly active_anomalies: number;
+    readonly drift_events_detected: number;
+    readonly health_scores: {
+      readonly federation_stability: Score0to100;
+      readonly archetype_confidence: Score0to100;
+      readonly federation_drift: Score0to100;
+      readonly anomaly_pressure: Score0to100;
+      readonly visibility_integrity: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 20 — bounded federated organizational learning surface.
+   * Sync, in-memory read only. Reflects archetype reliability tiers
+   * tracked, drift tier classification, pending policy proposals,
+   * recent operator decisions, and 6 federated learning health scores.
+   */
+  readonly federated_learning_summary?: {
+    readonly archetypes_tracked: number;
+    readonly archetypes_trusted: number;
+    readonly archetypes_degraded: number;
+    readonly active_drift_signals: number;
+    readonly drift_tier: 'stable' | 'monitoring' | 'fragmenting' | 'unstable';
+    readonly pending_policy_proposals: number;
+    readonly approved_policies_24h: number;
+    readonly rejected_policies_24h: number;
+    readonly health_scores: {
+      readonly federated_effectiveness: Score0to100;
+      readonly organizational_stabilization: Score0to100;
+      readonly federation_drift_pressure: Score0to100;
+      readonly archetype_reliability: Score0to100;
+      readonly federation_visibility_integrity: Score0to100;
+      readonly policy_evolution_stability: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 21 — bounded persistent federation runtime continuity. Reports
+   * the active broker adapter, the per-process node id, partition count,
+   * active isolations, recent replay activity, and 6 distributed runtime
+   * health scores. SINGLE-PROCESS, SINGLE-BROKER today. Forward-shaped
+   * for future multi-instance deployments without contract change.
+   */
+  readonly distributed_runtime_summary?: {
+    readonly node_id: string;
+    readonly active_adapter_kind: 'in_memory' | 'redis';
+    readonly broker_continuity_status: 'connected' | 'connecting' | 'reconnecting' | 'disconnected' | 'isolated';
+    readonly partition_count: number;
+    readonly active_isolations: number;
+    readonly recent_replay_count_24h: number;
+    readonly health_scores: {
+      readonly broker_continuity: Score0to100;
+      readonly partition_isolation: Score0to100;
+      readonly synchronization_stability: Score0to100;
+      readonly replay_recovery: Score0to100;
+      readonly distributed_topology_stability: Score0to100;
+      readonly runtime_drift_pressure: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 22 — bounded within-partition cognition topology orchestration.
+   * Aggregates fragmentation tier counts across partitions on this node,
+   * recent propagation activity, recovery plans, and 6 topology health
+   * scores. Within-partition only — never cross-partition. Single-step
+   * heuristic forecasting; no ML.
+   */
+  readonly topology_summary?: {
+    readonly partition_count: number;
+    readonly cohesive_partition_count: number;
+    readonly fragmented_partition_count: number;
+    readonly shattered_partition_count: number;
+    readonly active_propagations_24h: number;
+    readonly recent_recovery_plans_24h: number;
+    readonly health_scores: {
+      readonly topology_cohesion: Score0to100;
+      readonly fragmentation_pressure: Score0to100;
+      readonly propagation_amplification_score: Score0to100;
+      readonly dependency_stability: Score0to100;
+      readonly continuity_resilience: Score0to100;
+      readonly topology_recovery_readiness: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 23 — bounded operational execution substrate. Aggregates
+   * worker lifecycle state across all organizations on this single node:
+   * active workers, 24h lifecycle counts, active isolation count, recent
+   * governance decisions, and 6 execution health scores. Voluntary
+   * registration only; never auto-discovered. Within-organization
+   * isolation preserved.
+   */
+  readonly execution_substrate_summary?: {
+    readonly node_id: string;
+    readonly active_worker_count: number;
+    readonly completed_24h: number;
+    readonly failed_24h: number;
+    readonly interrupted_24h: number;
+    readonly rolled_back_24h: number;
+    readonly active_isolation_count: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly health_scores: {
+      readonly execution_continuity: Score0to100;
+      readonly rollback_resilience: Score0to100;
+      readonly worker_stability: Score0to100;
+      readonly execution_isolation: Score0to100;
+      readonly replay_execution_integrity: Score0to100;
+      readonly execution_governance_stability: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 24 — deterministic operational cognition compression. Aggregates
+   * recent narrative + guidance activity, current cognitive load tier
+   * across all partitions on this node, and 6 human-readable health
+   * scores. Templates only — no LLM, no inference, no synthesis.
+   */
+  readonly cognitive_compression_summary?: {
+    readonly node_id: string;
+    readonly recent_narratives_24h: number;
+    readonly recent_compressed_replays_24h: number;
+    readonly recent_guidance_plans_24h: number;
+    readonly current_load_tier: 'light' | 'moderate' | 'dense' | 'overloaded';
+    readonly current_load_score: number;
+    readonly health_scores: {
+      readonly operational_clarity: Score0to100;
+      readonly replay_comprehensibility: Score0to100;
+      readonly rollback_explainability: Score0to100;
+      readonly continuity_visibility: Score0to100;
+      readonly topology_understandability: Score0to100;
+      readonly operator_trust: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 25 — deterministic counterfactual operational projection.
+   * Aggregates recent sandbox + rollback simulation + propagation
+   * preview + rehearsal counts and 6 experimentation health scores.
+   * Pure in-memory simulation — never mutates production state.
+   */
+  readonly experimentation_summary?: {
+    readonly node_id: string;
+    readonly recent_sandboxes_24h: number;
+    readonly recent_rollback_simulations_24h: number;
+    readonly recent_propagation_previews_24h: number;
+    readonly recent_rehearsals_24h: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly health_scores: {
+      readonly experimentation_clarity: Score0to100;
+      readonly simulation_reliability: Score0to100;
+      readonly rollback_rehearsal_confidence: Score0to100;
+      readonly propagation_preview_quality: Score0to100;
+      readonly sandbox_integrity: Score0to100;
+      readonly experimentation_safety: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 26 — bounded live operational rehearsal substrate. Aggregates
+   * active runtime count + 24h activity counts (runtimes, rollback
+   * rehearsals, preview narratives, governance decisions, expirations)
+   * + 6 live sandbox health scores. The runtime is a typed lifecycle
+   * state machine wrapping Phase 25 projection — never spawns real
+   * workers, never mutates production state.
+   */
+  readonly live_sandbox_summary?: {
+    readonly node_id: string;
+    readonly active_runtimes: number;
+    readonly recent_runtimes_24h: number;
+    readonly recent_rollback_rehearsals_24h: number;
+    readonly recent_preview_narratives_24h: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly recent_expirations_24h: number;
+    readonly health_scores: {
+      readonly sandbox_execution_clarity: Score0to100;
+      readonly rehearsal_determinism: Score0to100;
+      readonly rollback_rehearsal_confidence: Score0to100;
+      readonly topology_containment_stability: Score0to100;
+      readonly live_preview_trust: Score0to100;
+      readonly sandbox_replay_reliability: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 27 — bounded delegated operational execution substrate.
+   * Aggregates recent envelope issuance + execution + refusal + timeout
+   * + expiration counts and 6 delegated-execution health scores.
+   * Single-use, time-bounded, rollback-required, topology-contained,
+   * synchronous-only execution. Operator is the sole authority source.
+   */
+  readonly delegated_execution_summary?: {
+    readonly node_id: string;
+    readonly recent_envelopes_24h: number;
+    readonly recent_executions_24h: number;
+    readonly recent_refusals_24h: number;
+    readonly recent_timeouts_24h: number;
+    readonly recent_expirations_24h: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly health_scores: {
+      readonly delegation_confidence: Score0to100;
+      readonly rollback_certainty: Score0to100;
+      readonly containment_integrity: Score0to100;
+      readonly authority_reliability: Score0to100;
+      readonly budget_safety: Score0to100;
+      readonly replay_integrity: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 28 — Execution resource governance + operational economics.
+   * Deterministic resource accounting. NOT autonomous orchestration.
+   * Bounded, governance-safe, operator-visible, replay-safe.
+   */
+  readonly execution_economics_summary?: {
+    readonly node_id: string;
+    readonly recent_quota_exhaustions_24h: number;
+    readonly recent_quota_governance_changes_24h: number;
+    readonly recent_pressure_samples_24h: number;
+    readonly recent_load_classifications_24h: number;
+    readonly recent_forecasts_24h: number;
+    readonly current_economics_tier: 'stable' | 'constrained' | 'elevated' | 'saturated' | 'exhausted';
+    readonly health_scores: {
+      readonly budget_reliability: Score0to100;
+      readonly rollback_cost_certainty: Score0to100;
+      readonly pressure_classification_confidence: Score0to100;
+      readonly topology_load_integrity: Score0to100;
+      readonly quota_safety: Score0to100;
+      readonly replay_integrity: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 29 — Stabilization playbook intelligence + recovery governance.
+   * Replay-safe stabilization recommendation intelligence. NOT
+   * autonomous recovery orchestration. Bounded, deterministic,
+   * rollback-protected, operator-mediated, replay-safe.
+   */
+  readonly stabilization_summary?: {
+    readonly node_id: string;
+    readonly recent_archetype_governance_changes_24h: number;
+    readonly recent_sequencings_24h: number;
+    readonly recent_forecasts_24h: number;
+    readonly recent_pressure_samples_24h: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly recent_finality_proofs_24h: number;
+    readonly current_stabilization_tier: 'stable' | 'recovering' | 'strained' | 'critical' | 'failing';
+    readonly health_scores: {
+      readonly rollback_survivability_confidence: Score0to100;
+      readonly continuity_restoration_trust: Score0to100;
+      readonly recovery_replay_integrity: Score0to100;
+      readonly topology_restoration_confidence: Score0to100;
+      readonly stabilization_reliability: Score0to100;
+      readonly recovery_governance_trust: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 30 — Recovery foresight UX + stabilization decision cognition.
+   * Replay-safe stabilization comparison cognition. NOT decision
+   * authority. Comparison ≠ recommendation. Side-by-side, no ranking.
+   */
+  readonly recovery_foresight_summary?: {
+    readonly node_id: string;
+    readonly recent_comparisons_24h: number;
+    readonly recent_survivability_24h: number;
+    readonly recent_tradeoffs_24h: number;
+    readonly recent_archaeology_24h: number;
+    readonly recent_walkthroughs_24h: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly current_foresight_tier: 'clear' | 'explorable' | 'contested' | 'unsuitable' | 'blocked';
+    readonly health_scores: {
+      readonly comparison_neutrality: Score0to100;
+      readonly survivability_visibility: Score0to100;
+      readonly tradeoff_clarity: Score0to100;
+      readonly archaeology_integrity: Score0to100;
+      readonly guidance_advisory_safety: Score0to100;
+      readonly decision_governance_trust: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 31 — Operator cognition continuity + governance memory.
+   * Replay-safe governance memory and cognition continuity substrate.
+   * Per-org append-only event log. NOT operator profiling.
+   */
+  readonly governance_memory_summary?: {
+    readonly node_id: string;
+    readonly recent_sessions_24h: number;
+    readonly recent_events_24h: number;
+    readonly recent_archaeology_24h: number;
+    readonly recent_replays_24h: number;
+    readonly recent_compressions_24h: number;
+    readonly recent_narratives_24h: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly current_density_tier: 'sparse' | 'partial' | 'developed' | 'dense' | 'compressed';
+    readonly health_scores: {
+      readonly memory_neutrality: Score0to100;
+      readonly continuity_integrity: Score0to100;
+      readonly timeline_visibility: Score0to100;
+      readonly archaeology_integrity: Score0to100;
+      readonly compression_transparency: Score0to100;
+      readonly replay_determinism: Score0to100;
+    };
+    readonly last_updated: string;
+  };
+
+  /**
+   * Phase 32 — Multi-operator governance continuity + handoff cognition.
+   * Replay-safe per-org append-only handoff event log. NOT operator
+   * ranking, NOT collaboration scoring, NOT behavioral inference.
+   * authority_transfer_supported: false typed-as-literal on every handoff.
+   */
+  readonly operator_continuity_summary?: {
+    readonly node_id: string;
+    readonly recent_handoffs_24h: number;
+    readonly recent_transfer_bundles_24h: number;
+    readonly recent_archaeology_24h: number;
+    readonly recent_replays_24h: number;
+    readonly recent_compressions_24h: number;
+    readonly recent_narratives_24h: number;
+    readonly recent_governance_decisions_24h: number;
+    readonly current_density_tier: 'silent' | 'sparse' | 'paired' | 'frequent' | 'continuous';
+    readonly health_scores: {
+      readonly handoff_neutrality: Score0to100;
+      readonly transfer_lineage_integrity: Score0to100;
+      readonly timeline_visibility: Score0to100;
+      readonly archaeology_integrity: Score0to100;
+      readonly compression_transparency: Score0to100;
+      readonly replay_determinism: Score0to100;
+    };
+    readonly last_updated: string;
+  };
 }
 
 // ---------------------------------------------------------------------------

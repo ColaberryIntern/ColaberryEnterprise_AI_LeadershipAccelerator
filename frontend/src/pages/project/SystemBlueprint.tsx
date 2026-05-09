@@ -548,6 +548,41 @@ export default function SystemBlueprint() {
   // Banner state (persisted via localStorage)
   const [bannerDismissed, setBannerDismissed] = useState(() => localStorage.getItem('blueprint_banner_dismissed') === 'true');
 
+  // Critique workspace handoff — when the Critique workspace compiles a
+  // prompt and routes here with `?build=visual-workspace`, surface it as a
+  // primary banner so the operator can copy + run it via Claude Code.
+  // Storage keys mirror VisualWorkspacePage.sendToBuildCenter.
+  const [pendingCritiquePrompt, setPendingCritiquePrompt] = useState<string | null>(null);
+  const [pendingCritiqueRoute, setPendingCritiqueRoute] = useState<string | null>(null);
+  const [pendingCritiqueCopied, setPendingCritiqueCopied] = useState(false);
+  useEffect(() => {
+    if (searchParams.get('build') !== 'visual-workspace') return;
+    try {
+      const text = sessionStorage.getItem('visualWorkspace:pendingBuildPrompt') || '';
+      const route = sessionStorage.getItem('visualWorkspace:pendingBuildSourceRoute') || '';
+      if (text) {
+        setPendingCritiquePrompt(text);
+        setPendingCritiqueRoute(route);
+      }
+    } catch { /* sessionStorage unavailable; silent */ }
+  }, [searchParams]);
+  const dismissPendingCritique = useCallback(() => {
+    setPendingCritiquePrompt(null);
+    setPendingCritiqueRoute(null);
+    try {
+      sessionStorage.removeItem('visualWorkspace:pendingBuildPrompt');
+      sessionStorage.removeItem('visualWorkspace:pendingBuildSourceRoute');
+    } catch { /* ignore */ }
+  }, []);
+  const copyPendingCritique = useCallback(async () => {
+    if (!pendingCritiquePrompt) return;
+    try {
+      await navigator.clipboard?.writeText(pendingCritiquePrompt);
+      setPendingCritiqueCopied(true);
+      setTimeout(() => setPendingCritiqueCopied(false), 1800);
+    } catch { /* clipboard unavailable */ }
+  }, [pendingCritiquePrompt]);
+
   // Autonomous mode + Cory suggestions/plan
   const [autonomousMode, setAutonomousMode] = useState(false);
   const [completedPlanSteps, setCompletedPlanSteps] = useState<Set<string>>(new Set());
@@ -979,6 +1014,31 @@ export default function SystemBlueprint() {
         <DemoOverlay text={DEMO_STEPS[demoStep].overlay} onExit={exitDemo} />
       )}
 
+      {/* ── Legacy surface banner — Blueprint Simplification Sprint ── */}
+      {!demoActive && (
+        <div
+          role="alert"
+          className="mb-3 d-flex align-items-center justify-content-between"
+          style={{
+            background: 'var(--color-warning-bg)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderLeft: '3px solid var(--color-warning)',
+            borderRadius: 6,
+            padding: '0.55rem 0.85rem',
+            fontSize: 12,
+          }}
+        >
+          <span style={{ color: 'var(--color-text)' }}>
+            <i className="bi bi-exclamation-triangle me-1" style={{ color: 'var(--color-warning)' }}></i>
+            <strong style={{ color: 'var(--color-warning)' }}>Legacy Blueprint surface.</strong>
+            &nbsp;The new lean execution lane is at <code>/portal/project/blueprint</code>. This page is preserved for rollback while specialized flows migrate over.
+          </span>
+          <Link to="/portal/project/blueprint" className="btn btn-sm btn-primary" style={{ fontSize: 11 }}>
+            <i className="bi bi-arrow-right me-1"></i>Open new Blueprint
+          </Link>
+        </div>
+      )}
+
       {/* ── Header ── */}
       <div className="d-flex justify-content-between align-items-start mb-4">
         <div>
@@ -1017,6 +1077,127 @@ export default function SystemBlueprint() {
           </Link>
         </div>
       </div>
+
+      {/* ── Pending build from Critique workspace ── */}
+      {pendingCritiquePrompt && (
+        <div
+          className="mb-3"
+          style={{
+            background: 'white',
+            border: '1px solid var(--color-primary-light)',
+            borderLeft: '4px solid var(--color-primary)',
+            borderRadius: 8,
+            boxShadow: '0 2px 6px rgba(26, 54, 93, 0.06)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0.75rem 1rem',
+              background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%)',
+              color: 'white',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.85 }}>
+                Pending build · from Critique workspace
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>
+                <i className="bi bi-lightning-charge me-2"></i>
+                Compiled prompt ready to run
+                {pendingCritiqueRoute && (
+                  <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 8, opacity: 0.85, fontFamily: 'var(--font-mono)' }}>
+                    {pendingCritiqueRoute}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{ background: 'rgba(255,255,255,0.18)', color: 'white', border: 'none', fontSize: 12 }}
+              onClick={dismissPendingCritique}
+              aria-label="Dismiss pending build"
+            >
+              <i className="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div style={{ padding: '0.75rem 1rem' }}>
+            <pre
+              style={{
+                margin: 0,
+                padding: '0.75rem 0.85rem',
+                background: '#0f172a',
+                color: '#e2e8f0',
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                lineHeight: 1.55,
+                borderRadius: 4,
+                maxHeight: 200,
+                overflowY: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {pendingCritiquePrompt}
+            </pre>
+            <div style={{ display: 'flex', gap: 6, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${pendingCritiqueCopied ? 'btn-success' : 'btn-primary'}`}
+                onClick={() => void copyPendingCritique()}
+              >
+                <i className={`bi ${pendingCritiqueCopied ? 'bi-check2' : 'bi-clipboard'} me-1`}></i>
+                {pendingCritiqueCopied ? 'Copied — paste into Claude Code' : 'Copy prompt'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary"
+                onClick={() => window.open(`data:text/plain;charset=utf-8,${encodeURIComponent(pendingCritiquePrompt)}`, '_blank')}
+              >
+                <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
+              </button>
+              <Link
+                to="/portal/visual-workspace"
+                className="btn btn-sm btn-outline-secondary"
+              >
+                <i className="bi bi-arrow-left me-1"></i>Back to Critique
+              </Link>
+              <span style={{ fontSize: 11, color: 'var(--color-text-light)', marginLeft: 'auto' }}>
+                After Claude Code finishes, return here and continue normal Blueprint execution to verify.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Authority hierarchy reminder — Blueprint is L3 execution; Cory is L1 ── */}
+      {!demoActive && !pendingCritiquePrompt && (
+        <div
+          className="mb-3 d-flex align-items-center justify-content-between"
+          style={{
+            background: 'var(--color-bg-alt)',
+            border: '1px solid var(--color-border)',
+            borderLeft: '3px solid var(--color-primary)',
+            borderRadius: 6,
+            padding: '0.5rem 0.85rem',
+            fontSize: 12,
+          }}
+        >
+          <span style={{ color: 'var(--color-text-light)' }}>
+            <i className="bi bi-house me-1" style={{ color: 'var(--color-primary)' }}></i>
+            <strong style={{ color: 'var(--color-primary)' }}>Cory</strong> decides what's next ·
+            <strong style={{ color: 'var(--color-text)' }}> Blueprint</strong> executes it.
+            Recommendations and the operational queue live at Home.
+          </span>
+          <Link to="/portal/home" className="btn btn-sm btn-outline-primary" style={{ fontSize: 11 }}>
+            <i className="bi bi-arrow-right me-1"></i>Open Home
+          </Link>
+        </div>
+      )}
 
       {/* ── Beta Banner ── */}
       {!bannerDismissed && !demoActive && (

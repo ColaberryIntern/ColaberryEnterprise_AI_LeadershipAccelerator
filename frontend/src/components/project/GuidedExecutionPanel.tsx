@@ -1,3 +1,13 @@
+/**
+ * GuidedExecutionPanel — step-by-step guidance renderer for an accepted Cory action.
+ *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   This panel is SUBORDINATE to Cory's authority. It does NOT decide
+ *   what to execute next; it only renders the guidance for an action
+ *   the operator has already accepted via `ProjectNextActionPanel` (which
+ *   in turn reads from `UnifiedProjectState.next_action`). It must never
+ *   render guidance for an action different from the canonical next action.
+ */
 import React, { useEffect, useState, useCallback } from 'react';
 import portalApi from '../../utils/portalApi';
 

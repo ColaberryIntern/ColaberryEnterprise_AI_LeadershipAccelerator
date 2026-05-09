@@ -13,10 +13,19 @@ function PortalLayout() {
     navigate('/portal/login');
   };
 
+  // Primary navigation — operational hierarchy:
+  //   L1 Cory authority      (Home — what matters now)
+  //   L2 Verification        (Critique — pin issues, compile prompts)
+  //   L3 Execution           (Blueprint — run prompts, validate)
+  //   L4 Understanding       (System — topology, intelligence)
+  // Curriculum/coaching live at the end (orthogonal to the build loop).
+  // Version-labelled and duplicated entries remain routed for rollback,
+  // but are not surfaced here.
   const navItems = [
+    { to: '/portal/home', label: 'Home', icon: 'bi-house' },
+    { to: '/portal/visual-workspace', label: 'Critique', icon: 'bi-bullseye' },
     { to: '/portal/project/blueprint', label: 'Blueprint', icon: 'bi-map' },
-    { to: '/portal/project/system', label: 'System View', icon: 'bi-grid-3x3-gap' },
-    { to: '/portal/project/system-v2', label: 'V2', icon: 'bi-stars' },
+    { to: '/portal/project/system-v2', label: 'System', icon: 'bi-grid-3x3-gap' },
     { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
   ];
 

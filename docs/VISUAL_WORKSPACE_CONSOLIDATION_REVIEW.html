@@ -1,0 +1,900 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visual Workspace Consolidation Review — One System</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white;
+    padding: 2.25rem 0;
+    margin-bottom: 1.5rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .doc-header .subtitle { font-size: 0.95rem; opacity: 0.92; max-width: 920px; }
+  .doc-header .meta {
+    margin-top: 1.3rem; display: flex; flex-wrap: wrap; gap: 0.55rem;
+    font-size: 0.78rem;
+  }
+  .doc-header .meta-item {
+    background: rgba(255, 255, 255, 0.13);
+    padding: 0.35rem 0.8rem;
+    border-radius: 4px;
+  }
+  .container-narrow { max-width: 1240px; }
+
+  .toc {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.8rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.4rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.3rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.78rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.9rem; color: var(--color-text-light);
+    margin-bottom: 1.1rem; padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 0.95rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.55rem;
+    color: var(--color-text);
+  }
+
+  .critique-zone {
+    margin-top: 1rem; padding: 0.7rem 0.95rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border);
+    border-radius: 4px;
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.68rem; color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* before/after */
+  .before-after {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;
+  }
+  .ba-col {
+    border: 1px solid var(--color-border); border-radius: 5px; overflow: hidden;
+  }
+  .ba-col .ba-head {
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ba-col.before .ba-head { background: var(--color-danger-bg); color: var(--color-danger); }
+  .ba-col.after .ba-head { background: var(--color-success-bg); color: var(--color-success); }
+  .ba-col .ba-body { padding: 0.7rem 0.9rem; font-size: 0.82rem; line-height: 1.55; background: white; }
+  .ba-col ul { margin: 0.3rem 0 0 1.1rem; padding: 0; }
+  .ba-col ul li { margin-bottom: 0.25rem; }
+
+  /* nav mockups */
+  .nav-mock {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.65rem 0.9rem; display: flex; align-items: center; gap: 1rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .nav-mock .brand {
+    font-weight: 700; font-size: 14px; color: var(--color-primary);
+    border-right: 1px solid var(--color-border); padding-right: 0.85rem;
+  }
+  .nav-mock .item {
+    font-size: 0.82rem; color: var(--color-text-light);
+    padding: 0.25rem 0.55rem; border-radius: 3px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .nav-mock .item.active { color: var(--color-primary); font-weight: 600; background: var(--color-bg-alt); }
+  .nav-mock .item.dropped {
+    color: var(--color-danger); text-decoration: line-through; opacity: 0.65;
+  }
+  .nav-mock .item.renamed { color: var(--color-info); }
+  .nav-mock .item.promoted { color: var(--color-success); font-weight: 600; }
+
+  /* flow diagram */
+  .flow {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem;
+    margin: 0.7rem 0;
+  }
+  .flow-step {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.65rem 0.7rem; text-align: center; position: relative;
+  }
+  .flow-step h5 { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.25rem; color: var(--color-primary); }
+  .flow-step .surface {
+    font-size: 0.7rem; color: var(--color-text-light);
+    font-family: 'Consolas', monospace;
+  }
+  .flow-step::after {
+    content: '→'; position: absolute; right: -0.65rem; top: 50%;
+    transform: translateY(-50%); color: var(--color-text-light); font-size: 1.1rem;
+    z-index: 2;
+  }
+  .flow-step:last-child::after { display: none; }
+
+  /* deprecation card */
+  .deprecation-card {
+    background: var(--color-warning-bg);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-left: 4px solid var(--color-warning);
+    border-radius: 5px;
+    padding: 0.75rem 0.95rem;
+    margin: 0.5rem 0;
+  }
+  .deprecation-card h5 {
+    font-size: 0.88rem; font-weight: 600; color: var(--color-warning); margin-bottom: 0.35rem;
+  }
+  .deprecation-card .file {
+    font-family: 'Consolas', monospace; font-size: 0.75rem;
+    background: white; padding: 0.15rem 0.45rem; border-radius: 3px;
+    color: var(--color-text); border: 1px solid var(--color-border);
+  }
+
+  /* mockup of pending build banner inside Blueprint */
+  .bp-mock-shell {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 1rem; margin-top: 0.5rem;
+  }
+  .bp-mock-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 1px solid var(--color-border); padding-bottom: 0.65rem; margin-bottom: 0.65rem;
+  }
+  .bp-mock-header h4 { font-size: 1.05rem; font-weight: 600; color: var(--color-primary); margin: 0; }
+  .bp-pending-banner {
+    border: 1px solid var(--color-primary-light);
+    border-left: 4px solid var(--color-primary);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+  .bp-pending-banner .head {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 0.6rem 0.85rem;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .bp-pending-banner .head .label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85;
+  }
+  .bp-pending-banner .head .title {
+    font-size: 13px; font-weight: 600; margin-top: 2px;
+  }
+  .bp-pending-banner .body {
+    padding: 0.7rem 0.85rem;
+  }
+  .bp-pending-banner pre {
+    margin: 0; padding: 0.6rem 0.7rem;
+    background: #0f172a; color: #e2e8f0;
+    font-family: 'Consolas', monospace; font-size: 11px; line-height: 1.55;
+    border-radius: 3px; max-height: 130px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .bp-pending-banner .actions {
+    display: flex; gap: 6px; margin-top: 0.55rem; flex-wrap: wrap; align-items: center;
+  }
+  .bp-pending-banner .actions .btn-mock {
+    padding: 0.25rem 0.55rem; border-radius: 3px;
+    font-size: 11px; border: 1px solid var(--color-border); background: white;
+  }
+  .bp-pending-banner .actions .btn-mock.primary {
+    background: var(--color-primary); color: white; border-color: var(--color-primary);
+  }
+  .bp-pending-banner .actions .hint {
+    font-size: 10px; color: var(--color-text-light); margin-left: auto;
+  }
+
+  /* status pills */
+  .pill {
+    display: inline-block; border-radius: 3px; padding: 0.1rem 0.45rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.55rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.85rem; margin: 0.85rem 0;
+  }
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.65rem 0.85rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>Consolidation Review — One Critique, One Blueprint, One Loop</h1>
+    <div class="subtitle">
+      Version language removed. Legacy critique deprecated. Critique nav promoted to position 1.
+      Blueprint reaffirmed as the single execution surface. Critique → Blueprint → verify is now ONE loop.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> Consolidation shipped — awaiting critique</span>
+      <span class="meta-item"><strong>Frontend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>Backend changes:</strong> 0</span>
+      <span class="meta-item"><strong>Files changed:</strong> 6 (5 frontend + this doc)</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields. Type, then save the
+    page (Ctrl+S) or paste your critique back into Claude Code referencing section numbers.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">What changed (one paragraph)</a></li>
+      <li><a href="#s2">Before / after navigation</a></li>
+      <li><a href="#s3">The unified loop</a></li>
+      <li><a href="#s4">Blueprint as execution surface</a></li>
+      <li><a href="#s5">Pending-build banner (mockup)</a></li>
+      <li><a href="#s6">Deprecated pathways</a></li>
+      <li><a href="#s7">Terminology cleanup</a></li>
+      <li><a href="#s8">Critique workspace tweaks</a></li>
+      <li><a href="#s9">File diff summary</a></li>
+      <li><a href="#s10">Remaining fragmentation risks</a></li>
+      <li><a href="#s11">Migration notes</a></li>
+      <li><a href="#s12">Hidden but still routed</a></li>
+      <li><a href="#s13">Open questions for the user</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> What changed (one paragraph)</h2>
+    <div class="lead">
+      Lean consolidation pass. No new feature surface. No new architecture. Tightening only.
+    </div>
+
+    <p style="font-size: 0.9rem;">
+      Critique was promoted to nav position 1 with the bullseye icon. Blueprint moved to position 2 and
+      took on the role of execution surface. The version-labelled "V2" item was renamed to a clean
+      "System". The duplicate "System View" item (the older ProjectDashboard) was dropped from the
+      navigation entirely (its route remains for rollback). The legacy
+      <kbd>frontend/src/pages/project/VisualReviewWorkspace.tsx</kbd> received a deprecation header and
+      a top-of-page warning banner that links to the new workspace. Blueprint now picks up
+      <kbd>?build=visual-workspace</kbd> with the compiled prompt staged in <kbd>sessionStorage</kbd>
+      and surfaces it as a primary banner (gradient header, dark prompt block, copy / open-in-new-tab /
+      back-to-Critique / dismiss actions). Inside the Critique workspace, every "Build Center" label
+      was renamed "Blueprint". Frontend <kbd>tsc</kbd> exit 0; backend untouched.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything missing from the consolidation summary?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> Before / after navigation</h2>
+    <div class="lead">
+      The nav was the loudest source of "which version am I in?" friction. It now reads like one product.
+    </div>
+
+    <h3>Before</h3>
+    <div class="nav-mock">
+      <span class="brand">Accelerator Portal</span>
+      <span class="item active"><i class="bi bi-map"></i> Blueprint</span>
+      <span class="item dropped"><i class="bi bi-grid-3x3-gap"></i> System View</span>
+      <span class="item dropped"><i class="bi bi-stars"></i> V2</span>
+      <span class="item"><i class="bi bi-bullseye"></i> Critique</span>
+      <span class="item"><i class="bi bi-calendar-event"></i> Sessions</span>
+    </div>
+    <p style="font-size: 0.82rem; color: var(--color-text-light); margin-top: 0.5rem;">
+      Five items. Two competing system overviews ("System View" + "V2"). Critique buried at position 4.
+      "V2" labels the surface as a version, not a destination.
+    </p>
+
+    <h3>After</h3>
+    <div class="nav-mock">
+      <span class="brand">Accelerator Portal</span>
+      <span class="item promoted active"><i class="bi bi-bullseye"></i> Critique</span>
+      <span class="item"><i class="bi bi-map"></i> Blueprint</span>
+      <span class="item renamed"><i class="bi bi-grid-3x3-gap"></i> System</span>
+      <span class="item"><i class="bi bi-calendar-event"></i> Sessions</span>
+    </div>
+    <p style="font-size: 0.82rem; color: var(--color-text-light); margin-top: 0.5rem;">
+      Four items. <span class="pill good">Critique</span> at position 1. Blueprint at 2.
+      "V2" renamed to <span class="pill info">System</span>. "System View" duplicate dropped from nav
+      (route preserved for rollback).
+    </p>
+
+    <h3>The why for each move</h3>
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Change</th><th>Reason</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="pill good">Critique → position 1</span></td>
+          <td>It is now the most important workflow. Per spec: "immediately after Overview/Home OR immediately before Build."</td>
+        </tr>
+        <tr>
+          <td><span class="pill info">"V2" → "System"</span></td>
+          <td>"V2" is version language. Per spec: "Externally, there is only THE PLATFORM."</td>
+        </tr>
+        <tr>
+          <td><span class="pill danger">"System View" dropped from nav</span></td>
+          <td>Duplicate of "System". The user should not have to choose between two system overviews.</td>
+        </tr>
+        <tr>
+          <td>Blueprint stays</td>
+          <td>Per clarification: Blueprint is correct. It is the execution layer. No new "Build Center" surface is being built.</td>
+        </tr>
+        <tr>
+          <td>Sessions stays</td>
+          <td>Curriculum/coaching surface — orthogonal, not duplicate. No change.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="Nav order? Labels? Icons?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> The unified loop</h2>
+    <div class="lead">
+      Per spec: "Critique → Prompt Generated → Routed Into Blueprint Build Execution → Verification → Visual Workspace Review. That is ONE loop."
+    </div>
+
+    <div class="flow">
+      <div class="flow-step">
+        <h5>1. Pin</h5>
+        <div class="surface">/portal/visual-workspace</div>
+      </div>
+      <div class="flow-step">
+        <h5>2. Compile</h5>
+        <div class="surface">Critique workspace</div>
+      </div>
+      <div class="flow-step">
+        <h5>3. Execute</h5>
+        <div class="surface">/portal/project/blueprint?build=visual-workspace</div>
+      </div>
+      <div class="flow-step">
+        <h5>4. Verify</h5>
+        <div class="surface">Blueprint flow + Critique re-render</div>
+      </div>
+      <div class="flow-step">
+        <h5>5. Resolve</h5>
+        <div class="surface">/portal/visual-workspace (mark resolved)</div>
+      </div>
+    </div>
+
+    <h3>What enforces it</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>The Critique workspace's <strong>Send to Blueprint</strong> button stages the prompt in <kbd>sessionStorage</kbd> and navigates to <kbd>/portal/project/blueprint?build=visual-workspace</kbd>.</li>
+      <li>Blueprint reads the param + storage on mount and renders a primary banner above its existing flow (see §5 mockup).</li>
+      <li>After the build completes, the user returns to <strong>Critique</strong> via the back link in the banner; pin states reflect the rebuild on iframe reload.</li>
+      <li>"Mark resolved" lives only inside Critique &mdash; Blueprint is execution, not state-of-truth for critique resolution.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Where does the loop break? What's still implicit that should be explicit?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> Blueprint as execution surface</h2>
+    <div class="lead">
+      Per clarification: "Blueprint is still correct. BUT: Blueprint should become the execution
+      orchestration layer."
+    </div>
+
+    <p style="font-size: 0.85rem;">
+      Blueprint now answers <em>three</em> kinds of execution requests, not one:
+    </p>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Origin</th><th>How Blueprint receives it</th><th>Visual treatment</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cory's plan / autonomous mode</td>
+          <td>Existing flow (no change)</td>
+          <td>Existing Cory plan UI</td>
+        </tr>
+        <tr>
+          <td>Capability "Build" buttons</td>
+          <td>Existing per-capability prompt flow (no change)</td>
+          <td>Existing prompt panel</td>
+        </tr>
+        <tr>
+          <td><strong>Critique workspace handoff</strong> (new)</td>
+          <td><kbd>?build=visual-workspace</kbd> param + <kbd>sessionStorage:visualWorkspace:pendingBuildPrompt</kbd></td>
+          <td>Primary gradient banner above the page (see §5)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.85rem;">
+      Crucially: the Critique handoff <em>does not bypass</em> Blueprint's existing flow. It surfaces
+      the prompt prominently, but the operator still copies it to Claude Code and runs it manually,
+      same as any other Blueprint-issued prompt. <strong>One execution lane preserved.</strong>
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="Is Blueprint as execution surface clear enough?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> Pending-build banner (mockup)</h2>
+    <div class="lead">
+      What the operator sees when they land on Blueprint via the Critique handoff.
+    </div>
+
+    <div class="bp-mock-shell">
+      <div class="bp-mock-header">
+        <div>
+          <h4>CES &middot; Pilot funnel</h4>
+          <span class="pill info" style="margin-top: 4px; display: inline-block;">consulting</span>
+          <span class="pill good" style="margin-top: 4px; display: inline-block;">Active</span>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button class="btn btn-sm btn-outline-secondary" style="font-size: 11px;">
+            <i class="bi bi-grid-3x3-gap me-1"></i>Full System View
+          </button>
+        </div>
+      </div>
+
+      <div class="bp-pending-banner">
+        <div class="head">
+          <div>
+            <div class="label">Pending build · from Critique workspace</div>
+            <div class="title">
+              <i class="bi bi-lightning-charge me-2"></i>Compiled prompt ready to run
+              <span style="font-size: 10px; font-weight: 400; opacity: 0.85; font-family: 'Consolas', monospace; margin-left: 8px;">
+                /pilot/ai-team
+              </span>
+            </div>
+          </div>
+          <button class="btn-mock" style="background: rgba(255,255,255,0.18); color: white; border: none; font-size: 11px;">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="body">
+<pre># Visual workspace change request
+
+**Target page:** `/pilot/ai-team`
+**Preview URL:** https://enterprise.colaberry.ai/pilot/ai-team
+**Critique count:** 2
+
+## Critiques
+### 1. [copy] · HIGH
+- Issue: Headline "AI Systems Architect" reads internal — replace with plain outcome statement.
+
+### 2. [spacing] · MEDIUM
+- Issue: Hero cramped against trust strip — add 24px padding...
+</pre>
+          <div class="actions">
+            <span class="btn-mock primary"><i class="bi bi-clipboard"></i> Copy prompt</span>
+            <span class="btn-mock" style="color: var(--color-primary); border-color: var(--color-primary);">
+              <i class="bi bi-box-arrow-up-right"></i> Open in new tab
+            </span>
+            <span class="btn-mock" style="color: var(--color-text); border-color: var(--color-border);">
+              <i class="bi bi-arrow-left"></i> Back to Critique
+            </span>
+            <span class="hint">After Claude Code finishes, return here and continue normal Blueprint execution to verify.</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; color: var(--color-text-light); padding: 0.5rem 0.65rem; background: var(--color-bg-alt); border-radius: 4px;">
+        <i class="bi bi-stars me-1"></i><strong>(rest of Blueprint flow continues below as normal)</strong> — beta banner, progress, Cory plan, capability grid, etc.
+      </div>
+    </div>
+
+    <p style="font-size: 0.82rem; color: var(--color-text-light); margin-top: 0.65rem;">
+      The banner is dismissible. Once dismissed, the storage keys are cleared so the prompt does not
+      reappear on the next reload. The Critique workspace itself still holds the source of truth (the
+      pinned critiques) regardless of dismissal.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Banner placement, density, copy?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> Deprecated pathways</h2>
+    <div class="lead">
+      Hidden from primary experience. Routes preserved internally for rollback.
+    </div>
+
+    <div class="deprecation-card">
+      <h5><i class="bi bi-exclamation-triangle me-2"></i>Legacy critique surface</h5>
+      <div style="font-size: 0.82rem;">
+        <strong>File:</strong> <span class="file">frontend/src/pages/project/VisualReviewWorkspace.tsx</span>
+      </div>
+      <div style="font-size: 0.82rem; margin-top: 0.4rem;">
+        <strong>Status:</strong> <span class="pill warn">deprecated</span> — file kept for rollback safety; not routed; deprecation header + visible in-page banner now redirect any user who hits it directly to <kbd>/portal/visual-workspace</kbd>.
+      </div>
+    </div>
+
+    <div class="deprecation-card">
+      <h5><i class="bi bi-eye-slash me-2"></i>Legacy "System View" nav item</h5>
+      <div style="font-size: 0.82rem;">
+        <strong>Was:</strong> nav item pointing to <kbd>/portal/project/system</kbd> (the older ProjectDashboard).
+      </div>
+      <div style="font-size: 0.82rem; margin-top: 0.4rem;">
+        <strong>Status:</strong> <span class="pill warn">hidden from nav</span> — route stays alive (deep links + bookmarks still work); just no discovery via the navbar.
+      </div>
+    </div>
+
+    <div class="deprecation-card">
+      <h5><i class="bi bi-tag me-2"></i>"V2" version label</h5>
+      <div style="font-size: 0.82rem;">
+        <strong>Was:</strong> nav label "V2" pointing to <kbd>/portal/project/system-v2</kbd>.
+      </div>
+      <div style="font-size: 0.82rem; margin-top: 0.4rem;">
+        <strong>Status:</strong> <span class="pill info">renamed → "System"</span> — same route, new icon (<kbd>bi-grid-3x3-gap</kbd>), no version language.
+      </div>
+    </div>
+
+    <h3>What was NOT touched (intentionally)</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><strong>Backend visual-review endpoints.</strong> They still serve the new Critique workspace. No churn.</li>
+      <li><strong>Existing Blueprint flow.</strong> Cory plan, capability grid, autonomous mode — all unchanged.</li>
+      <li><strong>SystemViewV2 page contents.</strong> Renamed in nav only; the 4,280-line page is its own future cleanup project.</li>
+      <li><strong>ProjectDashboard page contents.</strong> Same — hidden from nav only; not modified.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="Anything else that should be deprecated now?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> Terminology cleanup</h2>
+    <div class="lead">
+      User-facing language now matches the spec: no version, no "V1/V2", no "Build Center" branding.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Surface</th><th>Before</th><th>After</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Nav item (system overview)</td><td>"V2"</td><td>"System"</td></tr>
+        <tr><td>Critique → details panel button</td><td>"Send to Build Center"</td><td>"Send to Blueprint"</td></tr>
+        <tr><td>Critique → action bar primary CTA</td><td>"Open Build Center"</td><td>"Open Blueprint"</td></tr>
+        <tr><td>Critique → prompt preview modal CTA</td><td>"Send to Build Center"</td><td>"Send to Blueprint"</td></tr>
+        <tr><td>Critique landing strapline</td><td>"...compile a Claude Code prompt · ship faster"</td><td>"...compile a prompt · hand off to Blueprint · verify · ship"</td></tr>
+        <tr><td>Verification handoff alert</td><td>"...Verification Workspace lands in roadmap P4"</td><td>"...verify via Blueprint after the build completes"</td></tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="Any other version/Build Center language remaining?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> Critique workspace tweaks</h2>
+    <div class="lead">
+      Lean. No new feature surface. Per spec: focus only on operational clarity, annotation usability,
+      issue organization, prompt quality, execution flow, verification flow, visual polish, speed.
+    </div>
+
+    <ul style="font-size: 0.85rem;">
+      <li><strong>Empty-state hint expanded</strong> &mdash; the right panel now reads "Compile a prompt → hand off to Blueprint → run → verify here." Communicates the loop on first contact.</li>
+      <li><strong>Verification alert reworded</strong> &mdash; no longer mentions a "roadmap P4 Verification Workspace"; tells the operator to verify via Blueprint after the build.</li>
+      <li><strong>Build Center → Blueprint</strong> across all three CTAs (details panel, action bar, prompt preview modal).</li>
+      <li><strong>Same backend path, same compiler</strong> &mdash; no behaviour change; just terminology.</li>
+    </ul>
+
+    <div class="anti-list">
+      <h4>Not added (intentional restraint)</h4>
+      <ul>
+        <li>Advanced AI suggestion engines</li>
+        <li>Governance overlays</li>
+        <li>Multiplayer / live cursors</li>
+        <li>Topology visualization</li>
+        <li>Autonomous critique generation</li>
+        <li>DOM mutation engines</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="What's still rough in the Critique workspace?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> File diff summary</h2>
+    <div class="lead">
+      Six files changed. Zero new files. Zero new dependencies. Zero backend changes.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Change</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>frontend/src/components/Layout/PortalLayout.tsx</kbd></td>
+          <td>Reordered <kbd>navItems</kbd>: Critique → 1, Blueprint → 2, "V2" renamed to "System", "System View" dropped.</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/pages/project/VisualReviewWorkspace.tsx</kbd></td>
+          <td>Header rewritten as deprecation notice; in-page warning banner with link to new workspace.</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/pages/project/SystemBlueprint.tsx</kbd></td>
+          <td>Added <kbd>pendingCritiquePrompt</kbd> state + <kbd>?build=visual-workspace</kbd> pickup + primary gradient banner with copy / open / back / dismiss actions.</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/features/visualWorkspace/components/IssueDetailsPanel.tsx</kbd></td>
+          <td>"Send to Build Center" → "Send to Blueprint"; empty-state hint expanded.</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/features/visualWorkspace/components/ActionBar.tsx</kbd></td>
+          <td>"Open Build Center" → "Open Blueprint".</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/features/visualWorkspace/components/PromptPreviewModal.tsx</kbd></td>
+          <td>"Send to Build Center" → "Send to Blueprint".</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/features/visualWorkspace/components/SessionPickerEmpty.tsx</kbd></td>
+          <td>Strapline rewritten to communicate the unified loop.</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/features/visualWorkspace/VisualWorkspacePage.tsx</kbd></td>
+          <td>Verification alert reworded; comment in <kbd>sendToBuildCenter</kbd> updated.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Verification</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><kbd>npx tsc --noEmit</kbd> in <kbd>frontend/</kbd> — exit 0.</li>
+      <li>Backend: untouched. No <kbd>tsc</kbd> needed.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="Anything in the diff that needs to be reverted or extended?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> Remaining fragmentation risks</h2>
+    <div class="lead">
+      Honest list. These remain because they are bigger than a consolidation pass &mdash; future product cleanup.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Risk</th><th>Why it persists</th><th>When to address</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SystemViewV2 is 4,280 lines</td>
+          <td>Renaming did not slim it. Splitting requires a dedicated session.</td>
+          <td>Next product cleanup pass.</td>
+        </tr>
+        <tr>
+          <td>ProjectDashboard still exists at <kbd>/portal/project/system</kbd></td>
+          <td>Removed from nav, but route alive. Deep links / bookmarks still work; deletion needs explicit go-ahead.</td>
+          <td>After 1&ndash;2 weeks of zero traffic to the route.</td>
+        </tr>
+        <tr>
+          <td>SystemBlueprint is 2,000+ lines</td>
+          <td>Existing surface; not in scope for this consolidation.</td>
+          <td>Future cleanup &mdash; can be split into Header / PendingBuildBanner / BetaBanner / Plan / Grid components.</td>
+        </tr>
+        <tr>
+          <td>"Pending build" banner is the only Critique→Blueprint integration</td>
+          <td>V1 ships the simplest possible handoff. No status echo back to Critique yet.</td>
+          <td>Next iteration if operators ask for "did the build run?" feedback in Critique.</td>
+        </tr>
+        <tr>
+          <td>Multiple "next action" panels still exist inside Blueprint</td>
+          <td>Inherited from earlier work. Per Productization Plan §02 Pain P2.</td>
+          <td>Cory Home (Roadmap P2) &mdash; the natural place to consolidate.</td>
+        </tr>
+        <tr>
+          <td>No visible "Verification" surface yet</td>
+          <td>Roadmap P4. Currently the alert message points operators to verify via Blueprint.</td>
+          <td>Build the dedicated Verify surface in the next sprint.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="Risks I'm missing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> Migration notes</h2>
+    <div class="lead">
+      For the operator (you) and any teammate who has the platform open right now.
+    </div>
+
+    <ul style="font-size: 0.85rem;">
+      <li><strong>Browser cache may show the old nav.</strong> Hard reload (Ctrl+Shift+R / Cmd+Shift+R) on first visit after deploy.</li>
+      <li><strong>Bookmarks to <kbd>/portal/project/system</kbd> still work</strong> &mdash; the route is preserved. Bookmarks to <kbd>/portal/project/system-v2</kbd> still work too.</li>
+      <li><strong>Bookmarks to the legacy critique page</strong> (if any) load the deprecation banner with a one-click jump to the new workspace.</li>
+      <li><strong>Pending build prompts in <kbd>sessionStorage</kbd></strong> are per-tab. Closing the tab clears them. No persistence past session.</li>
+      <li><strong>Production deploy</strong>: per CLAUDE.md, deploy after-hours. Local dev (<kbd>localhost:3000</kbd>) shows the new nav immediately on hot-reload.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="What else needs to be communicated at deploy time?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> Hidden but still routed</h2>
+    <div class="lead">
+      Per spec: "Do NOT delete old systems yet." Routes preserved for rollback safety.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Route</th><th>Component</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><kbd>/portal/project/system</kbd></td><td>ProjectDashboard.tsx</td><td><span class="pill warn">hidden from nav</span></td></tr>
+        <tr><td><kbd>/portal/project/system-v2</kbd></td><td>SystemViewV2.tsx</td><td><span class="pill info">renamed in nav → "System"</span></td></tr>
+        <tr><td>(none)</td><td>VisualReviewWorkspace.tsx</td><td><span class="pill warn">never routed; deprecation banner added</span></td></tr>
+        <tr><td><kbd>/portal/visual-workspace</kbd></td><td>VisualWorkspacePage.tsx (features/)</td><td><span class="pill good">primary nav</span></td></tr>
+        <tr><td><kbd>/portal/project/blueprint</kbd></td><td>SystemBlueprint.tsx</td><td><span class="pill good">primary nav, now picks up Critique handoff</span></td></tr>
+        <tr><td><kbd>/portal/project/blueprint?build=visual-workspace</kbd></td><td>SystemBlueprint.tsx (with banner)</td><td><span class="pill good">new entry pattern</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="Routes to hard-delete sooner rather than later?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> Open questions for the user</h2>
+    <div class="lead">
+      Decisions that are within the consolidation philosophy but need your call.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>Order of items 2&ndash;3 in the new nav.</strong> Currently Blueprint at 2, System at 3. Should "System" be ahead of Blueprint as a more natural "Overview"? My read: Blueprint at 2 because the new loop puts execution right after critique; "System" is reference, not workflow. Confirm or flip?</li>
+      <li><strong>Hard-delete the legacy <kbd>VisualReviewWorkspace.tsx</kbd>?</strong> The deprecation banner is in place but the file still ships. We could delete it now to remove dead weight, or wait the spec-suggested period.</li>
+      <li><strong>Hard-delete the <kbd>/portal/project/system</kbd> route?</strong> Same call &mdash; nav-hidden today. Delete the route too, or wait for zero-traffic confirmation?</li>
+      <li><strong>"System" label.</strong> Other reasonable names: "Overview", "Map", "Architecture". Does "System" feel right?</li>
+      <li><strong>Critique → Blueprint handoff: should the banner reappear if the operator dismisses then returns to the same Critique session?</strong> Currently dismiss is permanent until a new compile. We could re-stash on dismiss so it's recoverable.</li>
+      <li><strong>Should Critique be the default landing</strong> when the user clicks "Accelerator Portal" in the navbar (currently lands on Blueprint via <kbd>/portal/project/blueprint</kbd>)? Pure brand decision &mdash; do operators "wake up to" Critique or Blueprint?</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Decisions on each numbered question."></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    Visual Workspace Consolidation Review &middot; Colaberry Enterprise AI Leadership Accelerator &middot; 2026-05-09<br>
+    Productization Sprint &middot; consolidation pass complete &middot; awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1008,6 +1008,24 @@ router.get('/api/portal/project/github/status', requireParticipant, async (req: 
 });
 
 // ---------------------------------------------------------------------------
+// Unified Project State (One Brain) — single canonical operational state.
+// Synthesizes existing engines (project, progress, next-action) into one
+// shape so the UI never re-computes priority/readiness/coverage locally.
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/unified-state', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollment_id = req.participant!.sub;
+    const { buildUnifiedProjectState } = await import('../intelligence/unifiedProjectState/unifiedProjectStateBuilder');
+    const state = await buildUnifiedProjectState({ enrollment_id });
+    res.json(state);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /unified-state error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Progress Routes (V2)
 // ---------------------------------------------------------------------------
 
@@ -5201,6 +5219,564 @@ router.get('/api/portal/project/governance/causality/epidemiology', requireParti
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Phase 17 — adaptive validator intelligence + causal governance ──
+// 6 read endpoints: validator-reliability, drift, specialization,
+// forecast, ancestry-rollback, recovery-chain. All read-only — the
+// engine plans + surfaces; operators execute via existing Phase 13-15
+// endpoints.
+
+router.get('/api/portal/project/governance/adaptive/validator-reliability', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readReliabilityProfile } = await import('../intelligence/systemStateEngine/adaptiveGovernance/validatorReliabilityTracker');
+    const { buildAdaptiveWeights } = await import('../intelligence/systemStateEngine/adaptiveGovernance/adaptiveValidatorEngine');
+    const reliability = readReliabilityProfile(project.id);
+    const adaptive = buildAdaptiveWeights({ project_id: project.id });
+    res.json({ reliability, adaptive_weights: adaptive });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/adaptive/drift', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildDriftProfile } = await import('../intelligence/systemStateEngine/adaptiveGovernance/validatorDriftDetector');
+    const drift = buildDriftProfile(project.id);
+    res.json({ drift });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/adaptive/specialization', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildSpecializationMap } = await import('../intelligence/systemStateEngine/adaptiveGovernance/validatorSpecializationAnalyzer');
+    const specialization = buildSpecializationMap(project.id);
+    res.json({ specialization });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/adaptive/forecast', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    // Pull current signals from existing surfaces.
+    const { readMutationCounters } = await import('../intelligence/systemStateEngine/mutation/mutationSummaryCounters');
+    const { readReliabilityProfile } = await import('../intelligence/systemStateEngine/adaptiveGovernance/validatorReliabilityTracker');
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine/snapshotReader');
+    const counters = readMutationCounters(project.id);
+    const reliability = readReliabilityProfile(project.id);
+    const state = await readOrRebuild(project.id).catch(() => null);
+    const divergenceAvg = Math.round(
+      Object.values(reliability.metrics_by_role).reduce((s, m) => s + (100 - m.arbitration_agreement_quality), 0)
+        / Math.max(1, Object.values(reliability.metrics_by_role).length),
+    );
+    const escalationAvg = Math.round(
+      Object.values(reliability.metrics_by_role).reduce((s, m) => s + (100 - m.accuracy), 0)
+        / Math.max(1, Object.values(reliability.metrics_by_role).length),
+    );
+    const { buildCausalStabilityForecast } = await import('../intelligence/systemStateEngine/adaptiveGovernance/causalForecastingEngine');
+    const forecast = buildCausalStabilityForecast({
+      project_id: project.id,
+      current: {
+        rollback_rate_per_hour: counters.recent_rollbacks,
+        validator_divergence_pct: divergenceAvg,
+        avg_inherited_trust_decay: 0,           // Phase 16 trust map is not cached at this layer
+        contradiction_count: state?.contradictions?.length ?? 0,
+        arbitration_escalation_rate_pct: escalationAvg,
+      },
+    });
+    res.json({ forecast });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/adaptive/ancestry-rollback/:mutation_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const graph = await buildProjectLineageGraph(project.id);
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine/snapshotReader');
+    const state = await readOrRebuild(project.id).catch(() => null);
+    const { buildContradictionPropagationProfile } = await import('../intelligence/systemStateEngine/causality/contradictionPropagationTracker');
+    const propagation = buildContradictionPropagationProfile({
+      project_id: project.id,
+      contradictions: (state?.contradictions ?? []) as any,
+    });
+    const { buildAncestryRollbackPlan } = await import('../intelligence/systemStateEngine/adaptiveGovernance/ancestryRollbackAdvisor');
+    const plan = buildAncestryRollbackPlan({
+      graph,
+      target_mutation_id: req.params.mutation_id as string,
+      propagation,
+    });
+    res.json({ plan });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 18 — operator-calibrated governance evolution ──────────
+//
+// 7 endpoints: calibration list/propose/approve/reject, routing
+// decision builder, forecast tuning profile, recovery session create
+// + step action, governance topology, transparency replay, recovery
+// optimization insights.
+
+router.get('/api/portal/project/governance/operator/calibration-proposals', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { listProposals } = await import('../intelligence/systemStateEngine/operatorGovernance/operatorCalibrationEngine');
+    res.json({ proposals: listProposals(project.id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/operator/calibration-proposals/:proposal_id/approve', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { approveCalibration } = await import('../intelligence/systemStateEngine/operatorGovernance/operatorCalibrationEngine');
+    const result = await approveCalibration({
+      project_id: project.id,
+      proposal_id: req.params.proposal_id as string,
+      operator_id: req.participant!.sub,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/operator/calibration-proposals/:proposal_id/reject', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { rejectCalibration } = await import('../intelligence/systemStateEngine/operatorGovernance/operatorCalibrationEngine');
+    const proposal = await rejectCalibration({
+      project_id: project.id,
+      proposal_id: req.params.proposal_id as string,
+      operator_id: req.participant!.sub,
+      reason: (req.body?.reason as string) ?? 'operator_rejected',
+    });
+    res.json({ proposal });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/operator/specialization-routing', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const target_intent = (req.query.target_intent as string) ?? 'POLICY_NUDGE';
+    const { buildRoutingDecision } = await import('../intelligence/systemStateEngine/operatorGovernance/specializationRoutingEngine');
+    const decision = buildRoutingDecision({ project_id: project.id, target_intent: target_intent as any });
+    res.json({ decision });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/operator/forecast-tuning', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildForecastCalibrationProfile } = await import('../intelligence/systemStateEngine/operatorGovernance/forecastTuningEngine');
+    const profile = buildForecastCalibrationProfile(project.id);
+    res.json({ profile });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/operator/topology', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildGovernanceTopology } = await import('../intelligence/systemStateEngine/operatorGovernance/governanceTopologyBuilder');
+    const topology = buildGovernanceTopology({ project_id: project.id });
+    res.json({ topology });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/operator/recovery-sessions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { listRecoverySessions } = await import('../intelligence/systemStateEngine/operatorGovernance/interactiveRecoveryCoordinator');
+    res.json({ sessions: listRecoverySessions(project.id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/operator/recovery-sessions/:session_id/step', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const action = (req.body?.action as string) ?? '';
+    if (!['approve', 'skip', 'abort'].includes(action)) {
+      res.status(400).json({ error: 'action must be one of approve|skip|abort' });
+      return;
+    }
+    const { performStepAction } = await import('../intelligence/systemStateEngine/operatorGovernance/interactiveRecoveryCoordinator');
+    const session = await performStepAction({
+      project_id: project.id,
+      session_id: req.params.session_id as string,
+      action: action as any,
+      operator_id: req.participant!.sub,
+    });
+    res.json({ session });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 19 — federated organizational governance intelligence ──
+//
+// 8 endpoints: consent read/update, archetypes (list + share), org
+// recovery intelligence, calibration impact replay, forecast anomalies,
+// governance drift replay, federation lineage.
+
+router.get('/api/portal/project/governance/federation/consent', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    res.json({ consent: readConsent(project.id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/federation/consent', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { updateConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = await updateConsent({
+      project_id: project.id,
+      organization_id: req.body?.organization_id,
+      federation_enabled: req.body?.federation_enabled,
+      share_permissions: req.body?.share_permissions,
+      consume_permissions: req.body?.consume_permissions,
+      anonymization_level: req.body?.anonymization_level,
+      updated_by: req.participant!.sub,
+    });
+    res.json({ consent });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federation/archetypes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const kind = req.query.kind as string | undefined;
+    const { listArchetypesFor } = await import('../intelligence/systemStateEngine/federation/federatedArchetypeRegistry');
+    const archetypes = listArchetypesFor({ project_id: project.id, kind: kind as any });
+    res.json({ archetypes });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/federation/archetypes/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { shareArchetype } = await import('../intelligence/systemStateEngine/federation/federatedArchetypeRegistry');
+    const result = await shareArchetype({
+      project_id: project.id,
+      raw_archetype: req.body?.raw_archetype,
+      anomaly_observed: req.body?.anomaly_observed === true,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federation/recovery-intelligence', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const kind = req.query.kind as string | undefined;
+    const { buildOrganizationalRecoveryIntelligence } = await import('../intelligence/systemStateEngine/federation/organizationalRecoveryIntelligence');
+    const report = buildOrganizationalRecoveryIntelligence({ project_id: project.id, kind: kind as any });
+    res.json({ report });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federation/calibration-impact/:proposal_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const window_hours = req.query.window_hours ? Number(req.query.window_hours) : undefined;
+    const { replayCalibrationImpact } = await import('../intelligence/systemStateEngine/federation/calibrationImpactReplay');
+    const result = await replayCalibrationImpact({
+      project_id: project.id,
+      proposal_id: req.params.proposal_id as string,
+      window_hours,
+    });
+    res.json({ replay: result });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federation/forecast-anomalies', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildForecastAnomalyProfile } = await import('../intelligence/systemStateEngine/federation/anomalyAwareForecastEngine');
+    const profile = buildForecastAnomalyProfile(project.id);
+    res.json({ profile });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federation/governance-drift', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const window_hours = req.query.window_hours ? Number(req.query.window_hours) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const { buildGovernanceDriftReplay } = await import('../intelligence/systemStateEngine/federation/governanceDriftReplay');
+    const replay = await buildGovernanceDriftReplay({ project_id: project.id, window_hours, limit });
+    res.json({ replay });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 20 — bounded federated organizational learning ─────────
+//
+// 12 endpoints: effectiveness observe + read + list, organizational
+// stabilization, diffusion replay, reliability evolution + read, drift,
+// visibility replay, policy proposals (list + propose + approve + reject).
+
+router.post('/api/portal/project/governance/federated-learning/effectiveness-observation', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) {
+      res.status(400).json({ error: 'project not federation-enabled' });
+      return;
+    }
+    const { recordOutcomeObservation } = await import('../intelligence/systemStateEngine/federatedLearning/federatedEffectivenessTracker');
+    await recordOutcomeObservation({
+      organization_id: consent.organization_id,
+      archetype_signature: req.body?.archetype_signature,
+      signal: req.body?.signal,
+      stabilization_delta: Number(req.body?.stabilization_delta) || 0,
+      propagation_reduction: Number(req.body?.propagation_reduction) || 0,
+      recovery_succeeded: req.body?.recovery_succeeded === true,
+      anomaly_observed: req.body?.anomaly_observed === true,
+    });
+    res.json({ recorded: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federated-learning/effectiveness', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.json({ profiles: [] }); return; }
+    const { listEffectivenessProfiles } = await import('../intelligence/systemStateEngine/federatedLearning/federatedEffectivenessTracker');
+    const profiles = await listEffectivenessProfiles(consent.organization_id);
+    res.json({ profiles });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federated-learning/organizational-stabilization', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.json({ report: null }); return; }
+    const { buildOrganizationalStabilizationReport } = await import('../intelligence/systemStateEngine/federatedLearning/organizationalStabilizationIntelligence');
+    const report = await buildOrganizationalStabilizationReport({ organization_id: consent.organization_id });
+    res.json({ report });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federated-learning/diffusion-replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.json({ replay: null }); return; }
+    const archetype_signature = req.query.archetype_signature as string | undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const { buildFederatedImpactDiffusionReplay } = await import('../intelligence/systemStateEngine/federatedLearning/federatedImpactDiffusionReplay');
+    const replay = await buildFederatedImpactDiffusionReplay({ organization_id: consent.organization_id, archetype_signature, limit });
+    res.json({ replay });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/federated-learning/reliability/:archetype_signature/evolve', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.status(400).json({ error: 'project not federation-enabled' }); return; }
+    const { evolveReliability } = await import('../intelligence/systemStateEngine/federatedLearning/archetypeReliabilityEvolution');
+    const profile = await evolveReliability({
+      organization_id: consent.organization_id,
+      archetype_signature: req.params.archetype_signature as string,
+    });
+    res.json({ profile });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federated-learning/reliability', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.json({ profiles: [] }); return; }
+    const { listReliabilityProfiles } = await import('../intelligence/systemStateEngine/federatedLearning/archetypeReliabilityEvolution');
+    const profiles = await listReliabilityProfiles(consent.organization_id);
+    res.json({ profiles });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federated-learning/drift', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.json({ profile: null }); return; }
+    const { buildFederationDriftProfile } = await import('../intelligence/systemStateEngine/federatedLearning/federationDriftDetector');
+    const profile = await buildFederationDriftProfile({ organization_id: consent.organization_id });
+    res.json({ profile });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federated-learning/visibility-replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.json({ replay: null }); return; }
+    const window_hours = req.query.window_hours ? Number(req.query.window_hours) : undefined;
+    const { buildFederationVisibilityReplay } = await import('../intelligence/systemStateEngine/federatedLearning/federationVisibilityReplay');
+    const replay = await buildFederationVisibilityReplay({ organization_id: consent.organization_id, window_hours });
+    res.json({ replay });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federated-learning/policy-proposals', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.json({ proposals: [] }); return; }
+    const { listPolicyProposals } = await import('../intelligence/systemStateEngine/federatedLearning/federationPolicyEvolutionEngine');
+    const proposals = await listPolicyProposals(consent.organization_id);
+    res.json({ proposals });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/federated-learning/policy-proposals', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.status(400).json({ error: 'project not federation-enabled' }); return; }
+    const { proposePolicyEvolution } = await import('../intelligence/systemStateEngine/federatedLearning/federationPolicyEvolutionEngine');
+    const result = await proposePolicyEvolution({
+      organization_id: consent.organization_id,
+      project_id: project.id,
+      evolution_kind: req.body?.evolution_kind,
+      proposed_change: req.body?.proposed_change ?? {},
+      rationale: (req.body?.rationale as string) ?? '',
+      impact_bounds: req.body?.impact_bounds,
+      forecasted_impact: req.body?.forecasted_impact ?? [],
+      rollback_path: req.body?.rollback_path ?? [],
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/federated-learning/policy-proposals/:proposal_id/approve', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.status(400).json({ error: 'project not federation-enabled' }); return; }
+    const { approvePolicy } = await import('../intelligence/systemStateEngine/federatedLearning/federationPolicyEvolutionEngine');
+    const result = await approvePolicy({
+      organization_id: consent.organization_id,
+      proposal_id: req.params.proposal_id as string,
+      operator_id: req.participant!.sub,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/governance/federated-learning/policy-proposals/:proposal_id/reject', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) { res.status(400).json({ error: 'project not federation-enabled' }); return; }
+    const { rejectPolicy } = await import('../intelligence/systemStateEngine/federatedLearning/federationPolicyEvolutionEngine');
+    const proposal = await rejectPolicy({
+      organization_id: consent.organization_id,
+      proposal_id: req.params.proposal_id as string,
+      operator_id: req.participant!.sub,
+      reason: req.body?.reason as string | undefined,
+    });
+    res.json({ proposal });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/federation/lineage', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { readConsent } = await import('../intelligence/systemStateEngine/federation/federationConsentEngine');
+    const { readFederationLineage } = await import('../intelligence/systemStateEngine/federation/federationLineageTracker');
+    const consent = readConsent(project.id);
+    if (!consent.federation_enabled || !consent.organization_id) {
+      res.json({ lineage: { organization_id: null, nodes: [], edges: [], archetype_count: 0, source_project_count: 0, consumer_project_count: 0, built_at: new Date().toISOString() } });
+      return;
+    }
+    const lineage = readFederationLineage({ organization_id: consent.organization_id });
+    res.json({ lineage });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/operator/transparency-replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
+    const { buildGovernanceTransparencyReplay } = await import('../intelligence/systemStateEngine/operatorGovernance/governanceTransparencyReplayBuilder');
+    const replay = await buildGovernanceTransparencyReplay({ project_id: project.id, limit });
+    res.json({ replay });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/governance/adaptive/recovery-chain', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const graph = await buildProjectLineageGraph(project.id);
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine/snapshotReader');
+    const state = await readOrRebuild(project.id).catch(() => null);
+    const { buildContradictionPropagationProfile } = await import('../intelligence/systemStateEngine/causality/contradictionPropagationTracker');
+    const propagation = buildContradictionPropagationProfile({
+      project_id: project.id,
+      contradictions: (state?.contradictions ?? []) as any,
+    });
+    // For the trigger, take the most-recent leaf from the lineage graph.
+    const leafId = graph.leaf_node_ids[0] ?? null;
+    const { analyzeRootCauses } = await import('../intelligence/systemStateEngine/causality/rootCauseAnalyzer');
+    const root_cause = leafId ? analyzeRootCauses({ graph, target_node_id: leafId, propagation }) : { project_id: project.id, target_mutation_id: null, identified_roots: [], built_at: new Date().toISOString() };
+    const { buildCausalRecoveryChain } = await import('../intelligence/systemStateEngine/adaptiveGovernance/causalRecoveryChainPlanner');
+    const chain = buildCausalRecoveryChain({
+      project_id: project.id,
+      root_cause,
+      propagation,
+      forecast: null,
+      latest_arbitration: null,
+      trigger_summary: (req.query.trigger as string) || 'operator_request',
+    });
+    res.json({ chain });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Kickoff prompt ──────────────────────────────────────────────────
 // Returns the Claude Code prompt the user should run as their very
 // first task on a brand-new project. Plan-mode foundation check, then
@@ -8488,6 +9064,1555 @@ router.get('/api/portal/project/system-prompt/draft', requireParticipant, async 
     const draft = await buildBlueprintSystemPrompt(req.participant!.sub);
     const saved = ((project as any).project_variables || {}).system_prompt || '';
     res.json({ draft, has_saved: !!saved.trim() });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 21 — Distributed Runtime ────────
+// Bounded persistent federation runtime continuity: broker topology,
+// partition health, replay, isolation, and operator-clicked recovery.
+// Single-process, single-broker today. No auto-failover.
+router.get('/api/portal/project/distributed-runtime/visibility', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const visibility = await engine.buildRuntimeVisibility();
+    res.json(visibility);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/distributed-runtime/topology', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const topology = await engine.buildRuntimeTopology();
+    res.json(topology);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/distributed-runtime/partitions', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const partitions = await engine.listPartitions();
+    res.json({ partitions, partition_count: partitions.length });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/distributed-runtime/isolations', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const profile = engine.buildIsolationProfile(engine.getDistributedAdapterKind());
+    res.json(profile);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/distributed-runtime/isolations/lift', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { namespace, organization_id } = req.body || {};
+    if (!namespace || typeof namespace !== 'string') { res.status(400).json({ error: 'namespace_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const lifted = engine.liftBrokerIsolation(namespace, organization_id ?? null);
+    res.json({ lifted });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/distributed-runtime/replays', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const replays = engine.listRecentReplays();
+    res.json({ replays });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/distributed-runtime/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = await engine.performContinuityReplay({
+      trigger: 'operator_clicked',
+      organization_id: req.body?.organization_id ?? null,
+      operator_id: req.participant?.sub,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/distributed-runtime/recovery-plans', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const plans = engine.listRecoveryPlans();
+    res.json({ plans });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/distributed-runtime/recovery-plans', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const trigger = req.body?.trigger ?? 'operator_requested';
+    const engine = await import('../intelligence/systemStateEngine');
+    const plan = engine.buildRecoveryPlan({ trigger });
+    res.json(plan);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/distributed-runtime/recovery-plans/:plan_id/steps/:step_id/execute', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = await engine.executeRecoveryStep({
+      plan_id: String(req.params.plan_id),
+      step_id: String(req.params.step_id),
+      operator_id: req.participant!.sub,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/distributed-runtime/ping', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = await engine.pingBroker();
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 22 — Within-Partition Cognition Topology ────────
+// Bounded topology orchestration on top of Phase 21 runtime continuity.
+// Within-partition only — never cross-partition, never cross-org.
+// Recovery sequencing is automatic; execution is operator-clicked.
+router.get('/api/portal/project/topology/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const visibility = engine.buildTopologyVisibilityReplay({ organization_id });
+    res.json(visibility);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/topology/graph', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildCognitionTopologyGraph(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/topology/dependency-edges', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, from_namespace, to_namespace, relation, latency_sensitivity, notes } = req.body || {};
+    if (!organization_id || !from_namespace || !to_namespace || !relation || !latency_sensitivity) {
+      res.status(400).json({ error: 'missing_required_fields' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const edge = engine.recordDependencyEdge({ organization_id, from_namespace, to_namespace, relation, latency_sensitivity, notes });
+    res.json(edge);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/topology/fragmentation', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildTopologyFragmentationProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/topology/dependencies', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRuntimeDependencyProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/topology/forecast', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const horizon_minutes = req.query.horizon_minutes ? Number(req.query.horizon_minutes) : undefined;
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildTopologyForecast({ organization_id, horizon_minutes }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/topology/propagations', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({
+      replays: engine.listRecentPropagationReplays(organization_id),
+      attributions: engine.listRecentPropagationAttributions(organization_id),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/topology/propagations/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, entries } = req.body || {};
+    if (!organization_id || !Array.isArray(entries)) {
+      res.status(400).json({ error: 'organization_id_and_entries_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRuntimePropagationReplay({ organization_id, entries }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/topology/stabilizations', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ stabilizations: engine.listStabilizationPaths(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/topology/recovery-plans', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ plans: engine.listTopologyRecoveryPlans(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/topology/recovery-plans', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, trigger } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildTopologyRecoveryPlan({ organization_id, trigger: trigger ?? 'operator_requested' }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/topology/recovery-plans/:plan_id/steps/:step_id/execute', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = await engine.executeTopologyRecoveryStep({
+      plan_id: String(req.params.plan_id),
+      step_id: String(req.params.step_id),
+      operator_id: req.participant!.sub,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 23 — Bounded Operational Execution Substrate ────────
+// Instrumentation + governance over existing operational workers
+// (Phase 14 handoff, Phase 15 mutation, Phase 21/22 recovery, scripts,
+// cron). Workers opt in voluntarily. Within-organization isolated.
+router.get('/api/portal/project/execution-substrate/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/execution-substrate/topology', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionTopologyProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/execution-substrate/continuity', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionContinuityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/execution-substrate/isolation', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionIsolationProfile());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/execution-substrate/isolation/lift', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { kind, organization_id } = req.body || {};
+    if (!kind || !organization_id) { res.status(400).json({ error: 'kind_and_organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ lifted: engine.liftExecutionIsolation(kind, organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/execution-substrate/governance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionGovernanceProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/execution-substrate/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const kind = req.query.kind ? String(req.query.kind) as any : undefined;
+    const state = req.query.state ? String(req.query.state) as any : undefined;
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.replayExecutionEnvelopes({ organization_id, kind, state }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/execution-substrate/rollback-plans', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({
+      plans: engine.listExecutionRollbackPlans(organization_id),
+      bounds: engine.listRollbackContinuityBounds(organization_id),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/execution-substrate/rollback-plans', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, trigger, source_chains } = req.body || {};
+    if (!organization_id || !Array.isArray(source_chains)) {
+      res.status(400).json({ error: 'organization_id_and_source_chains_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRollbackExecutionPlan({ organization_id, trigger: trigger ?? 'operator_requested', source_chains }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/execution-substrate/sweep-stalled', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ flipped: engine.sweepStalledWorkers() });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 24 — Cognitive Compression + Operational Storytelling ────
+// Deterministic template-rendered narratives over Phase 13-23 data.
+// No LLM, no inference. Every block cites its source attribution rows.
+router.get('/api/portal/project/cognitive-compression/causal-story', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const story = engine.buildCausalStoryReplay({ organization_id });
+    res.json(story);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/rollback-narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRollbackNarrativeReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/continuity-narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildContinuityNarrative({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/topology-narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildTopologyNarrativeReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/trust-surface', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildOperationalTrustSurface({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/cognitive-load', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildCognitiveLoadProfile({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/operator-guidance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({
+      latest: engine.buildOperatorGuidancePlan({ organization_id }),
+      history: engine.listOperatorGuidancePlans(organization_id),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/narratives', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ narratives: engine.listNarratives(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/cognitive-compression/template-registry', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const ids = engine.listTemplateIds();
+    res.json({
+      template_count: ids.length,
+      templates: ids.map(id => {
+        const spec = engine.getTemplateSpec(id);
+        return spec ? { template_id: id, description: spec.description, required_vars: spec.required_vars } : { template_id: id };
+      }),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 25 — Operational Experimentation + Sandbox ────────
+// Operator-initiated counterfactual projection. Pure in-memory
+// simulation — never mutates production state.
+router.post('/api/portal/project/experimentation/sandbox', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, hypothetical_actions, tier } = req.body || {};
+    if (!organization_id || !Array.isArray(hypothetical_actions)) {
+      res.status(400).json({ error: 'organization_id_and_hypothetical_actions_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.submitExecutionSandbox({ organization_id, hypothetical_actions, tier }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/sandboxes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ sandboxes: engine.listSandboxes(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/experimentation/rollback-simulation', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, plan_id, source_chain_ids, experiment_id } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.simulateRollback({ organization_id, plan_id, source_chain_ids, experiment_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/rollback-simulations', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ simulations: engine.listRollbackSimulations(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/experimentation/propagation-preview', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, hypothetical_origin, hypothetical_action_kind, experiment_id } = req.body || {};
+    if (!organization_id || !hypothetical_origin || !hypothetical_action_kind) {
+      res.status(400).json({ error: 'organization_id_origin_and_kind_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildPropagationPreview({ organization_id, hypothetical_origin, hypothetical_action_kind, experiment_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/propagation-previews', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ previews: engine.listPropagationPreviews(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/experimentation/rehearsal', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, chain, experiment_id } = req.body || {};
+    if (!organization_id || !Array.isArray(chain)) {
+      res.status(400).json({ error: 'organization_id_and_chain_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.rehearseStabilization({ organization_id, chain, experiment_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/rehearsals', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ rehearsals: engine.listRehearsals(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/governance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildSandboxGovernanceProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExperimentationTrustSurface({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExperimentationVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/experimentation/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExperimentReplayBundle({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 26 — Bounded Live Operational Rehearsal Substrate ──────
+// Async lifecycle envelope wrapping Phase 25 projection. Pure
+// in-memory typed state machine — no real worker spawning, no
+// production-state mutation.
+router.post('/api/portal/project/live-sandbox', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, hypothetical_actions, ttl_ms } = req.body || {};
+    if (!organization_id || !Array.isArray(hypothetical_actions)) {
+      res.status(400).json({ error: 'organization_id_and_hypothetical_actions_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.submitLiveSandbox({
+      organization_id, hypothetical_actions,
+      operator_id: req.participant!.sub, ttl_ms,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/runtimes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ runtimes: engine.listRuntimes(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/runtimes/:runtime_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const runtime = engine.getRuntime(String(req.params.runtime_id));
+    if (!runtime) { res.status(404).json({ error: 'runtime_not_found' }); return; }
+    res.json(runtime);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/live-sandbox/runtimes/:runtime_id/expire', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const updated = engine.expireRuntime(String(req.params.runtime_id), 'operator_cancelled');
+    if (!updated) { res.status(404).json({ error: 'runtime_not_found' }); return; }
+    res.json(updated);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/live-sandbox/rollback-rehearsal', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { runtime_id, organization_id, plan_id, source_chain_ids, experiment_id } = req.body || {};
+    if (!runtime_id || !organization_id) {
+      res.status(400).json({ error: 'runtime_id_and_organization_id_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const replay = engine.rehearseSandboxRollback({
+      runtime_id, organization_id, plan_id, source_chain_ids, experiment_id,
+    });
+    if (!replay) { res.status(404).json({ error: 'runtime_not_eligible' }); return; }
+    res.json(replay);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/rollback-rehearsals', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ rehearsals: engine.listSandboxRollbackRehearsals(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/live-sandbox/runtimes/:runtime_id/preview-narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.body?.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const narrative = engine.buildSandboxPreviewNarrative({
+      runtime_id: String(req.params.runtime_id), organization_id,
+    });
+    if (!narrative) { res.status(404).json({ error: 'runtime_not_found_or_no_narrative_blocks' }); return; }
+    res.json(narrative);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/preview-narratives', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ narratives: engine.listSandboxPreviewNarratives(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/governance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildLiveSandboxGovernanceProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildLiveSandboxTrustSurface({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildLiveSandboxVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/live-sandbox/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildSandboxReplayBundle({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 27 — Bounded Delegated Operational Execution Substrate ──
+// SAFETY MODEL: Delegated execution is NOT autonomous orchestration.
+// The operator remains the sole authority source. This substrate
+// executes ONE bounded pre-authorized action inside strict
+// rollback-protected governance constraints. Single-use envelopes,
+// 7 structural safety invariants, hard timeouts, no side-effect chains.
+router.post('/api/portal/project/delegated-execution/envelope', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const {
+      action_kind, target_namespace, target_kind, target_organization_id,
+      target_plan_id, target_step_id, rollback_chain_id,
+      topology_containment_proof, ttl_ms,
+    } = req.body || {};
+    if (!action_kind || !target_organization_id || !rollback_chain_id || !topology_containment_proof) {
+      res.status(400).json({
+        error: 'action_kind_target_organization_id_rollback_chain_id_topology_containment_proof_required',
+      }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    // Pre-flight: forbidden registry hard veto.
+    if (engine.isActionForbidden(action_kind)) {
+      res.status(400).json({ error: 'action_forbidden', explanation: engine.explainForbidden(action_kind) }); return;
+    }
+    // Pre-flight: governance issuance gate. Uses placeholder envelope_id
+    // since the envelope hasn't been issued yet — gate evaluates the
+    // would-be issuance shape only.
+    const issuer_organization_id = String(req.body?.issuer_organization_id ?? target_organization_id);
+    const gate = engine.evaluateDelegatedIssuance({
+      envelope_id: 'pre_issuance',
+      operator_id: req.participant!.sub,
+      organization_id: issuer_organization_id,
+      action_kind,
+      target_organization_id,
+      target_namespace,
+      rollback_chain_id,
+      target_plan_id,
+      target_step_id,
+    });
+    if (gate.decision !== 'permitted') {
+      res.status(403).json({ error: 'issuance_denied', reason: gate.reason, attribution: gate.attribution }); return;
+    }
+    const result = engine.issueAuthorityEnvelope({
+      operator_id: req.participant!.sub,
+      action_kind, target_namespace, target_kind, target_organization_id,
+      target_plan_id, target_step_id, rollback_chain_id,
+      topology_containment_proof, ttl_ms,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/envelopes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ envelopes: engine.listDelegatedEnvelopes(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/envelope/:envelope_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const env = engine.getDelegatedEnvelope(String(req.params.envelope_id));
+    if (!env) { res.status(404).json({ error: 'envelope_not_found' }); return; }
+    res.json(env);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/delegated-execution/envelope/:envelope_id/revoke', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    const updated = engine.revokeEnvelope(String(req.params.envelope_id));
+    if (!updated) { res.status(404).json({ error: 'envelope_not_found' }); return; }
+    res.json(updated);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// SYNCHRONOUS executor — flow: validate → 7 safety invariants → invoke
+// ONE Phase 21/22/23 mutator with hard timeout → consume envelope.
+router.post('/api/portal/project/delegated-execution/execute', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { envelope_id, timeout_ms } = req.body || {};
+    if (!envelope_id) { res.status(400).json({ error: 'envelope_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = await engine.executeDelegated({
+      envelope_id,
+      issuer_organization_id: req.participant!.sub,
+      timeout_ms,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/traces', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ traces: engine.listDelegatedExecutionTraces(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/governance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildDelegatedGovernanceProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildDelegatedExecutionTrustSurface({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildDelegatedExecutionVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildDelegatedReplayBundle({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/delegated-execution/authority-narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { envelope_id, organization_id } = req.body || {};
+    if (!envelope_id || !organization_id) {
+      res.status(400).json({ error: 'envelope_id_and_organization_id_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const narrative = engine.buildAuthorityCompressionNarrative({ envelope_id, organization_id });
+    if (!narrative) { res.status(404).json({ error: 'envelope_not_found_or_no_narrative' }); return; }
+    res.json(narrative);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/delegated-execution/non-delegatable-registry', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.getNonDelegatableRegistry());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 28 — Execution Resource Governance + Operational Economics ─
+// SAFETY MODEL: deterministic resource accounting. Phase 28 OBSERVES,
+// CLASSIFIES, BUDGETS, and CONSTRAINS. It NEVER optimizes, allocates
+// dynamically, reprioritizes execution, rebalances topology, expands
+// authority, or auto-governs runtime economics. Static operator-set
+// quotas; cross-organization isolation absolute.
+router.get('/api/portal/project/economics/quota', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionQuotaProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/economics/quota/set', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, quota_key, updated_limit, reason } = req.body || {};
+    if (!organization_id || !quota_key || typeof updated_limit !== 'number' || !reason) {
+      res.status(400).json({
+        error: 'organization_id_quota_key_updated_limit_reason_required',
+      }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.setQuotaLimit({
+      organization_id, quota_key, updated_limit,
+      updated_by: req.participant!.sub, reason,
+    });
+    if (!result.applied) {
+      res.status(400).json({ error: result.reason ?? 'quota_set_rejected' }); return;
+    }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/pressure', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRuntimePressureProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/load', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildTopologyLoadDistributionProfile(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/forecast', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRollbackResourceForecast(organization_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/governance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({
+      recent_governance: engine.listQuotaGovernanceAttributions(organization_id),
+      recent_exhaustions: engine.listQuotaExhaustions(organization_id),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionEconomicsTrustSurface({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionEconomicsVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionEconomicsReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/economics/narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.body?.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const narrative = engine.buildExecutionEconomicsNarrative({ organization_id });
+    if (!narrative) { res.status(404).json({ error: 'no_economics_data' }); return; }
+    res.json(narrative);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/forbidden-registry', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.getForbiddenEconomicsRegistry());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/economics/summary', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildExecutionEconomicsSummary(organization_id || undefined));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 29 — Stabilization Playbook Intelligence + Recovery Governance ─
+// SAFETY MODEL: read-only recovery recommendation intelligence. Phase 29
+// RECOMMENDS, SEQUENCES, FORECASTS, CLASSIFIES, REPLAYS — never executes.
+// Operator click + Phase 27 envelope is the sole mutation path.
+// `operator_mediation_required: true` typed-as-literal across every gate.
+router.get('/api/portal/project/stabilization/archetypes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({ archetypes: engine.listStabilizationArchetypes(organization_id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/stabilization/archetypes/:archetype_id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const arch = engine.getStabilizationArchetype(organization_id, String(req.params.archetype_id));
+    if (!arch) { res.status(404).json({ error: 'archetype_not_found' }); return; }
+    res.json(arch);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/stabilization/archetypes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_id, name, description, steps, applicable_when, reason } = req.body || {};
+    if (!organization_id || !name || !description || !Array.isArray(steps) || !Array.isArray(applicable_when) || !reason) {
+      res.status(400).json({ error: 'organization_id_name_description_steps_applicable_when_reason_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.setOperatorArchetype({
+      organization_id, archetype_id, name, description, steps, applicable_when,
+      registered_by: req.participant!.sub, reason,
+    });
+    if (!result.applied) { res.status(400).json({ error: result.reason ?? 'archetype_set_rejected' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/stabilization/sequencing', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_id, per_step_overrides } = req.body || {};
+    if (!organization_id || !archetype_id) { res.status(400).json({ error: 'organization_id_and_archetype_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.buildRollbackSequencing({ organization_id, archetype_id, per_step_overrides });
+    if (!result.built) { res.status(404).json({ error: result.reason }); return; }
+    res.json(result.profile);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/stabilization/forecast', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_id } = req.body || {};
+    if (!organization_id || !archetype_id) { res.status(400).json({ error: 'organization_id_and_archetype_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.buildContinuityRestorationForecast({ organization_id, archetype_id });
+    if (!result.built) { res.status(404).json({ error: result.reason }); return; }
+    res.json(result.forecast);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/stabilization/pressure', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json({
+      profile: engine.buildRecoveryPressureProfile(organization_id),
+      containment: engine.buildContainmentAttribution({ organization_id }),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/stabilization/governance/evaluate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_id, per_step_rollback_chain_ids } = req.body || {};
+    if (!organization_id || !archetype_id || !Array.isArray(per_step_rollback_chain_ids)) {
+      res.status(400).json({ error: 'organization_id_archetype_id_per_step_rollback_chain_ids_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.evaluateArchetypeApplication({
+      organization_id, archetype_id,
+      issuer_organization_id: organization_id,
+      operator_id: req.participant!.sub,
+      per_step_rollback_chain_ids,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/stabilization/governance/finality', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_id, envelope_ids_issued, bounded_reason } = req.body || {};
+    if (!organization_id || !archetype_id || !Array.isArray(envelope_ids_issued) || !bounded_reason) {
+      res.status(400).json({ error: 'organization_id_archetype_id_envelope_ids_issued_bounded_reason_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const proof = engine.recordArchetypeFinalityProof({
+      organization_id, archetype_id,
+      operator_id: req.participant!.sub,
+      envelope_ids_issued, bounded_reason,
+    });
+    res.json(proof);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/stabilization/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const archetype_id = req.query.archetype_id ? String(req.query.archetype_id) : undefined;
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildStabilizationTrustSurface({ organization_id, archetype_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/stabilization/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildStabilizationVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/stabilization/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const archetype_id = req.query.archetype_id ? String(req.query.archetype_id) : undefined;
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildStabilizationReplayBundle({ organization_id, archetype_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/stabilization/narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_id } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const narr = engine.buildStabilizationNarrative({ organization_id, archetype_id });
+    if (!narr) { res.status(404).json({ error: 'no_stabilization_data' }); return; }
+    res.json(narr);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/stabilization/forbidden-registry', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.getForbiddenRecoveryRegistry());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/stabilization/summary', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildStabilizationSummary(organization_id || undefined));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 30 — Recovery Foresight UX + Stabilization Decision Cognition ─
+// SAFETY MODEL: read-only comparison cognition. Phase 30 COMPARES, EXPLAINS,
+// WALKS THROUGH, REPLAYS, FORECASTS — never selects, never ranks.
+// `engine_never_ranks: true` typed-as-literal on every output.
+router.post('/api/portal/project/foresight/comparison', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_ids, per_step_rollback_chain_id_hint } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const profile = engine.buildStabilizationDecisionComparison({
+      organization_id, operator_id: req.participant!.sub,
+      archetype_ids, per_step_rollback_chain_id_hint,
+    });
+    res.json(profile);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/foresight/survivability', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_ids } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRollbackSurvivabilityComparison({ organization_id, archetype_ids }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/foresight/tradeoff', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_ids } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildContinuityTradeoffProfile({ organization_id, archetype_ids }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/foresight/archaeology', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRecoveryArchaeologyReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/foresight/governance/evaluate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_id, comparison_id, requested_action_kind } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.evaluateComparisonRequest({
+      organization_id, issuer_organization_id: organization_id,
+      operator_id: req.participant!.sub,
+      comparison_id, archetype_id, requested_action_kind,
+    });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/foresight/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_ids } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRecoveryForesightReplayBundle({
+      organization_id, operator_id: req.participant!.sub, archetype_ids,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/foresight/guidance', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_ids } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildStabilizationGuidanceSurface({
+      organization_id, operator_id: req.participant!.sub, archetype_ids,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/foresight/walkthrough', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, archetype_ids } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRecoveryNarrativeWalkthrough({
+      organization_id, operator_id: req.participant!.sub, archetype_ids,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/foresight/trust', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRecoveryForesightTrustSurface({
+      organization_id, operator_id: req.participant!.sub,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/foresight/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRecoveryForesightVisibilityReplay({
+      organization_id, operator_id: req.participant!.sub,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/foresight/forbidden-registry', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.getForbiddenForesightRegistry());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/foresight/summary', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildRecoveryForesightSummary(organization_id || undefined));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 31 — Operator Cognition Continuity + Governance Memory ──
+// SAFETY MODEL: replay-safe per-org append-only event log.
+// Phase 31 PERSISTS, REPLAYS, TIMELINES, COMPRESSES, NARRATES.
+// NEVER profiles operators, NEVER predicts behavior, NEVER ranks.
+// Population is operator-mediated POST only.
+router.post('/api/portal/project/memory/session/open', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, note } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    // Pre-flight: governance gate
+    const gate = engine.evaluateMemoryRequest({
+      organization_id, issuer_organization_id: organization_id,
+      operator_id: req.participant!.sub,
+    });
+    if (gate.decision !== 'permitted') {
+      res.status(403).json({ error: gate.reason, rule: gate.supervisor_rule_violated });
+      return;
+    }
+    const result = engine.openSession({
+      organization_id, operator_id: req.participant!.sub, note,
+    });
+    if (!result.opened) { res.status(400).json({ error: result.reason ?? 'session_open_failed' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/memory/session/event', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, session_id, event_kind, subject_kind, subject_id, note } = req.body || {};
+    if (!organization_id || !session_id || !event_kind) {
+      res.status(400).json({ error: 'organization_id_session_id_event_kind_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const gate = engine.evaluateMemoryRequest({
+      organization_id, issuer_organization_id: organization_id,
+      operator_id: req.participant!.sub, session_id, event_kind,
+    });
+    if (gate.decision !== 'permitted') {
+      res.status(403).json({ error: gate.reason, rule: gate.supervisor_rule_violated });
+      return;
+    }
+    const result = engine.recordEvent({
+      organization_id, session_id, operator_id: req.participant!.sub,
+      event_kind, subject_kind, subject_id, note,
+    });
+    if (!result.recorded) { res.status(400).json({ error: result.reason ?? 'event_record_failed' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/memory/session/close', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, session_id, note } = req.body || {};
+    if (!organization_id || !session_id) {
+      res.status(400).json({ error: 'organization_id_and_session_id_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.closeSession({
+      organization_id, session_id, operator_id: req.participant!.sub, note,
+    });
+    if (!result.closed) { res.status(400).json({ error: result.reason ?? 'session_close_failed' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/memory/continuity', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildOperatorContinuityProfile({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/memory/timeline', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const window_start = req.query.window_start ? String(req.query.window_start) : undefined;
+    const window_end = req.query.window_end ? String(req.query.window_end) : undefined;
+    const operator_id_filter = req.query.operator_id_filter ? String(req.query.operator_id_filter) : undefined;
+    const session_id_filter = req.query.session_id_filter ? String(req.query.session_id_filter) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildCognitionTimelineSurface({
+      organization_id, window_start, window_end,
+      operator_id_filter, session_id_filter, limit,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/memory/archaeology', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildGovernanceArchaeology({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/memory/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, window_start, window_end, operator_id_filter } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildReasoningContinuityReplay({
+      organization_id, window_start, window_end, operator_id_filter,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/memory/compression', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, window_start, window_end, max_representative_sessions_per_kind } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildOperatorReasoningCompression({
+      organization_id, window_start, window_end, max_representative_sessions_per_kind,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/memory/narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildMemoryContinuityNarrative({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/memory/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildGovernanceMemoryVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/memory/forbidden-registry', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.getForbiddenMemoryRegistry());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/memory/summary', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildGovernanceMemorySummary(organization_id || undefined));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Phase 32 — Multi-Operator Governance Continuity + Handoff Cognition ─
+// SAFETY MODEL: replay-safe per-org append-only handoff event log.
+// Phase 32 RECORDS handoff events; NEVER ranks, scores, infers, or routes.
+// authority_transfer_supported: false typed-as-literal on every handoff.
+// Population is operator-mediated POST only.
+router.post('/api/portal/project/handoff/record', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, to_operator_id, context_summary, reason, source_session_id, transfer_bundle_id } = req.body || {};
+    if (!organization_id || !to_operator_id) {
+      res.status(400).json({ error: 'organization_id_and_to_operator_id_required' }); return;
+    }
+    const engine = await import('../intelligence/systemStateEngine');
+    const gate = engine.evaluateHandoffRequest({
+      organization_id, issuer_organization_id: organization_id,
+      from_operator_id: req.participant!.sub, to_operator_id,
+    });
+    if (gate.decision !== 'permitted') {
+      res.status(403).json({ error: gate.reason, rule: gate.supervisor_rule_violated }); return;
+    }
+    const result = engine.recordHandoff({
+      organization_id, from_operator_id: req.participant!.sub, to_operator_id,
+      context_summary: context_summary ?? '', reason: reason ?? '',
+      source_session_id, transfer_bundle_id,
+    });
+    if (!result.recorded) { res.status(400).json({ error: result.reason ?? 'handoff_record_failed' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/handoff/acknowledge', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, handoff_id } = req.body || {};
+    if (!organization_id || !handoff_id) { res.status(400).json({ error: 'organization_id_and_handoff_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const gate = engine.evaluateHandoffRequest({
+      organization_id, issuer_organization_id: organization_id,
+      from_operator_id: req.participant!.sub, handoff_id,
+    });
+    if (gate.decision !== 'permitted') {
+      res.status(403).json({ error: gate.reason, rule: gate.supervisor_rule_violated }); return;
+    }
+    const result = engine.acknowledgeHandoff({
+      organization_id, handoff_id, operator_id: req.participant!.sub,
+    });
+    if (!result.transitioned) { res.status(400).json({ error: result.reason ?? 'handoff_acknowledge_failed' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/handoff/decline', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, handoff_id } = req.body || {};
+    if (!organization_id || !handoff_id) { res.status(400).json({ error: 'organization_id_and_handoff_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.declineHandoff({
+      organization_id, handoff_id, operator_id: req.participant!.sub,
+    });
+    if (!result.transitioned) { res.status(400).json({ error: result.reason ?? 'handoff_decline_failed' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/handoff/transfer', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, to_operator_id, ...refs } = req.body || {};
+    if (!organization_id || !to_operator_id) { res.status(400).json({ error: 'organization_id_and_to_operator_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    const result = engine.buildContinuityTransferBundle({
+      organization_id, from_operator_id: req.participant!.sub, to_operator_id,
+      ...refs,
+    });
+    if (!result.built) { res.status(400).json({ error: result.reason ?? 'transfer_build_failed' }); return; }
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/handoff/timeline', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const window_start = req.query.window_start ? String(req.query.window_start) : undefined;
+    const window_end = req.query.window_end ? String(req.query.window_end) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildSharedStabilizationTimeline({
+      organization_id, window_start, window_end, limit,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/handoff/archaeology', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildOperatorHandoffArchaeology({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/handoff/replay', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, window_start, window_end } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildCollaborativeContinuityReplay({
+      organization_id, window_start, window_end,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/handoff/compression', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id, window_start, window_end, max_representative_handoffs_per_kind } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildOperatorCoordinationCompression({
+      organization_id, window_start, window_end, max_representative_handoffs_per_kind,
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/handoff/narrative', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { organization_id } = req.body || {};
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildHandoffContinuityNarrative({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/handoff/visibility', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    if (!organization_id) { res.status(400).json({ error: 'organization_id_required' }); return; }
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildOperatorContinuityVisibilityReplay({ organization_id }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/handoff/forbidden-registry', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.getForbiddenHandoffRegistry());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/handoff/summary', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const organization_id = String(req.query.organization_id ?? '');
+    const engine = await import('../intelligence/systemStateEngine');
+    res.json(engine.buildOperatorContinuitySummary(organization_id || undefined));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

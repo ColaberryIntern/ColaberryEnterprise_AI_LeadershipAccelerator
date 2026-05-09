@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System View Restructure Review — 5 Tabs Replace 4,295 Lines</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 2.25rem 0; margin-bottom: 1.5rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .doc-header .subtitle { font-size: 0.95rem; opacity: 0.92; max-width: 950px; }
+  .doc-header .meta {
+    margin-top: 1.3rem; display: flex; flex-wrap: wrap; gap: 0.55rem; font-size: 0.78rem;
+  }
+  .doc-header .meta-item { background: rgba(255, 255, 255, 0.13); padding: 0.35rem 0.8rem; border-radius: 4px; }
+  .container-narrow { max-width: 1280px; }
+
+  .toc {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.85rem 1.1rem; margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.8rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 1.4rem 1.6rem; margin-bottom: 1.4rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.3rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.78rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.9rem; color: var(--color-text-light);
+    margin-bottom: 1.1rem; padding-bottom: 0.85rem; border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 0.95rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.55rem;
+    color: var(--color-text);
+  }
+
+  .critique-zone {
+    margin-top: 1rem; padding: 0.7rem 0.95rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border); border-radius: 4px;
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.68rem; color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* before/after */
+  .before-after {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;
+  }
+  .ba-col { border: 1px solid var(--color-border); border-radius: 5px; overflow: hidden; }
+  .ba-col .ba-head {
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ba-col.before .ba-head { background: var(--color-danger-bg); color: var(--color-danger); }
+  .ba-col.after .ba-head { background: var(--color-success-bg); color: var(--color-success); }
+  .ba-col .ba-body { padding: 0.7rem 0.9rem; font-size: 0.82rem; line-height: 1.55; background: white; }
+  .ba-col ul { margin: 0.3rem 0 0 1.1rem; padding: 0; }
+  .ba-col ul li { margin-bottom: 0.25rem; }
+  .ba-col .stat { font-size: 26px; font-weight: 600; line-height: 1; }
+  .ba-col.before .stat { color: var(--color-danger); }
+  .ba-col.after .stat { color: var(--color-success); }
+  .ba-col .stat-label { font-size: 0.75rem; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+  /* tab strip mockup */
+  .sv-mock {
+    background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 1rem 1.25rem; margin: 0.7rem 0;
+  }
+  .sv-mock .sv-header {
+    margin-bottom: 1rem;
+  }
+  .sv-mock .sv-header .label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600;
+  }
+  .sv-mock .sv-header h3 {
+    font-size: 18px; font-weight: 600; color: var(--color-primary); margin: 4px 0 4px;
+  }
+  .sv-mock .sv-header .sub { font-size: 12px; color: var(--color-text-light); }
+  .tab-strip {
+    display: flex; border-bottom: 1px solid var(--color-border);
+    gap: 4px; margin-bottom: 1rem;
+  }
+  .tab-strip .tab {
+    padding: 0.55rem 0.95rem; margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+    font-size: 13px; color: var(--color-text-light); font-weight: 500;
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .tab-strip .tab.active {
+    color: var(--color-primary); font-weight: 600;
+    border-bottom-color: var(--color-primary);
+  }
+  .tab-strip .adv-pill {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em;
+    background: var(--color-purple-bg); color: var(--color-purple);
+    padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 600; margin-left: 2px;
+  }
+
+  /* tab body mockup */
+  .tab-body {
+    padding: 0.7rem 0;
+  }
+  .tab-intro {
+    margin-bottom: 0.85rem;
+  }
+  .tab-intro h4 {
+    font-size: 16px; font-weight: 600; color: var(--color-primary); margin: 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tab-intro .blurb {
+    font-size: 12px; color: var(--color-text-light); margin-top: 4px;
+  }
+  .stub-card {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.8rem 1rem; margin-top: 8px; font-size: 12px; color: var(--color-text-light);
+  }
+  .info-strip {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.6rem 0.85rem; font-size: 11px; color: var(--color-text-light);
+    margin-top: 0.7rem;
+  }
+  .disclosure-mock {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.55rem 0.8rem; margin-top: 0.6rem; font-size: 12px;
+    display: flex; gap: 8px; align-items: center; cursor: pointer;
+  }
+  .disclosure-mock i.chev { color: var(--color-text-light); }
+
+  /* tier table */
+  .matrix th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-light); font-weight: 600; }
+  .matrix td { font-size: 0.78rem; vertical-align: middle; }
+  .matrix .file { font-family: 'Consolas', monospace; font-size: 0.72rem; color: var(--color-primary-light); }
+  .pill {
+    display: inline-block; border-radius: 3px; padding: 0.1rem 0.45rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+  .pill.advanced { background: var(--color-purple-bg); color: var(--color-purple); }
+
+  pre.code-block {
+    background: #0f172a; color: #e2e8f0; border-radius: 5px;
+    padding: 0.75rem 1rem; font-family: 'Consolas', monospace;
+    font-size: 0.78rem; line-height: 1.55; overflow-x: auto;
+  }
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.55rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.85rem; margin: 0.85rem 0;
+  }
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.65rem 0.85rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>System View Restructure Review</h1>
+    <div class="subtitle">
+      System View no longer competes with Cory. The new lean <kbd>SystemView</kbd> is a 5-tab understanding surface
+      (Components default · Architecture · BPs · Operations advanced · Cognition advanced). The legacy
+      4,295-line <kbd>SystemViewV2</kbd> is preserved at <kbd>/portal/project/system-v2-legacy</kbd> for rollback only.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> SystemView shipped — awaiting critique</span>
+      <span class="meta-item"><strong>Frontend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>Backend:</strong> untouched</span>
+      <span class="meta-item"><strong>Files changed:</strong> 3 (1 new + 2 modified)</span>
+      <span class="meta-item"><strong>Surface reduction:</strong> ~93% at default</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">What shipped (one paragraph)</a></li>
+      <li><a href="#s2">Before / after by the numbers</a></li>
+      <li><a href="#s3">The 5 tabs</a></li>
+      <li><a href="#s4">SystemView mockup</a></li>
+      <li><a href="#s5">Components tab</a></li>
+      <li><a href="#s6">Architecture tab</a></li>
+      <li><a href="#s7">BPs tab</a></li>
+      <li><a href="#s8">Operations tab (advanced)</a></li>
+      <li><a href="#s9">Cognition tab (advanced)</a></li>
+      <li><a href="#s10">Authority leakage audit</a></li>
+      <li><a href="#s11">Density reduction examples</a></li>
+      <li><a href="#s12">Migration map</a></li>
+      <li><a href="#s13">What this sprint did NOT do</a></li>
+      <li><a href="#s14">Remaining fragmentation risks</a></li>
+      <li><a href="#s15">File diff summary</a></li>
+      <li><a href="#s16">Open questions for the user</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> What shipped (one paragraph)</h2>
+    <div class="lead">
+      One new lean page. Two route changes. One legacy banner.
+    </div>
+
+    <p style="font-size: 0.9rem;">
+      A new <kbd>frontend/src/pages/project/SystemView.tsx</kbd> ships as a focused ~300-line page with 5 tabs:
+      Components (default), Architecture, BPs, Operations (advanced), Cognition (advanced). CORE tabs load
+      eagerly; ADVANCED tabs lazy-mount on first click. Tab persistence via <kbd>?tab=...</kbd> URL parameter.
+      Each tab is a thin wrapper around an existing component (<kbd>CapabilityGrid</kbd>, <kbd>SystemArchitectureCard</kbd>,
+      <kbd>PortalBusinessProcessesTab</kbd>, <kbd>AutonomousExecutionDashboard</kbd>, <kbd>OperatorCognitionDashboard</kbd>) —
+      no component logic was rewritten. Both advanced dashboards use the existing <kbd>defaultCollapsed={true}</kbd> prop
+      so users see a calm summary, not a dump.
+      Route <kbd>/portal/project/system-v2</kbd> now serves <kbd>SystemView</kbd>; the legacy 4,295-line <kbd>SystemViewV2</kbd>
+      moves to <kbd>/portal/project/system-v2-legacy</kbd> with a top-of-page warning banner. Backend untouched.
+      Frontend <kbd>tsc --noEmit</kbd> exit 0.
+    </p>
+
+    <div class="quote">
+      "System View no longer competes with Cory. It explains; Cory decides."
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything missing from the summary?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> Before / after by the numbers</h2>
+
+    <div class="before-after">
+      <div class="ba-col before">
+        <div class="ba-head">Before — SystemViewV2</div>
+        <div class="ba-body">
+          <div class="stat">4,295</div>
+          <div class="stat-label">lines in one file</div>
+          <ul style="margin-top: 12px;">
+            <li>Sprawling page with no tab structure (everything visible at once)</li>
+            <li>Mode toggle (Build / Reporting) on header</li>
+            <li>System mode + Cory mode + Work tab triple-state</li>
+            <li>Project setup wizard fallback embedded</li>
+            <li>"V2" version badge on header</li>
+            <li>Operator dashboards mounted inline at full bloat</li>
+            <li>Multiple tabs stacked: Overview, Build, Health, Improve, Architecture, Database, etc.</li>
+            <li><strong>4,295 / 500 = 8.59× over the 500-line ceiling</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="ba-col after">
+        <div class="ba-head">After — SystemView</div>
+        <div class="ba-body">
+          <div class="stat">300</div>
+          <div class="stat-label">lines (new file, single concern)</div>
+          <ul style="margin-top: 12px;">
+            <li>5 tabs with strict roles. Components is default.</li>
+            <li>No mode toggles. No "V2". No version language.</li>
+            <li>No project setup wizard (belongs in <kbd>/setup</kbd>, queued)</li>
+            <li>No operational authority surface — every tab explains, none decide</li>
+            <li>Advanced tabs lazy-mount + use <kbd>defaultCollapsed</kbd></li>
+            <li>Tab persistence in URL for deep links</li>
+            <li><strong>~93% reduction in default surface complexity</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size: 0.82rem; color: var(--color-text-light); margin-top: 0.65rem;">
+      The 4,295-line file isn't deleted — it lives at <kbd>/portal/project/system-v2-legacy</kbd> with a banner.
+      The reduction is "what the user sees by default at <kbd>/system-v2</kbd>", not total code in the repo.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="Numbers feel right?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> The 5 tabs</h2>
+    <div class="lead">
+      Each tab has one job. Advanced tabs are visually marked.
+    </div>
+
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>#</th><th>Tab</th><th>Tier</th><th>Purpose</th><th>Mounts</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><strong>Components</strong> (default)</td>
+          <td><span class="pill good">CORE</span></td>
+          <td>What exists in the system</td>
+          <td><kbd>CapabilityGrid</kbd></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><strong>Architecture</strong></td>
+          <td><span class="pill good">CORE</span></td>
+          <td>How the system is connected</td>
+          <td><kbd>SystemArchitectureCard</kbd> + a hint pointing to BPs tab for per-BP visualization</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><strong>BPs</strong></td>
+          <td><span class="pill good">CORE</span></td>
+          <td>Business process structure</td>
+          <td><kbd>PortalBusinessProcessesTab</kbd> (which mounts BP detail panel + per-BP visualization on selection)</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><strong>Operations</strong> <span class="pill advanced">advanced</span></td>
+          <td><span class="pill advanced">ADVANCED</span></td>
+          <td>Runtime visibility (operator dashboard)</td>
+          <td><kbd>AutonomousExecutionDashboard defaultCollapsed=true</kbd> + intro disclaimer</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><strong>Cognition</strong> <span class="pill advanced">advanced</span></td>
+          <td><span class="pill advanced">ADVANCED</span></td>
+          <td>Intelligence visibility (reasoning continuity)</td>
+          <td><kbd>OperatorCognitionDashboard defaultCollapsed=true</kbd> + intro disclaimer</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Lazy-mount behavior</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Components tab mounts on initial render (it's the default).</li>
+      <li>Architecture / BPs / Operations / Cognition mount the first time the user clicks them.</li>
+      <li>Once mounted, a tab stays mounted (preserves scroll + state) but is hidden when another tab is active.</li>
+      <li>This means: a user who never clicks "Cognition" never pays its data-fetch cost.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Tab order right? Anything to add or cut?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> SystemView mockup</h2>
+    <div class="lead">
+      The shell with the tab strip, calm header, and a sample tab body.
+    </div>
+
+    <div class="sv-mock">
+      <div class="sv-header">
+        <div class="label">System</div>
+        <h3>Understand the system.</h3>
+        <div class="sub">
+          This surface explains topology, components, and relationships. It does not rank or recommend &mdash;
+          <span style="color: var(--color-primary-light);">Cory at Home</span> decides what's next.
+        </div>
+      </div>
+
+      <div class="tab-strip">
+        <span class="tab active"><i class="bi bi-grid-3x3-gap"></i>Components</span>
+        <span class="tab"><i class="bi bi-diagram-3"></i>Architecture</span>
+        <span class="tab"><i class="bi bi-list-ul"></i>BPs</span>
+        <span class="tab"><i class="bi bi-activity"></i>Operations<span class="adv-pill">advanced</span></span>
+        <span class="tab"><i class="bi bi-cpu"></i>Cognition<span class="adv-pill">advanced</span></span>
+      </div>
+
+      <div style="font-size: 12px; color: var(--color-text-light); margin-bottom: 12px;">
+        What exists in the system.
+      </div>
+
+      <div class="tab-body">
+        <div class="tab-intro">
+          <h4>Components</h4>
+          <div class="blurb">Every capability the system contains, with completion and feature counts. Toggle scope here; execute via Blueprint.</div>
+        </div>
+
+        <div class="stub-card">
+          <i class="bi bi-grid-3x3-gap me-2" style="color: var(--color-primary);"></i>
+          [<strong>CapabilityGrid</strong> renders here — capability cards, completion %, scope toggles, AI feature builder]
+        </div>
+      </div>
+
+      <div style="font-size: 11px; color: var(--color-text-light); text-align: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border);">
+        Need the full operator dashboard? <span style="text-decoration: underline;">Open the legacy view</span>.
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="Density? Spacing? Tab strip?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> Components tab</h2>
+    <div class="lead">
+      The default tab — what most users see when they land on System.
+    </div>
+
+    <h3>What it contains</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><kbd>CapabilityGrid</kbd> mounted inline.</li>
+      <li>Project completion summary card (overall %).</li>
+      <li>Capability cards: name, description, completion %, feature count, status, scope toggle, optional AI badge.</li>
+      <li>Click a card → expands <kbd>CapabilityDetail</kbd> drawer.</li>
+      <li>"Add Feature with AI" → <kbd>AIFeatureBuilder</kbd> modal.</li>
+    </ul>
+
+    <h3>What it does NOT contain</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>"Build" buttons that bypass Blueprint. Scope toggle is configuration, not execution.</li>
+      <li>"Next step" recommendations — those live at Home.</li>
+      <li>Priority rankings — Cory's authority.</li>
+    </ul>
+
+    <p style="font-size: 0.85rem; color: var(--color-text-light);">
+      Why the existing <kbd>CapabilityGrid</kbd> is fine without modification: it already only exposes scope
+      management (toggle active/inactive) and feature creation — both are <strong>configuration</strong>, not
+      execution. Per the surface contract, configuration in System is allowed; only execution is forbidden.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Components tab right scope? Should scope toggles also move out?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> Architecture tab</h2>
+    <div class="lead">
+      How the layers fit together.
+    </div>
+
+    <h3>What it contains</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><kbd>SystemArchitectureCard</kbd> — backend / frontend / agents / data layer view.</li>
+      <li>A friendly hint pointing to the BPs tab for per-BP visualizations.</li>
+    </ul>
+
+    <h3>What it does NOT contain</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Per-BP visualizations bare. <kbd>ProcessVisualPanel</kbd> requires a BP context (<kbd>links</kbd> + <kbd>usability</kbd> props), so it only makes sense from inside the BPs tab when a process is selected.</li>
+      <li>"Refresh architecture" or "Edit architecture" buttons — System explains, Cory decides changes.</li>
+    </ul>
+
+    <p style="font-size: 0.85rem; color: var(--color-text-light);">
+      An info strip at the bottom of the tab tells the user: "For a per-BP visual flow, open the <strong>BPs</strong>
+      tab and pick a process." This avoids the mistake of showing a context-less visualization when the user
+      really wants per-BP detail.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="Architecture tab feel right? Should it expand?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> BPs tab</h2>
+    <div class="lead">
+      Process structure, status, dependencies.
+    </div>
+
+    <h3>What it contains</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><kbd>PortalBusinessProcessesTab</kbd> mounted inline.</li>
+      <li>BP list with lifecycle / layer filters, completion %, total + matched requirements, by-layer health badges.</li>
+      <li>Click a BP → <kbd>PortalBusinessProcessDetail</kbd> opens with the per-BP visualization (this is where <kbd>ProcessVisualPanel</kbd> lives, scoped properly to the selected BP).</li>
+    </ul>
+
+    <h3>What it does NOT contain</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>"Run BP" or "Execute BP" buttons — execution flows through Blueprint via Cory.</li>
+      <li>Priority sorting that competes with Cory's queue.</li>
+    </ul>
+
+    <p style="font-size: 0.85rem; color: var(--color-text-light);">
+      The existing <kbd>PortalBusinessProcessesTab</kbd> imports <kbd>SteeringPanel</kbd>; that's already marked
+      subordinate-to-Cory in its file header, and steering hints route through the unified state.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="BPs tab right scope?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> Operations tab (advanced)</h2>
+    <div class="lead">
+      Runtime visibility — opt-in, not in your face.
+    </div>
+
+    <h3>What it contains</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Intro card explaining: "You don't need to read these to use the platform."</li>
+      <li><kbd>AutonomousExecutionDashboard defaultCollapsed=true</kbd> — every phase section starts collapsed, expanded individually.</li>
+    </ul>
+
+    <h3>How progressive disclosure works</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Tab is lazy-mounted (no fetch until first click).</li>
+      <li>Once mounted, dashboard sections (Phase 13–32) all start collapsed.</li>
+      <li>Operator expands only what they want to inspect.</li>
+      <li>Default visual: a summary line + chevron per section.</li>
+    </ul>
+
+    <h3>Visual treatment</h3>
+    <p style="font-size: 0.85rem;">
+      The <span class="pill advanced">advanced</span> pill on the tab strip + intro card make it visually clear this is
+      <em>secondary</em>. Color treatment uses purple accents (consistent with the L4 / advanced visual identity
+      established in earlier sprints).
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="Operations tab feel optional enough?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> Cognition tab (advanced)</h2>
+    <div class="lead">
+      Intelligence visibility — same disclosure rules as Operations.
+    </div>
+
+    <h3>What it contains</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Intro card framing: "How the platform reasons about itself over time. Hidden infrastructure — surfaced for transparency, not because you need to act on it."</li>
+      <li><kbd>OperatorCognitionDashboard defaultCollapsed=true</kbd>.</li>
+    </ul>
+
+    <h3>Why this exists separately from Operations</h3>
+    <p style="font-size: 0.85rem;">
+      Operations is about <em>what's happening right now</em> (active autonomy lanes, recent governance actions).
+      Cognition is about <em>how the platform thinks over time</em> (governance memory, reasoning continuity,
+      handoff archaeology, federation state). Two distinct conceptual spaces — keeping them as separate tabs
+      lets a power user navigate to the one they want without scrolling past the other.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="Cognition tab worth a separate tab, or fold into Operations?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> Authority leakage audit</h2>
+    <div class="lead">
+      Section-by-section breakdown of what was in legacy SystemViewV2 and the keep / collapse / move / hide / deprecate decision.
+    </div>
+
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Legacy section / behaviour</th><th>Authority concern</th><th>Decision</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Header with org name + industry + stage badges + System mode toggle (Build / Reporting) + Blueprint quick-link</td>
+          <td>Mode toggle is a decision; Build/Reporting framing implies System is operational</td>
+          <td><span class="pill warn">collapsed</span> — replaced by 3-line calm header (label / "Understand the system." / subtitle pointing to Cory)</td>
+        </tr>
+        <tr>
+          <td>"V2" purple badge next to project name</td>
+          <td>Version language exposed to user</td>
+          <td><span class="pill danger">removed</span> — already removed in Authority Collapse Sprint; not in new SystemView either</td>
+        </tr>
+        <tr>
+          <td>Multiple stacked tabs (Overview / Build / Health / Improve / Architecture / Database / etc.)</td>
+          <td>"Build" + "Improve" in System are authority/execution signals</td>
+          <td><span class="pill warn">replaced</span> — now 5 tabs with strict roles (Components / Architecture / BPs / Operations / Cognition)</td>
+        </tr>
+        <tr>
+          <td>Inline ProjectSetupWizard fallback</td>
+          <td>Setup is a lifecycle stage, not part of System</td>
+          <td><span class="pill info">deferred</span> — kept in legacy; future <kbd>/portal/project/setup</kbd> route owns this</td>
+        </tr>
+        <tr>
+          <td>Cory mode (suggestions vs r-insights)</td>
+          <td>Cory authority lives at Home; System should not host Cory mode toggles</td>
+          <td><span class="pill danger">removed</span> from new SystemView; legacy keeps it</td>
+        </tr>
+        <tr>
+          <td>SystemArchitectureCard mounted at default</td>
+          <td>Worth keeping but in the right tab</td>
+          <td><span class="pill good">kept</span> — moved to dedicated Architecture tab</td>
+        </tr>
+        <tr>
+          <td>OperatorCognitionDashboard at default visibility (Phase sections inline)</td>
+          <td>Phase numbers and replay surfaces should not be primary UX</td>
+          <td><span class="pill warn">collapsed + lazy</span> — moved to advanced Cognition tab; lazy-mount + defaultCollapsed</td>
+        </tr>
+        <tr>
+          <td>AutonomousExecutionDashboard at default visibility</td>
+          <td>Same — operator dashboards belong in advanced tier</td>
+          <td><span class="pill warn">collapsed + lazy</span> — moved to advanced Operations tab</td>
+        </tr>
+        <tr>
+          <td>"Full System View" cross-link from Blueprint header</td>
+          <td>Was part of legacy header pattern</td>
+          <td><span class="pill info">acceptable</span> — Blueprint already has its own "Open Home" / "Open Critique" links; legacy "Full System View" goes away with SystemBlueprint deletion</td>
+        </tr>
+        <tr>
+          <td>Heuristics for system mode (Build / Reporting) gating which tab to show</td>
+          <td>Mode-based gating creates "what mode am I in?" friction</td>
+          <td><span class="pill danger">removed</span> from new SystemView — all 5 tabs always available</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="Decisions right? Anything moved that should stay?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> Density reduction examples</h2>
+    <div class="lead">
+      Concrete before/after of what the user encounters.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Concern</th><th>Before</th><th>After</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Page header</td>
+          <td>Project name + industry + stage + completion + ProjectModeSelector + Build/Reporting toggle + Blueprint link</td>
+          <td>"System" label + "Understand the system." + 1-line subtitle pointing to Cory at Home</td>
+        </tr>
+        <tr>
+          <td>Tab navigation</td>
+          <td>Mode-dependent tab set (different in Build vs Reporting)</td>
+          <td>Constant 5 tabs, always visible, advanced pill for the 2 power-user tabs</td>
+        </tr>
+        <tr>
+          <td>First-paint content</td>
+          <td>Header + mode strip + 4–7 dashboard sections all visible immediately</td>
+          <td>Header + 5 tabs + Components tab body (CapabilityGrid only)</td>
+        </tr>
+        <tr>
+          <td>Operator dashboards</td>
+          <td>Phase 13–32 sections rendered open by default</td>
+          <td>Behind 1 tab click; <kbd>defaultCollapsed=true</kbd> means each phase section starts closed</td>
+        </tr>
+        <tr>
+          <td>Mode confusion</td>
+          <td>"Am I in Build mode or Reporting mode?" + "Should I switch?"</td>
+          <td>No modes. The only state is "which tab am I on" — visible on the strip.</td>
+        </tr>
+        <tr>
+          <td>URL state</td>
+          <td>System mode + Cory mode + work tab; not in URL</td>
+          <td>Just <kbd>?tab=...</kbd>; deep-linkable</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="More density to cut?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> Migration map</h2>
+    <div class="lead">
+      Where existing SystemViewV2 features land in the new structure.
+    </div>
+
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Was in SystemViewV2</th><th>New home</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>SystemArchitectureCard</td><td>System &gt; Architecture tab</td></tr>
+        <tr><td>OperatorCognitionDashboard</td><td>System &gt; Cognition tab (advanced, lazy, collapsed)</td></tr>
+        <tr><td>AutonomousExecutionDashboard</td><td>System &gt; Operations tab (advanced, lazy, collapsed)</td></tr>
+        <tr><td>Build / Reporting mode toggle</td><td>(removed)</td></tr>
+        <tr><td>System mode + Cory mode + work tab tri-state</td><td>(removed)</td></tr>
+        <tr><td>"V2" badge</td><td>(removed)</td></tr>
+        <tr><td>Inline ProjectSetupWizard</td><td>Stays in legacy until <kbd>/portal/project/setup</kbd> route lands (next sprint)</td></tr>
+        <tr><td>"Full System View" cross-link</td><td>Stays in legacy; will be removed with SystemBlueprint hard-delete</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Routes</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><kbd>/portal/project/system-v2</kbd> → new SystemView (was SystemViewV2)</li>
+      <li><kbd>/portal/project/system-v2-legacy</kbd> → SystemViewV2 (rollback only)</li>
+      <li>Nav "System" navItem already pointed here from prior sprint — same URL, new home</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="Migration map right?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> What this sprint did NOT do (intentional)</h2>
+    <div class="lead">
+      Honest scoping.
+    </div>
+
+    <div class="anti-list">
+      <h4>Out of scope this sprint</h4>
+      <ul>
+        <li><strong>Did NOT delete</strong> SystemViewV2.tsx. The legacy surface is preserved at <kbd>/system-v2-legacy</kbd> with a warning banner.</li>
+        <li><strong>Did NOT migrate</strong> ProjectSetupWizard out of the legacy. That move belongs in the Setup Route Extraction sprint (next).</li>
+        <li><strong>Did NOT modify</strong> the underlying components (CapabilityGrid, PortalBusinessProcessesTab, dashboards). They mount as-is.</li>
+        <li><strong>Did NOT touch</strong> the backend.</li>
+        <li><strong>Did NOT add</strong> new dashboards or visualizations.</li>
+        <li><strong>Did NOT extract</strong> the operator dashboards into multiple smaller pieces — they remain large monoliths, just now hidden behind progressive disclosure.</li>
+        <li><strong>Did NOT add</strong> tests. The new shell is mostly composition + tab state; behaviour tests would belong with the underlying components.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Anything that should move into scope?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s14" class="section">
+    <h2><span class="num">14</span> Remaining fragmentation risks</h2>
+    <div class="lead">
+      Honest list.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Risk</th><th>Symptom</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Two SystemViews exist</td>
+          <td>Operator finds the legacy via bookmark</td>
+          <td>Legacy banner + footer link from new SystemView; eventual deletion</td>
+        </tr>
+        <tr>
+          <td>Operator dashboards still big monoliths inside the advanced tabs</td>
+          <td>Once expanded, they look like the old SystemViewV2</td>
+          <td>Future cleanup: split each phase section into its own progressive-disclosure unit; collapse aggressively</td>
+        </tr>
+        <tr>
+          <td>CapabilityGrid still calls scope-toggle endpoint directly</td>
+          <td>Configuration change happens here, not at Cory; could feel like authority</td>
+          <td>Acceptable — scope is configuration, not execution. Document in the Components tab intro</td>
+        </tr>
+        <tr>
+          <td>Architecture tab is sparse (just SystemArchitectureCard)</td>
+          <td>Could feel underdeveloped on first glance</td>
+          <td>Acceptable — the in-tab info strip points to BPs for per-BP visualization. Future enhancement: dependency graph at the top</td>
+        </tr>
+        <tr>
+          <td>Tab strip might overflow on narrow viewports</td>
+          <td>Mobile / small browser users see horizontal scroll</td>
+          <td>Already <kbd>overflow-x: auto</kbd> on the strip; acceptable for V1. Future: collapse to dropdown on &lt;600px</td>
+        </tr>
+        <tr>
+          <td>Lazy-mounted advanced tabs may still feel slow on first click</td>
+          <td>Operator clicks Cognition → waits for the dashboard's first fetch</td>
+          <td>Acceptable for V1. Future: prefetch on hover / show skeleton state</td>
+        </tr>
+        <tr>
+          <td>BP detail panel embeds <kbd>SteeringPanel</kbd> (subordinate marker added but still UI)</td>
+          <td>Steering input could feel like authority</td>
+          <td>Already documented as INPUT (not authority) via header docblock; callers refresh unified state after</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 14</div>
+      <textarea placeholder="Risks I'm missing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s15" class="section">
+    <h2><span class="num">15</span> File diff summary</h2>
+    <div class="lead">
+      3 files. 1 new. 2 modified.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Change</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>frontend/src/pages/project/SystemView.tsx</kbd></td>
+          <td><span class="pill good">NEW</span> The lean 5-tab System View (~300 lines)</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/routes/portalRoutes.tsx</kbd></td>
+          <td><span class="pill info">MODIFIED</span> <kbd>/portal/project/system-v2</kbd> → SystemView; new <kbd>/portal/project/system-v2-legacy</kbd> → SystemViewV2; explanatory comment</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/pages/project/SystemViewV2.tsx</kbd></td>
+          <td><span class="pill warn">LEGACY-MARKED</span> Replaced the prior authority-hierarchy banner with a top-of-page legacy warning banner pointing to the new SystemView</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Verification</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Frontend <kbd>npx tsc --noEmit</kbd> — exit 0</li>
+      <li>Backend untouched this sprint</li>
+      <li>Zero new dependencies</li>
+      <li>Zero new endpoints</li>
+      <li>Rollback: revert the 3 files; SystemViewV2 resumes at <kbd>/system-v2</kbd></li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 15</div>
+      <textarea placeholder="Anything in the diff to revert or extend?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s16" class="section">
+    <h2><span class="num">16</span> Open questions for the user</h2>
+    <div class="lead">
+      Decisions for the next sprint.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>Tab order.</strong> Components default first, then Architecture, BPs, Operations, Cognition. Reorder?</li>
+      <li><strong>Cognition vs Operations split.</strong> Worth keeping as 2 tabs, or fold both into one "Internals" tab?</li>
+      <li><strong>Mobile/narrow viewport.</strong> Tab strip overflows horizontally. Switch to a dropdown or accordion below 600px? (V1 leaves overflow:auto.)</li>
+      <li><strong>Default tab.</strong> Components is the default. Should the URL update on first load even when no tab param is present, or stay clean?</li>
+      <li><strong>Architecture tab depth.</strong> Currently just SystemArchitectureCard + a hint. Add a dependency graph or stay sparse?</li>
+      <li><strong>SystemViewV2 deletion timing.</strong> Same question pattern as SystemBlueprint legacy — delete after 1 sprint of zero traffic, 1 month, or wait?</li>
+      <li><strong>Setup wizard route.</strong> Per surface mapping, this should land at <kbd>/portal/project/setup</kbd>. Bring that in this next sprint or wait?</li>
+      <li><strong>Operator dashboard further breakdown.</strong> The dashboards still feel monolithic when expanded. Sprint to split each phase section into its own progressive-disclosure unit?</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 16</div>
+      <textarea placeholder="Decisions on each numbered question."></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    System View Restructure Review &middot; Colaberry Enterprise AI Leadership Accelerator &middot; 2026-05-09<br>
+    Productization Sprint &middot; SystemView shipped &middot; awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

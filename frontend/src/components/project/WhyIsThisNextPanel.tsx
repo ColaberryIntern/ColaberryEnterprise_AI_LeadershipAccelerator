@@ -1,6 +1,15 @@
 /**
  * WhyIsThisNextPanel — explainability surface for the authoritative queue.
  *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   This panel is SUBORDINATE to Cory's authority. The "what is next?"
+ *   answer comes from `useUnifiedProjectState().state.next_action`.
+ *   This panel only EXPLAINS that decision via DecisionTrace
+ *   (GET /system-state/explain/:taskId). It must never disagree with
+ *   Cory; if a future change risks divergence, the explainer must be
+ *   re-rooted on `state.next_action.metadata` instead of querying its
+ *   own task explanation feed.
+ *
  * Renders the full DecisionTrace returned by GET /system-state/explain/:taskId.
  * Designed as a side panel / modal — caller controls open state.
  *

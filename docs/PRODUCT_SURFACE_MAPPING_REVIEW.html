@@ -1,0 +1,1531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Surface Mapping Review — One Home Per Feature</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+
+    /* surface accent colors */
+    --home-color: #1a365d;
+    --critique-color: #e53e3e;
+    --execution-color: #38a169;
+    --verify-color: #3b82f6;
+    --system-color: #6366f1;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 2.25rem 0; margin-bottom: 1.5rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .doc-header .subtitle { font-size: 0.95rem; opacity: 0.92; max-width: 950px; }
+  .doc-header .meta {
+    margin-top: 1.3rem; display: flex; flex-wrap: wrap; gap: 0.55rem; font-size: 0.78rem;
+  }
+  .doc-header .meta-item { background: rgba(255, 255, 255, 0.13); padding: 0.35rem 0.8rem; border-radius: 4px; }
+  .container-narrow { max-width: 1280px; }
+
+  .toc {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.85rem 1.1rem; margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.8rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 1.4rem 1.6rem; margin-bottom: 1.4rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.3rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.78rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.9rem; color: var(--color-text-light);
+    margin-bottom: 1.1rem; padding-bottom: 0.85rem; border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 0.95rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.55rem;
+    color: var(--color-text);
+  }
+
+  .critique-zone {
+    margin-top: 1rem; padding: 0.7rem 0.95rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border); border-radius: 4px;
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.68rem; color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* surface 5-card */
+  .surface-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.55rem; margin: 0.7rem 0;
+  }
+  .surface-card {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.95rem 0.85rem; text-align: center; position: relative;
+    border-top: 4px solid var(--color-border);
+  }
+  .surface-card.home { border-top-color: var(--home-color); }
+  .surface-card.critique { border-top-color: var(--critique-color); }
+  .surface-card.execution { border-top-color: var(--execution-color); }
+  .surface-card.verify { border-top-color: var(--verify-color); }
+  .surface-card.system { border-top-color: var(--system-color); }
+  .surface-card .icon {
+    font-size: 22px; margin-bottom: 6px; display: block;
+  }
+  .surface-card.home .icon { color: var(--home-color); }
+  .surface-card.critique .icon { color: var(--critique-color); }
+  .surface-card.execution .icon { color: var(--execution-color); }
+  .surface-card.verify .icon { color: var(--verify-color); }
+  .surface-card.system .icon { color: var(--system-color); }
+  .surface-card h4 {
+    font-size: 0.95rem; font-weight: 600; margin: 0 0 0.2rem; color: var(--color-primary);
+  }
+  .surface-card .role {
+    font-size: 0.7rem; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .surface-card .feel {
+    margin-top: 0.55rem; font-size: 0.78rem; color: var(--color-text); font-style: italic;
+  }
+  .surface-card .url {
+    font-size: 9px; font-family: 'Consolas', monospace; color: var(--color-text-light); margin-top: 6px;
+  }
+
+  /* matrix table */
+  .matrix th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-light); font-weight: 600; }
+  .matrix td { font-size: 0.78rem; vertical-align: middle; }
+  .matrix .file { font-family: 'Consolas', monospace; font-size: 0.72rem; color: var(--color-primary-light); }
+  .matrix tbody tr.tier-core { background: var(--color-success-bg); }
+  .matrix tbody tr.tier-contextual { background: var(--color-info-bg); }
+  .matrix tbody tr.tier-advanced { background: var(--color-purple-bg); }
+  .matrix tbody tr.tier-legacy { background: var(--color-warning-bg); }
+
+  .pill {
+    display: inline-block; border-radius: 3px; padding: 0.1rem 0.45rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+  .pill.advanced { background: var(--color-purple-bg); color: var(--color-purple); }
+  .pill.home { background: rgba(26,54,93,0.1); color: var(--home-color); }
+  .pill.critique { background: rgba(229,62,62,0.1); color: var(--critique-color); }
+  .pill.execution { background: rgba(56,161,105,0.1); color: var(--execution-color); }
+  .pill.verify { background: rgba(59,130,246,0.1); color: var(--verify-color); }
+  .pill.system { background: rgba(99,102,241,0.1); color: var(--system-color); }
+
+  /* tier legend */
+  .tier-legend {
+    display: flex; gap: 6px; margin: 0.6rem 0; flex-wrap: wrap;
+  }
+  .tier-chip {
+    padding: 0.3rem 0.7rem; border-radius: 4px; font-size: 0.78rem;
+    border: 1px solid; font-weight: 500;
+  }
+  .tier-chip.core { background: var(--color-success-bg); color: var(--color-success); border-color: rgba(16,185,129,0.3); }
+  .tier-chip.contextual { background: var(--color-info-bg); color: var(--color-info); border-color: rgba(59,130,246,0.3); }
+  .tier-chip.advanced { background: var(--color-purple-bg); color: var(--color-purple); border-color: rgba(99,102,241,0.3); }
+  .tier-chip.legacy { background: var(--color-warning-bg); color: var(--color-warning); border-color: rgba(245,158,11,0.3); }
+
+  /* flow arrow */
+  .flow-arrow {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; margin: 0.7rem 0;
+  }
+  .flow-step {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.55rem 0.55rem; text-align: center; position: relative;
+  }
+  .flow-step h5 { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.15rem; color: var(--color-primary); }
+  .flow-step .verb { font-size: 0.7rem; color: var(--color-text-light); }
+  .flow-step::after {
+    content: '→'; position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    color: var(--color-text-light); font-size: 16px; z-index: 2;
+  }
+  .flow-step:last-child::after { display: none; }
+
+  /* orphan placement card */
+  .orphan-card {
+    background: white; border: 1px solid var(--color-border); border-left: 4px solid var(--color-warning);
+    border-radius: 5px; padding: 0.75rem 0.95rem; margin-bottom: 0.55rem;
+  }
+  .orphan-card h5 {
+    font-size: 0.88rem; font-weight: 600; margin: 0 0 4px; display: flex; align-items: center; gap: 8px;
+  }
+  .orphan-card .file {
+    font-family: 'Consolas', monospace; font-size: 0.72rem; color: var(--color-text-light);
+  }
+  .orphan-card .decision {
+    margin-top: 6px; font-size: 0.82rem; color: var(--color-text);
+  }
+  .orphan-card .decision strong { color: var(--color-primary); }
+
+  pre.code-block {
+    background: #0f172a; color: #e2e8f0; border-radius: 5px;
+    padding: 0.75rem 1rem; font-family: 'Consolas', monospace;
+    font-size: 0.78rem; line-height: 1.55; overflow-x: auto;
+  }
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.55rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.85rem; margin: 0.85rem 0;
+  }
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.65rem 0.85rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin: 0.7rem 0; }
+  .stat-tile {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.7rem 0.85rem; text-align: center;
+  }
+  .stat-tile .num { font-size: 22px; font-weight: 600; color: var(--color-primary); }
+  .stat-tile .label { font-size: 10px; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>Product Surface Mapping Review</h1>
+    <div class="subtitle">
+      Every feature gets one home. Five surfaces with strict ownership rules: <strong>Home</strong> (certainty),
+      <strong>Critique</strong> (creativity), <strong>Execution</strong> (momentum), <strong>Verify</strong> (reassurance),
+      <strong>System</strong> (understanding). Audit, ownership matrix, orphaned-feature placement,
+      surface-overlap collapse, and a 4-tier visibility model.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> Documentation sprint — no code shipped</span>
+      <span class="meta-item"><strong>Surfaces audited:</strong> 12 routes</span>
+      <span class="meta-item"><strong>Components inventoried:</strong> 50 in /project/ + 2 in /operator/</span>
+      <span class="meta-item"><strong>Hooks:</strong> 59 total · ~15 active</span>
+      <span class="meta-item"><strong>Output:</strong> this doc + PROGRESS entry</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields. This is the most
+    detailed surface map yet — bookmark it, it's the placement reference for the next several sprints.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">What this sprint produces</a></li>
+      <li><a href="#s2">The 5-surface product hierarchy</a></li>
+      <li><a href="#s3">Emotional role map</a></li>
+      <li><a href="#s4">Visibility tiers (4)</a></li>
+      <li><a href="#s5">The product flow</a></li>
+      <li><a href="#s6">Surface ownership matrix (every component)</a></li>
+      <li><a href="#s7">Orphaned-feature placement decisions</a></li>
+      <li><a href="#s8">Hidden-but-routed surfaces</a></li>
+      <li><a href="#s9">Hook debt audit</a></li>
+      <li><a href="#s10">Surface-overlap collapse recommendations</a></li>
+      <li><a href="#s11">Per-surface "should contain / shouldn't contain"</a></li>
+      <li><a href="#s12">Future deprecation candidates</a></li>
+      <li><a href="#s13">Implementation roadmap (next 4 sprints)</a></li>
+      <li><a href="#s14">Remaining fragmentation risks</a></li>
+      <li><a href="#s15">What this sprint did NOT do</a></li>
+      <li><a href="#s16">Open questions for the user</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> What this sprint produces</h2>
+    <div class="lead">
+      A document, not a build. The deliverable is the placement reference itself.
+    </div>
+
+    <div class="quote">
+      "This sprint is ORGANIZATION + SIMPLIFICATION — NOT expansion." — sprint brief.
+    </div>
+
+    <p style="font-size: 0.9rem;">
+      No new components. No new routes. No new endpoints. This sprint produces the canonical answer to
+      <strong>"where does each feature belong?"</strong> so the next several sprints can execute moves
+      against a settled plan rather than re-deciding placement each time.
+    </p>
+
+    <div class="stat-row">
+      <div class="stat-tile">
+        <div class="num">5</div>
+        <div class="label">Primary surfaces</div>
+      </div>
+      <div class="stat-tile">
+        <div class="num">4</div>
+        <div class="label">Visibility tiers</div>
+      </div>
+      <div class="stat-tile">
+        <div class="num">12</div>
+        <div class="label">Active routes</div>
+      </div>
+      <div class="stat-tile">
+        <div class="num">~22</div>
+        <div class="label">Orphaned components</div>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything missing from the framing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> The 5-surface product hierarchy</h2>
+    <div class="lead">
+      Five surfaces. Strict ownership. The user's mental model maps left-to-right.
+    </div>
+
+    <div class="surface-grid">
+      <div class="surface-card home">
+        <i class="bi bi-house icon"></i>
+        <h4>Home</h4>
+        <div class="role">L1 · Authority</div>
+        <div class="feel">"What matters now"</div>
+        <div class="url">/portal/home</div>
+      </div>
+      <div class="surface-card critique">
+        <i class="bi bi-bullseye icon"></i>
+        <h4>Critique</h4>
+        <div class="role">L2 · Improvement</div>
+        <div class="feel">"What should improve"</div>
+        <div class="url">/portal/visual-workspace</div>
+      </div>
+      <div class="surface-card execution">
+        <i class="bi bi-map icon"></i>
+        <h4>Blueprint</h4>
+        <div class="role">L3 · Execution</div>
+        <div class="feel">"Run the work"</div>
+        <div class="url">/portal/project/blueprint</div>
+      </div>
+      <div class="surface-card verify">
+        <i class="bi bi-shield-check icon"></i>
+        <h4>Verify</h4>
+        <div class="role">L4a · Confirmation</div>
+        <div class="feel">"Confirm the result"</div>
+        <div class="url">(today: inside Blueprint Step 5)</div>
+      </div>
+      <div class="surface-card system">
+        <i class="bi bi-grid-3x3-gap icon"></i>
+        <h4>System</h4>
+        <div class="role">L4b · Understanding</div>
+        <div class="feel">"Understand the architecture"</div>
+        <div class="url">/portal/project/system-v2</div>
+      </div>
+    </div>
+
+    <h3>Strict ownership rules</h3>
+    <ul style="font-size: 0.88rem;">
+      <li><strong>Home</strong> owns: prioritization, queue, readiness, coverage, blockers, active build, verification state.</li>
+      <li><strong>Critique</strong> owns: visual annotation, AI suggestions, prompt compilation, issue tracking.</li>
+      <li><strong>Blueprint</strong> owns: execution flow only — context → task → prompt → execute → verify → iterate.</li>
+      <li><strong>Verify</strong> owns: pass/fail confirmation, screenshots, comparison, acceptance review. Currently embedded in Blueprint Step 5; future sprint may extract.</li>
+      <li><strong>System</strong> owns: topology, components, dependencies, advanced visibility. Does NOT prioritize / orchestrate / recommend.</li>
+    </ul>
+
+    <p style="font-size: 0.85rem; color: var(--color-text-light);">
+      <strong>Sessions</strong> sits at the right edge of the navbar — orthogonal to the build loop (curriculum/coaching).
+      Not part of the 5-surface hierarchy.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="5 surfaces right? Should Verify get its own route now or stay embedded?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> Emotional role map</h2>
+    <div class="lead">
+      Every surface answers one emotional question for the user.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.85rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr>
+          <th>Surface</th>
+          <th>User feels</th>
+          <th>User does NOT feel</th>
+          <th>Test: if user thinks…</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="pill home">Home</span></td>
+          <td>Certainty. Calm. Executive.</td>
+          <td>Choice paralysis. "Where do I start?"</td>
+          <td>"What matters today?" — answered immediately by the priority card</td>
+        </tr>
+        <tr>
+          <td><span class="pill critique">Critique</span></td>
+          <td>Creativity. Iteration. Collaborative with AI.</td>
+          <td>Burdened. Operational.</td>
+          <td>"This page could be better." — pin it, prompt it, ship it</td>
+        </tr>
+        <tr>
+          <td><span class="pill execution">Blueprint</span></td>
+          <td>Momentum. Guided. Lightweight.</td>
+          <td>Decision overload. "Which button?"</td>
+          <td>"I just need to run this." — paste, verify, continue</td>
+        </tr>
+        <tr>
+          <td><span class="pill verify">Verify</span></td>
+          <td>Reassurance. Conclusive. Fast.</td>
+          <td>Audit-heavy. Compliance-flavored.</td>
+          <td>"Did it work?" — quick pass/fail confirmation</td>
+        </tr>
+        <tr>
+          <td><span class="pill system">System</span></td>
+          <td>Understanding. Curiosity satisfied. Non-blocking.</td>
+          <td>Pressured to act. Decision authority.</td>
+          <td>"What does this look like under the hood?" — explore at leisure</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.85rem;">
+      <strong>If a surface has conflicting emotional goals, it is fragmented.</strong> Cory Home should never feel
+      "operational" (that's Blueprint). Blueprint should never feel "creative" (that's Critique). System should never
+      feel "authoritative" (that's Home).
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Emotional roles right? Tests right?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> Visibility tiers (4)</h2>
+    <div class="lead">
+      Every feature lands in exactly one tier. Higher tiers = always shown. Lower tiers = deeper navigation.
+    </div>
+
+    <div class="tier-legend">
+      <span class="tier-chip core"><strong>CORE</strong> — shown always</span>
+      <span class="tier-chip contextual"><strong>CONTEXTUAL</strong> — shown when relevant</span>
+      <span class="tier-chip advanced"><strong>ADVANCED</strong> — behind deeper navigation</span>
+      <span class="tier-chip legacy"><strong>LEGACY</strong> — deprecated but retained</span>
+    </div>
+
+    <h3>Tier rules</h3>
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Tier</th><th>When</th><th>Where it appears</th><th>Examples</th></tr>
+      </thead>
+      <tbody>
+        <tr class="tier-core">
+          <td><strong>CORE</strong></td>
+          <td>Daily operator workflow</td>
+          <td>Primary navbar; default surface content</td>
+          <td>Cory Home, Critique, Blueprint, System nav, queue, readiness, next action</td>
+        </tr>
+        <tr class="tier-contextual">
+          <td><strong>CONTEXTUAL</strong></td>
+          <td>Specific scenario only</td>
+          <td>Inline within parent surface; surfaced when state warrants</td>
+          <td>Pending build banner, blocker list (only when present), Critique handoff banner</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td><strong>ADVANCED</strong></td>
+          <td>Power-user / debug / setup-time</td>
+          <td>Deeper-level routes; secondary tabs within System</td>
+          <td>Topology graphs, archaeology replay, governance/cognition dashboards, project setup wizard, demo overlay</td>
+        </tr>
+        <tr class="tier-legacy">
+          <td><strong>LEGACY</strong></td>
+          <td>Rollback safety only</td>
+          <td>Hidden from nav; reachable via direct URL</td>
+          <td>SystemBlueprint at <kbd>/blueprint-legacy</kbd>, ProjectDashboard at <kbd>/portal/project/system</kbd>, VisualReviewWorkspace</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="Tier definitions right? Anything mistakenly in the wrong tier today?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> The product flow</h2>
+    <div class="lead">
+      Linear. Reinforced by every surface.
+    </div>
+
+    <div class="flow-arrow">
+      <div class="flow-step"><h5>Understand</h5><div class="verb">read Home</div></div>
+      <div class="flow-step"><h5>Improve</h5><div class="verb">pin in Critique</div></div>
+      <div class="flow-step"><h5>Execute</h5><div class="verb">run via Blueprint</div></div>
+      <div class="flow-step"><h5>Verify</h5><div class="verb">paste-back report</div></div>
+      <div class="flow-step"><h5>Continue</h5><div class="verb">refresh, repeat</div></div>
+    </div>
+
+    <p style="font-size: 0.85rem;">
+      Every surface action either advances this flow or reinforces it (e.g. <em>"Back to Critique"</em> link in
+      Blueprint Step 6). Anything that <strong>interrupts</strong> the flow is a candidate for removal or
+      relegation to ADVANCED tier.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Flow right? Order right?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> Surface ownership matrix (every component)</h2>
+    <div class="lead">
+      Every meaningful component is mapped to its owning surface + visibility tier + status. Row-color matches tier.
+    </div>
+
+    <h3>Pages (12)</h3>
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Component</th><th>Owner surface</th><th>Tier</th><th>Status / next move</th></tr>
+      </thead>
+      <tbody>
+        <tr class="tier-core">
+          <td><div>CoryHome</div><div class="file">pages/portal/CoryHome.tsx</div></td>
+          <td><span class="pill home">Home</span></td>
+          <td>CORE</td>
+          <td>Primary surface — keep, polish</td>
+        </tr>
+        <tr class="tier-core">
+          <td><div>VisualWorkspacePage</div><div class="file">features/visualWorkspace/VisualWorkspacePage.tsx</div></td>
+          <td><span class="pill critique">Critique</span></td>
+          <td>CORE</td>
+          <td>Primary surface — keep, polish</td>
+        </tr>
+        <tr class="tier-core">
+          <td><div>ExecutionLane</div><div class="file">pages/project/ExecutionLane.tsx</div></td>
+          <td><span class="pill execution">Blueprint</span></td>
+          <td>CORE</td>
+          <td>Primary surface — keep sacred</td>
+        </tr>
+        <tr class="tier-core">
+          <td><div>SystemViewV2</div><div class="file">pages/project/SystemViewV2.tsx</div></td>
+          <td><span class="pill system">System</span></td>
+          <td>CORE</td>
+          <td>Slim into ADVANCED tabs (next sprint)</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td><div>ExecutiveDeliverable</div><div class="file">pages/project/ExecutiveDeliverable.tsx</div></td>
+          <td><span class="pill home">Home</span> (advanced view)</td>
+          <td>ADVANCED</td>
+          <td>Surface from Home as "Executive report" link; not in primary nav</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td><div>CoryFullscreen</div><div class="file">pages/project/CoryFullscreen.tsx</div></td>
+          <td><span class="pill home">Home</span> (advanced view)</td>
+          <td>ADVANCED</td>
+          <td>Surface from Home as "Open Cory chat" expansion; not in primary nav</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td><div>ProjectArtifacts</div><div class="file">pages/project/ProjectArtifacts.tsx</div></td>
+          <td><span class="pill system">System</span> (advanced tab)</td>
+          <td>ADVANCED</td>
+          <td>Move into System View as "Artifacts" tab</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td><div>ProjectPortfolio</div><div class="file">pages/project/ProjectPortfolio.tsx</div></td>
+          <td><span class="pill system">System</span> (advanced tab)</td>
+          <td>ADVANCED</td>
+          <td>Move into System View as "Portfolio" tab</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td><div>RequirementsBuilder</div><div class="file">pages/project/RequirementsBuilder.tsx</div></td>
+          <td><span class="pill execution">Blueprint</span> (setup-time)</td>
+          <td>ADVANCED</td>
+          <td>Move to <kbd>/portal/project/setup</kbd> dedicated route (new)</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td><div>SystemBuildDemo</div><div class="file">pages/project/SystemBuildDemo.tsx</div></td>
+          <td><span class="pill home">Home</span> (advanced trigger)</td>
+          <td>ADVANCED</td>
+          <td>Move to <kbd>/portal/demo</kbd>; surface from Home as "Watch demo"</td>
+        </tr>
+        <tr class="tier-legacy">
+          <td><div>SystemBlueprint</div><div class="file">pages/project/SystemBlueprint.tsx</div></td>
+          <td>(none — legacy)</td>
+          <td>LEGACY</td>
+          <td>Already at <kbd>/blueprint-legacy</kbd> with banner. Hard-delete after 1 sprint of zero traffic</td>
+        </tr>
+        <tr class="tier-legacy">
+          <td><div>ProjectDashboard</div><div class="file">pages/project/ProjectDashboard.tsx</div></td>
+          <td>(none — legacy)</td>
+          <td>LEGACY</td>
+          <td>Hidden from nav last sprint. Deprecate route <kbd>/portal/project/system</kbd> after migration of any consumers</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Components in <kbd>/components/project/</kbd> (top 30)</h3>
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Component</th><th>Owner surface</th><th>Tier</th><th>Status / next move</th></tr>
+      </thead>
+      <tbody>
+
+        <tr class="tier-core">
+          <td>ProjectNextActionPanel</td>
+          <td><span class="pill home">Home</span></td>
+          <td>CORE</td>
+          <td>Already migrated to read UnifiedProjectState. Keep where mounted; reads canonical state</td>
+        </tr>
+        <tr class="tier-core">
+          <td>ExecutiveReadinessCard</td>
+          <td><span class="pill home">Home</span></td>
+          <td>CORE</td>
+          <td>Already migrated. Keep — sources from canonical state</td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>ProjectIntelligencePanel</td>
+          <td><span class="pill home">Home</span></td>
+          <td>CONTEXTUAL</td>
+          <td>Wraps ExecutiveReadinessCard. Could collapse into Home directly</td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>WhyIsThisNextPanel</td>
+          <td><span class="pill home">Home</span> (drawer)</td>
+          <td>CONTEXTUAL</td>
+          <td>Subordinate marker added. Show as drawer on Home priority card click</td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>SteeringPanel</td>
+          <td><span class="pill home">Home</span> (drawer)</td>
+          <td>CONTEXTUAL</td>
+          <td>Subordinate marker added. Show as drawer when operator wants to bias next action</td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>GuidedExecutionPanel</td>
+          <td><span class="pill execution">Blueprint</span></td>
+          <td>CONTEXTUAL</td>
+          <td>Currently orphaned. Should slot into ExecutionLane Step 4 if step-by-step needed</td>
+        </tr>
+
+        <tr class="tier-advanced">
+          <td>CapabilityGrid</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Move out of ProjectDashboard → System View "Components" tab. Strip build buttons (no decisions)</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>CapabilityDetail</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into System View "Components" detail panel</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>SystemArchitectureCard</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Move out of dashboards → System View default tab</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>SystemIntelligencePanel</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Already in SystemViewV2. Demote to "Intelligence" tab</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>RepoComponentsPanel</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Move out of ProjectDashboard → System View "Repo" tab</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ProcessDatabaseGraph</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into System View "Architecture" tab</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ProcessVisualPanel</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into System View "Architecture" tab</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>DecisionGraphView</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into System View "Decisions" tab (rare-use)</td>
+        </tr>
+
+        <tr class="tier-advanced">
+          <td>ProjectSetupWizard</td>
+          <td><span class="pill execution">Blueprint</span> (setup mode)</td>
+          <td>ADVANCED</td>
+          <td>Move to <kbd>/portal/project/setup</kbd>. Triggered when no project exists</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ProjectSelectionScreen</td>
+          <td><span class="pill home">Home</span> (multi-project)</td>
+          <td>ADVANCED</td>
+          <td>Surface from Home when user has &gt;1 project; not on every page</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ProjectModeSelector</td>
+          <td>(none)</td>
+          <td>ADVANCED</td>
+          <td>Manual/Autonomous toggle. Per Authority Collapse — Cory decides. Demote or remove</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ProjectLockInScreen</td>
+          <td><span class="pill home">Home</span> (onboarding)</td>
+          <td>ADVANCED</td>
+          <td>Onboarding fence. Show only at first-load; not a recurring surface</td>
+        </tr>
+
+        <tr class="tier-advanced">
+          <td>ArtifactCategoryBoard</td>
+          <td><span class="pill system">System</span> → "Artifacts" tab</td>
+          <td>ADVANCED</td>
+          <td>Move out of ProjectArtifacts page → tab inside System</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ArtifactCard</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Slotted within ArtifactCategoryBoard (no change)</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ArtifactMaturityChart</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into System "Artifacts" tab as a sparkline</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>PortfolioPreview</td>
+          <td><span class="pill home">Home</span> (advanced section)</td>
+          <td>ADVANCED</td>
+          <td>Move out of ProjectPortfolio page → optional Home section "Portfolio glance"</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ExecutiveDeliverablePanel</td>
+          <td><span class="pill home">Home</span> (advanced section)</td>
+          <td>ADVANCED</td>
+          <td>Move out of ExecutiveDeliverable page → "Executive report" Home affordance</td>
+        </tr>
+
+        <tr class="tier-contextual">
+          <td>RequirementsStatusCard</td>
+          <td><span class="pill home">Home</span> (Coverage tile)</td>
+          <td>CONTEXTUAL</td>
+          <td>Currently orphaned. Repurpose as Coverage tile detail-on-click; reads <kbd>state.coverage</kbd></td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>RequirementsSectionBreakdown</td>
+          <td><span class="pill home">Home</span> (Coverage drawer)</td>
+          <td>CONTEXTUAL</td>
+          <td>Currently orphaned. Repurpose as Coverage drawer; reads <kbd>state.coverage</kbd></td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>ProjectMaturityGauge</td>
+          <td><span class="pill home">Home</span> (Readiness tile)</td>
+          <td>CONTEXTUAL</td>
+          <td>Currently orphaned. Repurpose as Readiness tile breakdown; reads <kbd>state.readiness.breakdown</kbd></td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>ProjectProgress</td>
+          <td><span class="pill home">Home</span></td>
+          <td>CONTEXTUAL</td>
+          <td>Same as Maturity Gauge — collapse into Home tiles</td>
+        </tr>
+        <tr class="tier-contextual">
+          <td>EnhancementPromptBuilder</td>
+          <td><span class="pill execution">Blueprint</span></td>
+          <td>CONTEXTUAL</td>
+          <td>Currently orphaned. Could slot into ExecutionLane Step 3 as alternate prompt-builder UI</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>PortalBusinessProcessesTab + Detail</td>
+          <td><span class="pill system">System</span> → "BPs" tab</td>
+          <td>ADVANCED</td>
+          <td>Move out of ProjectDashboard → System "BPs" tab</td>
+        </tr>
+
+        <tr class="tier-advanced">
+          <td>WarRoomTab</td>
+          <td><span class="pill system">System</span> (incident view)</td>
+          <td>ADVANCED</td>
+          <td>Move out of ProjectDashboard → System "Incidents" tab if used</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>WorkstationLauncher</td>
+          <td>(none — legacy)</td>
+          <td>LEGACY</td>
+          <td>Pre-Critique workspace launcher. Subordinate to Critique now. Deprecate</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ArchitectChat</td>
+          <td><span class="pill home">Home</span> (Cory drawer)</td>
+          <td>ADVANCED</td>
+          <td>Currently inline in ProjectDashboard. Surface as Cory chat drawer accessible from Home</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>PredictionModal</td>
+          <td><span class="pill home">Home</span> (drawer)</td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot as forward-looking forecast drawer on Home</td>
+        </tr>
+
+        <tr class="tier-advanced">
+          <td>ProjectMentorPanel + Alerts</td>
+          <td>(none — legacy)</td>
+          <td>LEGACY</td>
+          <td>Mentor concept superseded by Cory authority. Deprecate</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ProjectWorkflowPanel</td>
+          <td>(none — legacy)</td>
+          <td>LEGACY</td>
+          <td>Workflow visualization superseded by ExecutionLane. Deprecate</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>ProjectTimeline</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into System View "Timeline" tab if used</td>
+        </tr>
+
+        <tr class="tier-advanced">
+          <td>VisualHealthOverlay</td>
+          <td><span class="pill critique">Critique</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into Critique workspace as optional overlay</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>AnnotationOverlay</td>
+          <td><span class="pill critique">Critique</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Predates VisualWorkspace — superseded by AnnotationPin. Deprecate or repurpose</td>
+        </tr>
+
+        <tr class="tier-advanced">
+          <td>TelemetryHealthBadge / LiveTelemetryBadgeBar / LiveOrchestrationPressureBadges</td>
+          <td><span class="pill system">System</span></td>
+          <td>ADVANCED</td>
+          <td>Currently orphaned. Slot into System View as optional badges; not on Home</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Components in <kbd>/components/operator/</kbd> (2)</h3>
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Component</th><th>Owner surface</th><th>Tier</th><th>Status / next move</th></tr>
+      </thead>
+      <tbody>
+        <tr class="tier-advanced">
+          <td>OperatorCognitionDashboard</td>
+          <td><span class="pill system">System</span> → "Cognition" tab</td>
+          <td>ADVANCED</td>
+          <td>Currently in SystemViewV2. Move to dedicated "Cognition" advanced tab inside System</td>
+        </tr>
+        <tr class="tier-advanced">
+          <td>AutonomousExecutionDashboard</td>
+          <td><span class="pill system">System</span> → "Operations" tab</td>
+          <td>ADVANCED</td>
+          <td>Currently in SystemViewV2 with all 32 phase sections. Move to dedicated "Operations" advanced tab; collapse phase sections into expandable groups</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="Wrong placements? Missing components?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> Orphaned-feature placement decisions</h2>
+    <div class="lead">
+      The 4 deferred orphans from prior sprints + others called out by the audit, with a one-paragraph decision each.
+    </div>
+
+    <div class="orphan-card">
+      <h5>1. Components Grid <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">CapabilityGrid.tsx — currently mounted in ProjectDashboard (legacy nav-hidden)</div>
+      <div class="decision">
+        <strong>Move to System View as a "Components" tab.</strong> Strip the per-card "Build" buttons (no distributed
+        execution). The grid becomes pure topology display: each capability's name, status, completion %, and a link to
+        its detail panel. Build affordances live only in Blueprint via Cory's queue.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>2. Project Setup Wizard <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">ProjectSetupWizard.tsx — currently inline in 3 pages (ProjectDashboard, SystemBlueprint, SystemViewV2)</div>
+      <div class="decision">
+        <strong>Extract to a dedicated <kbd>/portal/project/setup</kbd> route.</strong> Setup is a distinct lifecycle stage
+        (no project yet → onboarding flow); it's not a recurring surface. Cory Home redirects to the setup route when
+        UnifiedProjectState reports no project. Once setup is done, the route is no longer exposed in nav.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>3. Demo Overlay <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">DemoOverlay (inline in SystemBlueprint.tsx) + SystemBuildDemo page</div>
+      <div class="decision">
+        <strong>Move to a dedicated <kbd>/portal/demo</kbd> route.</strong> Surface from Cory Home with a small "Watch
+        60-second demo" button (CONTEXTUAL — only visible to first-time users or sales-mode triggers).
+        Remove from operator default surfaces.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>4. System Prompt editor <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">Inline in SystemBlueprint.tsx (read/edit autoderived prompt)</div>
+      <div class="decision">
+        <strong>Move into the <kbd>/portal/project/setup</kbd> route alongside the Setup Wizard.</strong> System prompt is a
+        configuration concern, not an execution concern. Once configured, it shouldn't appear on daily surfaces.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>5. RequirementsStatusCard / RequirementsSectionBreakdown <span class="pill info">CONTEXTUAL</span></h5>
+      <div class="file">RequirementsStatusCard.tsx + RequirementsSectionBreakdown.tsx — currently orphaned</div>
+      <div class="decision">
+        <strong>Repurpose as Cory Home Coverage tile detail-on-click + drawer.</strong> Both already match the
+        <kbd>state.coverage</kbd> shape. Don't delete — reposition. Click the Coverage tile on Home → modal/drawer
+        opens with section-by-section breakdown.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>6. ProjectMaturityGauge <span class="pill info">CONTEXTUAL</span></h5>
+      <div class="file">ProjectMaturityGauge.tsx — currently orphaned</div>
+      <div class="decision">
+        <strong>Repurpose as Readiness tile detail-on-click.</strong> Already matches
+        <kbd>state.readiness.breakdown</kbd> shape (artifact_completion / requirements_coverage / github_health /
+        portfolio_quality / workflow_progress). Click Readiness tile on Home → opens the gauge breakdown.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>7. useGovernanceAdvice surfaces <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">useGovernanceAdvice hook + any caller</div>
+      <div class="decision">
+        <strong>Keep as on-demand utility, surface only from Critique workspace OR from Home blockers section.</strong>
+        When advice says <kbd>should_block_rollout</kbd>, fold the message into <kbd>state.blockers[]</kbd> at the
+        synthesizer level (next-sprint backend tweak). Otherwise advice stays a pull, not a push.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>8. Advanced topology visibility (DecisionGraph, ProcessDatabase, ProcessVisual) <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">DecisionGraphView, ProcessDatabaseGraph, ProcessVisualPanel — currently orphaned</div>
+      <div class="decision">
+        <strong>Mount as System View tabs.</strong> Three tabs: "Architecture" (Process visual), "Database" (Process database
+        graph), "Decisions" (Decision graph). All ADVANCED — not on the System default tab. Default tab becomes
+        "Components" (the repurposed CapabilityGrid).
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>9. Archaeology / replay visibility <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">OperatorCognitionDashboard + AutonomousExecutionDashboard (with 32 phase sections)</div>
+      <div class="decision">
+        <strong>Move out of System default surface into "Operations" + "Cognition" advanced tabs.</strong> The phase
+        sections (governance memory, handoff continuity, recovery foresight, etc.) collapse into expandable groups
+        within those tabs. Default System view never shows phase numbers.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>10. ProjectMentorPanel / Alerts / WorkflowPanel / WorkstationLauncher <span class="pill warn">LEGACY</span></h5>
+      <div class="file">ProjectMentorPanel.tsx, ProjectMentorAlerts.tsx, ProjectWorkflowPanel.tsx, WorkstationLauncher.tsx</div>
+      <div class="decision">
+        <strong>Deprecate.</strong> All four predate Cory authority. Mentor and workflow are subsumed by Cory + ExecutionLane.
+        WorkstationLauncher is subsumed by Critique → Blueprint flow. Add deprecation file headers; remove imports;
+        delete after 1 sprint of zero references.
+      </div>
+    </div>
+
+    <div class="orphan-card">
+      <h5>11. ArchitectChat <span class="pill advanced">ADVANCED</span></h5>
+      <div class="file">ArchitectChat.tsx — currently inline in ProjectDashboard</div>
+      <div class="decision">
+        <strong>Surface as a Cory chat drawer accessible from Home.</strong> Don't make it a primary surface — it's
+        secondary to the operational queue. CoryFullscreen page can become this drawer's "expand" target.
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="Placement decisions right? Anything to override?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> Hidden-but-routed surfaces</h2>
+    <div class="lead">
+      Routes that still respond to direct URL but are not in the navbar. Each has a path forward.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Route</th><th>Component</th><th>Hidden because</th><th>Path forward</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><kbd>/portal/project/system</kbd></td><td>ProjectDashboard</td><td>Duplicate of System; renamed</td><td>Hard-delete after 1 sprint of zero traffic</td></tr>
+        <tr><td><kbd>/portal/project/blueprint-legacy</kbd></td><td>SystemBlueprint</td><td>Replaced by ExecutionLane</td><td>Hard-delete after 1 sprint of zero traffic</td></tr>
+        <tr><td><kbd>/portal/project/artifacts</kbd></td><td>ProjectArtifacts</td><td>Move into System tabs</td><td>Migrate to System "Artifacts" tab; deprecate route</td></tr>
+        <tr><td><kbd>/portal/project/portfolio</kbd></td><td>ProjectPortfolio</td><td>Move into System tabs</td><td>Migrate to System "Portfolio" tab; deprecate route</td></tr>
+        <tr><td><kbd>/portal/project/executive</kbd></td><td>ExecutiveDeliverable</td><td>Move under Home</td><td>Surface from Home as "Executive report"; deprecate route after migration</td></tr>
+        <tr><td><kbd>/portal/project/cory</kbd></td><td>CoryFullscreen</td><td>Move under Home</td><td>Become Home's chat drawer expand target</td></tr>
+        <tr><td><kbd>/portal/project/requirements-builder</kbd></td><td>RequirementsBuilder</td><td>Setup-time concern</td><td>Move to <kbd>/portal/project/setup</kbd></td></tr>
+        <tr><td><kbd>/portal/project/demo</kbd></td><td>SystemBuildDemo</td><td>Sales/demo concern</td><td>Move to <kbd>/portal/demo</kbd>; surface from Home affordance</td></tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="Routes to delete sooner? Routes to keep longer?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> Hook debt audit</h2>
+    <div class="lead">
+      59 hooks live in <kbd>/frontend/src/hooks/</kbd>. ~15 are actively used. The rest are pre-federation or
+      experimental.
+    </div>
+
+    <h3>Active hooks (the working set)</h3>
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Hook</th><th>Purpose</th><th>Owner surface</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><kbd>useUnifiedProjectState</kbd></td><td>Canonical operational state</td><td><span class="pill home">Home</span> + <span class="pill execution">Blueprint</span></td></tr>
+        <tr><td><kbd>useVisualReviewSession</kbd></td><td>Critique workspace session</td><td><span class="pill critique">Critique</span></td></tr>
+        <tr><td><kbd>useLiveRemediationIntelligence</kbd></td><td>Real-time remediation reports</td><td><span class="pill system">System</span></td></tr>
+        <tr><td><kbd>useRemediationReplay</kbd></td><td>Replay UX remediation sessions</td><td><span class="pill system">System</span> (advanced)</td></tr>
+        <tr><td><kbd>useAdaptiveRemediationPrompt</kbd></td><td>Dynamic prompt generation</td><td><span class="pill system">System</span> (advanced)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Redundant / deprecated</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><kbd>useAuthoritativeSystemState</kbd> — superseded by <kbd>useUnifiedProjectState</kbd>. Mark deprecated; migrate any consumers.</li>
+      <li><kbd>useTelemetryHealth</kbd> — no current imports. Delete after verifying.</li>
+      <li><kbd>useIncidentReplay</kbd> — orphaned. Will resurface when an Incidents tab lands in System (advanced).</li>
+      <li><kbd>useOrchestrationLearning</kbd>, <kbd>useCognitiveHealthIndex</kbd> — orphaned; pre-federation. Defer.</li>
+    </ul>
+
+    <h3>Tail (~40 hooks)</h3>
+    <p style="font-size: 0.85rem;">
+      The bulk of the tail is governance / federation / topology / replay / continuity hooks shipped during the 32 backend
+      phases. They have no active consumers in the new product hierarchy. <strong>Recommended action:</strong> add a
+      <kbd>/* DEPRECATED — orphaned since productization pivot */</kbd> file header to each, and queue them for deletion
+      in a future cleanup sprint after we confirm no late-bound consumers.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="Hook cleanup priority? Any hooks I should preserve that I'm flagging?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> Surface-overlap collapse recommendations</h2>
+    <div class="lead">
+      Where two surfaces still expose the same information.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Overlap</th><th>Surfaces</th><th>Collapse to</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Project readiness %</td>
+          <td>Home Readiness tile · ExecutiveReadinessCard (already migrated) · ProjectMaturityGauge (orphan to repurpose)</td>
+          <td>Home tile is canonical; gauge becomes click-through detail; card is already migrated to canonical state</td>
+        </tr>
+        <tr>
+          <td>Coverage %</td>
+          <td>Home Coverage tile · RequirementsStatusCard (orphan) · RequirementsSectionBreakdown (orphan)</td>
+          <td>Home tile is canonical; status card + section breakdown become click-through drawer</td>
+        </tr>
+        <tr>
+          <td>Next action</td>
+          <td>Home priority card (canonical) · ProjectNextActionPanel (migrated) · WhyIsThisNextPanel (subordinate marker added)</td>
+          <td>Home priority card is canonical; panels become drawer/explainer accessed from there</td>
+        </tr>
+        <tr>
+          <td>Project health %</td>
+          <td>Home Health tile · ExecutionLane Step 5 idle view</td>
+          <td>Both read from <kbd>state.health</kbd>; intentional duplication for context. OK — same source.</td>
+        </tr>
+        <tr>
+          <td>Authority hierarchy reminder</td>
+          <td>Blueprint header subtitle · System View top banner</td>
+          <td>Both reinforce L1→L4. Acceptable — keep both as quiet reinforcement</td>
+        </tr>
+        <tr>
+          <td>Pending build prompt</td>
+          <td>Critique workspace (compile) · ExecutionLane Step 1+3 (consume) · SystemBlueprint legacy banner</td>
+          <td>ExecutionLane is canonical consumer; legacy banner can be removed once SystemBlueprint is hard-deleted</td>
+        </tr>
+        <tr>
+          <td>System architecture</td>
+          <td>SystemArchitectureCard mounted in 3 pages (ProjectDashboard, SystemBlueprint, SystemViewV2)</td>
+          <td>Should appear ONLY in System View. Remove from the legacy pages on hard-delete</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="Overlaps to address sooner? Overlaps to keep?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> Per-surface "should contain / shouldn't contain"</h2>
+    <div class="lead">
+      Concrete contract per surface so future placement decisions don't drift.
+    </div>
+
+    <h3><span class="pill home">Home</span> · <kbd>/portal/home</kbd></h3>
+    <div class="row g-2 mb-2">
+      <div class="col-md-6">
+        <strong style="color: var(--color-success);">Should contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Greeting + one-line status</li>
+          <li>Today's One Priority card (Cory authority)</li>
+          <li>3 tiles: Readiness · Coverage · Health</li>
+          <li>Critical Blockers (CONTEXTUAL — only when present)</li>
+          <li>Operational Queue (top 5–8)</li>
+          <li>Active Build · Verification footer row</li>
+          <li>Optional drawers: Cory chat, Why-is-this-next, Coverage breakdown, Maturity gauge, Steering input</li>
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <strong style="color: var(--color-danger);">Shouldn't contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Build buttons that bypass Blueprint</li>
+          <li>Capability grid</li>
+          <li>System architecture diagrams</li>
+          <li>Phase numbers / governance jargon</li>
+          <li>Setup wizard</li>
+          <li>Validation report textareas</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3><span class="pill critique">Critique</span> · <kbd>/portal/visual-workspace</kbd></h3>
+    <div class="row g-2 mb-2">
+      <div class="col-md-6">
+        <strong style="color: var(--color-success);">Should contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Embedded iframe stage with annotation overlay</li>
+          <li>Numbered pins + sidebar issue list (5 sections)</li>
+          <li>Annotation modal + AI suggest pre-fill</li>
+          <li>Right-side details panel + AI suggestions</li>
+          <li>Sticky bottom action bar (Annotate / Reload / Compile / Open Blueprint)</li>
+          <li>Prompt preview modal</li>
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <strong style="color: var(--color-danger);">Shouldn't contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Operational queue / readiness / coverage</li>
+          <li>Build state machine</li>
+          <li>System topology</li>
+          <li>Direct execution buttons (always hand off to Blueprint)</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3><span class="pill execution">Blueprint</span> · <kbd>/portal/project/blueprint</kbd></h3>
+    <div class="row g-2 mb-2">
+      <div class="col-md-6">
+        <strong style="color: var(--color-success);">Should contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>The 6 steps. Only the 6 steps.</li>
+          <li>Step 1: Context (from Cory's next_action OR Critique handoff)</li>
+          <li>Step 2: Task (files + acceptance criteria)</li>
+          <li>Step 3: Prompt (copy-ready dark code block)</li>
+          <li>Step 4: Execute (validation report textarea + Submit)</li>
+          <li>Step 5: Verify (pass/fail + project health)</li>
+          <li>Step 6: Iterate (Complete & continue / Back to Critique / Open Home)</li>
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <strong style="color: var(--color-danger);">Shouldn't contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Capability grid / build buttons per card</li>
+          <li>Mode toggles (Manual/Autonomous)</li>
+          <li>Project setup wizard</li>
+          <li>System architecture viewer</li>
+          <li>Demo overlay</li>
+          <li>Local prioritization or recommendation logic</li>
+          <li>Beta banners / promotional content</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3><span class="pill verify">Verify</span> · (today: embedded in Blueprint Step 5)</h3>
+    <div class="row g-2 mb-2">
+      <div class="col-md-6">
+        <strong style="color: var(--color-success);">Should contain (when extracted)</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Pass/fail confirmation</li>
+          <li>Screenshot diff (before / after)</li>
+          <li>Acceptance criteria checklist (carried over from prompt)</li>
+          <li>"Mark verified" + "Reject" actions</li>
+          <li>Recent verifications history</li>
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <strong style="color: var(--color-danger);">Shouldn't contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Audit / governance language</li>
+          <li>Compliance workflows</li>
+          <li>Test runner UI</li>
+          <li>Code diffs (those live in Critique re-render)</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3><span class="pill system">System</span> · <kbd>/portal/project/system-v2</kbd></h3>
+    <div class="row g-2">
+      <div class="col-md-6">
+        <strong style="color: var(--color-success);">Should contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>Tabs: Components · Architecture · Database · BPs · Operations (advanced) · Cognition (advanced)</li>
+          <li>Topology graphs (read-only)</li>
+          <li>Capability grid (no build buttons — link to Blueprint instead)</li>
+          <li>Dependency relationships</li>
+          <li>Advanced operator dashboards (collapsed by default)</li>
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <strong style="color: var(--color-danger);">Shouldn't contain</strong>
+        <ul style="font-size: 0.85rem; margin-top: 4px;">
+          <li>"What should I do next?" recommendations</li>
+          <li>Build buttons</li>
+          <li>Operational queue</li>
+          <li>Authority calls-to-action</li>
+          <li>Phase numbers in default-tab content</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="Per-surface contract right?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> Future deprecation candidates</h2>
+    <div class="lead">
+      The list of files queued for hard-delete (with timing).
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Why deprecated</th><th>When safe to delete</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>pages/project/SystemBlueprint.tsx</kbd></td>
+          <td>Replaced by ExecutionLane</td>
+          <td>+1 sprint after VPS deploy + 0 traffic to <kbd>/blueprint-legacy</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>pages/project/ProjectDashboard.tsx</kbd></td>
+          <td>Hidden from nav 3 sprints ago</td>
+          <td>+1 sprint after migrating any direct-link consumers</td>
+        </tr>
+        <tr>
+          <td><kbd>pages/project/VisualReviewWorkspace.tsx</kbd></td>
+          <td>Replaced by VisualWorkspacePage (features/)</td>
+          <td>Already deprecated; safe to delete next sprint</td>
+        </tr>
+        <tr>
+          <td><kbd>components/project/ProjectMentorPanel.tsx</kbd> + Alerts</td>
+          <td>Mentor concept superseded by Cory</td>
+          <td>Add deprecation header next sprint; delete after 1 sprint</td>
+        </tr>
+        <tr>
+          <td><kbd>components/project/ProjectWorkflowPanel.tsx</kbd></td>
+          <td>Workflow superseded by ExecutionLane</td>
+          <td>Add deprecation header next sprint; delete after 1 sprint</td>
+        </tr>
+        <tr>
+          <td><kbd>components/project/WorkstationLauncher.tsx</kbd></td>
+          <td>Subsumed by Critique → Blueprint flow</td>
+          <td>Add deprecation header next sprint; delete after 1 sprint</td>
+        </tr>
+        <tr>
+          <td><kbd>components/project/AnnotationOverlay.tsx</kbd></td>
+          <td>Predates VisualWorkspace AnnotationPin</td>
+          <td>Confirm zero references; delete next sprint</td>
+        </tr>
+        <tr>
+          <td><kbd>hooks/useAuthoritativeSystemState.ts</kbd></td>
+          <td>Superseded by useUnifiedProjectState</td>
+          <td>Migrate consumers next sprint; delete after</td>
+        </tr>
+        <tr>
+          <td>~40 governance/federation/topology/replay hooks</td>
+          <td>Pre-federation experiments without product surface</td>
+          <td>Tag with deprecation header; delete in dedicated cleanup sprint</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="Anything to delete sooner? Keep longer?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> Implementation roadmap (next 4 sprints)</h2>
+    <div class="lead">
+      What this map enables. Each sprint is small and focused.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Sprint</th><th>Focus</th><th>Concrete output</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Next</strong></td>
+          <td>System View tab restructure</td>
+          <td>System View becomes 5 tabs: Components (default, no build buttons) / Architecture / BPs / Operations (advanced) / Cognition (advanced). Phase sections collapse into expandable groups. CapabilityGrid moves out of ProjectDashboard.</td>
+        </tr>
+        <tr>
+          <td><strong>+2</strong></td>
+          <td>Setup route extraction</td>
+          <td>New <kbd>/portal/project/setup</kbd> hosting ProjectSetupWizard + System Prompt editor + RequirementsBuilder. Cory Home redirects when no project.</td>
+        </tr>
+        <tr>
+          <td><strong>+3</strong></td>
+          <td>Home drawers</td>
+          <td>Click Readiness / Coverage tiles → ProjectMaturityGauge / RequirementsSectionBreakdown drawer. Click priority card → WhyIsThisNextPanel drawer. Add Cory chat drawer (ArchitectChat).</td>
+        </tr>
+        <tr>
+          <td><strong>+4</strong></td>
+          <td>Hard-delete legacy</td>
+          <td>Delete SystemBlueprint, ProjectDashboard, VisualReviewWorkspace, mentor panels, workflow panels, ~40 orphan hooks. Verify zero traffic to legacy routes first.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.82rem; color: var(--color-text-light);">
+      Each sprint has a clear scope. None require backend changes. Total estimated effort: ~3 weeks if executed sequentially,
+      ~1.5 weeks if parallelized.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Sprint order right? Anything to fast-track or defer?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s14" class="section">
+    <h2><span class="num">14</span> Remaining fragmentation risks</h2>
+    <div class="lead">
+      Honest list of what could still confuse the user even after all the planned moves land.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Risk</th><th>Symptom</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Verify is embedded in Blueprint Step 5</td>
+          <td>"Where do I see all my passes/fails?" — answer: nowhere as a standalone surface</td>
+          <td>Future sprint: extract to <kbd>/portal/verify</kbd> if friction shows up; for now keep embedded</td>
+        </tr>
+        <tr>
+          <td>Operations + Cognition live inside System</td>
+          <td>Power users may want them as their own primary surface</td>
+          <td>Re-evaluate if power-user usage is high; default is they stay as System tabs</td>
+        </tr>
+        <tr>
+          <td>Sessions sits at the right edge of nav, orthogonal</td>
+          <td>Could feel disconnected from the main loop</td>
+          <td>Acceptable — coaching/curriculum is a different mode of use</td>
+        </tr>
+        <tr>
+          <td>Setup is a separate route + flow</td>
+          <td>First-run experience splits from steady-state experience</td>
+          <td>Acceptable — setup IS distinct; just make the transition smooth (Home auto-redirects)</td>
+        </tr>
+        <tr>
+          <td>Hidden routes accumulate (artifacts, portfolio, etc.)</td>
+          <td>Bookmarks rot; duplicate-content concerns</td>
+          <td>Migrate to System tabs; emit redirects from old routes for 1 sprint then 410 Gone</td>
+        </tr>
+        <tr>
+          <td>~40 orphan hooks still in codebase</td>
+          <td>Code maintenance debt; future contributors confused</td>
+          <td>Tag now; delete in dedicated cleanup sprint (Sprint +4)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 14</div>
+      <textarea placeholder="Risks I'm missing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s15" class="section">
+    <h2><span class="num">15</span> What this sprint did NOT do (intentional)</h2>
+    <div class="lead">
+      Deliberate restraint.
+    </div>
+
+    <div class="anti-list">
+      <h4>Out of scope this sprint</h4>
+      <ul>
+        <li><strong>Did NOT write any code.</strong> No components moved. No routes added. No imports changed.</li>
+        <li><strong>Did NOT delete any files.</strong> Deprecation candidates listed; deletions queued for future sprints.</li>
+        <li><strong>Did NOT migrate any orphans.</strong> Each orphan has a documented home, but the moves happen in the next 4 sprints.</li>
+        <li><strong>Did NOT touch the backend.</strong> Zero backend changes. Zero new endpoints.</li>
+        <li><strong>Did NOT add tests.</strong> This is a planning artifact, not a behaviour change.</li>
+        <li><strong>Did NOT invent new surfaces.</strong> Five surfaces were already identified; this doc maps existing features to them.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 15</div>
+      <textarea placeholder="Anything that should move into scope?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s16" class="section">
+    <h2><span class="num">16</span> Open questions for the user</h2>
+    <div class="lead">
+      Decisions that shape the next sprint and beyond.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>Verify as standalone surface?</strong> Today it's Blueprint Step 5. Extract to <kbd>/portal/verify</kbd> as the 4th nav item, or keep embedded?</li>
+      <li><strong>System tab structure.</strong> Proposed: Components (default) / Architecture / BPs / Operations (advanced) / Cognition (advanced). Add or cut?</li>
+      <li><strong>Setup route placement.</strong> <kbd>/portal/project/setup</kbd> seems right. Should setup be its own nav item too, or only auto-triggered when no project exists?</li>
+      <li><strong>Demo route home.</strong> <kbd>/portal/demo</kbd> with a Home affordance — or surface from a marketing site link only?</li>
+      <li><strong>Executive report placement.</strong> Surface as a Home affordance (link/drawer), or leave as its own <kbd>/portal/project/executive</kbd> route?</li>
+      <li><strong>CoryFullscreen vs Cory drawer.</strong> Should the full-screen Cory chat survive as its own route, or fully merge into a Home drawer?</li>
+      <li><strong>Hook cleanup pace.</strong> Tag and wait, or aggressively delete ~40 orphan hooks now (with risk of breaking late-bound consumers)?</li>
+      <li><strong>Sprint order.</strong> System View restructure first (most user-visible win) or Setup route first (cleans up the 3 inline mounts of the Setup Wizard)?</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 16</div>
+      <textarea placeholder="Decisions on each numbered question."></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    Product Surface Mapping Review &middot; Colaberry Enterprise AI Leadership Accelerator &middot; 2026-05-09<br>
+    Productization Sprint &middot; planning artifact &middot; awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

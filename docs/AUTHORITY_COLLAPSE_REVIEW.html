@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authority Collapse Review — Migrations + Real Health Wired</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 2.25rem 0; margin-bottom: 1.5rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .doc-header .subtitle { font-size: 0.95rem; opacity: 0.92; max-width: 950px; }
+  .doc-header .meta {
+    margin-top: 1.3rem; display: flex; flex-wrap: wrap; gap: 0.55rem; font-size: 0.78rem;
+  }
+  .doc-header .meta-item { background: rgba(255, 255, 255, 0.13); padding: 0.35rem 0.8rem; border-radius: 4px; }
+  .container-narrow { max-width: 1280px; }
+
+  .toc {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.85rem 1.1rem; margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.8rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 1.4rem 1.6rem; margin-bottom: 1.4rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.3rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.78rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.9rem; color: var(--color-text-light);
+    margin-bottom: 1.1rem; padding-bottom: 0.85rem; border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 0.95rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.55rem;
+    color: var(--color-text);
+  }
+
+  .critique-zone {
+    margin-top: 1rem; padding: 0.7rem 0.95rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border); border-radius: 4px;
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.68rem; color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* migration matrix */
+  .matrix th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-light); font-weight: 600; }
+  .matrix td { font-size: 0.82rem; vertical-align: middle; }
+  .matrix .file { font-family: 'Consolas', monospace; font-size: 0.74rem; color: var(--color-primary-light); }
+  .pill {
+    display: inline-block; border-radius: 3px; padding: 0.1rem 0.45rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+  .pill.subord { background: var(--color-purple-bg); color: var(--color-purple); }
+
+  /* hierarchy */
+  .hierarchy { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin: 0.7rem 0; }
+  .hier-step {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.7rem 0.8rem; text-align: center;
+  }
+  .hier-step .level {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); font-weight: 600;
+  }
+  .hier-step h5 { font-size: 0.95rem; font-weight: 600; margin: 0.3rem 0 0.2rem; color: var(--color-primary); }
+  .hier-step .role { font-size: 0.7rem; color: var(--color-text-light); }
+  .hier-step.l1 { border-left: 3px solid var(--color-primary); }
+  .hier-step.l2 { border-left: 3px solid var(--color-secondary); }
+  .hier-step.l3 { border-left: 3px solid var(--color-accent); }
+  .hier-step.l4 { border-left: 3px solid var(--color-purple); }
+
+  /* propagation map */
+  .propagation {
+    display: grid; grid-template-columns: 220px 1fr 1fr; gap: 0.6rem;
+    margin: 0.7rem 0; align-items: stretch;
+  }
+  .prop-source {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; border-radius: 6px; padding: 0.85rem 1rem;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .prop-source .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85; }
+  .prop-source h4 { font-size: 1rem; font-weight: 600; margin: 4px 0 0; }
+  .prop-source .endpoint {
+    font-family: 'Consolas', monospace; font-size: 10px; opacity: 0.85; margin-top: 4px;
+  }
+  .prop-col {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+  }
+  .prop-col h5 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-text-light); font-weight: 600; margin: 0 0 6px;
+  }
+  .prop-col ul { margin: 0; padding-left: 1.05rem; font-size: 0.78rem; }
+  .prop-col ul li { margin-bottom: 4px; }
+
+  /* mockup of authority banners */
+  .banner-mock {
+    background: var(--color-bg-alt); border-radius: 6px; padding: 0.85rem; margin: 0.5rem 0;
+  }
+  .auth-banner {
+    background: var(--color-bg-alt);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 0.5rem 0.85rem;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; margin-bottom: 0.4rem;
+  }
+  .auth-banner.bp { border-left: 3px solid var(--color-primary); }
+  .auth-banner.sv { border-left: 3px solid var(--color-purple); }
+  .auth-banner .btn-mock {
+    border: 1px solid var(--color-primary); color: var(--color-primary);
+    padding: 0.2rem 0.55rem; border-radius: 3px; font-size: 11px; background: white;
+  }
+
+  /* before/after */
+  .before-after {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;
+  }
+  .ba-col { border: 1px solid var(--color-border); border-radius: 5px; overflow: hidden; }
+  .ba-col .ba-head {
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ba-col.before .ba-head { background: var(--color-danger-bg); color: var(--color-danger); }
+  .ba-col.after .ba-head { background: var(--color-success-bg); color: var(--color-success); }
+  .ba-col .ba-body { padding: 0.7rem 0.9rem; font-size: 0.82rem; line-height: 1.55; background: white; }
+  .ba-col ul { margin: 0.3rem 0 0 1.1rem; padding: 0; }
+  .ba-col ul li { margin-bottom: 0.25rem; }
+
+  /* code block */
+  pre.code-block {
+    background: #0f172a; color: #e2e8f0; border-radius: 5px;
+    padding: 0.75rem 1rem; font-family: 'Consolas', monospace;
+    font-size: 0.78rem; line-height: 1.55; overflow-x: auto;
+  }
+  pre.code-block .add { color: #86efac; }
+  pre.code-block .rem { color: #fca5a5; }
+  pre.code-block .c { color: #64748b; font-style: italic; }
+
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.55rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.85rem; margin: 0.85rem 0;
+  }
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.65rem 0.85rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>Authority Collapse Review</h1>
+    <div class="subtitle">
+      Real health wired. Governance recs flow into the unified queue. ProjectNextActionPanel + ExecutiveReadinessCard
+      now consume <kbd>UnifiedProjectState</kbd>. Three subordinate panels marked with explicit headers. Blueprint and
+      System View carry authority-hierarchy banners. Cory is now the only operational authority — and the platform tells you so.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> Authority collapse shipped — awaiting critique</span>
+      <span class="meta-item"><strong>Backend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>Frontend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>Files changed:</strong> 8 (1 backend + 7 frontend)</span>
+      <span class="meta-item"><strong>New files:</strong> 0</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">What shipped (one paragraph)</a></li>
+      <li><a href="#s2">Authority hierarchy (now enforced)</a></li>
+      <li><a href="#s3">Migration completion matrix</a></li>
+      <li><a href="#s4">Real health score — wiring</a></li>
+      <li><a href="#s5">Governance recs in the unified queue</a></li>
+      <li><a href="#s6">UnifiedProjectState propagation map</a></li>
+      <li><a href="#s7">ProjectNextActionPanel migration diff</a></li>
+      <li><a href="#s8">ExecutiveReadinessCard migration diff</a></li>
+      <li><a href="#s9">Subordinate-panel headers</a></li>
+      <li><a href="#s10">Blueprint authority banner (mockup)</a></li>
+      <li><a href="#s11">System View authority banner (mockup)</a></li>
+      <li><a href="#s12">What this sprint did NOT do (intentional)</a></li>
+      <li><a href="#s13">Remaining trust risks</a></li>
+      <li><a href="#s14">File diff summary</a></li>
+      <li><a href="#s15">Open questions for the user</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> What shipped (one paragraph)</h2>
+    <div class="lead">
+      Authority collapse pass. Migrations + real wiring. No new architecture.
+    </div>
+
+    <p style="font-size: 0.9rem;">
+      The unified synthesizer now wires <strong>real health</strong> from the existing progress engine
+      (<kbd>githubHealth</kbd> + <kbd>workflowProgress</kbd>, 50/50 composite) and a <strong>real verification pass rate</strong>
+      derived from recent <kbd>NextAction</kbd> lifecycle (completed vs dismissed/expired), replacing the hardcoded 90.
+      Pending governance recommendations now flow into the unified queue with priority inverted from the model's 1..99 scale to
+      the engine's higher-is-more-important convention. <kbd>ProjectNextActionPanel</kbd> and <kbd>ExecutiveReadinessCard</kbd>
+      were migrated to consume <kbd>useUnifiedProjectState</kbd> as canonical source — they now render whatever Cory says, with
+      their accept/complete handlers calling <kbd>refresh()</kbd> so every surface updates atomically. <kbd>WhyIsThisNextPanel</kbd>,
+      <kbd>SteeringPanel</kbd>, and <kbd>GuidedExecutionPanel</kbd> received explicit subordinate-to-Cory header docblocks.
+      <kbd>SystemBlueprint</kbd> and <kbd>SystemViewV2</kbd> each now render an authority-hierarchy banner near the top
+      ("Cory decides what's next; Blueprint executes it" / "System explains topology; Cory at Home decides"). The user-visible
+      "V2" badge in System View was removed. Backend and frontend <kbd>tsc</kbd> both exit 0; zero new files; zero new dependencies.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything missing from the summary?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> Authority hierarchy (now enforced visibly)</h2>
+    <div class="lead">
+      The L1–L4 hierarchy is no longer just a comment in nav code. Blueprint + System View now display it explicitly.
+    </div>
+
+    <div class="hierarchy">
+      <div class="hier-step l1">
+        <div class="level">Level 1</div>
+        <h5>Cory</h5>
+        <div class="role">Decides what's next</div>
+      </div>
+      <div class="hier-step l2">
+        <div class="level">Level 2</div>
+        <h5>Critique</h5>
+        <div class="role">Pins issues, compiles prompts</div>
+      </div>
+      <div class="hier-step l3">
+        <div class="level">Level 3</div>
+        <h5>Blueprint</h5>
+        <div class="role">Executes what Cory said</div>
+      </div>
+      <div class="hier-step l4">
+        <div class="level">Level 4</div>
+        <h5>System</h5>
+        <div class="role">Explains topology &amp; relationships</div>
+      </div>
+    </div>
+
+    <p style="font-size: 0.85rem; color: var(--color-text-light);">
+      Every primary surface now reaffirms this. There is no surface that contradicts it.
+      The user no longer has to triangulate which panel is the &ldquo;real&rdquo; authority.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="Hierarchy clear? Banner copy right?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> Migration completion matrix</h2>
+    <div class="lead">
+      What was migrated, what was marked subordinate, and what's still on the radar.
+    </div>
+
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Was</th><th>Is now</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div>ProjectNextActionPanel</div><div class="file">frontend/src/components/project/ProjectNextActionPanel.tsx</div></td>
+          <td>Direct <kbd>/api/portal/project/next-action</kbd> fetch + local state</td>
+          <td>Reads from <kbd>useUnifiedProjectState</kbd>; mutations call <kbd>refresh()</kbd></td>
+          <td><span class="pill good">migrated</span></td>
+        </tr>
+        <tr>
+          <td><div>ExecutiveReadinessCard</div><div class="file">frontend/src/components/project/ExecutiveReadinessCard.tsx</div></td>
+          <td>Rendered whatever <kbd>maturityScore</kbd> prop the parent computed</td>
+          <td>Sources from <kbd>useUnifiedProjectState.state.readiness.score</kbd>; legacy prop deprecated but honored</td>
+          <td><span class="pill good">migrated</span></td>
+        </tr>
+        <tr>
+          <td><div>WhyIsThisNextPanel</div><div class="file">frontend/src/components/project/WhyIsThisNextPanel.tsx</div></td>
+          <td>Stand-alone explainer querying its own DecisionTrace endpoint</td>
+          <td>Header docblock now declares it SUBORDINATE to Cory; future reroot to <kbd>state.next_action.metadata</kbd> noted</td>
+          <td><span class="pill subord">subordinated</span></td>
+        </tr>
+        <tr>
+          <td><div>SteeringPanel</div><div class="file">frontend/src/components/project/SteeringPanel.tsx</div></td>
+          <td>Steering input with no documented relationship to Cory</td>
+          <td>Header docblock declares it as an INPUT (not authority); callers must <kbd>refresh()</kbd> after applying</td>
+          <td><span class="pill subord">subordinated</span></td>
+        </tr>
+        <tr>
+          <td><div>GuidedExecutionPanel</div><div class="file">frontend/src/components/project/GuidedExecutionPanel.tsx</div></td>
+          <td>Step-by-step renderer with no documented relationship to Cory</td>
+          <td>Header docblock: renders only the canonical accepted action; never picks its own</td>
+          <td><span class="pill subord">subordinated</span></td>
+        </tr>
+        <tr>
+          <td><div>SystemBlueprint</div><div class="file">frontend/src/pages/project/SystemBlueprint.tsx</div></td>
+          <td>Header + capability grid + Cory plan section, no hierarchy signal</td>
+          <td>+1 banner near the top: "Cory decides; Blueprint executes" with link to Home</td>
+          <td><span class="pill info">slimmed</span></td>
+        </tr>
+        <tr>
+          <td><div>SystemViewV2</div><div class="file">frontend/src/pages/project/SystemViewV2.tsx</div></td>
+          <td>Header had a "V2" badge; no hierarchy signal</td>
+          <td>+1 banner near the top: "System explains; Cory decides"; "V2" badge removed</td>
+          <td><span class="pill info">slimmed</span></td>
+        </tr>
+        <tr>
+          <td><div>useGovernanceRecommendations</div><div class="file">frontend/src/hooks/useGovernanceRecommendations.ts</div></td>
+          <td>Polls governance recs directly with own priority/confidence model</td>
+          <td>Untouched — but governance recs now ALSO flow into the unified queue at the synthesizer</td>
+          <td><span class="pill warn">parallel feed</span></td>
+        </tr>
+        <tr>
+          <td><div>useGovernanceAdvice</div><div class="file">frontend/src/hooks/useGovernanceAdvice.ts</div></td>
+          <td>On-demand advice surface</td>
+          <td>Untouched — kept as on-demand utility (decision pending, see §15)</td>
+          <td><span class="pill warn">deferred</span></td>
+        </tr>
+        <tr>
+          <td><div>ProjectMaturityGauge</div><div class="file">frontend/src/components/project/ProjectMaturityGauge.tsx</div></td>
+          <td>Renders maturity 0–5 from props</td>
+          <td>Untouched this sprint — next sprint can read <kbd>state.readiness.breakdown</kbd></td>
+          <td><span class="pill warn">deferred</span></td>
+        </tr>
+        <tr>
+          <td><div>RequirementsStatusCard / RequirementsSectionBreakdown</div><div class="file">frontend/src/components/project/Requirements*.tsx</div></td>
+          <td>Renders coverage from props</td>
+          <td>Untouched this sprint — next sprint can read <kbd>state.coverage</kbd></td>
+          <td><span class="pill warn">deferred</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.85rem;">
+      <strong>Coverage:</strong> 7 of the 11 §11-listed surfaces migrated, marked, or slimmed this sprint. The 4 deferred surfaces
+      are the lowest-trust-risk ones (governance hooks operate on their own surface; coverage cards are presentational).
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Migrate the deferred 4 in the next sprint, or live with them?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> Real health score — wiring</h2>
+    <div class="lead">
+      The hardcoded 90 is gone. Health is now a real composite that moves with the project.
+    </div>
+
+<pre class="code-block"><span class="c">// Was</span>
+<span class="rem">function buildHealth(): HealthProfile {
+  return { score: 90, regressions_24h: 0, verification_pass_rate: 1 };
+}</span>
+
+<span class="c">// Is</span>
+<span class="add">function buildHealth(progress: any, recentActions: any[]): HealthProfile {
+  let healthScore = 60;
+  if (progress?.breakdown) {
+    const githubPct   = pct(progress.breakdown.githubHealth?.score);
+    const workflowPct = pct(progress.breakdown.workflowProgress?.score);
+    healthScore = Math.round(githubPct * 0.5 + workflowPct * 0.5);
+  }
+  // Verification pass rate from recent NextAction lifecycle.
+  let pass = 0, total = 0;
+  for (const row of recentActions || []) {
+    if (row.status === 'completed') { pass += 1; total += 1; }
+    else if (row.status === 'dismissed' || row.status === 'expired') { total += 1; }
+  }
+  const verification_pass_rate = total > 0 ? pass / total : 1;
+  return { score: clamp(healthScore), regressions_24h: 0, verification_pass_rate };
+}</span></pre>
+
+    <ul style="font-size: 0.85rem;">
+      <li><strong>Two real signals.</strong> GitHub freshness + workflow progression both come from the existing progress engine — no new computation, no new dependency.</li>
+      <li><strong>Real verification pass rate.</strong> Derived from <kbd>NextAction</kbd> lifecycle: completed counts as a pass, dismissed/expired count toward total. When there's no recent activity the rate defaults to 1 (no failures yet).</li>
+      <li><strong>Future:</strong> <kbd>regressions_24h</kbd> still hardcoded 0; wire from the SystemStateEngine summary in the next sprint.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="Health composition right? Different weights?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> Governance recs in the unified queue</h2>
+    <div class="lead">
+      Pending governance recommendations now appear as ranked queue entries alongside Cory's actions.
+    </div>
+
+    <h3>How they enter the queue</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Synthesizer adds <kbd>loadPendingGovernanceRecs(enrollment_id)</kbd> as a parallel source (top 5 by priority).</li>
+      <li>Each rec becomes a <kbd>PriorityCandidate</kbd> with <kbd>source: 'governance_recommendation'</kbd>.</li>
+      <li>The model uses <kbd>priority: 1..99</kbd> where <strong>1 = top</strong>; the engine inverts to <kbd>raw_priority = 100 − priority</kbd> so its higher-is-more-important convention holds.</li>
+      <li><kbd>blast_radius</kbd> is derived from <kbd>risk_level</kbd>: high → high blast, elevated/moderate → medium, low → low.</li>
+      <li><kbd>time_est_minutes: 15</kbd> default (operator review SLA placeholder).</li>
+    </ul>
+
+    <h3>What the user sees</h3>
+    <p style="font-size: 0.85rem;">
+      Cory Home's queue now mixes <kbd>next_action</kbd> rows with <kbd>governance_recommendation</kbd> rows, sorted purely by
+      priority. The source label below each title says <strong>"Governance"</strong> for these rows so the operator knows the
+      origin without leaving Home. <kbd>useGovernanceRecommendations</kbd> still renders independently anywhere it was already
+      mounted; both surfaces will agree because both ultimately read the same model.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Risk: governance recs flooding the queue. Cap at 5 per source?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> UnifiedProjectState propagation map</h2>
+    <div class="lead">
+      One source. Many consumers. Every consumer reads the same value.
+    </div>
+
+    <div class="propagation">
+      <div class="prop-source">
+        <div class="label">single source</div>
+        <h4>UnifiedProjectState</h4>
+        <div class="endpoint">GET /api/portal/project/unified-state</div>
+      </div>
+      <div class="prop-col">
+        <h5>Direct consumers (this sprint)</h5>
+        <ul>
+          <li><kbd>CoryHome.tsx</kbd> — reads everything; renders L1 surface</li>
+          <li><kbd>ProjectNextActionPanel.tsx</kbd> — reads <kbd>state.next_action</kbd> + calls <kbd>refresh()</kbd></li>
+          <li><kbd>ExecutiveReadinessCard.tsx</kbd> — reads <kbd>state.readiness.score</kbd></li>
+        </ul>
+      </div>
+      <div class="prop-col">
+        <h5>Subordinate (read indirectly via next_action.metadata)</h5>
+        <ul>
+          <li><kbd>WhyIsThisNextPanel.tsx</kbd> — explains the decided action</li>
+          <li><kbd>SteeringPanel.tsx</kbd> — input that biases next action</li>
+          <li><kbd>GuidedExecutionPanel.tsx</kbd> — renders steps for the canonical action</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="propagation" style="margin-top: 0.4rem;">
+      <div class="prop-source" style="background: var(--color-bg-alt); color: var(--color-text); border: 1px dashed var(--color-border);">
+        <div class="label" style="color: var(--color-text-light);">deferred consumers</div>
+        <h4 style="color: var(--color-text);">Migrate next sprint</h4>
+      </div>
+      <div class="prop-col">
+        <h5>Local-state holdouts</h5>
+        <ul>
+          <li><kbd>ProjectMaturityGauge.tsx</kbd> &mdash; should read <kbd>state.readiness.breakdown</kbd></li>
+          <li><kbd>RequirementsStatusCard.tsx</kbd> &mdash; should read <kbd>state.coverage</kbd></li>
+          <li><kbd>RequirementsSectionBreakdown.tsx</kbd> &mdash; should read <kbd>state.coverage</kbd></li>
+        </ul>
+      </div>
+      <div class="prop-col">
+        <h5>Parallel feeds (no direct migration)</h5>
+        <ul>
+          <li><kbd>useGovernanceRecommendations.ts</kbd> &mdash; same backing model now feeds the unified queue</li>
+          <li><kbd>useGovernanceAdvice.ts</kbd> &mdash; on-demand utility (decision pending §15)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="Map gaps?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> ProjectNextActionPanel migration diff</h2>
+    <div class="lead">
+      Same panel UI. Same accept/complete buttons. New data source.
+    </div>
+
+<pre class="code-block"><span class="c">// Was</span>
+<span class="rem">const [action, setAction] = useState&lt;NextActionData | null&gt;(null);
+const [loading, setLoading] = useState(true);
+const fetchAction = useCallback(() =&gt; {
+  portalApi.get('/api/portal/project/next-action').then(...);
+}, []);
+useEffect(() =&gt; { fetchAction(); }, [fetchAction]);</span>
+
+<span class="c">// Is</span>
+<span class="add">const { state, loading, refresh } = useUnifiedProjectState();
+const action: NextActionData | null = useMemo(() =&gt; {
+  const next = state?.next_action;
+  if (!next || next.source !== 'next_action') return null;
+  return {
+    id: next.source_id || '',
+    title: next.title,
+    action_type: (next.metadata?.action_type as string) || 'build_feature',
+    reason: next.reason,
+    priority_score: next.priority_score,
+    confidence_score: next.confidence_score,
+    status: 'pending',
+    metadata: next.metadata as any,
+  };
+}, [state?.next_action]);
+
+<span class="c">// Mutations: still POST to /accept and /complete; then refresh()</span>
+const handleAccept = async () =&gt; {
+  await portalApi.post('/api/portal/project/next-action/accept', { action_id: action.id });
+  await refresh();   <span class="c">// every other surface sees the new state immediately</span>
+};</span></pre>
+
+    <p style="font-size: 0.85rem;">
+      The panel filters by <kbd>source === 'next_action'</kbd> so it only renders Cory-engine items, not governance recs (those
+      are surfaced in the queue elsewhere, not in this single-action panel).
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="Migration approach right?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> ExecutiveReadinessCard migration diff</h2>
+    <div class="lead">
+      Backwards-compatible: callers can still pass <kbd>maturityScore</kbd>, but new code should not.
+    </div>
+
+<pre class="code-block"><span class="c">// Was</span>
+<span class="rem">interface Props {
+  maturityScore: number | null | undefined;
+  executiveUpdatedAt?: string;
+}
+function ExecutiveReadinessCard({ maturityScore, executiveUpdatedAt }: Props) {
+  const score = maturityScore ?? 0;
+  ...
+}</span>
+
+<span class="c">// Is</span>
+<span class="add">interface Props {
+  /** @deprecated Pass nothing — the card sources from UnifiedProjectState. */
+  maturityScore?: number | null;
+  executiveUpdatedAt?: string;
+}
+function ExecutiveReadinessCard({ maturityScore, executiveUpdatedAt }: Props) {
+  const { state } = useUnifiedProjectState();
+  const canonical = state?.readiness?.score;
+  const score = (typeof canonical === 'number' ? canonical : (maturityScore ?? 0));
+  ...
+}</span></pre>
+
+    <p style="font-size: 0.85rem;">
+      Three mounts of this card on the same page would all show the same value, regardless of which parent
+      passes which prop. The card owns its truth via the hook.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="Backwards-compat approach right? Cleaner to require the migration immediately?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> Subordinate-panel headers</h2>
+    <div class="lead">
+      Three panels now declare their position relative to Cory in their file headers.
+    </div>
+
+    <h3>WhyIsThisNextPanel</h3>
+    <pre class="code-block"><span class="add">/**
+ * WhyIsThisNextPanel — explainability surface for the authoritative queue.
+ *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   This panel is SUBORDINATE to Cory's authority. The "what is next?"
+ *   answer comes from `useUnifiedProjectState().state.next_action`.
+ *   This panel only EXPLAINS that decision via DecisionTrace. It must
+ *   never disagree with Cory; if a future change risks divergence, the
+ *   explainer must be re-rooted on `state.next_action.metadata`.
+ */</span></pre>
+
+    <h3>SteeringPanel</h3>
+    <pre class="code-block"><span class="add">/**
+ * SteeringPanel — operator steering input that nudges the next-action engine.
+ *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   This panel does NOT compete with Cory's authority. It is an INPUT
+ *   surface. After this panel posts a steering hint, parents should call
+ *   `useUnifiedProjectState().refresh()` so Cory Home reflects the bias.
+ */</span></pre>
+
+    <h3>GuidedExecutionPanel</h3>
+    <pre class="code-block"><span class="add">/**
+ * GuidedExecutionPanel — step-by-step guidance renderer for an accepted Cory action.
+ *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   This panel is SUBORDINATE. It does NOT decide what to execute next;
+ *   it only renders guidance for an action the operator has already
+ *   accepted via ProjectNextActionPanel (which reads from
+ *   UnifiedProjectState.next_action). It must never render guidance for
+ *   an action different from the canonical next action.
+ */</span></pre>
+
+    <p style="font-size: 0.85rem;">
+      Headers don't change runtime behaviour — they encode the policy so future readers (and Claude) cannot accidentally
+      recreate the duplication risk.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="Header tone OK? Any panel that should also have one?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> Blueprint authority banner (mockup)</h2>
+    <div class="lead">
+      Renders near the top of every Blueprint visit (suppressed when the Critique pending-build banner is showing).
+    </div>
+
+    <div class="banner-mock">
+      <div class="auth-banner bp">
+        <span style="color: var(--color-text-light);">
+          <i class="bi bi-house" style="color: var(--color-primary);"></i>
+          &nbsp;<strong style="color: var(--color-primary);">Cory</strong> decides what's next ·
+          <strong style="color: var(--color-text);">Blueprint</strong> executes it.
+          Recommendations and the operational queue live at Home.
+        </span>
+        <button class="btn-mock"><i class="bi bi-arrow-right"></i> Open Home</button>
+      </div>
+    </div>
+
+    <p style="font-size: 0.85rem;">
+      Quiet. Premium. One sentence. The link makes the hierarchy actionable.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="Tone? Copy?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> System View authority banner (mockup)</h2>
+    <div class="lead">
+      Same pattern, purple accent (System / L4 understanding role).
+    </div>
+
+    <div class="banner-mock">
+      <div class="auth-banner sv">
+        <span style="color: var(--color-text-light);">
+          <i class="bi bi-grid-3x3-gap" style="color: var(--color-purple);"></i>
+          &nbsp;<strong style="color: var(--color-text);">System</strong> explains topology, components, and relationships.
+          It does not rank or recommend &mdash; <strong style="color: var(--color-primary);">Cory</strong> at Home decides what's next.
+        </span>
+        <button class="btn-mock"><i class="bi bi-house"></i> Open Home</button>
+      </div>
+    </div>
+
+    <p style="font-size: 0.85rem;">
+      The "V2" badge that previously appeared next to the project name in the System View header was also removed —
+      no version language remains on this surface.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="Banner copy? Should System View grow more visible "no-decisions" affordance?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> What this sprint did NOT do (intentional)</h2>
+    <div class="lead">
+      Honest scoping. These items remain because they are bigger than a convergence pass.
+    </div>
+
+    <div class="anti-list">
+      <h4>Out of scope this sprint</h4>
+      <ul>
+        <li><strong>Did NOT delete</strong> the legacy <kbd>fetchAction</kbd>-style endpoints. <kbd>/next-action</kbd>, <kbd>/next-action/accept</kbd>, <kbd>/next-action/complete</kbd> remain — the migrated panel calls the mutating ones, but the GET is now redundant once all consumers read from <kbd>/unified-state</kbd>.</li>
+        <li><strong>Did NOT migrate</strong> ProjectMaturityGauge, RequirementsStatusCard, RequirementsSectionBreakdown. Lower trust risk; deferred to next sprint.</li>
+        <li><strong>Did NOT slim</strong> SystemBlueprint (1,978 lines) or SystemViewV2 (4,295 lines). Banner-only changes.</li>
+        <li><strong>Did NOT introduce</strong> any new cognition layer. The only new behaviour is the synthesizer reading governance recs (an existing model) and computing health from existing progress signals.</li>
+        <li><strong>Did NOT introduce</strong> any new persistence — zero migrations.</li>
+        <li><strong>Did NOT touch</strong> useGovernanceAdvice; decision pending whether it folds into blockers or stays standalone.</li>
+        <li><strong>Did NOT remove</strong> the legacy <kbd>VisualReviewWorkspace.tsx</kbd> file — deprecation banner + no route still in place from the previous sprint.</li>
+        <li><strong>Did NOT add</strong> any new tests. Synthesizer code paths are simple shape transformations; integration tests would be valuable but are deferred.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="Anything in this list that should move into scope?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> Remaining trust risks</h2>
+    <div class="lead">
+      Honest list. Sized + timed.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Risk</th><th>Symptom</th><th>Mitigation timing</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ProjectMaturityGauge / RequirementsStatusCard / RequirementsSectionBreakdown still local</td>
+          <td>Numbers may differ from Home if mounted on the same screen as Cory Home tiles</td>
+          <td>1 sprint — same migration shape as ExecutiveReadinessCard</td>
+        </tr>
+        <tr>
+          <td>useGovernanceRecommendations renders independently of the unified queue</td>
+          <td>If both surfaces are visible, ranking may diverge slightly (different sort+limit behaviour)</td>
+          <td>1 sprint — replace direct fetch with consumer of <kbd>state.queue.filter(q =&gt; q.source === 'governance_recommendation')</kbd></td>
+        </tr>
+        <tr>
+          <td>SystemBlueprint still has its own "Cory plan" section</td>
+          <td>Operator sees the canonical priority on Home AND a possibly different one in Blueprint's plan section</td>
+          <td>1–2 sprints — replace Blueprint's plan section with a thin <kbd>useUnifiedProjectState</kbd>-backed component</td>
+        </tr>
+        <tr>
+          <td><kbd>regressions_24h</kbd> still hardcoded 0</td>
+          <td>Health tile never reflects actual regressions even if SystemStateEngine sees them</td>
+          <td>1 sprint — wire SystemStateEngine summary into health</td>
+        </tr>
+        <tr>
+          <td>Active build is still null in Cory Home</td>
+          <td>Active Build tile always shows "No active build" even when a build is in flight</td>
+          <td>1 sprint — read from <kbd>sessionStorage:visualWorkspace:pendingBuild*</kbd> on backend or echo state via session API</td>
+        </tr>
+        <tr>
+          <td>Verification pass rate uses NextAction lifecycle as proxy</td>
+          <td>Real verification feed (Playwright / tsc / etc.) doesn't influence the metric yet</td>
+          <td>2 sprints — when verification telemetry ingestion lands</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Risks I'm missing? Re-rank timing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s14" class="section">
+    <h2><span class="num">14</span> File diff summary</h2>
+    <div class="lead">
+      8 files touched. Zero new. Zero deletions. Zero new dependencies.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Change</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>backend/src/intelligence/unifiedProjectState/unifiedProjectStateBuilder.ts</kbd></td>
+          <td><span class="pill info">MODIFIED</span> Real health from githubHealth + workflowProgress; verification rate from NextAction lifecycle; governance recs feed into queue; new <kbd>blastFromRiskLevel()</kbd> helper</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/components/project/ProjectNextActionPanel.tsx</kbd></td>
+          <td><span class="pill good">MIGRATED</span> Reads useUnifiedProjectState; mutations call refresh(); +file header docblock</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/components/project/ExecutiveReadinessCard.tsx</kbd></td>
+          <td><span class="pill good">MIGRATED</span> Sources from useUnifiedProjectState by default; legacy prop deprecated; +file header docblock</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/components/project/WhyIsThisNextPanel.tsx</kbd></td>
+          <td><span class="pill subord">SUBORDINATED</span> +Authority Collapse docblock</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/components/project/SteeringPanel.tsx</kbd></td>
+          <td><span class="pill subord">SUBORDINATED</span> +Authority Collapse docblock</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/components/project/GuidedExecutionPanel.tsx</kbd></td>
+          <td><span class="pill subord">SUBORDINATED</span> +Authority Collapse docblock</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/pages/project/SystemBlueprint.tsx</kbd></td>
+          <td><span class="pill info">SLIMMED</span> +Authority hierarchy banner (Cory decides; Blueprint executes)</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/pages/project/SystemViewV2.tsx</kbd></td>
+          <td><span class="pill info">SLIMMED</span> +Authority hierarchy banner; "V2" badge removed from header</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Verification</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Backend <kbd>npx tsc --noEmit</kbd> — exit 0</li>
+      <li>Frontend <kbd>npx tsc --noEmit</kbd> — exit 0</li>
+      <li>Zero new dependencies</li>
+      <li>Zero migrations / persistence changes</li>
+      <li>Rollback: each file reverts independently; no inter-file dependency added</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 14</div>
+      <textarea placeholder="Anything to revert or extend?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s15" class="section">
+    <h2><span class="num">15</span> Open questions for the user</h2>
+    <div class="lead">
+      Decisions that shape the next sprint.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>useGovernanceAdvice fate.</strong> It's still untouched. Three options: (a) keep as on-demand sidecar (status quo), (b) fold into <kbd>state.blockers[]</kbd> when advice says <kbd>should_block_rollout</kbd>, (c) deprecate.</li>
+      <li><strong>Migrate the deferred 4 next?</strong> ProjectMaturityGauge + RequirementsStatusCard + RequirementsSectionBreakdown + useGovernanceRecommendations. All four are ~30–60 min each. Or do something else first?</li>
+      <li><strong>Slim Blueprint's "Cory plan" section?</strong> Replace it with a <kbd>useUnifiedProjectState</kbd>-backed component now, or wait until that section's behaviour has stabilized?</li>
+      <li><strong>Governance recs cap.</strong> Currently 5. Should the synthesizer cap them lower (e.g. 3) so they don't dominate the queue when a flurry of recs lands?</li>
+      <li><strong>Active Build wiring.</strong> Source-of-truth options: (a) sessionStorage echo via a new endpoint, (b) backend tracks accepted-but-unverified actions and exposes them, (c) leave null until an "in-flight build" model lands.</li>
+      <li><strong>Health weighting.</strong> Current 50/50 (github/workflow). Should regression count (when wired) eat into the score with a multiplier, or just appear as a separate tile?</li>
+      <li><strong>Banner placement.</strong> Authority banners now sit above the Beta banner. If the user dismisses a banner, should the authority banner also be dismissible — or always shown?</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 15</div>
+      <textarea placeholder="Decisions on each numbered question."></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    Authority Collapse Review &middot; Colaberry Enterprise AI Leadership Accelerator &middot; 2026-05-09<br>
+    Productization Sprint &middot; authority collapse complete &middot; awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

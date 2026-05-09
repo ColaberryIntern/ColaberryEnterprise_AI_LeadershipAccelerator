@@ -1,8 +1,26 @@
+/**
+ * ExecutiveReadinessCard — presentation card for project readiness.
+ *
+ * Authority Collapse Sprint, 2026-05-09:
+ *   - Was: rendered whatever `maturityScore` prop the parent passed in;
+ *     parents computed readiness independently.
+ *   - Is now: PRESENTATION ONLY. By default reads from
+ *     `useUnifiedProjectState().state.readiness` so every mount of this
+ *     card displays the canonical value. The optional `maturityScore` /
+ *     `executiveUpdatedAt` props are honored for backwards compatibility,
+ *     but new callers should NOT pass them — let the card source itself.
+ *
+ * The local `getReadiness(score)` mapping is preserved (purely
+ * presentational: badge label + colour + icon). It does not compute
+ * authority — only how the canonical score is rendered.
+ */
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useUnifiedProjectState } from '../../hooks/useUnifiedProjectState';
 
 interface Props {
-  maturityScore: number | null | undefined;
+  /** @deprecated Pass nothing — the card sources from UnifiedProjectState. */
+  maturityScore?: number | null;
   executiveUpdatedAt?: string;
 }
 
@@ -26,7 +44,11 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 function ExecutiveReadinessCard({ maturityScore, executiveUpdatedAt }: Props) {
-  const score = maturityScore ?? 0;
+  // CANONICAL: readiness from the unified synthesizer. Only fall back to
+  // the legacy prop when a caller still passes it (deprecated path).
+  const { state } = useUnifiedProjectState();
+  const canonical = state?.readiness?.score;
+  const score = (typeof canonical === 'number' ? canonical : (maturityScore ?? 0));
   const readiness = getReadiness(score);
 
   return (

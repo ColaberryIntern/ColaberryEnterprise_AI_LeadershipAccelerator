@@ -321,6 +321,335 @@ export function buildAuthoritativeStateFromInputs(input: PureBuildInput): Author
     };
   } catch { /* fail-soft */ }
 
+  // Phase 17 — adaptive governance surface. Strictly sync, in-memory.
+  // Counters reset on process restart; the new Phase 17 audit kinds
+  // remain authoritative for historical replay.
+  let adaptive_governance_summary: any = undefined;
+  try {
+    const counters = require('./adaptiveGovernance/adaptiveGovernanceSummaryCounters') as typeof import('./adaptiveGovernance/adaptiveGovernanceSummaryCounters');
+    const snap = counters.readAdaptiveGovernanceSummary(input.project.id);
+    adaptive_governance_summary = {
+      drifting_validators: snap.drifting_validators,
+      suppressed_validators: snap.suppressed_validators,
+      active_forecasts: snap.active_forecasts,
+      active_recovery_chains: snap.active_recovery_chains,
+      ancestry_rollbacks_recommended: snap.ancestry_rollbacks_recommended,
+      worst_validator_tier: snap.worst_validator_tier,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 18 — operator-calibrated governance evolution surface. Sync,
+  // in-memory; counters reset on process restart; Phase 18 audit kinds
+  // remain authoritative for history.
+  let governance_evolution_summary: any = undefined;
+  try {
+    const counters = require('./operatorGovernance/governanceEvolutionSummaryCounters') as typeof import('./operatorGovernance/governanceEvolutionSummaryCounters');
+    const snap = counters.readGovernanceEvolutionSummary(input.project.id);
+    governance_evolution_summary = {
+      pending_calibration_proposals: snap.pending_calibration_proposals,
+      approved_calibrations_24h: snap.approved_calibrations_24h,
+      rejected_calibrations_24h: snap.rejected_calibrations_24h,
+      active_recovery_sessions: snap.active_recovery_sessions,
+      forecast_signals_widened: snap.forecast_signals_widened,
+      routing_stability: snap.routing_stability,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 19 — federated organizational governance intelligence
+  // surface. Sync, in-memory only. Counters reset on process restart;
+  // Phase 19 audit kinds remain authoritative for history.
+  let federation_summary: any = undefined;
+  try {
+    const counters = require('./federation/federationSummaryCounters') as typeof import('./federation/federationSummaryCounters');
+    const snap = counters.readFederationSummary(input.project.id);
+    federation_summary = {
+      federation_enabled: snap.federation_enabled,
+      isolation_tier: snap.isolation_tier,
+      archetypes_shared_24h: snap.archetypes_shared_24h,
+      archetypes_consumed_24h: snap.archetypes_consumed_24h,
+      active_anomalies: snap.active_anomalies,
+      drift_events_detected: snap.drift_events_detected,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 20 — bounded federated learning refinement surface. Sync,
+  // in-memory; counters reset on process restart; Phase 20 audit kinds
+  // remain authoritative for history.
+  let federated_learning_summary: any = undefined;
+  try {
+    const counters = require('./federatedLearning/federatedLearningSummaryCounters') as typeof import('./federatedLearning/federatedLearningSummaryCounters');
+    const snap = counters.readFederatedLearningSummary(input.project.id);
+    federated_learning_summary = {
+      archetypes_tracked: snap.archetypes_tracked,
+      archetypes_trusted: snap.archetypes_trusted,
+      archetypes_degraded: snap.archetypes_degraded,
+      active_drift_signals: snap.active_drift_signals,
+      drift_tier: snap.drift_tier,
+      pending_policy_proposals: snap.pending_policy_proposals,
+      approved_policies_24h: snap.approved_policies_24h,
+      rejected_policies_24h: snap.rejected_policies_24h,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 21 — bounded persistent federation runtime continuity. Sync,
+  // in-memory counters; never reads DB; per-process node id; forward-shaped
+  // for future multi-broker deployments.
+  let distributed_runtime_summary: any = undefined;
+  try {
+    const counters = require('./distributedRuntime/distributedRuntimeSummaryCounters') as typeof import('./distributedRuntime/distributedRuntimeSummaryCounters');
+    const snap = counters.buildDistributedRuntimeSummary();
+    distributed_runtime_summary = {
+      node_id: snap.node_id,
+      active_adapter_kind: snap.active_adapter_kind,
+      broker_continuity_status: snap.broker_continuity_status,
+      partition_count: snap.partition_count,
+      active_isolations: snap.active_isolations,
+      recent_replay_count_24h: snap.recent_replay_count_24h,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 22 — bounded within-partition cognition topology orchestration.
+  // Sync, in-memory; never reads DB; aggregates per-partition tier counts +
+  // recent propagation activity + 6 topology health scores.
+  let topology_summary: any = undefined;
+  try {
+    const counters = require('./topology/topologySummaryCounters') as typeof import('./topology/topologySummaryCounters');
+    const snap = counters.buildTopologySummary();
+    topology_summary = {
+      partition_count: snap.partition_count,
+      cohesive_partition_count: snap.cohesive_partition_count,
+      fragmented_partition_count: snap.fragmented_partition_count,
+      shattered_partition_count: snap.shattered_partition_count,
+      active_propagations_24h: snap.active_propagations_24h,
+      recent_recovery_plans_24h: snap.recent_recovery_plans_24h,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 23 — bounded operational execution substrate. Sync, in-memory;
+  // aggregates active worker count + 24h lifecycle counts + active isolation
+  // count + 6 execution health scores. Voluntary registration only.
+  let execution_substrate_summary: any = undefined;
+  try {
+    const counters = require('./executionSubstrate/executionSummaryCounters') as typeof import('./executionSubstrate/executionSummaryCounters');
+    const snap = counters.buildExecutionSubstrateSummary();
+    execution_substrate_summary = {
+      node_id: snap.node_id,
+      active_worker_count: snap.active_worker_count,
+      completed_24h: snap.completed_24h,
+      failed_24h: snap.failed_24h,
+      interrupted_24h: snap.interrupted_24h,
+      rolled_back_24h: snap.rolled_back_24h,
+      active_isolation_count: snap.active_isolation_count,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 24 — deterministic operational cognition compression. Sync,
+  // in-memory; aggregates recent narrative + guidance counts + current
+  // cognitive load tier + 6 human-readable health scores. Templates only.
+  let cognitive_compression_summary: any = undefined;
+  try {
+    const counters = require('./cognitiveCompression/compressionSummaryCounters') as typeof import('./cognitiveCompression/compressionSummaryCounters');
+    const snap = counters.buildCognitiveCompressionSummary();
+    cognitive_compression_summary = {
+      node_id: snap.node_id,
+      recent_narratives_24h: snap.recent_narratives_24h,
+      recent_compressed_replays_24h: snap.recent_compressed_replays_24h,
+      recent_guidance_plans_24h: snap.recent_guidance_plans_24h,
+      current_load_tier: snap.current_load_tier,
+      current_load_score: snap.current_load_score,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 25 — deterministic counterfactual operational projection.
+  // Sync, in-memory; aggregates recent sandbox + rollback simulation +
+  // propagation preview + rehearsal counts + 6 experimentation health
+  // scores. Pure in-memory simulation — never mutates production state.
+  let experimentation_summary: any = undefined;
+  try {
+    const counters = require('./experimentation/experimentationSummaryCounters') as typeof import('./experimentation/experimentationSummaryCounters');
+    const snap = counters.buildExperimentationSummary();
+    experimentation_summary = {
+      node_id: snap.node_id,
+      recent_sandboxes_24h: snap.recent_sandboxes_24h,
+      recent_rollback_simulations_24h: snap.recent_rollback_simulations_24h,
+      recent_propagation_previews_24h: snap.recent_propagation_previews_24h,
+      recent_rehearsals_24h: snap.recent_rehearsals_24h,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 26 — bounded live operational rehearsal substrate. Sync,
+  // in-memory; aggregates active runtime count + 24h activity counts
+  // + 6 live sandbox health scores. Wraps Phase 25 projection in
+  // typed lifecycle envelopes — never spawns real workers.
+  let live_sandbox_summary: any = undefined;
+  try {
+    const counters = require('./liveSandbox/sandboxSummaryCounters') as typeof import('./liveSandbox/sandboxSummaryCounters');
+    const snap = counters.buildLiveSandboxSummary();
+    live_sandbox_summary = {
+      node_id: snap.node_id,
+      active_runtimes: snap.active_runtimes,
+      recent_runtimes_24h: snap.recent_runtimes_24h,
+      recent_rollback_rehearsals_24h: snap.recent_rollback_rehearsals_24h,
+      recent_preview_narratives_24h: snap.recent_preview_narratives_24h,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      recent_expirations_24h: snap.recent_expirations_24h,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 27 — bounded delegated operational execution substrate.
+  // Sync, in-memory; aggregates recent envelope issuance + execution +
+  // refusal + timeout + expiration counts + 6 delegated-execution
+  // health scores. Single-use, rollback-required, topology-contained.
+  let delegated_execution_summary: any = undefined;
+  try {
+    const counters = require('./delegatedExecution/delegatedExecutionSummaryCounters') as typeof import('./delegatedExecution/delegatedExecutionSummaryCounters');
+    const snap = counters.buildDelegatedExecutionSummary();
+    delegated_execution_summary = {
+      node_id: snap.node_id,
+      recent_envelopes_24h: snap.recent_envelopes_24h,
+      recent_executions_24h: snap.recent_executions_24h,
+      recent_refusals_24h: snap.recent_refusals_24h,
+      recent_timeouts_24h: snap.recent_timeouts_24h,
+      recent_expirations_24h: snap.recent_expirations_24h,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 28 — execution resource governance + operational economics.
+  // Sync, in-memory; aggregates recent quota exhaustions + governance
+  // changes + pressure samples + load classifications + forecasts.
+  // Deterministic resource accounting. NOT autonomous orchestration.
+  let execution_economics_summary: any = undefined;
+  try {
+    const counters = require('./executionEconomics/executionEconomicsSummaryCounters') as typeof import('./executionEconomics/executionEconomicsSummaryCounters');
+    const snap = counters.buildExecutionEconomicsSummary();
+    execution_economics_summary = {
+      node_id: snap.node_id,
+      recent_quota_exhaustions_24h: snap.recent_quota_exhaustions_24h,
+      recent_quota_governance_changes_24h: snap.recent_quota_governance_changes_24h,
+      recent_pressure_samples_24h: snap.recent_pressure_samples_24h,
+      recent_load_classifications_24h: snap.recent_load_classifications_24h,
+      recent_forecasts_24h: snap.recent_forecasts_24h,
+      current_economics_tier: snap.current_economics_tier,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 29 — stabilization playbook intelligence + recovery governance.
+  // Sync, in-memory; aggregates recent archetype governance + sequencings
+  // + forecasts + pressure samples + governance decisions + finality
+  // proofs. Read-only recommendation intelligence. NOT autonomous
+  // recovery orchestration.
+  let stabilization_summary: any = undefined;
+  try {
+    const counters = require('./stabilizationIntelligence/stabilizationSummaryCounters') as typeof import('./stabilizationIntelligence/stabilizationSummaryCounters');
+    const snap = counters.buildStabilizationSummary();
+    stabilization_summary = {
+      node_id: snap.node_id,
+      recent_archetype_governance_changes_24h: snap.recent_archetype_governance_changes_24h,
+      recent_sequencings_24h: snap.recent_sequencings_24h,
+      recent_forecasts_24h: snap.recent_forecasts_24h,
+      recent_pressure_samples_24h: snap.recent_pressure_samples_24h,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      recent_finality_proofs_24h: snap.recent_finality_proofs_24h,
+      current_stabilization_tier: snap.current_stabilization_tier,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 30 — recovery foresight UX + stabilization decision cognition.
+  // Sync, in-memory; aggregates recent comparisons + survivability +
+  // tradeoffs + archaeology + walkthroughs + governance decisions.
+  // Replay-safe comparison cognition. NOT decision authority.
+  let recovery_foresight_summary: any = undefined;
+  try {
+    const counters = require('./recoveryForesight/recoveryForesightSummaryCounters') as typeof import('./recoveryForesight/recoveryForesightSummaryCounters');
+    const snap = counters.buildRecoveryForesightSummary();
+    recovery_foresight_summary = {
+      node_id: snap.node_id,
+      recent_comparisons_24h: snap.recent_comparisons_24h,
+      recent_survivability_24h: snap.recent_survivability_24h,
+      recent_tradeoffs_24h: snap.recent_tradeoffs_24h,
+      recent_archaeology_24h: snap.recent_archaeology_24h,
+      recent_walkthroughs_24h: snap.recent_walkthroughs_24h,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      current_foresight_tier: snap.current_foresight_tier,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 31 — operator cognition continuity + governance memory.
+  // Sync, in-memory; aggregates recent sessions + events + archaeology
+  // + replays + compressions + narratives + governance decisions.
+  // Replay-safe memory substrate. NOT operator profiling.
+  let governance_memory_summary: any = undefined;
+  try {
+    const counters = require('./governanceMemory/governanceMemorySummaryCounters') as typeof import('./governanceMemory/governanceMemorySummaryCounters');
+    const snap = counters.buildGovernanceMemorySummary();
+    governance_memory_summary = {
+      node_id: snap.node_id,
+      recent_sessions_24h: snap.recent_sessions_24h,
+      recent_events_24h: snap.recent_events_24h,
+      recent_archaeology_24h: snap.recent_archaeology_24h,
+      recent_replays_24h: snap.recent_replays_24h,
+      recent_compressions_24h: snap.recent_compressions_24h,
+      recent_narratives_24h: snap.recent_narratives_24h,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      current_density_tier: snap.current_density_tier,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
+  // Phase 32 — multi-operator governance continuity + handoff cognition.
+  // Sync, in-memory; aggregates recent handoffs + transfer bundles +
+  // archaeology + replays + compressions + narratives + governance.
+  // Replay-safe handoff substrate. NOT operator ranking.
+  let operator_continuity_summary: any = undefined;
+  try {
+    const counters = require('./operatorContinuity/operatorContinuitySummaryCounters') as typeof import('./operatorContinuity/operatorContinuitySummaryCounters');
+    const snap = counters.buildOperatorContinuitySummary();
+    operator_continuity_summary = {
+      node_id: snap.node_id,
+      recent_handoffs_24h: snap.recent_handoffs_24h,
+      recent_transfer_bundles_24h: snap.recent_transfer_bundles_24h,
+      recent_archaeology_24h: snap.recent_archaeology_24h,
+      recent_replays_24h: snap.recent_replays_24h,
+      recent_compressions_24h: snap.recent_compressions_24h,
+      recent_narratives_24h: snap.recent_narratives_24h,
+      recent_governance_decisions_24h: snap.recent_governance_decisions_24h,
+      current_density_tier: snap.current_density_tier,
+      health_scores: snap.health_scores,
+      last_updated: generated_at,
+    };
+  } catch { /* fail-soft */ }
+
   return Object.freeze({
     project_id: input.project.id,
     generated_at,
@@ -337,6 +666,22 @@ export function buildAuthoritativeStateFromInputs(input: PureBuildInput): Author
     execution_summary,
     mutation_summary,
     causality_summary,
+    adaptive_governance_summary,
+    governance_evolution_summary,
+    federation_summary,
+    federated_learning_summary,
+    distributed_runtime_summary,
+    topology_summary,
+    execution_substrate_summary,
+    cognitive_compression_summary,
+    experimentation_summary,
+    live_sandbox_summary,
+    delegated_execution_summary,
+    execution_economics_summary,
+    stabilization_summary,
+    recovery_foresight_summary,
+    governance_memory_summary,
+    operator_continuity_summary,
   });
 }
 

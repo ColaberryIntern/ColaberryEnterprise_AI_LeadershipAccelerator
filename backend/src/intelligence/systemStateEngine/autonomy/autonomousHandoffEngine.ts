@@ -67,13 +67,45 @@ const HANDOFF_RATE_LIMIT_MAX_PER_MIN = 3;
  * Pure(-ish) handoff orchestrator. DB writes happen at the end (audit row).
  * Returns a HandoffResult describing what happened so callers can write
  * downstream events / dashboards.
+ *
+ * Phase 23 — opt-in instrumentation. Registers the dispatch as a bounded
+ * execution worker so it shows up in the unified visibility surface.
+ * Lifecycle is marked in `finalize()`. The instrumentation never throws;
+ * if registration is rejected (envelope-invalid / kind-isolated), the
+ * handoff still runs as before but no envelope is created. This preserves
+ * Phase 14's existing behavior under all paths.
  */
 export async function fireAutonomousHandoff(input: HandoffInput): Promise<HandoffResult> {
+  // 0. Phase 23: register the dispatch as a bounded worker. The worker_id
+  //    is threaded into finalize() so every return path marks the
+  //    appropriate lifecycle state.
+  let phase23WorkerId: string | null = null;
+  try {
+    const { registerWorker, markRunning } = await import('../executionSubstrate/executionRuntimeCoordinator');
+    const reg = registerWorker({
+      kind: 'autonomous_handoff_dispatch',
+      organization_id: 'colaberry',
+      project_id: input.project_id,
+      scope_summary: `Handoff dispatch for plan ${input.plan_id} (cluster ${input.cluster_signature})`,
+      bounded_envelope: {
+        max_duration_ms: 60_000,
+        max_attempts: 1,
+        allowed_namespaces: ['mutation_execution', 'manifest_ingest'],
+        parent_depth_limit: 0,
+      },
+      metadata: { plan_id: input.plan_id, cluster_signature: input.cluster_signature },
+    });
+    if (reg.permitted) {
+      phase23WorkerId = reg.envelope.worker_id;
+      markRunning(phase23WorkerId);
+    }
+  } catch { /* Phase 23 instrumentation never blocks Phase 14. */ }
+
   // 1. Re-check isolation (someone may have isolated this signature
   //    between approval and handoff).
   if (isIsolated(input.project_id, input.cluster_signature)) {
     publishBlocked(input, 'isolation_active');
-    return finalize(input, 'isolated', `Cluster ${input.cluster_signature} is currently isolated.`);
+    return finalize(input, 'isolated', `Cluster ${input.cluster_signature} is currently isolated.`, undefined, undefined, null, 0, phase23WorkerId);
   }
 
   // 2. Rate limit (per-project).
@@ -84,7 +116,7 @@ export async function fireAutonomousHandoff(input: HandoffInput): Promise<Handof
   });
   if (!allowed) {
     publishBlocked(input, 'rate_limit');
-    return finalize(input, 'rate_limited', `Project ${input.project_id} hit ${HANDOFF_RATE_LIMIT_MAX_PER_MIN}/min handoff cap.`);
+    return finalize(input, 'rate_limited', `Project ${input.project_id} hit ${HANDOFF_RATE_LIMIT_MAX_PER_MIN}/min handoff cap.`, undefined, undefined, null, 0, phase23WorkerId);
   }
 
   // 3. Re-run sandbox validation (state may have shifted since approval).
@@ -109,7 +141,7 @@ export async function fireAutonomousHandoff(input: HandoffInput): Promise<Handof
   });
   if (guardrail.action !== 'apply') {
     publishBlocked(input, `guardrail:${guardrail.reason}`);
-    return finalize(input, 'guardrail_blocked', guardrail.reason, sandbox, undefined);
+    return finalize(input, 'guardrail_blocked', guardrail.reason, sandbox, undefined, null, 0, phase23WorkerId);
   }
 
   // 5. Blast radius check (independent of guardrail; high-tier hard-blocks).
@@ -124,7 +156,7 @@ export async function fireAutonomousHandoff(input: HandoffInput): Promise<Handof
   const blastGate = evaluateBlastRadiusGate(blast);
   if (blastGate.action !== 'apply') {
     publishBlocked(input, `blast:${blastGate.reason}`);
-    return finalize(input, 'blast_blocked', blastGate.reason, sandbox, blast);
+    return finalize(input, 'blast_blocked', blastGate.reason, sandbox, blast, null, 0, phase23WorkerId);
   }
 
   // 6. Optimistic plan-flip: only the first caller wins. If rowCount=0,
@@ -137,7 +169,7 @@ export async function fireAutonomousHandoff(input: HandoffInput): Promise<Handof
       severity: 'info',
       payload: { plan_id: input.plan_id, reason: 'optimistic_lock_lost' },
     });
-    return finalize(input, 'preempted', 'Plan was already taken by another path.', sandbox, blast);
+    return finalize(input, 'preempted', 'Plan was already taken by another path.', sandbox, blast, null, 0, phase23WorkerId);
   }
 
   // 7. Generate the prompt (NOT execution).
@@ -153,7 +185,7 @@ export async function fireAutonomousHandoff(input: HandoffInput): Promise<Handof
       severity: 'warning',
       payload: { plan_id: input.plan_id, reason: `prompt_generation_failed: ${err?.message}` },
     });
-    return finalize(input, 'prompt_failed', `Prompt generation failed: ${err?.message}`, sandbox, blast);
+    return finalize(input, 'prompt_failed', `Prompt generation failed: ${err?.message}`, sandbox, blast, null, 0, phase23WorkerId);
   }
 
   const prompt_text_hash = prompt_text ? simpleHash(prompt_text) : null;
@@ -184,7 +216,7 @@ export async function fireAutonomousHandoff(input: HandoffInput): Promise<Handof
 
   noteHandoffFired(input.project_id, input.plan_id);
 
-  return finalize(input, 'fired', 'Handoff fired; prompt queued for operator/Cory.', sandbox, blast, prompt_text_hash, prompt_text?.length ?? 0);
+  return finalize(input, 'fired', 'Handoff fired; prompt queued for operator/Cory.', sandbox, blast, prompt_text_hash, prompt_text?.length ?? 0, phase23WorkerId);
 }
 
 async function optimisticPlanFlip(plan_id: string): Promise<boolean> {
@@ -250,6 +282,7 @@ function finalize(
   blast?: BlastRadiusProfile,
   prompt_text_hash: string | null = null,
   prompt_text_length = 0,
+  phase23WorkerId: string | null = null,
 ): HandoffResult {
   const sb = sandbox ?? {
     queue_impact: 0, pressure_evolution: 0, contradiction_growth: 0,
@@ -264,6 +297,21 @@ function finalize(
   const summary = outcome === 'fired'
     ? `HANDOFF FIRED: ${input.plan_id} (cluster ${input.cluster_signature}, blast ${br.blast_score}/100). Prompt awaiting operator/Cory pickup.`
     : `HANDOFF ${outcome.toUpperCase()}: ${input.plan_id} — ${reason}`;
+
+  // Phase 23 — mark the registered worker's lifecycle. Best-effort only.
+  if (phase23WorkerId) {
+    void (async () => {
+      try {
+        const { markCompleted, markFailed } = await import('../executionSubstrate/executionRuntimeCoordinator');
+        if (outcome === 'fired') {
+          markCompleted(phase23WorkerId, `handoff_fired:${input.plan_id}`);
+        } else {
+          markFailed(phase23WorkerId, `handoff_${outcome}:${reason}`);
+        }
+      } catch { /* never block on instrumentation */ }
+    })();
+  }
+
   return {
     handoff_fired: outcome === 'fired',
     outcome,

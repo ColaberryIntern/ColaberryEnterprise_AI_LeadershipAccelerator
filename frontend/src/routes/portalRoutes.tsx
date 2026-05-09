@@ -21,6 +21,10 @@ import ExecutiveDeliverable from '../pages/project/ExecutiveDeliverable';
 import CoryFullscreen from '../pages/project/CoryFullscreen';
 import RequirementsBuilder from '../pages/project/RequirementsBuilder';
 import SystemBuildDemo from '../pages/project/SystemBuildDemo';
+import VisualWorkspacePage from '../features/visualWorkspace/VisualWorkspacePage';
+import CoryHome from '../pages/portal/CoryHome';
+import ExecutionLane from '../pages/project/ExecutionLane';
+import SystemView from '../pages/project/SystemView';
 
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
@@ -28,7 +32,9 @@ const portalRoutes = (
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
     <Route element={<PortalProtectedRoute />}>
       <Route element={<PortalLayout />}>
-        <Route path="/portal/dashboard" element={<Navigate to="/portal/project" replace />} />
+        <Route path="/portal/home" element={<CoryHome />} />
+        {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
+        <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />
@@ -36,15 +42,24 @@ const portalRoutes = (
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
         <Route path="/portal/project" element={<Navigate to="/portal/project/blueprint" replace />} />
-        <Route path="/portal/project/blueprint" element={<SystemBlueprint />} />
+        {/* Blueprint Simplification Sprint: /blueprint now serves the lean
+            ExecutionLane (6-step flow). The legacy SystemBlueprint surface
+            is preserved at /blueprint-legacy for rollback only. */}
+        <Route path="/portal/project/blueprint" element={<ExecutionLane />} />
+        <Route path="/portal/project/blueprint-legacy" element={<SystemBlueprint />} />
         <Route path="/portal/project/system" element={<ProjectDashboard />} />
-        <Route path="/portal/project/system-v2" element={<SystemViewV2 />} />
+        {/* System View Restructure Sprint: /system-v2 now serves the lean
+            5-tab SystemView. The legacy 4,295-line SystemViewV2 surface
+            is preserved at /system-v2-legacy for rollback only. */}
+        <Route path="/portal/project/system-v2" element={<SystemView />} />
+        <Route path="/portal/project/system-v2-legacy" element={<SystemViewV2 />} />
         <Route path="/portal/project/artifacts" element={<ProjectArtifacts />} />
         <Route path="/portal/project/portfolio" element={<ProjectPortfolio />} />
         <Route path="/portal/project/executive" element={<ExecutiveDeliverable />} />
         <Route path="/portal/project/cory" element={<CoryFullscreen />} />
         <Route path="/portal/project/requirements-builder" element={<RequirementsBuilder />} />
         <Route path="/portal/project/demo" element={<SystemBuildDemo />} />
+        <Route path="/portal/visual-workspace" element={<VisualWorkspacePage />} />
       </Route>
     </Route>
   </Route>

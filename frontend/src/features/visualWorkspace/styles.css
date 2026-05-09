@@ -1,0 +1,277 @@
+/**
+ * Visual Engineering Workspace V1 — feature stylesheet.
+ *
+ * Tokens reference frontend/src/styles/tokens.css. This file follows
+ * CLAUDE.md's UI/UX policy: no hardcoded hex, Bootstrap utility classes
+ * preferred, custom layout only where Bootstrap doesn't fit.
+ */
+
+/* ---------- top-level shell ---------- */
+
+.vw-shell {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  background: var(--color-bg-alt);
+  /* sit below the portal navbar (~56px) */
+  top: 56px;
+}
+
+.vw-main {
+  display: grid;
+  grid-template-columns: 320px 1fr 400px;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* ---------- left sidebar ---------- */
+
+.vw-sidebar {
+  background: white;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.vw-sidebar-header {
+  padding: 0.85rem 0.95rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+}
+.vw-sidebar-section {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.vw-sidebar-section:last-child {
+  border-bottom: none;
+}
+.vw-sidebar-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-light);
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+.vw-sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.vw-sidebar-empty {
+  font-size: 11px;
+  color: var(--color-text-light);
+  font-style: italic;
+  padding: 0.3rem 0.1rem;
+}
+.vw-sidebar-footer {
+  padding: 0.5rem 0.85rem;
+  background: var(--color-bg-alt);
+  border-top: 1px solid var(--color-border);
+}
+.vw-section-toggle {
+  background: transparent;
+  border: none;
+  padding: 0.3rem 0.1rem;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.vw-section-toggle:hover {
+  color: var(--color-primary);
+}
+.vw-section-count {
+  margin-left: 6px;
+  background: var(--color-bg-alt);
+  color: var(--color-text-light);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0.05rem 0.4rem;
+  border-radius: 9999px;
+}
+
+/* ---------- center stage ---------- */
+
+.vw-canvas {
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem;
+  min-width: 0;
+  background: var(--color-bg-alt);
+  overflow: hidden;
+}
+.vw-canvas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+  font-size: 12px;
+}
+.vw-url-display {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-light);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- right details panel ---------- */
+
+.vw-details-panel {
+  background: white;
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.vw-details-empty {
+  padding: 3rem 1.25rem;
+  text-align: center;
+  flex: 1;
+}
+.vw-details-header {
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+}
+.vw-details-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.85rem 1rem;
+  min-height: 0;
+}
+.vw-details-section {
+  margin-bottom: 1rem;
+}
+.vw-details-section:last-child {
+  margin-bottom: 0;
+}
+.vw-details-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-light);
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+.vw-details-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text);
+}
+.vw-suggestion-card {
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.4rem;
+}
+.vw-details-actions {
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+}
+
+/* ---------- bottom action bar ---------- */
+
+.vw-action-bar {
+  background: white;
+  border-top: 1px solid var(--color-border);
+  padding: 0.55rem 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.04);
+}
+.vw-action-bar-left {
+  display: flex;
+  gap: 0.45rem;
+}
+.vw-action-bar-status {
+  font-size: 12px;
+  color: var(--color-text-light);
+}
+.vw-action-bar-right {
+  margin-left: auto;
+  display: flex;
+  gap: 0.45rem;
+}
+
+/* ---------- modal ---------- */
+
+.vw-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.vw-modal {
+  background: white;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 540px;
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+}
+.vw-modal-lg {
+  max-width: 880px;
+}
+.vw-modal-header {
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.vw-modal-body {
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.vw-modal-footer {
+  padding: 0.65rem 1.1rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 992px) {
+  .vw-main {
+    grid-template-columns: 280px 1fr 340px;
+  }
+}
+@media (max-width: 768px) {
+  .vw-main {
+    grid-template-columns: 1fr;
+  }
+  .vw-sidebar, .vw-details-panel {
+    display: none;
+  }
+}

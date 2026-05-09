@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visual Engineering Workspace V1 — Review &amp; Critique</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white;
+    padding: 2.25rem 0;
+    margin-bottom: 1.5rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .doc-header .subtitle { font-size: 0.95rem; opacity: 0.92; max-width: 920px; }
+  .doc-header .meta {
+    margin-top: 1.3rem; display: flex; flex-wrap: wrap; gap: 0.55rem;
+    font-size: 0.78rem;
+  }
+  .doc-header .meta-item {
+    background: rgba(255, 255, 255, 0.13);
+    padding: 0.35rem 0.8rem;
+    border-radius: 4px;
+  }
+  .container-narrow { max-width: 1280px; }
+
+  .toc {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.8rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.4rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.3rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.78rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.9rem; color: var(--color-text-light);
+    margin-bottom: 1.1rem; padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 0.95rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.55rem;
+    color: var(--color-text);
+  }
+
+  .critique-zone {
+    margin-top: 1rem; padding: 0.7rem 0.95rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border);
+    border-radius: 4px;
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.68rem; color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* file-tree visualization */
+  .filetree {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 5px;
+    padding: 0.85rem 1.1rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.78rem;
+    line-height: 1.65;
+    margin: 0.6rem 0;
+  }
+  .filetree .dir { color: #fbbf24; }
+  .filetree .file { color: #86efac; }
+  .filetree .new { color: #93c5fd; font-weight: 600; }
+  .filetree .comment { color: #64748b; font-style: italic; }
+
+  /* mockup of the workspace shell */
+  .mockup {
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 0.7rem;
+    margin: 1rem 0 0.5rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  }
+  .mockup-caption {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.7rem;
+    padding: 0.4rem 0.4rem 0.2rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .mockup-caption .url { background: rgba(255,255,255,0.12); padding: 0.15rem 0.55rem; border-radius: 3px; }
+
+  .vw-shell-mock {
+    background: #f7fafc;
+    border-radius: 4px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    height: 560px;
+  }
+  .vw-main-mock { display: grid; grid-template-columns: 280px 1fr 320px; min-height: 0; }
+
+  .vw-sidebar-mock {
+    background: white; border-right: 1px solid var(--color-border);
+    padding: 0.75rem; font-size: 0.74rem; overflow: auto;
+  }
+  .vw-sidebar-mock h5 {
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); margin: 0.55rem 0 0.3rem; font-weight: 600;
+  }
+  .vw-sidebar-mock .section-toggle {
+    font-size: 0.74rem; font-weight: 600; padding: 0.25rem 0;
+    display: flex; align-items: center;
+  }
+  .vw-sidebar-mock .section-count {
+    margin-left: 6px; background: var(--color-bg-alt); color: var(--color-text-light);
+    font-size: 9px; font-weight: 600; padding: 0.05rem 0.4rem; border-radius: 9999px;
+  }
+  .vw-sidebar-mock .issue-row {
+    background: white; border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-warning);
+    border-radius: 3px; padding: 0.4rem 0.55rem; margin: 4px 0;
+    cursor: pointer;
+  }
+  .vw-sidebar-mock .issue-row.active {
+    border-left-color: var(--color-primary);
+    background: var(--color-bg-alt);
+  }
+  .vw-sidebar-mock .issue-row.high { border-left-color: var(--color-danger); }
+  .vw-sidebar-mock .pin-num {
+    background: var(--color-warning); color: white;
+    font-size: 9px; font-weight: 600; width: 16px; height: 16px;
+    border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    margin-right: 4px;
+  }
+  .vw-sidebar-mock .pin-num.high { background: var(--color-danger); }
+  .vw-sidebar-mock .pin-num.active { background: var(--color-primary); }
+
+  .vw-canvas-mock {
+    background: var(--color-bg-alt); padding: 0.7rem; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .vw-toolbar-mock {
+    background: white; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.25rem 0.55rem; font-family: 'Consolas', monospace; font-size: 10px;
+    color: var(--color-text-light); margin-bottom: 0.5rem;
+  }
+  .vw-stage-mock {
+    flex: 1; background: white; border: 1px solid var(--color-border); border-radius: 4px;
+    position: relative; overflow: hidden;
+    background-image: linear-gradient(45deg, #f8fafc 25%, transparent 25%, transparent 75%, #f8fafc 75%),
+                      linear-gradient(45deg, #f8fafc 25%, transparent 25%, transparent 75%, #f8fafc 75%);
+    background-size: 20px 20px; background-position: 0 0, 10px 10px;
+  }
+  .vw-stage-mock::before {
+    content: 'embedded page · click to drop a pin'; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-text-light); font-size: 11px; font-family: 'Consolas', monospace;
+    background: white; padding: 0.4rem 0.75rem; border-radius: 3px; border: 1px solid var(--color-border);
+  }
+  .vw-stage-mock .pin {
+    position: absolute; width: 22px; height: 22px; border-radius: 50%;
+    color: white; font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18); cursor: pointer; border: 2px solid white;
+  }
+  .vw-stage-mock .pin.warn { background: var(--color-warning); }
+  .vw-stage-mock .pin.high { background: var(--color-danger); }
+  .vw-stage-mock .pin.active {
+    background: var(--color-warning);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.25), 0 2px 6px rgba(0,0,0,0.18);
+  }
+  .vw-stage-mock .annotate-badge {
+    position: absolute; top: 8px; left: 8px;
+    background: var(--color-primary); color: white; font-size: 10px;
+    padding: 0.25rem 0.55rem; border-radius: 3px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  .vw-details-mock {
+    background: white; border-left: 1px solid var(--color-border);
+    padding: 0.85rem; font-size: 0.74rem; overflow: auto;
+  }
+  .vw-details-mock h6 {
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); margin: 0.55rem 0 0.3rem; font-weight: 600;
+  }
+  .vw-suggestion {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.45rem 0.55rem; margin: 0.4rem 0; font-size: 0.72rem;
+  }
+  .vw-suggestion strong { font-size: 0.78rem; }
+  .vw-suggestion .impact {
+    font-size: 9px; background: var(--color-info-bg); color: var(--color-info);
+    padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 600;
+  }
+
+  .vw-action-mock {
+    background: white; border-top: 1px solid var(--color-border);
+    padding: 0.45rem 0.7rem; display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.74rem;
+  }
+  .vw-action-mock .right { margin-left: auto; display: flex; gap: 0.4rem; }
+  .vw-action-mock .btn-mock {
+    border: 1px solid var(--color-border); padding: 0.25rem 0.55rem; border-radius: 3px;
+    font-size: 0.72rem; background: white;
+  }
+  .vw-action-mock .btn-mock.primary {
+    background: var(--color-primary); color: white; border-color: var(--color-primary);
+  }
+  .vw-action-mock .btn-mock.outline-primary {
+    background: white; color: var(--color-primary); border-color: var(--color-primary);
+  }
+
+  /* loop diagram */
+  .loop-diagram {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.4rem;
+    margin: 1rem 0 0.4rem;
+  }
+  .loop-step {
+    background: white; border: 1px solid var(--color-border); border-radius: 4px;
+    padding: 0.55rem 0.6rem; text-align: center; position: relative;
+  }
+  .loop-step .num {
+    position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+    background: var(--color-primary); color: white;
+    width: 18px; height: 18px; border-radius: 50%; font-size: 0.65rem; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .loop-step h5 { font-size: 0.78rem; font-weight: 600; margin: 0.45rem 0 0.2rem; }
+  .loop-step .est { font-size: 0.68rem; color: var(--color-text-light); }
+
+  /* status pills */
+  .pill {
+    display: inline-block; border-radius: 3px; padding: 0.1rem 0.45rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.55rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.85rem; margin: 0.85rem 0;
+  }
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.65rem 0.85rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>Visual Engineering Workspace V1 — Review</h1>
+    <div class="subtitle">
+      First working version of the productized critique → prompt → rebuild surface.
+      Three-pane shell, click-to-pin annotations, AI suggestion controls, compiled prompts ready for Build Center.
+      Leverages existing visual-review backend; zero backend changes shipped.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> V1 shipped &mdash; awaiting critique</span>
+      <span class="meta-item"><strong>Route:</strong> /portal/visual-workspace</span>
+      <span class="meta-item"><strong>Frontend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>Backend:</strong> reused (no changes)</span>
+      <span class="meta-item"><strong>Files added:</strong> 13 frontend</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields. Type, then save the
+    page (Ctrl+S) or just paste your critique back into Claude Code referencing section numbers.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">What shipped</a></li>
+      <li><a href="#s2">File map</a></li>
+      <li><a href="#s3">UX walkthrough</a></li>
+      <li><a href="#s4">Live workspace mockup</a></li>
+      <li><a href="#s5">Annotation flow</a></li>
+      <li><a href="#s6">AI critique system</a></li>
+      <li><a href="#s7">Prompt compiler</a></li>
+      <li><a href="#s8">Build Center routing</a></li>
+      <li><a href="#s9">Verification handoff</a></li>
+      <li><a href="#s10">Backend reuse map</a></li>
+      <li><a href="#s11">Sidebar sections</a></li>
+      <li><a href="#s12">Loop time estimate</a></li>
+      <li><a href="#s13">Out of scope (V1)</a></li>
+      <li><a href="#s14">Critique categories &amp; what to look for</a></li>
+      <li><a href="#s15">Open questions for the user</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> What shipped</h2>
+    <div class="lead">
+      A productized re-skin of the existing visual-review backend, behind one new route.
+    </div>
+
+    <ul style="font-size: 0.88rem;">
+      <li>One new route: <kbd>/portal/visual-workspace</kbd> (with <kbd>?session=&lt;id&gt;</kbd> deep-link support).</li>
+      <li>One new nav link: <strong>Critique</strong> in the portal navbar.</li>
+      <li>13 new files under <kbd>frontend/src/features/visualWorkspace/</kbd>.</li>
+      <li>Zero backend changes &mdash; reuses <kbd>/api/portal/project/visual-review/*</kbd>, <kbd>useVisualReviewSession</kbd>.</li>
+      <li>Zero new dependencies &mdash; React + Bootstrap + bi-* icons + tokens.css only.</li>
+      <li>Frontend <kbd>tsc --noEmit</kbd> passes (exit 0).</li>
+    </ul>
+
+    <div class="quote">
+      "The system already thinks well enough. Now it must communicate clearly." &mdash; Productization mandate.
+      V1 honours this by pushing zero new architecture and instead wrapping the existing engine in a calm,
+      Linear/Figma-style three-pane shell.
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything missing from the shipped surface area?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> File map</h2>
+    <div class="lead">
+      Lean directory under <kbd>frontend/src/features/visualWorkspace/</kbd>. Every file under 300 lines.
+    </div>
+
+    <div class="filetree"><span class="dir">frontend/src/features/visualWorkspace/</span>
+├── <span class="new">VisualWorkspacePage.tsx</span>          <span class="comment"># orchestrator (~280 lines)</span>
+├── <span class="new">styles.css</span>                       <span class="comment"># shell + sidebar + modal CSS (~210 lines)</span>
+├── <span class="new">types.ts</span>                         <span class="comment"># CritiqueKind, Severity, IssueStatus, PinCoordinate</span>
+├── <span class="dir">components/</span>
+│   ├── <span class="new">WorkspaceSidebar.tsx</span>         <span class="comment"># left rail with 5 sections</span>
+│   ├── <span class="new">VisualStage.tsx</span>              <span class="comment"># iframe + click-capture overlay</span>
+│   ├── <span class="new">AnnotationPin.tsx</span>            <span class="comment"># single numbered pin</span>
+│   ├── <span class="new">AnnotationModal.tsx</span>          <span class="comment"># click-to-pin form (with AI suggest)</span>
+│   ├── <span class="new">IssueDetailsPanel.tsx</span>        <span class="comment"># right rail (selected critique)</span>
+│   ├── <span class="new">IssueCard.tsx</span>                <span class="comment"># sidebar list item</span>
+│   ├── <span class="new">ActionBar.tsx</span>                <span class="comment"># sticky bottom action bar</span>
+│   ├── <span class="new">PromptPreviewModal.tsx</span>       <span class="comment"># compiled prompt + copy/open Build Center</span>
+│   └── <span class="new">SessionPickerEmpty.tsx</span>       <span class="comment"># landing state when no session is open</span>
+└── <span class="dir">lib/</span>
+    ├── <span class="new">promptCompiler.ts</span>            <span class="comment"># local fallback Markdown compiler</span>
+    └── <span class="new">critiquePatterns.ts</span>          <span class="comment"># curated AI suggestion bank by kind</span>
+</div>
+
+    <h3>Modified files (2)</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><kbd>frontend/src/routes/portalRoutes.tsx</kbd> &mdash; added <kbd>VisualWorkspacePage</kbd> import + route.</li>
+      <li><kbd>frontend/src/components/Layout/PortalLayout.tsx</kbd> &mdash; added "Critique" navItem.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="Naming, structure, file boundaries OK?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> UX walkthrough</h2>
+    <div class="lead">
+      What the user actually does, end to end.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>Navigate to Critique.</strong> Click <em>Critique</em> in the navbar.</li>
+      <li><strong>Pick or create.</strong> Calm landing screen with two options: pick from recent reviews, or open a new one with a target preview origin + page route.</li>
+      <li><strong>Three-pane shell loads.</strong> Sidebar (left) · iframe stage (center) · details (right) · sticky action bar (bottom).</li>
+      <li><strong>Click "Annotate".</strong> Annotate-mode badge shows in the stage; cursor becomes a crosshair; iframe pointer events are suppressed so clicks register on the overlay.</li>
+      <li><strong>Click anywhere on the page.</strong> A modal opens prefilled with the pin's normalized x,y coordinates.</li>
+      <li><strong>Fill in the issue.</strong> Title, kind, severity, what's wrong, expected outcome. Optionally click "AI suggest" to pre-fill from the curated pattern bank.</li>
+      <li><strong>Save.</strong> Backend persists the critique with the region. A numbered pin renders on the stage; the issue appears in the sidebar.</li>
+      <li><strong>Pick a pin.</strong> Click any pin to select it; the right panel shows the full critique + AI suggestions + decision controls.</li>
+      <li><strong>Accept suggestions.</strong> Each suggestion gets Accept / Reject / Defer. Accepted suggestions surface in the sidebar's "Ready for prompt" section.</li>
+      <li><strong>Compile.</strong> Click "Compile prompt" in the action bar. The backend's <kbd>generate-prompt</kbd> runs; if it returns empty, the local compiler builds the Markdown locally.</li>
+      <li><strong>Preview, copy, open Build Center.</strong> Compiled prompt opens in a modal with copy button, "open in new tab", and "Send to Build Center" action.</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Friction points in the walkthrough?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> Live workspace mockup</h2>
+    <div class="lead">
+      CSS-only wireframe of the rendered shell. Real component output uses the same tokens.
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-caption">
+        <span>Visual Engineering Workspace &middot; annotate mode ON</span>
+        <span class="url">/portal/visual-workspace?session=...</span>
+      </div>
+      <div class="vw-shell-mock">
+        <div class="vw-main-mock">
+          <div class="vw-sidebar-mock">
+            <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-light); font-weight: 600;">Visual Workspace</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--color-primary); margin-top: 2px;">/pilot/ai-team</div>
+            <div style="font-size: 10px; color: var(--color-text-light); font-family: 'Consolas', monospace;">enterprise.colaberry.ai</div>
+
+            <h5>Target page</h5>
+            <input class="form-control form-control-sm" style="font-size: 10px; padding: 0.2rem 0.4rem;" value="enterprise.colaberry.ai" readonly>
+            <input class="form-control form-control-sm mt-1" style="font-size: 10px; padding: 0.2rem 0.4rem;" value="/pilot/ai-team" readonly>
+
+            <h5>Filter</h5>
+            <input class="form-control form-control-sm" style="font-size: 10px; padding: 0.2rem 0.4rem;" placeholder="Filter…">
+
+            <div class="section-toggle"><i class="bi bi-circle me-1"></i>Open issues<span class="section-count">1</span></div>
+            <div class="issue-row high">
+              <div><span class="pin-num high">1</span><span style="font-size: 9px; text-transform: uppercase; background: var(--color-danger-bg); color: var(--color-danger); padding: 0.05rem 0.3rem; border-radius: 2px; font-weight: 600;">copy</span></div>
+              <div style="font-size: 11px; font-weight: 500; margin-top: 2px;">Headline reads internal</div>
+            </div>
+
+            <div class="section-toggle"><i class="bi bi-stars me-1"></i>Suggested improvements<span class="section-count">1</span></div>
+            <div class="issue-row active">
+              <div><span class="pin-num active">2</span><span style="font-size: 9px; text-transform: uppercase; background: var(--color-warning-bg); color: var(--color-warning); padding: 0.05rem 0.3rem; border-radius: 2px; font-weight: 600;">spacing</span></div>
+              <div style="font-size: 11px; font-weight: 500; margin-top: 2px;">Hero cramped against trust strip</div>
+            </div>
+
+            <div class="section-toggle"><i class="bi bi-lightning-charge me-1"></i>Ready for prompt<span class="section-count">1</span></div>
+            <div class="issue-row">
+              <div><span class="pin-num">3</span><span style="font-size: 9px; text-transform: uppercase; background: var(--color-warning-bg); color: var(--color-warning); padding: 0.05rem 0.3rem; border-radius: 2px; font-weight: 600;">accessibility</span></div>
+              <div style="font-size: 11px; font-weight: 500; margin-top: 2px;">Focus ring suppressed</div>
+            </div>
+
+            <div class="section-toggle"><i class="bi bi-clipboard-check me-1"></i>Verification queue<span class="section-count">0</span></div>
+            <div class="section-toggle"><i class="bi bi-check2-circle me-1"></i>Resolved<span class="section-count">0</span></div>
+          </div>
+
+          <div class="vw-canvas-mock">
+            <div class="vw-toolbar-mock">https://enterprise.colaberry.ai/pilot/ai-team</div>
+            <div class="vw-stage-mock">
+              <div class="annotate-badge"><i class="bi bi-bullseye"></i> ANNOTATE MODE · CLICK TO DROP A PIN</div>
+              <div class="pin high" style="top: 18%; left: 22%;">1</div>
+              <div class="pin active" style="top: 42%; left: 58%;">2</div>
+              <div class="pin warn" style="top: 70%; left: 32%;">3</div>
+            </div>
+          </div>
+
+          <div class="vw-details-mock">
+            <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px;">
+              <span style="background: var(--color-warning); color: white; font-size: 10px; font-weight: 600; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;">2</span>
+              <span style="font-size: 9px; text-transform: uppercase; background: var(--color-warning-bg); color: var(--color-warning); padding: 0.05rem 0.4rem; border-radius: 3px; font-weight: 600;">spacing</span>
+              <span style="font-size: 9px; text-transform: uppercase; color: var(--color-warning); font-weight: 600; margin-left: auto;">medium</span>
+            </div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--color-primary); margin-bottom: 8px;">Hero cramped against trust strip</div>
+
+            <h6>Issue</h6>
+            <div style="font-size: 11px;">Sections feel disconnected — gap between hero and trust strip is too wide on desktop.</div>
+
+            <h6>Expected improvement</h6>
+            <div style="font-size: 11px;">Reduce vertical gap by ~30%; group hero + trust strip into a single visual block.</div>
+
+            <h6>Pinned region</h6>
+            <div style="font-size: 10px; color: var(--color-text-light); font-family: 'Consolas', monospace;">x=58.0% · y=42.0%</div>
+
+            <h6>AI suggestions (1, 0 accepted)</h6>
+            <div class="vw-suggestion">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                <strong>Tighten vertical rhythm</strong>
+                <span class="impact">+8 UX</span>
+              </div>
+              <div style="font-size: 10px; color: var(--color-text-light); margin-top: 3px;">Add 24px padding around the primary CTA; align with grid baseline.</div>
+              <div style="display: flex; gap: 3px; margin-top: 5px;">
+                <button class="btn btn-sm btn-success" style="font-size: 10px; padding: 0.1rem 0.4rem;">Accept</button>
+                <button class="btn btn-sm btn-outline-secondary" style="font-size: 10px; padding: 0.1rem 0.4rem;">Reject</button>
+                <button class="btn btn-sm btn-outline-warning" style="font-size: 10px; padding: 0.1rem 0.4rem;">Defer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="vw-action-mock">
+          <span class="btn-mock primary"><i class="bi bi-bullseye"></i> Annotate mode ON</span>
+          <span class="btn-mock"><i class="bi bi-arrow-clockwise"></i> Reload</span>
+          <span style="color: var(--color-text-light);">3 issues · <strong style="color: var(--color-success);">1 ready</strong></span>
+          <div class="right">
+            <span class="btn-mock"><i class="bi bi-clipboard-check"></i> Mark ready for verification</span>
+            <span class="btn-mock outline-primary"><i class="bi bi-lightning"></i> Compile prompt</span>
+            <span class="btn-mock primary"><i class="bi bi-rocket"></i> Open Build Center</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="Layout density? Typography? Spacing? What feels wrong?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> Annotation flow</h2>
+    <div class="lead">
+      Lightweight V1: click → modal → save. No advanced collaborative editing, no DOM mutation.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li>User clicks <strong>Annotate</strong> on the action bar; <kbd>annotateMode = true</kbd>.</li>
+      <li>Iframe pointer-events suppressed; transparent overlay captures all clicks.</li>
+      <li>Crosshair guide lines follow the cursor for precise placement.</li>
+      <li>Click drops a normalized <kbd>(x,y)</kbd> pin coordinate (0..1 of stage width/height).</li>
+      <li><kbd>AnnotationModal</kbd> opens with the pin coordinates pre-filled in a read-only hint footer.</li>
+      <li>User fills title (auto-derived from description if blank), kind, severity, description, expected outcome, optional CSS selector.</li>
+      <li>Optional: click <strong>AI suggest</strong> to pre-fill from <kbd>critiquePatterns.ts</kbd> by selected kind.</li>
+      <li>Save calls <kbd>session.addCritique({ kind, severity, description, region: {x,y,0,0}, target_selector, expected_outcome })</kbd>.</li>
+      <li>Pin renders on the stage with severity colour; sidebar list updates; annotate mode auto-exits.</li>
+    </ol>
+
+    <h3>Pin colour key</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><span class="pill danger">high</span> &mdash; red pin</li>
+      <li><span class="pill warn">medium</span> &mdash; amber pin</li>
+      <li><span class="pill info">low</span> &mdash; blue pin</li>
+      <li><span class="pill good">resolved</span> &mdash; green pin with check</li>
+      <li><strong>Active</strong> pin gets a primary-colour ring</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Should annotate mode persist after save? Should pins support drag/resize in V2?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> AI critique system</h2>
+    <div class="lead">
+      V1 ships a curated suggestion bank, not autonomous AI. Backend's existing
+      <kbd>generate-suggestions</kbd> flow remains the canonical source for accepted suggestions.
+    </div>
+
+    <h3>Two layers</h3>
+    <ol style="font-size: 0.88rem;">
+      <li>
+        <strong>Modal pre-fill (frontend-only).</strong> The "AI suggest" button in the annotation modal reads from
+        <kbd>critiquePatterns.ts</kbd> &mdash; a curated bank of 1&ndash;2 hints per critique kind. Cycles through alternates
+        on repeat clicks. Zero cost, zero network call. Used to give the user a strong starting point instead of a blank textarea.
+      </li>
+      <li>
+        <strong>Backend suggestions (canonical).</strong> When a critique is saved, the backend's existing flow attaches
+        AI-generated suggestions (these were already wired pre-V1; the workspace just renders them). Each suggestion is
+        Accept / Reject / Defer; accepted suggestions feed the prompt compiler.
+      </li>
+    </ol>
+
+    <h3>Suggestion bank coverage</h3>
+    <div style="font-size: 0.85rem;">
+      <span class="pill info">spacing</span> <span class="pill info">alignment</span>
+      <span class="pill info">color</span> <span class="pill info">typography</span>
+      <span class="pill info">interaction</span> <span class="pill info">accessibility</span>
+      <span class="pill info">hierarchy</span> <span class="pill info">responsiveness</span>
+      <span class="pill info">workflow</span> <span class="pill info">copy</span>
+    </div>
+    <p style="font-size: 0.85rem; margin-top: 0.6rem;">
+      All 10 critique kinds covered with at least one starter pattern. Easy to extend &mdash; add to the bank and the
+      modal picks it up.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="Should the V1 bank be replaced with a real LLM call? Pros: less stale. Cons: cost, latency, deterministic loss."></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> Prompt compiler</h2>
+    <div class="lead">
+      Backend-first with local fallback. The compiled output is production-grade Markdown ready for Claude Code.
+    </div>
+
+    <h3>Order of operations</h3>
+    <ol style="font-size: 0.88rem;">
+      <li>User clicks <kbd>Compile prompt</kbd> (action bar) or <kbd>Compile prompt for this issue</kbd> (right panel).</li>
+      <li>Frontend calls <kbd>session.generatePrompt()</kbd> &mdash; the backend's existing endpoint that pulls accepted suggestions, file context, etc.</li>
+      <li>If backend returns a non-empty prompt, use it (source: <span class="pill good">backend compiled</span>).</li>
+      <li>Otherwise, the local <kbd>compilePromptLocally</kbd> fallback builds a structured Markdown doc from in-memory critiques + suggestions + decisions (source: <span class="pill info">local fallback</span>).</li>
+      <li>Result opens in <kbd>PromptPreviewModal</kbd> with copy / open-in-new-tab / send-to-Build-Center actions.</li>
+    </ol>
+
+    <h3>Local prompt structure</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><strong>Header:</strong> target page, preview URL, critique count.</li>
+      <li><strong>Objective:</strong> address the pinned critiques; coordinates explained.</li>
+      <li><strong>Critiques:</strong> numbered list with kind/severity badges, selector (if any), normalized region, issue text, expected outcome, accepted suggestions.</li>
+      <li><strong>Implementation expectations:</strong> minimum-viable change, preserve contracts, use tokens, viewport check at 1280/1024/768.</li>
+      <li><strong>Verification:</strong> tsc, visual check, BuildManifest emission, PROGRESS.md update.</li>
+      <li><strong>Acceptance criteria:</strong> per-critique checkbox list of expected outcomes.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="Prompt structure missing anything? Should the local fallback include component file lookup hints?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> Build Center routing</h2>
+    <div class="lead">
+      Visual Workspace never builds directly. It hands off to Build Center via sessionStorage + navigation.
+    </div>
+
+    <h3>V1 mechanism</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><strong>Storage key:</strong> <kbd>visualWorkspace:pendingBuildPrompt</kbd> &mdash; the compiled prompt text.</li>
+      <li><strong>Storage key:</strong> <kbd>visualWorkspace:pendingBuildSourceRoute</kbd> &mdash; the page route the prompt came from.</li>
+      <li><strong>Navigation target (V1):</strong> <kbd>/portal/project/blueprint?build=visual-workspace</kbd> &mdash; the System Blueprint page; Build Center as its own route is roadmap P3.</li>
+      <li><strong>Future (P3):</strong> swap target to <kbd>/portal/build</kbd>; Build Center reads from the same storage keys.</li>
+    </ul>
+
+    <p style="font-size: 0.85rem; color: var(--color-text-light);">
+      Why sessionStorage and not URL params? Prompts can be long (thousands of chars), URLs choke at ~2k.
+      sessionStorage is per-tab and cleared on close &mdash; no leakage to other tabs, no persistence past the session.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="Build Center landing UX missing? Should we land on a dedicated holding page until P3?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> Verification handoff</h2>
+    <div class="lead">
+      V1 stub. The "Mark ready for verification" button writes to sessionStorage. Verification Workspace lands as roadmap P4.
+    </div>
+
+    <h3>V1 behaviour</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Action bar's <strong>Mark ready for verification</strong> button writes a payload to <kbd>visualWorkspace:verificationQueue</kbd>:
+        <kbd>{ session_id, page_route, issue_count, ready_count, flagged_at }</kbd>.</li>
+      <li>Surfaces a confirmation alert (V1 has no toast system).</li>
+      <li>The <strong>Verification queue</strong> sidebar section reflects this state in P4 when Verification Workspace ships.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="Should V1 also auto-trigger Playwright runs? Or wait for P4?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> Backend reuse map</h2>
+    <div class="lead">
+      Zero backend changes shipped. Every backend touch reuses the existing visual-review surface.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>UI action</th><th>Backend endpoint (existing)</th><th>Hook (existing)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Load recent sessions on landing</td>
+          <td><kbd>GET /api/portal/project/visual-review/sessions</kbd></td>
+          <td>direct portalApi call</td>
+        </tr>
+        <tr>
+          <td>Open new session</td>
+          <td><kbd>POST /api/portal/project/visual-review/session</kbd></td>
+          <td>direct portalApi call</td>
+        </tr>
+        <tr>
+          <td>Load session detail (critiques + suggestions + decisions)</td>
+          <td><kbd>GET .../session/:id</kbd></td>
+          <td><kbd>useVisualReviewSession.refresh</kbd></td>
+        </tr>
+        <tr>
+          <td>Save annotation (with pin region)</td>
+          <td><kbd>POST .../session/:id/critique</kbd></td>
+          <td><kbd>useVisualReviewSession.addCritique</kbd></td>
+        </tr>
+        <tr>
+          <td>Accept/reject/defer suggestion</td>
+          <td><kbd>POST .../session/:id/decision</kbd></td>
+          <td><kbd>useVisualReviewSession.decide</kbd></td>
+        </tr>
+        <tr>
+          <td>Mark critique resolved</td>
+          <td><kbd>POST .../session/:id/decision</kbd> (with critique_id)</td>
+          <td><kbd>useVisualReviewSession.decide</kbd></td>
+        </tr>
+        <tr>
+          <td>Generate prompt (canonical)</td>
+          <td><kbd>POST .../session/:id/generate-prompt</kbd></td>
+          <td><kbd>useVisualReviewSession.generatePrompt</kbd></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="Backend coverage gaps? Need a new endpoint for V1 we don't have?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> Sidebar sections</h2>
+    <div class="lead">
+      Five sections, each derived from critique + suggestion + decision state.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Section</th><th>Population rule</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><i class="bi bi-circle me-1"></i><strong>Open issues</strong></td>
+            <td>Critique exists, no suggestions yet, no resolved decision.</td></tr>
+        <tr><td><i class="bi bi-stars me-1"></i><strong>Suggested improvements</strong></td>
+            <td>At least one AI suggestion attached, none accepted yet.</td></tr>
+        <tr><td><i class="bi bi-lightning-charge me-1"></i><strong>Ready for prompt</strong></td>
+            <td>At least one suggestion accepted; will land in the next compiled prompt.</td></tr>
+        <tr><td><i class="bi bi-clipboard-check me-1"></i><strong>Verification queue</strong></td>
+            <td>V1: empty. P4: critiques whose plan has been built and is awaiting Playwright/visual proof.</td></tr>
+        <tr><td><i class="bi bi-check2-circle me-1"></i><strong>Resolved</strong></td>
+            <td>Critique-level "accepted" decision recorded (mark-resolved button).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="Right 5 sections? Order? Auto-expand which by default?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> Loop time estimate</h2>
+    <div class="lead">
+      Target loop &lt; 5 minutes. V1 hits it.
+    </div>
+
+    <div class="loop-diagram">
+      <div class="loop-step"><div class="num">1</div><h5>See</h5><div class="est">~10s</div></div>
+      <div class="loop-step"><div class="num">2</div><h5>Annotate</h5><div class="est">~30s</div></div>
+      <div class="loop-step"><div class="num">3</div><h5>Structure</h5><div class="est">~45s</div></div>
+      <div class="loop-step"><div class="num">4</div><h5>Compile</h5><div class="est">~5s</div></div>
+      <div class="loop-step"><div class="num">5</div><h5>Rebuild</h5><div class="est">~2&ndash;3m</div></div>
+      <div class="loop-step"><div class="num">6</div><h5>Verify</h5><div class="est">~30s</div></div>
+    </div>
+
+    <p style="font-size: 0.85rem; margin-top: 0.7rem;">
+      <strong>Total: ~4&ndash;5 minutes per critique loop.</strong> Compare to today's ~10&ndash;25 minute loop
+      (describe in chat → explain location → wait for clarifying questions → rebuild). 4&ndash;5&times; speedup
+      on QA cycles.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="Where does the V1 loop break in practice? Annotate ergonomics? Compile speed?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> Out of scope (V1)</h2>
+    <div class="lead">
+      Explicit deferrals so V1 stays calm and shippable.
+    </div>
+
+    <div class="anti-list">
+      <h4>Not in V1</h4>
+      <ul>
+        <li><strong>Pin drag / resize.</strong> V1 pins are point-only (width=height=0). Region rectangles are stored but not drawn.</li>
+        <li><strong>DOM introspection inside the iframe.</strong> Cross-origin would block; V1 stays at the overlay level.</li>
+        <li><strong>Real-time collaboration.</strong> Single-user only; no presence, no live cursors.</li>
+        <li><strong>Toast notifications.</strong> One alert() for verification handoff; no toast library added.</li>
+        <li><strong>Build Center as its own route.</strong> Roadmap P3. V1 routes to Blueprint with a flag + sessionStorage payload.</li>
+        <li><strong>Verification Workspace.</strong> Roadmap P4. V1 stub writes to sessionStorage.</li>
+        <li><strong>Component / route registry lookup at compile time.</strong> Roadmap P5 (UnifiedProjectState). V1 prompt names the page route only.</li>
+        <li><strong>Pin auto-resolution.</strong> No detection of "this critique is fixed" after rebuild &mdash; user clicks Mark resolved manually.</li>
+        <li><strong>Mobile layout.</strong> Sidebar + details collapse on &lt; 768px; full functionality requires desktop.</li>
+        <li><strong>Multi-page sessions.</strong> One session = one page. Switching route closes + reopens.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Anything in here that must move into V1?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s14" class="section">
+    <h2><span class="num">14</span> Critique categories &amp; what to look for</h2>
+    <div class="lead">
+      When you open the V1, here's what to evaluate. Score yourself: would the platform speed
+      <em>your</em> next QA loop?
+    </div>
+
+    <h3>Visual trust</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Does the empty state feel calm, or empty?</li>
+      <li>Does the active session feel premium, or busy?</li>
+      <li>Is the iframe size appropriate, or do you wish it were bigger?</li>
+      <li>Are the pins distinguishable enough at a glance?</li>
+    </ul>
+
+    <h3>Annotate ergonomics</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Does the cursor feel right in annotate mode?</li>
+      <li>Is the modal too long? Too short? Right fields?</li>
+      <li>Does "AI suggest" feel useful, or gimmicky?</li>
+    </ul>
+
+    <h3>Compile + handoff</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Is the compiled prompt actually paste-ready, or does it need editing first?</li>
+      <li>Does the Build Center handoff feel direct enough?</li>
+      <li>Should the prompt preview show a diff or comparison view?</li>
+    </ul>
+
+    <h3>Sidebar utility</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Are the 5 sections the right cuts?</li>
+      <li>Does the count badge add value?</li>
+      <li>Should "Resolved" be hidden by default?</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 14</div>
+      <textarea placeholder="Your category-by-category critique."></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s15" class="section">
+    <h2><span class="num">15</span> Open questions for the user</h2>
+    <div class="lead">
+      Decisions that need your call before V2.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>Same-origin embedding.</strong> Is it OK that V1 only works for pages on the portal origin (or whichever origin is set as "Preview origin")? External pages will not embed due to X-Frame-Options. Worth adding a server-side puppeteer screenshot fallback in V2?</li>
+      <li><strong>AI critique source.</strong> V1 uses a curated bank. Is this enough, or should we route through OpenAI for the modal pre-fill too?</li>
+      <li><strong>Build Center landing.</strong> V1 lands on Blueprint with a flag. Should we ship a tiny dedicated "Pending build" page now (a few hours) or wait for the full Build Center in P3?</li>
+      <li><strong>Verification stub.</strong> V1 alerts and stores. Should we surface a "queued" pill in the navbar with a count, or wait for P4?</li>
+      <li><strong>Critique navigation.</strong> The new "Critique" navItem sits between V2 and Sessions. Is that the right place, or should it be the first item?</li>
+      <li><strong>Existing VisualReviewWorkspace.</strong> The legacy <kbd>frontend/src/pages/project/VisualReviewWorkspace.tsx</kbd> is still routed (none of its routes were touched). Deprecate it now, or wait until V1 is validated in production?</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 15</div>
+      <textarea placeholder="Decisions on each numbered question."></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    Visual Engineering Workspace V1 &middot; Review document &middot; 2026-05-09<br>
+    Productization sprint &middot; Roadmap P1 shipped &middot; awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One Brain Consolidation Review — Cory as Single Operational Authority</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 2.25rem 0; margin-bottom: 1.5rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .doc-header .subtitle { font-size: 0.95rem; opacity: 0.92; max-width: 950px; }
+  .doc-header .meta {
+    margin-top: 1.3rem; display: flex; flex-wrap: wrap; gap: 0.55rem; font-size: 0.78rem;
+  }
+  .doc-header .meta-item { background: rgba(255, 255, 255, 0.13); padding: 0.35rem 0.8rem; border-radius: 4px; }
+  .container-narrow { max-width: 1280px; }
+
+  .toc {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.85rem 1.1rem; margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.8rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 1.4rem 1.6rem; margin-bottom: 1.4rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.3rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.78rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.9rem; color: var(--color-text-light);
+    margin-bottom: 1.1rem; padding-bottom: 0.85rem; border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 0.95rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.55rem;
+    color: var(--color-text);
+  }
+
+  .critique-zone {
+    margin-top: 1rem; padding: 0.7rem 0.95rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border); border-radius: 4px;
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.68rem; color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* duplication audit */
+  .dup-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.65rem;
+  }
+  .dup-card {
+    background: var(--color-danger-bg);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-left: 4px solid var(--color-danger);
+    border-radius: 5px;
+    padding: 0.65rem 0.8rem;
+  }
+  .dup-card h4 {
+    font-size: 0.78rem; font-weight: 600; color: var(--color-danger);
+    margin-bottom: 0.3rem; display: flex; align-items: center; gap: 6px;
+  }
+  .dup-card h4 .level {
+    font-size: 9px; padding: 0.05rem 0.4rem; border-radius: 2px;
+    background: var(--color-danger); color: white; letter-spacing: 0.04em;
+  }
+  .dup-card .src {
+    font-size: 0.7rem; color: var(--color-text); font-family: 'Consolas', monospace;
+    padding: 0.1rem 0; line-height: 1.5;
+  }
+  .dup-card .verdict {
+    font-size: 0.72rem; color: var(--color-text-light); margin-top: 0.4rem;
+    padding-top: 0.3rem; border-top: 1px solid rgba(239, 68, 68, 0.18);
+  }
+
+  /* hierarchy diagram */
+  .hierarchy { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin: 0.7rem 0; }
+  .hier-step {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.7rem 0.8rem; text-align: center;
+  }
+  .hier-step .level {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); font-weight: 600;
+  }
+  .hier-step h5 { font-size: 0.95rem; font-weight: 600; margin: 0.3rem 0 0.2rem; color: var(--color-primary); }
+  .hier-step .desc { font-size: 0.7rem; color: var(--color-text-light); }
+  .hier-step .surface {
+    font-size: 0.65rem; color: var(--color-primary-light); font-family: 'Consolas', monospace;
+    margin-top: 4px;
+  }
+  .hier-step.l1 { border-left: 3px solid var(--color-primary); }
+  .hier-step.l2 { border-left: 3px solid var(--color-secondary); }
+  .hier-step.l3 { border-left: 3px solid var(--color-accent); }
+  .hier-step.l4 { border-left: 3px solid var(--color-purple); }
+
+  /* before/after */
+  .before-after {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;
+  }
+  .ba-col { border: 1px solid var(--color-border); border-radius: 5px; overflow: hidden; }
+  .ba-col .ba-head {
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ba-col.before .ba-head { background: var(--color-danger-bg); color: var(--color-danger); }
+  .ba-col.after .ba-head { background: var(--color-success-bg); color: var(--color-success); }
+  .ba-col .ba-body { padding: 0.7rem 0.9rem; font-size: 0.82rem; line-height: 1.55; background: white; }
+  .ba-col ul { margin: 0.3rem 0 0 1.1rem; padding: 0; }
+  .ba-col ul li { margin-bottom: 0.25rem; }
+
+  /* nav mock */
+  .nav-mock {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.65rem 0.9rem; display: flex; align-items: center; gap: 1rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); margin-bottom: 0.5rem;
+  }
+  .nav-mock .brand {
+    font-weight: 700; font-size: 14px; color: var(--color-primary);
+    border-right: 1px solid var(--color-border); padding-right: 0.85rem;
+  }
+  .nav-mock .item {
+    font-size: 0.82rem; color: var(--color-text-light);
+    padding: 0.25rem 0.55rem; border-radius: 3px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .nav-mock .item.active { color: var(--color-primary); font-weight: 600; background: var(--color-bg-alt); }
+  .nav-mock .item.new { color: var(--color-success); font-weight: 600; }
+  .nav-mock .item.kept { color: var(--color-text-light); }
+
+  /* Cory Home mockup */
+  .home-mock {
+    background: var(--color-bg-alt);
+    border-radius: 6px; padding: 1rem; margin: 0.7rem 0;
+  }
+  .priority-card {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(26, 54, 93, 0.18);
+  }
+  .priority-card .label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.85; margin-bottom: 4px;
+  }
+  .priority-card .title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .priority-card .reason { font-size: 12px; opacity: 0.92; margin-bottom: 8px; }
+  .priority-card .actions { display: flex; gap: 6px; align-items: center; }
+  .priority-card .btn-mock {
+    background: white; color: var(--color-primary); padding: 0.25rem 0.6rem;
+    border-radius: 3px; font-size: 11px; font-weight: 600; border: none;
+  }
+  .priority-card .pill {
+    background: rgba(255,255,255,0.18); padding: 0.2rem 0.5rem; border-radius: 3px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .tile-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem; }
+  .tile {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px; padding: 0.7rem 0.85rem;
+  }
+  .tile .label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); font-weight: 600;
+  }
+  .tile .value { font-size: 24px; font-weight: 600; line-height: 1.1; margin-top: 4px; }
+  .tile .footer { font-size: 10px; color: var(--color-text-light); margin-top: 4px; }
+  .queue-mock {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    overflow: hidden; margin-bottom: 0.85rem;
+  }
+  .queue-mock .row {
+    padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--color-border);
+    display: flex; align-items: center; gap: 0.6rem; font-size: 12px;
+  }
+  .queue-mock .row:last-child { border-bottom: none; }
+  .queue-mock .row .pos {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--color-bg-alt); color: var(--color-text-light);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+  }
+  .queue-mock .row.first .pos { background: var(--color-primary); color: white; }
+  .queue-mock .row .blast {
+    margin-left: auto; font-size: 9px; text-transform: uppercase; font-weight: 600;
+  }
+  .queue-mock .row .blast.low { color: var(--color-success); }
+  .queue-mock .row .blast.medium { color: var(--color-warning); }
+  .queue-mock .row .blast.high { color: var(--color-danger); }
+
+  /* state shape */
+  pre.code-block {
+    background: #0f172a; color: #e2e8f0; border-radius: 5px;
+    padding: 0.85rem 1rem; font-family: 'Consolas', monospace;
+    font-size: 0.78rem; line-height: 1.55; overflow-x: auto;
+    max-height: 480px; overflow-y: auto;
+  }
+  pre.code-block .k { color: #fbbf24; }
+  pre.code-block .s { color: #86efac; }
+  pre.code-block .c { color: #64748b; font-style: italic; }
+
+  /* status pills */
+  .pill {
+    display: inline-block; border-radius: 3px; padding: 0.1rem 0.45rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.55rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.85rem; margin: 0.85rem 0;
+  }
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.65rem 0.85rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>One Brain Consolidation Review</h1>
+    <div class="subtitle">
+      Cory is now the single operational authority. <kbd>UnifiedProjectState</kbd> shipped as the canonical state object.
+      <kbd>UnifiedOperationalPriorityEngine</kbd> shipped as the only ranker. Cory Home shipped as the new product home screen.
+      Audit, mockups, before/after, and remaining risks documented below.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> Convergence shipped — awaiting critique</span>
+      <span class="meta-item"><strong>Backend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>Frontend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>New files:</strong> 5 (3 backend + 2 frontend)</span>
+      <span class="meta-item"><strong>Modified:</strong> 3 (route + nav + portalRoutes)</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields. Type, then save the
+    page (Ctrl+S) or paste your critique back into Claude Code referencing section numbers.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">What shipped (one paragraph)</a></li>
+      <li><a href="#s2">Operational hierarchy (4 levels)</a></li>
+      <li><a href="#s3">Duplication audit findings</a></li>
+      <li><a href="#s4">UnifiedProjectState shape</a></li>
+      <li><a href="#s5">UnifiedOperationalPriorityEngine</a></li>
+      <li><a href="#s6">Cory Home mockup</a></li>
+      <li><a href="#s7">Before / after navigation</a></li>
+      <li><a href="#s8">Backend reuse map</a></li>
+      <li><a href="#s9">What this sprint did NOT do (intentional)</a></li>
+      <li><a href="#s10">Remaining trust risks</a></li>
+      <li><a href="#s11">Migration plan for the surfaces still computing locally</a></li>
+      <li><a href="#s12">File diff summary</a></li>
+      <li><a href="#s13">Open questions for the user</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> What shipped (one paragraph)</h2>
+    <div class="lead">
+      Convergence sprint. No new cognition. No new architecture. New synthesizer + new home screen.
+    </div>
+
+    <p style="font-size: 0.9rem;">
+      A new backend module under <kbd>backend/src/intelligence/unifiedProjectState/</kbd> ships three files: <kbd>types.ts</kbd> (the
+      canonical <kbd>UnifiedProjectState</kbd> shape), <kbd>unifiedOperationalPriorityEngine.ts</kbd> (the one ranker), and
+      <kbd>unifiedProjectStateBuilder.ts</kbd> (the read-only synthesizer that calls existing engines in parallel and shapes their
+      output). One new route, <kbd>GET /api/portal/project/unified-state</kbd>, exposes it. On the frontend, one new hook
+      <kbd>useUnifiedProjectState</kbd> wraps the endpoint and one new page <kbd>CoryHome.tsx</kbd> consumes it as the new product
+      home screen at <kbd>/portal/home</kbd>. The portal nav now reads
+      <strong>Home → Critique → Blueprint → System → Sessions</strong>, with Home at position 1 (Cory authority L1).
+      <kbd>/portal/dashboard</kbd> redirects to Cory Home. Backend and frontend <kbd>tsc --noEmit</kbd> both exit 0. Backend reuses
+      <kbd>projectService</kbd>, <kbd>projectProgressService</kbd>, and <kbd>nextActionService</kbd> as input sources — no new
+      cognition layer.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything missing from the convergence summary?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> Operational hierarchy (4 levels)</h2>
+    <div class="lead">
+      Per spec §10. Every product surface obeys this hierarchy.
+    </div>
+
+    <div class="hierarchy">
+      <div class="hier-step l1">
+        <div class="level">Level 1</div>
+        <h5>Cory Authority</h5>
+        <div class="desc">What matters now</div>
+        <div class="surface">/portal/home</div>
+      </div>
+      <div class="hier-step l2">
+        <div class="level">Level 2</div>
+        <h5>Verification</h5>
+        <div class="desc">Pin · prompt · review</div>
+        <div class="surface">/portal/visual-workspace</div>
+      </div>
+      <div class="hier-step l3">
+        <div class="level">Level 3</div>
+        <h5>Execution</h5>
+        <div class="desc">Run · validate · ship</div>
+        <div class="surface">/portal/project/blueprint</div>
+      </div>
+      <div class="hier-step l4">
+        <div class="level">Level 4</div>
+        <h5>Understanding</h5>
+        <div class="desc">Topology · intelligence</div>
+        <div class="surface">/portal/project/system-v2</div>
+      </div>
+    </div>
+
+    <p style="font-size: 0.85rem; color: var(--color-text-light);">
+      The user's mental model maps left-to-right: <strong>"Where do I start?" → "What's wrong?" → "How do I fix it?" → "What does the system look like?"</strong>
+      Sessions sits at the right edge of the navbar — orthogonal to the build loop.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="Hierarchy clear? Any reorder?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> Duplication audit findings</h2>
+    <div class="lead">
+      Concrete map of competing authority surfaces that the new <kbd>UnifiedProjectState</kbd> exists to consolidate.
+      Sourced from a code-grep audit on 2026-05-09.
+    </div>
+
+    <h3>A · Next-action surfaces (HIGH duplication)</h3>
+    <div class="dup-grid">
+      <div class="dup-card">
+        <h4>ProjectNextActionPanel <span class="level">PANEL</span></h4>
+        <div class="src">frontend/src/components/project/ProjectNextActionPanel.tsx:32</div>
+        <div class="verdict">Pulls <kbd>/api/portal/project/next-action</kbd> directly. Renders priority + confidence.</div>
+      </div>
+      <div class="dup-card">
+        <h4>WhyIsThisNextPanel <span class="level">PANEL</span></h4>
+        <div class="src">frontend/src/components/project/WhyIsThisNextPanel.tsx:27</div>
+        <div class="verdict">Explainer; pulls DecisionTrace via <kbd>useTaskExplain</kbd>.</div>
+      </div>
+      <div class="dup-card">
+        <h4>SteeringPanel <span class="level">PANEL</span></h4>
+        <div class="src">frontend/src/components/project/SteeringPanel.tsx:8</div>
+        <div class="verdict">Recommendation surface (155 lines, parallel logic).</div>
+      </div>
+      <div class="dup-card">
+        <h4>GuidedExecutionPanel <span class="level">PANEL</span></h4>
+        <div class="src">frontend/src/components/project/GuidedExecutionPanel.tsx:66</div>
+        <div class="verdict">Step-by-step guidance for accepted actions.</div>
+      </div>
+      <div class="dup-card">
+        <h4>useGovernanceRecommendations <span class="level">HOOK</span></h4>
+        <div class="src">frontend/src/hooks/useGovernanceRecommendations.ts:31</div>
+        <div class="verdict">Polls governance recs with own priority/confidence model.</div>
+      </div>
+      <div class="dup-card">
+        <h4>useGovernanceAdvice <span class="level">HOOK</span></h4>
+        <div class="src">frontend/src/hooks/useGovernanceAdvice.ts:13</div>
+        <div class="verdict">Posts to advice endpoint; returns its own should_block_rollout.</div>
+      </div>
+    </div>
+    <p style="font-size: 0.82rem; margin-top: 0.55rem;">
+      <strong>Verdict:</strong> 6 parallel "what should I do next?" surfaces. Cory Home now claims primary authority for L1.
+      The 6 above continue to exist (none deleted) but are subordinate — see §11 migration plan.
+    </p>
+
+    <h3>B · Readiness calculations (MEDIUM duplication)</h3>
+    <div class="dup-grid">
+      <div class="dup-card">
+        <h4>ExecutiveReadinessCard</h4>
+        <div class="src">frontend/src/components/project/ExecutiveReadinessCard.tsx:30</div>
+        <div class="verdict">Local <kbd>getReadiness(score)</kbd> mapping.</div>
+      </div>
+      <div class="dup-card">
+        <h4>ProjectMaturityGauge</h4>
+        <div class="src">frontend/src/components/project/ProjectMaturityGauge.tsx:34</div>
+        <div class="verdict">Renders maturity 0–5 with category breakdown.</div>
+      </div>
+      <div class="dup-card">
+        <h4>useAuthoritativeSystemState</h4>
+        <div class="src">frontend/src/hooks/useAuthoritativeSystemState.ts:148</div>
+        <div class="verdict">Pulls readiness from system state engine.</div>
+      </div>
+      <div class="dup-card">
+        <h4>adaptiveScoringWeights</h4>
+        <div class="src">backend/src/intelligence/scoring/adaptiveScoringWeights.ts:16</div>
+        <div class="verdict">production_readiness multiplier table.</div>
+      </div>
+      <div class="dup-card">
+        <h4>nextBestActionEngine</h4>
+        <div class="src">backend/src/intelligence/nextBestActionEngine.ts:43</div>
+        <div class="verdict">Readiness baked into SystemState interface.</div>
+      </div>
+      <div class="dup-card">
+        <h4>predictiveEngine</h4>
+        <div class="src">backend/src/intelligence/predictiveEngine.ts:50</div>
+        <div class="verdict">readiness_target per action (40–100 range).</div>
+      </div>
+    </div>
+    <p style="font-size: 0.82rem; margin-top: 0.55rem;">
+      <strong>Verdict:</strong> Composite readiness comes from <kbd>projectProgressService</kbd>. Cory Home is the first surface
+      to consume the canonical value via <kbd>UnifiedProjectState.readiness</kbd>. The 6 surfaces above still compute locally —
+      see §11.
+    </p>
+
+    <h3>C · Coverage (HIGH duplication)</h3>
+    <div class="dup-grid">
+      <div class="dup-card">
+        <h4>RequirementsStatusCard</h4>
+        <div class="src">frontend/src/components/project/RequirementsStatusCard.tsx:26</div>
+        <div class="verdict">Renders coverage card (113 lines).</div>
+      </div>
+      <div class="dup-card">
+        <h4>RequirementsSectionBreakdown</h4>
+        <div class="src">frontend/src/components/project/RequirementsSectionBreakdown.tsx:26</div>
+        <div class="verdict">Section-by-section coverage breakdown.</div>
+      </div>
+      <div class="dup-card">
+        <h4>nextBestActionEngine guards</h4>
+        <div class="src">backend/src/intelligence/nextBestActionEngine.ts:202</div>
+        <div class="verdict">Gates actions on profile.reqCoverage 80%+ threshold.</div>
+      </div>
+    </div>
+
+    <h3>D · Ranking / priority (MEDIUM)</h3>
+    <ul style="font-size: 0.82rem;">
+      <li><kbd>nextBestActionEngine</kbd>:71-180 — hardcoded ExecutionAction priority table (100, 90, 80…)</li>
+      <li><kbd>adaptiveScoringWeights</kbd> — maturity-level-dependent re-weighting</li>
+      <li><kbd>useGovernanceRecommendations</kbd> — implicit sort by priority field</li>
+    </ul>
+    <p style="font-size: 0.82rem;">
+      Cory Home consumes the unified queue ranked by <kbd>UnifiedOperationalPriorityEngine</kbd> (see §5). Other panels do NOT
+      re-rank the same items. They consume the queue as-is or ignore it.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Audit gaps? Surfaces missed?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> UnifiedProjectState shape</h2>
+    <div class="lead">
+      The single canonical operational state object. Every surface that needs operational data reads from this.
+    </div>
+
+<pre class="code-block"><span class="k">interface UnifiedProjectState</span> {
+  project: { id, organization_name, industry, project_stage };
+
+  <span class="c">// ONE readiness — every UI surface consumes this</span>
+  readiness: {
+    score: 0..100;
+    band: <span class="s">'red' | 'amber' | 'green'</span>;
+    reasons: string[];
+    breakdown: { artifact_completion, requirements_coverage,
+                 github_health, portfolio_quality, workflow_progress };
+  };
+
+  <span class="c">// ONE coverage</span>
+  coverage: {
+    score: 0..100;
+    requirements_matched, requirements_total, bps_complete, bps_total;
+  };
+
+  confidence: { score, sources: string[] };
+  health:     { score, regressions_24h, verification_pass_rate };
+
+  <span class="c">// THE next step (top of queue) — Cory's authority</span>
+  next_action: NextActionProfile | null;
+
+  <span class="c">// ONE ranked operational queue (top 8)</span>
+  queue: QueueEntry[];
+
+  <span class="c">// ONE blocker list</span>
+  blockers: BlockerEntry[];
+
+  <span class="c">// ONE active build (or null)</span>
+  active_build: ActiveBuildProfile | null;
+
+  <span class="c">// ONE verification state</span>
+  verification: { pending, passing, failing, pass_rate_24h };
+
+  built_at: string;
+}</pre>
+
+    <p style="font-size: 0.82rem; color: var(--color-text-light);">
+      Source of truth: <kbd>backend/src/intelligence/unifiedProjectState/types.ts</kbd>. Frontend mirror in
+      <kbd>frontend/src/hooks/useUnifiedProjectState.ts</kbd>.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="State shape gaps? Anything to remove?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> UnifiedOperationalPriorityEngine</h2>
+    <div class="lead">
+      The ONE ranker. Heterogeneous candidates in → one normalized, deterministically-sorted list out.
+    </div>
+
+    <h3>Inputs (sources)</h3>
+    <ul style="font-size: 0.85rem;">
+      <li><span class="pill info">next_action</span> — top action from <kbd>nextActionService</kbd></li>
+      <li><span class="pill info">governance_recommendation</span> — pending governance recs (V1: not wired yet; reserved)</li>
+      <li><span class="pill info">visual_workspace_pending</span> — Critique→Blueprint pending builds (V1: not wired yet; reserved)</li>
+      <li><span class="pill info">verification_failure</span> — failed checks (V1: not wired yet; reserved)</li>
+      <li><span class="pill info">capability_gap</span> — low-completion capabilities (V1: derived from blocker logic)</li>
+    </ul>
+
+    <h3>Sort rules</h3>
+    <ol style="font-size: 0.85rem;">
+      <li>Primary: descending <kbd>priority_score</kbd> (clamped 0..100).</li>
+      <li>Tie-break 1: source-of-origin nudge (next_action &gt; verification_failure &gt; governance_recommendation &gt; visual_workspace_pending &gt; capability_gap).</li>
+      <li>Tie-break 2: alphabetical title (deterministic).</li>
+    </ol>
+
+    <h3>Hard rules</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>No surface re-ranks the queue locally. Consumers render in the order returned.</li>
+      <li>The same input always produces the same order (deterministic).</li>
+      <li>Source: <kbd>backend/src/intelligence/unifiedProjectState/unifiedOperationalPriorityEngine.ts</kbd></li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Sort priorities right? Tie-break logic? Source weights?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> Cory Home mockup</h2>
+    <div class="lead">
+      Calm, focused, premium. One priority + 3 tiles + queue + active build + verification. Nothing else.
+    </div>
+
+    <div class="home-mock">
+      <div style="font-size: 22px; font-weight: 600; color: var(--color-primary); letter-spacing: -0.01em;">
+        Good morning, <span style="color: var(--color-primary-light);">Colaberry CES</span>.
+      </div>
+      <div style="font-size: 13px; color: var(--color-text-light); margin-top: 4px; margin-bottom: 16px;">
+        4 things on the queue · 1 blocker.
+      </div>
+
+      <div class="priority-card">
+        <div class="label">Today's one priority</div>
+        <div class="title">Wire campaign attribution to the Pilot funnel</div>
+        <div class="reason">
+          14 leads landed on Pilot pages with no UTM — campaign source unrecoverable.
+          UnifiedProjectState rates this medium blast, high reversibility, ~35 min.
+        </div>
+        <div class="actions">
+          <span class="btn-mock"><i class="bi bi-arrow-right"></i> Open in Blueprint</span>
+          <span class="pill">35m</span>
+          <span class="pill">MEDIUM blast</span>
+          <span style="margin-left: auto; font-size: 10px; opacity: 0.85;">confidence 78% · priority 92</span>
+        </div>
+      </div>
+
+      <div class="tile-row">
+        <div class="tile">
+          <div class="label">Readiness</div>
+          <div class="value" style="color: var(--color-warning);">62%</div>
+          <div class="footer" style="color: var(--color-warning);">On track</div>
+        </div>
+        <div class="tile">
+          <div class="label">Coverage</div>
+          <div class="value" style="color: var(--color-primary);">71%</div>
+          <div class="footer">17 of 24 requirements matched</div>
+        </div>
+        <div class="tile">
+          <div class="label">Health</div>
+          <div class="value" style="color: var(--color-success);">98%</div>
+          <div class="footer">No regressions in 24h</div>
+        </div>
+      </div>
+
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-light); font-weight: 600; margin-bottom: 6px; display: flex; align-items: center;">
+        Operational queue
+        <span style="margin-left: 6px; font-size: 10px; background: var(--color-bg-alt); color: var(--color-text-light); padding: 0.1rem 0.45rem; border-radius: 9999px; font-weight: 600;">4</span>
+        <span style="margin-left: auto; font-size: 11px; color: var(--color-text-light); font-style: italic;">
+          Cory's authority — every surface agrees with this order.
+        </span>
+      </div>
+      <div class="queue-mock">
+        <div class="row first">
+          <span class="pos">1</span>
+          <div style="flex: 1;">
+            <div style="font-size: 12px; font-weight: 500;">Wire campaign attribution to the Pilot funnel</div>
+            <div style="font-size: 11px; color: var(--color-text-light); margin-top: 2px;">Cory · ~35m</div>
+          </div>
+          <span class="blast medium">medium blast</span>
+          <span style="font-size: 11px; padding: 0.2rem 0.45rem; border: 1px solid var(--color-primary); color: var(--color-primary); border-radius: 3px;">Open</span>
+        </div>
+        <div class="row">
+          <span class="pos">2</span>
+          <div style="flex: 1;">
+            <div style="font-size: 12px; font-weight: 500;">Verify Phase 32 dashboard reads in production</div>
+            <div style="font-size: 11px; color: var(--color-text-light); margin-top: 2px;">Cory · ~10m</div>
+          </div>
+          <span class="blast low">low blast</span>
+          <span style="font-size: 11px; padding: 0.2rem 0.45rem; border: 1px solid var(--color-primary); color: var(--color-primary); border-radius: 3px;">Open</span>
+        </div>
+        <div class="row">
+          <span class="pos">3</span>
+          <div style="flex: 1;">
+            <div style="font-size: 12px; font-weight: 500;">Add field validation to Pilot signup form</div>
+            <div style="font-size: 11px; color: var(--color-text-light); margin-top: 2px;">Cory · ~25m</div>
+          </div>
+          <span class="blast low">low blast</span>
+          <span style="font-size: 11px; padding: 0.2rem 0.45rem; border: 1px solid var(--color-primary); color: var(--color-primary); border-radius: 3px;">Open</span>
+        </div>
+      </div>
+
+      <div style="font-size: 10px; color: var(--color-text-light); text-align: center; margin-top: 6px;">
+        Synthesized 9:42:01 AM · confidence 80% · sources: progress_engine · next_action_engine
+      </div>
+    </div>
+
+    <p style="font-size: 0.82rem; color: var(--color-text-light); margin-top: 0.55rem;">
+      Notice what's <em>not</em> here: no phase badges, no boundary-proof-chain hashes, no governance overlay, no topology view, no
+      multiple "Cory says" panels. One brain. One queue. One next step.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="Density? Spacing? What's missing? What should be cut?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> Before / after navigation</h2>
+
+    <h3>Before (last sprint)</h3>
+    <div class="nav-mock">
+      <span class="brand">Accelerator Portal</span>
+      <span class="item active"><i class="bi bi-bullseye"></i> Critique</span>
+      <span class="item"><i class="bi bi-map"></i> Blueprint</span>
+      <span class="item"><i class="bi bi-grid-3x3-gap"></i> System</span>
+      <span class="item"><i class="bi bi-calendar-event"></i> Sessions</span>
+    </div>
+
+    <h3>After</h3>
+    <div class="nav-mock">
+      <span class="brand">Accelerator Portal</span>
+      <span class="item new active"><i class="bi bi-house"></i> Home</span>
+      <span class="item kept"><i class="bi bi-bullseye"></i> Critique</span>
+      <span class="item kept"><i class="bi bi-map"></i> Blueprint</span>
+      <span class="item kept"><i class="bi bi-grid-3x3-gap"></i> System</span>
+      <span class="item kept"><i class="bi bi-calendar-event"></i> Sessions</span>
+    </div>
+
+    <p style="font-size: 0.82rem; color: var(--color-text-light); margin-top: 0.5rem;">
+      <span class="pill good">Home</span> is now the L1 entry. Critique stays as L2. Blueprint stays as L3. System stays as L4. Sessions remains
+      orthogonal at the right edge. <kbd>/portal/dashboard</kbd> redirects to <kbd>/portal/home</kbd>.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="Nav order good?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> Backend reuse map</h2>
+    <div class="lead">
+      The synthesizer reads existing engines in parallel. Zero new persistence. Zero new cognition.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Source engine</th><th>What we read</th><th>How it lands in UnifiedProjectState</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>projectService.getProjectByEnrollment</kbd></td>
+          <td>Project metadata (id, org name, industry, stage)</td>
+          <td><kbd>state.project</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>projectProgressService.calculateProgress</kbd></td>
+          <td>Composite readiness + breakdown + requirements coverage</td>
+          <td><kbd>state.readiness</kbd>, <kbd>state.coverage</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>nextActionService.getNextAction</kbd></td>
+          <td>Cory's top action (priority_score, confidence, action_type, reason)</td>
+          <td><kbd>state.next_action</kbd>, queue rank 1</td>
+        </tr>
+        <tr>
+          <td><kbd>NextAction</kbd> model (recent rows)</td>
+          <td>Last 10 actions; pending/accepted only become queue tail</td>
+          <td><kbd>state.queue</kbd> ranks 2..N</td>
+        </tr>
+        <tr>
+          <td>(reserved) governance recs</td>
+          <td>Pending governance recommendations</td>
+          <td>Future <kbd>state.queue</kbd> entries with source <kbd>governance_recommendation</kbd></td>
+        </tr>
+        <tr>
+          <td>(reserved) visual-review pending</td>
+          <td>Critique→Blueprint pending builds</td>
+          <td>Future <kbd>state.queue</kbd> entries with source <kbd>visual_workspace_pending</kbd></td>
+        </tr>
+        <tr>
+          <td>(reserved) verification failures</td>
+          <td>Failed checks in last 24h</td>
+          <td>Future <kbd>state.queue</kbd> entries with source <kbd>verification_failure</kbd></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.82rem;">
+      <strong>Failure isolation:</strong> each source is fail-soft. If one source throws, the unified state still returns with safe
+      defaults for that section. The UI never goes blank.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="Should the reserved sources be wired now or kept for next sprint?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> What this sprint did NOT do (intentional)</h2>
+    <div class="lead">
+      Convergence sprint = reduction sprint. These are deferred deliberately to keep scope honest.
+    </div>
+
+    <div class="anti-list">
+      <h4>Out of scope this sprint</h4>
+      <ul>
+        <li><strong>Did NOT delete</strong> the 6 competing next-action surfaces (ProjectNextActionPanel, WhyIsThisNextPanel, SteeringPanel, GuidedExecutionPanel, useGovernanceRecommendations, useGovernanceAdvice). They still render where they always did. See §11 migration plan.</li>
+        <li><strong>Did NOT slim</strong> SystemViewV2 (4,280 lines) or SystemBlueprint (2,000 lines). Renaming + handoff banner only. Splitting is its own sprint.</li>
+        <li><strong>Did NOT delete</strong> the legacy <kbd>VisualReviewWorkspace.tsx</kbd>. Deprecation banner is in place; file kept for rollback.</li>
+        <li><strong>Did NOT remove</strong> the existing <kbd>ProjectDashboard</kbd> route. Hidden from nav last sprint; still alive at <kbd>/portal/project/system</kbd>.</li>
+        <li><strong>Did NOT introduce</strong> a new cognition layer. The synthesizer is a façade over existing engines, NOT a new engine.</li>
+        <li><strong>Did NOT introduce</strong> a new persistence model. Zero new tables, zero new audit kinds.</li>
+        <li><strong>Did NOT wire</strong> reserved sources (governance recs, visual workspace pending, verification failures) into the queue yet. Reserved hooks in the priority engine; emit zero entries in V1.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="Anything in this list that should move into scope?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> Remaining trust risks</h2>
+    <div class="lead">
+      The risks the user might still notice. Honest, sized, and timed.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Risk</th><th>Symptom</th><th>Mitigation timing</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Blueprint still shows its own "Cory plan" panel</td>
+          <td>User sees a recommendation in Cory Home AND a different one in Blueprint</td>
+          <td>Next sprint — add a single line: "(via Cory · matches Home)" or replace with ConsumesUnifiedState wrapper</td>
+        </tr>
+        <tr>
+          <td>SystemViewV2 still renders its own readiness/coverage</td>
+          <td>User sees a different % in System than in Home</td>
+          <td>Next sprint — replace System View's local calc with a useUnifiedProjectState read</td>
+        </tr>
+        <tr>
+          <td>ProjectMaturityGauge / ExecutiveReadinessCard / RequirementsStatusCard are still local</td>
+          <td>Numbers may differ from Home if these are mounted in any tab</td>
+          <td>2 sprints — wrap each with useUnifiedProjectState; deprecate prop-passing</td>
+        </tr>
+        <tr>
+          <td>Reserved sources emit nothing</td>
+          <td>The queue only shows next_action items; governance + verification rows missing</td>
+          <td>1 sprint — wire each reserved source into the synthesizer</td>
+        </tr>
+        <tr>
+          <td>Health score is hardcoded 90</td>
+          <td>Health tile always shows 90% regardless of reality</td>
+          <td>1 sprint — pull SystemStateEngine summary into the synthesizer</td>
+        </tr>
+        <tr>
+          <td>Active build is null</td>
+          <td>Active Build tile always shows "No active build"</td>
+          <td>2 sprints — when build state lands persistently (currently sessionStorage only)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="Risks I'm missing? Re-prioritize the timing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> Migration plan for the surfaces still computing locally</h2>
+    <div class="lead">
+      Each migration is small and local. Doing them gradually keeps the platform stable while the consolidation lands.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Surface</th><th>Migration</th><th>Effort</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ProjectNextActionPanel</td>
+          <td>Replace direct fetch with <kbd>useUnifiedProjectState().state?.next_action</kbd>; keep render shape.</td>
+          <td>~30 min</td>
+        </tr>
+        <tr>
+          <td>WhyIsThisNextPanel</td>
+          <td>Read same source; explain from <kbd>state.next_action.metadata</kbd>.</td>
+          <td>~1 hour</td>
+        </tr>
+        <tr>
+          <td>SteeringPanel + GuidedExecutionPanel</td>
+          <td>Render the unified queue + open in Blueprint; remove local recommendation logic.</td>
+          <td>~2 hours each</td>
+        </tr>
+        <tr>
+          <td>useGovernanceRecommendations</td>
+          <td>Wire governance recs into the synthesizer (queue source <kbd>governance_recommendation</kbd>); remove the panel-level hook usage.</td>
+          <td>~1 hour</td>
+        </tr>
+        <tr>
+          <td>useGovernanceAdvice</td>
+          <td>Either: (a) keep as on-demand advice surface (NOT a queue), OR (b) feed into <kbd>blockers[]</kbd>. Decision required.</td>
+          <td>~1 hour</td>
+        </tr>
+        <tr>
+          <td>ExecutiveReadinessCard</td>
+          <td>Read <kbd>state.readiness</kbd>; remove local <kbd>getReadiness()</kbd>.</td>
+          <td>~30 min</td>
+        </tr>
+        <tr>
+          <td>ProjectMaturityGauge</td>
+          <td>Render breakdown from <kbd>state.readiness.breakdown</kbd>; keep gauge UI.</td>
+          <td>~1 hour</td>
+        </tr>
+        <tr>
+          <td>RequirementsStatusCard / RequirementsSectionBreakdown</td>
+          <td>Read <kbd>state.coverage</kbd> + a coverage-detail endpoint (existing).</td>
+          <td>~1 hour total</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.82rem;">
+      <strong>Suggested order:</strong> ExecutiveReadinessCard first (smallest, most visible drift), then ProjectNextActionPanel
+      (most user-facing duplicate), then governance migration. Total estimated effort: <strong>~8–10 hours</strong> over 1–2
+      sprints. None requires backend changes.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="Migration order? Anything to fast-track?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> File diff summary</h2>
+    <div class="lead">
+      8 files touched. 5 new (3 backend + 2 frontend). 3 modified.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Change</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>backend/src/intelligence/unifiedProjectState/types.ts</kbd></td>
+          <td><span class="pill good">NEW</span> Canonical UnifiedProjectState shape</td>
+        </tr>
+        <tr>
+          <td><kbd>backend/src/intelligence/unifiedProjectState/unifiedOperationalPriorityEngine.ts</kbd></td>
+          <td><span class="pill good">NEW</span> The one ranker</td>
+        </tr>
+        <tr>
+          <td><kbd>backend/src/intelligence/unifiedProjectState/unifiedProjectStateBuilder.ts</kbd></td>
+          <td><span class="pill good">NEW</span> Read-only synthesizer</td>
+        </tr>
+        <tr>
+          <td><kbd>backend/src/routes/projectRoutes.ts</kbd></td>
+          <td><span class="pill info">MODIFIED</span> Added <kbd>GET /api/portal/project/unified-state</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/hooks/useUnifiedProjectState.ts</kbd></td>
+          <td><span class="pill good">NEW</span> The one hook</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/pages/portal/CoryHome.tsx</kbd></td>
+          <td><span class="pill good">NEW</span> Cory Home page (~410 lines)</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/routes/portalRoutes.tsx</kbd></td>
+          <td><span class="pill info">MODIFIED</span> Added <kbd>/portal/home</kbd>; redirected <kbd>/portal/dashboard</kbd></td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/components/Layout/PortalLayout.tsx</kbd></td>
+          <td><span class="pill info">MODIFIED</span> Home navItem at position 1; comment documents L1–L4 hierarchy</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Verification</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Backend <kbd>npx tsc --noEmit</kbd> &mdash; exit 0</li>
+      <li>Frontend <kbd>npx tsc --noEmit</kbd> &mdash; exit 0</li>
+      <li>No new dependencies</li>
+      <li>No backend persistence changes (no migrations)</li>
+      <li>No deletions; rollback via single-file revert</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="Anything in the diff to revert or extend?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> Open questions for the user</h2>
+    <div class="lead">
+      Decisions that will shape the next sprint.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>Health score.</strong> V1 hardcodes health to 90%. Should the next sprint pull from the SystemStateEngine summary (closes the loop with backend cognition) or from a simpler signal (recent test pass rate)?</li>
+      <li><strong>Reserved queue sources.</strong> Wire governance recs / verification failures / visual-workspace pending into the queue this sprint, or wait for Cory Home to settle first?</li>
+      <li><strong>Migration order.</strong> ExecutiveReadinessCard first, then ProjectNextActionPanel? Or take the most-visible duplicate first (ProjectNextActionPanel)?</li>
+      <li><strong>useGovernanceAdvice fate.</strong> Keep it as on-demand advice (separate from the queue), feed it into <kbd>blockers[]</kbd>, or deprecate entirely?</li>
+      <li><strong>Greeting personalization.</strong> Currently uses <kbd>organization_name</kbd>. Should we read the participant's first name (would need a backend tweak)?</li>
+      <li><strong>Polling cadence.</strong> Cory Home polls every 60s. Reasonable, or should we go event-driven via the existing cognitive event bus?</li>
+      <li><strong>Empty state.</strong> When no next_action, Cory Home shows "You're caught up." Is that the right tone, or should it surface a "what could you start" suggestion?</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Decisions on each numbered question."></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    One Brain Consolidation Review &middot; Colaberry Enterprise AI Leadership Accelerator &middot; 2026-05-09<br>
+    Productization Sprint &middot; convergence pass complete &middot; awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

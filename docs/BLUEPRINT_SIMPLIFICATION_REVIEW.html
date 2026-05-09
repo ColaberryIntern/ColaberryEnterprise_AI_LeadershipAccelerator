@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blueprint Simplification Review — Execution Lane Replaces 2,000 Lines</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  :root {
+    --color-primary: #1a365d;
+    --color-primary-light: #2b6cb0;
+    --color-secondary: #e53e3e;
+    --color-accent: #38a169;
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.08);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.08);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.08);
+    --color-info: #3b82f6;
+    --color-info-bg: rgba(59, 130, 246, 0.08);
+    --color-purple: #6366f1;
+    --color-purple-bg: rgba(99, 102, 241, 0.08);
+    --color-bg: #ffffff;
+    --color-bg-alt: #f7fafc;
+    --color-text: #2d3748;
+    --color-text-light: #718096;
+    --color-border: #e2e8f0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg-alt);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 2.25rem 0; margin-bottom: 1.5rem;
+  }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .doc-header .subtitle { font-size: 0.95rem; opacity: 0.92; max-width: 950px; }
+  .doc-header .meta {
+    margin-top: 1.3rem; display: flex; flex-wrap: wrap; gap: 0.55rem; font-size: 0.78rem;
+  }
+  .doc-header .meta-item { background: rgba(255, 255, 255, 0.13); padding: 0.35rem 0.8rem; border-radius: 4px; }
+  .container-narrow { max-width: 1280px; }
+
+  .toc {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.85rem 1.1rem; margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .toc h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 3; column-gap: 1.5rem; font-size: 0.8rem; }
+  .toc a { color: var(--color-primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 1.4rem 1.6rem; margin-bottom: 1.4rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .section h2 {
+    font-size: 1.3rem; font-weight: 600; color: var(--color-primary);
+    margin-bottom: 0.25rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .section h2 .num {
+    font-size: 0.78rem; color: var(--color-text-light); font-weight: 500;
+    background: var(--color-bg-alt); padding: 0.15rem 0.55rem; border-radius: 4px;
+  }
+  .section .lead {
+    font-size: 0.9rem; color: var(--color-text-light);
+    margin-bottom: 1.1rem; padding-bottom: 0.85rem; border-bottom: 1px solid var(--color-border);
+  }
+  .section h3 {
+    font-size: 0.95rem; font-weight: 600; margin-top: 1.3rem; margin-bottom: 0.55rem;
+    color: var(--color-text);
+  }
+
+  .critique-zone {
+    margin-top: 1rem; padding: 0.7rem 0.95rem;
+    background: var(--color-bg-alt);
+    border: 1px dashed var(--color-border); border-radius: 4px;
+  }
+  .critique-zone .label {
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    font-size: 0.68rem; color: var(--color-text-light); margin-bottom: 0.3rem;
+  }
+  .critique-zone textarea {
+    width: 100%; border: 1px solid var(--color-border); border-radius: 3px;
+    padding: 0.4rem 0.55rem; font-size: 0.82rem; min-height: 50px;
+    resize: vertical; font-family: inherit; background: white;
+  }
+  .critique-zone textarea:focus { outline: 2px solid var(--color-primary-light); outline-offset: -1px; }
+
+  /* before/after */
+  .before-after {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;
+  }
+  .ba-col { border: 1px solid var(--color-border); border-radius: 5px; overflow: hidden; }
+  .ba-col .ba-head {
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ba-col.before .ba-head { background: var(--color-danger-bg); color: var(--color-danger); }
+  .ba-col.after .ba-head { background: var(--color-success-bg); color: var(--color-success); }
+  .ba-col .ba-body { padding: 0.7rem 0.9rem; font-size: 0.82rem; line-height: 1.55; background: white; }
+  .ba-col ul { margin: 0.3rem 0 0 1.1rem; padding: 0; }
+  .ba-col ul li { margin-bottom: 0.25rem; }
+  .ba-col .stat { font-size: 26px; font-weight: 600; line-height: 1; }
+  .ba-col.before .stat { color: var(--color-danger); }
+  .ba-col.after .stat { color: var(--color-success); }
+  .ba-col .stat-label { font-size: 0.75rem; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+  /* simplification matrix */
+  .matrix th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-light); font-weight: 600; }
+  .matrix td { font-size: 0.82rem; vertical-align: middle; }
+  .matrix .file { font-family: 'Consolas', monospace; font-size: 0.74rem; color: var(--color-primary-light); }
+  .pill {
+    display: inline-block; border-radius: 3px; padding: 0.1rem 0.45rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.good { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.info { background: var(--color-info-bg); color: var(--color-info); }
+  .pill.warn { background: var(--color-warning-bg); color: var(--color-warning); }
+  .pill.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+  .pill.subord { background: var(--color-purple-bg); color: var(--color-purple); }
+
+  /* 6-step flow diagram */
+  .step-flow {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.45rem; margin: 0.7rem 0;
+  }
+  .step-card {
+    background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.75rem 0.6rem; text-align: center; position: relative;
+  }
+  .step-card .num {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    background: var(--color-primary); color: white;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 12px;
+  }
+  .step-card h5 {
+    font-size: 0.85rem; font-weight: 600; margin: 0.6rem 0 0.2rem; color: var(--color-primary);
+  }
+  .step-card .role { font-size: 0.7rem; color: var(--color-text-light); }
+
+  /* mockup */
+  .lane-mock {
+    background: var(--color-bg-alt);
+    border-radius: 6px; padding: 1.1rem; margin: 0.7rem 0;
+  }
+  .lane-mock .header-mock { margin-bottom: 1rem; }
+  .lane-mock .header-mock .label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--color-text-light); font-weight: 600;
+  }
+  .lane-mock .header-mock h3 {
+    font-size: 18px; font-weight: 600; color: var(--color-primary); margin: 4px 0 4px;
+  }
+  .lane-mock .header-mock .sub { font-size: 12px; color: var(--color-text-light); }
+  .lane-mock .step-mock { margin-bottom: 1rem; display: flex; gap: 12px; align-items: flex-start; }
+  .lane-mock .step-mock .step-num {
+    background: var(--color-primary); color: white;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 13px; flex-shrink: 0;
+  }
+  .lane-mock .step-mock .step-body { flex: 1; }
+  .lane-mock .step-mock .step-title {
+    font-size: 14px; font-weight: 600; color: var(--color-primary); margin: 2px 0;
+  }
+  .lane-mock .step-mock .step-sub { font-size: 11px; color: var(--color-text-light); }
+  .lane-mock .step-card-mock {
+    background: white; border: 1px solid var(--color-border); border-radius: 5px;
+    padding: 0.7rem 0.85rem; margin-top: 6px; font-size: 12px;
+  }
+  .lane-mock pre.prompt-mock {
+    margin: 0; background: #0f172a; color: #e2e8f0;
+    font-family: 'Consolas', monospace; font-size: 11px; line-height: 1.55;
+    padding: 0.7rem 0.85rem; border-radius: 5px; max-height: 130px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .lane-mock .actions-mock { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .lane-mock .btn-mock {
+    background: white; border: 1px solid var(--color-border); padding: 0.25rem 0.55rem;
+    border-radius: 3px; font-size: 11px; color: var(--color-text);
+  }
+  .lane-mock .btn-mock.primary {
+    background: var(--color-primary); color: white; border-color: var(--color-primary);
+  }
+  .lane-mock .btn-mock.success {
+    background: var(--color-success); color: white; border-color: var(--color-success);
+  }
+
+  kbd {
+    background: var(--color-bg-alt); border: 1px solid var(--color-border);
+    border-radius: 3px; padding: 0.05rem 0.35rem; font-size: 0.78rem;
+    font-family: 'Consolas', monospace; color: var(--color-primary);
+  }
+  pre.code-block {
+    background: #0f172a; color: #e2e8f0; border-radius: 5px;
+    padding: 0.75rem 1rem; font-family: 'Consolas', monospace;
+    font-size: 0.78rem; line-height: 1.55; overflow-x: auto;
+  }
+  .quote {
+    border-left: 3px solid var(--color-primary-light);
+    background: var(--color-bg-alt);
+    padding: 0.55rem 1rem; font-style: italic; color: var(--color-text);
+    font-size: 0.85rem; margin: 0.85rem 0;
+  }
+  .anti-list {
+    background: var(--color-warning-bg); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 5px; padding: 0.65rem 0.85rem; margin: 0.5rem 0;
+  }
+  .anti-list h4 {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-warning); font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .anti-list ul { margin: 0; padding-left: 1.1rem; font-size: 0.78rem; }
+  .footer {
+    text-align: center; color: var(--color-text-light); font-size: 0.78rem;
+    margin: 1.5rem 0 1.5rem;
+  }
+  .print-tip {
+    background: var(--color-info-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 5px; padding: 0.55rem 0.85rem; font-size: 0.78rem;
+    margin-bottom: 1rem; color: var(--color-info);
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="container container-narrow">
+    <h1>Blueprint Simplification Review</h1>
+    <div class="subtitle">
+      Blueprint no longer thinks. The new <kbd>ExecutionLane</kbd> is a calm 6-step flow that renders Cory's
+      decisions and walks the operator from prompt to verification. The old 2,000-line SystemBlueprint is
+      preserved at <kbd>/portal/project/blueprint-legacy</kbd> for rollback only.
+    </div>
+    <div class="meta">
+      <span class="meta-item"><strong>Date:</strong> 2026-05-09</span>
+      <span class="meta-item"><strong>Status:</strong> ExecutionLane shipped — awaiting critique</span>
+      <span class="meta-item"><strong>Backend tsc:</strong> exit 0 (untouched this sprint)</span>
+      <span class="meta-item"><strong>Frontend tsc:</strong> exit 0</span>
+      <span class="meta-item"><strong>Files changed:</strong> 3 (1 new + 2 modified)</span>
+    </div>
+  </div>
+</div>
+
+<div class="container container-narrow">
+
+  <div class="print-tip">
+    <strong>How to use this document:</strong> read top to bottom, leave inline critique in any
+    <em>Critique &amp; notes</em> box. Boxes are real <code>&lt;textarea&gt;</code> fields.
+  </div>
+
+  <div class="toc">
+    <h3>Sections</h3>
+    <ol>
+      <li><a href="#s1">What shipped (one paragraph)</a></li>
+      <li><a href="#s2">Before / after by the numbers</a></li>
+      <li><a href="#s3">The 6 steps</a></li>
+      <li><a href="#s4">ExecutionLane mockup</a></li>
+      <li><a href="#s5">SystemBlueprint section audit</a></li>
+      <li><a href="#s6">Removed / collapsed / kept</a></li>
+      <li><a href="#s7">Continuity contract</a></li>
+      <li><a href="#s8">Language reduction</a></li>
+      <li><a href="#s9">Authority preservation</a></li>
+      <li><a href="#s10">What this sprint did NOT do</a></li>
+      <li><a href="#s11">Remaining cognitive risks</a></li>
+      <li><a href="#s12">File diff summary</a></li>
+      <li><a href="#s13">Open questions for the user</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="s1" class="section">
+    <h2><span class="num">01</span> What shipped (one paragraph)</h2>
+    <div class="lead">
+      One new lean page. Two route changes. One legacy banner.
+    </div>
+
+    <p style="font-size: 0.9rem;">
+      A new <kbd>frontend/src/pages/project/ExecutionLane.tsx</kbd> ships as a focused ~520-line page implementing the
+      6-step execution flow (Context → Task → Prompt → Execute → Verify → Iterate). It reads operational state
+      exclusively from <kbd>useUnifiedProjectState</kbd> and consumes Critique handoff prompts from the existing
+      <kbd>sessionStorage:visualWorkspace:pendingBuildPrompt</kbd> contract. The route <kbd>/portal/project/blueprint</kbd>
+      now serves <kbd>ExecutionLane</kbd>; the legacy <kbd>SystemBlueprint</kbd> (2,026 lines) was moved to
+      <kbd>/portal/project/blueprint-legacy</kbd> for rollback safety, with a top-of-page warning banner pointing
+      operators to the new surface. Mutations (<kbd>/next-action/accept</kbd>, <kbd>/next-action/complete</kbd>,
+      <kbd>/verify</kbd>) reuse existing endpoints unchanged. Backend untouched. Frontend <kbd>tsc</kbd> exit 0.
+      Zero new dependencies.
+    </p>
+
+    <div class="quote">
+      "Blueprint no longer thinks. Cory thinks. Blueprint executes."
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 1</div>
+      <textarea placeholder="Anything missing from the summary?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s2" class="section">
+    <h2><span class="num">02</span> Before / after by the numbers</h2>
+
+    <div class="before-after">
+      <div class="ba-col before">
+        <div class="ba-head">Before — SystemBlueprint</div>
+        <div class="ba-body">
+          <div class="stat">2,026</div>
+          <div class="stat-label">lines in one file</div>
+          <ul style="margin-top: 12px;">
+            <li>10+ visual sections (header, pending build, authority banner, beta banner, progress, system prompt, architecture, Cory plan, exec mode, components grid, demo overlay)</li>
+            <li>Build state machine: idle → generating → waiting_for_execution → validating → validated</li>
+            <li>4 panel surfaces with their own decision logic</li>
+            <li>Demo mode + autonomous mode + manual mode toggles</li>
+            <li>Project setup wizard fallback</li>
+            <li>Capability grid + maturity tracking</li>
+            <li>Hard ceiling: <strong>2,026 / 500 = 4.05× over the 500-line ceiling</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="ba-col after">
+        <div class="ba-head">After — ExecutionLane</div>
+        <div class="ba-body">
+          <div class="stat">524</div>
+          <div class="stat-label">lines (new file, single concern)</div>
+          <ul style="margin-top: 12px;">
+            <li>6 step cards. One concern per card.</li>
+            <li>No state machine — reads UnifiedProjectState; writes via existing mutations + refresh()</li>
+            <li>Zero panel duplication — consumes canonical state</li>
+            <li>No demo / autonomous / manual mode toggles</li>
+            <li>No project setup fallback (separate route concern)</li>
+            <li>No capability grid</li>
+            <li><strong>74% reduction in surface complexity</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size: 0.82rem; color: var(--color-text-light); margin-top: 0.65rem;">
+      The old SystemBlueprint isn't deleted — it lives at <kbd>/portal/project/blueprint-legacy</kbd> with a banner.
+      The line count comparison is "what the user sees by default at <kbd>/blueprint</kbd>", not total code in the repo.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 2</div>
+      <textarea placeholder="Numbers feel right? Missing dimensions?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s3" class="section">
+    <h2><span class="num">03</span> The 6 steps</h2>
+    <div class="lead">
+      Each step has one job. The user always knows where they are.
+    </div>
+
+    <div class="step-flow">
+      <div class="step-card"><div class="num">1</div><h5>Context</h5><div class="role">What &amp; why</div></div>
+      <div class="step-card"><div class="num">2</div><h5>Task</h5><div class="role">Files &amp; specifics</div></div>
+      <div class="step-card"><div class="num">3</div><h5>Prompt</h5><div class="role">Copy-ready</div></div>
+      <div class="step-card"><div class="num">4</div><h5>Execute</h5><div class="role">Paste validation</div></div>
+      <div class="step-card"><div class="num">5</div><h5>Verify</h5><div class="role">Quick check</div></div>
+      <div class="step-card"><div class="num">6</div><h5>Iterate</h5><div class="role">Continue or back</div></div>
+    </div>
+
+    <h3>What each step does</h3>
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>#</th><th>Step</th><th>Source / Action</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td><td><strong>Context</strong></td>
+          <td>Reads <kbd>state.next_action.title</kbd> + <kbd>.reason</kbd> + meta. If Critique handoff present, shows the page route.</td>
+        </tr>
+        <tr>
+          <td>2</td><td><strong>Task</strong></td>
+          <td>Reads <kbd>next_action.metadata.files_suggested</kbd> + <kbd>requirement_key</kbd> + <kbd>action_type</kbd>. For Critique handoff, says "see prompt for full spec."</td>
+        </tr>
+        <tr>
+          <td>3</td><td><strong>Prompt</strong></td>
+          <td>Critique handoff prompt OR a lightweight template built from the action. Copy / open-in-new-tab / mark-accepted buttons.</td>
+        </tr>
+        <tr>
+          <td>4</td><td><strong>Execute</strong></td>
+          <td>Textarea for the validation report from Claude Code. Submit calls <kbd>POST /api/portal/project/verify</kbd>.</td>
+        </tr>
+        <tr>
+          <td>5</td><td><strong>Verify</strong></td>
+          <td>Shows the verify result (pass/fail) OR an idle view with project health % + recent verification pass rate from <kbd>state.health</kbd>.</td>
+        </tr>
+        <tr>
+          <td>6</td><td><strong>Iterate</strong></td>
+          <td>"Complete &amp; continue" calls <kbd>/next-action/complete</kbd> + <kbd>refresh()</kbd>. "Back to Critique" links to <kbd>/portal/visual-workspace</kbd>. "Open Home" link.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.82rem;">
+      Step 6's "Complete &amp; continue" button is <strong>disabled until Step 5 verifies</strong> (when there's a Cory action to complete).
+      For Critique handoffs (no Cory action behind them), Complete just dismisses the handoff and refreshes. No friction.
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 3</div>
+      <textarea placeholder="Step labels right? Order? Should anything collapse?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s4" class="section">
+    <h2><span class="num">04</span> ExecutionLane mockup</h2>
+    <div class="lead">
+      What the page looks like when there's something to execute. Whitespace is the feature.
+    </div>
+
+    <div class="lane-mock">
+      <div class="header-mock">
+        <div class="label">Blueprint</div>
+        <h3>Execute the next step.</h3>
+        <div class="sub">Cory decides what's next. This page walks you through running it.</div>
+      </div>
+
+      <div class="step-mock">
+        <span class="step-num">1</span>
+        <div class="step-body">
+          <div class="step-title">Context</div>
+          <div class="step-sub">What we're executing and why.</div>
+          <div class="step-card-mock">
+            <strong>Wire campaign attribution to the Pilot funnel</strong>
+            <div style="font-size: 11px; color: var(--color-text-light); margin-top: 4px;">
+              14 leads landed on Pilot pages with no UTM — campaign source unrecoverable.
+            </div>
+            <div style="font-size: 10px; color: var(--color-text-light); margin-top: 6px;">
+              Source: <strong>Cory</strong> · Est: <strong>35m</strong> · Blast: <strong style="color: var(--color-warning);">medium</strong> · Confidence: <strong>78%</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-mock">
+        <span class="step-num">2</span>
+        <div class="step-body">
+          <div class="step-title">Task</div>
+          <div class="step-sub">The specifics — files, acceptance criteria.</div>
+          <div class="step-card-mock">
+            <div style="font-size: 10px; color: var(--color-text-light); margin-bottom: 6px;">
+              Action type: <code>wire_integration</code>
+            </div>
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-light); font-weight: 600;">Suggested files</div>
+            <ul style="margin: 4px 0 0 18px; font-size: 11px;">
+              <li><code>backend/src/services/campaignAttributionService.ts</code></li>
+              <li><code>frontend/src/pages/PilotZeroRiskPage.tsx</code></li>
+              <li><code>frontend/src/pages/PilotAITeamPage.tsx</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-mock">
+        <span class="step-num">3</span>
+        <div class="step-body">
+          <div class="step-title">Prompt</div>
+          <div class="step-sub">Copy this into Claude Code.</div>
+          <pre class="prompt-mock"># Wire campaign attribution to the Pilot funnel
+
+## Why
+14 leads landed on Pilot pages with no UTM — campaign source unrecoverable.
+
+## Suggested files
+- `backend/src/services/campaignAttributionService.ts`
+- `frontend/src/pages/PilotZeroRiskPage.tsx`
+...</pre>
+          <div class="actions-mock">
+            <span class="btn-mock primary"><i class="bi bi-clipboard"></i> Copy prompt</span>
+            <span class="btn-mock"><i class="bi bi-box-arrow-up-right"></i> Open in new tab</span>
+            <span class="btn-mock"><i class="bi bi-flag"></i> Mark accepted</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-mock">
+        <span class="step-num">4</span>
+        <div class="step-body">
+          <div class="step-title">Execute</div>
+          <div class="step-sub">Run it in Claude Code, then paste the validation report below.</div>
+          <div class="step-card-mock" style="background: var(--color-bg-alt); padding: 8px 10px; font-family: 'Consolas', monospace; color: var(--color-text-light); font-size: 11px;">
+            Paste the validation report from Claude Code here…
+          </div>
+          <div class="actions-mock">
+            <span class="btn-mock primary"><i class="bi bi-shield-check"></i> Submit &amp; verify</span>
+            <span style="font-size: 10px; color: var(--color-text-light); align-self: center;">Verification reads telemetry — not just the report's claims.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-mock">
+        <span class="step-num">5</span>
+        <div class="step-body">
+          <div class="step-title">Verify</div>
+          <div class="step-sub">Lightweight check. Quick confirm — not an audit.</div>
+          <div class="step-card-mock" style="display: flex; gap: 24px; align-items: center;">
+            <div>
+              <div style="font-size: 10px; text-transform: uppercase; color: var(--color-text-light); font-weight: 600;">Project health</div>
+              <div style="font-size: 22px; font-weight: 600; color: var(--color-success);">87%</div>
+            </div>
+            <div>
+              <div style="font-size: 10px; text-transform: uppercase; color: var(--color-text-light); font-weight: 600;">Recent verifications</div>
+              <div style="font-size: 22px; font-weight: 600; color: var(--color-primary);">100%</div>
+              <div style="font-size: 10px; color: var(--color-text-light);">passing</div>
+            </div>
+            <div style="flex: 1; font-size: 11px; color: var(--color-text-light);">Submit the validation report above to verify this specific step.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-mock">
+        <span class="step-num">6</span>
+        <div class="step-body">
+          <div class="step-title">Iterate</div>
+          <div class="step-sub">Continue or critique.</div>
+          <div class="actions-mock" style="margin-top: 6px;">
+            <span class="btn-mock success"><i class="bi bi-check2-circle"></i> Complete &amp; continue</span>
+            <span class="btn-mock"><i class="bi bi-bullseye"></i> Back to Critique</span>
+            <span class="btn-mock"><i class="bi bi-house"></i> Open Home</span>
+            <span style="margin-left: auto; font-size: 10px; color: var(--color-text-light); align-self: center;">
+              Need the legacy build surface? <u>Open it</u>.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size: 10px; color: var(--color-text-light); text-align: center; margin-top: 12px;">
+        Source: Cory · synthesized 9:42:01 AM · health 87%
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 4</div>
+      <textarea placeholder="Density? Spacing? Copy? Anything to cut?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s5" class="section">
+    <h2><span class="num">05</span> SystemBlueprint section audit</h2>
+    <div class="lead">
+      The old surface broken down section by section, with the keep / collapse / remove decision.
+    </div>
+
+    <table class="table table-sm matrix">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th style="width: 38px;">Line</th><th>Section</th><th>Issue</th><th>Decision</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1017</td><td><strong>Header</strong> with org name + industry + stage badges + mode toggle + autonomous toggle + demo button + System View link</td>
+          <td>Operational density. Multiple controls competing for the user's first glance.</td>
+          <td><span class="pill warn">collapsed</span> — ExecutionLane has a calm 3-line header (label, "Execute the next step.", subtle status)</td>
+        </tr>
+        <tr>
+          <td>1056</td><td><strong>Pending build banner</strong> from Critique workspace</td>
+          <td>Core feature — must preserve.</td>
+          <td><span class="pill good">kept</span> — ExecutionLane reads the same sessionStorage keys; surfaces as Step 1+3</td>
+        </tr>
+        <tr>
+          <td>1152</td><td><strong>Authority hierarchy banner</strong> ("Cory decides; Blueprint executes")</td>
+          <td>Banner on the old page tells operators "this isn't authority"; the new page IS authority-clean by structure.</td>
+          <td><span class="pill warn">absorbed</span> — replaced by the page's intrinsic structure (header subtitle says it directly)</td>
+        </tr>
+        <tr>
+          <td>1177</td><td><strong>Beta Banner</strong> ("Guided Build Mode (Beta)")</td>
+          <td>Self-promoting language; not relevant once the experience IS the guided mode.</td>
+          <td><span class="pill danger">removed</span></td>
+        </tr>
+        <tr>
+          <td>1190</td><td><strong>Progress Bar</strong> with completion %</td>
+          <td>Same number lives in Cory Home (Coverage tile). Re-rendering it here creates drift risk.</td>
+          <td><span class="pill danger">removed</span> — readiness/coverage live at Home only</td>
+        </tr>
+        <tr>
+          <td>1214</td><td><strong>System Prompt + Architecture editor</strong></td>
+          <td>Setup-time concern, not execution-time. Belongs in a setup route.</td>
+          <td><span class="pill subord">deferred</span> — kept in legacy; future setup route owns this</td>
+        </tr>
+        <tr>
+          <td>1392</td><td><strong>Cory — Unified Build Guide</strong> (plan + step)</td>
+          <td>The actual execution mechanic. ExecutionLane's 6 steps replace this with a calmer flow.</td>
+          <td><span class="pill warn">replaced</span> — now lives as Steps 3, 4, 5, 6 of ExecutionLane</td>
+        </tr>
+        <tr>
+          <td>1394</td><td><strong>Execution Mode Header</strong> (manual vs autonomous toggle)</td>
+          <td>Decision-making surface; decisions belong to Cory, not Blueprint.</td>
+          <td><span class="pill danger">removed</span></td>
+        </tr>
+        <tr>
+          <td>1447</td><td><strong>Cory — Unified Build Guide (merged Plan + Build Step)</strong></td>
+          <td>Big nested area; the most cognitively heavy part of the page.</td>
+          <td><span class="pill warn">replaced</span> — see Steps 3–6</td>
+        </tr>
+        <tr>
+          <td>1960</td><td><strong>IDLE: Components Grid</strong> with capability cards + build buttons per card</td>
+          <td>Distributed build buttons — each card is a competing entry point.</td>
+          <td><span class="pill subord">deferred</span> — kept in legacy; future System View can show capability topology without action affordances</td>
+        </tr>
+        <tr>
+          <td>515</td><td><strong>DemoOverlay</strong> + 60s demo flow</td>
+          <td>Sales-demo path; not part of the operator's daily flow.</td>
+          <td><span class="pill subord">deferred</span> — kept in legacy until product-led-growth routes land</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size: 0.82rem;">
+      <strong>Net effect:</strong> 4 sections removed outright (Beta Banner, Progress Bar, Execution Mode Header, distributed Build buttons in cards),
+      4 collapsed/replaced (Header, Cory Build Guide ×2, redundant authority banner), 4 deferred (Pending Build kept; System Prompt editor, Components
+      Grid, Demo overlay all retained on the legacy route).
+    </p>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 5</div>
+      <textarea placeholder="Decisions right? Anything that should move from deferred to removed (or back)?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s6" class="section">
+    <h2><span class="num">06</span> Removed / collapsed / kept</h2>
+    <div class="lead">
+      Same data as §5, sliced by decision.
+    </div>
+
+    <div class="row g-2">
+      <div class="col-md-4">
+        <div class="ba-col after">
+          <div class="ba-head" style="background: var(--color-success-bg); color: var(--color-success);">Kept (in ExecutionLane)</div>
+          <div class="ba-body" style="font-size: 0.82rem;">
+            <ul>
+              <li>Critique handoff pickup (Step 1 + 3)</li>
+              <li>Prompt copy mechanism (Step 3)</li>
+              <li>Validation report paste-back (Step 4)</li>
+              <li>Verification call (Step 5)</li>
+              <li>Mark complete + refresh (Step 6)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="ba-col" style="border: 1px solid var(--color-border); border-radius: 5px; overflow: hidden;">
+          <div class="ba-head" style="background: var(--color-warning-bg); color: var(--color-warning); padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">Collapsed / replaced</div>
+          <div class="ba-body" style="background: white; padding: 0.7rem 0.9rem; font-size: 0.82rem;">
+            <ul>
+              <li>Sprawling header → 3-line subtitle</li>
+              <li>Cory Build Guide ×2 → Steps 3–6</li>
+              <li>Authority banner → page intrinsic</li>
+              <li>Project health surfaces → Step 5 idle view</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="ba-col before" style="border-radius: 5px; overflow: hidden;">
+          <div class="ba-head">Removed from default surface</div>
+          <div class="ba-body" style="font-size: 0.82rem;">
+            <ul>
+              <li>Beta Banner</li>
+              <li>Progress Bar (lives at Home)</li>
+              <li>Execution Mode toggle</li>
+              <li>Distributed Build buttons in cards</li>
+              <li>Project setup wizard fallback</li>
+              <li>Components grid</li>
+              <li>Demo overlay flow</li>
+            </ul>
+            <div style="font-size: 0.7rem; color: var(--color-text-light); margin-top: 6px; font-style: italic;">
+              All "removed" items still exist at <kbd>/blueprint-legacy</kbd> for rollback.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 6</div>
+      <textarea placeholder="What's missing from the new surface that you actually use?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s7" class="section">
+    <h2><span class="num">07</span> Continuity contract</h2>
+    <div class="lead">
+      Existing flows that hit Blueprint must keep working.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Flow</th><th>Old behaviour</th><th>New behaviour</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Critique workspace "Send to Blueprint"</td>
+          <td>Navigates to <kbd>/portal/project/blueprint?build=visual-workspace</kbd>; SystemBlueprint reads sessionStorage and surfaces a banner</td>
+          <td>Same URL; ExecutionLane reads the same keys (<kbd>visualWorkspace:pendingBuildPrompt</kbd> + <kbd>visualWorkspace:pendingBuildSourceRoute</kbd>) and surfaces them as Step 1 + 3</td>
+        </tr>
+        <tr>
+          <td>Cory Home "Open Blueprint" buttons</td>
+          <td>Linked to <kbd>/portal/project/blueprint</kbd></td>
+          <td>Same URL — now lands on ExecutionLane</td>
+        </tr>
+        <tr>
+          <td>Portal nav "Blueprint"</td>
+          <td>Linked to <kbd>/portal/project/blueprint</kbd></td>
+          <td>Same URL — now lands on ExecutionLane</td>
+        </tr>
+        <tr>
+          <td>Default project landing (<kbd>/portal/project</kbd>)</td>
+          <td>Redirects to <kbd>/portal/project/blueprint</kbd></td>
+          <td>Same redirect — now lands on ExecutionLane</td>
+        </tr>
+        <tr>
+          <td>Existing endpoints (<kbd>/next-action/accept</kbd>, <kbd>/complete</kbd>, <kbd>/verify</kbd>)</td>
+          <td>SystemBlueprint called these from its build state machine</td>
+          <td>ExecutionLane calls the same endpoints from Steps 3, 4, 6 — and follows each with <kbd>refresh()</kbd> on the unified hook</td>
+        </tr>
+        <tr>
+          <td>Power-user / specialized flows in old UI (capability grid, autonomous mode, demo)</td>
+          <td>Right there on the page</td>
+          <td>Available at <kbd>/portal/project/blueprint-legacy</kbd>; new surface has a footer link</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 7</div>
+      <textarea placeholder="Continuity gaps?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s8" class="section">
+    <h2><span class="num">08</span> Language reduction</h2>
+    <div class="lead">
+      Vocabulary swap. Operational, not architectural.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Was</th><th>Is now (in ExecutionLane)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>"Guided Build Mode (Beta)"</td><td>(removed)</td></tr>
+        <tr><td>"Execution Mode Header"</td><td>(removed)</td></tr>
+        <tr><td>"Cory — Unified Build Guide"</td><td>"Step 3: Prompt"</td></tr>
+        <tr><td>"Manual / Autonomous"</td><td>(removed)</td></tr>
+        <tr><td>"Authority hierarchy reminder"</td><td>"Cory decides what's next. This page walks you through running it."</td></tr>
+        <tr><td>"orchestration"</td><td>"execution"</td></tr>
+        <tr><td>"production readiness"</td><td>"project health"</td></tr>
+        <tr><td>"validation result"</td><td>"validation report"</td></tr>
+        <tr><td>"governance"</td><td>(absent — governance lives in the unified queue, not on Blueprint)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 8</div>
+      <textarea placeholder="Better word choices? Anything still infrastructure-flavored?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s9" class="section">
+    <h2><span class="num">09</span> Authority preservation</h2>
+    <div class="lead">
+      Cory's authority is enforced by structure, not by reminder banners.
+    </div>
+
+    <ul style="font-size: 0.85rem;">
+      <li><strong>No local prioritization.</strong> The page renders <kbd>state.next_action</kbd> verbatim. There is no rank, no sort, no recommendation logic.</li>
+      <li><strong>No alternative actions.</strong> The page does not offer "or pick something else from the queue" — for that, the user goes to Home.</li>
+      <li><strong>No local readiness/coverage.</strong> Step 5 reads <kbd>state.health.score</kbd> and <kbd>state.health.verification_pass_rate</kbd> only.</li>
+      <li><strong>No autonomous mode.</strong> The page never executes anything for the user; Claude Code is always run by the operator.</li>
+      <li><strong>One mutation lane.</strong> Accept / verify / complete only — no other writes happen from this page.</li>
+      <li><strong>Refresh after mutation.</strong> Every successful mutation calls <kbd>refresh()</kbd> on the unified hook so Home + Critique + everywhere see the new state.</li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 9</div>
+      <textarea placeholder="Authority gaps?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s10" class="section">
+    <h2><span class="num">10</span> What this sprint did NOT do (intentional)</h2>
+    <div class="lead">
+      Honest scoping.
+    </div>
+
+    <div class="anti-list">
+      <h4>Out of scope this sprint</h4>
+      <ul>
+        <li><strong>Did NOT delete</strong> SystemBlueprint.tsx. The legacy surface is preserved at <kbd>/blueprint-legacy</kbd> with a warning banner.</li>
+        <li><strong>Did NOT migrate</strong> the Components Grid, Project Setup Wizard, Demo Overlay, or System Prompt editor. They remain on the legacy route until they have proper homes.</li>
+        <li><strong>Did NOT touch</strong> backend endpoints. The new page calls existing <kbd>/next-action/accept</kbd>, <kbd>/complete</kbd>, <kbd>/verify</kbd>.</li>
+        <li><strong>Did NOT introduce</strong> new state machines. ExecutionLane has 4 useState hooks vs SystemBlueprint's 15+.</li>
+        <li><strong>Did NOT add</strong> backend cognition / governance / orchestration of any kind.</li>
+        <li><strong>Did NOT add</strong> autonomous execution. The operator always runs Claude Code by hand.</li>
+        <li><strong>Did NOT remove</strong> the navItem "Blueprint". Same name, new home.</li>
+      </ul>
+    </div>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 10</div>
+      <textarea placeholder="Anything that should move into scope?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s11" class="section">
+    <h2><span class="num">11</span> Remaining cognitive risks</h2>
+    <div class="lead">
+      Honest list. Sized + timed.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>Risk</th><th>Symptom</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Two Blueprints exist</td>
+          <td>Operator finds the legacy route via bookmark; isn't sure which is canonical</td>
+          <td>Legacy banner + footer link from new lane; eventual deletion (timing in §13)</td>
+        </tr>
+        <tr>
+          <td>Components grid is gone from default</td>
+          <td>Operators who used "click capability X to build it" lose direct affordance</td>
+          <td>Cory's queue surfaces capability-driven actions when they matter; Home + Critique + ExecutionLane is the new path</td>
+        </tr>
+        <tr>
+          <td>Lightweight verification only calls <kbd>/verify</kbd></td>
+          <td>The richer Phase-11 progression evaluator (gaps detection, learning injection) isn't surfaced here</td>
+          <td>Next sprint: surface gap detection inline; show learning_injection actions when blocked</td>
+        </tr>
+        <tr>
+          <td>No "skip / dismiss" on Cory's action</td>
+          <td>If the operator wants to do something other than what Cory said, they go to Home → queue → pick another</td>
+          <td>This is intentional (one execution lane); add inline skip only if friction shows up in real use</td>
+        </tr>
+        <tr>
+          <td>Verification result UI is minimal</td>
+          <td>Pass = green check + message; fail = red X + message. No detail panel.</td>
+          <td>Next sprint: surface server-side error structure when fail; link to full logs</td>
+        </tr>
+        <tr>
+          <td>Step 4's textarea is the only paste mechanism</td>
+          <td>Operators may want to upload a file or paste rich output</td>
+          <td>Plain text is fine for V1; add file paste / drop only if friction shows up</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 11</div>
+      <textarea placeholder="Risks I'm missing?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s12" class="section">
+    <h2><span class="num">12</span> File diff summary</h2>
+    <div class="lead">
+      3 files. 1 new. 2 modified.
+    </div>
+
+    <table class="table table-sm" style="font-size: 0.82rem;">
+      <thead style="background: var(--color-bg-alt);">
+        <tr><th>File</th><th>Change</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>frontend/src/pages/project/ExecutionLane.tsx</kbd></td>
+          <td><span class="pill good">NEW</span> The lean 6-step Blueprint (~520 lines)</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/routes/portalRoutes.tsx</kbd></td>
+          <td><span class="pill info">MODIFIED</span> <kbd>/portal/project/blueprint</kbd> → ExecutionLane; new <kbd>/portal/project/blueprint-legacy</kbd> → SystemBlueprint; explanatory comment</td>
+        </tr>
+        <tr>
+          <td><kbd>frontend/src/pages/project/SystemBlueprint.tsx</kbd></td>
+          <td><span class="pill warn">LEGACY-MARKED</span> Top-of-page warning banner with link to the new lean Blueprint</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Verification</h3>
+    <ul style="font-size: 0.85rem;">
+      <li>Frontend <kbd>npx tsc --noEmit</kbd> — exit 0</li>
+      <li>Backend untouched this sprint</li>
+      <li>Zero new dependencies</li>
+      <li>Critique-handoff sessionStorage contract preserved (verified by grep)</li>
+      <li>Rollback: revert the 3 files; old Blueprint resumes at <kbd>/blueprint</kbd></li>
+    </ul>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 12</div>
+      <textarea placeholder="Anything in the diff to revert or extend?"></textarea>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="s13" class="section">
+    <h2><span class="num">13</span> Open questions for the user</h2>
+    <div class="lead">
+      Decisions that shape the next sprint.
+    </div>
+
+    <ol style="font-size: 0.88rem;">
+      <li><strong>Legacy deletion timing.</strong> SystemBlueprint stays at <kbd>/blueprint-legacy</kbd>. Hard-delete after 1 week of zero-traffic, 1 month, or wait for explicit "ship it" call?</li>
+      <li><strong>Components Grid future.</strong> Should the capability grid move to <kbd>/portal/project/system-v2</kbd> (System View) as a topology-only display (no build buttons), or get its own dedicated route?</li>
+      <li><strong>Project Setup Wizard.</strong> Currently buried inside SystemBlueprint. Should it move to <kbd>/portal/project/setup</kbd> as its own lean route, or stay where it is?</li>
+      <li><strong>Demo flow.</strong> The 60-second demo overlay is a sales asset. Should it become its own <kbd>/portal/demo</kbd> route, or be triggered from Cory Home as a "tour" affordance?</li>
+      <li><strong>Step 4 verification depth.</strong> V1 only calls <kbd>/verify</kbd>. Should it also call <kbd>/progression-evaluate</kbd> and surface gaps/learning_injection when blocked? (More info but more complexity.)</li>
+      <li><strong>Step 5 idle view.</strong> Currently shows project health % + recent verification pass rate. Useful, or noise that competes with Home?</li>
+      <li><strong>Skip affordance.</strong> Add a quiet "Pick something else" link in Step 3 (links to Home) for operators who don't want to execute Cory's pick?</li>
+      <li><strong>Visual workspace handoff completion.</strong> When the operator marks Critique-driven build complete, should they auto-redirect back to Critique to mark the issue resolved, or just refresh and stay on ExecutionLane?</li>
+    </ol>
+
+    <div class="critique-zone">
+      <div class="label">Critique &amp; notes &mdash; section 13</div>
+      <textarea placeholder="Decisions on each numbered question."></textarea>
+    </div>
+  </section>
+
+  <div class="footer">
+    Blueprint Simplification Review &middot; Colaberry Enterprise AI Leadership Accelerator &middot; 2026-05-09<br>
+    Productization Sprint &middot; ExecutionLane shipped &middot; awaiting critique
+  </div>
+
+</div>
+
+</body>
+</html>

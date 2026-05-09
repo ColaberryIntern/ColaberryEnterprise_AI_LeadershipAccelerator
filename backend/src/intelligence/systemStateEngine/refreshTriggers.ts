@@ -63,6 +63,55 @@ export type RefreshTriggerKind =
   // Phase 16 — causality replay + distributed validation.
   | 'root_cause_detected'
   | 'arbitration_completed'
+  // Phase 17 — adaptive governance triggers.
+  | 'governance_calibration_updated'
+  | 'recovery_chain_generated'
+  // Phase 18 — operator-calibrated governance evolution triggers.
+  | 'governance_calibration_approved'
+  | 'recovery_step_executed'
+  | 'forecast_calibration_updated'
+  // Phase 19 — federated organizational governance triggers.
+  | 'federation_consent_updated'
+  | 'archetype_federated'
+  // Phase 20 — bounded federated learning refinement triggers.
+  | 'archetype_reliability_evolved'
+  | 'federation_policy_approved'
+  // Phase 21 — distributed organizational cognition runtime triggers.
+  | 'distributed_broker_isolation_triggered'
+  | 'distributed_replay_restored'
+  // Phase 22 — within-partition cognition topology orchestration triggers.
+  | 'topology_fragmented'
+  | 'topology_recovery_orchestrated'
+  // Phase 23 — bounded operational execution substrate triggers.
+  | 'execution_worker_failed'
+  | 'execution_isolated'
+  // Phase 24 — deterministic operational cognition compression triggers.
+  | 'cognitive_load_overloaded'
+  | 'cognitive_guidance_generated'
+  // Phase 25 — deterministic counterfactual operational projection triggers.
+  | 'experimentation_sandbox_completed'
+  | 'experimentation_rehearsal_executed'
+  // Phase 26 — bounded live operational rehearsal substrate triggers.
+  | 'live_sandbox_runtime_completed'
+  | 'live_sandbox_runtime_expired'
+  // Phase 27 — bounded delegated operational execution substrate triggers.
+  | 'delegation_executed'
+  | 'delegation_expired'
+  // Phase 28 — execution resource governance + operational economics.
+  | 'quota_exhausted'
+  | 'pressure_changed'
+  // Phase 29 — stabilization playbook intelligence + recovery governance.
+  | 'stabilization_archetype_changed'
+  | 'recovery_pressure_changed'
+  // Phase 30 — recovery foresight UX + stabilization decision cognition.
+  | 'decision_compared'
+  | 'archaeology_replayed'
+  // Phase 31 — operator cognition continuity + governance memory.
+  | 'memory_persisted'
+  | 'timeline_updated'
+  // Phase 32 — multi-operator governance continuity + handoff cognition.
+  | 'handoff_persisted'
+  | 'transfer_generated'
   | 'manual';
 
 // ── Phase 4 stability protection ─────────────────────────────────────────

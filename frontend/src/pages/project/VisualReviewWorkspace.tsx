@@ -1,17 +1,24 @@
 /**
- * VisualReviewWorkspace — full-page UI critique surface.
+ * VisualReviewWorkspace — DEPRECATED.
  *
- * V1 layout (Phase 5 §3, foundation):
- *   - Left side: large iframe of the page being reviewed (controlled by a
- *     URL input).
- *   - Right side: critique form (kind / severity / description / target_selector),
- *     critique list with each critique's AI-generated suggestions inline,
- *     accept/reject controls, "Generate prompt" button.
+ * This was the legacy two-pane critique surface. It has been superseded by
+ * the productized Visual Engineering Workspace at:
  *
- * Click-to-annotate (drawing bounding boxes) is the obvious follow-up but
- * deferred — V1 collects critique text + selector strings.
+ *   frontend/src/features/visualWorkspace/VisualWorkspacePage.tsx
+ *   route: /portal/visual-workspace
+ *
+ * The legacy file is retained for rollback safety only — no live route
+ * points here, no nav surface exposes it, and the deprecation banner
+ * below redirects any user who lands here via a stale bookmark or deep
+ * link. Do not extend this file. Do not import from it. Future cleanup
+ * will delete it once the new workspace has been validated in production.
+ *
+ * Backend endpoints used here (`/api/portal/project/visual-review/*`)
+ * remain in service — the new workspace consumes them through
+ * `useVisualReviewSession`.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import { useVisualReviewSession } from '../../hooks/useVisualReviewSession';
 
@@ -57,6 +64,38 @@ const VisualReviewWorkspace: React.FC = () => {
 
   return (
     <div className="container-fluid p-0" style={{ minHeight: '100vh', background: 'var(--color-bg-alt)' }}>
+      {/* Deprecation banner — this surface has been superseded. */}
+      <div
+        role="alert"
+        style={{
+          background: 'var(--color-warning-bg)',
+          borderBottom: '1px solid rgba(245, 158, 11, 0.3)',
+          padding: '0.65rem 1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '1rem',
+          fontSize: 13,
+        }}
+      >
+        <div>
+          <strong style={{ color: 'var(--color-warning)' }}>
+            <i className="bi bi-exclamation-triangle me-2"></i>
+            Legacy critique surface
+          </strong>
+          <span style={{ color: 'var(--color-text)', marginLeft: 8 }}>
+            This page has been replaced by the productized critique workspace. Please use the new surface for all visual reviews.
+          </span>
+        </div>
+        <Link
+          to="/portal/visual-workspace"
+          className="btn btn-sm btn-primary"
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          <i className="bi bi-bullseye me-1"></i>Open Critique workspace
+        </Link>
+      </div>
+
       <div className="row g-0" style={{ minHeight: '100vh' }}>
         <div className="col-lg-8 p-3">
           <div className="card border-0 shadow-sm h-100">

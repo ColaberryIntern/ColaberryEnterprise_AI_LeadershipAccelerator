@@ -1741,12 +1741,34 @@ function SystemViewV2Inner() {
 
   return (
     <div>
+      {/* ── Legacy surface banner — System View Restructure Sprint ── */}
+      <div
+        role="alert"
+        className="mb-3 d-flex align-items-center justify-content-between"
+        style={{
+          background: 'var(--color-warning-bg)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderLeft: '3px solid var(--color-warning)',
+          borderRadius: 6,
+          padding: '0.55rem 0.85rem',
+          fontSize: 12,
+        }}
+      >
+        <span style={{ color: 'var(--color-text)' }}>
+          <i className="bi bi-exclamation-triangle me-1" style={{ color: 'var(--color-warning)' }}></i>
+          <strong style={{ color: 'var(--color-warning)' }}>Legacy System View.</strong>
+          &nbsp;The new 5-tab understanding surface lives at <code>/portal/project/system-v2</code>. This page is preserved for rollback while specialized flows migrate over.
+        </span>
+        <Link to="/portal/project/system-v2" className="btn btn-sm btn-primary" style={{ fontSize: 11 }}>
+          <i className="bi bi-arrow-right me-1"></i>Open new System View
+        </Link>
+      </div>
+
       {/* ── Header ── */}
       <div className="d-flex justify-content-between align-items-start mb-4">
         <div>
           <h4 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>
             {project.organization_name || 'AI Project'}
-            <span className="badge ms-2" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 10, verticalAlign: 'middle' }}>V2</span>
           </h4>
           <div className="d-flex align-items-center gap-2">
             {project.industry && (
