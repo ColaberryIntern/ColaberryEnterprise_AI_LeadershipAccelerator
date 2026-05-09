@@ -7,7 +7,9 @@ COPY frontend/package.json ./frontend/
 RUN npm ci
 COPY backend/ ./backend/
 COPY frontend/src/pages/ ./frontend/src/pages/
-RUN npm run build:backend
+# Bump V8 heap for tsc — Phase 16-32 added enough TS surface that the default
+# (~1.7GB on slim) crashes with SIGABRT in V8 young-generation allocation.
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build:backend
 
 FROM node:20-bookworm-slim
 WORKDIR /app
