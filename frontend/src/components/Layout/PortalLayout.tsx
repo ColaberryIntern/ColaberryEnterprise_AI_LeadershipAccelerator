@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { MentorContextProvider } from '../../contexts/MentorContext';
 import CoryAvatar from '../cory/CoryAvatar';
+import WorkspaceContextBar from './WorkspaceContextBar';
 
 function PortalLayout() {
   const { logout } = useParticipantAuth();
@@ -92,6 +93,10 @@ function PortalLayout() {
           </div>
         </div>
       </nav>
+
+      {/* Ambient continuity strip — reads UnifiedProjectState, signals
+          cross-surface context. Hidden on auth + legacy routes. */}
+      <WorkspaceContextBar />
 
       <main className="container py-4">
         <Outlet />
