@@ -54,6 +54,34 @@ const SURFACES = [
   { slug: '11-system-legacy-banner', route: '/portal/project/system-v2-legacy', label: 'Legacy System View (with warning banner)', extraWaitMs: 3000 },
 ];
 
+// Wait for the unified-state endpoint (the canonical signal that the
+// backend is fully warm) to return 200. Production rebuilds put the
+// nginx proxy live before the backend has finished starting; capturing
+// during that window catches "Could not load operational state" 502
+// error pages instead of the real surfaces. Poll up to ~3 minutes.
+async function waitForBackend(http, baseUrl, token) {
+  const url = `${baseUrl}/api/portal/project/unified-state`;
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const maxAttempts = 18;     // 18 × 10s = 3 min ceiling
+  const intervalMs = 10_000;
+  process.stdout.write(`[capture] Healthcheck: ${url}\n`);
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const res = await http.fetch(url, { headers, method: 'GET' });
+      if (res.status === 200) {
+        console.log(`[capture] Healthcheck: ✓ 200 on attempt ${i}`);
+        return true;
+      }
+      process.stdout.write(`[capture]   attempt ${i}/${maxAttempts}: ${res.status} (waiting ${intervalMs/1000}s)\n`);
+    } catch (err) {
+      process.stdout.write(`[capture]   attempt ${i}/${maxAttempts}: error ${err.message} (waiting ${intervalMs/1000}s)\n`);
+    }
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  console.log(`[capture] Healthcheck: ✗ never returned 200 — capturing anyway, expect error states`);
+  return false;
+}
+
 async function main() {
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
   console.log(`[capture] Base: ${BASE}`);
@@ -61,6 +89,15 @@ async function main() {
   console.log(`[capture] Token: ${TOKEN ? `${TOKEN.slice(0, 12)}…(${TOKEN.length} chars)` : 'NONE'}`);
 
   const browser = await chromium.launch({ headless: true });
+
+  // Wait for backend to be warm before any capture. Skip with SKIP_HEALTHCHECK=1.
+  if (!process.env.SKIP_HEALTHCHECK) {
+    const ctx = await browser.newContext();
+    await waitForBackend(ctx.request, BASE, TOKEN);
+    await ctx.close();
+  } else {
+    console.log('[capture] SKIP_HEALTHCHECK set — proceeding without healthcheck');
+  }
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 2, // retina-quality screenshots

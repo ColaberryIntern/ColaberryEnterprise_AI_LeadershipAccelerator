@@ -26,6 +26,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useUnifiedProjectState } from '../../hooks/useUnifiedProjectState';
+import CoryDrawer from '../workspace/CoryDrawer';
 
 const HIDDEN_ROUTE_PREFIXES = [
   '/portal/login',
@@ -55,6 +56,7 @@ const WorkspaceContextBar: React.FC = () => {
     || surface === 'legacy';
 
   const { state } = useUnifiedProjectState({ pollMs: 60_000 });
+  const [coryOpen, setCoryOpen] = useState(false);
 
   // Critique handoff signal — if the operator compiled a prompt in the
   // visual workspace, the bar reflects "build pending" continuity until
@@ -189,9 +191,12 @@ const WorkspaceContextBar: React.FC = () => {
         {inFlightLine?.text}
       </div>
 
-      {/* ─── Slot 3: Cory whisper (ambient hint) ─── */}
+      {/* ─── Slot 3: Cory whisper (ambient hint, clickable → opens Cory drawer) ─── */}
       {whisper && (
-        <div
+        <button
+          type="button"
+          onClick={() => setCoryOpen(true)}
+          title={`${whisper} · click for full context`}
           style={{
             flexShrink: 0,
             maxWidth: 360,
@@ -200,13 +205,22 @@ const WorkspaceContextBar: React.FC = () => {
             fontStyle: 'italic',
             fontSize: 11,
             opacity: 0.85,
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            textAlign: 'right',
           }}
-          title={whisper}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--color-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.color = 'var(--color-text-light)'; }}
         >
           <i className="bi bi-stars" style={{ marginRight: 5, opacity: 0.6 }}></i>
           {whisper}
-        </div>
+        </button>
       )}
+
+      {/* Cory drawer — ambient operational assistant, opened by clicking the whisper */}
+      <CoryDrawer open={coryOpen} onClose={() => setCoryOpen(false)} />
     </div>
   );
 };

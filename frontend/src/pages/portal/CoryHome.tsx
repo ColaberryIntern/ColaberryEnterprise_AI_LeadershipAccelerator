@@ -16,7 +16,7 @@
  * Hard rule: there is no "next action" panel anywhere else on the platform
  * that disagrees with this page. This page IS the next-action authority.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   useUnifiedProjectState,
@@ -25,6 +25,9 @@ import {
   type QueueEntry,
   type BlockerEntry,
 } from '../../hooks/useUnifiedProjectState';
+import ReadinessDrawer from '../../components/workspace/ReadinessDrawer';
+import CoverageDrawer from '../../components/workspace/CoverageDrawer';
+import WhyThisNextDrawer from '../../components/workspace/WhyThisNextDrawer';
 
 const BAND_COLOR: Record<ReadinessBand, { fg: string; bg: string; label: string }> = {
   red: { fg: 'var(--color-danger)', bg: 'var(--color-danger-bg)', label: 'Needs attention' },
@@ -48,6 +51,9 @@ const SEVERITY_COLOR: Record<BlockerEntry['severity'], string> = {
 const CoryHome: React.FC = () => {
   const navigate = useNavigate();
   const { state, loading, error, refresh } = useUnifiedProjectState({ pollMs: 60_000 });
+
+  // Contextual drawers — opened by clicking tiles or the priority card.
+  const [openDrawer, setOpenDrawer] = useState<'readiness' | 'coverage' | 'why-this-next' | null>(null);
 
   if (loading && !state) {
     return (
@@ -96,28 +102,30 @@ const CoryHome: React.FC = () => {
         <NextActionCard
           action={state.next_action}
           onGo={() => navigate(state.next_action!.target_route)}
+          onWhy={() => setOpenDrawer('why-this-next')}
         />
       ) : (
         <EmptyPriorityCard />
       )}
 
-      {/* 3-tile row */}
+      {/* 3-tile row — Readiness + Coverage are click-through to drawers */}
       <div className="row g-3 mb-3">
         <div className="col-md-4">
           <Tile
             label="Readiness"
-            sublabel="how prepared the project is"
+            sublabel="how prepared the project is · click for breakdown"
             value={`${state.readiness.score}%`}
             valueColor={readinessC.fg}
             footer={readinessC.label}
             footerColor={readinessC.fg}
             tooltip={state.readiness.reasons[0]}
+            onClick={() => setOpenDrawer('readiness')}
           />
         </div>
         <div className="col-md-4">
           <Tile
             label="Coverage"
-            sublabel="requirements with implementation"
+            sublabel="requirements with implementation · click for breakdown"
             value={state.coverage.requirements_total > 0
               ? `${state.coverage.score}%`
               : '—'}
@@ -126,6 +134,7 @@ const CoryHome: React.FC = () => {
               ? `${state.coverage.requirements_matched} of ${state.coverage.requirements_total} requirements matched`
               : 'No requirements extracted yet'}
             footerColor="var(--color-text-light)"
+            onClick={() => setOpenDrawer('coverage')}
           />
         </div>
         <div className="col-md-4">
@@ -139,6 +148,11 @@ const CoryHome: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Drawers — anchored at the page level, opened by tiles + priority card */}
+      <ReadinessDrawer open={openDrawer === 'readiness'} onClose={() => setOpenDrawer(null)} />
+      <CoverageDrawer open={openDrawer === 'coverage'} onClose={() => setOpenDrawer(null)} />
+      <WhyThisNextDrawer open={openDrawer === 'why-this-next'} onClose={() => setOpenDrawer(null)} />
 
       {/* Things to address — only when present (less alarming than "Critical blockers") */}
       {blockerCount > 0 && (
@@ -251,7 +265,7 @@ const CoryHome: React.FC = () => {
 
 // -------------------------- subcomponents -----------------------------------
 
-const NextActionCard: React.FC<{ action: NonNullable<ReturnType<typeof useUnifiedProjectState>['state']>['next_action']; onGo: () => void }> = ({ action, onGo }) => {
+const NextActionCard: React.FC<{ action: NonNullable<ReturnType<typeof useUnifiedProjectState>['state']>['next_action']; onGo: () => void; onWhy: () => void }> = ({ action, onGo, onWhy }) => {
   if (!action) return null;
   return (
     <div
@@ -274,6 +288,19 @@ const NextActionCard: React.FC<{ action: NonNullable<ReturnType<typeof useUnifie
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button type="button" className="btn btn-sm" style={{ background: 'white', color: 'var(--color-primary)', fontWeight: 600 }} onClick={onGo}>
           <i className="bi bi-arrow-right me-1"></i>Open in {targetLabel(action.target_route)}
+        </button>
+        <button
+          type="button"
+          onClick={onWhy}
+          style={{
+            background: 'transparent', color: 'white',
+            border: '1px solid rgba(255,255,255,0.4)',
+            padding: '0.25rem 0.7rem', borderRadius: 3,
+            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}
+          title="See why Cory queued this"
+        >
+          <i className="bi bi-info-circle me-1"></i>Why this next?
         </button>
         <span style={{
           background: 'rgba(255,255,255,0.18)',
@@ -405,29 +432,57 @@ const Tile: React.FC<{
   footer: string;
   footerColor: string;
   tooltip?: string;
-}> = ({ label, sublabel, value, valueColor, footer, footerColor, tooltip }) => (
-  <div
-    style={{
-      background: 'white',
-      border: '1px solid var(--color-border)',
-      borderRadius: 6,
-      padding: '0.85rem 1rem',
-      height: '100%',
-    }}
-    title={tooltip}
-  >
-    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)', fontWeight: 600 }}>
-      {label}
-    </div>
-    {sublabel && (
-      <div style={{ fontSize: 10, color: 'var(--color-text-light)', marginTop: 2, fontStyle: 'italic' }}>
-        {sublabel}
+  onClick?: () => void;
+}> = ({ label, sublabel, value, valueColor, footer, footerColor, tooltip, onClick }) => {
+  const interactive = !!onClick;
+  const baseStyle: React.CSSProperties = {
+    background: 'white',
+    border: '1px solid var(--color-border)',
+    borderRadius: 6,
+    padding: '0.85rem 1rem',
+    height: '100%',
+    width: '100%',
+    textAlign: 'left',
+    cursor: interactive ? 'pointer' : 'default',
+    transition: 'border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
+  };
+  const inner = (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+        <div>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)', fontWeight: 600 }}>
+            {label}
+          </div>
+          {sublabel && (
+            <div style={{ fontSize: 10, color: 'var(--color-text-light)', marginTop: 2, fontStyle: 'italic' }}>
+              {sublabel}
+            </div>
+          )}
+        </div>
+        {interactive && (
+          <i className="bi bi-arrow-up-right" style={{ fontSize: 11, color: 'var(--color-text-light)', opacity: 0.5, marginTop: 2 }} aria-hidden="true"></i>
+        )}
       </div>
-    )}
-    <div style={{ fontSize: 28, fontWeight: 600, color: valueColor, marginTop: 4, lineHeight: 1.1 }}>{value}</div>
-    <div style={{ fontSize: 11, color: footerColor, marginTop: 4 }}>{footer}</div>
-  </div>
-);
+      <div style={{ fontSize: 28, fontWeight: 600, color: valueColor, marginTop: 4, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 11, color: footerColor, marginTop: 4 }}>{footer}</div>
+    </>
+  );
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={tooltip}
+        style={baseStyle}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-primary-light)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(43,108,176,0.08)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.boxShadow = 'none'; }}
+      >
+        {inner}
+      </button>
+    );
+  }
+  return <div style={baseStyle} title={tooltip}>{inner}</div>;
+};
 
 const Stat: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
   <div>

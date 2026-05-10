@@ -1,13 +1,15 @@
 import React from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { MentorContextProvider } from '../../contexts/MentorContext';
 import CoryAvatar from '../cory/CoryAvatar';
 import WorkspaceContextBar from './WorkspaceContextBar';
+import ToastHost from '../workspace/MicroToast';
 
 function PortalLayout() {
   const { logout } = useParticipantAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -98,9 +100,28 @@ function PortalLayout() {
           cross-surface context. Hidden on auth + legacy routes. */}
       <WorkspaceContextBar />
 
+      {/* Page transition wrapper — keys on pathname so React unmounts the
+          old page + mounts the new one with a soft fade-in. No exit
+          animation (would require a transition library); the perceived
+          flash is replaced by a calm 220ms fade-in on the new page. */}
       <main className="container py-4">
-        <Outlet />
+        <div
+          key={location.pathname}
+          style={{ animation: 'wsFadeIn 220ms ease-out' }}
+        >
+          <Outlet />
+        </div>
       </main>
+      <style>{`
+        @keyframes wsFadeIn {
+          from { opacity: 0; transform: translateY(2px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
+      {/* Ambient micro-feedback — reacts to state-deltas (next priority
+          appearing, active build accepted/cleared, readiness improved). */}
+      <ToastHost />
 
       <CoryAvatar />
     </div>
