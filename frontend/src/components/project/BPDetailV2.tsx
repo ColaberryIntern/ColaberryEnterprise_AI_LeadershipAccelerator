@@ -27,6 +27,7 @@
  * via "Show full inventory" → PortalBusinessProcessesTab.
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import { lifecycleStateFor, type LifecycleState } from '../../utils/bpDomainClassifier';
 
@@ -54,9 +55,21 @@ const MATURITY_LABELS: Record<number, { label: string; blurb: string }> = {
   5: { label: 'Mature',    blurb: 'Steady state; ongoing work is refinement.' },
 };
 
-const IMPROVEMENT_TARGETS: { key: string; label: string; help: string }[] = [
+interface ImprovementTarget {
+  key: string;
+  label: string;
+  help: string;
+  /** Optional page-specific override (used when frontend_route is set). */
+  pageLabel?: string;
+  pageHelp?: string;
+}
+const IMPROVEMENT_TARGETS: ImprovementTarget[] = [
   { key: 'backend_improvement', label: 'Generate a backend prompt',  help: 'Drafts a Claude Code prompt to extend the backend layer of this BP.' },
-  { key: 'frontend_exposure',   label: 'Generate a UI prompt',       help: 'Drafts a prompt to add or improve the frontend surface for this BP.' },
+  {
+    key: 'frontend_exposure',   label: 'Generate a UI prompt',       help: 'Drafts a prompt to add or improve the frontend surface for this BP.',
+    pageLabel: 'Generate upgrade prompt',
+    pageHelp: 'Drafts a Claude Code prompt to redesign / upgrade this page.',
+  },
   { key: 'agent_enhancement',   label: 'Generate an agent prompt',   help: 'Drafts a prompt to evolve the agent or autonomous layer.' },
 ];
 
@@ -68,10 +81,12 @@ function toast(msg: string) {
 }
 
 const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate: _onUpdate }) => {
+  const navigate = useNavigate();
   const [p, setP] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showAllReqs, setShowAllReqs] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [previewLoaded, setPreviewLoaded] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -115,6 +130,22 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate: _onUpdate }
     if (gaps.length > 0) missing.push(`${gaps.length} open gap${gaps.length === 1 ? '' : 's'} flagged by analysis`);
     return { working, missing };
   }, [p]);
+
+  /**
+   * Hand this Page BP off to the Critique workspace. We seed sessionStorage
+   * with the page route + BP id so VisualWorkspacePage (next render) can
+   * pre-create or pre-select a session for this surface without the
+   * operator needing to navigate manually.
+   */
+  const handleCritique = (route: string) => {
+    try {
+      sessionStorage.setItem('critique:autoOpenRoute', route);
+      sessionStorage.setItem('critique:autoOpenBpId', processId);
+      sessionStorage.setItem('critique:autoOpenAt', new Date().toISOString());
+    } catch { /* localStorage unavailable */ }
+    onClose();
+    navigate('/portal/visual-workspace');
+  };
 
   const handleGenerate = async (target: string) => {
     setGenerating(target);
@@ -226,6 +257,93 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate: _onUpdate }
         {intro}
       </p>
 
+      {/* ─── Live preview — only renders for Page BPs (frontend_route set) ─── */}
+      {p.frontend_route && (
+        <section style={{ marginBottom: '1.5rem' }}>
+          <div style={{
+            display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+            marginBottom: '0.65rem', gap: 12, flexWrap: 'wrap',
+          }}>
+            <div style={{
+              fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+              color: 'var(--color-text-light)', fontWeight: 600,
+            }}>
+              Live preview
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <a
+                href={p.frontend_route}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: 11.5, color: 'var(--color-primary-light)',
+                  textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+              >
+                <i className="bi bi-box-arrow-up-right" style={{ fontSize: 11 }}></i>
+                Open <code style={{ background: 'var(--color-bg-alt)', padding: '0 5px', borderRadius: 3, fontSize: 11 }}>{p.frontend_route}</code>
+              </a>
+              <button
+                type="button"
+                onClick={() => handleCritique(p.frontend_route)}
+                style={{
+                  background: 'var(--color-primary)', color: 'white',
+                  border: 'none', padding: '0.35rem 0.75rem', borderRadius: 4,
+                  fontSize: 11.5, fontWeight: 500, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                }}
+                title="Open this page in the Critique workspace to pin issues and compile a prompt"
+              >
+                <i className="bi bi-bullseye" style={{ fontSize: 11 }}></i>
+                Critique this page
+              </button>
+            </div>
+          </div>
+          <div
+            style={{
+              position: 'relative',
+              background: 'var(--color-bg-alt)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+              overflow: 'hidden',
+              height: 420,
+            }}
+          >
+            {!previewLoaded && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--color-text-light)', fontSize: 12,
+                pointerEvents: 'none',
+              }}>
+                <span className="spinner-border spinner-border-sm me-2" />
+                Loading {p.frontend_route}…
+              </div>
+            )}
+            <iframe
+              src={p.frontend_route}
+              title={`Preview of ${p.name}`}
+              onLoad={() => setPreviewLoaded(true)}
+              style={{
+                width: '100%', height: '100%', border: 'none',
+                background: 'white',
+                opacity: previewLoaded ? 1 : 0,
+                transition: 'opacity 220ms ease',
+              }}
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            />
+          </div>
+          <div style={{
+            fontSize: 11, color: 'var(--color-text-light)', marginTop: 6,
+            fontStyle: 'italic',
+          }}>
+            Preview is the live production surface. Use "Critique this page" to pin issues, or "Generate upgrade prompt" below to draft a redesign brief.
+          </div>
+        </section>
+      )}
+
       {/* ─── Where it stands (what's working / what's missing) ─── */}
       <section style={{ marginBottom: '1.5rem' }}>
         <div style={{
@@ -330,28 +448,33 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate: _onUpdate }
           Next steps
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          {IMPROVEMENT_TARGETS.map(t => (
-            <button
-              key={t.key}
-              type="button"
-              title={t.help}
-              disabled={!!generating}
-              onClick={() => handleGenerate(t.key)}
-              style={{
-                background: 'white', color: 'var(--color-primary)',
-                border: '1px solid var(--color-border)',
-                padding: '0.45rem 0.85rem', borderRadius: 4,
-                fontSize: 12.5, fontWeight: 500, cursor: generating ? 'wait' : 'pointer',
-                opacity: generating && generating !== t.key ? 0.5 : 1,
-              }}
-              onMouseEnter={(e) => { if (!generating) e.currentTarget.style.borderColor = 'var(--color-primary-light)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
-            >
-              {generating === t.key
-                ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 11, height: 11 }} /> Drafting…</>
-                : t.label}
-            </button>
-          ))}
+          {IMPROVEMENT_TARGETS.map(t => {
+            const isPage = !!p.frontend_route;
+            const label = isPage && t.pageLabel ? t.pageLabel : t.label;
+            const help = isPage && t.pageHelp ? t.pageHelp : t.help;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                title={help}
+                disabled={!!generating}
+                onClick={() => handleGenerate(t.key)}
+                style={{
+                  background: 'white', color: 'var(--color-primary)',
+                  border: '1px solid var(--color-border)',
+                  padding: '0.45rem 0.85rem', borderRadius: 4,
+                  fontSize: 12.5, fontWeight: 500, cursor: generating ? 'wait' : 'pointer',
+                  opacity: generating && generating !== t.key ? 0.5 : 1,
+                }}
+                onMouseEnter={(e) => { if (!generating) e.currentTarget.style.borderColor = 'var(--color-primary-light)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+              >
+                {generating === t.key
+                  ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 11, height: 11 }} /> Drafting…</>
+                  : label}
+              </button>
+            );
+          })}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontStyle: 'italic' }}>
           Each button drafts a Claude Code prompt and copies it to the clipboard. Run the prompt externally; nothing executes from here.
