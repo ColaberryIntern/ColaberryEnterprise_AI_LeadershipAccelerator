@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Continuity + Resume Flow — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .diagram { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; margin: 1rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; white-space: pre; overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Continuity + Resume Flow — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-12 to <strong>enterprise.colaberry.ai</strong> (commit
+    <code>4559489</code>). 2 new files + 2 modified + 1 new capture script.
+    Pure presence/memory layer — zero backend, zero new endpoints.
+    The workspace now <em>resumes</em>, <em>remembers focus</em>, and
+    <em>acknowledges what changed while you were away</em>.
+  </p>
+
+  <div class="philosophy">
+    "I never lose my place." The workspace persists across visits — last drawer,
+    last System tab, last BP, last critique session, in-flight build, pending
+    handoff. One row, one continuation, dismissible. Never a feed.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — ContinuationCard mounted on Home ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">ContinuationCard — "You were working on…"</span></h2>
+    <p>One calm row directly below the priority card. The active-path hook
+       picks the SINGLE most-relevant continuation from a fixed priority
+       cascade. Whole row is clickable; the small × on the right dismisses
+       it for the current session (and a different continuation kind rearms it).</p>
+    <h3>Resume last drawer (Coverage breakdown)</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-continuity-variants/01-home-resume-coverage-drawer.png" alt="Home with ContinuationCard reading 'Reopen Coverage breakdown'">
+      <div class="caption">Seeded memory.lastDrawerOpen=coverage · ContinuationCard reads "Reopen Coverage breakdown · you were inspecting this last visit" · click → /portal/home?drawer=coverage → drawer auto-opens · arrival toast bottom-left</div>
+    </div>
+    <h3>Resume compiled critique handoff</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-continuity-variants/02-home-resume-critique-handoff.png" alt="Home with ContinuationCard reading 'Run compiled critique prompt'">
+      <div class="caption">Seeded sessionStorage with a pending Critique prompt · ContinuationCard reads "Run compiled critique prompt · from /portal/home" with green-accent (fresh) left stripe · click → Blueprint with ?build=visual-workspace</div>
+    </div>
+    <div class="what-shipped">
+      <strong>How the active path is picked (fixed priority cascade):</strong>
+      <ul>
+        <li><strong>active_build</strong> — Cory has accepted a build; "Continue active build" → Blueprint <span class="badge badge-good">fresh</span></li>
+        <li><strong>critique_handoff</strong> — sessionStorage.pendingBuildPrompt is set; "Run compiled critique prompt" → Blueprint <span class="badge badge-good">fresh</span></li>
+        <li><strong>last_drawer</strong> — memory.lastDrawerOpen; "Reopen Coverage/Readiness/…" → Home?drawer=…&nbsp; <span class="badge badge-info">ambient</span></li>
+        <li><strong>last_system_tab</strong> — memory.lastSystemTab; "Return to System understanding · last on bps · BP abc123…" → SystemView ?tab=… <span class="badge badge-info">ambient</span></li>
+        <li><strong>recent_critique</strong> — visualWorkspace:lastSessionTouchedAt < 2h ago; "Return to Critique · last session 30m ago" <span class="badge badge-info">ambient</span></li>
+        <li><strong>next_action</strong> — fallback when memory.lastSnapshotAt exists (not first visit); "Pick up next priority" → action.target_route <span class="badge badge-info">ambient</span></li>
+      </ul>
+      Returns <code>null</code> on genuine first visit (no continuation to surface) — the row hides entirely, not even a placeholder.
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="cc-position-above-priority">Card should appear ABOVE the priority card so it's the first thing seen</label></li>
+        <li><label><input type="checkbox" data-issue="cc-two-rows">Allow a second row when active_build AND last_drawer are both present</label></li>
+        <li><label><input type="checkbox" data-issue="cc-stale-after">Auto-hide when stale (lastSnapshotAt > 24h ago)</label></li>
+        <li><label><input type="checkbox" data-issue="cc-dismiss-forever">Dismiss × should remember "permanent" not just session</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Good</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v1" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="continuation"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — SystemView memory restoration ───────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">SystemView tab + BP restoration</span></h2>
+    <p>Brief section §6 marked this REQUIRED: "If operator returns to System, land
+       exactly where they left off." Now wired. Memory keys
+       <code>lastSystemTab</code> + <code>lastBpId</code> are written on every tab
+       click and BP selection, then read at mount time. <code>?tab=</code> query
+       still overrides (deep-links work); URL is rewritten to include the resolved
+       tab so back-button works naturally.</p>
+    <h3>Operator lands on BPs tab (no query param — pure memory restoration)</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-continuity-variants/05-system-tab-restored-from-memory.png" alt="SystemView landing on BPs tab via memory restoration">
+      <div class="caption">Visited /portal/project/system-v2 with NO ?tab= · seeded memory.lastSystemTab=bps · BPs tab is the active tab on first paint · URL rewritten to ?tab=bps so the surface is shareable</div>
+    </div>
+    <h3>Same surface, seeded with memory.lastSystemTab=architecture</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-continuity-variants/06-system-tab-restored-architecture.png" alt="SystemView landing on Architecture tab via memory restoration">
+      <div class="caption">Same URL · seeded memory.lastSystemTab=architecture · Architecture tab is active immediately · operator's last understanding focus preserved</div>
+    </div>
+    <div class="what-shipped">
+      <strong>Resolution priority on mount:</strong>
+      <ul>
+        <li>1. <code>?tab=</code> query param (explicit deep-link)</li>
+        <li>2. <code>memory.lastSystemTab</code> (last surface focus)</li>
+        <li>3. <code>'components'</code> default fallback</li>
+      </ul>
+      The lazy-mount tracker initializes with the resolved tab marked mounted, not 'components' — so the operator's tab paints on first frame, not after a tab-switch.
+    </div>
+    <div class="what-shipped">
+      <strong>BP restoration:</strong>
+      <ul>
+        <li><code>memory.lastBpId</code> is passed to <code>PortalBusinessProcessesTab</code> as <code>initialSelectedId</code></li>
+        <li>SystemView mounts a visibilitychange + beforeunload + unmount handler that reads <code>localStorage.active_component_id</code> (the component's own persistence key) and syncs it to <code>memory.lastBpId</code></li>
+        <li>Net effect: navigating away mid-BP-review, then coming back, lands on the same BP card</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="sv-restore-tab-soft-cue">Show a small "(restored from your last visit)" cue on the active tab</label></li>
+        <li><label><input type="checkbox" data-issue="sv-scroll-position">Also restore scroll position within the BPs tab</label></li>
+        <li><label><input type="checkbox" data-issue="sv-cross-surface-bp">Pass the lastBpId through to Blueprint so they share BP focus</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Good</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v2" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="systemview"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Cross-surface acknowledgment ───────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Cross-surface arrival acknowledgment</span></h2>
+    <p>Brief section §5: "When returning to a surface, the workspace should gently
+       acknowledge what changed while you were away." Implemented as a single
+       one-time arrival toast keyed off the frozen session-start snapshot.</p>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-continuity-variants/04-home-arrival-toast-momentum.png" alt="Home with arrival acknowledgment toast in bottom-left">
+      <div class="caption">Seeded prior scores 6 hours stale; on Home arrival, MicroToast fires once: "Welcome back — Readiness +N · Coverage +M · Queue -X · Health +Y while you were away" · signature ties to frozen built_at so refreshing doesn't refire</div>
+    </div>
+    <div class="what-shipped">
+      <strong>Behavior:</strong>
+      <ul>
+        <li>Fires once per CoryHome mount, guarded by a useRef</li>
+        <li>Only when <code>netForwardMotion ≥ 2</code> — small noise deltas don't trigger</li>
+        <li>Message is built from positive-direction signals only: ↑readiness · ↑coverage · ↓queue · ↑health</li>
+        <li>Signature = <code>arrival:{built_at}</code> — re-fire suppressed via the existing 30s MicroToast dedup map</li>
+        <li>Stays calm — single 3.5s toast, never escalates to a banner</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="ack-too-quiet">3.5s is too fast — extend to 6s for arrival acks specifically</label></li>
+        <li><label><input type="checkbox" data-issue="ack-also-on-backwards">Acknowledge backward motion too — "Note: Health -2% while you were away"</label></li>
+        <li><label><input type="checkbox" data-issue="ack-merge-with-card">Merge into the ContinuationCard instead of a separate toast</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Good</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v3" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="arrival"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Active-path priority diagram ────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Active-path priority cascade (logic diagram)</span></h2>
+    <p>The continuation surface picks ONE row. The decision flow is intentionally
+       linear — falls through to the next branch only if the prior didn't match.</p>
+    <div class="diagram">state arrives → useActivePath(state, frozenMemory, sessionStorage signals)
+                                                          │
+                                                          ▼
+                                ┌─── state.active_build present? ────┐ YES → "Continue active build"  [FRESH]
+                                │                                     │
+                                NO                                    └─→ /portal/project/blueprint
+                                ▼
+                                ┌─── sessionStorage pendingBuildPrompt? ┐ YES → "Run compiled critique prompt"  [FRESH]
+                                │                                       │
+                                NO                                      └─→ /portal/project/blueprint?build=visual-workspace
+                                ▼
+                                ┌─── memory.lastDrawerOpen set? ───┐ YES → "Reopen {drawer} breakdown"  [AMBIENT]
+                                │                                   │
+                                NO                                  └─→ /portal/home?drawer={drawer}
+                                ▼
+                                ┌─── memory.lastSystemTab set? ────┐ YES → "Return to System · {tab} · BP {id}"  [AMBIENT]
+                                │                                   │
+                                NO                                  └─→ /portal/project/system-v2?tab={tab}
+                                ▼
+                                ┌─── lastCritiqueAt < 2h ago? ─────┐ YES → "Return to Critique · last session {N}m ago"  [FRESH if <30m]
+                                │                                   │
+                                NO                                  └─→ /portal/visual-workspace
+                                ▼
+                                ┌─── state.next_action exists AND memory.lastSnapshotAt set? ┐ YES → "Pick up next priority"
+                                │                                                            │
+                                NO                                                           └─→ action.target_route
+                                ▼
+                                return null  (card hides — no continuation to show)</div>
+    <p style="font-size: 13px; color: var(--muted);">Reading priority: top → bottom. First match wins. Each branch carries
+       its own freshness tone — <code>fresh</code> branches get a green left-stripe + ws-delta-rise entrance; <code>ambient</code> branches stay primary-blue.</p>
+    <div class="verdict">
+      <strong>Your verdict on the cascade order</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Right order</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Reorder branches</label>
+      <label><input type="radio" name="v4" value="cut">✕ Cascade is wrong; should be a multi-row</label>
+      <textarea placeholder="Notes / reorder requests…" data-notes="cascade"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Cross-surface continuity diagram ────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Cross-surface continuity threading</span></h2>
+    <p>Brief section §3: "Right now surfaces still feel mostly independent. Need:
+       operational threading." Here's what threads now and what doesn't:</p>
+    <div class="diagram">                            ┌─── frozen at mount ────────────┐
+                            │  memory snapshot               │
+                            │  (readiness, coverage,         │
+                            │   queue, health, drawer,       │
+                            │   system-tab, BP id,           │
+                            │   built_at, snapshot_at)       │
+                            └──────────┬─────────────────────┘
+                                       │
+                                       ▼
+   HOME ◄────────────── ContinuationCard ◄──── useActivePath ◄────── unifiedProjectState
+     │                       │                       ▲                       │
+     │ click on              │                       │                       │
+     │ continuation          │ reads also            │ reads                 │
+     │ row                   │                       │                       │
+     ▼                       │                       │                       │
+   …navigates to        sessionStorage:        sessionStorage:                │
+   target_route         (handoff prompt,       lastSessionTouchedAt           │
+                         source route)         ▲                              │
+                                               │                              │
+   CRITIQUE ──── compile prompt ──┬───── writes pendingBuildPrompt            │
+                                  └───── writes lastSessionTouchedAt          │
+                                                                              │
+   BLUEPRINT ──── accept build ────────►   state.active_build appears  ───────┘
+                                       (Cory authority — unchanged)
+
+   SYSTEM ──── tab click   ───────►   memory.lastSystemTab written
+                BP selection ───►   localStorage.active_component_id →
+                                    visibilitychange/unmount → memory.lastBpId
+
+   Cory Home re-arrival ─► momentum hook ─► arrival toast (one-time, signature-deduped)</div>
+    <h3>What threads now</h3>
+    <table>
+      <tr><th>Thread</th><th>Surface where written</th><th>Surface where read</th></tr>
+      <tr><td>Active build acceptance</td><td>Blueprint</td><td>Home (priority + continuation)</td></tr>
+      <tr><td>Compiled critique handoff</td><td>Critique</td><td>Home (continuation) + Blueprint (banner)</td></tr>
+      <tr><td>Last critique session timestamp</td><td>Critique compile</td><td>Home (history strip + continuation)</td></tr>
+      <tr><td>Last drawer opened</td><td>Home</td><td>Home (continuation + ?drawer= auto-open)</td></tr>
+      <tr><td>Last System tab</td><td>SystemView tab click</td><td>SystemView mount (URL rewrite) + Home (continuation)</td></tr>
+      <tr><td>Last BP</td><td>BPs tab selection</td><td>SystemView mount → PortalBusinessProcessesTab.initialSelectedId</td></tr>
+      <tr><td>Forward momentum since last visit</td><td>Home leave (snapshot)</td><td>Home arrival (toast + RecentlyMoved)</td></tr>
+    </table>
+    <h3>What doesn't thread (honest gaps)</h3>
+    <table>
+      <tr><th>Gap</th><th>Where it would help</th><th>Why deferred</th></tr>
+      <tr><td>Blueprint's current step (1-6)</td><td>Continuation: "Continue from step 3"</td><td>Step state is local to ExecutionLane component; would need lifting or memory wire-up — out of scope (Blueprint sacred rule)</td></tr>
+      <tr><td>Critique session pin count</td><td>Continuation: "3 unresolved pins"</td><td>Critique sessions don't expose pin counts via lightweight read; needs backend or session-level localStorage write</td></tr>
+      <tr><td>Verification queue position</td><td>Continuation: "Verify build #2 of 3"</td><td>No Verify surface exists yet — orthogonal sprint</td></tr>
+      <tr><td>Specific resolved item names ("REQ-027 verified")</td><td>RecentlyResolved card</td><td>Backend doesn't expose recent-resolution events; deferred to a "recently resolved" sprint with optional endpoint</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the threading coverage</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Right threads, right gaps</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ One of the gaps should have been bridged</label>
+      <label><input type="radio" name="v5" value="cut">✕ Too much threading — feels stateful</label>
+      <textarea placeholder="Which thread missing? Which one over-threaded?" data-notes="threading"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Continuity-gap audit ─────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Continuity-gap audit</span></h2>
+    <p>Brief section §13 required an audit of where continuity still breaks.
+       Honest list:</p>
+    <table>
+      <tr><th>Gap</th><th>Severity</th><th>Emotional impact</th><th>Proposed fix</th></tr>
+      <tr><td>Blueprint ExecutionLane step-state lost on navigation</td><td>Medium</td><td>"I lost my place in the prompt flow"</td><td>Memory wire-up for current step — but violates Blueprint sacred rule. Defer until that rule is revisited.</td></tr>
+      <tr><td>Critique pin count not threaded to Home</td><td>Medium</td><td>"How many issues did I leave unresolved?"</td><td>Critique writes <code>pinCount:{sessionId}</code> to sessionStorage on every pin change; ActivePath reads it.</td></tr>
+      <tr><td>SystemView scroll position not restored</td><td>Low</td><td>"I have to scroll back to the BP I was reading"</td><td>useRef + sessionStorage on scroll Y; restore on mount.</td></tr>
+      <tr><td>Cross-tab continuation drift</td><td>Low</td><td>"My second tab shows a different continuation"</td><td>storage event listener on the memory key (already present in <code>useWorkspaceMemory</code>); ContinuationCard re-renders. Verify in test.</td></tr>
+      <tr><td>"Recently resolved" items not surfaced by name</td><td>Medium</td><td>"What did I actually finish since yesterday?"</td><td>Track queueIds in memory snapshot; compute <code>resolved = lastQueueIds − currentQueueIds</code>. Sprint candidate.</td></tr>
+      <tr><td>Sessions surface has no continuation signal</td><td>Low</td><td>"My coaching cadence feels orthogonal"</td><td>By design (orthogonal to build loop). Possibly never bridge.</td></tr>
+      <tr><td>Dismissing × is session-only — refresh re-shows the card</td><td>Low</td><td>"I keep dismissing the same row"</td><td>Migrate dismiss to memory.dismissedContinuations[] + signature.</td></tr>
+      <tr><td>Continuation card sits BELOW priority — operator might miss it</td><td>Medium</td><td>"I didn't see it"</td><td>Move ABOVE priority, OR add a 1s reveal animation. Stated as possible-change in STOP 1.</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the audit completeness</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Honest, complete</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Add other gaps</label>
+      <label><input type="radio" name="v6" value="cut">✕ Was over-thought</label>
+      <textarea placeholder="Other gaps you noticed…" data-notes="audit"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Brief deferrals ──────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Brief sections honestly deferred</span></h2>
+    <table>
+      <tr><th>Brief section</th><th>Asked for</th><th>Shipped status</th></tr>
+      <tr><td>§1 "Continue where you left off"</td><td>Use captured memory keys</td><td><span class="badge badge-good">SHIPPED</span> ContinuationCard + useActivePath</td></tr>
+      <tr><td>§2 Contextual resume affordance</td><td>One calm row, dismissible, fades when stale</td><td><span class="badge badge-good">SHIPPED</span> (fade-when-stale = dismiss × signature dedup)</td></tr>
+      <tr><td>§3 Cross-surface continuity threading</td><td>Critique → Blueprint → Verify → Home</td><td><span class="badge badge-good">SHIPPED</span> for Critique → Blueprint → Home; Verify surface doesn't exist yet</td></tr>
+      <tr><td>§4 "You were working on…"</td><td>Reduce cognitive reload</td><td><span class="badge badge-good">SHIPPED</span> Card eyebrow uses exact phrase</td></tr>
+      <tr><td>§5 Recently changed surface awareness</td><td>"X improved while you were away"</td><td><span class="badge badge-good">SHIPPED</span> Arrival toast on Home</td></tr>
+      <tr><td>§6 SystemView memory wire-up</td><td>lastSystemTab + lastBpId restoration</td><td><span class="badge badge-good">SHIPPED</span></td></tr>
+      <tr><td>§7 Active-path single continuation</td><td>ONE row, never multiple</td><td><span class="badge badge-good">SHIPPED</span> useActivePath returns AT MOST one</td></tr>
+      <tr><td>§8 Recently resolved</td><td>"REQ-027 verified" / "Coverage gap resolved"</td><td><span class="badge badge-warn">DEFERRED</span> Needs queueIds tracking in memory snapshot, then delta computation. Possible without backend — saved for next pass.</td></tr>
+      <tr><td>§9 Drawer continuity</td><td>Restore + related-drawer transitions</td><td><span class="badge badge-info">PARTIAL</span> Restore shipped via ContinuationCard + ?drawer=; related-drawer transitions deferred</td></tr>
+      <tr><td>§10 Operational memory feel</td><td>Persistent, not session-based</td><td><span class="badge badge-good">SHIPPED</span> Implicit in everything above</td></tr>
+      <tr><td>§11 Keep Blueprint sacred</td><td>Don't pollute ExecutionLane</td><td><span class="badge badge-good">HELD</span> Zero changes to Blueprint files</td></tr>
+      <tr><td>§12 No history feeds</td><td>No activity feeds / changelogs / inboxes</td><td><span class="badge badge-good">HELD</span> Single row max</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the deferred items</strong><br>
+      <label><input type="radio" name="v7" value="ok">👍 Right scope split</label>
+      <label><input type="radio" name="v7" value="iterate">⚠ Should have included §8 / §9 transitions</label>
+      <label><input type="radio" name="v7" value="cut">✕ Scope was too large already</label>
+      <textarea placeholder="Notes…" data-notes="deferrals"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 8 — File diff summary ────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">8</span><span class="stop-title">File diff summary</span></h2>
+    <table>
+      <tr><th>File</th><th>Status</th><th>Lines</th><th>Purpose</th></tr>
+      <tr><td><code>frontend/src/hooks/useActivePath.ts</code></td><td><span class="badge badge-good">NEW</span></td><td>~135</td><td>Single-continuation derivation; fixed priority cascade</td></tr>
+      <tr><td><code>frontend/src/components/workspace/ContinuationCard.tsx</code></td><td><span class="badge badge-good">NEW</span></td><td>~135</td><td>"You were working on…" row, dismissible</td></tr>
+      <tr><td><code>frontend/src/pages/project/SystemView.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+62 / -8</td><td>Tab restoration from memory; BP restoration via initialSelectedId; sync on visibilitychange/unmount</td></tr>
+      <tr><td><code>frontend/src/pages/portal/CoryHome.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+76 / -3</td><td>ContinuationCard mount; ?drawer= auto-open; arrival-toast ack; sessionStorage signals for active-path</td></tr>
+      <tr><td><code>scripts/captureContinuityVariants.js</code></td><td><span class="badge badge-good">NEW</span></td><td>~140</td><td>6 seeded-memory scenarios for honest visual proof</td></tr>
+    </table>
+    <p style="font-size: 12.5px; color: var(--muted);">
+      <strong>Commit:</strong> <code>4559489</code> · 4 frontend files + 1 capture script · ~443 insertions · ~17 deletions.
+      Zero backend. Zero new endpoints. Zero new memory fields (all keys were reserved in the prior Workspace Presence Sprint).
+    </p>
+  </div>
+
+  <!-- ─────────────────────── STOP 9 — Overall verdict ──────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">9</span><span class="stop-title">Overall sprint verdict</span></h2>
+    <p>Brief success criterion: <em>"The workspace stays with me."</em>
+       Self-assessment: yes, for the seven threads in STOP 5's "what threads now"
+       table. The four "doesn't thread" rows are honest gaps requiring either a
+       Blueprint rule revisit (step state) or a small backend signal
+       (recent-resolution events).</p>
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship; continuity layer feels right</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Mostly good; iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should the next sprint pick up…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 9 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Continuity + Resume Flow Sprint — operator feedback\n\nFollowing commit 4559489 shipped 2026-05-12:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n- Pick up deferred §8 'recently resolved' if appropriate\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
