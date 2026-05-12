@@ -16,7 +16,7 @@
  * Hard rule: there is no "next action" panel anywhere else on the platform
  * that disagrees with this page. This page IS the next-action authority.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   useUnifiedProjectState,
@@ -56,7 +56,16 @@ const CoryHome: React.FC = () => {
   const navigate = useNavigate();
   const { state, loading, error, refresh } = useUnifiedProjectState({ pollMs: 60_000 });
   const { memory, update, recordSnapshot } = useWorkspaceMemory();
-  const momentum = useOperationalMomentum(state, memory);
+
+  // Freeze the memory state as it was when this session started. Momentum
+  // is computed against this frozen snapshot — not the live mutable memory.
+  // Without freezing, the recordSnapshot effect below would overwrite
+  // memory.lastXxx values on the first state arrival, deltas would zero
+  // out within one render, and RecentlyMovedCard / tile chevrons would
+  // never appear. The frozen snapshot represents "what you knew at the
+  // start of this visit" — the correct comparison for "what's moved".
+  const initialMemoryRef = useRef(memory);
+  const momentum = useOperationalMomentum(state, initialMemoryRef.current);
 
   // Contextual drawers — opened by clicking tiles or the priority card.
   // The drawer key is persisted to memory so the next visit can offer
@@ -81,18 +90,38 @@ const CoryHome: React.FC = () => {
   }, [update]);
 
   // Snapshot the current readiness/coverage/queue/health so the NEXT visit
-  // can compute "since you were last here" deltas. Only writes when
-  // state.built_at changes (recordSnapshot has a no-op guard for repeats).
+  // can compute "since you were last here" deltas. We deliberately do NOT
+  // snapshot on every state poll — that would overwrite the frozen memory
+  // before momentum can render. Instead, snapshot when the user *leaves*
+  // (visibilitychange to hidden, or beforeunload). The latest state values
+  // are held in a ref so the leave handler can read them without
+  // re-binding listeners on every poll.
+  const latestStateRef = useRef(state);
+  useEffect(() => { latestStateRef.current = state; }, [state]);
+
   useEffect(() => {
-    if (!state) return;
-    recordSnapshot({
-      readinessScore: state.readiness.score,
-      coverageScore: state.coverage.score,
-      queueSize: state.queue.length,
-      healthScore: state.health.score,
-      builtAt: state.built_at,
-    });
-  }, [state, recordSnapshot]);
+    const snapshotNow = () => {
+      const s = latestStateRef.current;
+      if (!s) return;
+      recordSnapshot({
+        readinessScore: s.readiness.score,
+        coverageScore: s.coverage.score,
+        queueSize: s.queue.length,
+        healthScore: s.health.score,
+        builtAt: s.built_at,
+      });
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') snapshotNow(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('beforeunload', snapshotNow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('beforeunload', snapshotNow);
+      // Snapshot on unmount (navigation within SPA) as well so the
+      // next surface visit has fresh comparison values.
+      snapshotNow();
+    };
+  }, [recordSnapshot]);
 
   if (loading && !state) {
     return (
