@@ -45,13 +45,13 @@ const SURFACES = [
   { slug: '02-cory-home', route: '/portal/home', label: 'Cory Home (L1)', extraWaitMs: 2500 },
   { slug: '03-critique-landing', route: '/portal/visual-workspace', label: 'Critique workspace landing', extraWaitMs: 1500 },
   { slug: '04-blueprint-execution-lane', route: '/portal/project/blueprint', label: 'Blueprint — ExecutionLane (L3)', extraWaitMs: 2500 },
-  { slug: '05-system-tab-components', route: '/portal/project/system-v2?tab=components', label: 'System View — Components tab', extraWaitMs: 2500 },
-  { slug: '06-system-tab-architecture', route: '/portal/project/system-v2?tab=architecture', label: 'System View — Architecture tab', extraWaitMs: 2500 },
-  { slug: '07-system-tab-bps', route: '/portal/project/system-v2?tab=bps', label: 'System View — BPs tab', extraWaitMs: 2500 },
-  { slug: '08-system-tab-operations', route: '/portal/project/system-v2?tab=operations', label: 'System View — Operations tab (advanced, lazy)', extraWaitMs: 3000 },
-  { slug: '09-system-tab-cognition', route: '/portal/project/system-v2?tab=cognition', label: 'System View — Cognition tab (advanced, lazy)', extraWaitMs: 3000 },
+  { slug: '05-system-tab-components', route: '/portal/project/system?tab=components', label: 'System View — Components tab', extraWaitMs: 2500 },
+  { slug: '06-system-tab-architecture', route: '/portal/project/system?tab=architecture', label: 'System View — Architecture tab', extraWaitMs: 2500 },
+  { slug: '07-system-tab-bps', route: '/portal/project/system?tab=bps', label: 'System View — BPs tab', extraWaitMs: 2500 },
+  { slug: '08-system-tab-operations', route: '/portal/project/system?tab=operations', label: 'System View — Operations tab (advanced, lazy)', extraWaitMs: 3000 },
+  { slug: '09-system-tab-cognition', route: '/portal/project/system?tab=cognition', label: 'System View — Cognition tab (advanced, lazy)', extraWaitMs: 3000 },
   { slug: '10-blueprint-legacy-banner', route: '/portal/project/blueprint-legacy', label: 'Legacy Blueprint (with warning banner)', extraWaitMs: 2500 },
-  { slug: '11-system-legacy-banner', route: '/portal/project/system-v2-legacy', label: 'Legacy System View (with warning banner)', extraWaitMs: 3000 },
+  { slug: '11-system-legacy-banner', route: '/portal/project/system-legacy', label: 'Legacy System View (with warning banner)', extraWaitMs: 3000 },
 ];
 
 // Wait for the unified-state endpoint (the canonical signal that the
@@ -59,23 +59,33 @@ const SURFACES = [
 // nginx proxy live before the backend has finished starting; capturing
 // during that window catches "Could not load operational state" 502
 // error pages instead of the real surfaces. Poll up to ~3 minutes.
-async function waitForBackend(http, baseUrl, token) {
+async function waitForBackend(baseUrl, token) {
+  const https = require('https');
+  const { URL } = require('url');
   const url = `${baseUrl}/api/portal/project/unified-state`;
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const parsed = new URL(url);
   const maxAttempts = 18;     // 18 × 10s = 3 min ceiling
   const intervalMs = 10_000;
   process.stdout.write(`[capture] Healthcheck: ${url}\n`);
   for (let i = 1; i <= maxAttempts; i++) {
-    try {
-      const res = await http.fetch(url, { headers, method: 'GET' });
-      if (res.status === 200) {
-        console.log(`[capture] Healthcheck: ✓ 200 on attempt ${i}`);
-        return true;
-      }
-      process.stdout.write(`[capture]   attempt ${i}/${maxAttempts}: ${res.status} (waiting ${intervalMs/1000}s)\n`);
-    } catch (err) {
-      process.stdout.write(`[capture]   attempt ${i}/${maxAttempts}: error ${err.message} (waiting ${intervalMs/1000}s)\n`);
+    const status = await new Promise((resolve) => {
+      const req = https.request({
+        hostname: parsed.hostname, port: parsed.port || 443, path: parsed.pathname,
+        method: 'GET',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        timeout: 8000,
+      }, (res) => {
+        res.on('data', () => {}); res.on('end', () => resolve(res.statusCode));
+      });
+      req.on('error', () => resolve(0));
+      req.on('timeout', () => { req.destroy(); resolve(0); });
+      req.end();
+    });
+    if (status === 200) {
+      console.log(`[capture] Healthcheck: ✓ 200 on attempt ${i}`);
+      return true;
     }
+    process.stdout.write(`[capture]   attempt ${i}/${maxAttempts}: ${status || 'no-response'} (waiting ${intervalMs/1000}s)\n`);
     await new Promise(r => setTimeout(r, intervalMs));
   }
   console.log(`[capture] Healthcheck: ✗ never returned 200 — capturing anyway, expect error states`);
@@ -92,9 +102,7 @@ async function main() {
 
   // Wait for backend to be warm before any capture. Skip with SKIP_HEALTHCHECK=1.
   if (!process.env.SKIP_HEALTHCHECK) {
-    const ctx = await browser.newContext();
-    await waitForBackend(ctx.request, BASE, TOKEN);
-    await ctx.close();
+    await waitForBackend(BASE, TOKEN);
   } else {
     console.log('[capture] SKIP_HEALTHCHECK set — proceeding without healthcheck');
   }

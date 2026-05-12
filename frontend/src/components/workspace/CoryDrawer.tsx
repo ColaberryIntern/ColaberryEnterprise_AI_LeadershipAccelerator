@@ -205,7 +205,7 @@ function buildSuggestions(surface: Surface, state: NonNullable<ReturnType<typeof
 
     case 'system':
       out.push({ icon: 'bi-house', label: 'System is read-only — Cory at Home decides', to: '/portal/home' });
-      out.push({ icon: 'bi-grid-3x3-gap', label: 'Components tab shows the capability grid', to: '/portal/project/system-v2?tab=components', hint: 'No build buttons here — execute via Blueprint' });
+      out.push({ icon: 'bi-grid-3x3-gap', label: 'Components tab shows the capability grid', to: '/portal/project/system?tab=components', hint: 'No build buttons here — execute via Blueprint' });
       break;
 
     case 'sessions':

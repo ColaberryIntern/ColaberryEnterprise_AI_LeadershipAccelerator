@@ -47,12 +47,17 @@ const portalRoutes = (
             is preserved at /blueprint-legacy for rollback only. */}
         <Route path="/portal/project/blueprint" element={<ExecutionLane />} />
         <Route path="/portal/project/blueprint-legacy" element={<SystemBlueprint />} />
-        <Route path="/portal/project/system" element={<ProjectDashboard />} />
-        {/* System View Restructure Sprint: /system-v2 now serves the lean
-            5-tab SystemView. The legacy 4,295-line SystemViewV2 surface
-            is preserved at /system-v2-legacy for rollback only. */}
-        <Route path="/portal/project/system-v2" element={<SystemView />} />
-        <Route path="/portal/project/system-v2-legacy" element={<SystemViewV2 />} />
+        {/* System Surface Maturity Sprint, 2026-05-12 — "v2" leakage purged.
+            The lean 5-tab SystemView now serves the canonical `/system`
+            URL. The old project dashboard is archived. The two `-v2`
+            routes redirect to their non-v2 equivalents so any external
+            link (Basecamp, email, etc.) still lands the operator on the
+            right surface without exposing the legacy naming. */}
+        <Route path="/portal/project/system" element={<SystemView />} />
+        <Route path="/portal/project/system-legacy" element={<SystemViewV2 />} />
+        <Route path="/portal/project/system-v2" element={<Navigate to="/portal/project/system" replace />} />
+        <Route path="/portal/project/system-v2-legacy" element={<Navigate to="/portal/project/system-legacy" replace />} />
+        <Route path="/portal/project/legacy-dashboard" element={<ProjectDashboard />} />
         <Route path="/portal/project/artifacts" element={<ProjectArtifacts />} />
         <Route path="/portal/project/portfolio" element={<ProjectPortfolio />} />
         <Route path="/portal/project/executive" element={<ExecutiveDeliverable />} />

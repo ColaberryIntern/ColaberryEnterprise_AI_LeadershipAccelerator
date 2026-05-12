@@ -32,7 +32,7 @@ function PortalLayout() {
     { to: '/portal/home', label: 'Home', icon: 'bi-house' },
     { to: '/portal/visual-workspace', label: 'Critique', icon: 'bi-bullseye' },
     { to: '/portal/project/blueprint', label: 'Blueprint', icon: 'bi-map' },
-    { to: '/portal/project/system-v2', label: 'System', icon: 'bi-grid-3x3-gap' },
+    { to: '/portal/project/system', label: 'System', icon: 'bi-grid-3x3-gap' },
     { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
   ];
 

@@ -107,7 +107,7 @@ export function useActivePath(args: Args): ActivePath | null {
         kind: 'last_system_tab',
         label: 'Return to System understanding',
         detail: `last on ${memory.lastSystemTab} tab · BP ${memory.lastBpId.slice(0, 8)}`,
-        target_route: `/portal/project/system-v2?tab=${memory.lastSystemTab}`,
+        target_route: `/portal/project/system?tab=${memory.lastSystemTab}`,
         icon: 'bi-grid-3x3-gap',
         freshness: 'ambient',
       };
@@ -117,7 +117,7 @@ export function useActivePath(args: Args): ActivePath | null {
         kind: 'last_system_tab',
         label: `Return to System · ${memory.lastSystemTab}`,
         detail: 'last surface you were on',
-        target_route: `/portal/project/system-v2?tab=${memory.lastSystemTab}`,
+        target_route: `/portal/project/system?tab=${memory.lastSystemTab}`,
         icon: 'bi-grid-3x3-gap',
         freshness: 'ambient',
       };

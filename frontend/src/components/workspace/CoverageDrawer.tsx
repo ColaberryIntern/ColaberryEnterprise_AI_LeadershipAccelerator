@@ -93,7 +93,7 @@ const CoverageDrawer: React.FC<Props> = ({ open, onClose }) => {
         borderRadius: 5, padding: '0.7rem 0.85rem', fontSize: 12, color: 'var(--color-text-light)',
       }}>
         <strong style={{ color: 'var(--color-primary)' }}>To raise coverage:</strong>{' '}
-        Cory's queue prioritizes uncovered requirements. Open <Link to="/portal/project/system-v2?tab=bps" onClick={onClose} style={{ color: 'var(--color-primary-light)' }}>System &gt; BPs</Link> to inspect, or run the next action via <Link to="/portal/project/blueprint" onClick={onClose} style={{ color: 'var(--color-primary-light)' }}>Blueprint</Link>.
+        Cory's queue prioritizes uncovered requirements. Open <Link to="/portal/project/system?tab=bps" onClick={onClose} style={{ color: 'var(--color-primary-light)' }}>System &gt; BPs</Link> to inspect, or run the next action via <Link to="/portal/project/blueprint" onClick={onClose} style={{ color: 'var(--color-primary-light)' }}>Blueprint</Link>.
       </section>
     </Drawer>
   );

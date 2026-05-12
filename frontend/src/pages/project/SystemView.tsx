@@ -4,8 +4,8 @@
  * System View Restructure Sprint, 2026-05-09.
  *
  * Replaces the 4,295-line SystemViewV2 as the user-facing target of
- * `/portal/project/system-v2`. The legacy SystemViewV2 surface is
- * preserved at `/portal/project/system-v2-legacy` for rollback only.
+ * `/portal/project/system`. The legacy SystemViewV2 surface is
+ * preserved at `/portal/project/system-legacy` for rollback only.
  *
  * Hard rule: this surface EXPLAINS. It does NOT decide, prioritize,
  * rank, recommend, or orchestrate. Cory at Home owns authority;
@@ -22,7 +22,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import CapabilityGrid from '../../components/project/CapabilityGrid';
-import PortalBusinessProcessesTab from '../../components/project/PortalBusinessProcessesTab';
+import BPDomainSurface from '../../components/project/BPDomainSurface';
 import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
 import { OperatorCognitionDashboard } from '../../components/operator/OperatorCognitionDashboard';
 import { AutonomousExecutionDashboard } from '../../components/operator/AutonomousExecutionDashboard';
@@ -127,25 +127,34 @@ const SystemView: React.FC = () => {
   const activeSpec = useMemo(() => TABS.find(t => t.key === active)!, [active]);
 
   return (
-    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '1.25rem 1rem 4rem' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1rem 4rem' }}>
 
-      {/* ─── Surface intent reminder ─────────────────────────── */}
-      <header style={{ marginBottom: '1.25rem' }}>
+      {/* ─── Editorial header ─────────────────────────── */}
+      {/* System Surface Maturity Sprint, 2026-05-12 — calmer header rhythm.
+          Wider top padding, lighter weight subtitle, longer cascade between
+          eyebrow / title / explainer. Goal: feels editorial, not toolbar. */}
+      <header style={{ marginBottom: '2rem' }}>
         <div style={{
-          fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+          fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em',
           color: 'var(--color-text-light)', fontWeight: 600,
         }}>
           System
         </div>
         <h2 style={{
-          fontSize: 22, fontWeight: 600, color: 'var(--color-primary)',
-          letterSpacing: '-0.01em', marginTop: 4, marginBottom: 4,
+          fontSize: 26, fontWeight: 600, color: 'var(--color-primary)',
+          letterSpacing: '-0.015em', marginTop: 8, marginBottom: 10,
+          lineHeight: 1.25,
         }}>
-          Understand the system.
+          Understand how your system is organized.
         </h2>
-        <div style={{ fontSize: 13, color: 'var(--color-text-light)' }}>
-          This surface explains topology, components, and relationships. It does not rank or recommend &mdash;
-          <Link to="/portal/home" style={{ color: 'var(--color-primary-light)', marginLeft: 4 }}>Cory at Home</Link> decides what's next.
+        <div style={{
+          fontSize: 13.5, color: 'var(--color-text-light)',
+          lineHeight: 1.65, maxWidth: 720,
+        }}>
+          This surface explains operational architecture — the domains your work belongs to,
+          how their pieces connect, and where each area sits in its lifecycle. It does not rank
+          or recommend; <Link to="/portal/home" style={{ color: 'var(--color-primary-light)' }}>Cory at Home</Link>{' '}
+          decides what's next.
         </div>
       </header>
 
@@ -155,7 +164,7 @@ const SystemView: React.FC = () => {
         style={{
           display: 'flex',
           borderBottom: '1px solid var(--color-border)',
-          marginBottom: '1.25rem',
+          marginBottom: '2rem',
           gap: 4,
           overflowX: 'auto',
         }}
@@ -204,10 +213,17 @@ const SystemView: React.FC = () => {
         })}
       </div>
 
-      {/* ─── Active tab subtitle ─────────────────────────── */}
-      <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginBottom: '1.25rem' }}>
-        {activeSpec.description}
-      </div>
+      {/* ─── Active tab subtitle — only shown when distinct from the
+          tab's own header to avoid doubled labels. BPDomainSurface ships
+          its own editorial headline. */}
+      {active !== 'bps' && (
+        <div style={{
+          fontSize: 12.5, color: 'var(--color-text-light)',
+          marginBottom: '1.5rem', fontStyle: 'italic',
+        }}>
+          {activeSpec.description}
+        </div>
+      )}
 
       {/* ─── Tab panels — keep mounted once shown to preserve scroll ─── */}
       <div role="tabpanel" hidden={active !== 'components'}>
@@ -232,7 +248,7 @@ const SystemView: React.FC = () => {
         marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)',
       }}>
         Need the full operator dashboard?{' '}
-        <Link to="/portal/project/system-v2-legacy" style={{ color: 'var(--color-text-light)', textDecoration: 'underline' }}>
+        <Link to="/portal/project/system-legacy" style={{ color: 'var(--color-text-light)', textDecoration: 'underline' }}>
           Open the legacy view
         </Link>.
       </div>
@@ -279,11 +295,20 @@ const ArchitectureTab: React.FC = () => (
 
 const BPsTab: React.FC<{ initialBpId?: string | null }> = ({ initialBpId }) => (
   <section>
-    <TabIntro
-      title="Business Processes"
-      blurb="Process structure, status, and dependencies. This tab explains — Cory drives execution from Home."
-    />
-    <PortalBusinessProcessesTab initialSelectedId={initialBpId ?? undefined} />
+    {/* TabIntro intentionally omitted here — BPDomainSurface ships its own
+        narrative headline that's richer than the static "Business
+        Processes" blurb. Avoids the doubled-header pattern. The initialBpId
+        is wired through via PortalBusinessProcessesTab's existing prop when
+        the operator drops into the full inventory mode. */}
+    <BPDomainSurface />
+    {initialBpId && (
+      <div style={{
+        fontSize: 11, color: 'var(--color-text-light)',
+        marginTop: '0.5rem', textAlign: 'right', fontStyle: 'italic',
+      }}>
+        Resumed your last BP context — open the inventory to inspect that BP directly.
+      </div>
+    )}
   </section>
 );
 

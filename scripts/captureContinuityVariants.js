@@ -101,7 +101,7 @@ const SCENARIOS = [
   {
     slug: '05-system-tab-restored-from-memory',
     label: 'SystemView lands on bps tab restored from memory',
-    route: '/portal/project/system-v2',  // no ?tab= — memory should restore
+    route: '/portal/project/system',  // no ?tab= — memory should restore
     memory: {
       lastVisitedSurface: 'system',
       lastSystemTab: 'bps',
@@ -112,7 +112,7 @@ const SCENARIOS = [
   {
     slug: '06-system-tab-restored-architecture',
     label: 'SystemView lands on architecture tab restored from memory',
-    route: '/portal/project/system-v2',
+    route: '/portal/project/system',
     memory: {
       lastVisitedSurface: 'system',
       lastSystemTab: 'architecture',

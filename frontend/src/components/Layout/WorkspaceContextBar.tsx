@@ -39,7 +39,7 @@ function detectSurface(pathname: string): Surface {
   if (pathname.startsWith('/portal/home')) return 'home';
   if (pathname.startsWith('/portal/visual-workspace')) return 'critique';
   if (pathname.startsWith('/portal/project/blueprint-legacy')) return 'legacy';
-  if (pathname.startsWith('/portal/project/system-v2-legacy')) return 'legacy';
+  if (pathname.startsWith('/portal/project/system-legacy')) return 'legacy';
   if (pathname.startsWith('/portal/project/blueprint')) return 'blueprint';
   if (pathname.startsWith('/portal/project/system')) return 'system';
   if (pathname.startsWith('/portal/sessions')) return 'sessions';
