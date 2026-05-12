@@ -182,19 +182,17 @@ const BPDomainSurface: React.FC = () => {
                   </div>
                 </div>
                 {i < flowStops.length - 1 && (
-                  <div style={{
-                    flex: 1, minWidth: 30, alignSelf: 'center',
-                    marginTop: 12, padding: '0 8px', position: 'relative',
-                  }}>
-                    <div style={{
-                      height: 1, background: 'var(--color-border)',
-                      position: 'relative',
-                    }}>
-                      <span style={{
-                        position: 'absolute', right: -1, top: -7,
-                        fontSize: 12, color: 'var(--color-border)',
-                      }}>›</span>
-                    </div>
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      flex: 1, minWidth: 28, alignSelf: 'center',
+                      marginTop: 14, padding: '0 6px',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      color: 'var(--color-text-light)', opacity: 0.55,
+                    }}
+                  >
+                    <span style={{ flex: 1, height: 1, background: 'currentColor' }}></span>
+                    <i className="bi bi-chevron-right" style={{ fontSize: 10, lineHeight: 1 }}></i>
                   </div>
                 )}
               </React.Fragment>
