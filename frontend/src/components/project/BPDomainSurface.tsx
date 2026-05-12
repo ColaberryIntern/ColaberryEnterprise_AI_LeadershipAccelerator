@@ -28,7 +28,7 @@ import {
   type LifecycleState,
 } from '../../utils/bpDomainClassifier';
 import { useDomainMomentum, type Direction } from '../../hooks/useDomainMomentum';
-import PortalBusinessProcessDetail from './PortalBusinessProcessDetail';
+import BPDetailV2 from './BPDetailV2';
 import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
 
 // Lifecycle state → tone. Softer than completion% — no hot reds.
@@ -252,7 +252,7 @@ const BPDomainSurface: React.FC = () => {
             background: 'white', borderRadius: 8, width: '100%', maxWidth: 960,
             padding: '1.25rem 1.4rem', boxShadow: '0 20px 60px rgba(15,23,42,0.4)',
           }}>
-            <PortalBusinessProcessDetail
+            <BPDetailV2
               processId={selectedBp}
               onClose={() => setSelectedBp(null)}
               onUpdate={() => {
