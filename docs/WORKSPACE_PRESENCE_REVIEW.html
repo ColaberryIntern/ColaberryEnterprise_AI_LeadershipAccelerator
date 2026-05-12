@@ -188,9 +188,11 @@
     <p>New card slot directly below the priority card. <em>Hidden</em> when nothing
        has moved — that's intentional. Renders only when at least one of
        readiness / coverage / queue / health has changed since the last snapshot.</p>
-    <p><strong>Why you don't see it in the screenshot above:</strong> first capture
-       after deploy — no prior snapshot to compare against. The card appears on
-       second visit (or any time state changes between visits).</p>
+    <p><strong>Why you don't see it in the STOP 1 screenshot:</strong> first visit after deploy —
+       memory had no prior snapshot to delta against. The two captures below are taken with
+       <code>workspaceMemory:v1</code> pre-seeded in localStorage (via <code>scripts/capturePresenceVariants.js</code>)
+       to force both forward and backward delta states to render. <em>This is what users see on their second visit
+       after state has actually moved.</em></p>
     <div class="what-shipped">
       <strong>What renders when there's momentum:</strong>
       <ul>
@@ -201,30 +203,27 @@
         <li>Subtle <code>ws-delta-rise</code> entrance — 360ms opacity + 4px translate. No looping.</li>
       </ul>
     </div>
-    <h3>Anatomy (annotated mockup)</h3>
-    <div style="background: white; border: 1px solid var(--border); border-left: 3px solid #38a169; border-radius: 6px; padding: 0.75rem 0.95rem;">
-      <div style="display: flex; justify-content: space-between; font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em;">
-        <span>Recently moved</span><span style="font-style: italic; text-transform: none;">Last visit 23 minutes ago</span>
-      </div>
-      <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
-        <div style="background: rgba(56,161,105,0.07); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
-          <span style="color: #38a169; font-weight: 700;">↑</span>
-          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Readiness <span style="color: #38a169;">+4%</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">project is more prepared</div></div>
-        </div>
-        <div style="background: rgba(56,161,105,0.07); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
-          <span style="color: #38a169; font-weight: 700;">↑</span>
-          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Coverage <span style="color: #38a169;">+2%</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">more requirements matched</div></div>
-        </div>
-        <div style="background: rgba(56,161,105,0.07); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
-          <span style="color: #38a169; font-weight: 700;">↓</span>
-          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Queue <span style="color: #38a169;">-3</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">items shipped or no longer needed</div></div>
-        </div>
-        <div style="background: rgba(229,62,62,0.06); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent;">
-          <span style="color: #e53e3e; font-weight: 700;">↓</span>
-          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Health <span style="color: #e53e3e;">-2%</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">regression(s) since last visit</div></div>
-        </div>
-      </div>
+    <h3>Forward-motion variant (seeded: readiness 34→38, coverage 45→47, queue 4→1, health 78→80)</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-presence-variants/cory-home-with-forward-deltas.png" alt="Cory Home with green forward-delta chips visible">
+      <div class="caption">Cory Home with seeded prior snapshot · 4 green ↑ chips · tile chevrons · ws-fresh halo on priority card</div>
     </div>
+    <h3>Backward-motion variant (seeded: readiness 44→38, coverage 51→47, queue 0→1, health 84→80)</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-presence-variants/cory-home-with-backward-deltas.png" alt="Cory Home with red backward-delta chips visible">
+      <div class="caption">Same surface, prior scores higher · 4 red ↓ chips · captions reading "lost ground / requirements drift / new items surfaced / regressions since last visit" · no tile chevrons (only forward deltas highlight)</div>
+    </div>
+    <h3>Engineering note: snapshot timing bug caught + fixed mid-sprint</h3>
+    <p style="font-size: 13.5px; color: var(--muted);">First version of <code>CoryHome.tsx</code> called <code>recordSnapshot()</code>
+       in a useEffect keyed to <code>state</code> — which fired on first state arrival and overwrote memory's prior values
+       <em>before</em> the momentum hook could compute deltas. Result: RecentlyMovedCard never rendered, tile chevrons never
+       appeared, the entire momentum layer was invisible. Caught when the seeded-variant capture script
+       (this stop's screenshots) came back identical to the cold first-visit capture. <strong>Fix:</strong>
+       (a) freeze the memory snapshot in a <code>useRef</code> at first mount so momentum always compares against the
+       session-start values; (b) move <code>recordSnapshot()</code> to a <code>visibilitychange</code> + <code>beforeunload</code>
+       + unmount handler so the snapshot represents what the user saw when they <em>left</em>, not when they <em>arrived</em>.
+       Shipped as commit <code>d7d3e7f</code>. Honest correction — this is the kind of bug that doesn't break tsc but
+       breaks the feature.</p>
     <div class="possible">
       <strong>Possible changes:</strong>
       <ul>
@@ -247,15 +246,16 @@
   <div class="stop">
     <h2><span class="stop-num">3</span><span class="stop-title">Tile highlight + priority-card fresh halo</span></h2>
     <p>Two subtle additions to the existing primary surfaces that give them a sense
-       of <em>having just changed</em>:</p>
+       of <em>having just changed</em>. Both are visible in the forward-motion variant in STOP 2 — look at
+       the small green <code>↗</code> next to each tile's number, and the soft outer-glow on the priority card.</p>
     <div class="grid">
       <div class="what-shipped" style="margin: 0;">
         <strong>Tile ↗ chevron</strong>
-        <p style="font-size: 13.5px; margin: 6px 0 0 0;">Readiness / Coverage / Health tiles now show a tiny green <code>↗</code> next to the value when the dimension improved since the last visit. Hidden when flat or backward.</p>
+        <p style="font-size: 13.5px; margin: 6px 0 0 0;">Readiness / Coverage / Health tiles show a tiny green <code>↗</code> next to the value when that dimension improved since the last visit. Hidden when flat or backward — the backward-motion variant has no chevrons.</p>
       </div>
       <div class="what-shipped" style="margin: 0;">
         <strong>Priority card <code>ws-fresh</code> halo</strong>
-        <p style="font-size: 13.5px; margin: 6px 0 0 0;">When a new <code>next_action.source_id</code> arrives (your last-seen id differs from current), the priority card gets a 6-second fading green outer glow. After 6s it goes back to neutral. No layout shift.</p>
+        <p style="font-size: 13.5px; margin: 6px 0 0 0;">When a new <code>next_action.source_id</code> arrives (your last-seen id differs from current), the priority card gets a 6-second fading green outer glow. After 6s it returns to neutral. Visible as a soft green ring around the navy card in both seeded variants in STOP 2.</p>
       </div>
     </div>
     <div class="possible">
@@ -474,9 +474,11 @@
       <tr><td><code>frontend/src/components/Layout/PortalLayout.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+4</td><td>Imports workspacePresence.css globally</td></tr>
       <tr><td><code>frontend/src/components/Layout/WorkspaceContextBar.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+3 / -1</td><td>Calmer pulse-dot when not freshening</td></tr>
       <tr><td><code>frontend/src/features/visualWorkspace/VisualWorkspacePage.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+3</td><td>Writes <code>visualWorkspace:lastSessionTouchedAt</code> on compile</td></tr>
+      <tr><td><code>scripts/capturePresenceVariants.js</code></td><td><span class="badge badge-good">NEW</span></td><td>~98</td><td>Seeds <code>workspaceMemory:v1</code> with prior scores → forces RecentlyMovedCard + chevrons to render for the review captures</td></tr>
     </table>
     <p style="font-size: 12.5px; color: var(--muted);">
-      Total: 10 files changed · 691 insertions · 34 deletions · commit <code>16ff83b</code>.
+      <strong>Commits:</strong> <code>16ff83b</code> (main sprint), <code>d7d3e7f</code> (snapshot-timing fix +
+      capture variants script). Total: 12 files changed · ~840 insertions · ~47 deletions.
       Zero backend changes. Zero schema changes. Zero new endpoints.
     </p>
   </div>
