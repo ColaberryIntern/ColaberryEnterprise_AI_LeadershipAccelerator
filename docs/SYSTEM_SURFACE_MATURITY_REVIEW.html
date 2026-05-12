@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>System Surface De-Densification + Operational Storytelling — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .diagram { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; margin: 1rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; white-space: pre; overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>System Surface De-Densification + Operational Storytelling — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-12 to <strong>enterprise.colaberry.ai</strong> (commit
+    <code>625030b</code>). 2 new files (classifier + new BP surface) + 1 new
+    capture script + 9 modified files (route rename + typography pass).
+    Zero backend changes. The System surface no longer looks like an
+    engineering inventory.
+  </p>
+
+  <div class="philosophy">
+    "I understand how my system works." The BPs tab now reads as
+    operational architecture — 6 named domains, each with a single
+    narrative line. The 45-card flat grid is preserved behind one
+    click for power users, but it's no longer the default visual budget.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Before/After ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">BPs tab — before / after</span></h2>
+    <p>The most visible change of the sprint. Same data, same backend, same
+       BP detail modal — but the surface reads entirely differently.</p>
+    <div class="pair">
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-maturity-before/07-system-tab-bps.png" alt="Old dense BPs grid — 45 cards with 5 metric bars each">
+        <div class="caption">BEFORE · ~45 cards in a 3-column grid · each card carries 5 metric bars (matched / readiness / quality / completion / Layer pills) · "engineering inventory" energy</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-maturity-variants/01-bps-domain-collapsed.png" alt="New editorial BPs surface — domain rows">
+        <div class="caption">AFTER · editorial header "Understand how your system is organized." · operational-architecture narrative · 6 collapsed domain rows with one narrative line each</div>
+      </div>
+    </div>
+    <div class="what-shipped">
+      <strong>What changed:</strong>
+      <ul>
+        <li>Title rewritten from "Understand the system." → "Understand how your system is organized." (richer, more inviting)</li>
+        <li>Subtitle rewritten with operational language: "the domains your work belongs to, how their pieces connect, and where each area sits in its lifecycle"</li>
+        <li>BPs tab content replaced: <code>PortalBusinessProcessesTab</code> → new <code>BPDomainSurface</code></li>
+        <li>Six named domains, classifier-driven, each with a per-completion-band narrative line</li>
+        <li>Domain rows collapsed by default; click to expand into a compact BP list</li>
+        <li>Expanded view shows BP name + req count + tone word; <strong>no</strong> metric bar grids</li>
+        <li>Click BP → existing <code>PortalBusinessProcessDetail</code> modal (zero rewrite)</li>
+        <li>"Show full inventory" escape hatch for power users (preserves the old grid one click away)</li>
+        <li>Container width reduced 1180 → 1100; top padding 1.25rem → 2rem; tab-strip margin-bottom 1.25 → 2rem</li>
+        <li>Title font 22 → 26, tighter letter-spacing, longer line-height</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes — toggle if you'd want any of these:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="bp-expand-first">First domain should auto-expand on tab open so the operator sees BPs immediately</label></li>
+        <li><label><input type="checkbox" data-issue="bp-show-counts">Show BP count next to each domain title ("Lead Intelligence · 6")</label></li>
+        <li><label><input type="checkbox" data-issue="bp-narrative-tighter">Narratives feel slightly templatey — vary the prose more</label></li>
+        <li><label><input type="checkbox" data-issue="bp-icons-too-strong">Domain icons feel a touch too colorful for the editorial tone</label></li>
+        <li><label><input type="checkbox" data-issue="bp-add-trend">Each domain should show a small trend line (was 30%, now 47%) instead of just a number</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Good</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v1" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="bps"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Progressive reveal proof ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Progressive reveal — collapsed → expanded → inventory</span></h2>
+    <p>Three states. Operator chooses depth.</p>
+    <h3>State A — collapsed (default)</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-maturity-variants/01-bps-domain-collapsed.png" alt="Domain rows collapsed">
+      <div class="caption">5 domain rows visible above the fold · each row carries: icon · name · narrative line · completion % · tone word · chevron-down · One scan, full operational picture</div>
+    </div>
+    <h3>State B — one domain expanded</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-maturity-variants/02-bps-domain-expanded.png" alt="Intake domain expanded showing BP rows">
+      <div class="caption">Click "Intake & Registration" → reveals one compact BP row underneath: name · req count · tone word · chevron-right · click → BP detail modal · No metric-bar grids · No "monitoring widget" energy</div>
+    </div>
+    <h3>State C — full inventory (escape hatch for power users)</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-maturity-variants/03-bps-full-inventory.png" alt="Legacy dense grid behind a toggle">
+      <div class="caption">"Show full inventory" toggle reveals the legacy 3-column metric-bar grid · operator can still inspect every BP at once if they need to · but it's no longer the default budget</div>
+    </div>
+    <div class="what-shipped">
+      <strong>Reveal stages:</strong>
+      <ul>
+        <li>1. Editorial overview (always shown — narrative headline + counts)</li>
+        <li>2. Domain rows (always shown — 6 max, one line each, collapsed)</li>
+        <li>3. Domain BP list (on click — compact list, no bars)</li>
+        <li>4. BP detail (on click — existing modal, full information)</li>
+        <li>5. Full inventory (on toggle — legacy grid for power users)</li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the reveal layering</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Right cascade</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Cut one tier or restage</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong; flatten back</label>
+      <textarea placeholder="Notes…" data-notes="reveal"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Domain classification ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Six operational domains</span></h2>
+    <p>The classifier is keyword-based, frontend-only, deterministic.
+       Each BP lands in exactly one bucket via longest-keyword match.</p>
+    <table>
+      <tr><th>Domain</th><th>Icon</th><th>Keywords (substring, case-insensitive)</th><th>Example BPs</th></tr>
+      <tr><td><strong>Intake &amp; Registration</strong></td><td>bi-door-open</td><td>registration, intake, signup, enrollment, onboarding, application, dataset, capture</td><td>Dataset Registration</td></tr>
+      <tr><td><strong>Lead Intelligence</strong></td><td>bi-bullseye</td><td>lead, prospect, qualification, scoring, routing, classification, attribution, enrichment</td><td>Lead Classification, Lead Scoring, Lead Routing, Lead Management, Lead Ingestion (Pipeline)</td></tr>
+      <tr><td><strong>Marketing Operations</strong></td><td>bi-megaphone</td><td>marketing, campaign, outreach, content, social, broadcast, engagement</td><td>Marketing Dashboard</td></tr>
+      <tr><td><strong>Student Lifecycle</strong></td><td>bi-mortarboard</td><td>student, cohort, curriculum, lesson, assignment, progress, mentor, session, coaching</td><td>(none yet — visible only when populated)</td></tr>
+      <tr><td><strong>Execution Systems</strong></td><td>bi-cpu</td><td>execution, build, pipeline, estimator, orchestrat, workflow, task, job, verify, validate, agent, autonomous</td><td>Impact Estimator, Lead Ingestion Pipeline</td></tr>
+      <tr><td><strong>Reporting &amp; Analytics</strong></td><td>bi-bar-chart</td><td>reporting, analytics, dashboard, briefing, metric, report, kpi, export, summary, visualization</td><td>Marketing Dashboard (also matches reporting; longest keyword wins)</td></tr>
+      <tr><td><strong>Other Operations</strong></td><td>bi-three-dots</td><td>(catch-all)</td><td>Anything that doesn't match a keyword above — surfaced honestly, never silently hidden</td></tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Per-domain narrative rules (keyed off completion %):</strong>
+      <ul>
+        <li><code>≥80%</code> → "healthy" tone: "Reporting systems have high confidence — N processes, X% complete."</li>
+        <li><code>40–79%</code> → "partial" tone: "Lead orchestration is partially connected — N processes, X% complete."</li>
+        <li><code>&lt;40%</code> → "early-stage" tone: "Marketing operations need foundational work — N processes, X% complete."</li>
+        <li>Empty domain → hidden entirely (no skeleton clutter)</li>
+        <li>"Uncategorized" placeholder BPs filtered out at classifier level (they pollute with engineering-internal terms)</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible classifier changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="cls-add-domain-x">Missing a domain (specify in notes)</label></li>
+        <li><label><input type="checkbox" data-issue="cls-bp-misplaced">A BP is misclassified (specify which one)</label></li>
+        <li><label><input type="checkbox" data-issue="cls-add-llm">Replace keyword classifier with an LLM call (per BP) on first load</label></li>
+        <li><label><input type="checkbox" data-issue="cls-manual-override">Add a way to manually override domain per BP (stored in memory)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the domain taxonomy</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Right six</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Add/remove a domain</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong taxonomy entirely</label>
+      <textarea placeholder="What's missing? What's miscategorized?" data-notes="taxonomy"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Route v2 leakage purge ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">v2 leakage purge — operator never sees a temporary system</span></h2>
+    <p>Brief section §1 was mandatory: "Remove 'v2' completely." Done.</p>
+    <h3>Redirect proof</h3>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-maturity-variants/04-route-redirect-proof.png" alt="/portal/project/system-v2 lands on /portal/project/system">
+      <div class="caption">Visited <code>/portal/project/system-v2</code> · landed on <code>/portal/project/system</code> · capture script's _summary JSON confirms <code>"redirected": true</code></div>
+    </div>
+    <div class="what-shipped">
+      <strong>Renames + redirects shipped:</strong>
+      <ul>
+        <li><code>/portal/project/system</code> → SystemView (canonical, was at <code>/system-v2</code>)</li>
+        <li><code>/portal/project/system-legacy</code> → SystemViewV2 (rollback fallback)</li>
+        <li><code>/portal/project/system-v2</code> → <code>&lt;Navigate to="/portal/project/system" replace /&gt;</code></li>
+        <li><code>/portal/project/system-v2-legacy</code> → <code>&lt;Navigate to="/portal/project/system-legacy" replace /&gt;</code></li>
+        <li>The old <code>/portal/project/system</code> route (which served the original <code>ProjectDashboard</code>) is archived at <code>/portal/project/legacy-dashboard</code> for safety</li>
+        <li>Active surface references all updated: <code>PortalLayout</code> nav · <code>WorkspaceContextBar</code> path detection · <code>useActivePath</code> target routes · <code>CoryDrawer</code> + <code>CoverageDrawer</code> links · capture scripts</li>
+        <li>Legacy surface references (<code>SystemBlueprint</code>, <code>SystemViewV2</code>, <code>CoryFullscreen</code>) deliberately left to the redirect — they're legacy themselves and modifying them risks scope drift</li>
+      </ul>
+    </div>
+    <h3>Where v2 might still leak (honest)</h3>
+    <table>
+      <tr><th>Surface</th><th>Status</th><th>Why</th></tr>
+      <tr><td>Component filename <code>SystemViewV2.tsx</code></td><td><span class="badge badge-warn">Internal-only</span></td><td>File-level identifier only; not user-visible. Renaming would touch a 1800-line legacy file for cosmetic gain.</td></tr>
+      <tr><td><code>__tests__/SystemViewV2.test.ts</code></td><td><span class="badge badge-warn">Test-only</span></td><td>Test name matches the legacy file. Renamed when the legacy file is renamed.</td></tr>
+      <tr><td>Legacy SystemBlueprint links → <code>/system-v2</code></td><td><span class="badge badge-info">Auto-redirect</span></td><td>Hits the Navigate redirect to <code>/system</code>; brief flash on first click. Acceptable.</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the rename completeness</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Operator-clean</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Rename the legacy files too</label>
+      <label><input type="radio" name="v4" value="cut">✕ Too aggressive</label>
+      <textarea placeholder="Notes…" data-notes="rename"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Density audit ─────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Density audit — what was repeated, what got cut</span></h2>
+    <p>Brief section §13 required an audit of visual repetition with severity
+       + cognitive cost. Here it is.</p>
+    <table>
+      <tr><th>Repetition</th><th>Cognitive cost</th><th>Severity (was)</th><th>Reduction (is)</th></tr>
+      <tr><td>3-column BP card grid with ~45 cards</td><td>Operator scans 45×5 = 225 visual units; no hierarchy; eye doesn't know where to land</td><td><span class="badge badge-danger">HIGH</span></td><td>Collapsed into 6 domain rows; eye lands on operational categories first</td></tr>
+      <tr><td>5 metric bars per BP card (matched / readiness / quality / completion / Layer pills)</td><td>Same bar shape × 45 cards × 5 = 225 bars; metrics dominate meaning</td><td><span class="badge badge-danger">HIGH</span></td><td>Bars hidden by default; one tone word + one % per domain; bars accessible via "Show full inventory"</td></tr>
+      <tr><td>Repeated "Not Ready" badges on every card</td><td>Visual fatigue; gravitates attention to negative</td><td><span class="badge badge-warn">MEDIUM</span></td><td>Replaced with domain-level tone words ("awaiting setup" / "early stage" / "partial" / "healthy")</td></tr>
+      <tr><td>Doubled headers (Tab subtitle + BP section header both said "Business Processes")</td><td>Doubled reading; visual stutter</td><td><span class="badge badge-warn">MEDIUM</span></td><td>Tab subtitle suppressed on BPs tab since the surface ships its own editorial headline</td></tr>
+      <tr><td>Filter button rows (All / Code / Pages / Backend / Frontend / Agents + Active / Deferred / All)</td><td>9 filter buttons fight for attention; few are used in practice</td><td><span class="badge badge-warn">MEDIUM</span></td><td>Filters only present behind "Show full inventory" toggle; editorial mode hides them</td></tr>
+      <tr><td>Overall progress bar (8px) + percentage badge + per-card progress bars</td><td>Same data shown 3 ways simultaneously</td><td><span class="badge badge-info">LOW</span></td><td>Overall % surfaces once in narrative headline ("104 business processes, 0 of 0 requirements matched")</td></tr>
+      <tr><td>"Uncategorized" placeholder BP visible in grid</td><td>Engineering-internal term leaks into operator-facing surface</td><td><span class="badge badge-info">LOW</span></td><td>Filtered out at classifier; counts are still summed into the totals</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the audit completeness</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Honest</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Other repetitions still present</label>
+      <label><input type="radio" name="v5" value="cut">✕ Over-thought</label>
+      <textarea placeholder="What other density did we miss?" data-notes="audit"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Typography + rhythm ────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Typography + spacing — premium rhythm</span></h2>
+    <table>
+      <tr><th>Element</th><th>Was</th><th>Is</th></tr>
+      <tr><td>Surface container max-width</td><td>1180px</td><td>1100px (narrower = more whitespace gutter)</td></tr>
+      <tr><td>Container top padding</td><td>1.25rem</td><td>2rem (more breathing room at top)</td></tr>
+      <tr><td>Surface title font-size</td><td>22px</td><td>26px (larger, more editorial)</td></tr>
+      <tr><td>Surface title</td><td>"Understand the system."</td><td>"Understand how your system is organized."</td></tr>
+      <tr><td>Surface title letter-spacing</td><td>-0.01em</td><td>-0.015em (tighter, more confident)</td></tr>
+      <tr><td>Eyebrow letter-spacing</td><td>0.10em</td><td>0.12em (more typographic confidence)</td></tr>
+      <tr><td>Subtitle line-height</td><td>default (~1.4)</td><td>1.65 (more breath, longer paragraph)</td></tr>
+      <tr><td>Subtitle max-width</td><td>full</td><td>720px (better reading measure)</td></tr>
+      <tr><td>Tab-strip margin-bottom</td><td>1.25rem</td><td>2rem (breath between nav and content)</td></tr>
+      <tr><td>Active tab subtitle</td><td>shown on every tab</td><td>hidden on BPs tab (BPDomainSurface ships its own headline)</td></tr>
+      <tr><td>Domain card border</td><td>n/a (no domain cards)</td><td>1px solid border-color · radius 8 · no shadow until hover (calmer than monitoring-card shadows)</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the rhythm pass</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Feels premium</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Tune further</label>
+      <label><input type="radio" name="v6" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="rhythm"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Held the line ──────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Held the line — what we deliberately didn't do</span></h2>
+    <table>
+      <tr><th>Brief rule</th><th>Held?</th><th>How</th></tr>
+      <tr><td>§MOST IMPORTANT — "DO NOT add more data / widgets / metrics"</td><td><span class="badge badge-good">HELD</span></td><td>Zero new metrics; the surface shows LESS than before. The classifier reuses existing requirement counts.</td></tr>
+      <tr><td>§11 "Preserve existing architecture"</td><td><span class="badge badge-good">HELD</span></td><td>Backend untouched. <code>PortalBusinessProcessDetail</code> reused unchanged. <code>PortalBusinessProcessesTab</code> still available via "Show full inventory".</td></tr>
+      <tr><td>§16 "no v2 leakage anywhere"</td><td><span class="badge badge-good">HELD</span></td><td>Active surfaces all reference <code>/portal/project/system</code>. Legacy file names + tests retain V2 internally but are not user-visible.</td></tr>
+      <tr><td>Blueprint sacred (prior sprint rule)</td><td><span class="badge badge-good">HELD</span></td><td>Zero ExecutionLane changes.</td></tr>
+      <tr><td>No notification centers / activity feeds (prior sprint rule)</td><td><span class="badge badge-good">HELD</span></td><td>The BPs tab doesn't fetch any "recent activity" — it presents the existing static BP state.</td></tr>
+    </table>
+    <h3>Sections honestly partial / deferred</h3>
+    <table>
+      <tr><th>Brief section</th><th>Status</th><th>Why</th></tr>
+      <tr><td>§7 Operational storytelling</td><td><span class="badge badge-info">PARTIAL</span></td><td>Per-domain narratives shipped (3 bands per domain × 7 domains). Cross-domain storytelling ("Your intake feeds Lead Intelligence but Lead Intelligence drops 30% of records") would require dependency-graph data — deferred.</td></tr>
+      <tr><td>§9 Progressive reveal "overview / domain / BP detail / deep metrics"</td><td><span class="badge badge-info">PARTIAL</span></td><td>3 of 4 tiers shipped. The 4th tier (deep metrics for one BP) lives inside the existing detail modal — not redesigned this sprint.</td></tr>
+      <tr><td>§16 Mobile-width screenshots</td><td><span class="badge badge-warn">DEFERRED</span></td><td>Capture script runs at 1440×900 desktop. Mobile capture would require viewport + scroll handling for the longer-flowing editorial layout. Defer to a focused mobile sprint.</td></tr>
+      <tr><td>Architecture tab redesign</td><td><span class="badge badge-warn">DEFERRED</span></td><td>The sprint was scoped to BPs tab. Architecture tab still uses <code>SystemArchitectureCard</code> + info strip pattern from prior sprints.</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the scope discipline</strong><br>
+      <label><input type="radio" name="v7" value="ok">👍 Right scope</label>
+      <label><input type="radio" name="v7" value="iterate">⚠ One deferred item should have shipped</label>
+      <label><input type="radio" name="v7" value="cut">✕ Should have been smaller</label>
+      <textarea placeholder="Which deferred item should have shipped?" data-notes="scope"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 8 — File diff summary ──────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">8</span><span class="stop-title">File diff summary</span></h2>
+    <table>
+      <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+      <tr><td><code>frontend/src/utils/bpDomainClassifier.ts</code></td><td><span class="badge badge-good">NEW</span></td><td>Keyword-based domain classifier + narrative rules</td></tr>
+      <tr><td><code>frontend/src/components/project/BPDomainSurface.tsx</code></td><td><span class="badge badge-good">NEW</span></td><td>New editorial BP surface (domain rows + progressive reveal + inventory toggle)</td></tr>
+      <tr><td><code>frontend/src/pages/project/SystemView.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>BPs tab swap + typography pass + tab subtitle suppression on BPs</td></tr>
+      <tr><td><code>frontend/src/routes/portalRoutes.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Route rename + redirects + ProjectDashboard archive</td></tr>
+      <tr><td><code>frontend/src/components/Layout/PortalLayout.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Nav link <code>/system-v2</code> → <code>/system</code></td></tr>
+      <tr><td><code>frontend/src/components/Layout/WorkspaceContextBar.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Path detection for legacy surface</td></tr>
+      <tr><td><code>frontend/src/hooks/useActivePath.ts</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Active-path target route uses <code>/system</code></td></tr>
+      <tr><td><code>frontend/src/components/workspace/CoverageDrawer.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Drawer CTA link updated</td></tr>
+      <tr><td><code>frontend/src/components/workspace/CoryDrawer.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Cory drawer suggestion link updated</td></tr>
+      <tr><td><code>scripts/captureProductionScreenshots.js</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>All capture routes use <code>/system</code></td></tr>
+      <tr><td><code>scripts/captureContinuityVariants.js</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Continuity captures use <code>/system</code></td></tr>
+      <tr><td><code>scripts/captureMaturityVariants.js</code></td><td><span class="badge badge-good">NEW</span></td><td>4 maturity-specific captures (collapsed / expanded / inventory / redirect proof)</td></tr>
+    </table>
+    <p style="font-size: 12.5px; color: var(--muted);">
+      <strong>Commit:</strong> <code>625030b</code> · 12 files · ~634 insertions · ~58 deletions.
+      Zero backend. Zero schema. Zero new endpoints.
+    </p>
+  </div>
+
+  <!-- ─────────────────────── STOP 9 — Overall verdict ────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">9</span><span class="stop-title">Overall verdict</span></h2>
+    <p>Self-assessment against the brief's success criterion
+       (<em>"calm architectural understanding, not engineering telemetry"</em>):
+       the BPs tab transformation is the biggest single visual maturity step
+       since the SystemView restructure replaced 4,295 lines with 300. The
+       editorial header + domain rows + narrative lines do read as
+       operational architecture, not inventory.</p>
+    <p>Honest gaps named in STOP 7: cross-domain storytelling, mobile capture,
+       Architecture tab redesign. None block shipping; all worth picking up
+       individually rather than bundled.</p>
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship; significant maturity step</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Mostly good; iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should the next sprint pick up…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 9 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# System Surface Maturity Sprint — operator feedback\n\nFollowing commit 625030b shipped 2026-05-12:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
