@@ -19,13 +19,14 @@
  *
  * Tab persistence: `?tab=components|architecture|bps|operations|cognition`.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import CapabilityGrid from '../../components/project/CapabilityGrid';
 import PortalBusinessProcessesTab from '../../components/project/PortalBusinessProcessesTab';
 import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
 import { OperatorCognitionDashboard } from '../../components/operator/OperatorCognitionDashboard';
 import { AutonomousExecutionDashboard } from '../../components/operator/AutonomousExecutionDashboard';
+import { useWorkspaceMemory } from '../../hooks/useWorkspaceMemory';
 
 type TabKey = 'components' | 'architecture' | 'bps' | 'operations' | 'cognition';
 
@@ -49,27 +50,79 @@ const DEFAULT_TAB: TabKey = 'components';
 
 const SystemView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = (searchParams.get('tab') as TabKey) || DEFAULT_TAB;
-  const [active, setActive] = useState<TabKey>(
-    TABS.some(t => t.key === initialTab) ? initialTab : DEFAULT_TAB,
-  );
+  const { memory, update } = useWorkspaceMemory();
 
-  // Lazy-mount tracker so advanced tabs don't load until first viewed.
-  const [hasMounted, setHasMounted] = useState<Record<TabKey, boolean>>({
-    components: true,
-    architecture: false,
-    bps: false,
-    operations: false,
-    cognition: false,
-  });
+  // Continuity + Resume Flow Sprint, 2026-05-12 — initial tab resolution priority:
+  //   1. ?tab=… query param (explicit user intent, deep-link)
+  //   2. memory.lastSystemTab (last tab the operator was on)
+  //   3. DEFAULT_TAB (components)
+  // The memory branch makes navigating away + back land the operator
+  // exactly where they left off without giant breadcrumbs.
+  const queryTab = searchParams.get('tab') as TabKey | null;
+  const validQuery = queryTab && TABS.some(t => t.key === queryTab) ? queryTab : null;
+  const validMemory = memory.lastSystemTab && TABS.some(t => t.key === memory.lastSystemTab as TabKey)
+    ? (memory.lastSystemTab as TabKey)
+    : null;
+  const resolvedInitial = validQuery ?? validMemory ?? DEFAULT_TAB;
+
+  const [active, setActive] = useState<TabKey>(resolvedInitial);
+
+  // Lazy-mount tracker so advanced tabs don't load until first viewed. The
+  // RESTORED initial tab (not just 'components') is marked mounted on first
+  // render so the operator's last surface paints immediately.
+  const [hasMounted, setHasMounted] = useState<Record<TabKey, boolean>>(() => ({
+    components: resolvedInitial === 'components',
+    architecture: resolvedInitial === 'architecture',
+    bps: resolvedInitial === 'bps',
+    operations: resolvedInitial === 'operations',
+    cognition: resolvedInitial === 'cognition',
+  }));
+
+  // If we resolved the tab from memory (no query param), reflect it in the
+  // URL so the surface is shareable and the back-button works naturally.
+  // Guarded by `mounted` so the rewrite happens exactly once per mount;
+  // subsequent searchParams changes (from user clicks) are no-ops here.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (mounted) return;
+    setMounted(true);
+    if (!queryTab && validMemory) {
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', resolvedInitial);
+      setSearchParams(next, { replace: true });
+    }
+  }, [mounted, queryTab, validMemory, resolvedInitial, searchParams, setSearchParams]);
 
   const setTab = (key: TabKey) => {
     setActive(key);
     setHasMounted(prev => ({ ...prev, [key]: true }));
+    update({ lastSystemTab: key });
     const next = new URLSearchParams(searchParams);
     next.set('tab', key);
     setSearchParams(next, { replace: true });
   };
+
+  // BP restoration: read memory.lastBpId once on mount and pass to the
+  // BPs tab as its initial selection. PortalBusinessProcessesTab already
+  // persists its own active_component_id to localStorage; we sync memory
+  // on unmount + visibilitychange so the next visit lands on the same BP.
+  const initialBpId = memory.lastBpId || null;
+  useEffect(() => {
+    const syncBpToMemory = () => {
+      try {
+        const current = localStorage.getItem('active_component_id');
+        if (current && current !== memory.lastBpId) update({ lastBpId: current });
+      } catch { /* ignore */ }
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') syncBpToMemory(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('beforeunload', syncBpToMemory);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('beforeunload', syncBpToMemory);
+      syncBpToMemory();
+    };
+  }, [memory.lastBpId, update]);
 
   const activeSpec = useMemo(() => TABS.find(t => t.key === active)!, [active]);
 
@@ -164,7 +217,7 @@ const SystemView: React.FC = () => {
         {hasMounted.architecture && <ArchitectureTab />}
       </div>
       <div role="tabpanel" hidden={active !== 'bps'}>
-        {hasMounted.bps && <BPsTab />}
+        {hasMounted.bps && <BPsTab initialBpId={initialBpId} />}
       </div>
       <div role="tabpanel" hidden={active !== 'operations'}>
         {hasMounted.operations && <OperationsTab />}
@@ -224,13 +277,13 @@ const ArchitectureTab: React.FC = () => (
   </section>
 );
 
-const BPsTab: React.FC = () => (
+const BPsTab: React.FC<{ initialBpId?: string | null }> = ({ initialBpId }) => (
   <section>
     <TabIntro
       title="Business Processes"
       blurb="Process structure, status, and dependencies. This tab explains — Cory drives execution from Home."
     />
-    <PortalBusinessProcessesTab />
+    <PortalBusinessProcessesTab initialSelectedId={initialBpId ?? undefined} />
   </section>
 );
 

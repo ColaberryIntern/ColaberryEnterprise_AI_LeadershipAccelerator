@@ -17,7 +17,7 @@
  * that disagrees with this page. This page IS the next-action authority.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useUnifiedProjectState,
   type ReadinessBand,
@@ -27,11 +27,14 @@ import {
 } from '../../hooks/useUnifiedProjectState';
 import { useWorkspaceMemory, type DrawerId } from '../../hooks/useWorkspaceMemory';
 import { useOperationalMomentum } from '../../hooks/useOperationalMomentum';
+import { useActivePath } from '../../hooks/useActivePath';
 import ReadinessDrawer from '../../components/workspace/ReadinessDrawer';
 import CoverageDrawer from '../../components/workspace/CoverageDrawer';
 import WhyThisNextDrawer from '../../components/workspace/WhyThisNextDrawer';
 import RecentlyMovedCard from '../../components/workspace/RecentlyMovedCard';
 import OperationalHistoryStrip from '../../components/workspace/OperationalHistoryStrip';
+import ContinuationCard from '../../components/workspace/ContinuationCard';
+import { fireToast } from '../../components/workspace/MicroToast';
 
 const BAND_COLOR: Record<ReadinessBand, { fg: string; bg: string; label: string }> = {
   red: { fg: 'var(--color-danger)', bg: 'var(--color-danger-bg)', label: 'Needs attention' },
@@ -54,8 +57,27 @@ const SEVERITY_COLOR: Record<BlockerEntry['severity'], string> = {
 
 const CoryHome: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { state, loading, error, refresh } = useUnifiedProjectState({ pollMs: 60_000 });
   const { memory, update, recordSnapshot } = useWorkspaceMemory();
+
+  // Continuity inputs — sessionStorage signals the active-path hook needs.
+  // Read once at mount; refreshed via state.built_at so we pick up changes
+  // made in other tabs.
+  const [continuityInputs, setContinuityInputs] = useState<{
+    pendingPrompt: string | null;
+    pendingRoute: string | null;
+    lastCritiqueAt: string | null;
+  }>({ pendingPrompt: null, pendingRoute: null, lastCritiqueAt: null });
+  useEffect(() => {
+    try {
+      setContinuityInputs({
+        pendingPrompt: sessionStorage.getItem('visualWorkspace:pendingBuildPrompt'),
+        pendingRoute: sessionStorage.getItem('visualWorkspace:pendingBuildSourceRoute'),
+        lastCritiqueAt: sessionStorage.getItem('visualWorkspace:lastSessionTouchedAt'),
+      });
+    } catch { /* ignore */ }
+  }, [state?.built_at]);
 
   // Freeze the memory state as it was when this session started. Momentum
   // is computed against this frozen snapshot — not the live mutable memory.
@@ -67,6 +89,17 @@ const CoryHome: React.FC = () => {
   const initialMemoryRef = useRef(memory);
   const momentum = useOperationalMomentum(state, initialMemoryRef.current);
 
+  // ActivePath — single most-relevant continuation. Computed against the
+  // frozen session-start memory so the operator sees what they were doing
+  // BEFORE this session, not what they just clicked on.
+  const activePath = useActivePath({
+    state,
+    memory: initialMemoryRef.current,
+    pendingCritiquePrompt: continuityInputs.pendingPrompt,
+    pendingCritiqueRoute: continuityInputs.pendingRoute,
+    lastCritiqueAt: continuityInputs.lastCritiqueAt,
+  });
+
   // Contextual drawers — opened by clicking tiles or the priority card.
   // The drawer key is persisted to memory so the next visit can offer
   // "you last opened the X drawer" affordances.
@@ -75,6 +108,24 @@ const CoryHome: React.FC = () => {
     setOpenDrawer(id);
     if (id) update({ lastDrawerOpen: id });
   };
+
+  // Restore-drawer from URL — when the ContinuationCard navigates to
+  // /portal/home?drawer=coverage, automatically open that drawer + scrub
+  // the param so a refresh doesn't loop. Guarded by `drawerHandled` so the
+  // handler runs once per mount regardless of subsequent param changes.
+  const [drawerHandled, setDrawerHandled] = useState(false);
+  useEffect(() => {
+    if (drawerHandled) return;
+    setDrawerHandled(true);
+    const drawerParam = searchParams.get('drawer') as DrawerId | null;
+    if (!drawerParam) return;
+    const valid: DrawerId[] = ['readiness', 'coverage', 'why-this-next', 'cory'];
+    if (!valid.includes(drawerParam)) return;
+    setOpenDrawer(drawerParam);
+    const next = new URLSearchParams(searchParams);
+    next.delete('drawer');
+    setSearchParams(next, { replace: true });
+  }, [drawerHandled, searchParams, setSearchParams]);
 
   // Detect whether the priority card content is fresh (the source_id we are
   // showing now differs from what the operator last saw). When fresh, we
@@ -88,6 +139,32 @@ const CoryHome: React.FC = () => {
   useEffect(() => {
     update({ lastVisitedSurface: 'home' });
   }, [update]);
+
+  // Cross-surface arrival acknowledgment — when the operator lands on
+  // Home with meaningful forward momentum that they haven't yet
+  // acknowledged for THIS exact session-start snapshot, fire a single
+  // welcome-back toast. Dedup signature includes the frozen snapshot's
+  // built_at so future visits with the same comparison don't re-fire.
+  const arrivalToastFiredRef = useRef(false);
+  useEffect(() => {
+    if (arrivalToastFiredRef.current) return;
+    if (!state || !momentum.hasMomentum) return;
+    if (momentum.netForwardMotion < 2) return;
+    arrivalToastFiredRef.current = true;
+    const builtAt = initialMemoryRef.current.lastBuiltAt || 'first';
+    const bits: string[] = [];
+    if (momentum.readinessDelta && momentum.readinessDelta > 0) bits.push(`Readiness +${momentum.readinessDelta}`);
+    if (momentum.coverageDelta && momentum.coverageDelta > 0) bits.push(`Coverage +${momentum.coverageDelta}`);
+    if (momentum.queueDelta && momentum.queueDelta < 0) bits.push(`Queue ${momentum.queueDelta}`);
+    if (momentum.healthDelta && momentum.healthDelta > 0) bits.push(`Health +${momentum.healthDelta}`);
+    if (bits.length === 0) return;
+    fireToast({
+      icon: 'bi-emoji-smile',
+      tone: 'good',
+      message: `Welcome back — ${bits.join(' · ')} while you were away`,
+      signature: `arrival:${builtAt}`,
+    });
+  }, [state, momentum.hasMomentum, momentum.netForwardMotion, momentum.readinessDelta, momentum.coverageDelta, momentum.queueDelta, momentum.healthDelta]);
 
   // Snapshot the current readiness/coverage/queue/health so the NEXT visit
   // can compute "since you were last here" deltas. We deliberately do NOT
@@ -176,6 +253,10 @@ const CoryHome: React.FC = () => {
       ) : (
         <EmptyPriorityCard />
       )}
+
+      {/* Continuation affordance — "You were working on …". One row. Hidden
+          when there's no meaningful continuation, dismissible per-session. */}
+      <ContinuationCard path={activePath} />
 
       {/* Recently-moved — shows deltas vs last snapshot. Hidden when nothing has moved. */}
       <RecentlyMovedCard momentum={momentum} />
