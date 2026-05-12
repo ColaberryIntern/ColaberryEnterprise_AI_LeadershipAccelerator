@@ -158,9 +158,10 @@ const WorkspaceContextBar: React.FC = () => {
         <span
           aria-hidden="true"
           title={pulse ? 'State just refreshed' : 'Live'}
+          className={pulse ? undefined : 'ws-pulse-dot'}
           style={{
             width: 7, height: 7, borderRadius: '50%',
-            background: pulse ? 'var(--color-success)' : 'rgba(16, 185, 129, 0.45)',
+            background: pulse ? 'var(--color-success)' : 'rgba(16, 185, 129, 0.55)',
             transition: 'background 350ms ease',
             flexShrink: 0,
           }}

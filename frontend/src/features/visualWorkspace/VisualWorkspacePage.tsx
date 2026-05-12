@@ -322,6 +322,9 @@ const VisualWorkspacePage: React.FC = () => {
     }
     sessionStorage.setItem('visualWorkspace:pendingBuildPrompt', text);
     sessionStorage.setItem('visualWorkspace:pendingBuildSourceRoute', pageRoute);
+    // Workspace Presence Sprint, 2026-05-12 — write a timestamp the
+    // OperationalHistoryStrip on Cory Home reads as "Last critique X ago".
+    sessionStorage.setItem('visualWorkspace:lastSessionTouchedAt', new Date().toISOString());
     // Blueprint is the execution surface — Critique compiles the prompt
     // and hands off here. Blueprint surfaces the pending prompt as a
     // primary banner (see SystemBlueprint.tsx pendingCritiquePrompt).

@@ -16,7 +16,7 @@
  * Hard rule: there is no "next action" panel anywhere else on the platform
  * that disagrees with this page. This page IS the next-action authority.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   useUnifiedProjectState,
@@ -25,9 +25,13 @@ import {
   type QueueEntry,
   type BlockerEntry,
 } from '../../hooks/useUnifiedProjectState';
+import { useWorkspaceMemory, type DrawerId } from '../../hooks/useWorkspaceMemory';
+import { useOperationalMomentum } from '../../hooks/useOperationalMomentum';
 import ReadinessDrawer from '../../components/workspace/ReadinessDrawer';
 import CoverageDrawer from '../../components/workspace/CoverageDrawer';
 import WhyThisNextDrawer from '../../components/workspace/WhyThisNextDrawer';
+import RecentlyMovedCard from '../../components/workspace/RecentlyMovedCard';
+import OperationalHistoryStrip from '../../components/workspace/OperationalHistoryStrip';
 
 const BAND_COLOR: Record<ReadinessBand, { fg: string; bg: string; label: string }> = {
   red: { fg: 'var(--color-danger)', bg: 'var(--color-danger-bg)', label: 'Needs attention' },
@@ -51,9 +55,44 @@ const SEVERITY_COLOR: Record<BlockerEntry['severity'], string> = {
 const CoryHome: React.FC = () => {
   const navigate = useNavigate();
   const { state, loading, error, refresh } = useUnifiedProjectState({ pollMs: 60_000 });
+  const { memory, update, recordSnapshot } = useWorkspaceMemory();
+  const momentum = useOperationalMomentum(state, memory);
 
   // Contextual drawers — opened by clicking tiles or the priority card.
-  const [openDrawer, setOpenDrawer] = useState<'readiness' | 'coverage' | 'why-this-next' | null>(null);
+  // The drawer key is persisted to memory so the next visit can offer
+  // "you last opened the X drawer" affordances.
+  const [openDrawer, setOpenDrawer] = useState<DrawerId | null>(null);
+  const openDrawerWithMemory = (id: DrawerId | null) => {
+    setOpenDrawer(id);
+    if (id) update({ lastDrawerOpen: id });
+  };
+
+  // Detect whether the priority card content is fresh (the source_id we are
+  // showing now differs from what the operator last saw). When fresh, we
+  // apply the ws-fresh halo for 6s so the card visually announces itself.
+  const priorityIsFresh =
+    !!state?.next_action?.source_id
+    && state.next_action.source_id !== memory.lastSeenNextActionId;
+
+  // Capture this surface as the last-visited so the context bar / next
+  // session can show "Last visited Home X min ago".
+  useEffect(() => {
+    update({ lastVisitedSurface: 'home' });
+  }, [update]);
+
+  // Snapshot the current readiness/coverage/queue/health so the NEXT visit
+  // can compute "since you were last here" deltas. Only writes when
+  // state.built_at changes (recordSnapshot has a no-op guard for repeats).
+  useEffect(() => {
+    if (!state) return;
+    recordSnapshot({
+      readinessScore: state.readiness.score,
+      coverageScore: state.coverage.score,
+      queueSize: state.queue.length,
+      healthScore: state.health.score,
+      builtAt: state.built_at,
+    });
+  }, [state, recordSnapshot]);
 
   if (loading && !state) {
     return (
@@ -101,12 +140,16 @@ const CoryHome: React.FC = () => {
       {state.next_action ? (
         <NextActionCard
           action={state.next_action}
+          fresh={priorityIsFresh}
           onGo={() => navigate(state.next_action!.target_route)}
-          onWhy={() => setOpenDrawer('why-this-next')}
+          onWhy={() => openDrawerWithMemory('why-this-next')}
         />
       ) : (
         <EmptyPriorityCard />
       )}
+
+      {/* Recently-moved — shows deltas vs last snapshot. Hidden when nothing has moved. */}
+      <RecentlyMovedCard momentum={momentum} />
 
       {/* 3-tile row — Readiness + Coverage are click-through to drawers */}
       <div className="row g-3 mb-3">
@@ -119,7 +162,8 @@ const CoryHome: React.FC = () => {
             footer={readinessC.label}
             footerColor={readinessC.fg}
             tooltip={state.readiness.reasons[0]}
-            onClick={() => setOpenDrawer('readiness')}
+            onClick={() => openDrawerWithMemory('readiness')}
+            highlight={momentum.readinessDelta != null && momentum.readinessDelta > 0}
           />
         </div>
         <div className="col-md-4">
@@ -134,7 +178,8 @@ const CoryHome: React.FC = () => {
               ? `${state.coverage.requirements_matched} of ${state.coverage.requirements_total} requirements matched`
               : 'No requirements extracted yet'}
             footerColor="var(--color-text-light)"
-            onClick={() => setOpenDrawer('coverage')}
+            onClick={() => openDrawerWithMemory('coverage')}
+            highlight={momentum.coverageDelta != null && momentum.coverageDelta > 0}
           />
         </div>
         <div className="col-md-4">
@@ -145,14 +190,15 @@ const CoryHome: React.FC = () => {
             valueColor={state.health.score >= 80 ? 'var(--color-success)' : state.health.score >= 60 ? 'var(--color-warning)' : 'var(--color-danger)'}
             footer={state.health.regressions_24h === 0 ? 'Stable' : `${state.health.regressions_24h} regression(s) in 24h`}
             footerColor="var(--color-text-light)"
+            highlight={momentum.healthDelta != null && momentum.healthDelta > 0}
           />
         </div>
       </div>
 
       {/* Drawers — anchored at the page level, opened by tiles + priority card */}
-      <ReadinessDrawer open={openDrawer === 'readiness'} onClose={() => setOpenDrawer(null)} />
-      <CoverageDrawer open={openDrawer === 'coverage'} onClose={() => setOpenDrawer(null)} />
-      <WhyThisNextDrawer open={openDrawer === 'why-this-next'} onClose={() => setOpenDrawer(null)} />
+      <ReadinessDrawer open={openDrawer === 'readiness'} onClose={() => openDrawerWithMemory(null)} />
+      <CoverageDrawer open={openDrawer === 'coverage'} onClose={() => openDrawerWithMemory(null)} />
+      <WhyThisNextDrawer open={openDrawer === 'why-this-next'} onClose={() => openDrawerWithMemory(null)} />
 
       {/* Things to address — only when present (less alarming than "Critical blockers") */}
       {blockerCount > 0 && (
@@ -201,7 +247,7 @@ const CoryHome: React.FC = () => {
           aside="Cory's authority — every surface agrees with this order."
         />
         {queueTotal === 0 ? (
-          <div style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, padding: '1.25rem', textAlign: 'center', color: 'var(--color-text-light)', fontSize: 13 }}>
+          <div className="ws-breath" style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, padding: '1.25rem', textAlign: 'center', color: 'var(--color-text-light)', fontSize: 13 }}>
             <i className="bi bi-check2-circle me-1" style={{ color: 'var(--color-success)' }}></i>
             Nothing in the queue. The platform is caught up.
           </div>
@@ -235,7 +281,7 @@ const CoryHome: React.FC = () => {
               </Link>
             </div>
           ) : (
-            <div style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, padding: '0.85rem 1rem', fontSize: 13, color: 'var(--color-text-light)' }}>
+            <div className="ws-breath" style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, padding: '0.85rem 1rem', fontSize: 13, color: 'var(--color-text-light)' }}>
               No active build. Pick a queue item to start.
             </div>
           )}
@@ -255,20 +301,21 @@ const CoryHome: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer meta */}
-      <div style={{ fontSize: 11, color: 'var(--color-text-light)', textAlign: 'center', marginTop: '1rem' }}>
-        Synthesized {new Date(state.built_at).toLocaleTimeString()} · confidence {state.confidence.score}% · sources: {state.confidence.sources.join(' · ') || 'none yet'}
-      </div>
+      {/* Operational history strip — richer than the prior "Synthesized at HH:MM"
+          footer. Shows synthesis age, last-touched age, last-critique age, and
+          confidence — all sourced from state + memory + sessionStorage. */}
+      <OperationalHistoryStrip state={state} memory={memory} />
     </div>
   );
 };
 
 // -------------------------- subcomponents -----------------------------------
 
-const NextActionCard: React.FC<{ action: NonNullable<ReturnType<typeof useUnifiedProjectState>['state']>['next_action']; onGo: () => void; onWhy: () => void }> = ({ action, onGo, onWhy }) => {
+const NextActionCard: React.FC<{ action: NonNullable<ReturnType<typeof useUnifiedProjectState>['state']>['next_action']; fresh?: boolean; onGo: () => void; onWhy: () => void }> = ({ action, fresh, onGo, onWhy }) => {
   if (!action) return null;
   return (
     <div
+      className={fresh ? 'ws-fresh' : undefined}
       style={{
         background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%)',
         color: 'white',
@@ -332,6 +379,7 @@ const NextActionCard: React.FC<{ action: NonNullable<ReturnType<typeof useUnifie
 
 const EmptyPriorityCard: React.FC = () => (
   <div
+    className="ws-breath"
     style={{
       background: 'white',
       border: '1px solid var(--color-border)',
@@ -433,7 +481,9 @@ const Tile: React.FC<{
   footerColor: string;
   tooltip?: string;
   onClick?: () => void;
-}> = ({ label, sublabel, value, valueColor, footer, footerColor, tooltip, onClick }) => {
+  /** Renders a soft "↗" chevron next to the value to acknowledge forward delta. */
+  highlight?: boolean;
+}> = ({ label, sublabel, value, valueColor, footer, footerColor, tooltip, onClick, highlight }) => {
   const interactive = !!onClick;
   const baseStyle: React.CSSProperties = {
     background: 'white',
@@ -463,7 +513,14 @@ const Tile: React.FC<{
           <i className="bi bi-arrow-up-right" style={{ fontSize: 11, color: 'var(--color-text-light)', opacity: 0.5, marginTop: 2 }} aria-hidden="true"></i>
         )}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 600, color: valueColor, marginTop: 4, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 28, fontWeight: 600, color: valueColor, marginTop: 4, lineHeight: 1.1, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span>{value}</span>
+        {highlight && (
+          <span title="Improved since your last visit" aria-label="improved" style={{ fontSize: 14, color: 'var(--color-accent)', fontWeight: 700 }}>
+            ↗
+          </span>
+        )}
+      </div>
       <div style={{ fontSize: 11, color: footerColor, marginTop: 4 }}>{footer}</div>
     </>
   );

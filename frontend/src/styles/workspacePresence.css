@@ -1,0 +1,86 @@
+/**
+ * Workspace Presence + Operational Momentum Sprint, 2026-05-12.
+ *
+ * Ambient motion primitives. All effects are calm, slow, and decorative —
+ * the workspace breathes; it does not pulse.
+ *
+ * Rules:
+ *   - No animation faster than 2.5s on a static element
+ *   - All animations honor prefers-reduced-motion
+ *   - No animation that moves layout (only opacity, box-shadow, background-position)
+ *   - Each class is opt-in; nothing is global
+ */
+
+/* ── ws-breath : 4.5s gentle opacity oscillation, used on empty/static cards
+   so the workspace never feels visually frozen. */
+@keyframes wsBreath {
+  0%, 100% { opacity: 0.78; }
+  50%      { opacity: 1; }
+}
+.ws-breath {
+  animation: wsBreath 4.5s ease-in-out infinite;
+}
+
+/* ── ws-fresh : a soft inset highlight applied when a card's content has
+   just changed (a new priority, a freshly-updated active build). Fades
+   out over 6s so it doesn't linger. */
+@keyframes wsFreshFade {
+  0%   { box-shadow: 0 0 0 2px rgba(56, 161, 105, 0.45), 0 4px 14px rgba(56, 161, 105, 0.18); }
+  100% { box-shadow: 0 0 0 2px rgba(56, 161, 105, 0), 0 4px 14px rgba(56, 161, 105, 0); }
+}
+.ws-fresh {
+  animation: wsFreshFade 6s ease-out forwards;
+}
+
+/* ── ws-shimmer : a subtle left-to-right shimmer used as success
+   acknowledgment after a verification step lands. Single sweep, 1.4s,
+   then gone. */
+@keyframes wsShimmer {
+  0%   { background-position: -180% 0; }
+  100% { background-position: 180% 0; }
+}
+.ws-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(56, 161, 105, 0.10) 45%,
+    rgba(56, 161, 105, 0.16) 50%,
+    rgba(56, 161, 105, 0.10) 55%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: wsShimmer 1.4s ease-out 1;
+}
+
+/* ── ws-delta-rise : fade + tiny rise for delta chips appearing in
+   the recently-moved card. */
+@keyframes wsDeltaRise {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.ws-delta-rise {
+  animation: wsDeltaRise 360ms ease-out 1;
+}
+
+/* ── ws-pulse-dot : 2.5s slow pulse on the context-bar live dot when
+   state is freshening. Slower than the old 1.2s flash. */
+@keyframes wsPulseDot {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.18); opacity: 0.72; }
+}
+.ws-pulse-dot {
+  animation: wsPulseDot 2.5s ease-in-out infinite;
+}
+
+/* Reduced-motion: shut everything down. The workspace becomes static but
+   readable — the *content* remains identical, only motion is removed. */
+@media (prefers-reduced-motion: reduce) {
+  .ws-breath,
+  .ws-fresh,
+  .ws-shimmer,
+  .ws-delta-rise,
+  .ws-pulse-dot {
+    animation: none !important;
+  }
+}

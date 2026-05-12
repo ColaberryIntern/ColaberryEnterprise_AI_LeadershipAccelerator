@@ -5,6 +5,10 @@ import { MentorContextProvider } from '../../contexts/MentorContext';
 import CoryAvatar from '../cory/CoryAvatar';
 import WorkspaceContextBar from './WorkspaceContextBar';
 import ToastHost from '../workspace/MicroToast';
+// Workspace Presence Sprint, 2026-05-12 — ambient breath/fresh/shimmer
+// animation primitives. Loaded once at layout level so any portal page
+// can opt in via class name without re-importing.
+import '../../styles/workspacePresence.css';
 
 function PortalLayout() {
   const { logout } = useParticipantAuth();
