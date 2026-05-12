@@ -66,15 +66,25 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   }
 
   // --- 2. Name Check ---
+  // Auto-notification senders include Ali's name in body as part of @-mentions,
+  // recipient lists, assignment summaries — not because someone is addressing him.
+  // Skip the name check for these domains. Also restrict the check to subject only,
+  // since body matches over-fire on project-management noise.
+  const AUTO_NOTIFICATION_SENDERS =
+    /@(3\.basecamp\.com|tc\.rocketmortgage\.com|zoom\.us|dart\.org|opentable\.com|substack\.com|lyftmail\.com|nextdoor\.com|otter\.ai|mailchimp\.com|sendgrid\.net|amazonses\.com)$/i;
+  const isAutoNotificationSender = AUTO_NOTIFICATION_SENDERS.test(email.from_address);
   const namePattern = /ali\s+muwwakkil/i;
-  if (namePattern.test(email.subject) || namePattern.test(email.body_text || '')) {
+  if (!isAutoNotificationSender && namePattern.test(email.subject)) {
     const reason = 'Directly addressed to Ali Muwwakkil';
     console.log(`${LOG_PREFIX} Name match: ${reason}`);
     return { matched: true, state: 'INBOX', reason, classified_by: 'hard_rule' };
   }
 
   // --- 3. Keyword Check ---
-  const priorityKeywords = ['school', 'daycare', 'sports league', 'parent teacher', 'pta', 'field trip'];
+  // 'school' was removed — Ali runs Colaberry's data school, so every internal
+  // school-related email was triggering this. The remaining keywords are
+  // unambiguously kid/family-related.
+  const priorityKeywords = ['daycare', 'sports league', 'parent teacher', 'pta', 'field trip'];
   for (const keyword of priorityKeywords) {
     const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const wordBoundaryRegex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');

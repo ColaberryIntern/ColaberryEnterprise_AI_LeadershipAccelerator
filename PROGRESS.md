@@ -12,6 +12,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Inbox Agent — Hard Rule Tuning to Stop Auto-Notification Leakage (2026-05-12)
+- [x] `backend/src/services/inbox/hardRuleEngine.ts` — fixed two over-firing hard rules that were leaking ~129 emails over 3 days into the user-facing inbox. (1) **Name check** restricted to subject only (was scanning body too) AND now skipped entirely for known auto-notification domains via `AUTO_NOTIFICATION_SENDERS` regex (basecamp.com, rocketmortgage.com, zoom.us, dart.org, opentable.com, substack.com, lyftmail.com, nextdoor.com, otter.ai, mailchimp.com, sendgrid.net, amazonses.com). Basecamp injects "Ali Muwwakkil" into the body of every project notification (assignment lists, recipient lists, @-mentions) so the old `namePattern.test(body)` was treating every Basecamp email as "directly addressed to Ali". (2) **Priority-keyword check** dropped 'school' from the list (`daycare, sports league, parent teacher, pta, field trip` remain). Ali runs Colaberry's data school so every internal school-related email was tripping a kid-school keyword filter.
+  - Date: 2026-05-12
+  - What changed: hardRuleEngine name check now `!isAutoNotificationSender && namePattern.test(email.subject)`; 'school' removed from `priorityKeywords`.
+  - Verification: `npx tsc --noEmit` exit 0 in backend; root cause was confirmed via 3 prod SQL queries — last 3 days had 107 INBOX-state classifications via "Directly addressed to Ali Muwwakkil" reason (75 of which were Basecamp notifications that the table-driven Basecamp rule should have routed to AUTOMATION but never got the chance because hard rules run first) and 22 INBOX via "Contains priority keyword: school" reason.
+  - Notes: deferred deploy per "production deploys only after hours" rule. DB rule additions (below) take effect immediately on the next classification. Code change ships on next prod deploy.
+- [x] Added 3 rows to `inbox_rules` table in prod for senders that had no rule at all: Rocket Mortgage receipts (id `309f6dba-0c4e-4f2f-9f7e-41cc47e15d60`), DART notifications (id `a790bcad-dd4d-4ecc-813a-212bb313b2c1`), OpenTable confirmations (id `88bdd973-ef43-4d98-a762-ee6d0dd25410`). All `target_state=AUTOMATION`, `priority=20`, `enabled=true`, condition `from CONTAINS <domain>`.
+  - Date: 2026-05-12
+  - Verification: `INSERT 0 3` returned by Postgres; rules visible via `SELECT * FROM inbox_rules WHERE created_by = 'inbox-audit-2026-05-12'`
+  - Notes: priority 20 > priority 10 (existing Basecamp rule) so these win during user-defined-rule iteration. But they still run AFTER hard rules — so the code fix above is the load-bearing change; these DB rules are belt-and-suspenders coverage.
+
 ### Workspace Presence + Operational Momentum Sprint (2026-05-12)
 - [x] **Production deploy** of presence layer to enterprise.colaberry.ai. Commit `16ff83b` pushed + SSH-deployed; backend + nginx rebuilt + healthy. Healthcheck wait kicked in correctly — backend took 7 healthcheck attempts (70s) before returning 200, capture proceeded automatically once warm. AFTER capture confirms shipped UI: new OperationalHistoryStrip rendering on Cory Home footer ("SYNTHESIZED just now · YOU LAST TOUCHED just now · LAST CRITIQUE — not opened yet · CONFIDENCE 80%") replacing the old "Synthesized HH:MM" line; RecentlyMovedCard correctly hidden on first visit (no prior snapshot to delta against).
   - Date: 2026-05-12
