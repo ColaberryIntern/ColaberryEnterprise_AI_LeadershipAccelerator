@@ -102,6 +102,30 @@ export async function runSkoolQualityGate(): Promise<{
         score -= 50; // Heavy penalty - auto-reject
       }
 
+      // --- GLOBAL DM-bait / share-CTA bans (applies to ALL categories) ---
+      // Moderators flag these in hiring posts too — Skool flag on 2026-05-11 for a "Congrats on
+      // the positive feedback, Harsh! ... DM me if you want to dig into this" reply, classified
+      // as 'hiring' but still rejected as self-promotion. These patterns are universally bad.
+      const universalDmBaitPatterns = [
+        /\bDM me\b/i,
+        /\bdive deeper\b/i,
+        /\bdig into this\b/i,
+        /\bhappy to (chat|share|discuss|connect|hop on|jump on)\b/i,
+        /\bhappy to share (more )?about\b/i,
+        /\b(feel free to |please |you can )?reach out (to me|directly|if you)\b/i,
+        /\bcontact me directly\b/i,
+        /\bmessage me\b/i,
+        /\bif you'?re (looking to|interested in) (partner|collaborat|work with me|connect)/i,
+        /\bif you (want|need|'?d like|have)[^.]*?(reach out|guidance|help|info|chat|questions|dig into|hop on)/i,
+        /\bif you'?re interested\s*[.,!]/i, // bare "if you're interested." at end of sentence
+        /\blet me know if you (want|need|are interested|'?d like)/i,
+      ];
+      const universalMatch = universalDmBaitPatterns.find(p => p.test(body));
+      if (universalMatch) {
+        reasons.push(`Contains DM-bait / share-CTA language (${universalMatch.toString()}) - moderators flag this as self-promotion across ALL categories`);
+        score -= 50; // Heavy penalty - auto-reject
+      }
+
       // --- Block pitch language AND case-study fingerprints in non-hiring categories ---
       // Verified: moderators flag self-promo language AND specific company numbers ($1.2M, 200 vehicles, 97% accuracy)
       // in dev-help/builds/intros even without URLs.
@@ -112,15 +136,11 @@ export async function runSkoolQualityGate(): Promise<{
           /\bmy team\b/i,
           /\bwe\s+(build|specialize|offer|deliver|provide)\b/i,
           /\bteam (specializes|builds|offers)\b/i,
-          // CTAs to take it private (any phrasing)
-          /\bDM me\b/i,
-          /\bdive deeper\b/i,
-          /\bhappy to (chat|share|discuss|connect)\b/i,
-          /\b(feel free to |please |you can )?reach out\b/i,
-          /\bcontact me directly\b/i,
-          /\bif you (want|need|'?d like|have)[^.]*?(reach out|guidance|help|info|chat|questions)/i,
-          /\bI have a tool that\b/i,
+          // Additional case-study / pitch fingerprints (non-hiring only)
+          /\bI (have|use) a tool that\b/i,
           /\bI use that might help\b/i,
+          /\bmulti[- ]agent voice system\b/i, // the canned case study leaks here
+          /\bI (just |recently )?(deployed|shipped|built|implemented) (a|an|the) multi[- ]agent\b/i,
           // Company case-study fingerprints — these dollar figures and counts uniquely identify our work
           /\$1\.?2\s*M(illion)?\b/i,
           /\b200\+?\s+vehicles?\b/i,

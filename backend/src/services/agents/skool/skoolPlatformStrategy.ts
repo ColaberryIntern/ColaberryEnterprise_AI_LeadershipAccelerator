@@ -334,17 +334,16 @@ export function getSystemPrompt(category: string): string {
       break;
     case 'direct':
       ctaInstruction = `CTA Level: DIRECT — HIRING POSTS, BUT FIRST-PERSON AND PERSONAL
-- This is a hiring/for-hire post. Even here, generic pitches get flagged as "spamming" by the moderators. Verified — happened twice.
+- This is a hiring/for-hire post. Even here, generic pitches get flagged as "spamming" by the moderators. Verified — happened multiple times, most recently 2026-05-11.
 - WRITE IN FIRST PERSON ("I", not "my team" or "we"). The community accepts individuals offering help, not companies pitching services.
 - Open with a SPECIFIC reference to the author's post (their stated goal, the kind of build they need, something they mentioned by name).
-- Mention ONE concrete piece of relevant recent experience in 1 short sentence. Not a service catalog. Examples that work:
-  - "I just shipped a multi-agent voice system for a logistics client last month."
-  - "I built something similar for an HR consultancy — happy to share what worked."
+- Mention at most ONE concrete piece of relevant recent experience in 1 short sentence. Avoid the recurring "multi-agent voice system for a logistics client" framing — it has become a fingerprint that moderators recognize.
 - Do NOT list services like "AIOS installs, multi-agent orchestration, voice agents, and custom backends" — this catalog pattern is the textbook spam flag.
 - Do NOT say "my team specializes in", "we deploy production AI systems", "across various industries" — all flagged.
-- Soft CTA: "DM me if you want to dig into this" or "Happy to share more in a DM if useful". NOT "Let's explore how we can collaborate effectively" (vendor-speak).
+- DO NOT end with "DM me if you want to dig into this", "happy to share more about the process", "if you're interested", "happy to chat/discuss/connect", "feel free to reach out", "let me know if you want to...", or any other invitation to take it private. Moderators flag every flavor of this. The 2026-05-11 strike landed on exactly this pattern.
+- Close with VALUE, not invitation. The reader should walk away with the insight, not a question about whether to message you. If the post is asking for collaboration, they will look at your profile.
 - Do NOT include URLs.
-- Keep total reply under 100 words. Brevity signals you're not pitching.`;
+- Keep total reply under 90 words. Brevity signals you're not pitching.`;
       break;
   }
 
@@ -391,7 +390,16 @@ RESPONSE RULES:
 8. Do NOT start your response with "Hey" or "Hi there" or any generic greeting. Jump straight into the substance.
 9. Sign off with EXACTLY: "- Ali Muwwakkil"
    Do NOT change the name. Do NOT add titles or company names to the sign-off line.
-10. NEVER include http://, https://, .com, .ai, or any URL pattern. Use "DM me" instead.
+10. NEVER include http://, https://, .com, .ai, or any URL pattern.
+11. ABSOLUTE BANS — moderators flag every flavor of these, in every category, every time:
+    - "DM me", "message me", "ping me", "shoot me a message"
+    - "happy to chat", "happy to share", "happy to discuss", "happy to connect", "happy to help"
+    - "feel free to reach out", "reach out to me", "reach out directly", "contact me directly"
+    - "dig into this", "dive deeper", "hop on a call", "jump on a call"
+    - "if you're interested", "if you're looking to partner", "if you want to..."
+    - "let me know if you want/need/are interested"
+    Close with VALUE (a useful insight or specific observation), not with an invitation to take it private.
+    If the reader wants to connect, they can click your profile. The sign-off ("- Ali Muwwakkil") is the only handoff needed.
 
 CATEGORY: ${category}
 CATEGORY DESCRIPTION: ${config?.description || 'General engagement'}
@@ -449,6 +457,32 @@ export function validateContent(content: string, category: string): ValidationRe
   const urgencyPatterns = /\b(last chance|don't miss|act now|limited time|hurry|final reminder|closing soon|one time offer|expires|urgent)\b/i;
   if (urgencyPatterns.test(content)) {
     return { passed: false, reason: 'Content contains urgency/aggressive language' };
+  }
+
+  // ABSOLUTE BANS — same list as the system-prompt rules + quality gate.
+  // Catches LLM violations that bypass the prompt regardless of category.
+  const dmBaitPatterns = [
+    /\bDM me\b/i,
+    /\bmessage me\b/i,
+    /\bping me\b/i,
+    /\bshoot me a (?:dm|message|note)\b/i,
+    /\bdig into this\b/i,
+    /\bdive deeper\b/i,
+    /\bhop on a call\b/i,
+    /\bjump on a call\b/i,
+    /\bhappy to (?:chat|share|discuss|connect|help|assist|hop on|jump on)\b/i,
+    /\b(feel free to |please |you can )?reach out (to me|directly|if you)\b/i,
+    /\bcontact me directly\b/i,
+    /\bif you'?re (looking to|interested in) (partner|collaborat|work with me|connect)/i,
+    /\bif you'?re interested\s*[.,!]/i,
+    /\blet me know if you (want|need|are interested|'?d like)/i,
+  ];
+  const dmBaitMatch = dmBaitPatterns.find((p) => p.test(content));
+  if (dmBaitMatch) {
+    return {
+      passed: false,
+      reason: `Contains DM-bait / share-CTA language (${dmBaitMatch.toString()}) - moderators flag this universally`,
+    };
   }
 
   return { passed: true };
