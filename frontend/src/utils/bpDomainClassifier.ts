@@ -22,6 +22,9 @@ export type DomainKey =
   | 'marketing'
   | 'execution'
   | 'reporting'
+  | 'ai_intelligence'      // Sprint 2026-05-12-bis: discovery/prompt/requirements/artifacts engine
+  | 'project_admin'        // Sprint 2026-05-12-bis: project setup + admin + auth
+  | 'public_pages'         // Sprint 2026-05-12-bis: marketing landing/page BPs
   | 'student_lifecycle'
   | 'other';
 
@@ -74,7 +77,7 @@ const DOMAINS: DomainSpec[] = [
       'registration', 'intake', 'signup', 'sign-up', 'enrollment',
       'onboarding', 'application', 'dataset', 'capture',
     ],
-    orderIndex: 1,
+    orderIndex: 2,
     feedsInto: ['lead_intelligence'],
     narratives: {
       Foundational: [
@@ -105,7 +108,7 @@ const DOMAINS: DomainSpec[] = [
       'lead', 'prospect', 'qualification', 'scoring', 'routing',
       'classification', 'attribution', 'enrichment',
     ],
-    orderIndex: 2,
+    orderIndex: 3,
     feedsInto: ['marketing', 'execution'],
     supports: ['reporting'],
     narratives: {
@@ -135,9 +138,9 @@ const DOMAINS: DomainSpec[] = [
     icon: 'bi-megaphone',
     keywords: [
       'marketing', 'campaign', 'outreach', 'content', 'social',
-      'broadcast', 'engagement',
+      'broadcast', 'engagement', 'visitor', 'attribution', 'journey',
     ],
-    orderIndex: 3,
+    orderIndex: 4,
     feedsInto: ['execution'],
     supports: ['reporting'],
     narratives: {
@@ -167,10 +170,10 @@ const DOMAINS: DomainSpec[] = [
     icon: 'bi-cpu',
     keywords: [
       'execution', 'build', 'pipeline', 'estimator', 'orchestrat',
-      'workflow', 'task', 'job', 'verify', 'verification', 'validate',
-      'agent', 'autonomous',
+      'workflow', 'task', 'job', 'verify', 'verification',
+      'agent', 'autonomous', 'behavior', 'alert',
     ],
-    orderIndex: 4,
+    orderIndex: 5,
     supports: ['reporting'],
     narratives: {
       Foundational: [
@@ -200,8 +203,9 @@ const DOMAINS: DomainSpec[] = [
     keywords: [
       'reporting', 'analytics', 'dashboard', 'briefing', 'metric',
       'report', 'kpi', 'export', 'summary', 'visualization',
+      'revenue', 'cost', 'optimization', 'ledger', 'event',
     ],
-    orderIndex: 5,
+    orderIndex: 6,
     narratives: {
       Foundational: [
         'Reporting infrastructure exists in skeleton form — surfaces are wired but downstream of inconsistent inputs.',
@@ -224,6 +228,65 @@ const DOMAINS: DomainSpec[] = [
     },
   },
   {
+    key: 'ai_intelligence',
+    label: 'AI & Intelligence',
+    icon: 'bi-cpu-fill',
+    keywords: [
+      'prompt', 'discovery', 'requirement', 'artifact', 'narrative',
+      'planner', 'decision', 'validation', 'parser', 'composer',
+      'inference', 'generation', 'classifier', 'extraction',
+    ],
+    orderIndex: 1,
+    supports: ['lead_intelligence', 'execution'],
+    narratives: {
+      Foundational: ['The intelligence engine has its first scaffolding; reasoning surfaces are not yet integrated.'],
+      Emerging:     ['The intelligence engine is producing prompts and artifacts; outputs are useful but still need review.'],
+      Coordinated:  ['Discovery, prompts, and artifact generation work in sequence; validation closes most loops.'],
+      Operational:  ['The intelligence engine runs reliably as the brain of the platform — every domain consumes its output.'],
+      Scaling:      ['The intelligence engine is widening its reasoning surface — more decision types, more validation depth.'],
+      Stabilizing:  ['The intelligence engine is mature; ongoing work is precision and reliability rather than new capability.'],
+    },
+  },
+  {
+    key: 'project_admin',
+    label: 'Project & Admin',
+    icon: 'bi-gear',
+    keywords: [
+      'project setup', 'project scope', 'project artifact', 'project progress',
+      'admin', 'authentication', 'auth', 'automation', 'route management',
+      'configuration', 'settings', 'ticket', 'strategy', 'implementation',
+    ],
+    orderIndex: 7,
+    narratives: {
+      Foundational: ['Project and admin scaffolding is in place but most controls are still manual.'],
+      Emerging:     ['Project setup and admin paths are forming; basic operator control is available.'],
+      Coordinated:  ['Project and admin systems run reliably for the common cases; edge controls remain operator-driven.'],
+      Operational:  ['Project lifecycle and admin tooling cover the documented surfaces; operators rarely fall back to manual.'],
+      Scaling:      ['Project + admin layer is widening into more configuration types and finer permissions.'],
+      Stabilizing:  ['Project + admin is mature; ongoing work is polish and accessibility.'],
+    },
+  },
+  {
+    key: 'public_pages',
+    label: 'Public Pages & Surfaces',
+    icon: 'bi-globe',
+    keywords: [
+      'landing page', 'designer page', 'partner page', 'champion page',
+      'public page', 'home page', 'pricing page', 'about page',
+      'advisory page', 'case studies', 'studies page', 'features page',
+    ],
+    orderIndex: 8,
+    supports: ['marketing'],
+    narratives: {
+      Foundational: ['Public-facing pages exist but are still being filled in with content and structure.'],
+      Emerging:     ['Public pages are present; some still need content polish or accessibility passes.'],
+      Coordinated:  ['Public pages cover the documented audience set; SEO and analytics are taking hold.'],
+      Operational:  ['Public pages are live across the audience set with content + analytics in the loop.'],
+      Scaling:      ['Public surface is widening into more audience-specific pages; content cadence is established.'],
+      Stabilizing:  ['Public pages are mature; ongoing work is content and visual refinement.'],
+    },
+  },
+  {
     key: 'student_lifecycle',
     label: 'Student Lifecycle',
     icon: 'bi-mortarboard',
@@ -231,7 +294,7 @@ const DOMAINS: DomainSpec[] = [
       'student', 'cohort', 'curriculum', 'lesson', 'assignment',
       'progress', 'mentor', 'session', 'coaching',
     ],
-    orderIndex: 6,
+    orderIndex: 9,
     narratives: {
       Foundational: [
         'Student systems are early — the surface exists but cohort cadence has not yet taken hold.',
@@ -321,8 +384,8 @@ function pickNarrative(spec: DomainSpec, state: LifecycleState): string {
   return variants[hash % variants.length];
 }
 
-function classifyName(name: string): DomainKey {
-  const lower = name.toLowerCase();
+function classifyBP(bp: BPLike): DomainKey {
+  const lower = (bp.name || '').toLowerCase();
   let best: { key: DomainKey; len: number } | null = null;
   for (const d of DOMAINS) {
     for (const kw of d.keywords) {
@@ -330,6 +393,13 @@ function classifyName(name: string): DomainKey {
         best = { key: d.key, len: kw.length };
       }
     }
+  }
+  // Fallback: BPs explicitly flagged as a frontend page belong in Public
+  // Pages even when their name doesn't match a page-keyword. The keyword
+  // match still wins when it's a strong signal (e.g. "Marketing Dashboard
+  // Page" → Marketing, not Public Pages).
+  if (!best && (bp.is_page_bp || bp.source === 'frontend_page')) {
+    return 'public_pages';
   }
   return best?.key ?? 'other';
 }
@@ -340,7 +410,7 @@ export function classifyBPs(processes: BPLike[]): DomainBucket[] {
   const groups = new Map<DomainKey, BPLike[]>();
   for (const k of EMPTY_DOMAIN_KEYS) groups.set(k, []);
   for (const p of visible) {
-    const key = classifyName(p.name || '');
+    const key = classifyBP(p);
     groups.get(key)!.push(p);
   }
 
