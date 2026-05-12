@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Workspace Presence + Operational Momentum — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --primary: #1a365d;
+    --accent: #38a169;
+    --warn: #d97706;
+    --danger: #e53e3e;
+    --border: #e5e7eb;
+    --card: #ffffff;
+    --frame: #0f172a;
+  }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55;
+    padding-bottom: 200px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.75rem; margin: 2rem 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .stop-num {
+    display: inline-block; background: var(--primary); color: white;
+    width: 28px; height: 28px; border-radius: 50%;
+    text-align: center; line-height: 28px; font-weight: 700; font-size: 13px;
+    margin-right: 8px; vertical-align: middle;
+  }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot {
+    background: var(--frame); border-radius: 8px; padding: 14px;
+    margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+  }
+  .screenshot img {
+    width: 100%; display: block; border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+  }
+  .screenshot .caption {
+    color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center;
+  }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea {
+    width: 100%; min-height: 70px; margin-top: 8px;
+    padding: 8px; border: 1px solid var(--border); border-radius: 4px;
+    font-family: inherit; font-size: 13px; box-sizing: border-box;
+    resize: vertical;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .compile-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: white; border-top: 1px solid var(--border);
+    padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 100;
+  }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button {
+    padding: 0.55rem 1.1rem; background: var(--primary); color: white;
+    border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px;
+  }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center; z-index: 200;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: white; border-radius: 8px; padding: 1.5rem;
+    width: 90%; max-width: 800px; max-height: 80vh; overflow: auto;
+  }
+  .modal h3 { margin-top: 0; }
+  .modal pre {
+    background: #1e293b; color: #e2e8f0; padding: 1rem;
+    border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px;
+    white-space: pre-wrap;
+  }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button {
+    padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;
+    border: 1px solid var(--primary);
+  }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy {
+    background: #f8fafc; border-left: 4px solid var(--primary);
+    padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0;
+    font-style: italic; color: var(--text);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Workspace Presence + Operational Momentum — Sprint Review</h1>
+  <p class="lede">
+    Sprint shipped 2026-05-12 to <strong>enterprise.colaberry.ai</strong> (commit
+    <code>16ff83b</code>). 4 new files + 6 modified. Pure presence layer on top of
+    existing surfaces — zero backend changes, zero new endpoints, zero new routes.
+    The workspace now <em>remembers</em>, <em>compares</em>, and <em>breathes</em>.
+  </p>
+
+  <div class="philosophy">
+    "Alive but calm." The workspace should feel emotionally responsive — aware of
+    you, aware of what just changed, aware of time passing — without ever feeling
+    chatty, busy, or attention-seeking. Motion is decorative; intent is in the data.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Operational History Strip ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">Operational History Strip</span></h2>
+    <p>The footer line used to read <code>Synthesized 5:59:42 PM · confidence 80% · sources: ...</code>.
+       That's a wall-clock + confidence — useless for momentum. Replaced with a richer
+       continuity strip that shows four pieces of time-context on one calm line.</p>
+    <div class="pair">
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-presence-before/02-cory-home.png" alt="Cory Home before — old footer">
+        <div class="caption">BEFORE · enterprise.colaberry.ai/portal/home · old footer "Synthesized HH:MM"</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-presence-after/02-cory-home.png" alt="Cory Home after — new history strip + history footer">
+        <div class="caption">AFTER · same URL · new strip "Synthesized · You last touched · Last critique · Confidence"</div>
+      </div>
+    </div>
+    <div class="what-shipped">
+      <strong>What's in the strip:</strong>
+      <ul>
+        <li><strong>Synthesized</strong> — minutes since the UnifiedProjectState was rebuilt (state.built_at)</li>
+        <li><strong>You last touched</strong> — minutes since the last memory snapshot (— first visit until you've visited once)</li>
+        <li><strong>Last critique</strong> — minutes since the last visual-workspace session compiled a prompt (— not opened yet if untouched)</li>
+        <li><strong>Confidence</strong> — the synthesizer's confidence score (kept from the old footer)</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes — toggle if you'd want any of these:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="strip-too-dense">Strip feels too dense — drop confidence?</label></li>
+        <li><label><input type="checkbox" data-issue="strip-needs-icons">Add a tiny clock icon before each timestamp for scannability</label></li>
+        <li><label><input type="checkbox" data-issue="strip-show-active-build-age">Add "Active build started Xh ago" when one is running</label></li>
+        <li><label><input type="checkbox" data-issue="strip-show-deploy-age">Add "Last deploy 6d ago" — useful for spotting stale state</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Good</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v1" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes / extra issues / suggested changes…" data-notes="strip"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Recently Moved Card ──────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">RecentlyMovedCard — operational history feeling</span></h2>
+    <p>New card slot directly below the priority card. <em>Hidden</em> when nothing
+       has moved — that's intentional. Renders only when at least one of
+       readiness / coverage / queue / health has changed since the last snapshot.</p>
+    <p><strong>Why you don't see it in the screenshot above:</strong> first capture
+       after deploy — no prior snapshot to compare against. The card appears on
+       second visit (or any time state changes between visits).</p>
+    <div class="what-shipped">
+      <strong>What renders when there's momentum:</strong>
+      <ul>
+        <li>Eyebrow + relative-time strap: <em>Recently moved · Last visit 23 minutes ago</em></li>
+        <li>One delta chip per moved dimension. Forward = green ↑ chip, backward = red ↓ chip</li>
+        <li>Each chip carries an arrow, the signed delta, and a one-line caption explaining what that direction means
+            ("more requirements matched" / "regression(s) since last visit" / etc.)</li>
+        <li>Subtle <code>ws-delta-rise</code> entrance — 360ms opacity + 4px translate. No looping.</li>
+      </ul>
+    </div>
+    <h3>Anatomy (annotated mockup)</h3>
+    <div style="background: white; border: 1px solid var(--border); border-left: 3px solid #38a169; border-radius: 6px; padding: 0.75rem 0.95rem;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em;">
+        <span>Recently moved</span><span style="font-style: italic; text-transform: none;">Last visit 23 minutes ago</span>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+        <div style="background: rgba(56,161,105,0.07); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
+          <span style="color: #38a169; font-weight: 700;">↑</span>
+          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Readiness <span style="color: #38a169;">+4%</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">project is more prepared</div></div>
+        </div>
+        <div style="background: rgba(56,161,105,0.07); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
+          <span style="color: #38a169; font-weight: 700;">↑</span>
+          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Coverage <span style="color: #38a169;">+2%</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">more requirements matched</div></div>
+        </div>
+        <div style="background: rgba(56,161,105,0.07); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
+          <span style="color: #38a169; font-weight: 700;">↓</span>
+          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Queue <span style="color: #38a169;">-3</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">items shipped or no longer needed</div></div>
+        </div>
+        <div style="background: rgba(229,62,62,0.06); padding: 0.35rem 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent;">
+          <span style="color: #e53e3e; font-weight: 700;">↓</span>
+          <div><div style="font-size: 11px; text-transform: uppercase; color: var(--muted);">Health <span style="color: #e53e3e;">-2%</span></div><div style="font-size: 10.5px; color: var(--muted); font-style: italic;">regression(s) since last visit</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="moved-noise-threshold">Add a minimum-delta threshold (e.g. ≥2%) so 1% rounding noise doesn't surface</label></li>
+        <li><label><input type="checkbox" data-issue="moved-clickable">Make chips clickable — Readiness chip opens the Readiness drawer</label></li>
+        <li><label><input type="checkbox" data-issue="moved-position">Position above the priority card instead of below?</label></li>
+        <li><label><input type="checkbox" data-issue="moved-multi-window">Show two windows: "since last visit" + "since yesterday" side-by-side</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Good</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v2" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="moved"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Tile Highlight + Fresh Halo ──────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Tile highlight + priority-card fresh halo</span></h2>
+    <p>Two subtle additions to the existing primary surfaces that give them a sense
+       of <em>having just changed</em>:</p>
+    <div class="grid">
+      <div class="what-shipped" style="margin: 0;">
+        <strong>Tile ↗ chevron</strong>
+        <p style="font-size: 13.5px; margin: 6px 0 0 0;">Readiness / Coverage / Health tiles now show a tiny green <code>↗</code> next to the value when the dimension improved since the last visit. Hidden when flat or backward.</p>
+      </div>
+      <div class="what-shipped" style="margin: 0;">
+        <strong>Priority card <code>ws-fresh</code> halo</strong>
+        <p style="font-size: 13.5px; margin: 6px 0 0 0;">When a new <code>next_action.source_id</code> arrives (your last-seen id differs from current), the priority card gets a 6-second fading green outer glow. After 6s it goes back to neutral. No layout shift.</p>
+      </div>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="chev-too-subtle">↗ chevron is too subtle — show the delta number too ("38% ↗ +4")</label></li>
+        <li><label><input type="checkbox" data-issue="chev-direction-symmetric">Also show ↘ in red when a tile went backward (currently only forward)</label></li>
+        <li><label><input type="checkbox" data-issue="halo-duration">6 seconds is too short (or too long) — tune</label></li>
+        <li><label><input type="checkbox" data-issue="halo-disrupts">Halo distracts from the priority text — drop it</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Good</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v3" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="tile-fresh"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Grouped MicroToast ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Grouped progression + 30s toast suppression</span></h2>
+    <p>The MicroToast host previously fired one toast per detected delta. If
+       readiness AND coverage both improved in the same poll, two toasts queued
+       sequentially (≈7s of toast time). That's noisy. Now:</p>
+    <div class="what-shipped">
+      <strong>What changed in MicroToast:</strong>
+      <ul>
+        <li><strong>Grouped progression.</strong> Readiness ≥+3 <em>and</em> Coverage ≥+3 in the same poll → one combined toast: <em>"Forward motion: Readiness +N, Coverage +M"</em> with a graph-up-arrow icon. Suppresses the two solo toasts.</li>
+        <li><strong>30-second signature dedup.</strong> Each toast carries a signature (<code>readiness-up</code>, <code>next:src_123</code>, <code>build-start:foo</code>). Re-firing the same signature within 30s is a no-op. Prevents poll-jitter from re-flashing the same toast.</li>
+        <li><strong>New coverage solo toast.</strong> Coverage ≥+3 (without readiness improving) now fires its own toast (<em>"Coverage +N% (now M%)"</em>). Previously only readiness was watched.</li>
+        <li><strong>Still ≤1 toast on screen.</strong> Queue head drains sequentially. Calm.</li>
+      </ul>
+    </div>
+    <h3>Examples</h3>
+    <table>
+      <tr><th>Trigger</th><th>Old behavior</th><th>New behavior</th></tr>
+      <tr><td>Readiness +4 alone</td><td>One toast: "Readiness +4%"</td><td>Same — one toast with <code>readiness-up</code> signature</td></tr>
+      <tr><td>Readiness +4 <em>and</em> Coverage +3 in same poll</td><td>Two toasts (≈7s)</td><td>One combined: "Forward motion: Readiness +4, Coverage +3"</td></tr>
+      <tr><td>Coverage +5 alone</td><td>No toast (only readiness watched)</td><td>One toast: "Coverage +5% (now M%)"</td></tr>
+      <tr><td>Same readiness delta on next poll 8s later</td><td>Would re-fire</td><td>Suppressed by 30s signature dedup</td></tr>
+    </table>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="toast-window-too-short">30s dedup window is too short — go 5 min?</label></li>
+        <li><label><input type="checkbox" data-issue="toast-threshold-low">Lower the +3% threshold — even +1 is worth a toast in a calm system?</label></li>
+        <li><label><input type="checkbox" data-issue="toast-grouped-3way">Add a 3-way grouping: readiness + coverage + health all up → "Across the board: +X"</label></li>
+        <li><label><input type="checkbox" data-issue="toast-undo">Add an undo affordance when a toast says "Active build complete"</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Good</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v4" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="toast"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Ambient Motion Primitives ────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Ambient motion primitives — ws-breath / ws-fresh / ws-pulse-dot / ws-shimmer / ws-delta-rise</span></h2>
+    <p>Five reusable CSS classes shipped in <code>frontend/src/styles/workspacePresence.css</code>.
+       All decorative — no layout shifts. All honor <code>prefers-reduced-motion: reduce</code>
+       (the workspace becomes static but content-identical).</p>
+    <table>
+      <tr><th>Class</th><th>Duration</th><th>What it does</th><th>Where applied</th></tr>
+      <tr><td><code>ws-breath</code></td><td>4.5s loop</td><td>Gentle 78%→100% opacity oscillation. Keeps static cards visually alive.</td><td>EmptyPriorityCard ("You're caught up"), empty queue, empty active build</td></tr>
+      <tr><td><code>ws-fresh</code></td><td>6s once</td><td>Green outer halo fades from solid to transparent. Acknowledges "this content just changed."</td><td>Priority card when next_action.source_id is new</td></tr>
+      <tr><td><code>ws-pulse-dot</code></td><td>2.5s loop</td><td>Slow scale-pulse 1→1.18→1 + opacity 1→0.72→1. Replaces 1.2s flash.</td><td>Context bar live dot (when not freshening)</td></tr>
+      <tr><td><code>ws-shimmer</code></td><td>1.4s once</td><td>Single left-to-right green shimmer sweep. Verification acknowledgment.</td><td>Reserved for future verification-success surface (not wired yet)</td></tr>
+      <tr><td><code>ws-delta-rise</code></td><td>360ms once</td><td>Fade + 4px translate-up entrance.</td><td>RecentlyMovedCard entrance</td></tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Rules baked into the file:</strong>
+      <ul>
+        <li>No animation faster than 2.5s on a static element</li>
+        <li>No animation moves layout — only opacity, box-shadow, background-position, transform</li>
+        <li>All classes are opt-in; nothing applies globally</li>
+        <li><code>prefers-reduced-motion: reduce</code> shuts every class down — content remains, motion gone</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="breath-too-slow">4.5s breath cycle is too slow — looks stuck</label></li>
+        <li><label><input type="checkbox" data-issue="breath-too-fast">4.5s breath cycle is too fast — distracting</label></li>
+        <li><label><input type="checkbox" data-issue="shimmer-unused">Wire <code>ws-shimmer</code> into Verification stat cards now (currently shipped but unused)</label></li>
+        <li><label><input type="checkbox" data-issue="pulse-color">Pulse dot color should shift to amber when state is stale (>5 min since synthesize)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Good</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v5" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="motion"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Surface Memory ───────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Contextual surface memory + drawer continuity</span></h2>
+    <p><code>useWorkspaceMemory</code> grew from 4 fields to 11. The workspace now
+       remembers more about what you were doing across reloads + tab switches.
+       Memory is in localStorage (cross-tab synced); reduced to in-memory if
+       blocked.</p>
+    <div class="grid">
+      <div class="what-shipped" style="margin: 0;">
+        <strong>New fields:</strong>
+        <ul>
+          <li><code>lastDrawerOpen</code> — last drawer the operator opened on Home</li>
+          <li><code>lastSystemTab</code> — last System View tab (reserved for next sprint)</li>
+          <li><code>lastBpId</code> — last BP detail viewed (reserved)</li>
+          <li><code>lastReadinessScore</code> / <code>lastCoverageScore</code> / <code>lastQueueSize</code> / <code>lastHealthScore</code> — snapshot values for delta computation</li>
+          <li><code>lastBuiltAt</code> — the state.built_at at last snapshot, prevents redundant writes</li>
+          <li><code>lastSnapshotAt</code> — drives "Last visit X ago" string</li>
+        </ul>
+      </div>
+      <div class="what-shipped" style="margin: 0;">
+        <strong>New helper:</strong> <code>recordSnapshot()</code>
+        <p style="font-size: 13.5px; margin: 6px 0 0 0;">Called by CoryHome on every state poll. No-ops when state.built_at is unchanged — so it writes localStorage at most once per actual rebuild (not once per render).</p>
+      </div>
+    </div>
+    <h3>What's NOT yet wired</h3>
+    <p style="font-size: 13.5px; color: var(--muted);">
+      <code>lastDrawerOpen</code> is captured but no "restore last drawer" affordance ships in this sprint —
+      the affordance design (subtle "Open last: Coverage" link on the page?) wants its own review.
+      <code>lastSystemTab</code> + <code>lastBpId</code> are reserved fields not yet read by System View
+      — that's the next sprint's pickup.
+    </p>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="memory-restore-drawer">Add a one-line affordance on Home: "Continue where you left off · open Coverage" (when lastDrawerOpen is set)</label></li>
+        <li><label><input type="checkbox" data-issue="memory-system-tab">Wire <code>lastSystemTab</code> into SystemView so navigating away + back lands you on the same tab</label></li>
+        <li><label><input type="checkbox" data-issue="memory-bp-id">Wire <code>lastBpId</code> into the BPs tab so reopening lands you on the same BP</label></li>
+        <li><label><input type="checkbox" data-issue="memory-history-log">Expose a small "history" page showing your last N snapshots</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Good</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v6" value="cut">✕ Cut</label>
+      <textarea placeholder="Notes…" data-notes="memory"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Audit: dead/static moments ───────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Audit of dead/static/cold moments</span></h2>
+    <p>The sprint brief asked for an audit of any moment that feels visually frozen.
+       Here's the honest list of what was found + what was treated.</p>
+    <table>
+      <tr><th>Surface / state</th><th>Was it static?</th><th>Treatment shipped</th></tr>
+      <tr><td>EmptyPriorityCard ("You're caught up")</td><td>Yes — pure static text</td><td><span class="badge badge-good">ws-breath</span> 4.5s</td></tr>
+      <tr><td>Empty queue ("Nothing in the queue")</td><td>Yes</td><td><span class="badge badge-good">ws-breath</span></td></tr>
+      <tr><td>Empty active build ("No active build")</td><td>Yes</td><td><span class="badge badge-good">ws-breath</span></td></tr>
+      <tr><td>Context bar live dot (no fresh state)</td><td>Was a 1.2s flash on refresh, then static</td><td><span class="badge badge-info">Slower 2.5s pulse-dot</span> when not freshening</td></tr>
+      <tr><td>Priority card with same priority for 24h+</td><td>Yes — looks identical day to day</td><td><span class="badge badge-warn">Not yet</span> — needs a "still here from yesterday" affordance</td></tr>
+      <tr><td>Verification stat row (0/0/0 all day)</td><td>Yes</td><td><span class="badge badge-warn">Not yet</span> — ws-shimmer reserved for first pass/fail</td></tr>
+      <tr><td>System View tabs (cold open with no data)</td><td>Yes</td><td><span class="badge badge-warn">Not in scope</span> — system view is L4 understanding, not L1 momentum</td></tr>
+      <tr><td>Blueprint ExecutionLane with no pending prompt</td><td>Yes — pure instruction text</td><td><span class="badge badge-warn">Not in scope</span> — preserves "Blueprint is sacred" rule from prior sprints</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the audit completeness</strong><br>
+      <label><input type="radio" name="v7" value="ok">👍 Complete enough</label>
+      <label><input type="radio" name="v7" value="iterate">⚠ Add the warn rows</label>
+      <label><input type="radio" name="v7" value="cut">✕ Was over-thought</label>
+      <textarea placeholder="Notes…" data-notes="audit"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 8 — Non-Goals ────────────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">8</span><span class="stop-title">Non-goals + explicit deferrals</span></h2>
+    <p>The brief named 16 sections. Many are real polish items but shipping all of
+       them in one sprint would create scope sprawl. Held to a tight presence layer
+       only. Honest list of what's <em>not</em> in this sprint:</p>
+    <table>
+      <tr><th>Deferred</th><th>Why not now</th></tr>
+      <tr><td>Cory ambient suggestion auto-rotation</td><td>Cory drawer suggestions are still static text. Need a derivation source from recent activity that doesn't add a backend endpoint.</td></tr>
+      <tr><td>System View tab-memory restoration</td><td>Memory field shipped (<code>lastSystemTab</code>) but the SystemView read is the next sprint's job.</td></tr>
+      <tr><td>BP last-viewed restoration</td><td>Same — field shipped, BPs tab integration deferred.</td></tr>
+      <tr><td>Verification card shimmer on first pass/fail</td><td>ws-shimmer is shipped but not wired. Needs a poll-delta on <code>state.verification.passing</code> to trigger.</td></tr>
+      <tr><td>Cross-surface "continue where you left off"</td><td>Single ambient affordance — wants its own review cycle.</td></tr>
+      <tr><td>"Recently verified / completed / improved" log on Home</td><td>Backend doesn't expose a recent-events stream. Would require a new endpoint — out of scope.</td></tr>
+      <tr><td>Drawer-to-drawer related-content transitions</td><td>Drawers are still independent. The "related-drawer" concept isn't sharp enough yet.</td></tr>
+      <tr><td>Stale-state warning (>5 min since synthesize)</td><td>Listed in possible-changes for the pulse-dot. Would need a new memory key + 1-min poll.</td></tr>
+      <tr><td>"Last deploy X ago" in history strip</td><td>No backend signal for "last deploy time" yet.</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the scope split</strong><br>
+      <label><input type="radio" name="v8" value="ok">👍 Right scope</label>
+      <label><input type="radio" name="v8" value="iterate">⚠ Should have included one of the deferred items</label>
+      <label><input type="radio" name="v8" value="cut">✕ Should have been smaller</label>
+      <textarea placeholder="Notes…" data-notes="scope"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 9 — File diff summary ────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">9</span><span class="stop-title">File diff summary</span></h2>
+    <table>
+      <tr><th>File</th><th>Status</th><th>Lines</th><th>Purpose</th></tr>
+      <tr><td><code>frontend/src/styles/workspacePresence.css</code></td><td><span class="badge badge-good">NEW</span></td><td>~86</td><td>5 ambient motion primitives, reduced-motion safe</td></tr>
+      <tr><td><code>frontend/src/hooks/useOperationalMomentum.ts</code></td><td><span class="badge badge-good">NEW</span></td><td>~128</td><td>Derives deltas + minutesSinceVisit/Built from state × memory</td></tr>
+      <tr><td><code>frontend/src/components/workspace/RecentlyMovedCard.tsx</code></td><td><span class="badge badge-good">NEW</span></td><td>~179</td><td>Delta chips; hidden when no momentum</td></tr>
+      <tr><td><code>frontend/src/components/workspace/OperationalHistoryStrip.tsx</code></td><td><span class="badge badge-good">NEW</span></td><td>~86</td><td>Footer-replacement: synth / touched / critique / confidence</td></tr>
+      <tr><td><code>frontend/src/hooks/useWorkspaceMemory.ts</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+63 / -16</td><td>+7 fields, +recordSnapshot helper, DrawerId type exported</td></tr>
+      <tr><td><code>frontend/src/components/workspace/MicroToast.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+82 / -10</td><td>Grouped progression, 30s signature dedup, coverage solo</td></tr>
+      <tr><td><code>frontend/src/pages/portal/CoryHome.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+91 / -10</td><td>Momentum integration, breath classes, fresh halo, drawer memory</td></tr>
+      <tr><td><code>frontend/src/components/Layout/PortalLayout.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+4</td><td>Imports workspacePresence.css globally</td></tr>
+      <tr><td><code>frontend/src/components/Layout/WorkspaceContextBar.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+3 / -1</td><td>Calmer pulse-dot when not freshening</td></tr>
+      <tr><td><code>frontend/src/features/visualWorkspace/VisualWorkspacePage.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+3</td><td>Writes <code>visualWorkspace:lastSessionTouchedAt</code> on compile</td></tr>
+    </table>
+    <p style="font-size: 12.5px; color: var(--muted);">
+      Total: 10 files changed · 691 insertions · 34 deletions · commit <code>16ff83b</code>.
+      Zero backend changes. Zero schema changes. Zero new endpoints.
+    </p>
+  </div>
+
+  <!-- ─────────────────────── STOP 10 — Overall verdict ─────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">10</span><span class="stop-title">Overall sprint verdict</span></h2>
+    <p>Cumulative sentence describing the workspace after this sprint, for the
+       record. The compile button below gathers everything you've marked into
+       a single paste-back prompt.</p>
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship; this is presence done right</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Mostly good; iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction — rework</label>
+      <textarea placeholder="Anything you want to land in the next sprint's prompt…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- Sticky compile bar -->
+<div class="compile-bar">
+  <div class="stats" id="stats">No verdicts yet · 0 / 10 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<!-- Modal: compiled markdown -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+
+  function compile() {
+    let out = "# Workspace Presence Sprint — operator feedback\n\nFollowing the sprint shipped on 2026-05-12 (commit 16ff83b), here is my pass-through:\n\n";
+
+    const stops = document.querySelectorAll('.stop');
+    stops.forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+
+      out += `## Stop ${i + 1} — ${title}\n`;
+      out += `Verdict: **${verdict}**\n`;
+      if (issues.length) {
+        out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      }
+      if (noteText) {
+        out += `Notes:\n${noteText}\n`;
+      }
+      out += '\n';
+    });
+
+    out += "## What I'd like in the next sprint\n(Edit before pasting — these are seeds.)\n- Resolve flagged items above\n- Wire any deferred items the team chose to promote\n";
+
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+
+  function copyPrompt() {
+    const text = document.getElementById('modalContent').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+
+  function closeModal() {
+    document.getElementById('modalBg').classList.remove('show');
+  }
+
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
