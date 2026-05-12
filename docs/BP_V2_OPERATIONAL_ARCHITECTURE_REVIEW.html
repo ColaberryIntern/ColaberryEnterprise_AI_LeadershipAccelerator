@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BP V2 Operational Architecture — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .lifecycle-tag { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+  .lc-foundational { background: rgba(113,128,150,0.08); color: var(--muted); }
+  .lc-emerging { background: rgba(245,158,11,0.10); color: #b45309; }
+  .lc-coordinated { background: rgba(59,130,246,0.10); color: #1d4ed8; }
+  .lc-operational { background: rgba(56,161,105,0.12); color: #15803d; }
+  .lc-scaling { background: rgba(8,145,178,0.12); color: #0e7490; }
+  .lc-stabilizing { background: rgba(139,92,246,0.10); color: #6d28d9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>BP V2 — Operational Architecture Review</h1>
+  <p class="lede">
+    Shipped 2026-05-12 to <strong>enterprise.colaberry.ai</strong> (commits
+    <code>0793b0f</code> + <code>e49e2f9</code>). 3 files modified, 1 new hook,
+    1 new capture script. The BPs surface stopped reading as "grouped
+    inventory" and started reading as <em>operational architecture</em>.
+  </p>
+
+  <div class="philosophy">
+    "I understand how work moves through the system." Intake feeds Lead
+    Intelligence. Lead Intelligence feeds Marketing and Execution. Execution
+    supports Reporting. Each domain carries a lifecycle state, a momentum
+    chip, and an authored narrative. The first populated domain is open
+    when you arrive. There is no inventory until you ask for one.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Architecture mode ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">From "grouped inventory" to operational architecture</span></h2>
+    <p>Same data, same backend. The surface reads entirely differently.</p>
+    <div class="pair">
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-maturity-variants/01-bps-domain-collapsed.png" alt="V1 grouped surface — collapsed rows, AWAITING SETUP tone words">
+        <div class="caption">PRIOR SPRINT (V1) · 6 collapsed rows · static %s · uniform tone words ("AWAITING SETUP") · colorful icons · no flow · no relationships</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-bp-v2-variants/01-default-auto-expanded.png" alt="V2 operational architecture — flow strip, lifecycle states, first domain auto-expanded">
+        <div class="caption">V2 · operational flow strip with lifecycle states · softer monochrome icons · lifecycle pills · first domain auto-expanded · relationship hints under each narrative</div>
+      </div>
+    </div>
+    <div class="what-shipped">
+      <strong>Editorial moves shipped:</strong>
+      <ul>
+        <li>Authored prose replaces templated narratives (no more "Lead orchestration is partially connected — N processes, X% complete")</li>
+        <li>Lifecycle states (Foundational / Emerging / Coordinated / Operational / Scaling / Stabilizing) replace the static % tone word</li>
+        <li>BP count appears next to each domain ("Lead Intelligence · 6 BPs")</li>
+        <li>Operational flow strip at the top — Intake → Lead Intelligence → Marketing Operations → Execution Systems → Reporting & Analytics → Student Lifecycle — lifecycle state above each stop</li>
+        <li>Relationship hints under the narrative ("Feeds Lead Intelligence" / "Feeds Marketing Operations and Execution Systems")</li>
+        <li>First populated domain auto-expands on mount so the operator sees actual BP substance immediately</li>
+        <li>Softer monochrome icons (single muted text-light color, opacity 0.7)</li>
+        <li>Expanded view gains a "PROCESSES IN THIS DOMAIN" sub-header for hierarchy</li>
+        <li>Soft per-BP word (usable / forming / early / unbuilt) — no red anywhere</li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Architecture mode achieved</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Mostly; iterate per stop notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="architecture"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Operational flow strip ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Operational flow strip</span></h2>
+    <p>The big unlock from brief §8. A subtle horizontal strip above the
+       domain stack expresses how work moves through the system —
+       <em>without</em> a full graph engine.</p>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-bp-v2-variants/04-flow-strip-detail.png" alt="Flow strip cropped from top of BPs surface">
+      <div class="caption">Cropped from production · 6 stops with lifecycle state above each label · separator lines + chevron indicate direction · soft tones · zero monitoring energy</div>
+    </div>
+    <div class="what-shipped">
+      <strong>Flow strip rules:</strong>
+      <ul>
+        <li>Stops are derived from the classifier's <code>orderIndex</code>: Intake → Lead → Marketing → Execution → Reporting → Student</li>
+        <li>"Other Operations" is excluded from the flow (it's the uncategorized catch-all, not part of the canonical path)</li>
+        <li>A stop only appears when its domain has at least one BP (so the strip never references something the operator doesn't see)</li>
+        <li>Lifecycle state appears above each label in soft tone color</li>
+        <li>Separator: 1px gray line + <code>bi-chevron-right</code> · color from <code>currentColor</code> with 55% opacity (subtle, not loud)</li>
+        <li>Horizontally scrollable if the strip doesn't fit (mobile-safe)</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="flow-clickable">Make each stop clickable — clicking jumps to the corresponding domain row</label></li>
+        <li><label><input type="checkbox" data-issue="flow-show-counts">Show BP count under each stop too</label></li>
+        <li><label><input type="checkbox" data-issue="flow-vertical-mobile">Stack the strip vertically on mobile width (currently scrolls horizontally)</label></li>
+        <li><label><input type="checkbox" data-issue="flow-add-loops">Show feedback loops — "Reporting feeds Cory's prioritization"</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Good</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v2" value="cut">✕ Cut the strip</label>
+      <textarea placeholder="Notes…" data-notes="flow"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Lifecycle states ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Lifecycle states — editorial, not telemetric</span></h2>
+    <p>Brief §7: states should feel editorial, not telemetric. Six maturity
+       bands chosen so each carries operational meaning, not a number.</p>
+    <table>
+      <tr><th>State</th><th>What it communicates</th><th>Derivation</th></tr>
+      <tr><td><span class="lifecycle-tag lc-foundational">Foundational</span></td><td>Exists, almost nothing is connected</td><td>Empty bucket fallback (no usable, 0% completion)</td></tr>
+      <tr><td><span class="lifecycle-tag lc-emerging">Emerging</span></td><td>First pieces moving; cadence forming</td><td>completion ≥5% OR usable&gt;0</td></tr>
+      <tr><td><span class="lifecycle-tag lc-coordinated">Coordinated</span></td><td>Pieces fit together; gaps remain</td><td>completion ≥30% OR usable-ratio ≥30%</td></tr>
+      <tr><td><span class="lifecycle-tag lc-operational">Operational</span></td><td>Running reliably end-to-end</td><td>completion ≥55% AND usable-ratio ≥40%</td></tr>
+      <tr><td><span class="lifecycle-tag lc-scaling">Scaling</span></td><td>Mature; expanding into new surfaces</td><td>completion ≥75% AND usable-ratio ≥60%</td></tr>
+      <tr><td><span class="lifecycle-tag lc-stabilizing">Stabilizing</span></td><td>Late-stage; refinements only</td><td>completion ≥90% AND usable-ratio ≥80%</td></tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Per-domain narratives change with state.</strong> Each (domain × state) pair has its own authored line — 6 states × 7 domains = 42 narrative variants in the classifier. Examples:
+      <ul>
+        <li>Intake · <span class="lifecycle-tag lc-foundational">Foundational</span> — "The doorway into the system is still being built — intake exists but little flows through it yet."</li>
+        <li>Lead Intelligence · <span class="lifecycle-tag lc-emerging">Emerging</span> — "Lead systems are beginning to coordinate across intake and routing; scoring is consistent within a single pass."</li>
+        <li>Marketing · <span class="lifecycle-tag lc-coordinated">Coordinated</span> — "Marketing handoffs connect to lead intelligence and to execution; cadence runs but observability is uneven."</li>
+        <li>Reporting · <span class="lifecycle-tag lc-operational">Operational</span> — "Reporting has high confidence end-to-end — every domain is represented and the numbers reconcile."</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="lc-7-states">Add a 7th state (e.g. "Strained" for domains that regressed)</label></li>
+        <li><label><input type="checkbox" data-issue="lc-add-variants">Add 2-3 narrative variants per state so re-loads vary the prose</label></li>
+        <li><label><input type="checkbox" data-issue="lc-pill-too-prominent">Lifecycle pill is too prominent — move to right side of the row</label></li>
+        <li><label><input type="checkbox" data-issue="lc-naming">Rename states (specify in notes)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the lifecycle taxonomy</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Right six states</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Rename / add</label>
+      <label><input type="radio" name="v3" value="cut">✕ Drop the states entirely</label>
+      <textarea placeholder="Renames?" data-notes="lifecycle"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Momentum chips ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Operational momentum — alive, not snapshot-based</span></h2>
+    <p>Brief §4: "Replace static % with operational momentum." A small chip
+       on each domain row carries directional movement vs the last snapshot
+       (per-domain, stored in <code>localStorage:bpDomainMomentum:v1</code>,
+       written on visibilitychange/beforeunload).</p>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-bp-v2-variants/03-with-momentum-chips.png" alt="Lead Intelligence row showing ↓ regressed -18 chip">
+      <div class="caption">Seeded prior snapshot from 2026-05-11 · Lead Intelligence chip reads "↓ regressed -18" in muted red · sits next to the EMERGING lifecycle pill · current state was at 0% (current architecture), prior snapshot was 18%</div>
+    </div>
+    <div class="what-shipped">
+      <strong>Momentum label thresholds:</strong>
+      <ul>
+        <li><strong>↑ improving</strong> — delta ≥ +10</li>
+        <li><strong>↑ progressing</strong> — delta ≥ +3</li>
+        <li><strong>↑ edging up</strong> — delta &gt; 0</li>
+        <li><strong>· stable</strong> — |delta| &lt; 1 (chip hidden — calm by default)</li>
+        <li><strong>↓ stalled</strong> — delta &lt; 0 small</li>
+        <li><strong>↓ slipping</strong> — delta ≤ -3</li>
+        <li><strong>↓ regressed</strong> — delta ≤ -10</li>
+        <li><strong>baseline</strong> — first-visit / no prior snapshot (chip hidden)</li>
+      </ul>
+    </div>
+    <div class="what-shipped">
+      <strong>Snapshot semantics (matches the Workspace Presence Sprint pattern):</strong>
+      <ul>
+        <li>Snapshot is frozen in a <code>useRef</code> at session start; momentum is computed against the frozen values, never the live ones</li>
+        <li>Fresh snapshot is written on <code>visibilitychange</code> to hidden, on <code>beforeunload</code>, and on unmount — represents what the operator saw when they LEFT</li>
+        <li>Per-domain timestamps preserved so future enhancements can show "since yesterday" or "in the last week"</li>
+        <li>Same hook pattern reusable for any future per-key delta surface</li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the momentum chips</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Right amount of motion</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Tune labels / thresholds</label>
+      <label><input type="radio" name="v4" value="cut">✕ Too noisy / Cut</label>
+      <textarea placeholder="Notes…" data-notes="momentum"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Auto-expand ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Auto-expand first populated domain</span></h2>
+    <p>Brief §2 (operator feedback). On mount, the first populated domain
+       opens automatically so the operator sees BP substance, not category
+       wrappers. The operator can still collapse it manually; subsequent
+       state changes honor explicit choices.</p>
+    <div class="screenshot">
+      <img src="screenshots/2026-05-12-bp-v2-variants/01-default-auto-expanded.png" alt="First domain (Intake & Registration) auto-opened on mount">
+      <div class="caption">Default landing state · Intake &amp; Registration opens automatically · "PROCESSES IN THIS DOMAIN" sub-header → Dataset Registration row with "UNBUILT" tone · zero clicks required to see BP substance</div>
+    </div>
+    <div class="what-shipped">
+      <strong>Auto-expand rules:</strong>
+      <ul>
+        <li>Triggers on first paint after buckets are loaded</li>
+        <li>Only runs once per mount (<code>autoExpanded</code> flag)</li>
+        <li>Operator's explicit toggle (open or close) is honored from that point</li>
+        <li>If buckets are empty (no BPs), nothing auto-expands (no spurious header)</li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Right behavior</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Auto-expand more than one</label>
+      <label><input type="radio" name="v5" value="cut">✕ Don't auto-expand</label>
+      <textarea placeholder="Notes…" data-notes="auto-expand"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Domain relationships ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Lightweight domain relationships</span></h2>
+    <p>Brief §9: subtle directional hints, no graph engine. Each domain
+       carries an optional <code>feedsInto</code> array; the surface filters
+       to only-visible downstream domains and renders a one-line italic
+       hint under the narrative.</p>
+    <table>
+      <tr><th>Domain</th><th>Feeds into</th><th>Renders as</th></tr>
+      <tr><td>Intake &amp; Registration</td><td>Lead Intelligence</td><td><em>→ Feeds Lead Intelligence</em></td></tr>
+      <tr><td>Lead Intelligence</td><td>Marketing Operations, Execution Systems</td><td><em>→ Feeds Marketing Operations and Execution Systems</em></td></tr>
+      <tr><td>Marketing Operations</td><td>Execution Systems</td><td><em>→ Feeds Execution Systems</em></td></tr>
+      <tr><td>Execution Systems</td><td>(supports Reporting — not a "feed")</td><td>(no hint)</td></tr>
+      <tr><td>Reporting &amp; Analytics</td><td>(none — it's the end of the flow)</td><td>(no hint)</td></tr>
+      <tr><td>Student Lifecycle</td><td>(orthogonal to the main flow)</td><td>(no hint)</td></tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Why the hints are subtle:</strong>
+      <ul>
+        <li>Only mentions a downstream domain when it's <em>actually present</em> in the current architecture (never references something invisible)</li>
+        <li>Italic, gray, small (11px) — sits below the narrative as a secondary signal</li>
+        <li>Uses a <code>bi-arrow-right-short</code> arrow prefix (not an emoji)</li>
+        <li>Multiple downstreams join with "and" (English grammar, not technical CSV)</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="rel-add-supports">Add "supports" hints too (Lead Intelligence supports Reporting)</label></li>
+        <li><label><input type="checkbox" data-issue="rel-click-to-jump">Make the hint clickable — click "Feeds Lead Intelligence" → jump to that domain</label></li>
+        <li><label><input type="checkbox" data-issue="rel-show-incoming">Also show "Receives from Intake" on the destination domain</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the relationship hints</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Subtle enough</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Add more</label>
+      <label><input type="radio" name="v6" value="cut">✕ Cut the hints</label>
+      <textarea placeholder="Notes…" data-notes="relationships"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — V1 energy audit ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Remaining V1 energy — honest audit</span></h2>
+    <p>Brief §15 requires an audit of remaining inventory/dashboard energy.
+       Honest list:</p>
+    <table>
+      <tr><th>Remaining pattern</th><th>Emotional impact</th><th>Trust impact</th><th>Proposed reduction</th></tr>
+      <tr><td>"Show full inventory" toggle reveals the legacy metric-bar grid</td><td>Operator who clicks it is briefly back in dashboard land</td><td>Acceptable — opt-in</td><td>Eventually re-skin the inventory mode with the editorial tone too. Deferred.</td></tr>
+      <tr><td>BP detail modal still shows engineering metrics (matched/readiness/quality)</td><td>Operator opens a BP and is back in telemetry</td><td>Medium — clicking through to detail is the expected affordance, but the modal hasn't been rewritten</td><td>Detail modal redesign (per brief §13, deferred). Sprint focused on the architecture map.</td></tr>
+      <tr><td>"Architecture" tab in System still uses the older <code>SystemArchitectureCard</code></td><td>Architecture tab feels less editorial than BPs tab</td><td>Low — different audience, different tab</td><td>Architecture tab redesign sprint.</td></tr>
+      <tr><td>"Components" tab still shows the <code>CapabilityGrid</code></td><td>Same scope-toggle grid as before</td><td>Low — Components is an inventory by definition</td><td>Components is intentionally inventory; redesign would change its purpose.</td></tr>
+      <tr><td>"Operations" + "Cognition" tabs surface advanced dashboards</td><td>Operator who opens these is back in monitoring land</td><td>Acceptable — both tabs carry "ADVANCED" pills and a "you don't need to read these" disclaimer</td><td>Out of scope; these tabs are explicitly admin-grade.</td></tr>
+      <tr><td>Tabs themselves are still tabs (not narrative chapters)</td><td>Light cognitive load to switch — but tabs are operator-trained pattern</td><td>Low</td><td>Acceptable. Replacing tabs with a scroll narrative would be a larger redesign.</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the audit completeness</strong><br>
+      <label><input type="radio" name="v7" value="ok">👍 Honest</label>
+      <label><input type="radio" name="v7" value="iterate">⚠ Other patterns still bother me</label>
+      <label><input type="radio" name="v7" value="cut">✕ Over-thought</label>
+      <textarea placeholder="Other V1 patterns we missed?" data-notes="audit"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 8 — File diff ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">8</span><span class="stop-title">File diff summary</span></h2>
+    <table>
+      <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+      <tr><td><code>frontend/src/utils/bpDomainClassifier.ts</code></td><td><span class="badge badge-info">REWRITTEN</span></td><td>Lifecycle states · authored narratives (6 states × 7 domains = 42 variants) · orderIndex + buildFlowStops · feedsInto + relationship hints</td></tr>
+      <tr><td><code>frontend/src/components/project/BPDomainSurface.tsx</code></td><td><span class="badge badge-info">REWRITTEN</span></td><td>Auto-expand · counts · flow strip · softer icons · lifecycle pill · momentum chips · relationship hint line · improved expanded-state hierarchy</td></tr>
+      <tr><td><code>frontend/src/hooks/useDomainMomentum.ts</code></td><td><span class="badge badge-good">NEW</span></td><td>Per-domain delta hook · frozen snapshot pattern · localStorage <code>bpDomainMomentum:v1</code></td></tr>
+      <tr><td><code>scripts/captureBPv2Variants.js</code></td><td><span class="badge badge-good">NEW</span></td><td>4 variants: auto-expanded · all expanded · seeded momentum · flow strip detail</td></tr>
+    </table>
+    <p style="font-size: 12.5px; color: var(--muted);">
+      <strong>Commits:</strong> <code>0793b0f</code> (main sprint) · <code>e49e2f9</code> (flow-strip arrow visibility fix).
+      Total: 4 files · ~650 insertions · ~200 deletions.
+      Zero backend. Zero schema. Zero new endpoints.
+    </p>
+  </div>
+
+  <!-- ─────────────────────── STOP 9 — Overall verdict ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">9</span><span class="stop-title">Overall verdict</span></h2>
+    <p>Self-assessment against the brief's success criterion
+       (<em>"This is how my business operations work together."</em>):
+       the flow strip + lifecycle states + relationship hints + authored
+       narratives jointly create an operational architecture read. The
+       remaining V1 energy lives behind the "Show full inventory" toggle
+       and inside the unrewritten BP detail modal — both opt-in, both
+       documented honestly.</p>
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Architecture mode achieved</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Mostly there; iterate per stops</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should the next sprint pick up…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 9 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# BP V2 Operational Architecture Sprint — operator feedback\n\nFollowing commits 0793b0f + e49e2f9 shipped 2026-05-12:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
