@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BP V2 Detail Modal — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>BP V2 Detail Modal — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-12 to <strong>enterprise.colaberry.ai</strong> (commit
+    <code>2648bec</code>). 1 new component + 1 wire-up in BPDomainSurface.
+    The click-through from V2 architecture → BP detail is now cohesive.
+    No more red NOT READY badge or bar-chart "System Truth" sections.
+  </p>
+
+  <div class="philosophy">
+    "Operator clicks a BP and stays in V2." The detail used to drop the
+    operator straight back into V1 telemetric land — red badges, metric
+    bars, numbered "Process Overview / System Truth / What Exists" sections.
+    Now the same data reads as one editorial paragraph + two prose stat
+    columns + a calm 5-dot maturity strip + three quiet prompt buttons.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Before/After ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">Before / After — same BP, two languages</span></h2>
+    <p>The user-flagged regression: clicking any BP from the new
+       architecture surface fell into a 1,441-line telemetric modal.
+       Now the click stays in V2 language.</p>
+    <div class="pair">
+      <div style="background: #1a1a1a; border-radius: 8px; padding: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.1);">
+        <div style="background: white; padding: 18px; border-radius: 4px; font-size: 11.5px; min-height: 320px; color: #1f2937;">
+          <strong style="color: #1a365d; font-size: 16px;">Lead Management</strong>
+          <span style="margin-left: 8px; background: #e53e3e; color: white; padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 12px;">NOT READY</span>
+          <span style="margin-left: 8px; background: #6366f120; color: #6366f1; padding: 3px 9px; border-radius: 3px; font-weight: 700; font-size: 10px;">Learn</span>
+          <div style="color: #6b7280; font-size: 11px; margin: 6px 0 14px;">0 requirements</div>
+          <div style="height: 3px; background: #e53e3e; margin-bottom: 14px; border-radius: 2px;"></div>
+          <div style="display: flex; align-items: center; gap: 6px;"><span style="background: #1a365d; color: white; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px;">1</span><strong>Process Overview</strong></div>
+          <div style="padding-left: 24px; margin: 4px 0 10px; font-size: 11px; color: #6b7280;">Manages the lifecycle of leads…</div>
+          <div style="display: flex; align-items: center; gap: 6px;"><span style="background: #1a365d; color: white; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px;">2</span><strong>System Truth</strong></div>
+          <div style="padding-left: 24px; margin: 6px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 9.5px;"><span>Req. Matched</span><strong style="color: #e53e3e;">0%</strong></div>
+            <div style="height: 4px; background: #e53e3e; width: 0%; margin-bottom: 4px;"></div>
+            <div style="display: flex; justify-content: space-between; font-size: 9.5px;"><span>System Readiness</span><strong style="color: #f59e0b;">40%</strong></div>
+            <div style="height: 4px; background: #f59e0b; width: 40%; margin-bottom: 4px;"></div>
+            <div style="display: flex; justify-content: space-between; font-size: 9.5px;"><span>Quality Score</span><strong style="color: #38a169;">100%</strong></div>
+            <div style="height: 4px; background: #38a169; width: 100%;"></div>
+          </div>
+          <div style="display: flex; gap: 6px; padding-left: 24px; margin: 8px 0 12px; font-size: 9.5px;">
+            <span>Backend <strong style="color: #f59e0b;">● Partial</strong></span>
+            <span>Frontend <strong style="color: #f59e0b;">● Partial</strong></span>
+            <span>Agents <strong style="color: #38a169;">● Ready</strong></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;"><span style="background: #1a365d; color: white; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px;">3</span><strong>What Exists</strong></div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;"><span style="background: #1a365d; color: white; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px;">5</span><strong>Requirements Status</strong></div>
+          <div style="display: flex; gap: 16px; padding-left: 24px; margin: 6px 0 8px; font-size: 9.5px; color: #6b7280;">
+            <span>0 Verified</span><span>0 Auto-Matched</span><span>0 Planned</span><span>0 Unmapped</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;"><span style="background: #1a365d; color: white; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px;">7</span><strong>Maturity: L1 Prototype → L5 Target</strong></div>
+          <div style="margin-top: 12px; display: flex; gap: 6px;">
+            <span style="font-size: 10px; padding: 4px 8px; background: #f3f4f6; border-radius: 4px;">Architecture</span>
+            <span style="font-size: 10px; padding: 4px 8px; background: #f3f4f6; border-radius: 4px;">Flow</span>
+            <span style="font-size: 10px; padding: 4px 8px; background: #f3f4f6; border-radius: 4px;">Database</span>
+          </div>
+        </div>
+        <div style="color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center;">BEFORE · V1 telemetric modal · red NOT READY badge · numbered sections · metric bars · architecture/flow/database tab strip · System Intelligence panel · 1,441 lines</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-bp-detail-v2/02-detail-lead-management.png" alt="V2 detail of Lead Management — editorial header, lifecycle pill, prose">
+        <div class="caption">AFTER · V2 detail · FOUNDATIONAL pill · authored intro · "In place" / "Still needed" columns · 5-dot maturity strip · 3 quiet prompt buttons</div>
+      </div>
+    </div>
+    <div class="what-shipped">
+      <strong>What changed:</strong>
+      <ul>
+        <li><span class="badge badge-danger">REMOVED</span> red "NOT READY" badge — replaced by a soft <span style="background: rgba(113,128,150,0.08); color: #6b7280; padding: 2px 7px; border-radius: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600;">FOUNDATIONAL</span> lifecycle pill (matches the surface palette)</li>
+        <li><span class="badge badge-danger">REMOVED</span> three metric progress bars (Req. Matched / System Readiness / Quality Score) — replaced by two prose stat columns ("In place" / "Still needed")</li>
+        <li><span class="badge badge-danger">REMOVED</span> Backend / Frontend / Agents dot+word triplet — folded into the "In place" column as natural-language items</li>
+        <li><span class="badge badge-danger">REMOVED</span> numbered "Process Overview / System Truth / What Exists / Backend Stack / Gaps / Requirements Status / Quality Scores / Maturity" header pattern — replaced by 4 calm sections (intro · Where it stands · Maturity · Next steps)</li>
+        <li><span class="badge badge-danger">REMOVED</span> Architecture/Flow/Database tab strip + System Intelligence diagram</li>
+        <li><span class="badge badge-good">ADDED</span> authored intro paragraph: BP description + lifecycle-aware framing (e.g. "Lead Management is still being scaffolded — the structure is in place but the through-line is incomplete.")</li>
+        <li><span class="badge badge-good">ADDED</span> 5-dot maturity strip (L1 → L5) with current stage filled + one-line stage blurb</li>
+        <li><span class="badge badge-good">ADDED</span> 3 quiet "Generate a backend / UI / agent prompt" buttons (same backend endpoint, calmer presentation) + italic explainer</li>
+        <li><span class="badge badge-info">KEPT</span> the same data + same API + same clipboard-prompt mechanism — operators don't lose any capability</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="detail-add-features">Show features list (currently only requirements show)</label></li>
+        <li><label><input type="checkbox" data-issue="detail-recs-section">Restore recommendations as a 5th section ("Suggested next actions")</label></li>
+        <li><label><input type="checkbox" data-issue="detail-page-bp-handling">Page BPs (Visual Review categories) — keep the existing checklist UI or rewrite</label></li>
+        <li><label><input type="checkbox" data-issue="detail-modal-larger">Modal max-width 960px feels narrow — go 1080px</label></li>
+        <li><label><input type="checkbox" data-issue="detail-add-flow-arch">Restore the architecture flow diagram in a collapsed "More detail" disclosure</label></li>
+        <li><label><input type="checkbox" data-issue="detail-learn-button">Restore the "Learn" button (opens ChatGPT with learning-mode prompt)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 V2 leads now</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Restore something</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="detail"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Asymmetric content proof ───────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Two BPs, different shapes</span></h2>
+    <p>The "Where it stands" two-column section adapts to each BP — proves
+       the new layout is not just chrome.</p>
+    <div class="pair">
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-bp-detail-v2/01-detail-foundational.png" alt="Dataset Registration detail">
+        <div class="caption">Dataset Registration · "In place": Frontend surface (forming) + Agent / autonomous layer · "Still needed": Backend implementation</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-bp-detail-v2/02-detail-lead-management.png" alt="Lead Management detail">
+        <div class="caption">Lead Management · "In place": Backend (forming) + Frontend (forming) + Agent · "Still needed": "Nothing flagged as missing — the layer set is complete."</div>
+      </div>
+    </div>
+    <div class="what-shipped">
+      <strong>How "In place" / "Still needed" is derived (no new endpoints):</strong>
+      <ul>
+        <li><code>usability.backend === 'ready'</code> → "Backend implementation" in "In place"</li>
+        <li><code>usability.backend === 'partial'</code> → "Backend implementation (forming)" in "In place"</li>
+        <li><code>usability.backend === 'missing'</code> (or absent) → "Backend implementation" in "Still needed"</li>
+        <li>Same rules for <code>frontend</code> ("Frontend surface") and <code>agent</code> ("Agent / autonomous layer")</li>
+        <li>Open gaps count appended to "Still needed" as one line ("3 open gaps flagged by analysis")</li>
+        <li>Both columns have empty-state copy so the surface never shows a bare list</li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the "where it stands" split</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Right shape</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong</label>
+      <textarea placeholder="Notes…" data-notes="stands"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Maturity strip ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Maturity progression — calm, not numeric</span></h2>
+    <p>The old modal had "Maturity: L1 Prototype → L5 Target" as a numbered
+       section #7. The new strip shows the journey at a glance.</p>
+    <h3>Mapping</h3>
+    <table>
+      <tr><th>Level</th><th>Label</th><th>Blurb shipped</th></tr>
+      <tr><td>L1</td><td>Prototype</td><td>"Early structure exists; rough edges are expected."</td></tr>
+      <tr><td>L2</td><td>Working</td><td>"Core path runs; edges and recovery paths still informal."</td></tr>
+      <tr><td>L3</td><td>Reliable</td><td>"Documented happy path; supporting infrastructure in place."</td></tr>
+      <tr><td>L4</td><td>Hardened</td><td>"Verified end-to-end; observability is in the loop."</td></tr>
+      <tr><td>L5</td><td>Mature</td><td>"Steady state; ongoing work is refinement."</td></tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Visual rules:</strong>
+      <ul>
+        <li>5 dots at 14×14 in a horizontal strip, separated by 16×2 connectors</li>
+        <li>Filled dots = at or below current level (primary blue); empty dots = above current</li>
+        <li>Connector between two filled dots is also primary blue; otherwise gray</li>
+        <li>Sits in a calm <code>bg-alt</code> container — no white card-on-card stacking</li>
+        <li>200ms ease transition on dot color so a level promotion feels intentional</li>
+        <li>"Not yet rated" empty state when <code>maturity.level</code> is 0 or absent</li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the strip</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Tune</label>
+      <label><input type="radio" name="v3" value="cut">✕ Drop the strip</label>
+      <textarea placeholder="Notes…" data-notes="maturity"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Next steps ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Next steps — same prompts, calmer presentation</span></h2>
+    <p>The old modal had 3 colored "Fix Backend / Add UI / Enhance Agent"
+       buttons in a toolbar at the top + a Learn button + a USABLE/NOT READY
+       badge. The new "Next steps" section at the bottom carries three
+       quiet outline buttons with explanatory hover titles.</p>
+    <table>
+      <tr><th>Old label</th><th>New label</th><th>Backend endpoint (unchanged)</th></tr>
+      <tr><td>"Fix Backend"</td><td>"Generate a backend prompt"</td><td><code>POST /api/portal/project/business-processes/:id/prompt</code> with <code>target=backend_improvement</code></td></tr>
+      <tr><td>"Add UI"</td><td>"Generate a UI prompt"</td><td>same endpoint, <code>target=frontend_exposure</code></td></tr>
+      <tr><td>"Enhance Agent"</td><td>"Generate an agent prompt"</td><td>same endpoint, <code>target=agent_enhancement</code></td></tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Presentation rules:</strong>
+      <ul>
+        <li>Outline buttons (white background, primary text, light border) — no colored fills</li>
+        <li>Tooltip on hover explains what the button drafts ("Drafts a Claude Code prompt to extend the backend layer of this BP")</li>
+        <li>When clicked, the same <code>bpApi.generatePrompt()</code> call drafts the prompt and copies to clipboard</li>
+        <li>Spinner replaces button text while drafting; other buttons dim to 0.5 opacity</li>
+        <li>Single italic line below explains the contract: "Each button drafts a Claude Code prompt and copies it to the clipboard. Run the prompt externally; nothing executes from here."</li>
+        <li>Toast confirmation: "Prompt copied — paste into Claude Code"</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible changes:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="next-add-learn">Restore the "Learn" button (opens ChatGPT in learn-mode)</label></li>
+        <li><label><input type="checkbox" data-issue="next-show-which">Highlight the most-relevant button based on lifecycle state (e.g. Foundational → emphasize backend)</label></li>
+        <li><label><input type="checkbox" data-issue="next-direct-blueprint">Add "Send to Blueprint" — bypass clipboard, drop the prompt directly into the Blueprint banner</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on next-steps treatment</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Right</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate</label>
+      <label><input type="radio" name="v4" value="cut">✕ Wrong</label>
+      <textarea placeholder="Notes…" data-notes="next"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Honest deferrals ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">What's not in the new detail (honest list)</span></h2>
+    <p>The legacy modal carried more than the V2 distillation. Things that
+       didn't make it into the new view, and why:</p>
+    <table>
+      <tr><th>Legacy element</th><th>Status</th><th>Why</th></tr>
+      <tr><td>Features list (per-feature description + requirement nesting)</td><td><span class="badge badge-warn">DEFERRED</span></td><td>Requirements list is shown; the per-feature grouping was extra structure that the editorial layout doesn't need. Will re-add if operators ask.</td></tr>
+      <tr><td>"Learn Mode" ChatGPT button</td><td><span class="badge badge-warn">DEFERRED</span></td><td>Workflow lives outside Claude Code; not load-bearing for the BPs surface. Restorable as a quiet link if requested.</td></tr>
+      <tr><td>Recommendations list (per-target suggested actions)</td><td><span class="badge badge-warn">DEFERRED</span></td><td>Subsumed by the 3 "Generate prompt" buttons. If operators want specific text-form recommendations, restore as a 5th section.</td></tr>
+      <tr><td>Backend Stack disclosure ("0 endpoints, 0 models, 5 agents")</td><td><span class="badge badge-warn">DEFERRED</span></td><td>This was telemetric pseudo-data, often misleading. Folded into the "Backend implementation (forming)" tone word.</td></tr>
+      <tr><td>System Intelligence diagram (Frontend → API Routes → Services → Agents → Database)</td><td><span class="badge badge-warn">DEFERRED</span></td><td>The Architecture tab in System View shows this for the whole system. Per-BP diagrams are a future sprint if operators ask.</td></tr>
+      <tr><td>PageVisualReview checklist (Layout / Accessibility / Responsiveness / Interaction / Content)</td><td><span class="badge badge-danger">NOT IN V2</span></td><td>Only applies to Page BPs (frontend pages). New modal renders the same regardless; checklist UX needs its own redesign sprint.</td></tr>
+      <tr><td>Repo URL link (when present)</td><td><span class="badge badge-warn">DEFERRED</span></td><td>Niche utility. Restorable in a "More info" disclosure.</td></tr>
+      <tr><td>Preview URL polling + "Open preview" link</td><td><span class="badge badge-warn">DEFERRED</span></td><td>Preview-stack feature lives in its own context. Page-BP-specific.</td></tr>
+      <tr><td>The legacy modal itself</td><td><span class="badge badge-good">PRESERVED</span></td><td>Power users can still reach <code>PortalBusinessProcessDetail</code> via "Show full inventory" → click a card. The full modal remains accessible behind one toggle.</td></tr>
+    </table>
+    <div class="verdict">
+      <strong>Your verdict on the deferrals</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Right scope</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Restore some</label>
+      <label><input type="radio" name="v5" value="cut">✕ Cut too much</label>
+      <textarea placeholder="What to restore?" data-notes="deferrals"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — File diff ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">File diff summary</span></h2>
+    <table>
+      <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+      <tr><td><code>frontend/src/components/project/BPDetailV2.tsx</code></td><td><span class="badge badge-good">NEW</span></td><td>Editorial detail · ~370 lines</td></tr>
+      <tr><td><code>frontend/src/components/project/BPDomainSurface.tsx</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>Swap modal import: <code>PortalBusinessProcessDetail</code> → <code>BPDetailV2</code></td></tr>
+      <tr><td><code>scripts/captureBPDetailV2.js</code></td><td><span class="badge badge-good">NEW</span></td><td>Auto-clicks BPs and captures the new modal</td></tr>
+      <tr><td><code>frontend/src/components/project/PortalBusinessProcessDetail.tsx</code></td><td><span class="badge badge-warn">PRESERVED (1,441 lines)</span></td><td>Still reachable via "Show full inventory" → BP card click in the legacy grid. No rewrite, no deletion.</td></tr>
+    </table>
+    <p style="font-size: 12.5px; color: var(--muted);">
+      <strong>Commit:</strong> <code>2648bec</code> · 2 frontend files · ~448 insertions · ~2 deletions. Zero backend. Zero new endpoints.
+    </p>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Overall verdict ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Overall verdict</span></h2>
+    <p>Self-assessment: the surface↔detail experience is finally cohesive. A
+       BP click no longer leaves V2 architecture mode. The remaining V1
+       energy in the codebase lives behind the explicit "Show full inventory"
+       toggle, which is opt-in by design.</p>
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 V2 leads end-to-end</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Mostly there; iterate per stops</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should the next sprint pick up…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 7 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# BP V2 Detail Modal Sprint — operator feedback\n\nFollowing commit 2648bec shipped 2026-05-12:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
