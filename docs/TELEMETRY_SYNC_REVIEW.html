@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Telemetry Sync + BP Categorization — Before/After Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+    --term-bg: #0d1117; --term-fg: #c9d1d9; --term-green: #56d364;
+    --term-red: #ff7b72; --term-amber: #d29922; --term-blue: #79c0ff;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+
+  /* Terminal mockup */
+  .terminal {
+    background: var(--term-bg); color: var(--term-fg);
+    border-radius: 8px; padding: 14px 16px;
+    margin: 1rem 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.55;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .terminal .green { color: var(--term-green); }
+  .terminal .red   { color: var(--term-red); }
+  .terminal .amber { color: var(--term-amber); }
+  .terminal .blue  { color: var(--term-blue); }
+  .terminal .dim   { color: #8b949e; }
+  .terminal-caption { color: #6b7280; font-size: 11.5px; text-align: center; margin-top: 6px; }
+
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  td.numeric { font-variant-numeric: tabular-nums; text-align: right; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .arrow {
+    font-size: 28px; color: var(--accent); text-align: center; margin: 1rem 0;
+  }
+
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Telemetry Sync + BP Categorization — Before/After</h1>
+  <p class="lede">
+    Operator caught two related problems: the System surface didn't reflect everything
+    we'd shipped, and most BPs were dumping into "Other Operations." Both are fixed.
+    This doc shows the before/after state of each, the new verification tooling,
+    and the path to closing the remaining gaps.
+  </p>
+
+  <div class="philosophy">
+    The portal had been running blind on filesystem heuristics across every recent sprint.
+    The Telemetry Synchronization Contract requires Claude Code to emit a
+    <code>BuildManifest</code> after every non-trivial commit; <strong>zero</strong> had
+    been emitted. The fix is two new tools — a verifier you can re-run any time, and a
+    backfill emitter that catches the system up.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Telemetry sync ─────────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">Telemetry sync — before / after the backfill</span></h2>
+    <p>Same script, same endpoint, same JWT. Same machine. Run before and after
+       the backfill emitter ran. The system went from "blind" to "actively
+       grading drift."</p>
+
+    <h3>BEFORE — verifier reports zero manifests, ever</h3>
+    <div class="terminal">
+<span class="dim">┌─────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  TELEMETRY SYNC VERIFICATION
+<span class="dim">│</span>  https://enterprise.colaberry.ai
+<span class="dim">└─────────────────────────────────────────────────────────────────────┘</span>
+
+<span class="amber">[A] Telemetry health</span>
+
+    Sync health score:       <span class="amber">83%</span>  <span class="dim">(inflated — no data to grade)</span>
+    Total manifests:         <span class="red">0</span>
+    Fresh manifests:         <span class="red">0</span>
+    Contradictions detected: 57
+      · duplicate_next_step: 56
+      · orphan_route: 1
+
+<span class="amber">[B] Filesystem (ground truth) vs production maps</span>
+
+    Surface              Filesystem    System map    Status
+    ─────────────────────────────────────────────────────────
+    UI routes            <span class="dim">—</span>             <span class="red">0</span>             <span class="red">✗ EMPTY</span>
+    UI components        258           <span class="red">0</span>             <span class="red">✗ EMPTY</span>
+    UI pages             162           <span class="red">0</span>             <span class="red">✗ EMPTY</span>
+    DB tables (Sequelize)209           <span class="red">0</span>             <span class="red">✗ EMPTY</span>
+    BPs                  <span class="dim">—</span>             104 (44 usable, <span class="red">0 with reqs</span>)  ✓
+
+<span class="amber">[C] Recent commits without telemetry coverage</span>
+
+    The following 30 commits shipped without emitting a BuildManifest.
+    Per CLAUDE.md "Telemetry Synchronization Contract", each non-trivial commit
+    should POST to /api/portal/project/telemetry.
+    <span class="dim">…30 commits listed…</span>
+
+<span class="dim">┌─────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  <span class="red">VERDICT:  TELEMETRY SYNC IS BROKEN</span>
+<span class="dim">│</span>
+<span class="dim">│</span>  The portal is running on repo heuristics only. None of the recent
+<span class="dim">│</span>  productization sprints have been reflected in telemetry.
+<span class="dim">└─────────────────────────────────────────────────────────────────────┘</span>
+    </div>
+    <div class="terminal-caption">Exit code: 1 · 0 BuildManifests in production · all ui_map / db_map dimensions zero</div>
+
+    <div class="arrow">↓ backfill emitter ran ↓</div>
+
+    <div class="terminal">
+<span class="green">$ node scripts/backfillBuildManifests.js --max 60</span>
+
+<span class="dim">┌─────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  BUILD MANIFEST BACKFILL
+<span class="dim">│</span>  LIVE
+<span class="dim">│</span>  since 14.days               max 60
+<span class="dim">└─────────────────────────────────────────────────────────────────────┘</span>
+
+[backfill] Found 60 non-merge commits to emit
+
+  b6dc20e  Add scripts/verifyTelemetrySync.js …                  1 files  <span class="green">✓ 201</span>
+  583d8f1  BP classifier: 3 new domains + expanded keywords …    1 files  <span class="green">✓ 201</span>
+  b59c0df  BP V2 detail: review HTML + capture script …          3 files  <span class="green">✓ 201</span>
+  2648bec  BP V2 detail modal: editorial replacement …           2 files  <span class="green">✓ 201</span>
+  fcf795c  BP V2 review HTML + captures script …                 3 files  <span class="green">✓ 201</span>
+  <span class="dim">…</span>
+  16ff83b  Workspace Presence: momentum hook …                  10 files  <span class="green">✓ 201</span>
+  8264e61  Living Workspace: 4 contextual drawers …             11 files  <span class="green">✓ 201</span>
+  7a8e73b  Productization arc: Cory Home, ExecutionLane …      369 files  <span class="green">✓ 201</span>
+  241a560  SystemStateEngine phases 2-15: governed autonomous…  336 files  <span class="green">✓ 201</span>
+  <span class="dim">…42 more emissions, all ✓ 201…</span>
+
+[backfill] Done. <span class="green">60 emitted</span>, 0 failed, 0 skipped (empty diffs)
+    </div>
+    <div class="terminal-caption">60 commits, 60 manifests POSTed to /api/portal/project/telemetry, all accepted (HTTP 201)</div>
+
+    <h3>AFTER — verifier reports 61 manifests + real drift detection</h3>
+    <div class="terminal">
+<span class="dim">┌─────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>  TELEMETRY SYNC VERIFICATION
+<span class="dim">└─────────────────────────────────────────────────────────────────────┘</span>
+
+<span class="amber">[A] Telemetry health</span>
+
+    Sync health score:       <span class="blue">68%</span>  <span class="dim">(real grading on more dimensions)</span>
+    Total manifests:         <span class="green">61</span>
+    Fresh manifests:         <span class="green">17</span>
+    Contradictions detected: 167
+      · missing_telemetry:    22
+      · duplicate_next_step:  56
+      · orphan_route:          1
+      · <span class="blue">telemetry_conflict:    44</span>  <span class="dim">(new — real drift now visible)</span>
+      · <span class="blue">ui_drift:              44</span>  <span class="dim">(new — engine can see surface drift)</span>
+
+<span class="amber">[B] Filesystem (ground truth) vs production maps</span>
+
+    Surface              Filesystem    System map    Status
+    ─────────────────────────────────────────────────────────
+    UI routes            <span class="dim">—</span>             <span class="red">0</span>             <span class="red">✗ still empty</span>
+    UI components        258           <span class="green">53</span>            <span class="green">✓ now populated</span>
+    UI pages             162           <span class="green">1</span>             <span class="green">✓ first one ingested</span>
+    DB tables (Sequelize)209           <span class="red">0</span>             <span class="red">✗ still empty</span>
+    BPs                  <span class="dim">—</span>             104 (44 usable, <span class="red">0 with reqs</span>) ✓
+    </div>
+    <div class="terminal-caption">61 manifests received · UI synchronizer ingested 53 components + 1 page · engine now finds real drift</div>
+
+    <h3>Headline numbers</h3>
+    <table>
+      <tr><th>Metric</th><th>Before</th><th>After</th><th>Change</th></tr>
+      <tr><td>BuildManifests received</td><td class="numeric">0</td><td class="numeric">61</td><td><span class="badge badge-good">+61</span></td></tr>
+      <tr><td>Fresh manifests (last 24h)</td><td class="numeric">0</td><td class="numeric">17</td><td><span class="badge badge-good">+17</span></td></tr>
+      <tr><td>UI components in map</td><td class="numeric">0</td><td class="numeric">53</td><td><span class="badge badge-good">+53</span></td></tr>
+      <tr><td>UI pages in map</td><td class="numeric">0</td><td class="numeric">1</td><td><span class="badge badge-info">+1 (first)</span></td></tr>
+      <tr><td>Sync health score</td><td class="numeric">83%</td><td class="numeric">68%</td><td><span class="badge badge-good">→ lower BUT real</span></td></tr>
+      <tr><td>Contradictions detected</td><td class="numeric">57</td><td class="numeric">167</td><td><span class="badge badge-good">→ engine now grades real drift</span></td></tr>
+      <tr><td>Drift signals (ui_drift + telemetry_conflict)</td><td class="numeric">0</td><td class="numeric">88</td><td><span class="badge badge-good">+88</span></td></tr>
+    </table>
+
+    <div class="what-shipped">
+      <strong>Why "sync health dropped from 83% → 68%" is good news:</strong>
+      <ul>
+        <li>Before the backfill, the engine had no data to grade. <code>83%</code> was inflated — all dimensions were zero, which doesn't mean "healthy," it means "no signal."</li>
+        <li>After 61 manifests landed, the engine started grading <em>real</em> dimensions: <code>ui_drift</code> (manifest says X, file scan shows Y), <code>telemetry_conflict</code> (two manifests disagree), <code>missing_telemetry</code> (surfaces still uncovered).</li>
+        <li>The drift counter going from 0 → 88 is the engine doing its actual job. We can now <em>see</em> where reality and declared state disagree, instead of inflated false confidence.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Honest remaining gaps (next-sprint candidates):</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="parse-routes">Ship a parser for <code>portalRoutes.tsx</code> so UI routes populate (currently 0)</label></li>
+        <li><label><input type="checkbox" data-issue="parse-models">Ship a Sequelize-model parser so DB tables populate (currently 0)</label></li>
+        <li><label><input type="checkbox" data-issue="bp-reqs">Surface BP requirement counts (still 0) — requires per-BP attachments backfill can't synthesize</label></li>
+        <li><label><input type="checkbox" data-issue="ci-verify">Wire <code>verifyTelemetrySync.js</code> into a pre-deploy CI check</label></li>
+        <li><label><input type="checkbox" data-issue="auto-emit">Add post-commit hook so the emitter fires automatically going forward</label></li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Sync gap closed enough; address remaining gaps next sprint</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Close one more gap now</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong approach</label>
+      <textarea placeholder="Notes…" data-notes="sync"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — BP categorization ────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">BP categorization — Other Operations 72% → 5%</span></h2>
+    <p>Operator-flagged: most BPs were dumping into "Other Operations" because the
+       classifier only knew 7 domains. Fixed by adding 3 new ones + expanding
+       keyword coverage.</p>
+
+    <h3>Classification distribution — before / after</h3>
+    <table>
+      <tr><th>Domain</th><th>Before (7 domains)</th><th>After (10 domains)</th><th>Net</th></tr>
+      <tr><td><strong>Other Operations</strong></td><td class="numeric"><span class="badge badge-danger">75 (72%)</span></td><td class="numeric"><span class="badge badge-good">5 (5%)</span></td><td>−70</td></tr>
+      <tr><td><strong>AI &amp; Intelligence</strong> <span class="badge badge-good">NEW</span></td><td class="numeric"><span class="dim">(did not exist)</span></td><td class="numeric">14 (13%)</td><td>+14</td></tr>
+      <tr><td><strong>Project &amp; Admin</strong> <span class="badge badge-good">NEW</span></td><td class="numeric"><span class="dim">(did not exist)</span></td><td class="numeric">9 (9%)</td><td>+9</td></tr>
+      <tr><td><strong>Public Pages &amp; Surfaces</strong> <span class="badge badge-good">NEW</span></td><td class="numeric"><span class="dim">(did not exist)</span></td><td class="numeric">45 (43%)</td><td>+45</td></tr>
+      <tr><td>Marketing Operations</td><td class="numeric">6</td><td class="numeric">6</td><td class="numeric">±0</td></tr>
+      <tr><td>Lead Intelligence</td><td class="numeric">6</td><td class="numeric">6</td><td class="numeric">±0</td></tr>
+      <tr><td>Execution Systems</td><td class="numeric">9</td><td class="numeric">8</td><td class="numeric">−1</td></tr>
+      <tr><td>Reporting &amp; Analytics</td><td class="numeric">4</td><td class="numeric">9</td><td class="numeric">+5</td></tr>
+      <tr><td>Intake &amp; Registration</td><td class="numeric">1</td><td class="numeric">1</td><td class="numeric">±0</td></tr>
+      <tr><td>Student Lifecycle</td><td class="numeric">3</td><td class="numeric">1</td><td class="numeric">−2</td></tr>
+    </table>
+
+    <h3>What "Other Operations" used to hide</h3>
+    <div class="what-shipped">
+      <strong>The 75 BPs sitting in Other Operations were actually:</strong>
+      <ul>
+        <li><strong>AI &amp; Intelligence</strong> (the platform's reasoning engine): Prompt Generation, Prompt Generation Service, Prompt Validation, Validation Parser, Discovery, Discovery Engine, Requirements Management, Requirements Engine, Artifact Generation, Executive Narrative Composer, Action Planner, …</li>
+        <li><strong>Project &amp; Admin</strong>: Project Setup, Project Artifacts Management, Project Scope Definition, Project Progress Tracking, Admin Settings, Admin Route Management, User Authentication, Automation Management, Ticket Management, Implementation Strategy Management</li>
+        <li><strong>Public Pages</strong>: AI Architect Landing Page, AI Workforce Designer Page, Agency Partner Page, Alumni Champion Page, Advisory Page, Case Studies Page, …+~40 more</li>
+        <li><strong>Reporting &amp; Analytics</strong> (newly-broadened keywords): Visitor Tracking, Visitor Analytics Tracking, User Journey Mapping, Event Ledger, Revenue Optimization, Cost Optimization, Revenue Dashboard</li>
+      </ul>
+    </div>
+
+    <h3>Visual before / after</h3>
+    <div class="pair">
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-maturity-variants/01-bps-domain-collapsed.png" alt="V1 surface — 6 collapsed domains, all AWAITING SETUP">
+        <div class="caption">BEFORE · prior maturity layer · 6 named domains visible · 5 mostly empty (1 BP each) · 75 BPs invisibly absorbed by Other Operations</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-12-bp-v2-variants/01-default-auto-expanded.png" alt="V2 architecture surface — AI Intelligence visible with 14 BPs">
+        <div class="caption">AFTER · 9 operational domains in the flow strip · AI &amp; Intelligence auto-expanded showing 14 BPs (Content Generation for Marketing, Discovery, Prompt Generation, Requirements Management…)</div>
+      </div>
+    </div>
+
+    <div class="possible">
+      <strong>Possible follow-ups:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="cat-cgm">"Content Generation for Marketing" is in AI &amp; Intelligence — should it be in Marketing?</label></li>
+        <li><label><input type="checkbox" data-issue="cat-public-pages-large">Public Pages is 43% of BPs — that's accurate for this product, but should it split (Landing / Pricing / Resource)?</label></li>
+        <li><label><input type="checkbox" data-issue="cat-add-domain">A meaningful operational area is still missing (specify in notes)</label></li>
+        <li><label><input type="checkbox" data-issue="cat-llm-classifier">Move classifier from keyword-based to LLM call (per BP, on extraction)</label></li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Your verdict on the categorization</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Right shape now</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Tune (see notes)</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong taxonomy</label>
+      <textarea placeholder="Notes / missing domains / mis-bucketed BPs…" data-notes="categorization"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Tools shipped ─────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Tools shipped — re-runnable any time</span></h2>
+    <p>Two scripts now live in the repo so this state stays verifiable.</p>
+    <table>
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr>
+        <td><code>node scripts/verifyTelemetrySync.js</code></td>
+        <td>Queries 4 production endpoints, counts ground-truth files on disk via Node-native recursive walk (no shell-out — Windows/Mac/Linux all work), reads last 30 git commits, prints a "system thinks vs reality" diff. Exits non-zero when sync is broken — suitable for CI / pre-deploy.</td>
+      </tr>
+      <tr>
+        <td><code>node scripts/backfillBuildManifests.js</code></td>
+        <td>Walks recent git commits, builds a schema-valid <code>BuildManifest</code> for each (classifies touched files into <code>ui_components_added/modified</code>, <code>apis_modified</code>, <code>tests_added</code>, <code>files_created/modified/deleted</code>), POSTs to <code>/api/portal/project/telemetry</code>. Supports <code>--dry-run</code>, <code>--max N</code>, <code>--since 7.days</code>.</td>
+      </tr>
+    </table>
+
+    <h3>File diff for this work</h3>
+    <table>
+      <tr><th>File</th><th>Status</th><th>Lines</th><th>Purpose</th></tr>
+      <tr><td><code>frontend/src/utils/bpDomainClassifier.ts</code></td><td><span class="badge badge-info">MODIFIED</span></td><td>+82 / -12</td><td>3 new domains + expanded keywords + Page-BP metadata fallback</td></tr>
+      <tr><td><code>scripts/verifyTelemetrySync.js</code></td><td><span class="badge badge-good">NEW</span></td><td>~210</td><td>One-command sync verifier</td></tr>
+      <tr><td><code>scripts/backfillBuildManifests.js</code></td><td><span class="badge badge-good">NEW</span></td><td>~295</td><td>Walks git log, emits one manifest per commit</td></tr>
+      <tr><td><code>docs/TELEMETRY_SYNC_REVIEW.html</code></td><td><span class="badge badge-good">NEW</span></td><td>this doc</td><td>Before/after review</td></tr>
+    </table>
+    <p style="font-size: 12.5px; color: var(--muted);">
+      <strong>Commits:</strong> <code>583d8f1</code> (classifier expansion) · <code>b6dc20e</code> (verifier) · <code>39e3ba3</code> (backfill emitter). Zero new backend endpoints — the telemetry endpoint already existed; it just wasn't being called.
+    </p>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Overall verdict ─────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Overall verdict</span></h2>
+    <p>The system is no longer blind. The classifier no longer dumps 72% of BPs
+       into Other Operations. Two tools exist to keep this verifiable going
+       forward.</p>
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship; close remaining gaps next sprint</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Address remaining gaps now</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 4 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Telemetry sync + BP categorization — operator feedback\n\nFollowing commits 583d8f1 + b6dc20e + 39e3ba3 shipped 2026-05-12:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
