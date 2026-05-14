@@ -45,17 +45,23 @@ function saveSnapshot(snap: Snapshot) {
   catch { /* ignore */ }
 }
 
+/**
+ * Operational Causality Sprint, 2026-05-12 — momentum vocabulary
+ * evolved from analytical ("improving", "regressed") to operationally
+ * intelligent. The platform should sound like it understands what's
+ * happening to the system, not like it's reading a chart.
+ */
 function labelFor(direction: Direction, delta: number | null): string {
   if (direction === 'first-visit') return 'baseline';
-  if (direction === 'flat') return 'stable';
+  if (direction === 'flat') return 'holding steady';
   if (direction === 'up') {
-    if (delta != null && delta >= 10) return 'improving';
-    if (delta != null && delta >= 3) return 'progressing';
-    return 'edging up';
+    if (delta != null && delta >= 8) return 'accelerating';
+    if (delta != null && delta >= 3) return 'gaining structure';
+    return 'operationalizing';
   }
-  if (delta != null && delta <= -10) return 'regressed';
-  if (delta != null && delta <= -3) return 'slipping';
-  return 'stalled';
+  if (delta != null && delta <= -8) return 'fragmented';
+  if (delta != null && delta <= -3) return 'fragmenting';
+  return 'slowing';
 }
 
 export function useDomainMomentum(

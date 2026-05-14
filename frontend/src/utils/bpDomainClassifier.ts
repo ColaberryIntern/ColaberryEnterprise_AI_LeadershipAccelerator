@@ -2,9 +2,10 @@
  * bpDomainClassifier — groups Business Processes into operational
  * domains for the System surface's editorial architecture view.
  *
- * BP V2 Operational Architecture Sprint, 2026-05-12 — rewritten to
- * express lifecycle states, authored narratives, operational flow,
- * and inter-domain relationships.
+ * Operational Causality Sprint, 2026-05-12 — added bidirectional
+ * relationships (feeds / receives from / supports), operational-pressure
+ * narratives, entry/exit roles, and downstream-effect counts. This is
+ * editorial relationship UX, NOT a graph engine.
  *
  * Frontend only. Zero backend changes. The matcher is case-insensitive,
  * longest-pattern-wins, substring-based.
@@ -12,7 +13,10 @@
  * Each bucket carries:
  *   - lifecycleState: editorial state ("Foundational" → "Stabilizing")
  *   - narrative: authored prose chosen by lifecycleState (no templated %)
- *   - relationship: one-line "feeds into …" hint when applicable
+ *   - entryRole: where this domain sits in the operational journey
+ *   - relationships: structured, clickable {verb, targetKey, targetLabel}
+ *   - downstreamCount: how many domains depend on this one
+ *   - pressureNote: operational-pressure sentence (or null)
  *   - orderIndex: position in the canonical operational flow
  */
 
@@ -22,9 +26,9 @@ export type DomainKey =
   | 'marketing'
   | 'execution'
   | 'reporting'
-  | 'ai_intelligence'      // Sprint 2026-05-12-bis: discovery/prompt/requirements/artifacts engine
-  | 'project_admin'        // Sprint 2026-05-12-bis: project setup + admin + auth
-  | 'public_pages'         // Sprint 2026-05-12-bis: marketing landing/page BPs
+  | 'ai_intelligence'
+  | 'project_admin'
+  | 'public_pages'
   | 'student_lifecycle'
   | 'other';
 
@@ -36,6 +40,25 @@ export type LifecycleState =
   | 'Operational'     // running reliably
   | 'Scaling'         // mature, expanding
   | 'Stabilizing';    // mature, late-stage optimization
+
+/** Ordered for pressure math — higher index = more mature. */
+const STATE_INDEX: Record<LifecycleState, number> = {
+  Foundational: 0, Emerging: 1, Coordinated: 2,
+  Operational: 3, Scaling: 4, Stabilizing: 5,
+};
+
+/** Relationship verbs — used sparingly, editorial, not a matrix. */
+export type RelationshipVerb =
+  | 'feeds'           // A → B (downstream flow)
+  | 'receives from'   // B ← A (upstream flow)
+  | 'supports'        // A assists B cross-cut
+  | 'supported by';   // B is assisted by A
+
+export interface DomainRelationship {
+  verb: RelationshipVerb;
+  targetKey: DomainKey;
+  targetLabel: string;
+}
 
 export interface BPLike {
   id: string;
@@ -55,20 +78,46 @@ interface DomainSpec {
   label: string;
   icon: string;
   keywords: string[];
-  /** Position in the canonical Intake → Lead → Marketing → Execution → Reporting flow. */
+  /** Position in the canonical operational flow. */
   orderIndex: number;
-  /** Lightweight relationship hint surfaced when applicable. */
+  /** Outgoing flow edges: this domain feeds these. */
   feedsInto?: DomainKey[];
+  /** Outgoing cross-cut edges: this domain supports these. */
   supports?: DomainKey[];
   /**
+   * One sentence on where this domain sits in the operational journey —
+   * entry / transform / distribute / consolidate / govern language.
+   */
+  entryRole: string;
+  /**
    * Editorial narratives per lifecycle state. No "X% complete" templating.
-   * Multiple variants per state — picker uses a deterministic hash of the
-   * domain key so the narrative is stable across reloads.
+   * Deterministic hash-based variant pick — stable across reloads.
    */
   narratives: Record<LifecycleState, string[]>;
 }
 
 const DOMAINS: DomainSpec[] = [
+  {
+    key: 'ai_intelligence',
+    label: 'AI & Intelligence',
+    icon: 'bi-cpu-fill',
+    keywords: [
+      'prompt', 'discovery', 'requirement', 'artifact', 'narrative',
+      'planner', 'decision', 'validation', 'parser', 'composer',
+      'inference', 'generation', 'classifier', 'extraction',
+    ],
+    orderIndex: 1,
+    supports: ['lead_intelligence', 'execution'],
+    entryRole: 'This domain reasons over the whole system — discovery, prompts, requirements, decisions. It informs everything downstream.',
+    narratives: {
+      Foundational: ['The intelligence engine has its first scaffolding; reasoning surfaces are not yet integrated.'],
+      Emerging:     ['The intelligence engine is producing prompts and artifacts; outputs are useful but still need review.'],
+      Coordinated:  ['Discovery, prompts, and artifact generation work in sequence; validation closes most loops.'],
+      Operational:  ['The intelligence engine runs reliably as the brain of the platform — every domain consumes its output.'],
+      Scaling:      ['The intelligence engine is widening its reasoning surface — more decision types, more validation depth.'],
+      Stabilizing:  ['The intelligence engine is mature; ongoing work is precision and reliability rather than new capability.'],
+    },
+  },
   {
     key: 'intake',
     label: 'Intake & Registration',
@@ -79,25 +128,14 @@ const DOMAINS: DomainSpec[] = [
     ],
     orderIndex: 2,
     feedsInto: ['lead_intelligence'],
+    entryRole: 'This is where new operational activity enters the platform.',
     narratives: {
-      Foundational: [
-        'The doorway into the system is still being built — intake exists but little flows through it yet.',
-      ],
-      Emerging: [
-        'Intake is beginning to receive structured signals; the first end-to-end path is taking shape.',
-      ],
-      Coordinated: [
-        'Intake reliably accepts new records and hands them to the lead layer; gaps remain in edge-case validation.',
-      ],
-      Operational: [
-        'Intake is running cleanly across every channel — work enters the system without manual translation.',
-      ],
-      Scaling: [
-        'Intake handles a broadening surface of channels and source types; new sources cost less to onboard.',
-      ],
-      Stabilizing: [
-        'Intake is mature; ongoing changes are refinements rather than additions.',
-      ],
+      Foundational: ['The doorway into the system is still being built — intake exists but little flows through it yet.'],
+      Emerging: ['Intake is beginning to receive structured signals; the first end-to-end path is taking shape.'],
+      Coordinated: ['Intake reliably accepts new records and hands them to the lead layer; gaps remain in edge-case validation.'],
+      Operational: ['Intake is running cleanly across every channel — work enters the system without manual translation.'],
+      Scaling: ['Intake handles a broadening surface of channels and source types; new sources cost less to onboard.'],
+      Stabilizing: ['Intake is mature; ongoing changes are refinements rather than additions.'],
     },
   },
   {
@@ -111,25 +149,14 @@ const DOMAINS: DomainSpec[] = [
     orderIndex: 3,
     feedsInto: ['marketing', 'execution'],
     supports: ['reporting'],
+    entryRole: 'This domain transforms incoming records into qualification and routing decisions.',
     narratives: {
-      Foundational: [
-        'Lead handling is still componentized — ingestion, classification, and routing exist but do not yet talk to each other.',
-      ],
-      Emerging: [
-        'Lead systems are beginning to coordinate across intake and routing; scoring is consistent within a single pass.',
-      ],
-      Coordinated: [
-        'Leads move from intake to qualification to routing without manual intervention; enrichment is the current frontier.',
-      ],
-      Operational: [
-        'Lead intelligence runs the qualification → routing path reliably and feeds marketing + execution with consistent records.',
-      ],
-      Scaling: [
-        'Lead intelligence is expanding into attribution and segmented scoring; downstream surfaces consume the same signal.',
-      ],
-      Stabilizing: [
-        'Lead intelligence is mature; changes now focus on accuracy and model drift rather than coverage.',
-      ],
+      Foundational: ['Lead handling is still componentized — ingestion, classification, and routing exist but do not yet talk to each other.'],
+      Emerging: ['Lead systems are beginning to coordinate across intake and routing; scoring is consistent within a single pass.'],
+      Coordinated: ['Leads move from intake to qualification to routing without manual intervention; enrichment is the current frontier.'],
+      Operational: ['Lead intelligence runs the qualification → routing path reliably and feeds marketing + execution with consistent records.'],
+      Scaling: ['Lead intelligence is expanding into attribution and segmented scoring; downstream surfaces consume the same signal.'],
+      Stabilizing: ['Lead intelligence is mature; changes now focus on accuracy and model drift rather than coverage.'],
     },
   },
   {
@@ -143,25 +170,14 @@ const DOMAINS: DomainSpec[] = [
     orderIndex: 4,
     feedsInto: ['execution'],
     supports: ['reporting'],
+    entryRole: 'This domain turns intelligence into outbound activity and engagement.',
     narratives: {
-      Foundational: [
-        'Marketing exists as individual surfaces — dashboards, campaign skeletons — but no orchestrated cadence yet.',
-      ],
-      Emerging: [
-        'Marketing operations exist but are still fragmented; the same content moves through more than one disconnected path.',
-      ],
-      Coordinated: [
-        'Marketing handoffs connect to lead intelligence and to execution; cadence runs but observability is uneven.',
-      ],
-      Operational: [
-        'Marketing operations run on schedule with lead intelligence in the loop; performance feeds back into prioritization.',
-      ],
-      Scaling: [
-        'Marketing surfaces are expanding across channels with shared instrumentation; reporting picks up new sources cleanly.',
-      ],
-      Stabilizing: [
-        'Marketing is operating at steady-state; ongoing work is content cadence rather than platform expansion.',
-      ],
+      Foundational: ['Marketing exists as individual surfaces — dashboards, campaign skeletons — but no orchestrated cadence yet.'],
+      Emerging: ['Marketing operations exist but are still fragmented; the same content moves through more than one disconnected path.'],
+      Coordinated: ['Marketing handoffs connect to lead intelligence and to execution; cadence runs but observability is uneven.'],
+      Operational: ['Marketing operations run on schedule with lead intelligence in the loop; performance feeds back into prioritization.'],
+      Scaling: ['Marketing surfaces are expanding across channels with shared instrumentation; reporting picks up new sources cleanly.'],
+      Stabilizing: ['Marketing is operating at steady-state; ongoing work is content cadence rather than platform expansion.'],
     },
   },
   {
@@ -175,25 +191,14 @@ const DOMAINS: DomainSpec[] = [
     ],
     orderIndex: 5,
     supports: ['reporting'],
+    entryRole: 'This domain acts on the decisions the rest of the system produces.',
     narratives: {
-      Foundational: [
-        'Execution is being scaffolded — pipelines exist on paper but the through-line is incomplete.',
-      ],
-      Emerging: [
-        'Execution can take a downstream signal and act on it for the simple cases; verification is still operator-driven.',
-      ],
-      Coordinated: [
-        'Execution systems are active but under-verified — work runs to completion, but the audit trail trails the work.',
-      ],
-      Operational: [
-        'Execution runs reliably across the documented paths; verification confirms outcomes without manual replay.',
-      ],
-      Scaling: [
-        'Execution is widening the set of work it can handle autonomously while staying inside the verification envelope.',
-      ],
-      Stabilizing: [
-        'Execution is mature; current focus is on resilience and edge-case verification, not new capability.',
-      ],
+      Foundational: ['Execution is being scaffolded — pipelines exist on paper but the through-line is incomplete.'],
+      Emerging: ['Execution can take a downstream signal and act on it for the simple cases; verification is still operator-driven.'],
+      Coordinated: ['Execution systems are active but under-verified — work runs to completion, but the audit trail trails the work.'],
+      Operational: ['Execution runs reliably across the documented paths; verification confirms outcomes without manual replay.'],
+      Scaling: ['Execution is widening the set of work it can handle autonomously while staying inside the verification envelope.'],
+      Stabilizing: ['Execution is mature; current focus is on resilience and edge-case verification, not new capability.'],
     },
   },
   {
@@ -206,45 +211,14 @@ const DOMAINS: DomainSpec[] = [
       'revenue', 'cost', 'optimization', 'ledger', 'event',
     ],
     orderIndex: 6,
+    entryRole: 'This domain consolidates operational visibility from every other area.',
     narratives: {
-      Foundational: [
-        'Reporting infrastructure exists in skeleton form — surfaces are wired but downstream of inconsistent inputs.',
-      ],
-      Emerging: [
-        'Reporting infrastructure is operational with limited downstream integration; the dashboards exist; trust is the gap.',
-      ],
-      Coordinated: [
-        'Reporting pulls from intake, lead, and marketing reliably; gaps remain on the execution side.',
-      ],
-      Operational: [
-        'Reporting has high confidence end-to-end — every domain is represented and the numbers reconcile.',
-      ],
-      Scaling: [
-        'Reporting is expanding into derived analytics and cohort views; the platform now reads its own performance.',
-      ],
-      Stabilizing: [
-        'Reporting is mature; ongoing work is presentation refinement, not data plumbing.',
-      ],
-    },
-  },
-  {
-    key: 'ai_intelligence',
-    label: 'AI & Intelligence',
-    icon: 'bi-cpu-fill',
-    keywords: [
-      'prompt', 'discovery', 'requirement', 'artifact', 'narrative',
-      'planner', 'decision', 'validation', 'parser', 'composer',
-      'inference', 'generation', 'classifier', 'extraction',
-    ],
-    orderIndex: 1,
-    supports: ['lead_intelligence', 'execution'],
-    narratives: {
-      Foundational: ['The intelligence engine has its first scaffolding; reasoning surfaces are not yet integrated.'],
-      Emerging:     ['The intelligence engine is producing prompts and artifacts; outputs are useful but still need review.'],
-      Coordinated:  ['Discovery, prompts, and artifact generation work in sequence; validation closes most loops.'],
-      Operational:  ['The intelligence engine runs reliably as the brain of the platform — every domain consumes its output.'],
-      Scaling:      ['The intelligence engine is widening its reasoning surface — more decision types, more validation depth.'],
-      Stabilizing:  ['The intelligence engine is mature; ongoing work is precision and reliability rather than new capability.'],
+      Foundational: ['Reporting infrastructure exists in skeleton form — surfaces are wired but downstream of inconsistent inputs.'],
+      Emerging: ['Reporting infrastructure is operational with limited downstream integration; the dashboards exist; trust is the gap.'],
+      Coordinated: ['Reporting pulls from intake, lead, and marketing reliably; gaps remain on the execution side.'],
+      Operational: ['Reporting has high confidence end-to-end — every domain is represented and the numbers reconcile.'],
+      Scaling: ['Reporting is expanding into derived analytics and cohort views; the platform now reads its own performance.'],
+      Stabilizing: ['Reporting is mature; ongoing work is presentation refinement, not data plumbing.'],
     },
   },
   {
@@ -257,6 +231,8 @@ const DOMAINS: DomainSpec[] = [
       'configuration', 'settings', 'ticket', 'strategy', 'implementation',
     ],
     orderIndex: 7,
+    supports: ['execution'],
+    entryRole: 'This domain governs project lifecycle and operator controls.',
     narratives: {
       Foundational: ['Project and admin scaffolding is in place but most controls are still manual.'],
       Emerging:     ['Project setup and admin paths are forming; basic operator control is available.'],
@@ -276,7 +252,9 @@ const DOMAINS: DomainSpec[] = [
       'advisory page', 'case studies', 'studies page', 'features page',
     ],
     orderIndex: 8,
+    feedsInto: ['intake'],
     supports: ['marketing'],
+    entryRole: 'This domain is the platform’s outward face — the surfaces the audience actually sees, and where the operational journey begins.',
     narratives: {
       Foundational: ['Public-facing pages exist but are still being filled in with content and structure.'],
       Emerging:     ['Public pages are present; some still need content polish or accessibility passes.'],
@@ -295,25 +273,14 @@ const DOMAINS: DomainSpec[] = [
       'progress', 'mentor', 'session', 'coaching',
     ],
     orderIndex: 9,
+    entryRole: 'This domain runs the cohort journey end to end — orthogonal to the build loop.',
     narratives: {
-      Foundational: [
-        'Student systems are early — the surface exists but cohort cadence has not yet taken hold.',
-      ],
-      Emerging: [
-        'Student lifecycle has its first cohort moving through; the operational rhythm is still finding its shape.',
-      ],
-      Coordinated: [
-        'Cohort movement is reliable across enrollment, progress, and coaching; gaps are at the lifecycle edges.',
-      ],
-      Operational: [
-        'Student lifecycle runs end-to-end with mentor cadence holding; the loop closes without manual reconciliation.',
-      ],
-      Scaling: [
-        'The student lifecycle is widening into more cohort types and richer mentor surfaces.',
-      ],
-      Stabilizing: [
-        'Student lifecycle is at steady-state; current work is content and outcome polish.',
-      ],
+      Foundational: ['Student systems are early — the surface exists but cohort cadence has not yet taken hold.'],
+      Emerging: ['Student lifecycle has its first cohort moving through; the operational rhythm is still finding its shape.'],
+      Coordinated: ['Cohort movement is reliable across enrollment, progress, and coaching; gaps are at the lifecycle edges.'],
+      Operational: ['Student lifecycle runs end-to-end with mentor cadence holding; the loop closes without manual reconciliation.'],
+      Scaling: ['The student lifecycle is widening into more cohort types and richer mentor surfaces.'],
+      Stabilizing: ['Student lifecycle is at steady-state; current work is content and outcome polish.'],
     },
   },
   {
@@ -322,6 +289,7 @@ const DOMAINS: DomainSpec[] = [
     icon: 'bi-three-dots',
     keywords: [],
     orderIndex: 99,
+    entryRole: 'Uncategorized operational activity that hasn’t found its domain yet.',
     narratives: {
       Foundational: ['Additional processes that have not yet been categorized — they live outside the named domains for now.'],
       Emerging:    ['Additional processes outside the named domains — early to call them a domain of their own.'],
@@ -347,10 +315,20 @@ export interface DomainBucket {
   lifecycleState: LifecycleState;
   /** Authored prose; never templated with raw %. */
   narrative: string;
-  /** One-line relationship hint (or null if no meaningful relationship). */
-  relationshipHint: string | null;
-  /** Whether the domain feeds another visible domain. */
+  /** Where this domain sits in the operational journey. */
+  entryRole: string;
+  /** Downstream flow targets (this domain feeds these), present-only. */
   feedsInto: DomainKey[];
+  /** Upstream flow sources (these feed this domain), present-only. */
+  receivesFrom: DomainKey[];
+  /** Cross-cut targets this domain supports, present-only. */
+  supports: DomainKey[];
+  /** Structured, clickable relationships — feeds / receives from / supports / supported by. */
+  relationships: DomainRelationship[];
+  /** How many downstream domains depend on this one (feeds + supports). */
+  downstreamCount: number;
+  /** Operational-pressure sentence — e.g. "Constrained by early-stage Intake." Null when none. */
+  pressureNote: string | null;
 }
 
 const EMPTY_DOMAIN_KEYS = DOMAINS.map(d => d.key);
@@ -364,8 +342,6 @@ export function lifecycleStateFor(processes: BPLike[], completionPercent: number
   if (total === 0) return 'Foundational';
   const usable = processes.filter(p => p.usability?.usable).length;
   const usableRatio = usable / total;
-  // Combine completion + usability — both must lift to advance the state.
-  // Heuristic, intentionally simple. Stable; ordered.
   if (completionPercent >= 90 && usableRatio >= 0.8) return 'Stabilizing';
   if (completionPercent >= 75 && usableRatio >= 0.6) return 'Scaling';
   if (completionPercent >= 55 && usableRatio >= 0.4) return 'Operational';
@@ -374,11 +350,9 @@ export function lifecycleStateFor(processes: BPLike[], completionPercent: number
   return 'Foundational';
 }
 
-/** Stable index-pick of a narrative variant based on the bucket key. */
 function pickNarrative(spec: DomainSpec, state: LifecycleState): string {
   const variants = spec.narratives[state];
   if (!variants || variants.length === 0) return '';
-  // Deterministic — same domain always picks same variant across reloads.
   let hash = 0;
   for (const c of spec.key) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
   return variants[hash % variants.length];
@@ -394,10 +368,6 @@ function classifyBP(bp: BPLike): DomainKey {
       }
     }
   }
-  // Fallback: BPs explicitly flagged as a frontend page belong in Public
-  // Pages even when their name doesn't match a page-keyword. The keyword
-  // match still wins when it's a strong signal (e.g. "Marketing Dashboard
-  // Page" → Marketing, not Public Pages).
   if (!best && (bp.is_page_bp || bp.source === 'frontend_page')) {
     return 'public_pages';
   }
@@ -410,8 +380,7 @@ export function classifyBPs(processes: BPLike[]): DomainBucket[] {
   const groups = new Map<DomainKey, BPLike[]>();
   for (const k of EMPTY_DOMAIN_KEYS) groups.set(k, []);
   for (const p of visible) {
-    const key = classifyBP(p);
-    groups.get(key)!.push(p);
+    groups.get(classifyBP(p))!.push(p);
   }
 
   const buckets: DomainBucket[] = DOMAINS
@@ -439,32 +408,85 @@ export function classifyBPs(processes: BPLike[]): DomainBucket[] {
         usableCount,
         lifecycleState,
         narrative,
-        relationshipHint: null as string | null,
-        feedsInto: spec.feedsInto || [],
+        entryRole: spec.entryRole,
+        feedsInto: (spec.feedsInto || []),
+        receivesFrom: [] as DomainKey[],
+        supports: (spec.supports || []),
+        relationships: [] as DomainRelationship[],
+        downstreamCount: 0,
+        pressureNote: null as string | null,
       };
     })
     .filter(b => b.processes.length > 0)
     .sort((a, b) => a.orderIndex - b.orderIndex);
 
-  // Decorate with relationship hints — only mention a downstream domain
-  // that's actually present in the current architecture, so the hint
-  // never references something the operator doesn't see.
   const presentKeys = new Set(buckets.map(b => b.key));
+  const byKey = new Map(buckets.map(b => [b.key, b]));
+
+  // ── Prune relationship edges to present-only domains ──
   for (const b of buckets) {
-    const visibleDownstream = b.feedsInto.filter(k => presentKeys.has(k));
-    if (visibleDownstream.length === 1) {
-      b.relationshipHint = `Feeds ${DOMAIN_LABELS[visibleDownstream[0]]}`;
-    } else if (visibleDownstream.length > 1) {
-      const labels = visibleDownstream.map(k => DOMAIN_LABELS[k]);
-      b.relationshipHint = `Feeds ${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+    b.feedsInto = b.feedsInto.filter(k => presentKeys.has(k));
+    b.supports = b.supports.filter(k => presentKeys.has(k));
+  }
+
+  // ── Compute inverse edges: receivesFrom = who feeds me ──
+  for (const b of buckets) {
+    for (const target of b.feedsInto) {
+      const t = byKey.get(target);
+      if (t) t.receivesFrom.push(b.key);
+    }
+  }
+
+  // ── Build structured, clickable relationship list per domain ──
+  for (const b of buckets) {
+    const rels: DomainRelationship[] = [];
+    for (const k of b.receivesFrom) rels.push({ verb: 'receives from', targetKey: k, targetLabel: DOMAIN_LABELS[k] });
+    for (const k of b.feedsInto)    rels.push({ verb: 'feeds', targetKey: k, targetLabel: DOMAIN_LABELS[k] });
+    for (const k of b.supports)     rels.push({ verb: 'supports', targetKey: k, targetLabel: DOMAIN_LABELS[k] });
+    // "supported by" — who supports me
+    for (const other of buckets) {
+      if (other.supports.includes(b.key)) {
+        rels.push({ verb: 'supported by', targetKey: other.key, targetLabel: DOMAIN_LABELS[other.key] });
+      }
+    }
+    b.relationships = rels;
+    b.downstreamCount = b.feedsInto.length + b.supports.length;
+  }
+
+  // ── Operational-pressure narrative ──
+  // A domain is "constrained" when an upstream it depends on is weaker
+  // than it is — the operator should understand the bottleneck moves
+  // downstream. Editorial language, no red alerts.
+  for (const b of buckets) {
+    const upstreamKeys = [
+      ...b.receivesFrom,
+      ...buckets.filter(o => o.supports.includes(b.key)).map(o => o.key),
+    ];
+    let weakest: DomainBucket | null = null;
+    for (const k of upstreamKeys) {
+      const u = byKey.get(k);
+      if (!u) continue;
+      if (STATE_INDEX[u.lifecycleState] <= 1) { // Foundational or Emerging
+        if (!weakest || STATE_INDEX[u.lifecycleState] < STATE_INDEX[weakest.lifecycleState]) {
+          weakest = u;
+        }
+      }
+    }
+    if (weakest) {
+      b.pressureNote = `Constrained by early-stage ${weakest.label} upstream — strengthening that area unblocks this one.`;
+    } else if (b.downstreamCount > 0 && STATE_INDEX[b.lifecycleState] <= 1) {
+      // This domain is weak AND others depend on it → it's the bottleneck.
+      b.pressureNote = `Early-stage maturity here creates downstream friction for the ${b.downstreamCount} area${b.downstreamCount === 1 ? '' : 's'} that depend on it.`;
     }
   }
 
   return buckets;
 }
 
-/** Canonical ordered flow labels — used by the operational flow strip. */
-export function buildFlowStops(buckets: DomainBucket[]): { label: string; state: LifecycleState }[] {
+/** Canonical ordered flow stops — used by the operational flow strip. */
+export function buildFlowStops(
+  buckets: DomainBucket[],
+): { key: DomainKey; label: string; state: LifecycleState; bpCount: number }[] {
   const ordered = DOMAINS
     .filter(d => d.key !== 'other')
     .sort((a, b) => a.orderIndex - b.orderIndex);
@@ -472,7 +494,9 @@ export function buildFlowStops(buckets: DomainBucket[]): { label: string; state:
   return ordered
     .map(spec => {
       const b = byKey.get(spec.key);
-      return b ? { label: spec.label, state: b.lifecycleState } : null;
+      return b
+        ? { key: spec.key, label: spec.label, state: b.lifecycleState, bpCount: b.processes.length }
+        : null;
     })
-    .filter((x): x is { label: string; state: LifecycleState } => x !== null);
+    .filter((x): x is { key: DomainKey; label: string; state: LifecycleState; bpCount: number } => x !== null);
 }

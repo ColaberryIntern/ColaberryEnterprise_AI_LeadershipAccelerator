@@ -1,24 +1,26 @@
 /**
- * BPDomainSurface — operational architecture view.
+ * BPDomainSurface — operational architecture view with causality.
  *
- * BP V2 Operational Architecture Sprint, 2026-05-12.
+ * Operational Causality Sprint, 2026-05-12.
  *
- * The surface reads like a map of business operations, not a list of
- * categorized processes. Sequence:
+ * The surface reads like a navigable map of business operations — the
+ * operator can trace how operational pressure moves through the system.
  *
  *   1. Editorial overview headline (authored, not "X% complete")
- *   2. Operational flow strip — Intake → Lead → Marketing → Execution → Reporting,
- *      with the lifecycle state of each stop visible above the line
- *   3. Domain rows — softer monochrome icons, BP count, lifecycle state badge,
- *      authored narrative, momentum chip, relationship hint
- *   4. First populated domain auto-expanded so the operator immediately sees
- *      actual BP substance, not just category wrappers
- *   5. Expanded BPs: name + req count + tone word (no metric-bar grids)
+ *   2. Operational flow strip — CLICKABLE: each stop carries a BP count
+ *      and navigates to its domain (expand + smooth-scroll + pulse)
+ *   3. Domain rows — softer monochrome icons, BP count, lifecycle state,
+ *      authored narrative, momentum chip, CLICKABLE relationship chips
+ *      (receives from / feeds / supports), and an operational-pressure note
+ *   4. Expanded domain — entry/exit role + downstream-effect summary +
+ *      the BP list
+ *   5. First populated domain auto-expanded
  *   6. Power-user escape hatch: "Show full inventory" reveals the legacy grid
  *
- * Reuses the existing PortalBusinessProcessDetail modal unchanged.
+ * Not a graph engine — editorial relationship UX. Clicking any
+ * relationship or flow stop expands + scrolls + pulses the target domain.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import {
   classifyBPs,
@@ -26,6 +28,8 @@ import {
   type DomainBucket,
   type BPLike,
   type LifecycleState,
+  type DomainKey,
+  type DomainRelationship,
 } from '../../utils/bpDomainClassifier';
 import { useDomainMomentum, type Direction } from '../../hooks/useDomainMomentum';
 import BPDetailV2 from './BPDetailV2';
@@ -34,11 +38,11 @@ import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
 // Lifecycle state → tone. Softer than completion% — no hot reds.
 const LIFECYCLE_TONE: Record<LifecycleState, { fg: string; bg: string }> = {
   Foundational: { fg: 'var(--color-text-light)', bg: 'rgba(113,128,150,0.08)' },
-  Emerging:     { fg: '#b45309', bg: 'rgba(245,158,11,0.10)' },     // muted amber
-  Coordinated:  { fg: '#1d4ed8', bg: 'rgba(59,130,246,0.10)' },     // muted blue
-  Operational:  { fg: '#15803d', bg: 'rgba(56,161,105,0.12)' },     // muted green
-  Scaling:      { fg: '#0e7490', bg: 'rgba(8,145,178,0.12)' },      // muted teal
-  Stabilizing:  { fg: '#6d28d9', bg: 'rgba(139,92,246,0.10)' },     // muted purple
+  Emerging:     { fg: '#b45309', bg: 'rgba(245,158,11,0.10)' },
+  Coordinated:  { fg: '#1d4ed8', bg: 'rgba(59,130,246,0.10)' },
+  Operational:  { fg: '#15803d', bg: 'rgba(56,161,105,0.12)' },
+  Scaling:      { fg: '#0e7490', bg: 'rgba(8,145,178,0.12)' },
+  Stabilizing:  { fg: '#6d28d9', bg: 'rgba(139,92,246,0.10)' },
 };
 
 const MOMENTUM_TONE: Record<Direction, { fg: string; bg: string; symbol: string }> = {
@@ -48,6 +52,14 @@ const MOMENTUM_TONE: Record<Direction, { fg: string; bg: string; symbol: string 
   'first-visit': { fg: 'var(--color-text-light)', bg: 'transparent', symbol: '·' },
 };
 
+// Relationship verb → directional glyph + tone.
+const REL_STYLE: Record<DomainRelationship['verb'], { glyph: string; fg: string }> = {
+  'receives from': { glyph: '↑', fg: '#0e7490' },  // upstream
+  'feeds':         { glyph: '↓', fg: '#1d4ed8' },  // downstream
+  'supports':      { glyph: '→', fg: '#15803d' },  // cross-cut out
+  'supported by':  { glyph: '←', fg: '#6d28d9' },  // cross-cut in
+};
+
 const BPDomainSurface: React.FC = () => {
   const [processes, setProcesses] = useState<BPLike[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +67,11 @@ const BPDomainSurface: React.FC = () => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showFullInventory, setShowFullInventory] = useState(false);
   const [autoExpanded, setAutoExpanded] = useState(false);
+  const [pulsedKey, setPulsedKey] = useState<DomainKey | null>(null);
+
+  // Refs to each domain row <section> so clicks on the flow strip or a
+  // relationship chip can smooth-scroll the target into view.
+  const rowRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
     setLoading(true);
@@ -68,8 +85,23 @@ const BPDomainSurface: React.FC = () => {
   const momentum = useDomainMomentum(buckets);
   const flowStops = useMemo(() => buildFlowStops(buckets), [buckets]);
 
-  // Auto-expand the first populated domain on first paint. Only runs once
-  // per mount; subsequent re-renders honor the operator's explicit choices.
+  // Navigate to a domain: expand it, smooth-scroll it into view, pulse it.
+  // Used by the flow strip stops AND every relationship chip.
+  const navigateToDomain = useCallback((key: DomainKey) => {
+    setExpanded(e => ({ ...e, [key]: true }));
+    setPulsedKey(key);
+    // Let the expand paint, then scroll.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        rowRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+    window.setTimeout(() => {
+      setPulsedKey(k => (k === key ? null : k));
+    }, 1700);
+  }, []);
+
+  // Auto-expand the first populated domain on first paint.
   useEffect(() => {
     if (autoExpanded) return;
     if (buckets.length === 0) return;
@@ -80,10 +112,7 @@ const BPDomainSurface: React.FC = () => {
   const overall = useMemo(() => {
     const total = buckets.reduce((s, b) => s + b.totalRequirements, 0);
     const matched = buckets.reduce((s, b) => s + b.matchedRequirements, 0);
-    return {
-      total, matched,
-      pct: total > 0 ? Math.round((matched / total) * 100) : 0,
-    };
+    return { total, matched, pct: total > 0 ? Math.round((matched / total) * 100) : 0 };
   }, [buckets]);
 
   if (loading) {
@@ -150,13 +179,13 @@ const BPDomainSurface: React.FC = () => {
         </div>
       </header>
 
-      {/* ─── Operational flow strip ─── */}
+      {/* ─── Operational flow strip — CLICKABLE ─── */}
       {flowStops.length >= 2 && (
         <div
-          aria-label="Operational flow"
+          aria-label="Operational flow — click a stop to jump to its domain"
           style={{
             display: 'flex', alignItems: 'flex-start', gap: 0,
-            padding: '0.95rem 1.1rem', marginBottom: '1.5rem',
+            padding: '0.95rem 1.1rem', marginBottom: '0.5rem',
             background: 'white',
             border: '1px solid var(--color-border)',
             borderRadius: 8,
@@ -166,8 +195,19 @@ const BPDomainSurface: React.FC = () => {
           {flowStops.map((stop, i) => {
             const tone = LIFECYCLE_TONE[stop.state];
             return (
-              <React.Fragment key={stop.label}>
-                <div style={{ minWidth: 0, flex: '0 0 auto', textAlign: 'left' }}>
+              <React.Fragment key={stop.key}>
+                <button
+                  type="button"
+                  onClick={() => navigateToDomain(stop.key)}
+                  title={`Jump to ${stop.label}`}
+                  style={{
+                    minWidth: 0, flex: '0 0 auto', textAlign: 'left',
+                    background: 'transparent', border: 'none', padding: '2px 4px',
+                    borderRadius: 4, cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-alt)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
                   <div style={{
                     fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
                     color: tone.fg, fontWeight: 600, marginBottom: 3,
@@ -180,7 +220,13 @@ const BPDomainSurface: React.FC = () => {
                   }}>
                     {stop.label}
                   </div>
-                </div>
+                  <div style={{
+                    fontSize: 10.5, color: 'var(--color-text-light)', marginTop: 1,
+                    fontWeight: 500,
+                  }}>
+                    {stop.bpCount} BP{stop.bpCount === 1 ? '' : 's'}
+                  </div>
+                </button>
                 {i < flowStops.length - 1 && (
                   <div
                     aria-hidden="true"
@@ -200,6 +246,12 @@ const BPDomainSurface: React.FC = () => {
           })}
         </div>
       )}
+      <div style={{
+        fontSize: 11, color: 'var(--color-text-light)', fontStyle: 'italic',
+        marginBottom: '1.5rem', paddingLeft: 2,
+      }}>
+        Click any stop above — or any relationship below — to jump to that domain.
+      </div>
 
       {/* ─── Domain stack ─── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
@@ -209,7 +261,10 @@ const BPDomainSurface: React.FC = () => {
             bucket={b}
             momentum={momentum[b.key]}
             isExpanded={!!expanded[b.key]}
+            isPulsing={pulsedKey === b.key}
+            registerRef={(el) => { rowRefs.current[b.key] = el; }}
             onToggle={() => setExpanded(e => ({ ...e, [b.key]: !e[b.key] }))}
+            onNavigate={navigateToDomain}
             onPickBp={setSelectedBp}
           />
         ))}
@@ -238,7 +293,7 @@ const BPDomainSurface: React.FC = () => {
         </button>
       </div>
 
-      {/* ─── BP detail modal (reuses existing component) ─── */}
+      {/* ─── BP detail modal ─── */}
       {selectedBp && (
         <div
           style={{
@@ -272,53 +327,53 @@ const DomainRow: React.FC<{
   bucket: DomainBucket;
   momentum: { delta: number | null; direction: Direction; label: string; minutesSince: number | null } | undefined;
   isExpanded: boolean;
+  isPulsing: boolean;
+  registerRef: (el: HTMLElement | null) => void;
   onToggle: () => void;
+  onNavigate: (key: DomainKey) => void;
   onPickBp: (id: string) => void;
-}> = ({ bucket, momentum, isExpanded, onToggle, onPickBp }) => {
+}> = ({ bucket, momentum, isExpanded, isPulsing, registerRef, onToggle, onNavigate, onPickBp }) => {
   const tone = LIFECYCLE_TONE[bucket.lifecycleState];
   const mom = momentum || { delta: null, direction: 'first-visit' as Direction, label: 'baseline', minutesSince: null };
   const momTone = MOMENTUM_TONE[mom.direction];
 
+  const downstreamSummary = bucket.downstreamCount === 0
+    ? 'No downstream dependencies yet'
+    : `${bucket.downstreamCount} operational area${bucket.downstreamCount === 1 ? '' : 's'} depend${bucket.downstreamCount === 1 ? 's' : ''} on this domain`;
+
   return (
     <section
+      ref={registerRef}
+      className={isPulsing ? 'ws-domain-pulse' : undefined}
       style={{
         background: 'white',
         border: '1px solid var(--color-border)',
         borderRadius: 8, overflow: 'hidden',
       }}
     >
+      {/* Header — toggles expand. Contains only non-interactive content. */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={isExpanded}
         style={{
           width: '100%', background: 'transparent', border: 'none',
-          padding: '1rem 1.15rem', textAlign: 'left', cursor: 'pointer',
+          padding: '1rem 1.15rem 0.7rem', textAlign: 'left', cursor: 'pointer',
           display: 'flex', alignItems: 'flex-start', gap: 14, minWidth: 0,
         }}
         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-alt)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
       >
-        {/* Icon — softer, monochrome */}
         <i
           className={`bi ${bucket.icon}`}
           aria-hidden="true"
-          style={{
-            fontSize: 18,
-            color: 'var(--color-text-light)',
-            opacity: 0.7,
-            flexShrink: 0, width: 22, marginTop: 2,
-          }}
+          style={{ fontSize: 18, color: 'var(--color-text-light)', opacity: 0.7, flexShrink: 0, width: 22, marginTop: 2 }}
         ></i>
 
-        {/* Main content */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Title row — name · count · lifecycle pill · momentum chip */}
+          {/* Title row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-            <span style={{
-              fontSize: 15, fontWeight: 600, color: 'var(--color-primary)',
-              letterSpacing: '-0.005em',
-            }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-primary)', letterSpacing: '-0.005em' }}>
               {bucket.label}
             </span>
             <span style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontWeight: 500 }}>
@@ -340,43 +395,97 @@ const DomainRow: React.FC<{
                 <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1 }}>{momTone.symbol}</span>
                 {mom.label}
                 {mom.delta != null && Math.abs(mom.delta) >= 1 && (
-                  <span style={{ opacity: 0.8, marginLeft: 2 }}>
-                    {mom.delta > 0 ? '+' : ''}{mom.delta}
-                  </span>
+                  <span style={{ opacity: 0.8, marginLeft: 2 }}>{mom.delta > 0 ? '+' : ''}{mom.delta}</span>
                 )}
               </span>
             )}
           </div>
 
           {/* Narrative */}
-          <div style={{
-            fontSize: 13, color: 'var(--color-text-light)', lineHeight: 1.6,
-            maxWidth: 720,
-          }}>
+          <div style={{ fontSize: 13, color: 'var(--color-text-light)', lineHeight: 1.6, maxWidth: 720 }}>
             {bucket.narrative}
           </div>
-
-          {/* Relationship hint */}
-          {bucket.relationshipHint && (
-            <div style={{
-              fontSize: 11, color: 'var(--color-text-light)',
-              marginTop: 6, fontStyle: 'italic', opacity: 0.85,
-            }}>
-              <i className="bi bi-arrow-right-short me-1" style={{ fontSize: 12 }}></i>
-              {bucket.relationshipHint}
-            </div>
-          )}
         </div>
 
-        {/* Chevron */}
         <i
           className={`bi ${isExpanded ? 'bi-chevron-up' : 'bi-chevron-down'}`}
           style={{ fontSize: 12, color: 'var(--color-text-light)', flexShrink: 0, marginTop: 5 }}
         ></i>
       </button>
 
+      {/* Relationship strip — always visible, CLICKABLE chips. Sits outside
+          the toggle button so chip clicks navigate instead of toggling. */}
+      {(bucket.relationships.length > 0 || bucket.pressureNote) && (
+        <div style={{
+          padding: '0 1.15rem 0.85rem 3.4rem',
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {bucket.relationships.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {bucket.relationships.map((rel, idx) => {
+                const rs = REL_STYLE[rel.verb];
+                return (
+                  <button
+                    key={`${rel.verb}:${rel.targetKey}:${idx}`}
+                    type="button"
+                    onClick={() => onNavigate(rel.targetKey)}
+                    title={`${bucket.label} ${rel.verb} ${rel.targetLabel} — click to jump`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)',
+                      borderRadius: 999, padding: '2px 9px 2px 7px',
+                      fontSize: 10.5, color: 'var(--color-text-light)', cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = rs.fg;
+                      e.currentTarget.style.color = 'var(--color-text)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--color-border)';
+                      e.currentTarget.style.color = 'var(--color-text-light)';
+                    }}
+                  >
+                    <span style={{ color: rs.fg, fontWeight: 700, fontSize: 11 }}>{rs.glyph}</span>
+                    <span>{rel.verb} <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{rel.targetLabel}</strong></span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {bucket.pressureNote && (
+            <div style={{
+              fontSize: 11, color: '#92400e', fontStyle: 'italic',
+              display: 'flex', alignItems: 'flex-start', gap: 5, lineHeight: 1.5,
+            }}>
+              <i className="bi bi-exclamation-circle" style={{ fontSize: 11, marginTop: 2, flexShrink: 0, opacity: 0.8 }}></i>
+              <span>{bucket.pressureNote}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Expanded — operational role + downstream summary + BP list */}
       {isExpanded && (
         <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-alt)' }}>
+          <div style={{
+            padding: '0.8rem 1.4rem 0.7rem 3.4rem',
+            borderBottom: '1px solid var(--color-border)',
+          }}>
+            <div style={{
+              fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+              color: 'var(--color-text-light)', fontWeight: 600, marginBottom: 4,
+            }}>
+              Operational role
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--color-text)', lineHeight: 1.6, maxWidth: 680 }}>
+              {bucket.entryRole}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', marginTop: 5 }}>
+              <i className="bi bi-diagram-2 me-1" style={{ fontSize: 11 }}></i>
+              {downstreamSummary}.
+            </div>
+          </div>
           <div style={{
             padding: '0.55rem 1.4rem 0.4rem 3.4rem',
             fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -398,13 +507,8 @@ const BPLine: React.FC<{ bp: BPLike; onPick: () => void }> = ({ bp, onPick }) =>
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
   const usable = bp.usability?.usable === true;
-  // Soft per-row word — never red. Calmer than the metric-bar grid.
   const word = usable ? 'usable' : pct >= 50 ? 'forming' : pct > 0 ? 'early' : 'unbuilt';
-  const wordColor = usable
-    ? '#15803d'
-    : pct >= 50
-      ? '#1d4ed8'
-      : 'var(--color-text-light)';
+  const wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
   return (
     <button
       type="button"
@@ -441,12 +545,9 @@ const BPLine: React.FC<{ bp: BPLike; onPick: () => void }> = ({ bp, onPick }) =>
 };
 
 function buildArchitectureHeadline(buckets: DomainBucket[], overallPct: number): string {
-  // Lead with a lifecycle-aware sentence that names a stand-out domain when
-  // one exists, otherwise an overall framing.
   const sorted = [...buckets].sort((a, b) => b.completionPercent - a.completionPercent);
   const top = sorted[0];
   const bottom = sorted[sorted.length - 1];
-
   if (top && bottom && top !== bottom && top.completionPercent - bottom.completionPercent >= 30) {
     return `${top.label} leads the architecture in maturity; ${bottom.label} is still being scaffolded.`;
   }
