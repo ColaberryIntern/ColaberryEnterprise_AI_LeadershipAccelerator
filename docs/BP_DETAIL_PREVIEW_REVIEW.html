@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BP Detail Live Preview — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>BP Detail Live Preview — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-12 to <strong>enterprise.colaberry.ai</strong> (commit
+    <code>ac5239e</code>). Operator request: "I want to see the frontend in the
+    BP detail so I can upgrade or critique." Done — Page BPs now embed the live
+    page inline with one-click critique + upgrade actions.
+  </p>
+
+  <div class="philosophy">
+    Clicking a Page BP used to show you a description and some status words.
+    Now it shows you the actual page — rendered live from production — so you can
+    look at it, then either pin issues in Critique or draft an upgrade brief,
+    without leaving the modal to go hunt for the URL.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Before / After ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">BP detail — before / after</span></h2>
+    <p>Same modal, same data. For Page BPs (those with a real
+       <code>frontend_route</code>), the detail now embeds the live page.</p>
+    <div class="pair">
+      <div style="background: #1a1a1a; border-radius: 8px; padding: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.1);">
+        <div style="background: white; padding: 18px; border-radius: 4px; font-size: 12px; min-height: 360px; color: #1f2937;">
+          <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: #6b7280; font-weight: 600;">Business process</div>
+          <div style="font-size: 19px; font-weight: 600; color: #1a365d; margin: 6px 0;">Program Page</div>
+          <div style="margin-bottom: 14px;"><span style="background: rgba(113,128,150,0.08); color: #6b7280; padding: 2px 7px; border-radius: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600;">Foundational</span> <span style="color: #6b7280; font-size: 11.5px; margin-left: 6px;">No requirements yet</span></div>
+          <div style="font-size: 13px; color: #1f2937; line-height: 1.6; margin-bottom: 16px;">Frontend page at /program. Add UX requirements to improve this page. Program Page is still being scaffolded — the structure is in place but the through-line is incomplete.</div>
+          <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; font-weight: 600; margin-bottom: 8px;">Where it stands</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px;">
+            <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px;"><div style="font-size: 10px; color: #15803d; font-weight: 600;">In place</div><div style="font-size: 11px; color: #1f2937;">• Frontend surface</div></div>
+            <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px;"><div style="font-size: 10px; color: #6b7280; font-weight: 600;">Still needed</div><div style="font-size: 11px; color: #1f2937;">• Backend implementation<br>• Agent / autonomous layer</div></div>
+          </div>
+          <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; font-weight: 600;">Maturity</div>
+          <div style="margin: 8px 0 14px; color: #6b7280; font-size: 11px;">● ─ ○ ─ ○ ─ ○ ─ ○  &nbsp; L1 · Prototype</div>
+          <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; font-weight: 600;">Next steps</div>
+          <div style="display: flex; gap: 6px; margin-top: 8px;">
+            <span style="font-size: 10px; padding: 5px 9px; border: 1px solid #e5e7eb; border-radius: 4px;">Generate a backend prompt</span>
+            <span style="font-size: 10px; padding: 5px 9px; border: 1px solid #e5e7eb; border-radius: 4px;">Generate a UI prompt</span>
+            <span style="font-size: 10px; padding: 5px 9px; border: 1px solid #e5e7eb; border-radius: 4px;">Generate an agent prompt</span>
+          </div>
+        </div>
+        <div style="color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center;">BEFORE · description + status words only · no way to see the actual page · "Generate a UI prompt" generic label</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-14-bp-detail-preview/01-program-page-preview.png" alt="Program Page BP detail with embedded live preview iframe">
+        <div class="caption">AFTER · live /program page embedded in a 420px iframe · "Open /program" + "Critique this page" actions · "Generate upgrade prompt" relabel</div>
+      </div>
+    </div>
+    <div class="what-shipped">
+      <strong>What's new in the modal — only for Page BPs (frontend_route set):</strong>
+      <ul>
+        <li><strong>Live preview iframe</strong> — 420px tall, renders the actual production page at <code>frontend_route</code>. Loading spinner while it fetches, fades in on <code>onLoad</code>. Sandboxed (<code>allow-same-origin allow-scripts allow-forms allow-popups</code>).</li>
+        <li><strong>"Open <code>/route</code>"</strong> ↗ link — opens the page in a new tab for full-size inspection.</li>
+        <li><strong>"Critique this page"</strong> primary button — seeds <code>sessionStorage</code> with <code>critique:autoOpenRoute</code> + <code>critique:autoOpenBpId</code> + <code>critique:autoOpenAt</code>, closes the modal, navigates to <code>/portal/visual-workspace</code>.</li>
+        <li><strong>"Generate a UI prompt" → "Generate upgrade prompt"</strong> — the Next Steps button relabels for Page BPs, with redesign-oriented help text. Same backend endpoint (<code>generatePrompt</code> with <code>target=frontend_exposure</code>).</li>
+        <li>Italic explainer ties the two actions together: critique to pin issues, upgrade prompt to draft a redesign brief.</li>
+        <li>Non-Page BPs render <em>identically to before</em> — the preview section only appears when <code>frontend_route</code> is truthy.</li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 This is what I wanted</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Close; iterate</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="preview"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Two pages, real renders ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Two pages — real production renders inline</span></h2>
+    <p>The iframe is the live production surface, not a screenshot. Whatever
+       is deployed is what you see in the BP detail.</p>
+    <div class="pair">
+      <div class="screenshot">
+        <img src="screenshots/2026-05-14-bp-detail-preview/01-program-page-preview.png" alt="Program Page detail">
+        <div class="caption">Program Page → <code>/program</code> · "The 3-Week Enterprise AI Execution Journey" hero rendered live inside the modal</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-14-bp-detail-preview/02-pricing-page-preview.png" alt="Pricing Page detail">
+        <div class="caption">Pricing Page → <code>/pricing</code> · "Executive Accelerator Pricing" hero rendered live · same modal, different route</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the iframe approach</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Live iframe is right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Prefer a static screenshot (faster, no JS)</label>
+      <label><input type="radio" name="v2" value="cut">✕ Drop the embed</label>
+      <textarea placeholder="Notes…" data-notes="iframe"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Which BPs get a preview ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Which BPs get a preview — and the honest data gap</span></h2>
+    <p>The preview renders when the BP has a real <code>frontend_route</code>.
+       Auditing production showed two kinds of "page" BP:</p>
+    <table>
+      <tr><th>Kind</th><th>source</th><th>frontend_route</th><th>Gets a preview?</th><th>Examples</th></tr>
+      <tr>
+        <td><strong>Route-tree pages</strong></td>
+        <td><code>frontend_page</code></td>
+        <td><span class="badge badge-good">set</span> (<code>/program</code>, <code>/pricing</code>, <code>/enroll</code>, <code>/contact</code>, <code>/sponsorship</code>)</td>
+        <td><span class="badge badge-good">YES</span></td>
+        <td>Program Page, Pricing Page, Enroll Page, Contact Page, Sponsorship Page</td>
+      </tr>
+      <tr>
+        <td><strong>Brownfield-discovered</strong></td>
+        <td><code>brownfield_discovered</code></td>
+        <td><span class="badge badge-danger">null</span></td>
+        <td><span class="badge badge-warn">NO (correctly)</span></td>
+        <td>AI Architect Landing Page, AI Workforce Designer Page, Agency Partner Page, Alumni Champion Page, Advisory Page, Case Studies Page</td>
+      </tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Why the brownfield BPs don't preview — and why that's correct behavior:</strong>
+      <ul>
+        <li>~34 BPs are <em>named</em> like pages but were discovered by the brownfield requirement-extraction process from documents — not from the actual route tree. They carry no <code>frontend_route</code>.</li>
+        <li>The component does the right thing: it only embeds an iframe when there's a real route to embed. No route → no preview section → the modal renders exactly as it did before.</li>
+        <li><strong>The real fix is upstream</strong>: the brownfield discovery should link these named-page BPs to their actual routes (e.g. "AI Architect Landing Page" → some <code>/ai-architect</code> route that exists in the codebase). That's a data-quality task for the discovery engine, not the detail modal.</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible follow-ups:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="brownfield-route-link">Backfill <code>frontend_route</code> on brownfield page BPs by fuzzy-matching names to the route tree</label></li>
+        <li><label><input type="checkbox" data-issue="preview-fallback">When a page BP has no route, show "no route linked — connect one" affordance instead of just hiding the section</label></li>
+        <li><label><input type="checkbox" data-issue="preview-non-page">Show a route preview for non-page BPs too when <code>implementation_links</code> points at a frontend file</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the data gap</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Correct behavior; fix discovery upstream later</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Backfill the routes now</label>
+      <label><input type="radio" name="v3" value="cut">✕ Different approach</label>
+      <textarea placeholder="Notes…" data-notes="datagap"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Critique handoff ─────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Critique handoff — what's wired, what's pending</span></h2>
+    <p>"Critique this page" seeds the handoff but the Critique surface
+       pickup is a follow-up.</p>
+    <table>
+      <tr><th>Step</th><th>Status</th></tr>
+      <tr><td>"Critique this page" button writes <code>critique:autoOpenRoute</code> / <code>autoOpenBpId</code> / <code>autoOpenAt</code> to sessionStorage</td><td><span class="badge badge-good">SHIPPED</span></td></tr>
+      <tr><td>Button closes the modal + navigates to <code>/portal/visual-workspace</code></td><td><span class="badge badge-good">SHIPPED</span></td></tr>
+      <tr><td>VisualWorkspacePage reads the hint + auto-creates / pre-selects a session for that route</td><td><span class="badge badge-warn">PENDING</span> — next sprint; the hint is in sessionStorage waiting to be consumed</td></tr>
+    </table>
+    <div class="what-shipped">
+      <strong>Why ship the hint before the pickup:</strong> the seed is harmless if unconsumed (just three sessionStorage keys), it makes the affordance discoverable now, and wiring the Critique-side pickup is a focused change that doesn't block this modal from being useful today (the operator can still pick the page manually in Critique).
+    </div>
+    <div class="verdict">
+      <strong>Your verdict on the handoff staging</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Fine to stage</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Wire the pickup now</label>
+      <label><input type="radio" name="v4" value="cut">✕ Cut the button until pickup exists</label>
+      <textarea placeholder="Notes…" data-notes="handoff"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — No-login token ─────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Bonus: no-login token for tooling</span></h2>
+    <p>The 7-day JWT in <code>scripts/.ali_jwt.txt</code> expired mid-session and
+       blocked screenshot capture. Operator asked: "I don't want to have to login."</p>
+    <div class="what-shipped">
+      <strong>Fixed without a deploy:</strong>
+      <ul>
+        <li>Minted a fresh participant JWT directly from the backend container — ran an inline <code>node</code> script via <code>docker compose exec</code> that found the <code>ali@colaberry.com</code> enrollment and signed a token with <code>{ expiresIn: '365d' }</code> using the same payload shape + secret the magic-link flow uses.</li>
+        <li>Token written to the gitignored <code>scripts/.ali_jwt.txt</code> — <strong>expires 2027-05-14</strong>, verified against production (HTTP 200).</li>
+        <li>No login flow, no email magic-link, no deploy. The capture scripts work again for a year.</li>
+      </ul>
+    </div>
+    <div class="possible">
+      <strong>Possible follow-up:</strong>
+      <ul>
+        <li><label><input type="checkbox" data-issue="mint-script">Commit a proper <code>backend/src/scripts/mintToolingToken.ts</code> so next year's refresh is one clean command instead of an inline script</label></li>
+        <li><label><input type="checkbox" data-issue="auto-refresh">Have the capture scripts auto-refresh the token when it's within 7 days of expiry</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Your verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Good — 365d is fine</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Commit the mint script too</label>
+      <label><input type="radio" name="v5" value="cut">✕ Concerned about a long-lived token</label>
+      <textarea placeholder="Notes…" data-notes="token"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — File diff ─────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">File diff summary</span></h2>
+    <table>
+      <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+      <tr><td><code>frontend/src/components/project/BPDetailV2.tsx</code></td><td><span class="badge badge-info">MODIFIED</span> +147 / -24</td><td>Live preview iframe section · Critique handoff · Page-BP button relabel</td></tr>
+      <tr><td><code>scripts/captureBPDetailPreview.js</code></td><td><span class="badge badge-good">NEW</span></td><td>Captures the modal on Page BPs with real routes</td></tr>
+      <tr><td><code>scripts/.ali_jwt.txt</code></td><td><span class="badge badge-info">REFRESHED</span> (gitignored)</td><td>365-day tooling token, minted from backend</td></tr>
+      <tr><td><code>docs/BP_DETAIL_PREVIEW_REVIEW.html</code></td><td><span class="badge badge-good">NEW</span></td><td>This review</td></tr>
+    </table>
+    <p style="font-size: 12.5px; color: var(--muted);">
+      <strong>Commit:</strong> <code>ac5239e</code> · 1 frontend file · ~147 insertions. Zero backend changes — the token mint used the existing backend, no new code shipped to it.
+    </p>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Overall verdict ─────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Overall verdict</span></h2>
+    <p>You can now see the frontend inside the BP detail and act on it —
+       critique or upgrade — without leaving the modal. The only gap is the
+       ~34 brownfield-discovered page BPs that have no route linked yet;
+       that's a discovery-engine data fix, not a modal fix.</p>
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship; backfill brownfield routes next</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 7 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# BP Detail Live Preview Sprint — operator feedback\n\nFollowing commit ac5239e shipped 2026-05-12:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
