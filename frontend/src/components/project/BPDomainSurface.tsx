@@ -24,18 +24,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import {
   classifyBPs,
-  buildFlowStops,
   type DomainBucket,
   type BPLike,
   type DomainKey,
 } from '../../utils/bpDomainClassifier';
 import { useDomainMomentum } from '../../hooks/useDomainMomentum';
 import { useWorkspaceMemory } from '../../hooks/useWorkspaceMemory';
+import { useUnifiedProjectState } from '../../hooks/useUnifiedProjectState';
 import { computeSystemLeverage, leverageHeadline, buildLeverageSummary } from '../../utils/operationalLeverage';
-import { systemResilienceSentence, trustLabel } from '../../utils/structuralConfidence';
+import { systemResilienceSentence } from '../../utils/structuralConfidence';
+import { matchCoryPriorityDomain, whyThisMattersSentence } from '../../utils/coryPriorityMatcher';
+import { sortByOperationalPriority, downstreamKeysOf } from '../../utils/domainPrioritySorter';
 import BPDetailV2 from './BPDetailV2';
 import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
-import { LIFECYCLE_TONE, DomainRow } from './BPDomainSurfaceRows';
+import { DomainRow } from './BPDomainSurfaceRows';
 
 const BPDomainSurface: React.FC = () => {
   const [processes, setProcesses] = useState<BPLike[]>([]);
@@ -52,7 +54,7 @@ const BPDomainSurface: React.FC = () => {
 
   // Workspace memory — remember which domain the operator engaged so Cory
   // Home can orient them ("you are currently shaping Lead Intelligence").
-  const { update: updateMemory } = useWorkspaceMemory();
+  const { memory: workspaceMemory, update: updateMemory } = useWorkspaceMemory();
 
   useEffect(() => {
     setLoading(true);
@@ -62,9 +64,41 @@ const BPDomainSurface: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const buckets = useMemo(() => classifyBPs(processes), [processes]);
+  const naturalBuckets = useMemo(() => classifyBPs(processes), [processes]);
+
+  // Cory authority — pull the current next_action so the surface can
+  // surface the priority domain visually. Operational Priority Topology
+  // Sprint, 2026-05-15.
+  const { state: unifiedState } = useUnifiedProjectState({ pollMs: 60_000 });
+  const coryPriorityDomain = useMemo(
+    () => matchCoryPriorityDomain(unifiedState?.next_action, naturalBuckets),
+    [unifiedState?.next_action, naturalBuckets],
+  );
+  const focusDomainKey = (workspaceMemory.lastBpDomain as DomainKey | undefined) || null;
+
+  // Priority-sorted stack — Cory's priority domain first, then operator
+  // focus, then leverage descending, then canonical orderIndex.
+  const buckets = useMemo(
+    () => sortByOperationalPriority(naturalBuckets, { coryPriorityDomain, focusDomain: focusDomainKey }),
+    [naturalBuckets, coryPriorityDomain, focusDomainKey],
+  );
   const momentum = useDomainMomentum(buckets);
-  const flowStops = useMemo(() => buildFlowStops(buckets), [buckets]);
+
+  // Set of domain keys downstream of the Cory priority — those rows get
+  // a subtle muted-primary left border to make the linkage visible
+  // without drawing graph lines.
+  const priorityDownstream = useMemo(
+    () => downstreamKeysOf(coryPriorityDomain, buckets),
+    [coryPriorityDomain, buckets],
+  );
+  const priorityBucket = useMemo(
+    () => buckets.find(b => b.key === coryPriorityDomain) || null,
+    [buckets, coryPriorityDomain],
+  );
+  const whyMattersLine = useMemo(
+    () => whyThisMattersSentence(priorityBucket),
+    [priorityBucket],
+  );
 
   // System-level leverage — where in the operational system effort would
   // ripple furthest right now. Editorial reading of the classifier's
@@ -211,81 +245,11 @@ const BPDomainSurface: React.FC = () => {
         </div>
       </header>
 
-      {/* ─── Operational flow strip — CLICKABLE ─── */}
-      {flowStops.length >= 2 && (
-        <div
-          aria-label="Operational flow — click a stop to jump to its domain"
-          style={{
-            display: 'flex', alignItems: 'flex-start', gap: 0,
-            padding: '0.95rem 1.1rem', marginBottom: '0.5rem',
-            background: 'white',
-            border: '1px solid var(--color-border)',
-            borderRadius: 8,
-            overflowX: 'auto',
-          }}
-        >
-          {flowStops.map((stop, i) => {
-            const tone = LIFECYCLE_TONE[stop.state];
-            return (
-              <React.Fragment key={stop.key}>
-                <button
-                  type="button"
-                  onClick={() => navigateToDomain(stop.key)}
-                  title={`Jump to ${stop.label}`}
-                  style={{
-                    minWidth: 0, flex: '0 0 auto', textAlign: 'left',
-                    background: 'transparent', border: 'none', padding: '2px 4px',
-                    borderRadius: 4, cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-alt)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <div
-                    title={`Lifecycle state: ${stop.state}`}
-                    style={{
-                      fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
-                      color: tone.fg, fontWeight: 600, marginBottom: 3,
-                    }}>
-                    {trustLabel(stop.state)}
-                  </div>
-                  <div style={{
-                    fontSize: 12.5, color: 'var(--color-primary)', fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {stop.label}
-                  </div>
-                  <div style={{
-                    fontSize: 10.5, color: 'var(--color-text-light)', marginTop: 1,
-                    fontWeight: 500,
-                  }}>
-                    {stop.bpCount} BP{stop.bpCount === 1 ? '' : 's'}
-                  </div>
-                </button>
-                {i < flowStops.length - 1 && (
-                  <div
-                    aria-hidden="true"
-                    style={{
-                      flex: 1, minWidth: 28, alignSelf: 'center',
-                      marginTop: 14, padding: '0 6px',
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      color: 'var(--color-text-light)', opacity: 0.55,
-                    }}
-                  >
-                    <span style={{ flex: 1, height: 1, background: 'currentColor' }}></span>
-                    <i className="bi bi-chevron-right" style={{ fontSize: 10, lineHeight: 1 }}></i>
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </div>
-      )}
-      <div style={{
-        fontSize: 11, color: 'var(--color-text-light)', fontStyle: 'italic',
-        marginBottom: leverageLine ? '1rem' : '1.5rem', paddingLeft: 2,
-      }}>
-        Click any stop above — or any relationship below — to jump to that domain.
-      </div>
+      {/* Horizontal flow strip removed in the Operational Priority
+          Topology Sprint, 2026-05-15 — operator feedback approved the
+          removal. The domain stack below now serves both navigation and
+          overview; relationships between domains remain clickable on
+          the per-row chips. */}
 
       {/* ─── Operational leverage headline — editorial, never prescriptive ─── */}
       {leverageLine && (
@@ -318,6 +282,21 @@ const BPDomainSurface: React.FC = () => {
             <div style={{ fontSize: 13, color: 'var(--color-text)', lineHeight: 1.5 }}>
               {leverageLine}
             </div>
+            {whyMattersLine && (
+              <div
+                style={{
+                  fontSize: 12, color: 'var(--color-primary)', marginTop: 6, lineHeight: 1.5,
+                  paddingTop: 6, borderTop: '1px dashed var(--color-border)',
+                }}
+                title="Cory's current priority embedded in the topology"
+              >
+                <span style={{
+                  fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+                  color: 'var(--color-text-light)', fontWeight: 600, marginRight: 6,
+                }}>Why this matters</span>
+                {whyMattersLine}
+              </div>
+            )}
             {resilienceLine && (
               <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', marginTop: 4, fontStyle: 'italic', lineHeight: 1.5 }}>
                 {resilienceLine}
@@ -336,6 +315,8 @@ const BPDomainSurface: React.FC = () => {
             momentum={momentum[b.key]}
             isExpanded={!!expanded[b.key]}
             isPulsing={pulsedKey === b.key}
+            isCoryPriority={coryPriorityDomain === b.key}
+            isDownstreamOfPriority={priorityDownstream.has(b.key)}
             registerRef={(el) => { rowRefs.current[b.key] = el; }}
             onToggle={() => {
               if (!expanded[b.key]) rememberDomain(b.key); // about to expand — operator engagement

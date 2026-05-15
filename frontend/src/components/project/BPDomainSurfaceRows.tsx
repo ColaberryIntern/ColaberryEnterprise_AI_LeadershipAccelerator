@@ -54,14 +54,32 @@ export const DomainRow: React.FC<{
   momentum: { delta: number | null; direction: Direction; label: string; minutesSince: number | null } | undefined;
   isExpanded: boolean;
   isPulsing: boolean;
+  /** Cory's current next_action lives in this domain — render the priority badge + accent border. */
+  isCoryPriority?: boolean;
+  /** This domain is downstream of the Cory priority — render a muted linkage border. */
+  isDownstreamOfPriority?: boolean;
   registerRef: (el: HTMLElement | null) => void;
   onToggle: () => void;
   onNavigate: (key: DomainKey) => void;
   onPickBp: (id: string) => void;
-}> = ({ bucket, momentum, isExpanded, isPulsing, registerRef, onToggle, onNavigate, onPickBp }) => {
+}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp }) => {
   const tone = LIFECYCLE_TONE[bucket.lifecycleState];
   const mom = momentum || { delta: null, direction: 'first-visit' as Direction, label: 'baseline', minutesSince: null };
   const momTone = MOMENTUM_TONE[mom.direction];
+
+  // Subtle left-border accent expresses dependency linkage without a
+  // graph. Priority domain gets full primary; downstream domains get
+  // muted-primary; everything else is the standard border.
+  const accentBorder = isCoryPriority
+    ? '3px solid var(--color-primary)'
+    : isDownstreamOfPriority
+      ? '3px solid var(--color-primary-light)'
+      : '1px solid var(--color-border)';
+  const accentBg = isCoryPriority
+    ? 'linear-gradient(to right, rgba(26, 54, 93, 0.025), white 80px)'
+    : isDownstreamOfPriority
+      ? 'linear-gradient(to right, rgba(43, 108, 176, 0.015), white 60px)'
+      : 'white';
 
   const downstreamSummary = bucket.downstreamCount === 0
     ? 'No downstream dependencies yet'
@@ -76,8 +94,9 @@ export const DomainRow: React.FC<{
       ref={registerRef}
       className={isPulsing ? 'ws-domain-pulse' : undefined}
       style={{
-        background: 'white',
+        background: accentBg,
         border: '1px solid var(--color-border)',
+        borderLeft: accentBorder,
         borderRadius: 8, overflow: 'hidden',
       }}
     >
@@ -118,6 +137,17 @@ export const DomainRow: React.FC<{
               }}>
               {trustLabel(bucket.lifecycleState)}
             </span>
+            {isCoryPriority && (
+              <span
+                title="Cory's current operational priority lives in this domain"
+                style={{
+                  fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+                  color: 'white', background: 'var(--color-primary)', padding: '2px 8px',
+                  borderRadius: 3, fontWeight: 600,
+                }}>
+                Current priority
+              </span>
+            )}
             {mom.direction !== 'first-visit' && mom.direction !== 'flat' && (
               <span title={mom.minutesSince != null ? `since ${mom.minutesSince}m ago` : undefined} style={{
                 fontSize: 10.5, color: momTone.fg, background: momTone.bg,
@@ -280,7 +310,10 @@ export const BPLine: React.FC<{ bp: BPLike; onPick: () => void }> = ({ bp, onPic
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
   const usable = bp.usability?.usable === true;
-  const word = usable ? 'usable' : pct >= 50 ? 'forming' : pct > 0 ? 'early' : 'unbuilt';
+  // Sentence-case operator-facing words. The all-caps treatment + bare
+  // "UNBUILT" read as harsh inventory labels. Operational Priority
+  // Topology Sprint, 2026-05-15.
+  const word = usable ? 'Usable' : pct >= 50 ? 'Forming' : pct > 0 ? 'Early' : 'Not built yet';
   const wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
   return (
     <button
@@ -306,9 +339,9 @@ export const BPLine: React.FC<{ bp: BPLike; onPick: () => void }> = ({ bp, onPic
         </span>
       )}
       <span style={{
-        fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em',
+        fontSize: 11, letterSpacing: '0.01em',
         color: wordColor, fontWeight: 600, flexShrink: 0,
-        minWidth: 62, textAlign: 'right',
+        minWidth: 80, textAlign: 'right',
       }}>
         {word}
       </span>
