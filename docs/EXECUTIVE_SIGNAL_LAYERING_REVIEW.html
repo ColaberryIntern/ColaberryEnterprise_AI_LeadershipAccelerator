@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Executive Signal Layering + Scan-Speed Clarity — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Executive Signal Layering + Scan-Speed Clarity — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-15 to <strong>enterprise.colaberry.ai</strong>
+    (commit <code>3b74bd1</code>). Operator feedback after the structural
+    confidence sprint: the workspace had become calm and editorial, but
+    the operator still had to click each domain row to see completion
+    and downstream count. This sprint surfaces those two signals at the
+    scan layer — without adding a single new computation, dashboard, or
+    color.
+  </p>
+
+  <div class="philosophy">
+    The classifier already knew the percent complete and how many areas
+    each domain feeds. Those numbers just lived inside the expanded
+    view. Adding a two-item metadata line in the row header — muted,
+    sentence-case, dot-separated — gives the eye a calm second row of
+    information to scan, without piling on chrome.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> progress bars,
+    KPI badges, colored percentages, status pills, icons next to
+    numbers, dashboard grids. Two items max per row. The 2-item cap is
+    enforced by the util's design — adding a third would require a
+    deliberate code change, not a typo.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Collapsed row ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">The collapsed row — scannable without clicking</span></h2>
+    <p>The operator no longer has to expand a row to know how complete a
+       domain is or how many areas it influences downstream. Both signals
+       sit in the row header, in a calm muted line directly below the
+       title row.</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-executive-signal-layering/02-collapsed-row-with-metadata-strip.png" target="_blank">
+        <img src="screenshots/2026-05-15-executive-signal-layering/02-collapsed-row-with-metadata-strip.png" alt="Intake &amp; Registration row header showing the new metadata strip">
+      </a>
+      <div class="caption">Intake &amp; Registration row (collapsed) — header carries "supports 1 downstream area" between the title row and the narrative · production · 2026-05-15</div>
+    </div>
+
+    <p>Note: this domain has no requirements extracted yet, so the
+       completion item is correctly <em>absent</em> — the strip stays
+       silent rather than rendering "0% complete" or a "—" placeholder.
+       Honest no-signal silence was the operator's confirmed preference.</p>
+
+    <div class="what-shipped">
+      <strong>What the strip carries (at most two items, in this order):</strong>
+      <ul>
+        <li><strong>Completion</strong> — "47% complete" when <code>totalRequirements &gt; 0</code>; silent otherwise.</li>
+        <li><strong>Downstream influence</strong> — "supports N downstream area(s)" when <code>downstreamCount &gt; 0</code>; silent otherwise.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Should also surface BP "usable" count at scan speed (e.g. "4 of 14 usable")</label></li>
+        <li><label><input type="checkbox"> Should also surface trend direction inline (e.g. "improving") — currently only on momentum chip when motion is recent</label></li>
+        <li><label><input type="checkbox"> Move the strip ABOVE the trust badge (badge then metadata then narrative) for tighter visual rhythm</label></li>
+        <li><label><input type="checkbox"> Drop the "supports N downstream areas" — duplicates the forward leverage note inside the relationships block</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 1…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Full surface ───────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">The full surface — scan rhythm across multiple rows</span></h2>
+    <p>The metadata strip's real value shows up when the eye drops down
+       the stack. Each row carries the same two-item structure in the
+       same slot, so the operator can scan completion + downstream
+       horizontally across domains without reading sentences.</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-executive-signal-layering/01-system-bps-with-scan-strip.png" target="_blank">
+        <img src="screenshots/2026-05-15-executive-signal-layering/01-system-bps-with-scan-strip.png" alt="Full System BPs surface with the metadata strip visible on AI &amp; Intelligence row">
+      </a>
+      <div class="caption">/portal/project/system?tab=bps · AI &amp; Intelligence row shows "supports 2 downstream areas" inline · production · 2026-05-15</div>
+    </div>
+
+    <p>The full row layering, top to bottom, now reads:</p>
+    <table>
+      <thead>
+        <tr><th>Layer</th><th>Content</th><th>Weight</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1. Title row</td><td>Icon · Label · BP count · trust badge · momentum chip (when moving)</td><td><span class="badge badge-info">Primary</span></td></tr>
+        <tr><td>2. <strong>Scan-speed metadata (new)</strong></td><td>"X% complete · supports N downstream areas"</td><td><span class="badge badge-info">Primary scan</span></td></tr>
+        <tr><td>3. Narrative</td><td>One editorial sentence about what the area is doing operationally</td><td><span class="badge badge-good">Secondary</span></td></tr>
+        <tr><td>4. Confidence line (italic)</td><td>"X is operationally dependable." / etc.</td><td><span class="badge badge-good">Secondary tone</span></td></tr>
+        <tr><td>5. Relationship chips</td><td>Clickable navigation between domains</td><td><span class="badge badge-warn">Interactive</span></td></tr>
+        <tr><td>6. Pressure + forward notes</td><td>Backward/forward operational reading (amber + blue)</td><td><span class="badge badge-warn">Tertiary</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Layers 2 + 3 + 4 stacked feels heavy — collapse 2 into the BP count line ("· 14 BPs · supports 2 downstream areas")</label></li>
+        <li><label><input type="checkbox"> Use tabular alignment so percentages line up vertically across rows (true scan grid feel)</label></li>
+        <li><label><input type="checkbox"> Add a thin underline or separator above the metadata strip so it visually groups with the title row</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 2…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Composition guardrails ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Composition guardrails — calm without becoming a dashboard</span></h2>
+    <p>The line between "useful metadata" and "KPI dashboard" is composition,
+       not content. Same two strings rendered with bold numbers, colored
+       percentages, and progress bars would feel like a control panel. The
+       constraints below are what kept them feeling editorial.</p>
+
+    <table>
+      <thead>
+        <tr><th>Could have done</th><th>Did instead</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Bold percentage</td><td>Weight 400, same as the rest of the line</td><td>Bold pulls the eye; weight 400 lets the strip read as prose</td></tr>
+        <tr><td>Colored percentage (red &lt; 50%, green &gt; 75%)</td><td>Single muted color (<code>--color-text-light</code>)</td><td>Color encodes evaluation; muted = observation only</td></tr>
+        <tr><td>Progress bar visualization</td><td>Number only</td><td>A bar is a chart; a number is metadata</td></tr>
+        <tr><td>Icons next to each item (📊 47%)</td><td>No icons</td><td>Icons next to numbers always feel like a dashboard KPI</td></tr>
+        <tr><td>Show "0% complete" when nothing is matched</td><td>Silent when no requirements exist</td><td>"0%" reads as a verdict; silence is honest about no signal</td></tr>
+        <tr><td>3+ items (add usable count, mode, etc.)</td><td>2-item cap, enforced by the util's design</td><td>Anything more becomes a tag row, not a sentence fragment</td></tr>
+        <tr><td>Proportional digits (47% jitters as it grows)</td><td><code>font-variant-numeric: tabular-nums</code></td><td>Tabular digits keep the strip from twitching on data updates</td></tr>
+      </tbody>
+    </table>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> The constraint set is too strict — bold the percentage so it's findable on busy screens</label></li>
+        <li><label><input type="checkbox"> Color-code completion (subtle red/amber/green tint, not bold) — adds at-a-glance signal without dashboard energy</label></li>
+        <li><label><input type="checkbox"> Allow a 3rd item ONLY for "improving" / "stalled" trend word when known</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Right constraints</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Too strict</label>
+      <textarea placeholder="Notes for Stop 3…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Cory Home regression ──────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Cory Home — verified no regression</span></h2>
+    <p>This sprint only touches BPDomainSurfaceRows. Cory Home should be
+       byte-identical to last sprint's structural-confidence build — same
+       restrained tiles, same OperatorFocusCard, same OperationalHistoryStrip.
+       Verified.</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-executive-signal-layering/04-home-no-regression.png" target="_blank">
+        <img src="screenshots/2026-05-15-executive-signal-layering/04-home-no-regression.png" alt="Cory Home unchanged post-deploy">
+      </a>
+      <div class="caption">/portal/home · unchanged from the prior sprint · production · 2026-05-15</div>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Should Home also surface a tiny scan-speed metadata row somewhere (e.g. on the OperatorFocusCard footer)</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 No regression</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Regression spotted</label>
+      <textarea placeholder="Notes for Stop 4…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Audit + overall ───────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">"Too vague" audit + overall</span></h2>
+    <p>Quick sweep for places where the editorial layers go vague enough
+       to hide useful signal. The audit kept this sprint scoped — no
+       changes are demanded by the findings below, they're documented as
+       deliberate.</p>
+
+    <table>
+      <thead>
+        <tr><th>Surface</th><th>Audit finding</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Domain row's existing forward leverage note ("Strengthening this would stabilize 2 downstream areas")</td><td>Names downstream count too — overlaps the new "supports 2 downstream areas" metadata.</td><td><span class="badge badge-good">Kept as complementary framing</span> — metadata is a fragment; the note is conditional prose.</td></tr>
+        <tr><td>Expanded view's "operational role" block ("2 operational areas depend on this domain")</td><td>Also names downstream count.</td><td><span class="badge badge-good">Kept</span> — that block is only visible when expanded; the scan-speed strip serves the collapsed reader.</td></tr>
+        <tr><td>BP-line word ("UNBUILT", "EARLY", "FORMING", "USABLE")</td><td>Only visible in expanded view.</td><td><span class="badge badge-good">Kept</span> — that's BP-level signal, not domain-level. Surfacing it at the row header would conflate scales.</td></tr>
+        <tr><td>Cory Home tiles (28px → 22px from last sprint)</td><td>No scan-speed metadata under each tile.</td><td><span class="badge badge-warn">Out of scope</span> — sprint-12 may revisit Home composition if the operator finds the same gap there.</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Net stats:</strong> 3 files (1 new util + 1 new test +
+       1 modified component), 242 tests passing (13 new). Single commit,
+       no follow-up needed. <strong>No backend changes, no new
+       endpoints, no computation added.</strong> Pure surfacing of
+       existing classifier output.</p>
+
+    <p><strong>The line not crossed:</strong> the operator now scans
+       faster but the surface still reads as editorial. No progress
+       bars. No colored percentages. No icons next to numbers. No status
+       pills. The metadata strip would not survive an audit five sprints
+       from now if any of those crept in — keeping the constraint
+       enforced via the util's design.</p>
+
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship as-is</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 5 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Executive Signal Layering Sprint — operator feedback\n\nFollowing commit 3b74bd1 shipped 2026-05-15:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
