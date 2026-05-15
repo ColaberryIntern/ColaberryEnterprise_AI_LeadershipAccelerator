@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operational Priority Topology + Visual Dependency System — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --primary-light: #2b6cb0;
+    --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+  .mockup { background: white; border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0; font-size: 13px; }
+  .mockup .priority-badge { display: inline-block; background: var(--primary); color: white; padding: 2px 8px; border-radius: 3px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Operational Priority Topology + Visual Dependency System — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-15 to <strong>enterprise.colaberry.ai</strong>
+    (commit <code>e3ec648</code>). Five surgical changes turn the System
+    BPs surface from a list-of-buckets into a priority topology — the
+    horizontal flow strip is gone, the stack sorts itself around Cory's
+    current priority, dependency linkage is visible without a graph
+    engine, and the BP-line vocabulary stops shouting.
+  </p>
+
+  <div class="philosophy">
+    The previous sprint surfaced what each domain <em>is</em>. This one
+    surfaces what each domain <em>matters for, right now</em>. Same
+    classifier data — reorganized so the operator's eye lands first on
+    whatever Cory just made operational priority, then walks down by
+    leverage. No new graph engine, no SVG dependency lines, no
+    architecture canvas.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> a node graph, an
+    architecture canvas, dependency spaghetti, an observability map,
+    enterprise graph tooling, or any new motion. Visual dependency =
+    subtle left-border accent on related rows, never an SVG line.
+    Anti-overdesign guardrails enforced by the implementation (no graph
+    library imported anywhere) and asserted by the calm-language tests
+    on the "Why this matters" sentence.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Flow strip removed ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">Horizontal flow strip removed — operator-approved</span></h2>
+    <p>The flow strip compressed all domains into a horizontally-scrolling
+       header. Operator feedback approved removal: it created navigation
+       friction without adding meaning the domain stack didn't already
+       carry. Gone. The architecture headline + leverage block sit at top;
+       the domain stack now serves both navigation and overview.</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-operational-priority-topology/01-system-bps-no-flow-strip.png" target="_blank">
+        <img src="screenshots/2026-05-15-operational-priority-topology/01-system-bps-no-flow-strip.png" alt="System BPs surface with the flow strip removed">
+      </a>
+      <div class="caption">/portal/project/system?tab=bps — flow strip gone, stack starts immediately under the leverage block · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What also went with the strip:</strong>
+      <ul>
+        <li>The "Click any stop above — or any relationship below — to jump to that domain" hint (no stops to click anymore)</li>
+        <li>The <code>buildFlowStops</code> import + <code>flowStops</code> memo (dead code after the strip removal)</li>
+        <li>The <code>LIFECYCLE_TONE</code> + <code>trustLabel</code> imports from BPDomainSurface (only used by the strip)</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Miss the at-a-glance overview the strip gave — re-add as a compact vertical pill column on the left</label></li>
+        <li><label><input type="checkbox"> Operators with 10+ domains need scroll-anchor jumps to specific domains — add a tiny in-page table-of-contents</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Right call</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Restore the strip</label>
+      <textarea placeholder="Notes for Stop 1…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Dynamic ordering ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Dynamic priority-based ordering — Lead Intelligence rises to the top</span></h2>
+    <p>The classifier's canonical order put domains in operational-flow
+       sequence (AI &amp; Intelligence, Intake, Lead Intelligence, …). The
+       new sorter reorganizes around current operational priority. In the
+       capture above, <strong>Lead Intelligence is now first</strong>
+       (was 3rd canonically) because its leverage score
+       (downstreamCount × maturityHeadroom = 3 × 2 = 6) is the highest.
+       AI &amp; Intelligence sits second (14 BPs, 2 downstream, also high).
+       Reporting falls to the bottom (downstream 0, leverage 0).</p>
+
+    <table>
+      <thead>
+        <tr><th>Sort priority</th><th>Tier</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>Cory's current priority domain</td><td>Matched via <code>next_action.metadata.bp_id</code> or keyword on title</td></tr>
+        <tr><td>2</td><td>Operator's focus domain</td><td>From <code>memory.lastBpDomain</code> (the domain you last engaged on System)</td></tr>
+        <tr><td>3</td><td>Leverage score descending</td><td><code>downstreamCount × maturityHeadroom</code></td></tr>
+        <tr><td>4</td><td>Canonical orderIndex (tiebreak)</td><td>Stable — same state → same order, no shifty re-renders</td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>Deterministic by design:</strong> the sorter is a pure
+      function. Given the same buckets + the same priority signals, it
+      always returns the same order. State changes (Cory's priority
+      shifts, operator engages a different domain) move things — but
+      within a single visit the order is stable.
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Dynamic ordering breaks "Intake is always second" muscle memory — switch to canonical-only with the priority badge as the sole signal</label></li>
+        <li><label><input type="checkbox"> Add a small "Priority order ▾ / Flow order ▾" toggle for operators who want the canonical sequence on demand</label></li>
+        <li><label><input type="checkbox"> Show a tiny "↑ moved up from #3 by priority" affordance next to the first row so the reorder is honest</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 2…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Cory priority embedding ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Cory priority embedding — badge, accent, "Why this matters"</span></h2>
+    <p>When Cory's current <code>next_action</code> can be mapped to a
+       specific domain, three things happen:</p>
+    <ol>
+      <li>That domain sorts to the very top of the stack</li>
+      <li>It wears a <strong>CURRENT PRIORITY</strong> badge in its title row + a 3px primary left-border + soft gradient background</li>
+      <li>Downstream domains carry a muted-primary left-border so the operator can SEE the linkage without a graph</li>
+      <li>A "Why this matters" calm sentence appears inside the leverage block, composing the priority domain's downstream relationships</li>
+    </ol>
+
+    <h4>What the badge + sentence look like</h4>
+    <p style="font-size: 13.5px; color: var(--muted);">Honest disclosure: the production project's current <code>next_action</code> is
+       <em>"Create artifact for: <code>GET /api/courses</code> to retrieve
+       available courses."</em> — that title doesn't keyword-match any
+       existing BP name (no BP is literally called "GET /api/courses"),
+       so the matcher correctly returns null and the badge stays
+       silent on today's capture. Below is the mockup of what would
+       render when Cory's priority does map (e.g. an action titled
+       "Strengthen Lead Routing for accelerator cohorts" matching the
+       "Lead Routing" BP inside Lead Intelligence):</p>
+
+    <div class="mockup">
+      <div style="border-left: 3px solid var(--primary); margin-left: -1.25rem; padding-left: calc(1.25rem - 3px);">
+        <strong style="color: var(--primary);">Lead Intelligence</strong>
+        <span style="color: var(--muted); font-size: 11.5px;">· 6 BPs</span>
+        <span style="font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; color: #b45309; background: rgba(245,158,11,0.10); padding: 2px 7px; border-radius: 3px; font-weight: 600; margin-left: 6px;">Coordinating</span>
+        <span class="priority-badge">Current priority</span>
+        <div style="font-size: 11.5px; color: var(--muted); margin-top: 4px;">47% complete · supports 3 downstream areas</div>
+        <div style="font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.5;">Lead intelligence is gaining consistency across intake → qualification → routing.</div>
+      </div>
+    </div>
+
+    <h4>And the "Why this matters" sentence inside the leverage block:</h4>
+    <div class="mockup" style="background: var(--bg); border-left: 3px solid var(--primary-light);">
+      <span style="font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600;">Why this matters</span>
+      <span style="color: var(--primary);">Cory's current priority sits in Lead Intelligence — strengthening it would influence Marketing Operations, Execution Systems, and Reporting &amp; Analytics.</span>
+    </div>
+
+    <p>And here is the actual leverage block as it renders today, with the
+       Why-this-matters line correctly silent because no priority match:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-operational-priority-topology/02-leverage-with-why-this-matters.png" target="_blank">
+        <img src="screenshots/2026-05-15-operational-priority-topology/02-leverage-with-why-this-matters.png" alt="Leverage block on production">
+      </a>
+      <div class="caption">Leverage block — production today; Why-this-matters silent because no BP-name match</div>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> 6-character minimum on the keyword matcher is too strict — relax to 4 chars to catch shorter BP names</label></li>
+        <li><label><input type="checkbox"> Match on <code>next_action.reason</code> too, not just title — would catch more cases</label></li>
+        <li><label><input type="checkbox"> Add a dev-only URL override (<code>?priorityDomain=lead_intelligence</code>) so the badge can be demoed regardless of current next_action</label></li>
+        <li><label><input type="checkbox"> If no priority match, fall back to showing the leverage-headline domain as the priority (so the badge is rarely silent)</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Design is right; will fire as priorities map</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes (especially matcher tuning)</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 3…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Softened BP-line word ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">BP-line vocabulary softened — no more shouting UNBUILT</span></h2>
+    <p>The harsh all-caps treatment on every BP row read like a stock-take
+       label. Each row's word is now sentence-case, with regular
+       letter-spacing.</p>
+
+    <table>
+      <thead>
+        <tr><th>Before</th><th>After</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>UNBUILT</code></td><td>Not built yet</td></tr>
+        <tr><td><code>EARLY</code></td><td>Early</td></tr>
+        <tr><td><code>FORMING</code></td><td>Forming</td></tr>
+        <tr><td><code>USABLE</code></td><td>Usable</td></tr>
+      </tbody>
+    </table>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-operational-priority-topology/05-softened-bp-line-words.png" target="_blank">
+        <img src="screenshots/2026-05-15-operational-priority-topology/05-softened-bp-line-words.png" alt="Softened BP-line words in expanded Lead Intelligence">
+      </a>
+      <div class="caption">Expanded Lead Intelligence — BP rows now read "Not built yet" / "Forming" / "Usable" in sentence case · production · 2026-05-15</div>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "Not built yet" is wordy — drop to "Pending" or just leave empty when nothing is built</label></li>
+        <li><label><input type="checkbox"> Add a tiny progress %, e.g. "Early · 12%", since the matched/total count alongside is already shown</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Restore caps</label>
+      <textarea placeholder="Notes for Stop 4…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Anti-overdesign audit + overall ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Anti-overdesign audit + overall</span></h2>
+    <p>The prompt's "no graph chaos" rule was the load-bearing
+       constraint. Audit confirms the implementation holds it:</p>
+
+    <table>
+      <thead>
+        <tr><th>Forbidden by the prompt</th><th>What I did instead</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Node graph engine</td><td>No D3, no vis.js, no react-flow. No SVG. Dependency linkage = subtle left-border accent only.</td></tr>
+        <tr><td>Architecture canvas</td><td>Plain HTML/CSS stack of section elements. No canvas.</td></tr>
+        <tr><td>Dependency spaghetti</td><td>No lines drawn anywhere. Linkage is read by color, not traced by eye.</td></tr>
+        <tr><td>Observability map</td><td>No telemetry feed added. The "Why this matters" sentence reads observationally, not as a status display.</td></tr>
+        <tr><td>Visual chaos</td><td>Domain stack still calm. One badge added (CURRENT PRIORITY), one accent border, one inline sentence in the leverage block.</td></tr>
+        <tr><td>New motion</td><td>Zero. The existing 1.7s navigation pulse from the prior Causality sprint is untouched.</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Net stats:</strong> 6 files (3 new — 2 utils + 1 test),
+       261 tests passing across 8 suites (19 new). <strong>No backend
+       changes, no new endpoints, no graph library, no new component.</strong></p>
+
+    <p><strong>What's deliberately deferred:</strong></p>
+    <ul>
+      <li><strong>Per-BP downstream context</strong> — BPs don't carry per-row downstream count in the data model; the domain-level count already speaks for the BPs inside it. Adding it would require new computation.</li>
+      <li><strong>Full "active shaping zone" treatment</strong> — beyond the operator-focus left-border accent. A full "aura" or elevated typography would cross the anti-Dribbble line per the prompt.</li>
+    </ul>
+
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship as-is</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 5 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Operational Priority Topology Sprint — operator feedback\n\nFollowing commit e3ec648 shipped 2026-05-15:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
