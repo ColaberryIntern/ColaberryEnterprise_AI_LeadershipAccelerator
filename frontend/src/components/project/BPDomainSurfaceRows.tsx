@@ -22,6 +22,7 @@ import {
 import { type Direction } from '../../hooks/useDomainMomentum';
 import { forwardLookingNote } from '../../utils/operationalLeverage';
 import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
+import { metadataItems } from '../../utils/scanSpeedSignals';
 
 // Lifecycle state → tone. Softer than completion% — no hot reds.
 export const LIFECYCLE_TONE: Record<LifecycleState, { fg: string; bg: string }> = {
@@ -68,6 +69,7 @@ export const DomainRow: React.FC<{
 
   const forwardNote = forwardLookingNote(bucket);
   const confidence = confidenceLine(bucket);
+  const scanItems = metadataItems(bucket);
 
   return (
     <section
@@ -130,6 +132,26 @@ export const DomainRow: React.FC<{
               </span>
             )}
           </div>
+
+          {/* Scan-speed metadata strip — calm editorial signals visible
+              without expanding the row. Executive Signal Layering Sprint,
+              2026-05-15. Hidden when the bucket carries no signal. Never
+              bold, never colored, never icon'd — pure editorial fragments. */}
+          {scanItems.length > 0 && (
+            <div style={{
+              fontSize: 11.5, color: 'var(--color-text-light)',
+              marginTop: 3, marginBottom: 5, lineHeight: 1.4,
+              fontWeight: 400, fontVariantNumeric: 'tabular-nums',
+              maxWidth: 720,
+            }}>
+              {scanItems.map((item, i) => (
+                <React.Fragment key={item}>
+                  {i > 0 && <span aria-hidden="true" style={{ opacity: 0.45, margin: '0 6px' }}>·</span>}
+                  <span>{item}</span>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
 
           {/* Narrative */}
           <div style={{ fontSize: 13, color: 'var(--color-text-light)', lineHeight: 1.6, maxWidth: 720 }}>
