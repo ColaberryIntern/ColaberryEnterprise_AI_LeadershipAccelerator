@@ -26,6 +26,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useUnifiedProjectState } from '../../hooks/useUnifiedProjectState';
+import { useWorkspaceMemory } from '../../hooks/useWorkspaceMemory';
 import CoryDrawer from '../workspace/CoryDrawer';
 
 const HIDDEN_ROUTE_PREFIXES = [
@@ -56,7 +57,15 @@ const WorkspaceContextBar: React.FC = () => {
     || surface === 'legacy';
 
   const { state } = useUnifiedProjectState({ pollMs: 60_000 });
+  const { memory } = useWorkspaceMemory();
   const [coryOpen, setCoryOpen] = useState(false);
+
+  // Operator focus persists across surfaces — the operator engaged a
+  // domain on System BPs and that signal stays in workspace memory.
+  // Carrying it in the bar means the operator never loses orientation
+  // when moving between Home / System / Critique / Blueprint.
+  // Environmental Continuity Sprint, 2026-05-15.
+  const focusLabel = memory.lastBpDomainLabel || null;
 
   // Critique handoff signal — if the operator compiled a prompt in the
   // visual workspace, the bar reflects "build pending" continuity until
@@ -176,6 +185,20 @@ const WorkspaceContextBar: React.FC = () => {
           <>
             <span style={{ opacity: 0.4 }}>·</span>
             <span style={{ fontWeight: 500, color: 'var(--color-text)' }}>{surfaceLabel}</span>
+          </>
+        )}
+        {focusLabel && (
+          <>
+            <span style={{ opacity: 0.4 }} aria-hidden="true">·</span>
+            <span
+              title={`Your operational focus, carried across surfaces from your last System engagement`}
+              style={{
+                fontWeight: 400, color: 'var(--color-text-light)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                maxWidth: 220,
+              }}>
+              shaping <strong style={{ fontWeight: 600, color: 'var(--color-text)' }}>{focusLabel}</strong>
+            </span>
           </>
         )}
       </div>

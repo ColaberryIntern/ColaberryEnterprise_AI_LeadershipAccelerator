@@ -107,19 +107,28 @@ function PortalLayout() {
       {/* Page transition wrapper — keys on pathname so React unmounts the
           old page + mounts the new one with a soft fade-in. No exit
           animation (would require a transition library); the perceived
-          flash is replaced by a calm 220ms fade-in on the new page. */}
+          flash is replaced by a calm 220ms fade-in on the new page.
+          Respects prefers-reduced-motion — operators who opt out of
+          motion get an instant swap with no transform. Environmental
+          Continuity Sprint, 2026-05-15. */}
       <main className="container py-4">
         <div
           key={location.pathname}
-          style={{ animation: 'wsFadeIn 220ms ease-out' }}
+          className="ws-surface-arrival"
         >
           <Outlet />
         </div>
       </main>
       <style>{`
+        .ws-surface-arrival {
+          animation: wsFadeIn 220ms ease-out;
+        }
         @keyframes wsFadeIn {
           from { opacity: 0; transform: translateY(2px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ws-surface-arrival { animation: none; }
         }
       `}</style>
 

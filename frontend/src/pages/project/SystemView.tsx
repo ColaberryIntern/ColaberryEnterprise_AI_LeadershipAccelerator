@@ -127,7 +127,7 @@ const SystemView: React.FC = () => {
   const activeSpec = useMemo(() => TABS.find(t => t.key === active)!, [active]);
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1rem 4rem' }}>
+    <div style={{ maxWidth: 1080, margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
 
       {/* ─── Editorial header ─────────────────────────── */}
       {/* System Surface Maturity Sprint, 2026-05-12 — calmer header rhythm.
