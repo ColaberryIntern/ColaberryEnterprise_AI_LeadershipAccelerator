@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Structural Confidence + Operational Maturity Expression — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Structural Confidence + Operational Maturity Expression — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-15 to <strong>enterprise.colaberry.ai</strong> (commits
+    <code>2a21689</code> + <code>a90d230</code>). The classifier already
+    knew whether a domain was Foundational, Emerging, Coordinated,
+    Operational, Scaling, or Stabilizing. This sprint translates those
+    technical states into operator-facing confidence language and adds one
+    calm editorial sentence per domain about how that area <em>feels</em>
+    operationally.
+  </p>
+
+  <div class="philosophy">
+    The same structural facts, a softer reading. "Foundational" becomes
+    "Still forming" on the badge. "Emerging" becomes "Coordinating". Below
+    the narrative, an italic confidence line says what the operator can
+    sense without reading the technical state at all. The technical state
+    lives on, accessible via the badge's hover tooltip — nothing was
+    deleted, only expressed differently.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> monitoring
+    software, analytics, KPI dashboards, red/yellow/green enterprise
+    tooling, health-score scoring, telemetry surfacing. The lifecycle
+    state machine and every other piece of computation is exactly as it
+    was. Only the surface expression softened.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Trust labels ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">Trust-label translation — same state machine, calmer words</span></h2>
+    <p>The flow strip stops at the top and the per-row badges share one
+       vocabulary now. The classifier's six states map to six operator-
+       facing labels — only four actually change (Coordinated and
+       Operational already read clearly):</p>
+
+    <table>
+      <thead>
+        <tr><th>Lifecycle state (data)</th><th>Trust label (operator sees)</th><th>Reason</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Foundational</code></td><td><strong>Still forming</strong></td><td>"Foundational" reads cold; "Still forming" suggests motion.</td></tr>
+        <tr><td><code>Emerging</code></td><td><strong>Coordinating</strong></td><td>Names the active verb of what the area is doing.</td></tr>
+        <tr><td><code>Coordinated</code></td><td>Coordinated</td><td>(unchanged — already operator-readable)</td></tr>
+        <tr><td><code>Operational</code></td><td>Operational</td><td>(unchanged)</td></tr>
+        <tr><td><code>Scaling</code></td><td><strong>Dependable</strong></td><td>Shifts focus from "growing" to "you can rely on this".</td></tr>
+        <tr><td><code>Stabilizing</code></td><td><strong>Trusted</strong></td><td>The softest, sturdiest word in the ladder.</td></tr>
+      </tbody>
+    </table>
+
+    <p>Flow strip + first domain row, side by side in production:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-structural-confidence/02-domain-row-trust-label-and-confidence.png" target="_blank">
+        <img src="screenshots/2026-05-15-structural-confidence/02-domain-row-trust-label-and-confidence.png" alt="Flow strip with trust labels (STILL FORMING / COORDINATING / COORDINATED) above domain rows">
+      </a>
+      <div class="caption">Flow strip stops + leverage block — all on softened vocabulary · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What shipped here:</strong>
+      <ul>
+        <li><code>trustLabel(state)</code> in <code>utils/structuralConfidence.ts</code> — single source of the translation, used by both the flow strip stops in <code>BPDomainSurface.tsx</code> and the per-row badges in <code>BPDomainSurfaceRows.tsx</code>.</li>
+        <li>Raw <code>LifecycleState</code> lives in each badge's <code>title</code> attribute — visible on hover. Nothing technical was deleted.</li>
+        <li>The follow-up commit (<code>a90d230</code>) caught and fixed an inconsistency where the flow strip still rendered the raw labels while the row badges below had softened — surfaced by the first production capture.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "Trusted" reads almost too soft for Stabilizing — try "Mature" or "Established"</label></li>
+        <li><label><input type="checkbox"> "Dependable" and "Trusted" feel close enough to merge — collapse to 5 tiers instead of 6</label></li>
+        <li><label><input type="checkbox"> "Still forming" is a participle phrase; the others are adjectives. Try "Forming" for consistency</label></li>
+        <li><label><input type="checkbox"> The technical states should be hidden entirely, not just in a title attribute</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 1…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Confidence line ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Per-domain confidence sentence — one editorial line of how it feels</span></h2>
+    <p>Below the narrative in each row, a tiny italic sentence names how
+       the area feels operationally. Calm, observational, conditional —
+       never a verdict. Returns null entirely for the catch-all "Other"
+       bucket or any bucket with no processes, so empty domains stay
+       editorially silent.</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-structural-confidence/01-system-bps-confidence.png" target="_blank">
+        <img src="screenshots/2026-05-15-structural-confidence/01-system-bps-confidence.png" alt="System BPs surface showing trust labels in flow strip and the new confidence line inside the AI & Intelligence row">
+      </a>
+      <div class="caption">/portal/project/system?tab=bps · "AI & Intelligence — STILL FORMING" badge + italic line "The structure exists, but downstream confidence remains limited." · production · 2026-05-15</div>
+    </div>
+
+    <p>The full sentence ladder by lifecycle tier (each gated; null when nothing meaningful to say):</p>
+
+    <table>
+      <thead>
+        <tr><th>State</th><th>Conditional</th><th>Confidence sentence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Foundational</td><td>has downstream</td><td>"The structure exists, but downstream confidence remains limited."</td></tr>
+        <tr><td>Foundational</td><td>no downstream</td><td>"<em>&lt;Label&gt;</em> still depends heavily on manual structure."</td></tr>
+        <tr><td>Emerging</td><td>—</td><td>"<em>&lt;Label&gt;</em> is gaining consistency."</td></tr>
+        <tr><td>Coordinated</td><td>—</td><td>"<em>&lt;Label&gt;</em> is beginning to coordinate reliably."</td></tr>
+        <tr><td>Operational</td><td>—</td><td>"<em>&lt;Label&gt;</em> is operationally dependable."</td></tr>
+        <tr><td>Scaling</td><td>has downstream</td><td>"<em>&lt;Label&gt;</em> now supports downstream reliability."</td></tr>
+        <tr><td>Scaling</td><td>no downstream</td><td>"<em>&lt;Label&gt;</em> is broadening with confidence."</td></tr>
+        <tr><td>Stabilizing</td><td>—</td><td>"<em>&lt;Label&gt;</em> feels increasingly stable."</td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>How honest framing is enforced:</strong>
+      <ul>
+        <li>All language lives in <code>operationalLeverage.ts</code> and <code>structuralConfidence.ts</code> — two files.</li>
+        <li>Unit tests assert no imperatives (<code>should / must / fix / address</code>), no certainty words (<code>guaranteed / optimal / perfect</code>), no exclamation marks.</li>
+        <li>"Other" catch-all bucket and empty-process buckets always return null — no false confidence for things we have no signal about.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Three italic lines per row (narrative + confidence + pressure/forward) is one too many — drop the confidence line and let the badge carry that signal alone</label></li>
+        <li><label><input type="checkbox"> "Feels increasingly stable" reads emotional — try "is increasingly stable" (purely observational)</label></li>
+        <li><label><input type="checkbox"> The Foundational line ("structure exists, but downstream confidence remains limited") reads as a verdict — soften further</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 2…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — System resilience ────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">System-resilience sentence — sturdier than "scaffolded / coordinated"</span></h2>
+    <p>The leverage block's italic sub-line previously read the
+       classifier's <code>systemEvolution</code> wording ("Your operational
+       system is still being scaffolded…"). The new
+       <code>systemResilienceSentence</code> reads what the system <em>is
+       becoming</em> rather than what's still missing — language about
+       structure and trust.</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-structural-confidence/03-leverage-with-resilience.png" target="_blank">
+        <img src="screenshots/2026-05-15-structural-confidence/03-leverage-with-resilience.png" alt="Operational leverage block with the new resilience sentence below">
+      </a>
+      <div class="caption">Leverage block — "The operational structure is still forming — most areas remain in early scaffolding." · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>The new resilience phrasing ladder (by average system maturity):</strong>
+      <ul>
+        <li><strong>Very early</strong>: "The operational structure is still forming — most areas remain in early scaffolding."</li>
+        <li><strong>Early coordination</strong>: "Operational coordination is starting to take hold, with maturity uneven across areas."</li>
+        <li><strong>Broadly coordinated</strong>: "Operational coordination is broadly in place; reliability is the next frontier."</li>
+        <li><strong>Dependable</strong>: "The operational structure is dependable, and downstream reliability is increasingly the focus."</li>
+        <li><strong>Mature</strong>: "The operational structure feels stable and trusted across the system."</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Two italic sub-lines in the same block (leverage + resilience) feel duplicative — keep only the resilience line</label></li>
+        <li><label><input type="checkbox"> The "Operational coordination is broadly in place" reads consultant-y — try plain "Most areas now coordinate reliably"</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 3…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Cory Home tile restraint ────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Cory Home — tile metric restraint</span></h2>
+    <p>The Readiness / Coverage / Health tiles on Cory Home dropped from a
+       28px metric value to 22px, with the editorial band label
+       ("Healthy" / "Needs attention") bumped to weight 600 + 12px. The
+       number is still there — it just reads as a peer of the band label
+       rather than the headline. Same data, less metric energy.</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-structural-confidence/05-tiles-row-crop.png" target="_blank">
+        <img src="screenshots/2026-05-15-structural-confidence/05-tiles-row-crop.png" alt="Cory Home tiles after the restraint pass">
+      </a>
+      <div class="caption">Restrained tiles — value 22px, band label weight 600 · production · 2026-05-15</div>
+    </div>
+
+    <p>The full Home in context:</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-structural-confidence/04-home-restrained-tiles.png" target="_blank">
+        <img src="screenshots/2026-05-15-structural-confidence/04-home-restrained-tiles.png" alt="Full Cory Home with restrained tiles">
+      </a>
+      <div class="caption">/portal/home · tiles now read closer to peer of the band label · production · 2026-05-15</div>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> 22px still reads too prominent — drop to 18px and make the band label the headline</label></li>
+        <li><label><input type="checkbox"> Re-saturate the value colors (currently red / primary-navy / yellow-amber) for stronger at-a-glance signal</label></li>
+        <li><label><input type="checkbox"> Restore 28px — the smaller value is harder to scan from across the room</label></li>
+        <li><label><input type="checkbox"> Replace the percentage with the band label entirely (drop number, keep "Healthy" / "Needs attention")</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Restore 28px</label>
+      <textarea placeholder="Notes for Stop 4…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Anti-tooling audit ──────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Anti-enterprise-tooling audit</span></h2>
+    <p>Scanned every workspace surface for residual dashboard / KPI /
+       monitoring / telemetry drift.</p>
+
+    <table>
+      <thead>
+        <tr><th>Pattern</th><th>Where found</th><th>Verdict</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>dashboard</code></td><td>Legacy <code>/portal/dashboard</code> route — already redirects to Cory Home; <code>PortalDashboardPage.tsx</code> exists but is unreachable from the nav.</td><td><span class="badge badge-good">Already neutralized</span></td></tr>
+        <tr><td><code>KPI / telemetry / monitoring</code></td><td>Zero hits in <code>components/workspace</code> or <code>pages/portal</code>.</td><td><span class="badge badge-good">Clean</span></td></tr>
+        <tr><td><code>notification / alert</code></td><td>One hit in <code>MicroToast.tsx</code> — a doc comment explicitly disclaiming notifications ("NOT a notification system").</td><td><span class="badge badge-good">Self-policed</span></td></tr>
+        <tr><td>Tile value font size</td><td>28px headline values on Cory Home tiles (3 places).</td><td><span class="badge badge-warn">Restrained to 22px</span></td></tr>
+        <tr><td>Lifecycle state badge labels</td><td>"FOUNDATIONAL" / "EMERGING" / "STABILIZING" — technical, cold.</td><td><span class="badge badge-warn">Softened to "Still forming" / "Coordinating" / "Trusted"</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>Net result:</strong> No remaining dashboard/KPI/monitoring
+      drift surfaces in the operator's normal path. The legacy
+      <code>/portal/dashboard</code> route is preserved purely for backward
+      compatibility; nothing in the current nav exposes it.
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Verification block on Cory Home (0 PENDING / 0 PASSING / 0 FAILING) still has telemetry energy — restrain or replace</label></li>
+        <li><label><input type="checkbox"> Next-action card metrics ("confidence 90% · priority 21") reads scorecard-y — soften</label></li>
+        <li><label><input type="checkbox"> Audit missed: flag a surface (note below)</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Audit was sufficient</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v5" value="cut">✕ Re-audit needed</label>
+      <textarea placeholder="Notes for Stop 5…" data-notes="stop5"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Overall ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Overall verdict</span></h2>
+    <p>The workspace now expresses how stable, fragile, emerging, or
+       coordinated each area feels — through softer label vocabulary, one
+       calm editorial sentence per domain, sturdier system-resilience
+       phrasing, and a small composition restraint on Cory Home tiles.
+       Same structural facts, softer reading.</p>
+
+    <p><strong>Net stats:</strong> 7 files (1 new util + 1 new test +
+       5 modified), 229 tests passing (18 new). Two commits — sprint
+       commit + a follow-up to fix a flow-strip inconsistency surfaced by
+       the first production capture. <strong>No new computation, no
+       scoring, no dashboards.</strong></p>
+
+    <p><strong>What's not in this sprint:</strong> visual-system redesign,
+       Bootstrap restyling, motion treatments. The prompt called for
+       "confidence through composition" — interpreted conservatively as
+       label vocabulary + one type-size tweak. Holding scope.</p>
+
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship as-is</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 6 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Structural Confidence Sprint — operator feedback\n\nFollowing commits 2a21689 + a90d230 shipped 2026-05-15:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
