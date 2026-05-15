@@ -20,7 +20,7 @@
  *   - whyThisMattersSentence is observational, conditional, never
  *     imperative
  */
-import type { DomainBucket, DomainKey } from './bpDomainClassifier';
+import { classifyTextToDomain, type DomainBucket, type DomainKey } from './bpDomainClassifier';
 
 /** Minimal shape we care about — keeps this util independent of the full state type. */
 export interface NextActionLike {
@@ -29,13 +29,14 @@ export interface NextActionLike {
   metadata?: Record<string, unknown> | null;
 }
 
-const MIN_KEYWORD_LENGTH = 6;
+const MIN_BP_NAME_LENGTH = 6;
 
 export function matchCoryPriorityDomain(
   nextAction: NextActionLike | null | undefined,
   buckets: DomainBucket[],
 ): DomainKey | null {
   if (!nextAction || buckets.length === 0) return null;
+  const presentKeys = new Set(buckets.map(b => b.key));
 
   // 1. Explicit bp_id from metadata (best signal when available).
   const bpId = nextAction.metadata?.bp_id;
@@ -45,20 +46,39 @@ export function matchCoryPriorityDomain(
     }
   }
 
-  // 2. Keyword match on the action title against BP names.
-  const haystack = (nextAction.title || '').toLowerCase();
-  if (!haystack) return null;
-  let best: { key: DomainKey; len: number } | null = null;
-  for (const b of buckets) {
-    for (const p of b.processes) {
-      const name = (p.name || '').toLowerCase();
-      if (name.length < MIN_KEYWORD_LENGTH) continue;
-      if (haystack.includes(name)) {
-        if (!best || name.length > best.len) best = { key: b.key, len: name.length };
+  // 2. Keyword match on the action title against actual BP names (must
+  // be at least 6 chars long to avoid spurious hits on common short
+  // words). When this fires, it's the most specific match available.
+  const titleHaystack = (nextAction.title || '').toLowerCase();
+  if (titleHaystack) {
+    let best: { key: DomainKey; len: number } | null = null;
+    for (const b of buckets) {
+      for (const p of b.processes) {
+        const name = (p.name || '').toLowerCase();
+        if (name.length < MIN_BP_NAME_LENGTH) continue;
+        if (titleHaystack.includes(name)) {
+          if (!best || name.length > best.len) best = { key: b.key, len: name.length };
+        }
       }
     }
+    if (best) return best.key;
   }
-  return best?.key ?? null;
+
+  // 3. Classify the combined title + reason + action_type text against
+  // the classifier's own domain keywords. This is what catches the
+  // common code-level next_action cases — e.g. action_type
+  // "create_artifact" naturally matches AI & Intelligence (whose
+  // keywords include "artifact"), even when the action title doesn't
+  // overlap with any literal BP name.
+  const md = nextAction.metadata || {};
+  const actionType = typeof md.action_type === 'string' ? md.action_type.replace(/_/g, ' ') : '';
+  const composite = [nextAction.title || '', nextAction.reason || '', actionType].filter(Boolean).join(' ');
+  const classified = classifyTextToDomain(composite);
+  // Only return when the classified domain is actually present in this
+  // project's bucket set — never point at a domain that has no rows.
+  if (classified && presentKeys.has(classified)) return classified;
+
+  return null;
 }
 
 /**

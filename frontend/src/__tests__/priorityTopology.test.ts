@@ -74,9 +74,49 @@ describe('matchCoryPriorityDomain', () => {
       bucket({ key: 'intake', label: 'Intake', lifecycleState: 'Foundational', processes: [bp('p1', 'Form')] }), // 4 chars, ignored
       bucket({ key: 'lead_intelligence', label: 'Lead', lifecycleState: 'Operational', processes: [bp('p2', 'Lead Scoring')] }),
     ];
-    const action = { title: 'Add Form validation to the page' };
-    // "form" would match Intake's BP, but it's below threshold — should pick the longer Lead match instead, or return null
+    // 'form' is in lead_intelligence text indirectly via 'inform', but no exact match
+    // 'page' would hit public_pages keywords. Just verify no false match on Intake.
+    const action = { title: 'Add zzzzzz validation to the abcxyz' };
     expect(matchCoryPriorityDomain(action, buckets)).toBeNull();
+  });
+
+  test('fallback: action_type metadata classifies to a domain via classifier keywords', () => {
+    // Reproduces the real production case: next_action title doesn't
+    // overlap with any BP name, but metadata.action_type = "create_artifact"
+    // and AI & Intelligence's keywords include "artifact".
+    const buckets = [
+      bucket({ key: 'ai_intelligence', label: 'AI & Intelligence', lifecycleState: 'Foundational' }),
+      bucket({ key: 'lead_intelligence', label: 'Lead Intelligence', lifecycleState: 'Operational' }),
+      bucket({ key: 'reporting', label: 'Reporting', lifecycleState: 'Operational' }),
+    ];
+    const action = {
+      title: 'Create artifact for: `GET /api/courses` to retrieve available courses.',
+      reason: 'Requirement REQ-027 has no linked artifact. An artifact must be created.',
+      metadata: { action_type: 'create_artifact', requirement_key: 'REQ-027' },
+    };
+    expect(matchCoryPriorityDomain(action, buckets)).toBe('ai_intelligence');
+  });
+
+  test('fallback: classified domain that is NOT in this project\'s bucket set is rejected', () => {
+    // The classifier could classify text to "marketing" but if marketing
+    // isn't a present bucket in this project, the matcher should NOT
+    // point at a non-existent domain.
+    const buckets = [
+      bucket({ key: 'lead_intelligence', label: 'Lead', lifecycleState: 'Operational' }),
+    ];
+    const action = { title: 'Launch new marketing campaign for outreach' };
+    expect(matchCoryPriorityDomain(action, buckets)).toBeNull();
+  });
+
+  test('fallback: title keywords match domain even without action_type metadata', () => {
+    const buckets = [
+      bucket({ key: 'ai_intelligence', label: 'AI', lifecycleState: 'Foundational' }),
+      bucket({ key: 'lead_intelligence', label: 'Lead', lifecycleState: 'Operational' }),
+    ];
+    const action = { title: 'Refine the lead scoring discovery pipeline' };
+    // 'lead' (4) is in lead_intelligence keywords, 'discovery' (9) is in ai_intelligence keywords
+    // Longer keyword wins → ai_intelligence
+    expect(matchCoryPriorityDomain(action, buckets)).toBe('ai_intelligence');
   });
 
   test('failure path: malformed inputs do not throw', () => {

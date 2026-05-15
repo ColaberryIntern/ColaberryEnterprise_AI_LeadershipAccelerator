@@ -382,6 +382,30 @@ function classifyBP(bp: BPLike): DomainKey {
   return best?.key ?? 'other';
 }
 
+/**
+ * Classify any free-form text to a domain using the same longest-keyword-
+ * wins logic the BP classifier uses internally. Returns null when nothing
+ * matches (no editorial-silence default to 'other' here — callers want
+ * to know if no signal existed).
+ *
+ * Exposed in the Operational Priority Topology Sprint, 2026-05-15, so
+ * the Cory-priority matcher can fall back to text classification when
+ * BP-name keyword matching doesn't find a hit.
+ */
+export function classifyTextToDomain(text: string): DomainKey | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  let best: { key: DomainKey; len: number } | null = null;
+  for (const d of DOMAINS) {
+    for (const kw of d.keywords) {
+      if (lower.includes(kw) && (!best || kw.length > best.len)) {
+        best = { key: d.key, len: kw.length };
+      }
+    }
+  }
+  return best?.key ?? null;
+}
+
 export function classifyBPs(processes: BPLike[]): DomainBucket[] {
   const visible = processes.filter(p => !/uncategorized/i.test(p.name || ''));
 
