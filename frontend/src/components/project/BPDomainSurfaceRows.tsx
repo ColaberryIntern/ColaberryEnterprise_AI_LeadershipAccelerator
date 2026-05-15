@@ -21,6 +21,7 @@ import {
 } from '../../utils/bpDomainClassifier';
 import { type Direction } from '../../hooks/useDomainMomentum';
 import { forwardLookingNote } from '../../utils/operationalLeverage';
+import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
 
 // Lifecycle state → tone. Softer than completion% — no hot reds.
 export const LIFECYCLE_TONE: Record<LifecycleState, { fg: string; bg: string }> = {
@@ -66,6 +67,7 @@ export const DomainRow: React.FC<{
     : `${bucket.downstreamCount} operational area${bucket.downstreamCount === 1 ? '' : 's'} depend${bucket.downstreamCount === 1 ? 's' : ''} on this domain`;
 
   const forwardNote = forwardLookingNote(bucket);
+  const confidence = confidenceLine(bucket);
 
   return (
     <section
@@ -105,12 +107,14 @@ export const DomainRow: React.FC<{
             <span style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontWeight: 500 }}>
               · {bucket.processes.length} BP{bucket.processes.length === 1 ? '' : 's'}
             </span>
-            <span style={{
-              fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em',
-              color: tone.fg, background: tone.bg, padding: '2px 7px',
-              borderRadius: 3, fontWeight: 600,
-            }}>
-              {bucket.lifecycleState}
+            <span
+              title={`Lifecycle state: ${bucket.lifecycleState}`}
+              style={{
+                fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+                color: tone.fg, background: tone.bg, padding: '2px 7px',
+                borderRadius: 3, fontWeight: 600,
+              }}>
+              {trustLabel(bucket.lifecycleState)}
             </span>
             {mom.direction !== 'first-visit' && mom.direction !== 'flat' && (
               <span title={mom.minutesSince != null ? `since ${mom.minutesSince}m ago` : undefined} style={{
@@ -131,6 +135,15 @@ export const DomainRow: React.FC<{
           <div style={{ fontSize: 13, color: 'var(--color-text-light)', lineHeight: 1.6, maxWidth: 720 }}>
             {bucket.narrative}
           </div>
+
+          {/* Structural confidence — calm one-liner about how this area
+              feels operationally. Sits with the narrative so it reads as
+              part of describing the domain, not an event note. */}
+          {confidence && (
+            <div style={{ fontSize: 12, color: 'var(--color-text)', marginTop: 4, lineHeight: 1.5, fontStyle: 'italic', opacity: 0.85, maxWidth: 720 }}>
+              {confidence}
+            </div>
+          )}
         </div>
 
         <i

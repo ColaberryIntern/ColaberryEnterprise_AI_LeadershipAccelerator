@@ -32,6 +32,7 @@ import {
 import { useDomainMomentum } from '../../hooks/useDomainMomentum';
 import { useWorkspaceMemory } from '../../hooks/useWorkspaceMemory';
 import { computeSystemLeverage, leverageHeadline, buildLeverageSummary } from '../../utils/operationalLeverage';
+import { systemResilienceSentence } from '../../utils/structuralConfidence';
 import BPDetailV2 from './BPDetailV2';
 import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
 import { LIFECYCLE_TONE, DomainRow } from './BPDomainSurfaceRows';
@@ -71,6 +72,13 @@ const BPDomainSurface: React.FC = () => {
   // never a recommendation. Returns null when no domain stands out.
   const systemLeverage = useMemo(() => computeSystemLeverage(buckets), [buckets]);
   const leverageLine = useMemo(() => leverageHeadline(systemLeverage), [systemLeverage]);
+  // Resilience phrasing reads sturdier than the classifier's existing
+  // systemEvolution scaffolding-and-coordination wording. Falls back to
+  // systemEvolution when resilience returns null (fewer than 3 buckets).
+  const resilienceLine = useMemo(
+    () => systemResilienceSentence(buckets) || systemLeverage.systemEvolution,
+    [buckets, systemLeverage.systemEvolution],
+  );
 
   // Persist the operator's current domain focus. Called on explicit
   // engagement only (expanding a row, jumping via flow strip / relationship
@@ -308,9 +316,9 @@ const BPDomainSurface: React.FC = () => {
             <div style={{ fontSize: 13, color: 'var(--color-text)', lineHeight: 1.5 }}>
               {leverageLine}
             </div>
-            {systemLeverage.systemEvolution && (
+            {resilienceLine && (
               <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', marginTop: 4, fontStyle: 'italic', lineHeight: 1.5 }}>
-                {systemLeverage.systemEvolution}
+                {resilienceLine}
               </div>
             )}
           </div>

@@ -236,15 +236,18 @@ export const Tile: React.FC<{
           <i className="bi bi-arrow-up-right" style={{ fontSize: 11, color: 'var(--color-text-light)', opacity: 0.5, marginTop: 2 }} aria-hidden="true"></i>
         )}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 600, color: valueColor, marginTop: 4, lineHeight: 1.1, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+      {/* Value font intentionally restrained — 22px instead of 28px so the
+          editorial band label below reads as peer of the number rather
+          than a footnote. Structural Confidence Sprint, 2026-05-15. */}
+      <div style={{ fontSize: 22, fontWeight: 600, color: valueColor, marginTop: 4, lineHeight: 1.15, display: 'flex', alignItems: 'baseline', gap: 6 }}>
         <span>{value}</span>
         {highlight && (
-          <span title="Improved since your last visit" aria-label="improved" style={{ fontSize: 14, color: 'var(--color-accent)', fontWeight: 700 }}>
+          <span title="Improved since your last visit" aria-label="improved" style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 700 }}>
             ↗
           </span>
         )}
       </div>
-      <div style={{ fontSize: 11, color: footerColor, marginTop: 4 }}>{footer}</div>
+      <div style={{ fontSize: 12, color: footerColor, marginTop: 4, fontWeight: 600 }}>{footer}</div>
     </>
   );
   if (interactive) {
