@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operational Leverage + System Influence — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+  .formula { background: #f0f9ff; border-left: 3px solid var(--primary); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 13px; color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Operational Leverage + System Influence — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-15 to <strong>enterprise.colaberry.ai</strong> (commit
+    <code>4a98938</code>). The previous sprint taught the workspace to
+    communicate where the operator is shaping the system. This one teaches
+    it to communicate <em>where in the operational system effort would
+    ripple furthest</em> — without recommending anything.
+  </p>
+
+  <div class="philosophy">
+    The system has the structural facts. Some domains support many others;
+    some have room to mature; some are constrained by upstream gaps.
+    Reading those facts editorially produces <em>leverage</em> — a calm
+    observation about where effort might travel furthest. This sprint
+    surfaces that observation. It never tells the operator what to do.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> a recommendation
+    engine, a task inbox, an AI copilot, productivity software, workflow
+    automation, prescriptive PM tooling, or anything that ranks tasks for
+    the operator. The anti-prescription guardrails — no imperatives, no
+    certainty words, conditional verbs only — are asserted by the unit
+    test suite.
+  </div>
+
+  <div class="formula">
+    leverageScore = downstreamCount × maturityHeadroom
+    <div style="font-family: inherit; color: var(--muted); font-size: 12px; margin-top: 6px; font-style: italic;">
+      A foundational domain that supports four others (headroom 5 × 4 = 20) outscores a stabilized anchor with the same downstream (0 × 4 = 0). The system calls out where effort has room to ripple — not what the operator should do.
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Leverage headline ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">The leverage headline — system-level reading</span></h2>
+    <p>Above the domain stack on System BPs, a calm editorial sentence
+       reads the structural facts and names where effort would travel
+       furthest. Conditional verb ("<em>would</em> unblock"), explicit
+       downstream count, named downstream areas. <strong>Silent when no
+       domain meaningfully stands out.</strong></p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-operational-leverage/02-leverage-headline-crop.png" target="_blank">
+        <img src="screenshots/2026-05-15-operational-leverage/02-leverage-headline-crop.png" alt="Operational leverage headline showing Lead Intelligence as highest leverage">
+      </a>
+      <div class="caption">Operational leverage headline + system-evolution sub-line · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What the headline says:</strong>
+      <ul>
+        <li><strong>Top line</strong> — names the highest-leverage domain + the conditional ripple ("strengthening it would unblock 3 downstream areas (…)").</li>
+        <li><strong>Italic sub-line</strong> — overall system evolution phrase ("Your operational system is still being scaffolded — most areas have room to mature.").</li>
+        <li><strong>Three reason phrasings</strong> based on the score profile: <code>constrained_downstream</code> ("strengthening it would unblock N"), <code>broadest_surface</code> ("ripple through"), <code>mature_anchor</code> ("currently anchors the broadest operational surface", no "would" — contextual).</li>
+        <li><strong>Threshold:</strong> headline only fires when leverage score ≥ 3. Below that, silent.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> The headline reads slightly suggestive ("strengthening it would …") — drop to pure observation ("Lead Intelligence is the broadest downstream surface.")</label></li>
+        <li><label><input type="checkbox"> The bullseye icon (<code>bi-bullseye</code>) reads target-y / task-y — try <code>bi-graph-up</code> or <code>bi-diagram-3</code></label></li>
+        <li><label><input type="checkbox"> System-evolution sub-line is redundant with the headline — drop it</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 1…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Per-row mirror ───────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Per-domain forward-looking note — the mirror of pressure</span></h2>
+    <p>Each domain row already carries a backward-looking pressure note
+       (amber italic) when an upstream area is weaker than it. This sprint
+       adds a forward-looking leverage note (blue italic) when there is
+       room downstream. Two halves of the same coin — pressure looking
+       upstream, leverage looking downstream — living in the same italic
+       group so they read together.</p>
+
+    <table>
+      <thead>
+        <tr><th>Note</th><th>Direction</th><th>Language</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="badge badge-warn">Pressure</span></td><td>Backward (upstream)</td><td><em>"Constrained by early-stage Intake upstream — strengthening that area unblocks this one."</em></td></tr>
+        <tr><td><span class="badge badge-info">Leverage</span></td><td>Forward (downstream)</td><td><em>"Strengthening this would stabilize the 2 downstream areas that depend on it."</em></td></tr>
+      </tbody>
+    </table>
+
+    <p>The full System BPs surface, post-deploy:</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-operational-leverage/01-system-bps-leverage.png" target="_blank">
+        <img src="screenshots/2026-05-15-operational-leverage/01-system-bps-leverage.png" alt="System BPs surface with leverage headline at top + domain stack below">
+      </a>
+      <div class="caption">/portal/project/system?tab=bps · leverage headline above domain stack · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>Forward-note language ladder (calm, conditional, gated on maturity):</strong>
+      <ul>
+        <li><strong>Foundational / Emerging</strong> (low maturity, ≥1 downstream): "Strengthening this <em>would stabilize</em> the N downstream area(s) that depend on it."</li>
+        <li><strong>Coordinated / Operational</strong>: "Continued maturation here <em>would reinforce</em> N downstream area(s)."</li>
+        <li><strong>Scaling</strong>: softer — "Further refinement here <em>may</em> further stabilize N downstream area(s)."</li>
+        <li><strong>Stabilizing</strong>: no headroom → no note (silent).</li>
+        <li><strong>Zero downstream</strong>: no note (silent — nothing forward to say).</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Two italic lines per row (amber + blue) feels busy — keep only one at a time</label></li>
+        <li><label><input type="checkbox"> Blue (<code>#1d4ed8</code>) reads "info / action" — try a calmer slate or muted teal</label></li>
+        <li><label><input type="checkbox"> The icon (<code>bi-arrow-down-right-circle</code>) reads "action arrow" — try <code>bi-arrow-down-square</code> or no icon</label></li>
+        <li><label><input type="checkbox"> Should fire only when the headline domain isn't already saying it — dedupe</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 2…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Home footer ──────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Home — system leverage arrives via memory, not fetch</span></h2>
+    <p>When the operator leaves System BPs, the surface persists a
+       <code>lastLeverageSummary</code> to workspace memory. On the next
+       Home visit, <code>OperatorFocusCard</code> reads it from the frozen
+       session-start memory and renders one ambient footer line — but only
+       when it points somewhere <em>different</em> from the focus domain
+       (otherwise it'd restate what the operator is already looking at).
+       <strong>No new fetch on Home, no new card.</strong></p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-operational-leverage/05-focus-card-with-leverage-footer.png" target="_blank">
+        <img src="screenshots/2026-05-15-operational-leverage/05-focus-card-with-leverage-footer.png" alt="OperatorFocusCard with leverage footer line">
+      </a>
+      <div class="caption">OperatorFocusCard with cached system-leverage footer · production · 2026-05-15</div>
+    </div>
+
+    <p>The card now reads, top to bottom: orientation (where you are) → flows-into (what it influences) → impact (what moved while you were there) → <strong>cached system-level leverage observation</strong> (after a dashed divider). The footer line is the system telling the operator "there's a separate area worth knowing about" — never "you should go there".</p>
+
+    <p>Home in full, with the seeded memory state:</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-operational-leverage/04-home-with-leverage-summary.png" target="_blank">
+        <img src="screenshots/2026-05-15-operational-leverage/04-home-with-leverage-summary.png" alt="Cory Home with seeded leverageSummary showing the new footer line">
+      </a>
+      <div class="caption">/portal/home with seeded leverage summary · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>Suppression rules — when the footer line stays silent:</strong>
+      <ul>
+        <li>No cached <code>lastLeverageSummary</code> yet (operator hasn't visited System BPs in this browser).</li>
+        <li>Cached summary is stale (more than 72 hours old).</li>
+        <li>Cached summary points to the operator's <em>current</em> focus domain — would just restate the orientation.</li>
+        <li>OperatorFocusCard itself is hidden (no focus signal).</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> The footer reads "in your system currently" — slightly redundant. Try "Highest operational leverage currently sits in Lead Intelligence."</label></li>
+        <li><label><input type="checkbox"> Make the domain name a soft link to <code>/portal/project/system?tab=bps</code> — currently non-interactive by design</label></li>
+        <li><label><input type="checkbox"> Show the cached summary age ("noted 25m ago in System") for transparency</label></li>
+        <li><label><input type="checkbox"> Hide the footer when more than 24h old (currently 72h) — fresher = more trustworthy</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 3…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Honest framing ────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Honest framing — observation, never recommendation</span></h2>
+    <p>The most psychologically loaded line in the sprint is the leverage
+       headline. It would be very easy to drift toward "Focus your effort
+       on Lead Intelligence" — a recommendation. Instead, every sentence
+       describes <em>structural facts about the system</em> with
+       conditional verbs, leaving the operator to draw the inference.</p>
+
+    <table>
+      <thead>
+        <tr><th>Forbidden framing</th><th>Shipped framing</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>"You should focus on Lead Intelligence next."</td><td>"Highest operational leverage currently sits in Lead Intelligence — strengthening it would unblock 3 downstream areas."</td></tr>
+        <tr><td>"Fix Intake first — it's blocking everything downstream."</td><td>"Strengthening this would stabilize the 2 downstream areas that depend on it."</td></tr>
+        <tr><td>"Optimal next move: stabilize Execution."</td><td>"Continued maturation here would reinforce 1 downstream area."</td></tr>
+        <tr><td>"Lead Intelligence will guarantee Reporting improvements."</td><td>"Lead Intelligence currently anchors the broadest operational surface."</td></tr>
+        <tr><td><span class="badge badge-danger">Recommendation</span></td><td><span class="badge badge-good">Observation</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>How this is enforced:</strong>
+      <ul>
+        <li>All leverage language lives in one file: <code>operationalLeverage.ts</code>.</li>
+        <li>Unit tests assert no imperative phrases anywhere: <code>you should</code>, <code>you must</code>, <code>you need to</code>, <code>fix</code>, <code>address</code>, <code>do this</code>.</li>
+        <li>Unit tests assert no certainty words: <code>guarantee</code>, <code>optimal</code>, <code>perfect</code>, <code>definitely</code>, <code>best practice</code>.</li>
+        <li>Unit tests assert no exclamation marks anywhere in the output.</li>
+        <li>Every builder returns <code>null</code> when there's nothing meaningful to say — surfaces render nothing rather than fall back to filler.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "Strengthening it would unblock …" still suggests the operator should act — try purer "Lead Intelligence is upstream of 3 areas."</label></li>
+        <li><label><input type="checkbox"> Hide leverage commentary on rows the operator hasn't engaged with — only narrate for the focus domain</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Framing holds</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Too suggestive</label>
+      <textarea placeholder="Notes for Stop 4…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Anti-PM audit ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Anti-PM-software audit</span></h2>
+    <p>Scanned the workspace + page surfaces for any drift toward
+       assignments, deadlines, alerts, reminders, due dates, todos, or
+       imperative operator-addressing phrasing.</p>
+
+    <table>
+      <thead>
+        <tr><th>Pattern</th><th>Where found</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>\b(assign|deadline|todo|due date|reminder)\b</code></td><td>Only in a doc comment explicitly disclaiming notifications (<code>MicroToast.tsx</code>: "NOT a notification system")</td><td><span class="badge badge-good">No drift</span></td></tr>
+        <tr><td><code>you should / you must / you need to</code></td><td>Zero hits in <code>pages/portal</code> or <code>components/workspace</code></td><td><span class="badge badge-good">No drift</span></td></tr>
+        <tr><td><code>fix this / address this</code></td><td>One hit in <code>PortalBusinessProcessDetail.tsx</code>, inside a Claude Code prompt body that gets <em>copied to Claude</em> — not operator-facing copy</td><td><span class="badge badge-good">Out of scope</span></td></tr>
+        <tr><td>Recommendation-engine vocabulary in leverage util</td><td>Suite enforces no imperatives, no certainty words, no exclamations</td><td><span class="badge badge-good">Asserted by tests</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>Net result:</strong> The workspace remains operational
+      intelligence, not task-manager. The leverage layer adds editorial
+      reading without crossing into prescriptive territory.
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> The leverage headline's "would unblock" still reads slightly procedural — sharpen the audit rule to forbid "would <action>" phrasing too</label></li>
+        <li><label><input type="checkbox"> Audit missed: flag a surface I should re-examine (note below)</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Audit was sufficient</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v5" value="cut">✕ Re-audit needed</label>
+      <textarea placeholder="Notes for Stop 5…" data-notes="stop5"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Overall ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Overall verdict</span></h2>
+    <p>The platform now reads leverage from the structural facts it
+       already had on screen — lifecycle states, downstream counts,
+       pressure notes — and surfaces that reading editorially. The
+       headline names where effort would travel furthest; per-row notes
+       mirror upstream pressure with downstream leverage; Home carries
+       the cached observation forward.</p>
+
+    <p><strong>Net stats:</strong> 9 files (3 new), 211 tests passing (25
+       new), production deployed and verified. <strong>No backend changes,
+       no new endpoints, no recommendation engine.</strong> Every leverage
+       statement is a reading of facts the classifier already computes.</p>
+
+    <p><strong>What's not in this sprint:</strong> task ranking, "next best
+       action" suggestions, AI inference about what the operator should do
+       next. The line we did not cross.</p>
+
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship as-is</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 6 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Operational Leverage Sprint — operator feedback\n\nFollowing commit 4a98938 shipped 2026-05-15:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
