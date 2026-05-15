@@ -21,7 +21,14 @@ interface Props {
 }
 
 const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading }) => {
-  const [origin, setOrigin] = useState('http://localhost:8888');
+  // Default to the current page origin so production operators don't
+  // land on a stale `http://localhost:8888` default that would fail to
+  // load (mixed-content blocked on HTTPS portals, plus localhost can't
+  // resolve from a public visitor's machine). Caught during the
+  // Critique walkthrough capture, 2026-05-15.
+  const [origin, setOrigin] = useState(
+    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8888'
+  );
   const [route, setRoute] = useState('/');
   const [submitting, setSubmitting] = useState(false);
 
