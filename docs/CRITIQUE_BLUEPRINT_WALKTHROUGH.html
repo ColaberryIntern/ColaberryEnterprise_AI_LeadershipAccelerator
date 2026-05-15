@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Critique → Blueprint — How to use it, step by step</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --primary-light: #2b6cb0;
+    --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+  h1 { font-size: 30px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 22px; color: var(--primary); margin-top: 3rem; padding-top: 1.25rem; border-top: 2px solid var(--border); }
+  h2.no-border { border-top: none; padding-top: 0; }
+  h3 { font-size: 17px; color: var(--primary); margin-top: 2rem; }
+  h4 { font-size: 14px; color: var(--primary); margin-top: 1.25rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .toc { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0 2rem; }
+  .toc-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  .toc ul { margin: 0; padding-left: 18px; font-size: 14px; }
+  .toc li { margin: 2px 0; }
+  .toc a { color: var(--primary-light); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .pill { display: inline-block; background: var(--primary); color: white; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; vertical-align: middle; margin-right: 8px; }
+  .pill-critique { background: #b91c1c; }
+  .pill-blueprint { background: #1d4ed8; }
+  .pill-fix { background: var(--warn); }
+  .case { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem 1.75rem; margin: 1.5rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .case-num { display: inline-block; background: var(--primary); color: white; width: 30px; height: 30px; border-radius: 50%; text-align: center; line-height: 30px; font-weight: 700; font-size: 14px; margin-right: 10px; vertical-align: middle; }
+  .case-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .case-context { background: var(--bg); border-left: 3px solid var(--primary-light); padding: 0.75rem 1rem; border-radius: 4px; font-size: 14px; color: var(--text); margin: 1rem 0 1.5rem; }
+  .case-context strong { color: var(--primary); }
+  .step { margin: 1.5rem 0 2rem; }
+  .step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .step-num { display: inline-block; background: var(--primary-light); color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+  .step-label { font-size: 15px; font-weight: 700; color: var(--primary); }
+  .step-action { font-size: 13.5px; color: var(--muted); margin-left: 34px; margin-bottom: 8px; }
+  .step-action strong { color: var(--text); }
+  .step-action code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 12px; margin: 0.5rem 0 0 34px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11px; margin-top: 6px; text-align: center; }
+  .what-to-notice { background: #ecfdf5; border-left: 3px solid var(--accent); padding: 0.5rem 0.9rem; border-radius: 4px; font-size: 13px; color: #14532d; margin: 0.5rem 0 0 34px; }
+  .what-to-notice strong { color: #14532d; }
+  .gotcha { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.5rem 0.9rem; border-radius: 4px; font-size: 13px; color: #78350f; margin: 0.5rem 0 0 34px; }
+  .gotcha strong { color: #78350f; }
+  .fix-box { background: #fff7ed; border: 1px solid #fed7aa; border-left: 4px solid var(--warn); border-radius: 6px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+  .fix-box .fix-head { color: #9a3412; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .when-to-use { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; }
+  .when-to-use h4 { margin-top: 0; }
+  .surface-intro { background: linear-gradient(to right, #f8fafc, var(--bg)); border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-size: 14.5px; color: var(--text); }
+  .surface-intro strong { color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Critique → Blueprint: how to actually use them</h1>
+  <p class="lede">
+    A step-by-step walkthrough of the two execution surfaces, with two real
+    use cases per surface, captured live on
+    <strong>enterprise.colaberry.ai</strong> on 2026-05-15. Every
+    screenshot below is the real production page after a real click.
+  </p>
+
+  <div class="toc">
+    <div class="toc-title">What's in this document</div>
+    <ul>
+      <li><a href="#mental-model">The mental model — which tab does what</a></li>
+      <li><a href="#fix-found">Fix found along the way</a></li>
+      <li><a href="#critique">Critique — how to use it (2 use cases)</a></li>
+      <li><a href="#blueprint">Blueprint — how to use it (2 use cases)</a></li>
+      <li><a href="#gotchas">Common gotchas</a></li>
+    </ul>
+  </div>
+
+  <!-- ─────────────────────── Mental model ─────────────────────── -->
+  <h2 id="mental-model" class="no-border">The mental model — which tab does what</h2>
+  <p>The two surfaces are halves of one loop. <strong>Critique</strong>
+     is where you <em>see what's wrong</em>. <strong>Blueprint</strong>
+     is where you <em>fix it with Claude Code</em>. They hand off to each
+     other through a single compiled prompt.</p>
+
+  <table>
+    <thead>
+      <tr><th>Tab</th><th>What it's for</th><th>What you do here</th><th>What you walk away with</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="pill pill-critique">CRITIQUE</span></td>
+        <td>Visually reviewing pages and pinning issues</td>
+        <td>Open a page in an iframe, click <em>Annotate</em>, drop pins on problem areas, describe each issue, then click <em>Compile prompt</em>.</td>
+        <td>A Claude Code prompt that bundles every pin into one structured ask, with verification steps.</td>
+      </tr>
+      <tr>
+        <td><span class="pill pill-blueprint">BLUEPRINT</span></td>
+        <td>Executing one focused build with Claude Code</td>
+        <td>Walk through 6 stages: Context → Task → Prompt → Execute → Verify → Iterate. Copy the prompt, run it in Claude Code, paste the validation report back.</td>
+        <td>A shipped change, verified against telemetry.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The handoff: when you click <strong>Send to Blueprint</strong> in
+     Critique, the compiled prompt lands in Blueprint's Stage 3, the
+     context bar says "Critique pending: /your-route", and you copy + run
+     in Claude Code.</p>
+
+  <!-- ─────────────────────── Fix found ─────────────────────── -->
+  <h2 id="fix-found">Fix found along the way</h2>
+  <div class="fix-box">
+    <div class="fix-head"><span class="pill pill-fix">FIX</span>Critique landing page defaulted to <code>http://localhost:8888</code></div>
+    <p style="margin: 0;">
+      Walking through Use Case 1 surfaced an immediate breakage. The "Start
+      a new review" form's <em>Preview origin</em> defaulted to
+      <code>http://localhost:8888</code> on production — a stale dev URL
+      that any operator typing a route into would have been blocked by
+      mixed-content rules (HTTPS portal trying to load HTTP iframe). The
+      hardcoded default in <code>SessionPickerEmpty.tsx</code> was
+      replaced with <code>window.location.origin</code>, so the form now
+      pre-fills <code>https://enterprise.colaberry.ai</code> in
+      production, and your local dev origin in dev. Shipped as commit
+      <code>6298c76</code> before the rest of the walkthrough was
+      captured — so every screenshot below shows the corrected behavior.
+    </p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       CRITIQUE
+       ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="critique"><span class="pill pill-critique">CRITIQUE</span>How to use it — step by step</h2>
+
+  <div class="surface-intro">
+    Critique is your visual review desk. Open any page in your portal
+    (public site, admin surface, anything that loads in an iframe of the
+    same origin), pin issues you can see, and let the system compile your
+    pins into a Claude Code prompt. <strong>Two real use cases below.</strong>
+  </div>
+
+  <!-- ─────────────────────── CRITIQUE Use Case 1 ─────────────────────── -->
+  <div class="case">
+    <h3><span class="case-num">1</span><span class="case-title">Use Case — Reviewing the public Pricing page</span></h3>
+    <div class="case-context">
+      <strong>Scenario:</strong> A prospect emails saying "your pricing
+      page didn't tell me which tier to pick — I bounced." You want to
+      pin exactly what's wrong with the hero, compile a Claude Code prompt
+      to fix it, and hand off to Blueprint to actually ship the change.
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <span class="step-label">Open Critique</span>
+      </div>
+      <div class="step-action">Click <strong>Critique</strong> in the top nav. You land on the Visual Engineering Workspace. The "How it works · 3 steps" guide is right there, and the "Start a new review" form is below it.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc1-step1-landing.png" alt="Critique landing page with the How it works guide and Start a new review form">
+        <div class="caption">/portal/visual-workspace — landing</div>
+      </div>
+      <div class="what-to-notice"><strong>Notice:</strong> the Preview origin now defaults to your portal's URL (the fix). You only need to type the page route.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">2</span>
+        <span class="step-label">Type the route you want to review</span>
+      </div>
+      <div class="step-action">In the <strong>Page route</strong> field, type <code>/pricing</code>. Leave the Preview origin alone — it's already correct.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc1-step2-form-filled.png" alt="Start a new review form with /pricing typed">
+        <div class="caption">Form ready — origin auto-filled, route entered</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">3</span>
+        <span class="step-label">Click "Open visual workspace"</span>
+      </div>
+      <div class="step-action">The 3-pane shell loads: <strong>sidebar</strong> on the left (where your pins will appear), <strong>stage</strong> in the middle (the live page in an iframe), <strong>details</strong> on the right (which fills when you select a pin).</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc1-step3-workspace-opened.png" alt="Three-pane workspace with the live /pricing page in the iframe">
+        <div class="caption">Workspace opened — live /pricing page in the center stage</div>
+      </div>
+      <div class="what-to-notice"><strong>Notice:</strong> the actual <em>Executive Accelerator Pricing</em> hero is rendering inside the stage. This is the real production page, not a mockup.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">4</span>
+        <span class="step-label">Click "Annotate" in the bottom action bar</span>
+      </div>
+      <div class="step-action">The button label switches to <strong>Annotate mode ON</strong>. Your cursor now means "drop a pin here" when you click on the page.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc1-step4-annotate-active.png" alt="Annotate mode active">
+        <div class="caption">Annotate mode toggled on</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">5</span>
+        <span class="step-label">Click on a problem area — the annotation modal opens</span>
+      </div>
+      <div class="step-action">Click roughly where the issue is on the page (we clicked the hero). The annotation modal pops up.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc1-step5-annotation-modal.png" alt="Annotation modal opened">
+        <div class="caption">Annotation modal — opens at your click coordinates</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">6</span>
+        <span class="step-label">Describe the issue clearly, then save</span>
+      </div>
+      <div class="step-action">Write what's wrong in operator language. The description we used: <em>"The headline 'Executive Accelerator Pricing' tells the visitor WHAT this is, not WHO it's for. An exec landing here wants to know which tier matches their stage. Rewrite the hero so it leads with the operator situation, then names the tiers as outcomes, not labels."</em> Click <strong>Save annotation</strong>.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc1-step6a-annotation-filled.png" alt="Annotation modal filled in">
+        <div class="caption">Annotation filled in — ready to save</div>
+      </div>
+      <div class="what-to-notice"><strong>Tip:</strong> the more specifically you describe the desired outcome, the better the compiled Claude Code prompt becomes. Pretend you're handing off to an engineer — what would they need to know to make the right change?</div>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="step-num">7</span>
+        <span class="step-label">Click "Compile prompt" — see the full Claude Code prompt</span>
+      </div>
+      <div class="step-action">All your pins (just one here, but works for many) get bundled into a structured prompt with title, why, files to touch, implementation expectations, and verification steps. From here you can copy it, open in a new tab, or — the magic — <strong>Send to Blueprint</strong> to run it through the execution flow.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc1-step7-prompt-preview.png" alt="Compiled prompt preview modal">
+        <div class="caption">Compiled prompt — ready to paste into Claude Code or send to Blueprint</div>
+      </div>
+      <div class="what-to-notice"><strong>What just happened:</strong> the system read every pin, ranked them by severity, picked a representative title, drafted a "why" block from your descriptions, and added boilerplate verification steps (tsc, run dev server, check the route). You didn't write any of that — you just pinned what was wrong.</div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── CRITIQUE Use Case 2 ─────────────────────── -->
+  <div class="case">
+    <h3><span class="case-num">2</span><span class="case-title">Use Case — Critiquing an internal portal surface (Cory Home)</span></h3>
+    <div class="case-context">
+      <strong>Scenario:</strong> You're reviewing your own product. On Cory
+      Home, the Health tile shows 60% in amber and gives no hint of what
+      would lift it back to healthy. Operators have to click into the
+      tile to find out. You want to fix that without leaving Critique.
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">1</span><span class="step-label">Open Critique (same as before)</span></div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step1-landing.png" alt="Critique landing for use case 2">
+        <div class="caption">/portal/visual-workspace — landing</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">2</span><span class="step-label">Type a different route — this time <code>/portal/home</code></span></div>
+      <div class="step-action">The same form, different route. Any same-origin route in your portal works — the iframe loads with your session cookie so authenticated pages render normally.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step2-form-filled.png" alt="Form with /portal/home">
+        <div class="caption">Form ready for the internal portal route</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">3</span><span class="step-label">Open the workspace — Cory Home loads in the stage</span></div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step3-workspace-opened.png" alt="Cory Home loaded in the stage iframe">
+        <div class="caption">Cory Home — rendering live inside the stage iframe</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">4</span><span class="step-label">Annotate mode ON, then click the Health tile</span></div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step4-annotate-active.png" alt="Annotate mode for the home review">
+        <div class="caption">Annotate active — ready to drop a pin on the Health tile</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">5</span><span class="step-label">Pin opens — describe what's missing</span></div>
+      <div class="step-action">We wrote: <em>"Operators land on Home, see Health at 60% (amber), and have no idea what would lift it back to healthy. Add one calm sentence under the tile value naming the dominant signal pulling the score down right now (e.g. 'regressions in the last 24h' / 'verification pass rate below 80%') so the operator can act without opening the drawer."</em></div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step5-annotation-modal.png" alt="Annotation modal on home">
+        <div class="caption">Annotation modal opened on the Health tile</div>
+      </div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step6a-annotation-filled.png" alt="Annotation filled in">
+        <div class="caption">Annotation filled — concrete, operator-language, prescriptive about the desired outcome</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">6</span><span class="step-label">Pin saved — visible in the sidebar</span></div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step6b-pin-saved.png" alt="Pin saved in sidebar">
+        <div class="caption">Pin saved — the sidebar now lists your issue</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">7</span><span class="step-label">Compile prompt — same flow, different page</span></div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/critique-uc2-step7-prompt-preview.png" alt="Compiled prompt for home tile issue">
+        <div class="caption">Compiled prompt — different page, same handoff path to Blueprint</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       BLUEPRINT
+       ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="blueprint"><span class="pill pill-blueprint">BLUEPRINT</span>How to use it — step by step</h2>
+
+  <div class="surface-intro">
+    Blueprint is the execution surface. <strong>Cory decides what's next;
+    this page walks you through running it.</strong> Six stages —
+    Context, Task, Prompt, Execute, Verify, Iterate — render in sequence.
+    Two ways to land here: directly (Cory's next action takes priority),
+    or via the <em>Send to Blueprint</em> button from Critique (a
+    handoff prompt takes priority over Cory's next action).
+  </div>
+
+  <!-- ─────────────────────── BLUEPRINT Use Case 1 ─────────────────────── -->
+  <div class="case">
+    <h3><span class="case-num">1</span><span class="case-title">Use Case — Execute Cory's next action (no Critique handoff)</span></h3>
+    <div class="case-context">
+      <strong>Scenario:</strong> You open Blueprint with nothing in flight
+      from Critique. Cory has decided the next operational priority is to
+      create an artifact for <code>GET /api/courses</code> (requirement
+      REQ-027 has no artifact yet). You walk through the 6 stages,
+      copy the prompt, run it in Claude Code, paste the validation report
+      back, and verify.
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">1</span><span class="step-label">Open Blueprint</span></div>
+      <div class="step-action">Click <strong>Blueprint</strong> in the top nav. The page reads "Execute the next step." The whisper line in the context bar tells you what to do next: "Click Mark accepted to track this as your active build."</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc1-step1-landing.png" alt="Blueprint landing page">
+        <div class="caption">/portal/project/blueprint — landing, Cory's next action visible</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">2</span><span class="step-label">Read Stage 1 (Context) + Stage 2 (Task)</span></div>
+      <div class="step-action"><strong>Context</strong> tells you what we're executing and why. <strong>Task</strong> gives the specifics — action type, requirement key, suggested files. These two stages set the stage; nothing for you to do here except read.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc1-step2-context-task.png" alt="Context and Task stages">
+        <div class="caption">Stages 1 + 2 — Context (why) and Task (specifics)</div>
+      </div>
+      <div class="what-to-notice"><strong>Notice:</strong> Cory tags this with confidence 90%, blast radius low, est. 25m. That's not a guess — it's pulled from the same unified state every other surface reads.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">3</span><span class="step-label">Stage 3 — the Claude Code prompt</span></div>
+      <div class="step-action">A fully-formed Claude Code prompt with sections for Why, Requirement, Implementation expectations, and Verification. Three actions: <strong>Copy prompt</strong>, <strong>Open in new tab</strong>, <strong>Mark accepted</strong> (tracks this as your active build on Home).</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc1-step3-prompt.png" alt="Stage 3 Prompt block">
+        <div class="caption">Stage 3 — the Claude Code prompt is copy-ready</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">4</span><span class="step-label">Stage 4 — Execute (paste back the validation report)</span></div>
+      <div class="step-action">After you run the prompt in Claude Code, paste whatever Claude reports back (the validation summary, tsc results, what shipped) into the textarea. Click <strong>Submit &amp; verify</strong>. The verification reads telemetry — not just the report's claims — so the system knows whether the change actually landed.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc1-step4-execute.png" alt="Execute stage">
+        <div class="caption">Stage 4 — paste the Claude Code validation report</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">5</span><span class="step-label">Stage 5 — Verify (lightweight project-health check)</span></div>
+      <div class="step-action">A small project-health pill (here: 60%) and a recent-verifications counter. This is the "did it actually move the needle" sanity check — not an audit. If it didn't, you iterate.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc1-step5-verify.png" alt="Verify stage">
+        <div class="caption">Stage 5 — lightweight verification readout</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">6</span><span class="step-label">Stage 6 — Iterate (continue or hand back to Critique)</span></div>
+      <div class="step-action">Three exits: <strong>Complete &amp; continue</strong> (mark this build done and refresh the next), <strong>Back to Critique</strong> (return to pin more issues), <strong>Open Home</strong> (back to the L1 authority view). The "Need the legacy build surface?" link is preserved for rollback.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc1-step6-iterate.png" alt="Iterate stage">
+        <div class="caption">Stage 6 — Iterate: three deliberate exits</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── BLUEPRINT Use Case 2 ─────────────────────── -->
+  <div class="case">
+    <h3><span class="case-num">2</span><span class="case-title">Use Case — Execute a Critique handoff (the loop closes)</span></h3>
+    <div class="case-context">
+      <strong>Scenario:</strong> You just clicked <em>Send to Blueprint</em>
+      at the end of the Pricing-page Critique flow above. Blueprint
+      switches to handoff mode — the compiled critique prompt takes
+      priority over Cory's default next action, and the context bar tells
+      you exactly where to look.
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">1</span><span class="step-label">Land in Blueprint with the handoff</span></div>
+      <div class="step-action">The context bar at the top now reads <strong>"Critique pending: /pricing · ready to run in Blueprint"</strong> and the whisper says <em>"Compiled prompt is in Step 3 — copy + run in Claude Code"</em>. Stage 1 (Context) shows <strong>"Critique handoff — refining a page · Target: /pricing"</strong> — distinct from Cory's normal context block.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc2-step1-handoff-landing.png" alt="Blueprint with Critique handoff">
+        <div class="caption">Blueprint in handoff mode — bar + Stage 1 both signal the handoff</div>
+      </div>
+      <div class="what-to-notice"><strong>Notice the priority:</strong> when a Critique handoff is present, it overrides Cory's normal next_action in the prompt slot. Cory's recommendation is still tracked elsewhere; Blueprint just respects your in-flight intent.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-num">2</span><span class="step-label">Stage 3 — the compiled critique prompt</span></div>
+      <div class="step-action">The full prompt you compiled in Critique now sits in Stage 3, ready to copy. Same three actions as before (Copy prompt, Open in new tab, Mark accepted). Stages 4-6 work identically — paste the validation report, verify, iterate.</div>
+      <div class="screenshot">
+        <img src="screenshots/2026-05-15-critique-blueprint-walkthrough/blueprint-uc2-step2-handoff-prompt.png" alt="Handoff prompt in Stage 3">
+        <div class="caption">Stage 3 — the critique-compiled prompt, copy-ready</div>
+      </div>
+      <div class="what-to-notice"><strong>What this proves:</strong> the loop closed. You started in Critique with a visual problem on /pricing, ended in Blueprint with a Claude Code prompt that addresses it — without leaving the workspace, without copying anything by hand, without losing context.</div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── Gotchas ─────────────────────── -->
+  <h2 id="gotchas">Common gotchas + tips</h2>
+
+  <h3>Critique</h3>
+  <ul>
+    <li><strong>The iframe is sandboxed.</strong> Some interactions inside the iframe (logins on third-party pages, popups) won't work. Stick to same-origin portal routes for full fidelity.</li>
+    <li><strong>One session per page route.</strong> Each "Open visual workspace" creates a new session in the backend. Use the "Recent reviews" list to resume an existing one rather than spawning new ones.</li>
+    <li><strong>Description quality drives prompt quality.</strong> "This looks bad" → bad prompt. "Hero headline X reads feature-y; rewrite to name the buyer's situation, then position the tiers as outcomes" → useful prompt. Be the engineer's brief.</li>
+    <li><strong>Compile when you have 1-5 pins.</strong> The compiled prompt scales but tight bundles ship faster. If you have 12 pins, split into 2-3 compiles by theme.</li>
+  </ul>
+
+  <h3>Blueprint</h3>
+  <ul>
+    <li><strong>Cory decides what's next, Blueprint executes.</strong> If you disagree with the priority, change it on Home (Cory authority surface) — not here. This page never argues with Cory.</li>
+    <li><strong>"Mark accepted" tracks this as your active build on Home.</strong> Useful when you'll be away from your machine and want the next visit to resume right where you left off.</li>
+    <li><strong>Validation reads telemetry.</strong> Stage 4 doesn't just trust the report you paste — it cross-references the project's actual state. Don't try to gaslight it.</li>
+    <li><strong>Critique handoffs override Cory's next action <em>in the prompt slot only</em>.</strong> Cory's queue is unchanged; only this Blueprint session pulls from sessionStorage.</li>
+  </ul>
+
+  <h3>The loop</h3>
+  <ul>
+    <li><strong>Critique → Blueprint is the visual-improvement loop.</strong> See it → pin it → compile → run in Claude Code → verify. Stay in the loop until the change is real, not just intended.</li>
+    <li><strong>Critique without a Blueprint handoff is a half-loop.</strong> You can copy a compiled prompt and paste it manually into Claude Code, but you lose the verification trail. Prefer "Send to Blueprint" for anything you actually intend to ship.</li>
+    <li><strong>Don't pin what isn't visible.</strong> Critique is for things you can see on the page. For "the API is wrong" type issues, work from Cory's queue on Home instead.</li>
+  </ul>
+
+</div>
+</body>
+</html>
