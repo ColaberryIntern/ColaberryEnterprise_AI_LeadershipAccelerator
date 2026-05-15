@@ -47,19 +47,8 @@ export default function CapabilityGrid() {
     try { const r = await portalApi.post('/api/portal/project/capabilities/scope', { type, id, active }); setCaps(r.data); } catch {}
   };
 
-  if (loading) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
-
-  if (caps.length === 0) return (
-    <div className="card border-0 shadow-sm">
-      <div className="card-body text-center py-4">
-        <i className="bi bi-grid-3x3-gap d-block mb-2" style={{ fontSize: 28, color: 'var(--color-text-light)' }}></i>
-        <p className="text-muted small mb-2">No capabilities yet. Activate your project with a requirements document to generate the capability hierarchy.</p>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowBuilder(true)}><i className="bi bi-plus-lg me-1"></i>Add Feature with AI</button>
-        {showBuilder && <AIFeatureBuilder onCreated={load} onClose={() => setShowBuilder(false)} />}
-      </div>
-    </div>
-  );
-
+  // ── Derived values — must compute BEFORE any conditional early returns
+  // so the hook order stays stable across renders (React Rules of Hooks).
   const totalActive = caps.reduce((s, c) => s + c.total_active, 0);
   const completedActive = caps.reduce((s, c) => s + c.completed_active, 0);
   const overallPct = totalActive > 0 ? Math.round((completedActive / totalActive) * 100) : 0;
@@ -78,6 +67,19 @@ export default function CapabilityGrid() {
   }, [caps, bpsById]);
   const noRequirementsExtracted = totalActive === 0;
   const buildSummary = domainBuildSummary(buildBreakdown);
+
+  if (loading) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
+
+  if (caps.length === 0) return (
+    <div className="card border-0 shadow-sm">
+      <div className="card-body text-center py-4">
+        <i className="bi bi-grid-3x3-gap d-block mb-2" style={{ fontSize: 28, color: 'var(--color-text-light)' }}></i>
+        <p className="text-muted small mb-2">No capabilities yet. Activate your project with a requirements document to generate the capability hierarchy.</p>
+        <button className="btn btn-sm btn-primary" onClick={() => setShowBuilder(true)}><i className="bi bi-plus-lg me-1"></i>Add Feature with AI</button>
+        {showBuilder && <AIFeatureBuilder onCreated={load} onClose={() => setShowBuilder(false)} />}
+      </div>
+    </div>
+  );
 
   return (
     <div>
