@@ -1,0 +1,283 @@
+/**
+ * BPDomainSurfaceRows — DomainRow + BPLine subcomponents for BPDomainSurface.
+ *
+ * Extracted in the Operational Leverage Sprint, 2026-05-15, to bring
+ * BPDomainSurface back under the module size ceiling before adding the
+ * leverage layer. Pure presentation — no hooks, no state, no fetches.
+ * BPDomainSurface owns those and passes values down.
+ *
+ * One semantic addition while we're here: each domain row now renders a
+ * forwardLookingNote alongside the existing backward-looking pressureNote.
+ * The two are mirrored — pressure looking upstream, leverage looking
+ * downstream — and live in the same italic group so they read together.
+ */
+import React from 'react';
+import {
+  type DomainBucket,
+  type BPLike,
+  type LifecycleState,
+  type DomainKey,
+  type DomainRelationship,
+} from '../../utils/bpDomainClassifier';
+import { type Direction } from '../../hooks/useDomainMomentum';
+import { forwardLookingNote } from '../../utils/operationalLeverage';
+
+// Lifecycle state → tone. Softer than completion% — no hot reds.
+export const LIFECYCLE_TONE: Record<LifecycleState, { fg: string; bg: string }> = {
+  Foundational: { fg: 'var(--color-text-light)', bg: 'rgba(113,128,150,0.08)' },
+  Emerging:     { fg: '#b45309', bg: 'rgba(245,158,11,0.10)' },
+  Coordinated:  { fg: '#1d4ed8', bg: 'rgba(59,130,246,0.10)' },
+  Operational:  { fg: '#15803d', bg: 'rgba(56,161,105,0.12)' },
+  Scaling:      { fg: '#0e7490', bg: 'rgba(8,145,178,0.12)' },
+  Stabilizing:  { fg: '#6d28d9', bg: 'rgba(139,92,246,0.10)' },
+};
+
+export const MOMENTUM_TONE: Record<Direction, { fg: string; bg: string; symbol: string }> = {
+  up:            { fg: '#15803d', bg: 'rgba(56,161,105,0.10)', symbol: '↑' },
+  down:          { fg: '#b91c1c', bg: 'rgba(229,62,62,0.08)',  symbol: '↓' },
+  flat:          { fg: 'var(--color-text-light)', bg: 'transparent', symbol: '·' },
+  'first-visit': { fg: 'var(--color-text-light)', bg: 'transparent', symbol: '·' },
+};
+
+// Relationship verb → directional glyph + tone.
+export const REL_STYLE: Record<DomainRelationship['verb'], { glyph: string; fg: string }> = {
+  'receives from': { glyph: '↑', fg: '#0e7490' },  // upstream
+  'feeds':         { glyph: '↓', fg: '#1d4ed8' },  // downstream
+  'supports':      { glyph: '→', fg: '#15803d' },  // cross-cut out
+  'supported by':  { glyph: '←', fg: '#6d28d9' },  // cross-cut in
+};
+
+export const DomainRow: React.FC<{
+  bucket: DomainBucket;
+  momentum: { delta: number | null; direction: Direction; label: string; minutesSince: number | null } | undefined;
+  isExpanded: boolean;
+  isPulsing: boolean;
+  registerRef: (el: HTMLElement | null) => void;
+  onToggle: () => void;
+  onNavigate: (key: DomainKey) => void;
+  onPickBp: (id: string) => void;
+}> = ({ bucket, momentum, isExpanded, isPulsing, registerRef, onToggle, onNavigate, onPickBp }) => {
+  const tone = LIFECYCLE_TONE[bucket.lifecycleState];
+  const mom = momentum || { delta: null, direction: 'first-visit' as Direction, label: 'baseline', minutesSince: null };
+  const momTone = MOMENTUM_TONE[mom.direction];
+
+  const downstreamSummary = bucket.downstreamCount === 0
+    ? 'No downstream dependencies yet'
+    : `${bucket.downstreamCount} operational area${bucket.downstreamCount === 1 ? '' : 's'} depend${bucket.downstreamCount === 1 ? 's' : ''} on this domain`;
+
+  const forwardNote = forwardLookingNote(bucket);
+
+  return (
+    <section
+      ref={registerRef}
+      className={isPulsing ? 'ws-domain-pulse' : undefined}
+      style={{
+        background: 'white',
+        border: '1px solid var(--color-border)',
+        borderRadius: 8, overflow: 'hidden',
+      }}
+    >
+      {/* Header — toggles expand. Contains only non-interactive content. */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        style={{
+          width: '100%', background: 'transparent', border: 'none',
+          padding: '1rem 1.15rem 0.7rem', textAlign: 'left', cursor: 'pointer',
+          display: 'flex', alignItems: 'flex-start', gap: 14, minWidth: 0,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-alt)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      >
+        <i
+          className={`bi ${bucket.icon}`}
+          aria-hidden="true"
+          style={{ fontSize: 18, color: 'var(--color-text-light)', opacity: 0.7, flexShrink: 0, width: 22, marginTop: 2 }}
+        ></i>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Title row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-primary)', letterSpacing: '-0.005em' }}>
+              {bucket.label}
+            </span>
+            <span style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontWeight: 500 }}>
+              · {bucket.processes.length} BP{bucket.processes.length === 1 ? '' : 's'}
+            </span>
+            <span style={{
+              fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+              color: tone.fg, background: tone.bg, padding: '2px 7px',
+              borderRadius: 3, fontWeight: 600,
+            }}>
+              {bucket.lifecycleState}
+            </span>
+            {mom.direction !== 'first-visit' && mom.direction !== 'flat' && (
+              <span title={mom.minutesSince != null ? `since ${mom.minutesSince}m ago` : undefined} style={{
+                fontSize: 10.5, color: momTone.fg, background: momTone.bg,
+                padding: '2px 6px', borderRadius: 3, fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1 }}>{momTone.symbol}</span>
+                {mom.label}
+                {mom.delta != null && Math.abs(mom.delta) >= 1 && (
+                  <span style={{ opacity: 0.8, marginLeft: 2 }}>{mom.delta > 0 ? '+' : ''}{mom.delta}</span>
+                )}
+              </span>
+            )}
+          </div>
+
+          {/* Narrative */}
+          <div style={{ fontSize: 13, color: 'var(--color-text-light)', lineHeight: 1.6, maxWidth: 720 }}>
+            {bucket.narrative}
+          </div>
+        </div>
+
+        <i
+          className={`bi ${isExpanded ? 'bi-chevron-up' : 'bi-chevron-down'}`}
+          style={{ fontSize: 12, color: 'var(--color-text-light)', flexShrink: 0, marginTop: 5 }}
+        ></i>
+      </button>
+
+      {/* Relationship strip — always visible, CLICKABLE chips. Sits outside
+          the toggle button so chip clicks navigate instead of toggling. */}
+      {(bucket.relationships.length > 0 || bucket.pressureNote || forwardNote) && (
+        <div style={{
+          padding: '0 1.15rem 0.85rem 3.4rem',
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {bucket.relationships.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {bucket.relationships.map((rel, idx) => {
+                const rs = REL_STYLE[rel.verb];
+                return (
+                  <button
+                    key={`${rel.verb}:${rel.targetKey}:${idx}`}
+                    type="button"
+                    onClick={() => onNavigate(rel.targetKey)}
+                    title={`${bucket.label} ${rel.verb} ${rel.targetLabel} — click to jump`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)',
+                      borderRadius: 999, padding: '2px 9px 2px 7px',
+                      fontSize: 10.5, color: 'var(--color-text-light)', cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = rs.fg;
+                      e.currentTarget.style.color = 'var(--color-text)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--color-border)';
+                      e.currentTarget.style.color = 'var(--color-text-light)';
+                    }}
+                  >
+                    <span style={{ color: rs.fg, fontWeight: 700, fontSize: 11 }}>{rs.glyph}</span>
+                    <span>{rel.verb} <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{rel.targetLabel}</strong></span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {bucket.pressureNote && (
+            <div style={{
+              fontSize: 11, color: '#92400e', fontStyle: 'italic',
+              display: 'flex', alignItems: 'flex-start', gap: 5, lineHeight: 1.5,
+            }}>
+              <i className="bi bi-exclamation-circle" style={{ fontSize: 11, marginTop: 2, flexShrink: 0, opacity: 0.8 }}></i>
+              <span>{bucket.pressureNote}</span>
+            </div>
+          )}
+          {/* Forward-looking leverage note — mirrors the backward pressureNote.
+              Where pressure looks upstream ("constrained by …"), leverage
+              looks downstream ("strengthening this would stabilize …"). */}
+          {forwardNote && (
+            <div style={{
+              fontSize: 11, color: '#1d4ed8', fontStyle: 'italic',
+              display: 'flex', alignItems: 'flex-start', gap: 5, lineHeight: 1.5,
+            }}>
+              <i className="bi bi-arrow-down-right-circle" style={{ fontSize: 11, marginTop: 2, flexShrink: 0, opacity: 0.8 }}></i>
+              <span>{forwardNote}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Expanded — operational role + downstream summary + BP list */}
+      {isExpanded && (
+        <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-alt)' }}>
+          <div style={{
+            padding: '0.8rem 1.4rem 0.7rem 3.4rem',
+            borderBottom: '1px solid var(--color-border)',
+          }}>
+            <div style={{
+              fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+              color: 'var(--color-text-light)', fontWeight: 600, marginBottom: 4,
+            }}>
+              Operational role
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--color-text)', lineHeight: 1.6, maxWidth: 680 }}>
+              {bucket.entryRole}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', marginTop: 5 }}>
+              <i className="bi bi-diagram-2 me-1" style={{ fontSize: 11 }}></i>
+              {downstreamSummary}.
+            </div>
+          </div>
+          <div style={{
+            padding: '0.55rem 1.4rem 0.4rem 3.4rem',
+            fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+            color: 'var(--color-text-light)', fontWeight: 600,
+          }}>
+            Processes in this domain
+          </div>
+          {bucket.processes.map(p => (
+            <BPLine key={p.id} bp={p} onPick={() => onPickBp(p.id)} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
+export const BPLine: React.FC<{ bp: BPLike; onPick: () => void }> = ({ bp, onPick }) => {
+  const matched = bp.matched_requirements || 0;
+  const total = bp.total_requirements || 0;
+  const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
+  const usable = bp.usability?.usable === true;
+  const word = usable ? 'usable' : pct >= 50 ? 'forming' : pct > 0 ? 'early' : 'unbuilt';
+  const wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      style={{
+        width: '100%', background: 'transparent', border: 'none',
+        borderBottom: '1px solid var(--color-border)',
+        padding: '0.6rem 1.4rem 0.6rem 3.4rem',
+        textAlign: 'left', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 12,
+        fontSize: 13, color: 'var(--color-text)',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'white'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {bp.name}
+      </span>
+      {total > 0 && (
+        <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+          {matched}/{total}
+        </span>
+      )}
+      <span style={{
+        fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em',
+        color: wordColor, fontWeight: 600, flexShrink: 0,
+        minWidth: 62, textAlign: 'right',
+      }}>
+        {word}
+      </span>
+      <i className="bi bi-chevron-right" style={{ fontSize: 10, color: 'var(--color-text-light)', flexShrink: 0, opacity: 0.6 }}></i>
+    </button>
+  );
+};

@@ -47,6 +47,14 @@ const STATE_INDEX: Record<LifecycleState, number> = {
   Operational: 3, Scaling: 4, Stabilizing: 5,
 };
 
+/** Public maturity index lookup — 0 (Foundational) … 5 (Stabilizing). */
+export function lifecycleMaturityIndex(state: LifecycleState): number {
+  return STATE_INDEX[state];
+}
+
+/** Maximum maturity index (Stabilizing). Useful for computing headroom. */
+export const MAX_MATURITY_INDEX = 5;
+
 /** Relationship verbs — used sparingly, editorial, not a matrix. */
 export type RelationshipVerb =
   | 'feeds'           // A → B (downstream flow)
@@ -499,6 +507,8 @@ export interface DomainProfile {
   relationships: DomainRelationship[];
   /** Labels of domains this one feeds or supports — "your work flows into …". */
   downstreamLabels: string[];
+  /** How many downstream domains this one feeds or supports. Static — derived from the canonical graph. */
+  downstreamCount: number;
 }
 
 const DOMAIN_SPEC_BY_KEY = new Map(DOMAINS.map(d => [d.key, d] as const));
@@ -523,6 +533,7 @@ export function getDomainProfile(key: string): DomainProfile | null {
     ...supportedBy.map(k => ({ verb: 'supported by' as RelationshipVerb, targetKey: k, targetLabel: DOMAIN_LABELS[k] })),
   ];
 
+  const downstreamLabels = [...feedsInto, ...supports].map(k => DOMAIN_LABELS[k]);
   return {
     key: spec.key,
     label: spec.label,
@@ -530,7 +541,8 @@ export function getDomainProfile(key: string): DomainProfile | null {
     entryRole: spec.entryRole,
     orderIndex: spec.orderIndex,
     relationships,
-    downstreamLabels: [...feedsInto, ...supports].map(k => DOMAIN_LABELS[k]),
+    downstreamLabels,
+    downstreamCount: downstreamLabels.length,
   };
 }
 

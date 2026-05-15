@@ -17,23 +17,43 @@
 import React from 'react';
 import type { OperatorFocus } from '../../hooks/useOperatorFocus';
 import type { OperationalMomentum } from '../../hooks/useOperationalMomentum';
+import type { WorkspaceMemory } from '../../hooks/useWorkspaceMemory';
 import {
   orientationSentence,
   flowsIntoSentence,
   impactSentence,
 } from '../../utils/operatorOrientationLanguage';
+import {
+  downstreamSupportLine,
+  homeLeverageLine,
+  type LeverageSummary,
+} from '../../utils/operationalLeverage';
 
 interface Props {
   focus: OperatorFocus;
   momentum: OperationalMomentum;
+  /** Optional cached leverage summary from the last System BPs visit. */
+  leverageSummary?: WorkspaceMemory['lastLeverageSummary'];
 }
 
-const OperatorFocusCard: React.FC<Props> = ({ focus, momentum }) => {
+const OperatorFocusCard: React.FC<Props> = ({ focus, momentum, leverageSummary }) => {
   const orient = orientationSentence(focus);
   if (!orient || !focus.domain) return null; // no focus signal — render nothing
 
   const flows = flowsIntoSentence(focus);
   const impact = impactSentence(focus, momentum);
+  // Leverage emphasis only when the focus domain supports many downstream
+  // areas (4+); for smaller counts the flowsIntoSentence already names
+  // them and this line would just be a count restatement.
+  const leverageEmphasis = focus.domain.downstreamCount >= 4
+    ? downstreamSupportLine(focus.domain)
+    : null;
+  // System-level leverage from the last System BPs visit. Only surfaced
+  // when it points somewhere OTHER than the focus domain (otherwise it
+  // restates what the operator is already looking at).
+  const systemNote = leverageSummary && leverageSummary.highestLeverageLabel !== focus.domain.label
+    ? homeLeverageLine(leverageSummary as LeverageSummary)
+    : null;
 
   return (
     <div
@@ -69,9 +89,19 @@ const OperatorFocusCard: React.FC<Props> = ({ focus, momentum }) => {
             {flows}
           </div>
         )}
+        {leverageEmphasis && (
+          <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginTop: 4, lineHeight: 1.55 }}>
+            {leverageEmphasis}
+          </div>
+        )}
         {impact && (
           <div style={{ fontSize: 12, color: 'var(--color-primary-light)', marginTop: 4, lineHeight: 1.55, fontStyle: 'italic' }}>
             {impact}
+          </div>
+        )}
+        {systemNote && (
+          <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', marginTop: 6, lineHeight: 1.55, paddingTop: 6, borderTop: '1px dashed var(--color-border)' }}>
+            {systemNote}
           </div>
         )}
       </div>

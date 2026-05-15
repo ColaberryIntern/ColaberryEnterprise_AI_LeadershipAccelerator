@@ -289,8 +289,14 @@ const CoryHome: React.FC = () => {
       <ContinuationCard path={activePath} />
 
       {/* Operator orientation — "where you are shaping the system". Calm,
-          non-interactive. Hidden when there's no focus signal yet. */}
-      <OperatorFocusCard focus={operatorFocus} momentum={momentum} />
+          non-interactive. Hidden when there's no focus signal yet. The
+          leverage summary is the cached observation from the operator's
+          last System BPs visit, surfaced as one ambient line. */}
+      <OperatorFocusCard
+        focus={operatorFocus}
+        momentum={momentum}
+        leverageSummary={initialMemoryRef.current.lastLeverageSummary}
+      />
 
       {/* Recently-moved — shows deltas vs last snapshot. Hidden when nothing has moved. */}
       <RecentlyMovedCard momentum={momentum} />

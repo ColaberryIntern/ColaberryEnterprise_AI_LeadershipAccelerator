@@ -68,6 +68,14 @@ export interface WorkspaceMemory {
   /** ISO timestamp of the lastBpDomain write — drives focus recency, distinct from updatedAt. */
   lastBpDomainAt?: string;
   lastContribution?: OperatorContribution;
+  // Operational Leverage Sprint additions — system-level leverage summary
+  // cached on leave from System BPs so Home can surface one calm line.
+  lastLeverageSummary?: {
+    highestLeverageLabel: string;
+    reason: string;
+    evolutionPhrase: string | null;
+    at: string;
+  };
   /** ISO timestamp of last write, used by callers to detect freshness. */
   updatedAt?: string;
 }
