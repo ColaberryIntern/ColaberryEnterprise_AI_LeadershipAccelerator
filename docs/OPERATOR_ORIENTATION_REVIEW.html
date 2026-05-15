@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operator Orientation + System Impact — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Operator Orientation + System Impact — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-15 to <strong>enterprise.colaberry.ai</strong> (commit
+    <code>7c41fac</code>). The previous sprint taught the system to communicate
+    architecture, causality, and operational pressure. This one teaches it to
+    communicate <em>the operator's place inside the system</em> — where their
+    attention is, what their work influences downstream, and what's moved while
+    they were shaping it.
+  </p>
+
+  <div class="philosophy">
+    Before: "Here is a system you are operating." &nbsp;→&nbsp;
+    After: "Here is where <em>you</em> are shaping the system." Nothing in this
+    sprint scores the operator, ranks them, predicts their behavior, or tracks
+    activity. Every signal is a reflection of something the operator themselves
+    produced by clicking — no analytics, no AI inference, no tracking
+    infrastructure.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> operator scoring,
+    productivity analytics, user rankings, activity feeds, behavior tracking,
+    AI personalization, gamification, streaks, points, congratulation,
+    rewards, or PM-tool energy. The calm-language guardrails live in a single
+    file (<code>operatorOrientationLanguage.ts</code>) and are asserted by
+    unit tests.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Control: Home before the sprint ──── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">Before — Home with no orientation surfaces</span></h2>
+    <p>The control. Same Cory Home, captured against production with an empty
+       workspace memory. There's a priority card, three tiles, the queue, an
+       active-build slot, and a history strip — but nothing on this page says
+       <em>where</em> the operator is shaping the system, nor <em>what their
+       work influences</em>.</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-operator-orientation/01-home-no-focus.png" target="_blank">
+        <img src="screenshots/2026-05-15-operator-orientation/01-home-no-focus.png" alt="Cory Home with no orientation signal — control state">
+      </a>
+      <div class="caption">/portal/home · cleared workspace memory · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What's intentional in the empty state:</strong>
+      <ul>
+        <li>OperatorFocusCard is <strong>hidden</strong> — no focus signal yet, nothing to say.</li>
+        <li>ContinuationCard is <strong>hidden</strong> — no continuation worth surfacing.</li>
+        <li>RecentlyMovedCard is <strong>hidden</strong> — first visit, nothing has moved.</li>
+        <li>OperationalHistoryStrip shows "— first visit", "— none yet" placeholders gracefully.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Empty Home feels too sparse without orientation surfaces</label></li>
+        <li><label><input type="checkbox"> The "— first visit" placeholders should be removed entirely (more calm) rather than dashed-out</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 1…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — OperatorFocusCard ─────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">The orientation block — "Where am I shaping the system?"</span></h2>
+    <p>After the operator engages Lead Intelligence on the System BPs surface
+       (click a flow-strip stop, expand a row, or click a relationship chip),
+       Cory Home reflects that focus back to them on their next visit. One
+       calm block, three sentences in order: <strong>where</strong> → <strong>what
+       it influences</strong> → <strong>did anything move while you were
+       shaping it</strong> (honest temporal correlation, not claimed causation).</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-operator-orientation/04-operator-focus-card-crop.png" target="_blank">
+        <img src="screenshots/2026-05-15-operator-orientation/04-operator-focus-card-crop.png" alt="OperatorFocusCard close-up">
+      </a>
+      <div class="caption">OperatorFocusCard — focused crop · production · 2026-05-15</div>
+    </div>
+
+    <p>The card in the natural Home context, after engaging Lead Intelligence:</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-15-operator-orientation/02-home-with-focus.png" target="_blank">
+        <img src="screenshots/2026-05-15-operator-orientation/02-home-with-focus.png" alt="Cory Home after engaging Lead Intelligence on System">
+      </a>
+      <div class="caption">Home after real engagement on System BPs · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What shipped here:</strong>
+      <ul>
+        <li><code>OperatorFocusCard.tsx</code> — calm block under ContinuationCard. No buttons, no metrics, no chrome. Renders <em>nothing</em> when there's no focus signal.</li>
+        <li><code>useOperatorFocus</code> derives <code>{ domain, confidence: 'recent' | 'ambient', minutesSince }</code> from <code>lastBpDomain</code> in workspace memory. Pure derivation — no fetch.</li>
+        <li><code>BPDomainSurface</code> writes <code>lastBpDomain</code> only on <em>explicit</em> operator engagement (expand, flow-strip click, relationship-chip click). Never on the system's auto-expand of the first domain.</li>
+        <li><code>bpDomainClassifier.getDomainProfile(key)</code> — static domain identity (label, icon, relationships, downstream labels) with zero BP data needed, so Home doesn't fetch the BP list.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "Your operational focus" eyebrow could be quieter or removed</label></li>
+        <li><label><input type="checkbox"> The downstream sentence reads long when there are 3+ areas — consider truncating to top 2</label></li>
+        <li><label><input type="checkbox"> Move the card position (above ContinuationCard? below RecentlyMoved?)</label></li>
+        <li><label><input type="checkbox"> Make the domain name clickable to jump back to System (currently non-interactive — by design)</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 2…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Continuation reframed ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Continuation reframed as operator impact</span></h2>
+    <p>The ContinuationCard used to say "Return to System understanding" when
+       the operator left off on a System tab — navigation framing. When a focus
+       domain is known, it now says <strong>"Continue shaping Lead
+       Intelligence"</strong> — operator-impact framing. Same hook (<code>useActivePath</code>),
+       same target route, different language.</p>
+
+    <table>
+      <thead>
+        <tr><th>Before</th><th>After</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>"Return to System understanding"<br><span style="color: var(--muted); font-size: 12px;">last on bps tab · BP 7e2b…</span></td>
+          <td>"Continue shaping Lead Intelligence"<br><span style="color: var(--muted); font-size: 12px;">you were last working in this operational area</span></td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-info">Navigation</span> "go back to a tab"</td>
+          <td><span class="badge badge-good">Impact</span> "continue shaping the system"</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>What shipped here:</strong>
+      <ul>
+        <li>New <code>useActivePath</code> branch (priority 4a, before the existing System-tab branches): when <code>memory.lastBpDomain &amp;&amp; memory.lastBpDomainLabel</code>, returns operator-impact framing.</li>
+        <li>ContinuationCard itself untouched — same render, different label string.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "Continue shaping X" reads slightly active; consider "You were shaping X" (past tense)</label></li>
+        <li><label><input type="checkbox"> Redundant with OperatorFocusCard — they say similar things; consider hiding one when both apply</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 3…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Last improvement ──────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Operational history — "Last improvement"</span></h2>
+    <p>The OperationalHistoryStrip already showed four ambient pieces
+       (Synthesized · You last touched · Last critique · Confidence). It now
+       carries a fifth — <strong>Last improvement</strong> — sourced from a new
+       <code>lastContribution</code> memory written on leave when the operator
+       made forward motion this visit. Not a feed. Not a log. Exactly one
+       value, overwritten each time.</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-operator-orientation/05-history-strip-crop.png" target="_blank">
+        <img src="screenshots/2026-05-15-operator-orientation/05-history-strip-crop.png" alt="OperationalHistoryStrip showing Last improvement piece">
+      </a>
+      <div class="caption">OperationalHistoryStrip — "LAST IMPROVEMENT readiness in Lead Intelligence" · production · 2026-05-15</div>
+    </div>
+
+    <p>Captured here with seeded contribution memory to demonstrate the
+       populated state. In an empty state the piece reads "— none yet" — same
+       graceful fallback as the other strip pieces.</p>
+
+    <div class="what-shipped">
+      <strong>What shipped here:</strong>
+      <ul>
+        <li>New <code>OperatorContribution</code> field on <code>WorkspaceMemory</code>: <code>{ domainLabel, signal, at }</code>.</li>
+        <li>CoryHome leave-handler writes it when <code>netForwardMotion &gt; 0</code> AND a focus domain exists. The signal is picked via <code>dominantSignal(momentum)</code> — readiness > coverage > health > queue.</li>
+        <li>OperationalHistoryStrip's new "Last improvement" piece reads <code>contributionLine(memory.lastContribution)</code> → renders <code>"&lt;signal&gt; in &lt;domain&gt;"</code> or "— none yet".</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "Last improvement" feels evaluative — try "Last contribution" or "Last forward step"</label></li>
+        <li><label><input type="checkbox"> Strip is getting crowded (5 pieces) — drop one of the older pieces?</label></li>
+        <li><label><input type="checkbox"> Show the age too ("readiness in Lead Intelligence · 30m ago") for context</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 4…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Honest framing ────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Honest impact framing — temporal, never causal</span></h2>
+    <p>The impact line is the most psychologically loaded sentence on Cory
+       Home. It would be very easy to write something like <em>"Your work
+       strengthened readiness by 4 points"</em> — but that's a claim of
+       causation we cannot honestly make. The operator was in this domain
+       <em>while</em> readiness moved. The work and the movement are
+       temporally correlated; we don't know they are causally connected.</p>
+
+    <table>
+      <thead>
+        <tr><th>Forbidden framing</th><th>Shipped framing</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>"Your work strengthened readiness by 4 points."</td><td>"While you were shaping Lead Intelligence, readiness strengthened."</td></tr>
+        <tr><td>"Thanks to your effort in Intake, coverage expanded."</td><td>"While you were shaping Intake, coverage expanded."</td></tr>
+        <tr><td>"You cleared 3 queue items."</td><td>"While you were shaping Lead Intelligence, the queue got lighter."</td></tr>
+        <tr><td><span class="badge badge-danger">Claimed causation</span></td><td><span class="badge badge-good">Temporal correlation</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>How this is enforced:</strong>
+      <ul>
+        <li>All language lives in one file: <code>operatorOrientationLanguage.ts</code>.</li>
+        <li>Unit test asserts the impact sentence never contains "because", "caused", "thanks to", "resulted in".</li>
+        <li>Unit test asserts no exclamation marks and no congratulatory vocabulary ("great", "nice", "awesome", "congrat", "well done").</li>
+        <li>Every language builder returns <code>null</code> when there is nothing meaningful to say — surfaces render nothing rather than fall back to filler.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "While you were shaping" still reads slightly suggestive — try pure observation ("Since your last visit, readiness strengthened.")</label></li>
+        <li><label><input type="checkbox"> Hide the impact line entirely — operators may read it as scoring regardless of phrasing</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v5" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 5…" data-notes="stop5"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Calm-language audit ────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Calm-language &amp; anti-gamification audit</span></h2>
+    <p>Scanned every workspace surface for drift toward streaks, points,
+       rewards, congratulation, or consumer-SaaS energy. The audit was
+       largely clean — one drift found and fixed.</p>
+
+    <table>
+      <thead>
+        <tr><th>Surface</th><th>Audit finding</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>RecentlyMovedCard captions</td><td>"project is more prepared", "more requirements matched", "items shipped or no longer needed" — calm, factual.</td><td><span class="badge badge-good">No change</span></td></tr>
+        <tr><td>OperationalHistoryStrip eyebrows</td><td>11px muted text, no badges, no buttons. "Last improvement" added in line with existing tone.</td><td><span class="badge badge-good">No change</span></td></tr>
+        <tr><td>Drawer titleBadges</td><td>Status pills (band, count) — not gamification badges.</td><td><span class="badge badge-good">No change</span></td></tr>
+        <tr><td>CoryDrawer per-surface suggestions</td><td>"Cory at Home decides next", "compiled prompt waiting" — operational, not exhortative.</td><td><span class="badge badge-good">No change</span></td></tr>
+        <tr><td><strong>Arrival-toast icon (CoryHome)</strong></td><td><code>bi-emoji-smile</code> — read consumer-SaaS for the enterprise-exec audience.</td><td><span class="badge badge-warn">Swapped → <code>bi-arrow-up-right</code></span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>Net result:</strong> zero streaks, points, leaderboards,
+      congratulations, or gamification. The workspace continues to feel
+      <em>operationally intelligent</em>, not task-manager-like.
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> The "Welcome back — Readiness +4 · Coverage +2" toast is still slightly evaluative; tone down to "Readiness +4 · Coverage +2 since last visit"</label></li>
+        <li><label><input type="checkbox"> Drop the arrival toast entirely — RecentlyMovedCard already says this without the pop-up</label></li>
+        <li><label><input type="checkbox"> Audit missed: flag a surface I should re-examine (note below)</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Audit was sufficient</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v6" value="cut">✕ Re-audit needed</label>
+      <textarea placeholder="Notes for Stop 6…" data-notes="stop6"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Overall ───────────────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Overall verdict</span></h2>
+    <p>The operator can now see, on Cory Home, <em>where</em> they're shaping
+       the system, <em>what their work flows into</em> downstream, and an
+       honest note on motion while they were there — derived purely from
+       continuity signals they themselves produced. No backend, no tracking,
+       no analytics. Twelve files (5 new), 186 tests passing (23 new),
+       production deployed and verified.</p>
+
+    <p>The two anti-scope guardrails the plan called out were honored: no
+       operator analytics (the focus signal is what the operator clicked, not
+       what we inferred); no gamification (the only drift, a smiley toast
+       icon, was caught and fixed).</p>
+
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship as-is</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 7 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Operator Orientation Sprint — operator feedback\n\nFollowing commit 7c41fac shipped 2026-05-15:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
