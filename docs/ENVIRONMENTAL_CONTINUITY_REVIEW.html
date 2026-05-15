@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Environmental Continuity + Unified Workspace Feel — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Environmental Continuity + Unified Workspace Feel — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-15 to <strong>enterprise.colaberry.ai</strong>
+    (commit <code>842acde</code>). Three surgical changes — persistent
+    focus in the context bar, formalized surface-arrival timing with
+    reduced-motion respect, and Home + System container rhythm aligned
+    — turn the workspace from four stitched-together pages into one
+    continuous operational environment. No new components. No motion
+    libraries. No animation framework.
+  </p>
+
+  <div class="philosophy">
+    Spatial continuity didn't need a new shell architecture. It needed
+    the operator's <em>current operational context</em> to ride along
+    in the persistent bar at the top of every surface, and it needed
+    the two main reading rooms to share visual cadence. Everything
+    else — the route tree, the transition timing, the layout system
+    — was already there.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> cross-fade
+    transitions, slide-up motion, parallax, cinematic UI, animation
+    libraries (Framer Motion / GSAP / Lottie all out of scope), new
+    persistent UI chrome, or any restructuring of the route tree or
+    layout shell. The only motion that exists is the same 220ms fade
+    that was already there — now it respects
+    <code>prefers-reduced-motion</code>.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Persistent focus ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">The persistent operational context — focus travels across rooms</span></h2>
+    <p>The persistent context bar at the top of every authenticated
+       surface now carries one calm line: <strong>"shaping &lt;Focus
+       Domain&gt;"</strong>. The signal comes from
+       <code>useWorkspaceMemory().memory.lastBpDomainLabel</code> —
+       written when the operator engages a domain on System BPs, read
+       everywhere else. The operator never loses orientation when
+       moving rooms.</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-15-environmental-continuity/05-bar-crop.png" target="_blank">
+        <img src="screenshots/2026-05-15-environmental-continuity/05-bar-crop.png" alt="Workspace context bar with persistent focus line">
+      </a>
+      <div class="caption">Context bar — project · surface · <strong>shaping Lead Intelligence</strong> · in-flight line · whisper · production · 2026-05-15</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>How the line behaves:</strong>
+      <ul>
+        <li><strong>Hidden by default</strong> — operator hasn't engaged a domain yet, the bar reads exactly as before (project · surface · in-flight · whisper).</li>
+        <li><strong>Appears after the first System BPs engagement</strong> — clicking a flow strip stop, expanding a row, or jumping via a relationship chip writes <code>lastBpDomainLabel</code>; the bar picks it up immediately.</li>
+        <li><strong>Carried verbatim across Home / Critique / Blueprint / System</strong> — the bar lives in <code>PortalLayout</code>, so the signal travels without per-surface plumbing.</li>
+        <li><strong>Width-capped at 220px with ellipsis</strong> — never wraps, never elbows the in-flight slot.</li>
+        <li><strong>Hover tooltip discloses provenance</strong> — "Your operational focus, carried across surfaces from your last System engagement."</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "shaping" reads slightly active for an ambient bar — try "focus:" or just the domain name with the icon</label></li>
+        <li><label><input type="checkbox"> Make the focus segment clickable to jump to that domain on System (currently non-interactive)</label></li>
+        <li><label><input type="checkbox"> Append the cached leverage observation too ("· highest leverage sits in X") — currently deferred to keep the bar a single visual rhythm</label></li>
+        <li><label><input type="checkbox"> Add a tiny domain-icon next to the label for at-a-glance recognition</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 1…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Cross-surface continuity ─────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Cross-surface continuity — same focus, every room</span></h2>
+    <p>The "shaping Lead Intelligence" line appears identically on every
+       surface. The operator sees a unified environmental frame instead
+       of four independent pages each with their own context.</p>
+
+    <div class="pair">
+      <div class="screenshot">
+        <a href="screenshots/2026-05-15-environmental-continuity/01-home-bar-continuity.png" target="_blank">
+          <img src="screenshots/2026-05-15-environmental-continuity/01-home-bar-continuity.png" alt="Cory Home with persistent focus bar">
+        </a>
+        <div class="caption">Home — bar carries shaping Lead Intelligence · production · 2026-05-15</div>
+      </div>
+      <div class="screenshot">
+        <a href="screenshots/2026-05-15-environmental-continuity/04-system-bar-continuity.png" target="_blank">
+          <img src="screenshots/2026-05-15-environmental-continuity/04-system-bar-continuity.png" alt="System with persistent focus bar">
+        </a>
+        <div class="caption">System — same persistent focus line · production · 2026-05-15</div>
+      </div>
+      <div class="screenshot">
+        <a href="screenshots/2026-05-15-environmental-continuity/02-critique-bar-continuity.png" target="_blank">
+          <img src="screenshots/2026-05-15-environmental-continuity/02-critique-bar-continuity.png" alt="Critique with persistent focus bar">
+        </a>
+        <div class="caption">Critique — same persistent focus line · production · 2026-05-15</div>
+      </div>
+      <div class="screenshot">
+        <a href="screenshots/2026-05-15-environmental-continuity/03-blueprint-bar-continuity.png" target="_blank">
+          <img src="screenshots/2026-05-15-environmental-continuity/03-blueprint-bar-continuity.png" alt="Blueprint with persistent focus bar">
+        </a>
+        <div class="caption">Blueprint — same persistent focus line · production · 2026-05-15</div>
+      </div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What this proves:</strong> The same operational frame
+      survives every navigation. Only the surface label and the
+      in-flight line change room-to-room — the operator's focus stays
+      grounded across the whole environment.
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> When the in-flight line is long, the focus segment competes for the limited bar width — consider truncating in-flight before focus</label></li>
+        <li><label><input type="checkbox"> The bar's surface label and the focus segment use similar visual weight — distinguish them more</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Continuity holds</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 2…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Reduced motion ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Formalized surface-arrival timing — respects reduced motion</span></h2>
+    <p>The existing 220ms <code>wsFadeIn</code> outlet animation now
+       lives in a <code>.ws-surface-arrival</code> class with a
+       <code>@media (prefers-reduced-motion: reduce)</code> guard.
+       Operators who opt out of motion get an instant surface swap with
+       no transform.</p>
+
+    <p><strong>No new motion was added</strong> — only formalizing what
+       was there and honoring an accessibility preference that was
+       previously ignored.</p>
+
+    <table>
+      <thead>
+        <tr><th>Before</th><th>After</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Inline <code>style={{ animation: 'wsFadeIn 220ms ease-out' }}</code></td>
+          <td>Class <code>.ws-surface-arrival</code> with the keyframe + a media-query guard</td>
+        </tr>
+        <tr>
+          <td>Animation fires for every operator, including those with reduced-motion preferences</td>
+          <td>Animation skipped entirely when <code>prefers-reduced-motion: reduce</code></td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-warn">A11y gap</span></td>
+          <td><span class="badge badge-good">Honored</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> 220ms still feels slow on a fast machine — drop to 180ms</label></li>
+        <li><label><input type="checkbox"> 220ms still feels fast on a slow machine — bump to 280ms for more environmental "settling in"</label></li>
+        <li><label><input type="checkbox"> Remove the 2px translateY entirely — pure fade only</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 3…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Container rhythm ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Container rhythm — Home and System share cadence</span></h2>
+    <p>Three of the four main surfaces had drifted to different max-widths
+       and top-paddings. The two operational architecture surfaces —
+       Home and System — now share rhythm.</p>
+
+    <table>
+      <thead>
+        <tr><th>Surface</th><th>Before</th><th>After</th><th>Reasoning</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Cory Home</strong></td>
+          <td><code>max-width: 1080 · padding: 1.5rem 1rem 3rem</code></td>
+          <td>(unchanged)</td>
+          <td>Set the baseline; the L1 authority surface.</td>
+        </tr>
+        <tr>
+          <td><strong>SystemView</strong></td>
+          <td><code>max-width: 1100 · padding: 2rem 1rem 4rem</code></td>
+          <td><code>max-width: 1080 · padding: 1.5rem 1rem 3rem</code> <span class="badge badge-good">Aligned</span></td>
+          <td>The L4 understanding surface should sit at the same rhythm as Home so the eye doesn't reset between them.</td>
+        </tr>
+        <tr>
+          <td>ExecutionLane</td>
+          <td><code>max-width: 880</code></td>
+          <td>(unchanged)</td>
+          <td><span class="badge badge-info">Deliberate</span> — narrower reading width for the step-by-step Blueprint format.</td>
+        </tr>
+        <tr>
+          <td>VisualWorkspacePage</td>
+          <td>3-pane layout (own shell)</td>
+          <td>(unchanged)</td>
+          <td><span class="badge badge-info">Deliberate</span> — Critique needs its sidebar + stage + details split.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> ExecutionLane (880) feels too narrow compared to the new 1080 baseline — bump it to match</label></li>
+        <li><label><input type="checkbox"> Drop max-width on all surfaces and use Bootstrap's <code>.container</code> alone for true rhythm unity</label></li>
+        <li><label><input type="checkbox"> Add a shared CSS class (e.g. <code>.ws-surface-container</code>) so future surfaces can opt into the rhythm without copying values</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes for Stop 4…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Audit + overall ───────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Multi-tool-feeling audit + overall</span></h2>
+    <p>Scan for places where the workspace still feels stitched together.
+       The findings below are documented as deliberate, not as bugs to
+       fix in this sprint.</p>
+
+    <table>
+      <thead>
+        <tr><th>Surface</th><th>Audit finding</th><th>Verdict</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>SystemView Advanced tabs (Operations, Cognition)</td><td>Lazy-loaded with their own internal shells.</td><td><span class="badge badge-good">Deliberate</span> — power-user surfaces, distinct from the editorial main flow.</td></tr>
+        <tr><td>Sessions</td><td>Different rhythm + spacing from Home/System/Critique/Blueprint.</td><td><span class="badge badge-good">Deliberate</span> — coaching surface, orthogonal to the build loop.</td></tr>
+        <tr><td>Legacy <code>/portal/project/system-legacy</code> + <code>/portal/project/blueprint-legacy</code></td><td>Different containers; hidden by WorkspaceContextBar.</td><td><span class="badge badge-good">Skipped</span> — rollback-only routes, not part of the continuous experience.</td></tr>
+        <tr><td>Auth + verify surfaces</td><td>Different shell; bar hidden.</td><td><span class="badge badge-good">Deliberate</span> — pre-workspace.</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Net stats:</strong> 3 files modified (no new files), 242
+       tests still passing across 7 suites (no test churn because no
+       logic changed — only composition + persistent surface
+       extension). <strong>No backend changes, no new components, no
+       new motion.</strong></p>
+
+    <p><strong>Two scope items deferred:</strong></p>
+    <ul>
+      <li><strong>Soft return</strong> — restoring scroll position or last-expanded element on revisit. Flagged as a focused follow-up sprint if the operator wants it after this lands.</li>
+      <li><strong>Cross-surface motion choreography</strong> (focus card morphs into the bar line as you navigate). Explicitly skipped per the prompt's anti-Dribbble-energy rule.</li>
+    </ul>
+
+    <div class="verdict">
+      <strong>Overall</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship as-is</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 5 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Environmental Continuity Sprint — operator feedback\n\nFollowing commit 842acde shipped 2026-05-15:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
