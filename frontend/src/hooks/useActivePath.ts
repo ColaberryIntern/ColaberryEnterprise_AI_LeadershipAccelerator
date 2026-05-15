@@ -101,7 +101,22 @@ export function useActivePath(args: Args): ActivePath | null {
       };
     }
 
-    // 4. Last System View focus — if the operator was deep in a BP, offer return.
+    // 4. Operator-domain focus — if the operator was shaping a specific
+    // operational domain on System, frame the continuation as impact
+    // ("Continue shaping Lead Intelligence") rather than navigation
+    // ("Return to System"). Operator Orientation Sprint, 2026-05-14.
+    if (memory.lastBpDomain && memory.lastBpDomainLabel) {
+      return {
+        kind: 'last_system_tab',
+        label: `Continue shaping ${memory.lastBpDomainLabel}`,
+        detail: 'you were last working in this operational area',
+        target_route: `/portal/project/system?tab=${memory.lastSystemTab || 'bps'}`,
+        icon: 'bi-diagram-3',
+        freshness: 'ambient',
+      };
+    }
+
+    // 4b. Last System View focus — if the operator was deep in a BP, offer return.
     if (memory.lastSystemTab && memory.lastBpId) {
       return {
         kind: 'last_system_tab',
@@ -153,5 +168,5 @@ export function useActivePath(args: Args): ActivePath | null {
     }
 
     return null;
-  }, [state, memory.lastDrawerOpen, memory.lastSystemTab, memory.lastBpId, memory.lastSnapshotAt, pendingCritiquePrompt, pendingCritiqueRoute, lastCritiqueAt]);
+  }, [state, memory.lastDrawerOpen, memory.lastSystemTab, memory.lastBpId, memory.lastBpDomain, memory.lastBpDomainLabel, memory.lastSnapshotAt, pendingCritiquePrompt, pendingCritiqueRoute, lastCritiqueAt]);
 }

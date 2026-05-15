@@ -32,6 +32,7 @@ import {
   type DomainRelationship,
 } from '../../utils/bpDomainClassifier';
 import { useDomainMomentum, type Direction } from '../../hooks/useDomainMomentum';
+import { useWorkspaceMemory } from '../../hooks/useWorkspaceMemory';
 import BPDetailV2 from './BPDetailV2';
 import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
 
@@ -73,6 +74,10 @@ const BPDomainSurface: React.FC = () => {
   // relationship chip can smooth-scroll the target into view.
   const rowRefs = useRef<Record<string, HTMLElement | null>>({});
 
+  // Workspace memory — remember which domain the operator engaged so Cory
+  // Home can orient them ("you are currently shaping Lead Intelligence").
+  const { update: updateMemory } = useWorkspaceMemory();
+
   useEffect(() => {
     setLoading(true);
     bpApi.getProcesses()
@@ -85,9 +90,25 @@ const BPDomainSurface: React.FC = () => {
   const momentum = useDomainMomentum(buckets);
   const flowStops = useMemo(() => buildFlowStops(buckets), [buckets]);
 
+  // Persist the operator's current domain focus. Called on explicit
+  // engagement only (expanding a row, jumping via flow strip / relationship
+  // chip) — never on the system's auto-expand of the first domain.
+  const labelByKey = useMemo(
+    () => new Map(buckets.map(b => [b.key, b.label] as const)),
+    [buckets],
+  );
+  const rememberDomain = useCallback((key: DomainKey) => {
+    updateMemory({
+      lastBpDomain: key,
+      lastBpDomainLabel: labelByKey.get(key),
+      lastBpDomainAt: new Date().toISOString(),
+    });
+  }, [updateMemory, labelByKey]);
+
   // Navigate to a domain: expand it, smooth-scroll it into view, pulse it.
   // Used by the flow strip stops AND every relationship chip.
   const navigateToDomain = useCallback((key: DomainKey) => {
+    rememberDomain(key);
     setExpanded(e => ({ ...e, [key]: true }));
     setPulsedKey(key);
     // Let the expand paint, then scroll.
@@ -99,7 +120,7 @@ const BPDomainSurface: React.FC = () => {
     window.setTimeout(() => {
       setPulsedKey(k => (k === key ? null : k));
     }, 1700);
-  }, []);
+  }, [rememberDomain]);
 
   // Auto-expand the first populated domain on first paint.
   useEffect(() => {
@@ -263,7 +284,10 @@ const BPDomainSurface: React.FC = () => {
             isExpanded={!!expanded[b.key]}
             isPulsing={pulsedKey === b.key}
             registerRef={(el) => { rowRefs.current[b.key] = el; }}
-            onToggle={() => setExpanded(e => ({ ...e, [b.key]: !e[b.key] }))}
+            onToggle={() => {
+              if (!expanded[b.key]) rememberDomain(b.key); // about to expand — operator engagement
+              setExpanded(e => ({ ...e, [b.key]: !e[b.key] }));
+            }}
             onNavigate={navigateToDomain}
             onPickBp={setSelectedBp}
           />

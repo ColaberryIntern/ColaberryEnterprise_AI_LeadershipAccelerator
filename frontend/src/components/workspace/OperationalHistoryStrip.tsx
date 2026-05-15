@@ -4,10 +4,12 @@
  *
  * Workspace Presence Sprint, 2026-05-12.
  *
- * Shows three pieces of time-context on a single calm line:
+ * Shows pieces of time-context on a single calm line:
  *   - When the state was last synthesized (existing built_at)
  *   - When the operator last touched the workspace (memory.lastSnapshotAt)
  *   - When the last critique session was opened (sessionStorage)
+ *   - The operator's last forward contribution (memory.lastContribution) —
+ *     added in the Operator Orientation Sprint, 2026-05-14
  *
  * Each piece is collapsible to "—" when its source is null. The strip
  * is calm: 11px text, muted color, no badges, no buttons.
@@ -16,6 +18,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { UnifiedProjectState } from '../../hooks/useUnifiedProjectState';
 import type { WorkspaceMemory } from '../../hooks/useWorkspaceMemory';
 import { formatMinutesAgo } from '../../hooks/useOperationalMomentum';
+import { contributionLine } from '../../utils/operatorOrientationLanguage';
 
 interface Props {
   state: UnifiedProjectState;
@@ -45,6 +48,8 @@ const OperationalHistoryStrip: React.FC<Props> = ({ state, memory }) => {
     ? Math.max(0, Math.floor((Date.now() - new Date(lastCritiqueAt).getTime()) / 60_000))
     : null;
 
+  const lastImprovement = contributionLine(memory.lastContribution);
+
   return (
     <div
       style={{
@@ -64,6 +69,8 @@ const OperationalHistoryStrip: React.FC<Props> = ({ state, memory }) => {
       <HistoryPiece label="You last touched" value={visitMin != null ? formatMinutesAgo(visitMin) : '— first visit'} />
       <Sep />
       <HistoryPiece label="Last critique" value={critiqueMin != null ? formatMinutesAgo(critiqueMin) : '— not opened yet'} />
+      <Sep />
+      <HistoryPiece label="Last improvement" value={lastImprovement ?? '— none yet'} />
       <Sep />
       <HistoryPiece label="Confidence" value={`${state.confidence.score}%`} />
     </div>

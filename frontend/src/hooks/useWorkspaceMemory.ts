@@ -14,12 +14,18 @@
  *   lastDrawerOpen           — id of the last drawer the operator opened on Home
  *   lastSystemTab            — last tab the operator viewed on System view
  *   lastBpId                 — last BP detail viewed
+ *   lastBpDomain             — domain key of the last domain the operator engaged on System
+ *   lastBpDomainLabel        — human label for lastBpDomain (so Home needs no classifier fetch)
+ *   lastContribution         — last forward-motion contribution acknowledged on leave
  *   lastReadinessScore       — readiness score at last poll (used for delta)
  *   lastCoverageScore        — coverage score at last poll
  *   lastQueueSize            — queue length at last poll
  *   lastHealthScore          — health score at last poll
  *   lastBuiltAt              — state.built_at value at last snapshot
  *   lastSnapshotAt           — ISO timestamp of the snapshot
+ *
+ * Operator Orientation Sprint, 2026-05-14, added lastBpDomain / lastBpDomainLabel
+ * / lastContribution — all pure continuity derivation, no new tracking.
  *
  * Safe-mode: if localStorage is unavailable, hook degrades to in-memory state.
  */
@@ -28,6 +34,18 @@ import { useCallback, useEffect, useState } from 'react';
 const STORAGE_KEY = 'workspaceMemory:v1';
 
 export type DrawerId = 'readiness' | 'coverage' | 'why-this-next' | 'cory';
+
+/**
+ * A forward-motion contribution the operator made, captured on leave so the
+ * next visit can ambiently acknowledge it. Not a feed, not a log — exactly
+ * one, overwritten each time. `signal` is a short editorial phrase
+ * ("readiness", "coverage"), not a number.
+ */
+export interface OperatorContribution {
+  domainLabel: string;
+  signal: string;
+  at: string;
+}
 
 export interface WorkspaceMemory {
   lastVisitedSurface?: string;
@@ -44,6 +62,12 @@ export interface WorkspaceMemory {
   lastHealthScore?: number;
   lastBuiltAt?: string;
   lastSnapshotAt?: string;
+  // Operator Orientation Sprint additions — continuity derivation only
+  lastBpDomain?: string;
+  lastBpDomainLabel?: string;
+  /** ISO timestamp of the lastBpDomain write — drives focus recency, distinct from updatedAt. */
+  lastBpDomainAt?: string;
+  lastContribution?: OperatorContribution;
   /** ISO timestamp of last write, used by callers to detect freshness. */
   updatedAt?: string;
 }

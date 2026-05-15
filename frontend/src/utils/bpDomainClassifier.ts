@@ -483,6 +483,57 @@ export function classifyBPs(processes: BPLike[]): DomainBucket[] {
   return buckets;
 }
 
+/**
+ * Static domain identity — the canonical-flow facts about a domain that
+ * hold regardless of which BPs are present. Lets surfaces that don't load
+ * the BP list (e.g. Cory Home) still say "your work in X flows into Y"
+ * without a classifier round-trip.
+ */
+export interface DomainProfile {
+  key: DomainKey;
+  label: string;
+  icon: string;
+  entryRole: string;
+  orderIndex: number;
+  /** Full canonical relationships — receives from / feeds / supports / supported by. Unpruned. */
+  relationships: DomainRelationship[];
+  /** Labels of domains this one feeds or supports — "your work flows into …". */
+  downstreamLabels: string[];
+}
+
+const DOMAIN_SPEC_BY_KEY = new Map(DOMAINS.map(d => [d.key, d] as const));
+
+/**
+ * Resolve the static profile for a domain key. Returns null for unknown
+ * keys (e.g. memory written by an older build). Pure — no BP data needed.
+ */
+export function getDomainProfile(key: string): DomainProfile | null {
+  const spec = DOMAIN_SPEC_BY_KEY.get(key as DomainKey);
+  if (!spec) return null;
+
+  const feedsInto = spec.feedsInto || [];
+  const supports = spec.supports || [];
+  const receivesFrom = DOMAINS.filter(d => (d.feedsInto || []).includes(spec.key)).map(d => d.key);
+  const supportedBy = DOMAINS.filter(d => (d.supports || []).includes(spec.key)).map(d => d.key);
+
+  const relationships: DomainRelationship[] = [
+    ...receivesFrom.map(k => ({ verb: 'receives from' as RelationshipVerb, targetKey: k, targetLabel: DOMAIN_LABELS[k] })),
+    ...feedsInto.map(k => ({ verb: 'feeds' as RelationshipVerb, targetKey: k, targetLabel: DOMAIN_LABELS[k] })),
+    ...supports.map(k => ({ verb: 'supports' as RelationshipVerb, targetKey: k, targetLabel: DOMAIN_LABELS[k] })),
+    ...supportedBy.map(k => ({ verb: 'supported by' as RelationshipVerb, targetKey: k, targetLabel: DOMAIN_LABELS[k] })),
+  ];
+
+  return {
+    key: spec.key,
+    label: spec.label,
+    icon: spec.icon,
+    entryRole: spec.entryRole,
+    orderIndex: spec.orderIndex,
+    relationships,
+    downstreamLabels: [...feedsInto, ...supports].map(k => DOMAIN_LABELS[k]),
+  };
+}
+
 /** Canonical ordered flow stops — used by the operational flow strip. */
 export function buildFlowStops(
   buckets: DomainBucket[],
