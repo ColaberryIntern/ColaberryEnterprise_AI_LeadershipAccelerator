@@ -32,7 +32,7 @@ import {
 import { useDomainMomentum } from '../../hooks/useDomainMomentum';
 import { useWorkspaceMemory } from '../../hooks/useWorkspaceMemory';
 import { computeSystemLeverage, leverageHeadline, buildLeverageSummary } from '../../utils/operationalLeverage';
-import { systemResilienceSentence } from '../../utils/structuralConfidence';
+import { systemResilienceSentence, trustLabel } from '../../utils/structuralConfidence';
 import BPDetailV2 from './BPDetailV2';
 import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
 import { LIFECYCLE_TONE, DomainRow } from './BPDomainSurfaceRows';
@@ -240,11 +240,13 @@ const BPDomainSurface: React.FC = () => {
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-alt)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <div style={{
-                    fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
-                    color: tone.fg, fontWeight: 600, marginBottom: 3,
-                  }}>
-                    {stop.state}
+                  <div
+                    title={`Lifecycle state: ${stop.state}`}
+                    style={{
+                      fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+                      color: tone.fg, fontWeight: 600, marginBottom: 3,
+                    }}>
+                    {trustLabel(stop.state)}
                   </div>
                   <div style={{
                     fontSize: 12.5, color: 'var(--color-primary)', fontWeight: 600,
