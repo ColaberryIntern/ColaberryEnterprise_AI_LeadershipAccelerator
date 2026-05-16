@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-05-16T15:18:10.811Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "slug": "01-system-bps-with-stage-chips",
+      "label": "Full BPs surface — stage chips visible across all domain rows",
+      "file": "01-system-bps-with-stage-chips.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "02-priority-title-row-with-stage-chip",
+      "label": "Priority domain title row — stage chip alongside Current priority",
+      "file": "02-priority-title-row-with-stage-chip.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    },
+    {
+      "slug": "03-priority-expanded-bps-with-accent",
+      "label": "Priority domain expanded — primary left-border accent on each BP row",
+      "file": "03-priority-expanded-bps-with-accent.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    },
+    {
+      "slug": "04-viewport-top-no-horizontal-scroll",
+      "label": "Viewport-only capture (top of BPs surface) — confirms zero horizontal scroll",
+      "file": "04-viewport-top-no-horizontal-scroll.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    }
+  ]
+}

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operational Pathways + Cory Priority Embedding — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .deferred { background: #f0f9ff; border-left: 3px solid #0284c7; padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .deferred strong { color: #075985; }
+  .deferred ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .deferred li { font-size: 14px; color: #374151; margin: 5px 0; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; overflow: auto; font-size: 12.5px; line-height: 1.5; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+  .stage-pill { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: #f3f4f6; margin: 0 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Operational Pathways + Cory Priority Embedding — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-16 to <strong>enterprise.colaberry.ai</strong>
+    (commits <code>e3e763d</code>). Two bounded additions on top of an
+    already-mature topology surface: a calm canonical-pathway stage chip
+    on each domain row, and the priority/downstream dependency accent
+    now extending through BP rows. Plus an anti-overwhelm audit pass —
+    three findings logged for the operator, no rushed fixes shipped.
+  </p>
+
+  <div class="philosophy">
+    The prompt asked for fourteen items. Twelve of them were already
+    live (badge, accent borders, dynamic ordering, "Why this matters",
+    inherited BP context, leverage signals, calm BP vocabulary,
+    relationship chips, trust labels, lifecycle softening, BP-row
+    bottom borders, build composition). This sprint closes the two
+    actual gaps — canonical-flow anchor and dependency continuity into
+    the BP layer — and leaves the rest alone.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> a redesign,
+    a strip restoration, a graph engine, a dashboard, a motion system,
+    a shaping aura, a backend per-BP downstream computation. All
+    deferred per operator decision in the prior planning rounds.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — What's already shipped ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">What's already shipped (so we don't re-ship)</span></h2>
+    <p>Status of every item in the prompt against current production:</p>
+
+    <table>
+      <thead><tr><th>Item</th><th>Status</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>Replace horizontal flow strip</td><td><span class="badge badge-good">DONE 2026-05-15</span></td><td>Removed in Operational Priority Topology Sprint</td></tr>
+        <tr><td>Embed Cory priority into topology</td><td><span class="badge badge-good">DONE 2026-05-15</span></td><td>"Current priority" badge + 3px primary border</td></tr>
+        <tr><td>Dynamic domain priority ordering</td><td><span class="badge badge-good">DONE 2026-05-15</span></td><td><code>sortByOperationalPriority()</code></td></tr>
+        <tr><td>"Why this matters now"</td><td><span class="badge badge-good">DONE 2026-05-15</span></td><td>Calm sentence in leverage block</td></tr>
+        <tr><td>Meaningful process context</td><td><span class="badge badge-good">DONE 2026-05-16</span></td><td>Inherited domain context on each BP row (Phase 4 of recovery sprint)</td></tr>
+        <tr><td>Domain-level signals</td><td><span class="badge badge-good">DONE</span></td><td>Leverage, downstream count, trust label, momentum, priority badge</td></tr>
+        <tr><td>Improve data flow clarity (verbal)</td><td><span class="badge badge-good">DONE</span></td><td>Leverage block, "Why this matters", relationship chips</td></tr>
+        <tr><td>Operational pathways spatial expression</td><td><span class="badge badge-info">THIS SPRINT</span></td><td>Pathway-stage chip — Stop 2</td></tr>
+        <tr><td>Visual dependency markers through hierarchy</td><td><span class="badge badge-info">THIS SPRINT</span></td><td>Inherited accent on BP rows — Stop 3</td></tr>
+        <tr><td>Active shaping aura / elevated lane</td><td><span class="badge badge-warn">DEFERRED</span></td><td>Operator-confirmed sufficient with current badge + border</td></tr>
+      </tbody>
+    </table>
+
+    <div class="verdict">
+      <strong>Verdict on scope framing</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Right scope</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Missed something</label>
+      <label><input type="radio" name="v1" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Pathway stage chip ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Canonical pathway-stage chip on each domain row</span></h2>
+    <p>The dynamic priority ordering tells the operator <em>what's most
+       urgent</em>. With the horizontal flow strip removed, they had no
+       way to see <em>where each domain sits in the canonical flow</em>.
+       The new chip restores that anchor — without bringing the strip
+       back, without adding a separate sequence rail, and without
+       computing anything new (the chip is derived purely from the
+       existing <code>DomainKey</code>).</p>
+
+    <p>Four stages, mapped 1:1 from the existing <code>DomainKey</code> union:</p>
+
+    <table>
+      <thead><tr><th>Stage</th><th>Domain keys</th></tr></thead>
+      <tbody>
+        <tr><td><span class="stage-pill">Entry</span></td><td><code>public_pages</code>, <code>intake</code></td></tr>
+        <tr><td><span class="stage-pill">Coordination</span></td><td><code>lead_intelligence</code>, <code>marketing</code>, <code>ai_intelligence</code></td></tr>
+        <tr><td><span class="stage-pill">Execution</span></td><td><code>execution</code>, <code>student_lifecycle</code></td></tr>
+        <tr><td><span class="stage-pill">Reporting</span></td><td><code>reporting</code>, <code>project_admin</code></td></tr>
+      </tbody>
+    </table>
+
+    <p>The catch-all <code>other</code> domain renders no chip — honest
+       silence rather than an "Other" tag.</p>
+
+    <p>The chip in context (priority section header, showing
+       Coordination stage alongside the existing badges):</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-16-operational-pathways/03-priority-expanded-bps-with-accent.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-pathways/03-priority-expanded-bps-with-accent.png" alt="AI &amp; Intelligence domain row showing: 14 BPs · STILL FORMING · COORDINATION · CURRENT PRIORITY. Below: BP rows each carrying a primary left-border accent.">
+      </a>
+      <div class="caption">AI &amp; Intelligence (Coordination stage) — priority domain with stage chip beside the existing badges · 1064 px wide</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What shipped:</strong>
+      <ul>
+        <li><code>frontend/src/utils/pathwayStage.ts</code> — pure helper, ~43 lines, returns null for the catch-all.</li>
+        <li><code>BPDomainSurfaceRows.tsx</code> — chip in DomainRow title row alongside the trust label.</li>
+        <li>5 unit tests in <code>priorityTopology.test.ts</code> (one per stage + the null silence case). Suite at <strong>289 tests pass across 9 suites</strong> (was 284).</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Chip is too quiet — reads as just another classification badge, not a sequence anchor</label></li>
+        <li><label><input type="checkbox"> Add a prefix glyph (↳ or ▸) to read as "position in flow" vs another tag</label></li>
+        <li><label><input type="checkbox"> "Coordination" is a strange one-word stage name — try "Coordinating" or "Coordinate"</label></li>
+        <li><label><input type="checkbox"> Mapping is wrong — <code>ai_intelligence</code> belongs in Execution, not Coordination</label></li>
+        <li><label><input type="checkbox"> Mapping is wrong — <code>student_lifecycle</code> belongs in Reporting, not Execution</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Dependency accent through BP rows ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Dependency accent extended through the hierarchy</span></h2>
+    <p><code>isCoryPriority</code> and <code>isDownstreamOfPriority</code>
+       were computed in <code>DomainRow</code> and used to color the
+       <em>domain header</em>'s left border. The BP rows inside those
+       domains had no inherited signal. An operator scanning expanded
+       BPs couldn't tell at a glance which ones were inside the active
+       zone — the dependency-marker vocabulary stopped at the header.</p>
+
+    <p>Now the same left-border accent extends through every BP row
+       beneath a priority or downstream domain. Same color language,
+       same intensity ratio (priority = 3 px primary; downstream = 3 px
+       primary-light; otherwise no left-border).</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-16-operational-pathways/03-priority-expanded-bps-with-accent.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-pathways/03-priority-expanded-bps-with-accent.png" alt="AI &amp; Intelligence priority domain expanded: each BP row beneath the header (Executive Narrative Composer, Action Planner, Curriculum Generation, Artifact Generation, Discovery, etc.) carries a 3 px primary left-border, matching the domain header's accent.">
+      </a>
+      <div class="caption">Priority domain expanded — primary accent continues onto every BP row · 1064 px wide</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What shipped:</strong>
+      <ul>
+        <li><code>BPLine</code> gained an optional <code>inheritedAccent: 'priority' | 'downstream' | null</code> prop.</li>
+        <li>Renders 3 px primary on <code>'priority'</code>, 3 px primary-light on <code>'downstream'</code>, none otherwise.</li>
+        <li><code>DomainRow</code> threads the value into every BPLine via its existing <code>isCoryPriority</code> / <code>isDownstreamOfPriority</code> flags. No new state, no new computation.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Primary accent on 14 sequential BP rows is too visually heavy — try a lighter accent inside priority sections</label></li>
+        <li><label><input type="checkbox"> Should also accent BPs in <em>downstream</em> domains (primary-light), not just priority</label></li>
+        <li><label><input type="checkbox"> The accent disappears at the top of each BP row — extend the border to the section's bottom for continuity</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Full surface integrity ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Full surface — stage chips visible across the priority-ordered stack</span></h2>
+    <p>Every domain row in the stack carries its stage chip, regardless
+       of where dynamic priority placed it. Priority-first sorting +
+       canonical-flow anchor read together without conflict:</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-16-operational-pathways/01-system-bps-with-stage-chips.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-pathways/01-system-bps-with-stage-chips.png" alt="Full System BPs surface — domain rows priority-ordered top to bottom, each title bar carrying its pathway stage chip (Entry / Coordination / Execution / Reporting).">
+      </a>
+      <div class="caption">Full System BPs surface · production · 2026-05-16 · 1440 px wide · zero horizontal scroll</div>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Zero horizontal scroll ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Zero horizontal scroll — proven by Playwright diagnostic</span></h2>
+    <p>The capture script measured the document's scroll geometry at the
+       end of the run and persisted the result alongside the PNGs:</p>
+
+    <pre>// docs/screenshots/2026-05-16-operational-pathways/_scroll-diagnostic.json
+{
+  "documentScrollWidth":  1440,
+  "documentClientWidth":  1440,
+  "bodyScrollWidth":      1440,
+  "hasHorizontalScroll":  false
+}</pre>
+
+    <p>All three measurements agree: the surface renders at exactly the
+       1440 px viewport width with no overflow. No horizontal scrollbar
+       on any axis.</p>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Confirmed clean</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v5" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop5"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Anti-overwhelm audit ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Anti-overwhelm audit — three findings, all deferred</span></h2>
+    <p>Reviewed the live BPs surface for "mountain of tasks" energy.
+       Three observations surfaced. None were shipped as fixes — each
+       touches operator-decision territory or affects vocabulary that
+       the operator just accepted in the prior sprint. Logging here for
+       the next planning round.</p>
+
+    <div class="deferred">
+      <strong>Finding 1 — Inherited-context sentence repeats inside large expanded domains.</strong>
+      <ul>
+        <li><strong>Observation:</strong> A priority domain with 14 BPs (e.g., AI &amp; Intelligence) renders the italic <em>"In AI &amp; Intelligence — supports 2 downstream areas"</em> sentence 14 times in immediate vertical sequence.</li>
+        <li><strong>Operational impact:</strong> The sentence was designed to anchor each BP to its operational context. Repeated 14 times in sequence, it may shift from <em>anchor</em> to <em>boilerplate</em>.</li>
+        <li><strong>Proposed refinement:</strong> Either (a) suppress per-BP inherited context when the domain has &gt; N BPs and surface a single "section context" line above the BP list, or (b) leave as-is and trust that the operator already filters it visually.</li>
+        <li><strong>Why deferred:</strong> The operator confirmed the per-BP inheritance approach explicitly in the prior planning round. Changing it now without operator sign-off would re-litigate that decision. Logged for operator call.</li>
+      </ul>
+    </div>
+
+    <div class="deferred">
+      <strong>Finding 2 — Pathway-stage chip reads as a classification badge, not a sequence anchor.</strong>
+      <ul>
+        <li><strong>Observation:</strong> The new chip uses the same uppercase muted style as the trust-label badge. They visually read as siblings, not as different kinds of signal.</li>
+        <li><strong>Operational impact:</strong> The canonical-flow anchor is present but does not stand out as a navigation aid.</li>
+        <li><strong>Proposed refinement:</strong> Consider a subtle differentiator — a prefix glyph (<code>↳</code> or <code>▸</code>) or a different background tone — so the chip reads as <em>position in sequence</em> rather than <em>another category</em>. Operator preference call.</li>
+        <li><strong>Why deferred:</strong> Aesthetic decision; would benefit from operator review of the chip in production before iterating.</li>
+      </ul>
+    </div>
+
+    <div class="deferred">
+      <strong>Finding 3 — Leverage block doesn't reference pathway-stage vocabulary.</strong>
+      <ul>
+        <li><strong>Observation:</strong> The "Why this matters" line says <em>"Cory's current priority sits in AI &amp; Intelligence — strengthening it would influence Lead Intelligence and Execution Systems."</em> It doesn't mention that AI &amp; Intelligence sits in the Coordination stage.</li>
+        <li><strong>Operational impact:</strong> Minor. The operator can read both sentences. Cross-referencing would create cohesion between the two new vocabularies.</li>
+        <li><strong>Proposed refinement:</strong> Optionally enrich <code>whyThisMattersSentence</code> in <code>coryPriorityMatcher.ts</code> to compose pathway-stage into the sentence: <em>"Cory's current priority sits in AI &amp; Intelligence (Coordination stage) — …"</em>. Adds light coupling from <code>coryPriorityMatcher</code> to <code>pathwayStage</code>.</li>
+        <li><strong>Why deferred:</strong> The cross-utility coupling is small but real. Worth a 5-minute operator decision before adding.</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict on the audit</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Findings make sense — defer is right</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Ship some of these now</label>
+      <label><input type="radio" name="v6" value="cut">✕ Missed the real overwhelm sources</label>
+      <textarea placeholder="Which findings should ship next, and which to drop entirely…" data-notes="stop6"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Overall ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Overall</span></h2>
+    <p>Two bounded changes shipped on top of a mature topology surface.
+       Three audit findings logged for the operator. Zero horizontal
+       scroll confirmed. Editorial restraint honored — no graph engine,
+       no new colors, no motion, no new dashboards. The next decision
+       belongs to the operator: are the three deferred findings worth a
+       small follow-up sprint, or has the surface reached the right
+       calm-vs-clarity equilibrium?</p>
+    <div class="verdict">
+      <strong>Overall verdict</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship + close sprint</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Follow-up sprint on the deferred findings</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 7 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Operational Pathways + Cory Priority Embedding Sprint — operator feedback\n\nFollowing commit e3e763d shipped 2026-05-16:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n- Decide on each of the three deferred audit findings (Stop 6)\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
