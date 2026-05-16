@@ -24,6 +24,7 @@ import { forwardLookingNote } from '../../utils/operationalLeverage';
 import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
 import { metadataItems } from '../../utils/scanSpeedSignals';
 import { inheritedDomainContextSentence } from '../../utils/bpInheritedContext';
+import { pathwayStageLabel } from '../../utils/pathwayStage';
 
 // Lifecycle state → tone. Softer than completion% — no hot reds.
 export const LIFECYCLE_TONE: Record<LifecycleState, { fg: string; bg: string }> = {
@@ -138,6 +139,17 @@ export const DomainRow: React.FC<{
               }}>
               {trustLabel(bucket.lifecycleState)}
             </span>
+            {pathwayStageLabel(bucket.key) && (
+              <span
+                title={`Canonical operational pathway stage for ${bucket.label}`}
+                style={{
+                  fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em',
+                  color: 'var(--color-text-light)', background: 'var(--color-bg-alt)',
+                  padding: '2px 7px', borderRadius: 3, fontWeight: 600,
+                }}>
+                {pathwayStageLabel(bucket.key)}
+              </span>
+            )}
             {isCoryPriority && (
               <span
                 title="Cory's current operational priority lives in this domain"
@@ -303,6 +315,7 @@ export const DomainRow: React.FC<{
               bp={p}
               domainLabel={bucket.label}
               domainDownstreamCount={bucket.downstreamCount}
+              inheritedAccent={isCoryPriority ? 'priority' : isDownstreamOfPriority ? 'downstream' : null}
               onPick={() => onPickBp(p.id)}
             />
           ))}
@@ -316,8 +329,14 @@ export const BPLine: React.FC<{
   bp: BPLike;
   domainLabel?: string;
   domainDownstreamCount?: number;
+  /** Inherited from the parent DomainRow. 'priority' applies the same
+   *  3px primary accent the domain header carries; 'downstream' applies
+   *  the muted primary-light variant. Extends the dependency-marker
+   *  vocabulary through the hierarchy so the operator can scan BP rows
+   *  and see at a glance which ones sit inside the active zone. */
+  inheritedAccent?: 'priority' | 'downstream' | null;
   onPick: () => void;
-}> = ({ bp, domainLabel, domainDownstreamCount, onPick }) => {
+}> = ({ bp, domainLabel, domainDownstreamCount, inheritedAccent, onPick }) => {
   const matched = bp.matched_requirements || 0;
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
@@ -325,6 +344,11 @@ export const BPLine: React.FC<{
   const word = usable ? 'Usable' : pct >= 50 ? 'Forming' : pct > 0 ? 'Early' : 'Not built yet';
   const wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
   const inheritedContext = inheritedDomainContextSentence(domainLabel || '', domainDownstreamCount || 0);
+  const accentBorderLeft = inheritedAccent === 'priority'
+    ? '3px solid var(--color-primary)'
+    : inheritedAccent === 'downstream'
+      ? '3px solid var(--color-primary-light)'
+      : undefined;
   return (
     <button
       type="button"
@@ -332,6 +356,7 @@ export const BPLine: React.FC<{
       style={{
         width: '100%', background: 'transparent', border: 'none',
         borderBottom: '1px solid var(--color-border)',
+        borderLeft: accentBorderLeft,
         padding: '0.6rem 1.4rem 0.6rem 3.4rem',
         textAlign: 'left', cursor: 'pointer',
         display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3,

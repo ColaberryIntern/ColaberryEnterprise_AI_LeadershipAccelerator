@@ -9,6 +9,7 @@ import type { DomainBucket, DomainKey, LifecycleState, DomainRelationship, BPLik
 import { matchCoryPriorityDomain, whyThisMattersSentence } from '../utils/coryPriorityMatcher';
 import { sortByOperationalPriority, downstreamKeysOf } from '../utils/domainPrioritySorter';
 import { inheritedDomainContextSentence } from '../utils/bpInheritedContext';
+import { pathwayStageLabel } from '../utils/pathwayStage';
 
 // --- builders --------------------------------------------------------------
 
@@ -265,5 +266,33 @@ describe('inheritedDomainContextSentence', () => {
     expect(s).not.toMatch(/\b(should|must|need|needs|fix|address|improve|optimize)\b/i);
     expect(s).not.toMatch(/\b(guaranteed|optimal|perfect|critical|urgent)\b/i);
     expect(s).not.toContain('!');
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('pathwayStageLabel', () => {
+  test('Entry stage covers public_pages + intake', () => {
+    expect(pathwayStageLabel('public_pages')).toBe('Entry');
+    expect(pathwayStageLabel('intake')).toBe('Entry');
+  });
+
+  test('Coordination stage covers lead_intelligence + marketing + ai_intelligence', () => {
+    expect(pathwayStageLabel('lead_intelligence')).toBe('Coordination');
+    expect(pathwayStageLabel('marketing')).toBe('Coordination');
+    expect(pathwayStageLabel('ai_intelligence')).toBe('Coordination');
+  });
+
+  test('Execution stage covers execution + student_lifecycle', () => {
+    expect(pathwayStageLabel('execution')).toBe('Execution');
+    expect(pathwayStageLabel('student_lifecycle')).toBe('Execution');
+  });
+
+  test('Reporting stage covers reporting + project_admin', () => {
+    expect(pathwayStageLabel('reporting')).toBe('Reporting');
+    expect(pathwayStageLabel('project_admin')).toBe('Reporting');
+  });
+
+  test('"other" catch-all returns null — honest silence, no "Other" tag', () => {
+    expect(pathwayStageLabel('other')).toBeNull();
   });
 });
