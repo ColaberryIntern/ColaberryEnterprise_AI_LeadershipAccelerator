@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operational Onboarding + Guided Comprehension — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .deferred { background: #f0f9ff; border-left: 3px solid #0284c7; padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .deferred strong { color: #075985; }
+  .deferred ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .deferred li { font-size: 14px; color: #374151; margin: 5px 0; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; overflow: auto; font-size: 12.5px; line-height: 1.5; }
+  blockquote { border-left: 3px solid var(--border); padding: 6px 14px; color: var(--text); font-style: italic; margin: 0.75rem 0; background: #f9fafb; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Operational Onboarding + Guided Comprehension — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-16 to <strong>enterprise.colaberry.ai</strong>
+    (commits <code>0eb4f2f</code> + <code>1b9f725</code> + <code>e3d2f64</code>).
+    Three bounded additions for first-time operators: ambient first-visit
+    framing cards on Cory Home and System BPs, plus three surgical
+    explanatory clauses in existing canonical sentences. No tutorials,
+    no tours, no modals, no tooltip proliferation. The cards dismiss
+    once and never return.
+  </p>
+
+  <div class="philosophy">
+    The hard constraint: <em>no tutorials, tooltips, modals, tours,
+    LMS energy</em>. The threaded needle: a small calm card that
+    explains the surface in 3-4 sentences with a "Got it" dismiss
+    button, plus three single-clause explanations embedded in the
+    existing operational vocabulary. A first-time operator reads
+    one card per surface, dismisses, and the workspace looks exactly
+    as it did before — but they now know what they're looking at.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> a product
+    tour, a guided "next/next/next" sequence, a modal overlay, a
+    chat-based onboarding bot, a separate lexicon page (operator-
+    declined), or a tooltip system. The maximum tooltip footprint
+    is ONE enriched hover title-attr on the pathway-stage chip.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — The first-time-operator gap ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">The first-time-operator gap</span></h2>
+    <p>An experienced operator landing on Cory Home or System BPs sees:</p>
+    <ul>
+      <li>"Today's one priority" — a card with a domain-specific action title</li>
+      <li>"YOU WERE WORKING ON…" continuation</li>
+      <li>Readiness · Coverage · Health tiles</li>
+      <li>"OPERATIONAL LEVERAGE" + "WHY THIS MATTERS" + structural-resilience sentence</li>
+      <li>Pathway-stage chips on every domain (Entry / Coordination / Execution / Reporting)</li>
+      <li>"CURRENT PRIORITY" badge, downstream parentheticals, inherited-context section headers</li>
+    </ul>
+    <p>An experienced operator reads this fluently. A first-time
+       operator gets sophisticated surface signal without embedded
+       explanation of any of the vocabulary.</p>
+
+    <p>The constraint set ruled out every standard onboarding pattern:
+       no tours, no modals, no tooltips everywhere, no LMS, no AI-chat
+       onboarding spam. The only viable shape: ambient, embedded,
+       dismissible.</p>
+
+    <div class="verdict">
+      <strong>Verdict on framing</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Right gap identified</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Missed something</label>
+      <label><input type="radio" name="v1" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Cory Home framing card ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Cory Home — first-visit framing card</span></h2>
+    <p>A small calm card at the top of <code>/portal/home</code>,
+       above the priority card. Sole gate: <code>memory.seenIntros.home</code>.
+       Visible until the operator clicks "Got it"; then never returns.</p>
+
+    <p><strong>Body:</strong></p>
+    <blockquote>Cory reads your operational system every visit and surfaces one thing worth doing next. The tiles below show how the system is moving — readiness, coverage, health. The strip at the bottom remembers your last touch so you can pick up where you left off.</blockquote>
+
+    <p>Live in production:</p>
+    <div class="screenshot">
+      <a href="screenshots/2026-05-16-operational-onboarding/01-cory-home-first-visit-framing.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-onboarding/01-cory-home-first-visit-framing.png" alt="Cory Home with first-visit framing card visible above priority card">
+      </a>
+      <div class="caption">Cory Home — framing card above priority card · 1440 px wide</div>
+    </div>
+
+    <p>After dismiss — surface returns to its default rhythm with no trace of the card:</p>
+    <div class="screenshot">
+      <a href="screenshots/2026-05-16-operational-onboarding/02-cory-home-after-dismiss.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-onboarding/02-cory-home-after-dismiss.png" alt="Cory Home after dismissing the framing card — surface looks identical to pre-card state">
+      </a>
+      <div class="caption">Cory Home — after "Got it" dismiss · 1440 px wide</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>What shipped:</strong>
+      <ul>
+        <li>New <code>frontend/src/components/workspace/FirstVisitFramingCard.tsx</code> — calm card with eyebrow + body + "Got it" dismiss button. ~117 lines.</li>
+        <li><code>useWorkspaceMemory.ts</code> — new <code>seenIntros: { home?, systemBps? }</code> field + <code>markIntroSeen(surface)</code> writer + pure render-gate helper <code>shouldShowFirstVisitFraming</code> (extracted for pure-logic testing).</li>
+        <li>Persistence: localStorage via <code>workspaceMemory:v1</code> shape; cross-tab sync via existing storage listener.</li>
+        <li>7 new unit tests in <code>firstVisitFraming.test.ts</code>: first-visit + no dismiss → show; not first-visit → don't show; dismissed → don't show; per-surface independence; both-dismissed silence; explicit-false vs undefined.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "WHAT YOU'RE LOOKING AT" eyebrow is too generic — try "ABOUT THIS VIEW" or just remove it</label></li>
+        <li><label><input type="checkbox"> Body is too long at 3 sentences — collapse to 2</label></li>
+        <li><label><input type="checkbox"> "Got it" button is too quiet — make it more prominent so operators see the affordance</label></li>
+        <li><label><input type="checkbox"> Card competes with the priority card visually — needs more vertical separation</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Reads calm + dismissible</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — System BPs framing card ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">System BPs — first-visit framing card</span></h2>
+    <p>Same component, different surface. Sits between the editorial
+       header and the leverage block. Independent dismiss state
+       (<code>memory.seenIntros.systemBps</code>).</p>
+
+    <p><strong>Body:</strong></p>
+    <blockquote>Your operational system is grouped into domains across four canonical stages — Entry, Coordination, Execution, Reporting. The "Current priority" marker shows where Cory's attention sits today; the order adapts as the system evolves. Strengthening high-leverage areas ripples downstream.</blockquote>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-16-operational-onboarding/03-system-bps-first-visit-framing.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-onboarding/03-system-bps-first-visit-framing.png" alt="System BPs with first-visit framing card visible above leverage block">
+      </a>
+      <div class="caption">System BPs — framing card between editorial header and leverage block · 1440 px wide</div>
+    </div>
+
+    <p>After dismiss — surface returns to its default rhythm:</p>
+    <div class="screenshot">
+      <a href="screenshots/2026-05-16-operational-onboarding/04-system-bps-after-dismiss.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-onboarding/04-system-bps-after-dismiss.png" alt="System BPs after dismissing the framing card">
+      </a>
+      <div class="caption">System BPs — after "Got it" dismiss · 1440 px wide</div>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Surgical reasoning hints ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Surgical reasoning hints — three explanatory clauses</span></h2>
+    <p>Three single-clause additions to existing canonical sentences,
+       chosen to explain the highest-value-but-least-self-evident terms
+       inline. <strong>Discipline:</strong> bounded by plan to maximum
+       three; anything more becomes verbose.</p>
+
+    <table>
+      <thead><tr><th>#</th><th>Where</th><th>What was added</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><code>operationalLeverage.ts</code> — <code>leverageHeadline</code> constrained_downstream branch</td>
+          <td>Mid-sentence em-dash clause "<em>the area where strengthening ripples furthest</em>" inside the existing "Highest operational leverage…" sentence. Explains "leverage" inline without a separate definition.</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><code>BPDomainSurface.tsx</code> — editorial header</td>
+          <td>One trailing italic sentence: "<em>Domains are grouped operational areas; expanding a domain shows the business processes inside it.</em>" Frames the BP/domain hierarchy for first-time scanners.</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><code>BPDomainSurfaceRows.tsx</code> — pathway chip hover title-attr</td>
+          <td>Enriched from "Canonical operational pathway stage for {label}" to "<em>{label} sits in the {stage} stage of the operational pathway (Entry → Coordination → Execution → Reporting).</em>" No visual change — revealed on hover only.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>Leverage block with the new explanatory clause (item #1) visible inline:</p>
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-16-operational-onboarding/05-leverage-block-with-phase-c-clause.png" target="_blank">
+        <img src="screenshots/2026-05-16-operational-onboarding/05-leverage-block-with-phase-c-clause.png" alt="Leverage block carrying the new mid-sentence em-dash clause">
+      </a>
+      <div class="caption">Leverage block — "Highest operational leverage — the area where strengthening ripples furthest — currently sits in Lead Intelligence…" · 1072 px wide</div>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Em-dash clause makes the leverage sentence too long — split into two sentences</label></li>
+        <li><label><input type="checkbox"> Editorial header trailing sentence reads patronizing — drop it</label></li>
+        <li><label><input type="checkbox"> Pathway chip hover-title is invisible until hover — operator never discovers it</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reads bounded + helpful</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Insider-knowledge audit ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Insider-knowledge audit — three deferred findings</span></h2>
+    <p>Reviewed the live surfaces after Phases A + C. Three terms still
+       assume insider context. None shipped as fixes — each touches
+       operator-decision territory or would require non-trivial new
+       infrastructure. Logging for the next planning round.</p>
+
+    <div class="deferred">
+      <strong>Finding 1 — "blockers" and "queue" in the Cory Home header.</strong>
+      <ul>
+        <li><strong>Observation:</strong> The page subtitle reads "1 thing on the queue · 2 blockers" — both terms assume the operator knows what the queue tracks and what "blocker" semantically means.</li>
+        <li><strong>Operational impact:</strong> Low. The full text is short and the meaning is roughly inferable from context. But a first-time operator might not immediately tie "queue" to Cory's operational work backlog.</li>
+        <li><strong>Proposed refinement:</strong> Adjust subtitle to "1 thing Cory's queued · 2 blockers to resolve" — adds a verb that anchors the noun. Single-line edit, no new component.</li>
+        <li><strong>Why deferred:</strong> Operator preference call. The current copy is calm; the proposed copy is slightly more explicit but slightly longer.</li>
+      </ul>
+    </div>
+
+    <div class="deferred">
+      <strong>Finding 2 — "artifact" in priority titles.</strong>
+      <ul>
+        <li><strong>Observation:</strong> Cory's <code>next_action</code> titles use domain-specific jargon like "Create artifact for: GET /api/courses" — the word "artifact" reads as technical jargon to an outside reader.</li>
+        <li><strong>Operational impact:</strong> Medium. The priority card is the most-read element on Cory Home; if the title is opaque, the operator stalls.</li>
+        <li><strong>Proposed refinement:</strong> Either (a) backend change to expand the "artifact" terminology in <code>next_action.title</code>, or (b) frontend post-processing to rewrite the title. Both are larger than a one-line fix.</li>
+        <li><strong>Why deferred:</strong> Crosses into the backend's next-action generation logic. Out of scope for an onboarding-comprehension sprint.</li>
+      </ul>
+    </div>
+
+    <div class="deferred">
+      <strong>Finding 3 — "CORY · CONTEXTUAL TO HOME" whisper in the context bar.</strong>
+      <ul>
+        <li><strong>Observation:</strong> The persistent context bar carries an italic whisper labeled "CORY · CONTEXTUAL TO HOME" with a tiny "(click for full context)" affordance. The first-visit framing card now explains what Cory is, but the whisper itself doesn't reference back to that explanation.</li>
+        <li><strong>Operational impact:</strong> Low. The framing card is sufficient for orientation; the whisper is a tertiary signal.</li>
+        <li><strong>Proposed refinement:</strong> No change. The framing card's explanation carries through. If post-launch operator feedback says the whisper is opaque, revisit then.</li>
+        <li><strong>Why deferred:</strong> No clear refinement needed — leaving as-is.</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict on audit</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Findings make sense — defer is right</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Ship some of these now</label>
+      <label><input type="radio" name="v5" value="cut">✕ Missed bigger insider terms</label>
+      <textarea placeholder="Which findings should ship next, and which to drop entirely…" data-notes="stop5"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Anti-overwhelm proof ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Anti-overwhelm proof — no tooltips, no modals, no tours</span></h2>
+    <p>The framing card is the only addition to the surface. After
+       dismiss, the page is byte-identical to its pre-onboarding-sprint
+       state (modulo Phase C's three small clauses). No persistent
+       tooltips, no modal overlays, no "next" buttons, no progress dots,
+       no chat-bot avatars, no tour spinner.</p>
+
+    <p>The dismissed-state captures (Stops 2 and 3) prove the surface
+       returns cleanly to its default rhythm. No residual UI elements
+       from the onboarding work.</p>
+
+    <p>Footprint:</p>
+    <table>
+      <thead><tr><th>Onboarding addition</th><th>Footprint after dismiss</th></tr></thead>
+      <tbody>
+        <tr><td>FirstVisitFramingCard on Home</td><td>Zero — component returns <code>null</code></td></tr>
+        <tr><td>FirstVisitFramingCard on System BPs</td><td>Zero — component returns <code>null</code></td></tr>
+        <tr><td>Phase C leverage clause</td><td>Embedded in existing sentence (no new DOM element)</td></tr>
+        <tr><td>Phase C editorial header trailing sentence</td><td>One italic line — calm enough to fade visually once known</td></tr>
+        <tr><td>Phase C pathway-chip hover title-attr</td><td>Zero visual footprint (revealed on hover only)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Anti-overwhelm guardrails honored</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v6" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop6"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Overall ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Overall</span></h2>
+    <p>First-time operators now get an embedded ambient explanation on
+       each of the two main entry surfaces, plus three surgical
+       explanatory clauses inside the canonical operational vocabulary.
+       Once dismissed, the surface looks exactly as it did before. Three
+       remaining insider terms logged for operator decision in the next
+       planning round.</p>
+    <p>Sprint-specific learning: the timing-based first-visit detection
+       was tried, deployed, and didn't work in production — React strict-
+       mode + state-poll lifecycle defeated the useRef freeze. The
+       simpler "show until dismissed" gate is robust and arguably better
+       UX (existing operators get the same one-time courtesy as new
+       operators).</p>
+    <div class="verdict">
+      <strong>Overall verdict</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship + close sprint</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Follow-up sprint on deferred findings</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 7 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Operational Onboarding + Guided Comprehension Sprint — operator feedback\n\nFollowing commits 0eb4f2f + 1b9f725 + e3d2f64 shipped 2026-05-16:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n- Decide on each of the three deferred insider-knowledge findings (Stop 5)\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>

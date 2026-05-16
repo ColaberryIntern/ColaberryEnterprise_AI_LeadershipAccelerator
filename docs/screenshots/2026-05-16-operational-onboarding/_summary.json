@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-05-16T21:06:23.732Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "slug": "01-cory-home-first-visit-framing",
+      "label": "Cory Home — first-visit framing card visible above priority card",
+      "file": "01-cory-home-first-visit-framing.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "02-cory-home-after-dismiss",
+      "label": "Cory Home — after dismiss, card hidden, surface returns to default rhythm",
+      "file": "02-cory-home-after-dismiss.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "03-system-bps-first-visit-framing",
+      "label": "System BPs — first-visit framing card visible between editorial header and leverage block",
+      "file": "03-system-bps-first-visit-framing.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "04-system-bps-after-dismiss",
+      "label": "System BPs — after dismiss, card hidden, surface returns to default rhythm",
+      "file": "04-system-bps-after-dismiss.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "05-leverage-block-with-phase-c-clause",
+      "label": "Leverage block — Phase C explanatory clause \"the area where strengthening ripples furthest\"",
+      "file": "05-leverage-block-with-phase-c-clause.png",
+      "originalWidth": 1072,
+      "finalWidth": 1072,
+      "downscaled": false
+    }
+  ]
+}
