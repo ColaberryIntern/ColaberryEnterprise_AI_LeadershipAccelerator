@@ -1,16 +1,18 @@
 /**
- * bpInheritedContext — calm helper that surfaces a BP's inherited
- * domain-level operational context inside each BP row, so even unbuilt
- * BPs read as "part of an area that matters" rather than flat inventory.
+ * bpInheritedContext — calm helper that surfaces a BP-section's
+ * inherited operational context as a single section-header sentence
+ * above the BP list, so unbuilt BPs read as "part of an area that
+ * matters" rather than flat inventory.
  *
- * Operational Priority Topology Recovery Sprint, 2026-05-16.
+ * Operational Priority Topology Recovery Sprint, 2026-05-16 — original
+ * per-BP variant.
  *
- * Background: in the prior sprint, each BP row in an expanded domain
- * rendered as a single horizontal line — name, count, builtness word,
- * chevron. The eye drops from the domain header (which mentions
- * downstream relationships) into a flat list that loses operational
- * weight. This helper produces a one-line italic sub-sentence that
- * travels with each BP row, inheriting the domain's downstream count.
+ * Semantic Coherence + Operational Wayfinding Sprint, 2026-05-16 —
+ * collapsed to a single section-header phrasing. In a large expanded
+ * domain (e.g. 14 BPs), the per-BP form was repeating the same sentence
+ * 14 times in immediate vertical sequence — shifting from anchor to
+ * boilerplate. The section-header form preserves inheritance
+ * understanding without the visual repetition.
  *
  * Observational tone only. Returns null when there is nothing
  * meaningful to say (no downstream, missing label) — honest silence,
@@ -24,5 +26,5 @@ export function inheritedDomainContextSentence(
   if (!domainLabel) return null;
   if (downstreamCount <= 0) return null;
   const noun = downstreamCount === 1 ? 'area' : 'areas';
-  return `In ${domainLabel} — supports ${downstreamCount} downstream ${noun}.`;
+  return `Each BP below sits inside ${domainLabel} — supports ${downstreamCount} downstream ${noun}.`;
 }

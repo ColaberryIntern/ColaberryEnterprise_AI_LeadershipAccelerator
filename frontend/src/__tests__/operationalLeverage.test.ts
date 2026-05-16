@@ -243,14 +243,14 @@ describe('downstreamSupportLine', () => {
     // intake feeds into lead_intelligence only
     const profile = getDomainProfile('intake')!;
     expect(profile.downstreamCount).toBe(1);
-    expect(downstreamSupportLine(profile)).toBe('This area supports 1 downstream operational area.');
+    expect(downstreamSupportLine(profile)).toBe('This area supports 1 downstream area.');
   });
 
   test('domain with multiple downstream → plural numeric line', () => {
     // lead_intelligence feeds marketing + execution and supports reporting → 3
     const profile = getDomainProfile('lead_intelligence')!;
     const out = downstreamSupportLine(profile)!;
-    expect(out).toBe('This area supports 3 downstream operational areas.');
+    expect(out).toBe('This area supports 3 downstream areas.');
     assertCalm(out);
   });
 });

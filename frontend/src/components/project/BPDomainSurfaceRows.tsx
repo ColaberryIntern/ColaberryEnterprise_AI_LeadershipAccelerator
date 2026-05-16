@@ -143,10 +143,12 @@ export const DomainRow: React.FC<{
               <span
                 title={`Canonical operational pathway stage for ${bucket.label}`}
                 style={{
-                  fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.08em',
-                  color: 'var(--color-text-light)', background: 'var(--color-bg-alt)',
-                  padding: '2px 7px', borderRadius: 3, fontWeight: 600,
+                  fontSize: 11.5,
+                  color: 'var(--color-text-light)',
+                  fontWeight: 500,
+                  letterSpacing: 0,
                 }}>
+                <span aria-hidden="true" style={{ opacity: 0.55, marginRight: 4 }}>·</span>
                 {pathwayStageLabel(bucket.key)}
               </span>
             )}
@@ -309,12 +311,19 @@ export const DomainRow: React.FC<{
           }}>
             Processes in this domain
           </div>
+          {inheritedDomainContextSentence(bucket.label, bucket.downstreamCount) && (
+            <div style={{
+              padding: '0 1.4rem 0.5rem 3.4rem',
+              fontSize: 11.5, color: 'var(--color-text-light)',
+              fontStyle: 'italic', opacity: 0.85, lineHeight: 1.4,
+            }}>
+              {inheritedDomainContextSentence(bucket.label, bucket.downstreamCount)}
+            </div>
+          )}
           {bucket.processes.map(p => (
             <BPLine
               key={p.id}
               bp={p}
-              domainLabel={bucket.label}
-              domainDownstreamCount={bucket.downstreamCount}
               inheritedAccent={isCoryPriority ? 'priority' : isDownstreamOfPriority ? 'downstream' : null}
               onPick={() => onPickBp(p.id)}
             />
@@ -327,8 +336,6 @@ export const DomainRow: React.FC<{
 
 export const BPLine: React.FC<{
   bp: BPLike;
-  domainLabel?: string;
-  domainDownstreamCount?: number;
   /** Inherited from the parent DomainRow. 'priority' applies the same
    *  3px primary accent the domain header carries; 'downstream' applies
    *  the muted primary-light variant. Extends the dependency-marker
@@ -336,14 +343,13 @@ export const BPLine: React.FC<{
    *  and see at a glance which ones sit inside the active zone. */
   inheritedAccent?: 'priority' | 'downstream' | null;
   onPick: () => void;
-}> = ({ bp, domainLabel, domainDownstreamCount, inheritedAccent, onPick }) => {
+}> = ({ bp, inheritedAccent, onPick }) => {
   const matched = bp.matched_requirements || 0;
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
   const usable = bp.usability?.usable === true;
   const word = usable ? 'Usable' : pct >= 50 ? 'Forming' : pct > 0 ? 'Early' : 'Not built yet';
   const wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
-  const inheritedContext = inheritedDomainContextSentence(domainLabel || '', domainDownstreamCount || 0);
   const accentBorderLeft = inheritedAccent === 'priority'
     ? '3px solid var(--color-primary)'
     : inheritedAccent === 'downstream'
@@ -359,41 +365,28 @@ export const BPLine: React.FC<{
         borderLeft: accentBorderLeft,
         padding: '0.6rem 1.4rem 0.6rem 3.4rem',
         textAlign: 'left', cursor: 'pointer',
-        display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3,
+        display: 'flex', alignItems: 'center', gap: 12,
         fontSize: 13, color: 'var(--color-text)',
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = 'white'; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
-        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {bp.name}
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {bp.name}
+      </span>
+      {total > 0 && (
+        <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+          {matched}/{total}
         </span>
-        {total > 0 && (
-          <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-            {matched}/{total}
-          </span>
-        )}
-        <span style={{
-          fontSize: 11, letterSpacing: '0.01em',
-          color: wordColor, fontWeight: 600, flexShrink: 0,
-          minWidth: 80, textAlign: 'right',
-        }}>
-          {word}
-        </span>
-        <i className="bi bi-chevron-right" style={{ fontSize: 10, color: 'var(--color-text-light)', flexShrink: 0, opacity: 0.6 }}></i>
-      </div>
-      {inheritedContext && (
-        <div style={{
-          fontSize: 11.5,
-          color: 'var(--color-text-light)',
-          fontStyle: 'italic',
-          opacity: 0.85,
-          lineHeight: 1.4,
-        }}>
-          {inheritedContext}
-        </div>
       )}
+      <span style={{
+        fontSize: 11, letterSpacing: '0.01em',
+        color: wordColor, fontWeight: 600, flexShrink: 0,
+        minWidth: 80, textAlign: 'right',
+      }}>
+        {word}
+      </span>
+      <i className="bi bi-chevron-right" style={{ fontSize: 10, color: 'var(--color-text-light)', flexShrink: 0, opacity: 0.6 }}></i>
     </button>
   );
 };

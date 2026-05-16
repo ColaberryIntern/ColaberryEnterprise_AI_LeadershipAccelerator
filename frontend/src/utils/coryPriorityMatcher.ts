@@ -21,6 +21,7 @@
  *     imperative
  */
 import { classifyTextToDomain, type DomainBucket, type DomainKey } from './bpDomainClassifier';
+import { pathwayStageLabel } from './pathwayStage';
 
 /** Minimal shape we care about — keeps this util independent of the full state type. */
 export interface NextActionLike {
@@ -82,24 +83,59 @@ export function matchCoryPriorityDomain(
 }
 
 /**
- * "Cory's current priority sits in Lead Intelligence — strengthening it
- *  would influence Marketing Operations, Execution Systems, and
- *  Reporting & Analytics."
+ * "Cory's current priority sits in AI & Intelligence (Coordination) —
+ *  strengthening it would influence Lead Intelligence (Coordination)
+ *  and Execution Systems (Execution)."
  *
- * Returns null when there is no priority domain or when the domain has
- * no downstream — silence is honest no-signal behavior.
+ * The parenthetical pathway-stage tags reinforce the same vocabulary
+ * the operator sees in each domain row's title bar — one mental model,
+ * one operational language. Pathway stage is omitted for the catch-all
+ * `other` domain (pathwayStageLabel returns null there); no "(null)"
+ * artifacts ever appear.
+ *
+ * Returns null when there is no priority domain — silence is honest
+ * no-signal behavior.
+ *
+ * Semantic Coherence + Operational Wayfinding Sprint, 2026-05-16:
+ * enriched with pathway-stage parentheticals so the leverage block
+ * reinforces the topology vocabulary rather than living beside it.
  */
 export function whyThisMattersSentence(
   priorityDomain: DomainBucket | null | undefined,
+  buckets?: DomainBucket[],
 ): string | null {
   if (!priorityDomain) return null;
-  const downstream = priorityDomain.relationships
-    .filter(r => r.verb === 'feeds' || r.verb === 'supports')
-    .map(r => r.targetLabel);
-  if (downstream.length === 0) {
-    return `Cory's current priority sits in ${priorityDomain.label}.`;
+  const priorityWithStage = withStage(priorityDomain.label, priorityDomain.key);
+
+  const downstreamRels = priorityDomain.relationships
+    .filter(r => r.verb === 'feeds' || r.verb === 'supports');
+  if (downstreamRels.length === 0) {
+    return `Cory's current priority sits in ${priorityWithStage}.`;
   }
-  return `Cory's current priority sits in ${priorityDomain.label} — strengthening it would influence ${joinLabels(downstream)}.`;
+
+  // When the caller passes the full bucket list, look up each downstream
+  // target's pathway stage too — keeps the parenthetical vocabulary
+  // consistent end-to-end. When buckets are absent, fall back to plain
+  // labels (existing callers in tests that pass priorityDomain alone
+  // still work).
+  const bucketByKey = new Map<DomainKey, DomainBucket>();
+  if (buckets) for (const b of buckets) bucketByKey.set(b.key, b);
+
+  const downstreamLabels = downstreamRels.map(r => {
+    const target = bucketByKey.get(r.targetKey);
+    return target ? withStage(r.targetLabel, target.key) : r.targetLabel;
+  });
+  return `Cory's current priority sits in ${priorityWithStage} — strengthening it would influence ${joinLabels(downstreamLabels)}.`;
+}
+
+/**
+ * Compose a domain label with its pathway-stage parenthetical, or just
+ * the label if the domain has no canonical stage (the catch-all 'other'
+ * is the only case where pathwayStageLabel returns null).
+ */
+function withStage(label: string, key: DomainKey): string {
+  const stage = pathwayStageLabel(key);
+  return stage ? `${label} (${stage})` : label;
 }
 
 function joinLabels(labels: string[]): string {

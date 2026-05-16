@@ -96,8 +96,8 @@ const BPDomainSurface: React.FC = () => {
     [buckets, coryPriorityDomain],
   );
   const whyMattersLine = useMemo(
-    () => whyThisMattersSentence(priorityBucket),
-    [priorityBucket],
+    () => whyThisMattersSentence(priorityBucket, buckets),
+    [priorityBucket, buckets],
   );
 
   // System-level leverage — where in the operational system effort would

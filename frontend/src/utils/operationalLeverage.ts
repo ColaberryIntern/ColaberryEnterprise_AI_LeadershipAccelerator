@@ -122,11 +122,11 @@ function extractUpstreamLabel(pressureNote: string | null): string | null {
 function systemEvolutionPhrase(buckets: DomainBucket[]): string | null {
   if (buckets.length < 3) return null;
   const avg = buckets.reduce((s, b) => s + lifecycleMaturityIndex(b.lifecycleState), 0) / buckets.length;
-  if (avg < 1.2) return 'Your operational system is still being scaffolded — most areas have room to mature.';
-  if (avg < 2.2) return 'Your operational system is in early coordination — the through-lines are forming but maturity is uneven.';
-  if (avg < 3.2) return 'Your operational system is broadly coordinated — most areas are wired and producing reliably.';
-  if (avg < 4.0) return 'Your operational system is operating at scale — ongoing work is widening, not building.';
-  return 'Your operational system is mature and stable — ongoing work is refinement.';
+  if (avg < 1.2) return 'Your operational structure is still being scaffolded — most areas have room to mature.';
+  if (avg < 2.2) return 'Your operational structure is in early coordination — the through-lines are forming but maturity is uneven.';
+  if (avg < 3.2) return 'Your operational structure is broadly coordinated — most areas are wired and producing reliably.';
+  if (avg < 4.0) return 'Your operational structure is operating at scale — ongoing work is widening, not building.';
+  return 'Your operational structure is mature and stable — ongoing work is refinement.';
 }
 
 // ---------------------------------------------------------------------------
@@ -185,8 +185,8 @@ export function downstreamSupportLine(profile: DomainProfile): string | null {
   const n = profile.downstreamCount;
   if (n === 0) return null;
   if (n >= 4) return 'This area supports the broadest operational surface.';
-  if (n === 1) return 'This area supports 1 downstream operational area.';
-  return `This area supports ${n} downstream operational areas.`;
+  if (n === 1) return 'This area supports 1 downstream area.';
+  return `This area supports ${n} downstream areas.`;
 }
 
 /**

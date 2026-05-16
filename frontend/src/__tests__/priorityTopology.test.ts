@@ -134,7 +134,7 @@ describe('whyThisMattersSentence', () => {
     expect(whyThisMattersSentence(undefined)).toBeNull();
   });
 
-  test('domain with downstream → "strengthening it would influence …"', () => {
+  test('priority domain composes its pathway stage into the sentence', () => {
     const b = bucket({
       key: 'lead_intelligence', label: 'Lead Intelligence', lifecycleState: 'Operational',
       relationships: [
@@ -144,16 +144,46 @@ describe('whyThisMattersSentence', () => {
       ],
     });
     const out = whyThisMattersSentence(b)!;
-    expect(out).toMatch(/^Cory's current priority sits in Lead Intelligence/);
+    expect(out).toMatch(/^Cory's current priority sits in Lead Intelligence \(Coordination\)/);
     expect(out).toContain('Marketing Operations');
     expect(out).toContain('Execution Systems');
     expect(out).toContain('Reporting & Analytics');
     expect(out).toContain('would influence');
   });
 
+  test('when buckets are passed, downstream targets get their pathway stage parenthetical too', () => {
+    const priority = bucket({
+      key: 'lead_intelligence', label: 'Lead Intelligence', lifecycleState: 'Operational',
+      relationships: [
+        { verb: 'feeds', targetKey: 'marketing', targetLabel: 'Marketing Operations' },
+        { verb: 'feeds', targetKey: 'execution', targetLabel: 'Execution Systems' },
+      ],
+    });
+    const buckets = [
+      priority,
+      bucket({ key: 'marketing', label: 'Marketing Operations', lifecycleState: 'Coordinated' }),
+      bucket({ key: 'execution', label: 'Execution Systems', lifecycleState: 'Emerging' }),
+    ];
+    const out = whyThisMattersSentence(priority, buckets)!;
+    expect(out).toContain('Lead Intelligence (Coordination)');
+    expect(out).toContain('Marketing Operations (Coordination)');
+    expect(out).toContain('Execution Systems (Execution)');
+  });
+
+  test('"other" catch-all domain omits the pathway parenthetical (no "(null)" artifact)', () => {
+    const b = bucket({
+      key: 'other', label: 'Other Operations', lifecycleState: 'Operational',
+      relationships: [{ verb: 'feeds', targetKey: 'reporting', targetLabel: 'Reporting & Analytics' }],
+    });
+    const out = whyThisMattersSentence(b)!;
+    expect(out).toContain('Cory\'s current priority sits in Other Operations ');
+    expect(out).not.toContain('(null)');
+    expect(out).not.toContain('Other Operations (');
+  });
+
   test('domain with no downstream → shorter sentence (no false claim)', () => {
     const b = bucket({ key: 'reporting', label: 'Reporting & Analytics', lifecycleState: 'Operational', relationships: [] });
-    expect(whyThisMattersSentence(b)).toBe(`Cory's current priority sits in Reporting & Analytics.`);
+    expect(whyThisMattersSentence(b)).toBe(`Cory's current priority sits in Reporting & Analytics (Reporting).`);
   });
 
   test('calm guardrail: no imperatives or certainty', () => {
@@ -246,11 +276,11 @@ describe('downstreamKeysOf', () => {
 
 // ---------------------------------------------------------------------------
 describe('inheritedDomainContextSentence', () => {
-  test('downstream > 0 → composed sentence with singular/plural agreement', () => {
+  test('downstream > 0 → composed section-header sentence with singular/plural agreement', () => {
     expect(inheritedDomainContextSentence('Lead Intelligence', 3))
-      .toBe('In Lead Intelligence — supports 3 downstream areas.');
+      .toBe('Each BP below sits inside Lead Intelligence — supports 3 downstream areas.');
     expect(inheritedDomainContextSentence('Marketing Operations', 1))
-      .toBe('In Marketing Operations — supports 1 downstream area.');
+      .toBe('Each BP below sits inside Marketing Operations — supports 1 downstream area.');
   });
 
   test('downstream === 0 → silent (returns null, no "supports 0" filler)', () => {
