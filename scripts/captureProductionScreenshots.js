@@ -6,6 +6,11 @@
  * captures a full-page PNG of every productization-arc surface into
  * docs/screenshots/<date>-deploy/.
  *
+ * All capture pathways route through scripts/captureHelpers.js so that
+ * no PNG ever exceeds the Claude many-image dimension ceiling. DSF is 1
+ * by default; pass label: 'retina-review' on a per-capture basis if a
+ * retina image is genuinely needed for a review-doc embed (rare).
+ *
  * Usage:
  *   node scripts/captureProductionScreenshots.js
  *
@@ -18,10 +23,15 @@
 const path = require('path');
 const fs = require('fs');
 const { chromium } = require('playwright');
+const {
+  createSafeContext,
+  safeScreenshot,
+  writeCaptureSummary,
+  readDefaultToken,
+} = require('./captureHelpers');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const BASE = process.env.CAPTURE_BASE || 'https://enterprise.colaberry.ai';
-const TOKEN_FILE = path.join(REPO_ROOT, 'scripts', '.ali_jwt.txt');
 const OUT_DIR = process.env.CAPTURE_OUT || path.join(
   REPO_ROOT,
   'docs',
@@ -29,16 +39,12 @@ const OUT_DIR = process.env.CAPTURE_OUT || path.join(
   `${new Date().toISOString().slice(0, 10)}-deploy`,
 );
 
-const TOKEN = process.env.CAPTURE_TOKEN || (
-  fs.existsSync(TOKEN_FILE) ? fs.readFileSync(TOKEN_FILE, 'utf8').trim() : null
-);
-
+const TOKEN = readDefaultToken();
 if (!TOKEN) {
-  console.error(`[capture] No token found at ${TOKEN_FILE} and CAPTURE_TOKEN env not set.`);
-  console.error(`[capture] Authenticated routes will redirect to /portal/login.`);
+  console.error('[capture] No token found and CAPTURE_TOKEN env not set.');
+  console.error('[capture] Authenticated routes will redirect to /portal/login.');
 }
 
-// Each entry: { slug, route, label, waitForSelector?, extraWaitMs? }
 const SURFACES = [
   { slug: '00-public-landing', route: '/', label: 'Public landing' },
   { slug: '01-portal-login', route: '/portal/login', label: 'Portal login' },
@@ -64,7 +70,7 @@ async function waitForBackend(baseUrl, token) {
   const { URL } = require('url');
   const url = `${baseUrl}/api/portal/project/unified-state`;
   const parsed = new URL(url);
-  const maxAttempts = 18;     // 18 × 10s = 3 min ceiling
+  const maxAttempts = 18;
   const intervalMs = 10_000;
   process.stdout.write(`[capture] Healthcheck: ${url}\n`);
   for (let i = 1; i <= maxAttempts; i++) {
@@ -88,7 +94,7 @@ async function waitForBackend(baseUrl, token) {
     process.stdout.write(`[capture]   attempt ${i}/${maxAttempts}: ${status || 'no-response'} (waiting ${intervalMs/1000}s)\n`);
     await new Promise(r => setTimeout(r, intervalMs));
   }
-  console.log(`[capture] Healthcheck: ✗ never returned 200 — capturing anyway, expect error states`);
+  console.log('[capture] Healthcheck: ✗ never returned 200 — capturing anyway, expect error states');
   return false;
 }
 
@@ -100,29 +106,16 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
 
-  // Wait for backend to be warm before any capture. Skip with SKIP_HEALTHCHECK=1.
   if (!process.env.SKIP_HEALTHCHECK) {
     await waitForBackend(BASE, TOKEN);
   } else {
     console.log('[capture] SKIP_HEALTHCHECK set — proceeding without healthcheck');
   }
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    deviceScaleFactor: 2, // retina-quality screenshots
-  });
 
-  // Inject the participant token into localStorage on EVERY page load,
-  // before any script runs. This authenticates the SPA without going
-  // through the login form.
-  if (TOKEN) {
-    await context.addInitScript((tok) => {
-      try { window.localStorage.setItem('participant_token', tok); } catch { /* ignore */ }
-    }, TOKEN);
-  }
-
+  const context = await createSafeContext(browser, { token: TOKEN, label: 'safe' });
   const page = await context.newPage();
 
-  const summary = [];
+  const entries = [];
   for (const s of SURFACES) {
     const url = `${BASE}${s.route}`;
     const out = path.join(OUT_DIR, `${s.slug}.png`);
@@ -130,28 +123,38 @@ async function main() {
     try {
       const resp = await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
       const status = resp ? resp.status() : 'no-response';
-      // Give SPA hydration a moment so we capture the fully-rendered page,
-      // not the loading spinner.
       if (s.extraWaitMs) await page.waitForTimeout(s.extraWaitMs);
-      await page.screenshot({ path: out, fullPage: true });
-      // Read the post-render URL so we know if we got redirected to login.
+      const shotInfo = await safeScreenshot(page, out, { fullPage: true, label: 'safe' });
       const finalUrl = page.url();
       const redirected = !finalUrl.endsWith(s.route);
       console.log(`${status} ${redirected ? '⚠ redirected → ' + finalUrl : 'ok'}`);
-      summary.push({ slug: s.slug, label: s.label, route: s.route, file: path.basename(out), status, redirected, finalUrl });
+      entries.push({
+        slug: s.slug,
+        label: s.label,
+        route: s.route,
+        file: path.basename(out),
+        status,
+        redirected,
+        finalUrl,
+        originalWidth: shotInfo.originalWidth,
+        finalWidth: shotInfo.finalWidth,
+        downscaled: shotInfo.downscaled,
+      });
     } catch (err) {
       console.log(`FAIL ${err.message}`);
-      summary.push({ slug: s.slug, label: s.label, route: s.route, file: null, error: err.message });
+      entries.push({ slug: s.slug, label: s.label, route: s.route, file: null, error: err.message });
     }
   }
 
   await browser.close();
-
-  // Write a small summary JSON next to the screenshots so the doc can read it.
-  fs.writeFileSync(path.join(OUT_DIR, '_summary.json'), JSON.stringify(summary, null, 2));
-  console.log(`\n[capture] Done. ${summary.filter(s => s.file).length}/${summary.length} screenshots saved to ${OUT_DIR}`);
-  if (summary.some(s => s.redirected)) {
-    console.log(`[capture] ⚠ Some routes redirected — token may be expired.`);
+  writeCaptureSummary(OUT_DIR, entries);
+  console.log(`\n[capture] Done. ${entries.filter(e => e.file).length}/${entries.length} screenshots saved to ${OUT_DIR}`);
+  if (entries.some(e => e.redirected)) {
+    console.log('[capture] ⚠ Some routes redirected — token may be expired.');
+  }
+  const oversize = entries.filter(e => e.finalWidth && e.finalWidth > 1800);
+  if (oversize.length) {
+    console.log(`[capture] ⚠ ${oversize.length} PNGs exceed MAX_SAFE_WIDTH after clamp — investigate.`);
   }
 }
 

@@ -23,6 +23,7 @@ import { type Direction } from '../../hooks/useDomainMomentum';
 import { forwardLookingNote } from '../../utils/operationalLeverage';
 import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
 import { metadataItems } from '../../utils/scanSpeedSignals';
+import { inheritedDomainContextSentence } from '../../utils/bpInheritedContext';
 
 // Lifecycle state → tone. Softer than completion% — no hot reds.
 export const LIFECYCLE_TONE: Record<LifecycleState, { fg: string; bg: string }> = {
@@ -297,7 +298,13 @@ export const DomainRow: React.FC<{
             Processes in this domain
           </div>
           {bucket.processes.map(p => (
-            <BPLine key={p.id} bp={p} onPick={() => onPickBp(p.id)} />
+            <BPLine
+              key={p.id}
+              bp={p}
+              domainLabel={bucket.label}
+              domainDownstreamCount={bucket.downstreamCount}
+              onPick={() => onPickBp(p.id)}
+            />
           ))}
         </div>
       )}
@@ -305,16 +312,19 @@ export const DomainRow: React.FC<{
   );
 };
 
-export const BPLine: React.FC<{ bp: BPLike; onPick: () => void }> = ({ bp, onPick }) => {
+export const BPLine: React.FC<{
+  bp: BPLike;
+  domainLabel?: string;
+  domainDownstreamCount?: number;
+  onPick: () => void;
+}> = ({ bp, domainLabel, domainDownstreamCount, onPick }) => {
   const matched = bp.matched_requirements || 0;
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
   const usable = bp.usability?.usable === true;
-  // Sentence-case operator-facing words. The all-caps treatment + bare
-  // "UNBUILT" read as harsh inventory labels. Operational Priority
-  // Topology Sprint, 2026-05-15.
   const word = usable ? 'Usable' : pct >= 50 ? 'Forming' : pct > 0 ? 'Early' : 'Not built yet';
   const wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
+  const inheritedContext = inheritedDomainContextSentence(domainLabel || '', domainDownstreamCount || 0);
   return (
     <button
       type="button"
@@ -324,28 +334,41 @@ export const BPLine: React.FC<{ bp: BPLike; onPick: () => void }> = ({ bp, onPic
         borderBottom: '1px solid var(--color-border)',
         padding: '0.6rem 1.4rem 0.6rem 3.4rem',
         textAlign: 'left', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', gap: 12,
+        display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3,
         fontSize: 13, color: 'var(--color-text)',
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = 'white'; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
-      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {bp.name}
-      </span>
-      {total > 0 && (
-        <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-          {matched}/{total}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {bp.name}
         </span>
+        {total > 0 && (
+          <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+            {matched}/{total}
+          </span>
+        )}
+        <span style={{
+          fontSize: 11, letterSpacing: '0.01em',
+          color: wordColor, fontWeight: 600, flexShrink: 0,
+          minWidth: 80, textAlign: 'right',
+        }}>
+          {word}
+        </span>
+        <i className="bi bi-chevron-right" style={{ fontSize: 10, color: 'var(--color-text-light)', flexShrink: 0, opacity: 0.6 }}></i>
+      </div>
+      {inheritedContext && (
+        <div style={{
+          fontSize: 11.5,
+          color: 'var(--color-text-light)',
+          fontStyle: 'italic',
+          opacity: 0.85,
+          lineHeight: 1.4,
+        }}>
+          {inheritedContext}
+        </div>
       )}
-      <span style={{
-        fontSize: 11, letterSpacing: '0.01em',
-        color: wordColor, fontWeight: 600, flexShrink: 0,
-        minWidth: 80, textAlign: 'right',
-      }}>
-        {word}
-      </span>
-      <i className="bi bi-chevron-right" style={{ fontSize: 10, color: 'var(--color-text-light)', flexShrink: 0, opacity: 0.6 }}></i>
     </button>
   );
 };

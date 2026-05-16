@@ -12,32 +12,29 @@
  * snapshot values that DIFFER from current state, then captures Cory
  * Home — forcing the momentum surfaces to render.
  *
- * Output → docs/screenshots/<YYYY-MM-DD>-presence-variants/
+ * Routed through scripts/captureHelpers.js so every PNG stays under
+ * the Claude many-image dimension ceiling.
  *
- * Captures:
- *   1. cory-home-with-deltas.png        — RecentlyMovedCard + tile chevrons visible
- *   2. cory-home-with-deltas-backwards.png — same but with backward deltas (red ↓ chips)
- *   3. cory-home-fresh-priority.png     — ws-fresh halo on priority card (clean lastSeenNextActionId mismatch)
+ * Output → docs/screenshots/<YYYY-MM-DD>-presence-variants/
  */
 const path = require('path');
 const fs = require('fs');
 const { chromium } = require('playwright');
+const {
+  createSafeContext,
+  safeScreenshot,
+  writeCaptureSummary,
+  readDefaultToken,
+} = require('./captureHelpers');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const BASE = process.env.CAPTURE_BASE || 'https://enterprise.colaberry.ai';
-const TOKEN_FILE = path.join(REPO_ROOT, 'scripts', '.ali_jwt.txt');
 const OUT_DIR = process.env.CAPTURE_OUT || path.join(
   REPO_ROOT, 'docs', 'screenshots',
   `${new Date().toISOString().slice(0, 10)}-presence-variants`,
 );
-const TOKEN = process.env.CAPTURE_TOKEN
-  || (fs.existsSync(TOKEN_FILE) ? fs.readFileSync(TOKEN_FILE, 'utf8').trim() : null);
+const TOKEN = readDefaultToken();
 
-// Prior-snapshot values to seed memory with. The live state at capture
-// time appears to be readiness=38, coverage=47, queue=1, health=80.
-// Seed values are chosen so each direction is exercised:
-//   forward variant   : readiness was 34 (+4), coverage was 45 (+2), queue was 4 (-3), health was 78 (+2)
-//   backward variant  : readiness was 44 (-6), coverage was 51 (-4), queue was 0 (+1), health was 84 (-4)
 const FORWARD_SEED = {
   lastVisitedSurface: 'home',
   lastReadinessScore: 34,
@@ -62,41 +59,34 @@ const BACKWARD_SEED = {
   updatedAt: new Date(Date.now() - 6 * 3600_000).toISOString(),
 };
 
-const NO_FRESH_SEED = {
-  ...FORWARD_SEED,
-  // Match the actual current id so the priority card does NOT halo.
-  // We can't know the id without reading state — so leave undefined,
-  // which means it'll match nothing and the halo fires. The two
-  // forward/backward variants both demonstrate the halo; this one is
-  // just here as a reference for "halo OFF" comparison.
-};
-
 (async () => {
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
   console.log(`[presence] Base: ${BASE}`);
   console.log(`[presence] Out:  ${OUT_DIR}`);
 
   const browser = await chromium.launch({ headless: true });
+  const entries = [];
 
   const captureSeeded = async (slug, seed, label) => {
-    const ctx = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      deviceScaleFactor: 2,
+    const ctx = await createSafeContext(browser, {
+      token: TOKEN,
+      seededMemory: JSON.stringify(seed),
+      label: 'safe',
     });
-    // Inject token + memory seed before any script runs
-    await ctx.addInitScript(({ tok, seed }) => {
-      try {
-        if (tok) window.localStorage.setItem('participant_token', tok);
-        window.localStorage.setItem('workspaceMemory:v1', JSON.stringify(seed));
-      } catch { /* ignore */ }
-    }, { tok: TOKEN, seed });
-
     const page = await ctx.newPage();
     console.log(`[presence] ${slug}  (${label})`);
     await page.goto(`${BASE}/portal/home`, { waitUntil: 'networkidle' });
-    // Give the state poll + memory snapshot guard time to settle
     await page.waitForTimeout(3000);
-    await page.screenshot({ path: path.join(OUT_DIR, `${slug}.png`), fullPage: false });
+    const out = path.join(OUT_DIR, `${slug}.png`);
+    const shotInfo = await safeScreenshot(page, out, { fullPage: false, label: 'safe' });
+    entries.push({
+      slug,
+      label,
+      file: path.basename(out),
+      originalWidth: shotInfo.originalWidth,
+      finalWidth: shotInfo.finalWidth,
+      downscaled: shotInfo.downscaled,
+    });
     await ctx.close();
   };
 
@@ -104,5 +94,6 @@ const NO_FRESH_SEED = {
   await captureSeeded('cory-home-with-backward-deltas', BACKWARD_SEED, 'backward deltas — red ↓ chips');
 
   await browser.close();
-  console.log(`[presence] Done. 2 variants saved to ${OUT_DIR}`);
+  writeCaptureSummary(OUT_DIR, entries);
+  console.log(`[presence] Done. ${entries.length} variants saved to ${OUT_DIR}`);
 })().catch(e => { console.error(e); process.exit(1); });

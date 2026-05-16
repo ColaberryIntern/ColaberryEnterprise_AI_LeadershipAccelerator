@@ -742,6 +742,46 @@ Two failure modes the protocol prevents:
 
 ---
 
+# Screenshot Verification Safety Protocol
+
+A prior session died because a single screenshot at 2128×266 pushed the cumulative many-image context past Claude Code's 2000px ceiling, and every reply after that hit the dimension-limit error and could not recover. The verification workflow itself is now hardened so this is not possible.
+
+## Hard rules (enforced)
+
+- **Max safe width is 1800px.** Every PNG that Claude will be asked to `Read` must be ≤1800px wide. Anything wider must be downscaled before it lands on disk.
+- **Default capture viewport is `SAFE_VIEWPORT` (1440×900 at `deviceScaleFactor=1`).** DSF 2 (retina) is permitted only when the PNG will exclusively be embedded into a review-doc HTML for human inspection — never when Claude will `Read` it.
+- **All capture scripts must route through `scripts/captureHelpers.js`.** Direct `page.screenshot(...)` calls in capture scripts are a violation. The helper provides `safeScreenshot`, `safeCrop`, `boundedFullPage`, and `maxWidthGuard`, each of which downscales in place if the captured PNG exceeds the safe width.
+- **Three-image read budget per conversation turn.** Claude reads at most three PNGs in any single turn during verification. Subsequent images go through a focused crop, not a re-`Read` of the same surface.
+- **`_summary.json` is mandatory.** Every capture batch writes `_summary.json` next to the PNGs via `writeCaptureSummary(...)`. Each entry must include `originalWidth`, `finalWidth`, `downscaled`. Any `finalWidth > 1800` is a process violation.
+
+## The helper API
+
+`scripts/captureHelpers.js` is the single sanctioned capture path:
+
+| Export | Use |
+| --- | --- |
+| `MAX_SAFE_WIDTH` (=1800) | Hard cap referenced throughout |
+| `SAFE_VIEWPORT` | Default: 1440×900, DSF 1 |
+| `RETINA_REVIEW_VIEWPORT` | 1440×900, DSF 2 — review-doc embeds only |
+| `createSafeContext(browser, { token, viewport, seededMemory, label })` | Returns a Playwright context with auth injected via `addInitScript` and viewport set per `label` |
+| `safeScreenshot(page, outPath, { fullPage, clip, label })` | Wraps `page.screenshot`; downscales to ≤1800px after capture |
+| `safeCrop(page, selector, outPath, { padding, label })` | Bounding-rect crop with width clamp |
+| `boundedFullPage(page, outPath, { label })` | Full-page convenience that asserts DSF 1 |
+| `maxWidthGuard(pngPath, { label })` | Standalone downscale check for non-Playwright captures |
+| `writeCaptureSummary(outDir, entries)` | Writes `_summary.json` with `max_safe_width`, `safe_viewport`, and the per-PNG `final_width` ledger |
+
+Use `label: 'retina-review'` only for explicitly human-reviewed embeds; any other label routes through the safe-width clamp.
+
+## Dependency
+
+This protocol depends on `sharp` (^0.33) at the repo-root `devDependencies` for in-place PNG downscaling. Added 2026-05-16.
+
+## When the protocol is triggered
+
+The full protocol applies to **every** Playwright capture script in `scripts/` that produces PNGs into `docs/screenshots/` or `tmp/`. A new capture script that does not import from `captureHelpers.js` is a defect, regardless of how small.
+
+---
+
 # Tooling Assumptions
 
 Claude may assume:

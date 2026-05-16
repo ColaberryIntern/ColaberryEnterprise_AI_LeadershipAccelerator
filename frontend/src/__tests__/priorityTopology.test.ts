@@ -8,6 +8,7 @@
 import type { DomainBucket, DomainKey, LifecycleState, DomainRelationship, BPLike } from '../utils/bpDomainClassifier';
 import { matchCoryPriorityDomain, whyThisMattersSentence } from '../utils/coryPriorityMatcher';
 import { sortByOperationalPriority, downstreamKeysOf } from '../utils/domainPrioritySorter';
+import { inheritedDomainContextSentence } from '../utils/bpInheritedContext';
 
 // --- builders --------------------------------------------------------------
 
@@ -239,5 +240,30 @@ describe('downstreamKeysOf', () => {
 
   test('unknown source key → empty set (graceful, not throw)', () => {
     expect(downstreamKeysOf('nonexistent' as DomainKey, buckets).size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('inheritedDomainContextSentence', () => {
+  test('downstream > 0 → composed sentence with singular/plural agreement', () => {
+    expect(inheritedDomainContextSentence('Lead Intelligence', 3))
+      .toBe('In Lead Intelligence — supports 3 downstream areas.');
+    expect(inheritedDomainContextSentence('Marketing Operations', 1))
+      .toBe('In Marketing Operations — supports 1 downstream area.');
+  });
+
+  test('downstream === 0 → silent (returns null, no "supports 0" filler)', () => {
+    expect(inheritedDomainContextSentence('Lead Intelligence', 0)).toBeNull();
+  });
+
+  test('negative downstream → silent (defensive against bad input)', () => {
+    expect(inheritedDomainContextSentence('Lead Intelligence', -2)).toBeNull();
+  });
+
+  test('observational tone — no imperatives, no certainty words, no exclamations', () => {
+    const s = inheritedDomainContextSentence('Lead Intelligence', 3);
+    expect(s).not.toMatch(/\b(should|must|need|needs|fix|address|improve|optimize)\b/i);
+    expect(s).not.toMatch(/\b(guaranteed|optimal|perfect|critical|urgent)\b/i);
+    expect(s).not.toContain('!');
   });
 });
