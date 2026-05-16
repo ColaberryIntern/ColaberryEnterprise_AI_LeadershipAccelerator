@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operational Priority Topology Recovery + Verification Hardening — Sprint Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  .possible input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; overflow: auto; font-size: 12.5px; line-height: 1.5; }
+  .err { color: #fecaca; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+  .ledger td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Operational Priority Topology Recovery + Verification Hardening — Sprint Review</h1>
+  <p class="lede">
+    Shipped 2026-05-16 to <strong>enterprise.colaberry.ai</strong> (commits
+    <code>d86c540</code>). The prior session shipped the topology UX
+    correctly, then died at the visual-verification step because a single
+    screenshot at 2128px pushed the cumulative many-image context past
+    Claude Code's 2000px ceiling. This sprint hardens the verification
+    workflow so that can't happen again, surfaces the already-shipped
+    topology with bounded captures, and lands one Phase 4 calm one-liner
+    inheriting domain context into BP rows.
+  </p>
+
+  <div class="philosophy">
+    The root cause was not rendering, logic, topology, routing, or
+    architecture. It was the verification workflow itself — silently
+    producing oversize images that bricked the session. The fix is
+    structural: every capture script now routes through one safe helper
+    that downscales in place and refuses to emit anything wider than
+    1800 px.
+  </div>
+
+  <div class="rule">
+    <strong>What this sprint explicitly is NOT:</strong> a redesign of the
+    operational priority topology. The badge, the accent borders, the
+    "Why this matters" sentence, the calm BP-line vocabulary, and the
+    bpSignals on capability cards were all already shipped. This sprint
+    verifies them visually with bounded captures and adds one inherited-
+    context sentence per BP row. No shaping aura, no motion, no graph.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — What crashed and why ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">What crashed and why — the 2000 px image-context overflow</span></h2>
+    <p>
+      The prior session captured <code>tmp/build-composition-card.png</code>
+      at 2128 × 266 native (deviceScaleFactor 2). The next image read
+      tipped the cumulative many-image dimension over the per-conversation
+      ceiling, and every subsequent assistant turn returned the same
+      error and could not recover:
+    </p>
+
+    <pre><span class="err">An image in the conversation exceeds the dimension limit for
+many-image requests (2000px). Start a new session with fewer images.</span></pre>
+
+    <p>The session had already shipped the topology UX correctly and was
+       at the visual-verification step. The fix lives in the workflow,
+       not the product.</p>
+
+    <div class="what-shipped">
+      <strong>Recovery summary:</strong>
+      <ul>
+        <li>The dead session's JSONL was extracted to a clean text-only transcript at <code>tmp/recovered-session.md</code> (1537 lines, 452 KB, 40 images stripped).</li>
+        <li>The Honest-Build-Signal Sprint commits (<code>92b223f</code> + <code>f92a9ee</code>) were already on <code>main</code> and live. PROGRESS.md was missing the entry — written first, before any new work.</li>
+        <li>This sprint's hardening + Phase 4 shipped as <code>d86c540</code>.</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Right problem framing</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v1" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Safety protocol ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">The new Screenshot Verification Safety Protocol</span></h2>
+    <p>Hard rules now codified in <code>CLAUDE.md</code> under
+       <em>Screenshot Verification Safety Protocol</em>:</p>
+
+    <table>
+      <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Max safe width is 1800 px.</strong> Every PNG Claude will <code>Read</code> is ≤ 1800 px wide.</td><td>2000 px is the per-conversation cumulative ceiling; 1800 leaves headroom for stacked images in a single turn.</td></tr>
+        <tr><td><strong>Default viewport: 1440 × 900 at DSF 1.</strong> Retina DSF 2 only for review-doc embeds humans read in-browser.</td><td>DSF 2 doubles the native pixel width of every capture — silently the leading cause of overflow.</td></tr>
+        <tr><td><strong>All capture scripts must route through <code>scripts/captureHelpers.js</code>.</strong> Direct <code>page.screenshot()</code> calls in capture scripts are a violation.</td><td>One sanctioned path means one place to enforce the clamp, not nine.</td></tr>
+        <tr><td><strong>Three-image read budget per conversation turn.</strong></td><td>Even at 1800 px, four full-page images in one turn can still stress the context. The budget keeps verification focused.</td></tr>
+        <tr><td><strong>Every capture batch writes <code>_summary.json</code>.</strong> Each entry lists <code>originalWidth</code>, <code>finalWidth</code>, <code>downscaled</code>. Any <code>finalWidth &gt; 1800</code> is a process violation.</td><td>Audit artifact. Operator can confirm the clamp ran without reading every PNG.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The helper API</h3>
+    <pre>// scripts/captureHelpers.js — single sanctioned capture path
+const MAX_SAFE_WIDTH = 1800;
+const SAFE_VIEWPORT  = { width: 1440, height: 900, deviceScaleFactor: 1 };
+
+async function safeScreenshot(page, outPath, { fullPage, clip, label }) {
+  await page.screenshot({ path: outPath, fullPage, clip });
+  return maxWidthGuard(outPath, { label });   // downscales in place via sharp
+}
+
+async function safeCrop(page, selector, outPath, { padding, label }) {
+  const box = /* bounding rect */;
+  if (box.width > MAX_SAFE_WIDTH) box.width = MAX_SAFE_WIDTH;
+  return safeScreenshot(page, outPath, { clip: box, label });
+}</pre>
+
+    <div class="what-shipped">
+      <strong>What shipped here:</strong>
+      <ul>
+        <li><code>scripts/captureHelpers.js</code> — <code>createSafeContext</code>, <code>safeScreenshot</code>, <code>safeCrop</code>, <code>boundedFullPage</code>, <code>maxWidthGuard</code>, <code>writeCaptureSummary</code>.</li>
+        <li><code>sharp@^0.33</code> added as devDependency for in-place PNG downscaling.</li>
+        <li>All four existing capture scripts refactored to route through the helper: <code>captureProductionScreenshots.js</code>, <code>captureDrawerVariants.js</code>, <code>capturePresenceVariants.js</code>, <code>captureOperatorOrientation.js</code>. The three retina ones dropped DSF 2 → DSF 1.</li>
+        <li>CLAUDE.md gained the new section codifying the rules.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> 1800 px ceiling is too aggressive — push to 1900 to keep more pixels</label></li>
+        <li><label><input type="checkbox"> The three-image read budget is too tight — bump to 4 or 5</label></li>
+        <li><label><input type="checkbox"> Retina label exception is a footgun — remove it entirely, never allow DSF 2</label></li>
+        <li><label><input type="checkbox"> sharp is too heavy a dep for this — use a smaller image library</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Protocol reads right</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v2" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Priority topology in production ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Priority topology in production — captured with the new safe pipeline</span></h2>
+    <p>The full System BPs surface, captured at safe viewport (1440 × 900,
+       DSF 1) — the domain stack is ordered priority-first:</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-16-priority-topology-recovery/01-system-bps-full.png" target="_blank">
+        <img src="screenshots/2026-05-16-priority-topology-recovery/01-system-bps-full.png" alt="Full System BPs surface — priority-first ordering">
+      </a>
+      <div class="caption">Full System BPs surface · production · 2026-05-16 · 1440 px wide</div>
+    </div>
+
+    <p>Focused crop of the priority row + its adjacent downstream row,
+       showing the "Current priority" badge and the differentiated accent
+       borders (primary on priority, primary-light on downstream):</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-16-priority-topology-recovery/02-priority-and-downstream-rows.png" target="_blank">
+        <img src="screenshots/2026-05-16-priority-topology-recovery/02-priority-and-downstream-rows.png" alt="Priority domain (AI &amp; Intelligence) with Current priority badge; adjacent downstream domain below">
+      </a>
+      <div class="caption">Priority row (AI &amp; Intelligence) + adjacent downstream row · 1064 px wide</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>Already shipped (Operational Priority Topology Sprint, 2026-05-15):</strong>
+      <ul>
+        <li><code>sortByOperationalPriority()</code> orders the stack: Cory's priority → operator focus → leverage score → canonical orderIndex.</li>
+        <li><code>matchCoryPriorityDomain()</code> + keyword fallback resolves Cory's <code>next_action</code> to a domain.</li>
+        <li>"Current priority" badge in <code>BPDomainSurfaceRows.tsx</code>; 3 px primary left-border on the priority row, 3 px primary-light on downstream rows.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> The "Current priority" badge is too small to scan at a distance — bump font size</label></li>
+        <li><label><input type="checkbox"> Downstream border should be more clearly differentiated from the priority border</label></li>
+        <li><label><input type="checkbox"> Priority row needs more vertical breathing room from the second row</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v3" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — Leverage block with Why this matters ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Leverage block with "Why this matters" — calm operational consequence</span></h2>
+    <p>The leverage block now carries the "Why this matters" line that
+       composes Cory's priority into a downstream-influence sentence —
+       no graph chaos, one calm observation:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-16-priority-topology-recovery/03-leverage-with-why-this-matters.png" target="_blank">
+        <img src="screenshots/2026-05-16-priority-topology-recovery/03-leverage-with-why-this-matters.png" alt="Operational leverage block including the WHY THIS MATTERS line">
+      </a>
+      <div class="caption">Operational leverage + "Why this matters" + structural-resilience sentence · 1072 px wide</div>
+    </div>
+
+    <p>The eye reads three layers in this block, top to bottom:</p>
+    <ul>
+      <li><strong>Operational leverage:</strong> the highest-leverage domain and what strengthening it would unlock.</li>
+      <li><strong>Why this matters:</strong> where Cory's current priority sits and the downstream domains it would influence.</li>
+      <li><strong>Structural resilience:</strong> a one-liner about how the operational structure as a whole feels right now.</li>
+    </ul>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> Three sentences in one block is too much density — collapse to two</label></li>
+        <li><label><input type="checkbox"> "Why this matters" should be its own block, not embedded in leverage</label></li>
+        <li><label><input type="checkbox"> The structural-resilience sentence reads soft to the point of vague</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Components tab honesty ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Components tab honesty — bpSignals on every card, no more 0% lie</span></h2>
+    <p>Three capability cards on the Components tab, showing the build
+       signal layer (B / F / A pillars, kind label, builtness tier) that
+       the Honest-Build-Signal Sprint delivered:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-16-priority-topology-recovery/04-capability-cards-with-bp-signals.png" target="_blank">
+        <img src="screenshots/2026-05-16-priority-topology-recovery/04-capability-cards-with-bp-signals.png" alt="Three capability cards: Accelerator Management, Apollo Management, Campaigns Management — each PAGE kind, F pillar lit green, Built tier">
+      </a>
+      <div class="caption">Capability cards with pillars (B / F / A), kind (PAGE), and builtness (Built) · 1080 px wide</div>
+    </div>
+
+    <p>And the build-composition summary header, which replaced the
+       misleading "Project Completion 0%" when no requirements have been
+       extracted:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-16-priority-topology-recovery/05-build-composition-summary.png" target="_blank">
+        <img src="screenshots/2026-05-16-priority-topology-recovery/05-build-composition-summary.png" alt="Build composition summary header showing built / forming / not started counts and an honest no-requirements explanation">
+      </a>
+      <div class="caption">Build-composition summary header — honest math, no "0%" red filler · 1064 px wide</div>
+    </div>
+
+    <div class="what-shipped">
+      <strong>Already shipped (Honest-Build-Signal Sprint, 2026-05-15):</strong>
+      <ul>
+        <li><code>frontend/src/utils/bpSignals.ts</code> — <code>bpPillars</code>, <code>bpKindLabel</code>, <code>bpBuiltness</code>, <code>domainBuildBreakdown</code>, <code>domainBuildSummary</code>.</li>
+        <li>CapabilityGrid joins capabilities ↔ BPs by id, renders pillars + kind + builtness per card, and uses <code>domainBuildSummary</code> in the header when no requirements exist.</li>
+        <li>16 unit tests in <code>bpSignals.test.ts</code>; all green in the 280-test suite at the time.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> "PAGE" pill is too quiet — operator scans past it</label></li>
+        <li><label><input type="checkbox"> "scoring inactive" footer reads negative — replace with neutral phrasing</label></li>
+        <li><label><input type="checkbox"> Three pillars (B / F / A) need labels, not just letters</label></li>
+        <li><label><input type="checkbox"> The "Built" tier label color (green) is too celebratory for a PAGE-only BP</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v5" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop5"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — Anti-overflow ledger ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Anti-overflow safeguards — width ledger from <code>_summary.json</code></span></h2>
+    <p>The full audit ledger for this capture batch, straight from
+       <code>docs/screenshots/2026-05-16-priority-topology-recovery/_summary.json</code>:</p>
+
+    <table class="ledger">
+      <thead><tr><th>Slug</th><th>Original width</th><th>Final width</th><th>Downscaled?</th></tr></thead>
+      <tbody>
+        <tr><td>01-system-bps-full</td><td>1440</td><td>1440</td><td>no</td></tr>
+        <tr><td>02-priority-and-downstream-rows</td><td>1064</td><td>1064</td><td>no</td></tr>
+        <tr><td>03-leverage-with-why-this-matters</td><td>1072</td><td>1072</td><td>no</td></tr>
+        <tr><td>04-capability-cards-with-bp-signals</td><td>1080</td><td>1080</td><td>no</td></tr>
+        <tr><td>05-build-composition-summary</td><td>1064</td><td>1064</td><td>no</td></tr>
+      </tbody>
+    </table>
+
+    <p>Every PNG comfortably under the 1800 px cap. No downscale needed
+       on any image because the safe viewport (DSF 1) and the clip-rect
+       clamps in <code>safeCrop</code> kept the capture pipeline honest
+       at the source — sharp's in-place downscale never had to fire on
+       this batch.</p>
+
+    <div class="what-shipped">
+      <strong>Defense in depth, three layers:</strong>
+      <ul>
+        <li><strong>Capture-time:</strong> <code>SAFE_VIEWPORT</code> with DSF 1 keeps full-page captures naturally narrow.</li>
+        <li><strong>Clip-time:</strong> <code>safeCrop</code> clamps the bounding-rect width before <code>page.screenshot()</code> ever runs.</li>
+        <li><strong>Post-write:</strong> <code>maxWidthGuard</code> reads the PNG metadata and downscales in place if anything slipped through.</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Audit reads clean</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v6" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop6"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Phase 4 — inherited BP context ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Phase 4 — inherited domain context on BP rows</span></h2>
+    <p>Two questions were surfaced before this sprint started, and
+       answered explicitly:</p>
+
+    <table>
+      <thead><tr><th>Question</th><th>Operator decision</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Q1.</strong> "Active shaping aura / elevated lane" beyond the existing badge + 3 px border?</td>
+          <td><span class="badge badge-info">Current signal is sufficient</span> — no shaping-aura, elevated-typography, or motion work. The badge + accent border <em>is</em> the active-shaping signal.</td>
+        </tr>
+        <tr>
+          <td><strong>Q2.</strong> Per-BP downstream context for UNBUILT rows?</td>
+          <td><span class="badge badge-good">Inherit domain-level context</span> — surface the domain's downstream count inside BP rows as a calm italic sub-sentence. No backend escalation.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>Q2 shipped as a single bounded change in <code>BPDomainSurfaceRows.tsx</code>:
+       each BP row now renders an italic sub-line below the main row
+       — <em>"In Lead Intelligence — supports 3 downstream areas."</em>
+       — when the domain has any downstream. Silent (renders nothing)
+       when downstream count is 0.</p>
+
+    <p>The sentence is produced by a pure helper, <code>inheritedDomainContextSentence(domainLabel, downstreamCount)</code>
+       in <code>frontend/src/utils/bpInheritedContext.ts</code>, with 4
+       unit tests in <code>priorityTopology.test.ts</code> covering:
+       singular/plural agreement, silence at 0, silence at negative,
+       and the anti-prescription vocabulary guardrail.</p>
+
+    <div class="what-shipped">
+      <strong>What shipped here:</strong>
+      <ul>
+        <li><code>frontend/src/utils/bpInheritedContext.ts</code> — pure helper, ~28 lines, returns null when nothing meaningful to say.</li>
+        <li><code>BPLine</code> in <code>BPDomainSurfaceRows.tsx</code> — now accepts <code>domainLabel</code> + <code>domainDownstreamCount</code> props and renders the italic sub-sentence beneath the main row.</li>
+        <li>4 new tests; suite at <strong>284 tests pass across 9 suites</strong> (was 280).</li>
+        <li><code>tsc --noEmit</code> exit 0, CRA build exit 0, deployed to prod VPS in commit <code>d86c540</code>.</li>
+      </ul>
+    </div>
+
+    <div class="possible">
+      <strong>Possible concerns:</strong>
+      <ul>
+        <li><label><input type="checkbox"> The sentence is too redundant when the operator just expanded the domain and saw the same number in the header</label></li>
+        <li><label><input type="checkbox"> Should only render on Unbuilt / Early BPs, not on Built / Forming ones</label></li>
+        <li><label><input type="checkbox"> "In {Domain} — supports N downstream areas" is wordy — try "{Domain} feeds N downstream"</label></li>
+        <li><label><input type="checkbox"> Italic is too quiet, operator misses it; try regular weight at smaller size</label></li>
+        <li><label><input type="checkbox"> Other (note below)</label></li>
+      </ul>
+    </div>
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v7" value="ok">👍 Reads right</label>
+      <label><input type="radio" name="v7" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v7" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="Notes…" data-notes="stop7"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── Overall ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">8</span><span class="stop-title">Overall</span></h2>
+    <p>The verification workflow is now operationally safe for long-running
+       refinement sessions. The topology UX is verified live in production
+       with bounded captures. One Phase 4 sentence inherits domain context
+       into BP rows. Nothing else moved.</p>
+    <div class="verdict">
+      <strong>Overall verdict</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Ship + close sprint</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Iterate per stop notes</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Wrong direction</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 8 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Operational Priority Topology Recovery + Verification Hardening Sprint — operator feedback\n\nFollowing commit d86c540 shipped 2026-05-16:\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      const issues = [];
+      stop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => issues.push(cb.parentElement.textContent.trim()));
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (issues.length) out += `Flagged:\n${issues.map(s => '- ' + s).join('\n')}\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts, checkboxes, and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>

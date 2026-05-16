@@ -26,15 +26,16 @@ const {
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const BASE = process.env.CAPTURE_BASE || 'https://enterprise.colaberry.ai';
-const PROJECT_SLUG = process.env.CAPTURE_PROJECT || 'colaberry-enterprise-ai-accelerator';
 const OUT_DIR = process.env.CAPTURE_OUT || path.join(
   REPO_ROOT, 'docs', 'screenshots',
   `${new Date().toISOString().slice(0, 10)}-priority-topology-recovery`,
 );
 const TOKEN = readDefaultToken();
 
-const BPS_URL = `${BASE}/portal/project/${PROJECT_SLUG}/system?tab=bps`;
-const COMPONENTS_URL = `${BASE}/portal/project/${PROJECT_SLUG}/system?tab=components`;
+// The /portal/project/system route is project-agnostic — it serves
+// whatever project the authenticated token currently has selected.
+const BPS_URL = `${BASE}/portal/project/system?tab=bps`;
+const COMPONENTS_URL = `${BASE}/portal/project/system?tab=components`;
 
 // Find a DOM element by walking sections and matching text content.
 // Returns { x, y, width, height } clip rect (clamped to MAX_SAFE_WIDTH) or null.

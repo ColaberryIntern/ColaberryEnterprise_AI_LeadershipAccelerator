@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-05-16T14:39:56.329Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "slug": "01-system-bps-full",
+      "label": "Full System BPs surface — priority-first ordering",
+      "file": "01-system-bps-full.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "02-priority-and-downstream-rows",
+      "label": "Priority row + adjacent downstream row",
+      "file": "02-priority-and-downstream-rows.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    },
+    {
+      "slug": "03-leverage-with-why-this-matters",
+      "label": "Leverage block — \"Why this matters\" sentence",
+      "file": "03-leverage-with-why-this-matters.png",
+      "originalWidth": 1072,
+      "finalWidth": 1072,
+      "downscaled": false
+    },
+    {
+      "slug": "04-capability-cards-with-bp-signals",
+      "label": "Capability cards with bpSignals pillars + kind + builtness",
+      "file": "04-capability-cards-with-bp-signals.png",
+      "originalWidth": 1080,
+      "finalWidth": 1080,
+      "downscaled": false
+    },
+    {
+      "slug": "05-build-composition-summary",
+      "label": "Build-composition summary replacing the misleading 0%",
+      "file": "05-build-composition-summary.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    }
+  ]
+}
