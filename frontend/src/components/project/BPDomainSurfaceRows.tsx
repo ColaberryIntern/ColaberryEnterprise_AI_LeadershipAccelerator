@@ -141,7 +141,7 @@ export const DomainRow: React.FC<{
             </span>
             {pathwayStageLabel(bucket.key) && (
               <span
-                title={`Canonical operational pathway stage for ${bucket.label}`}
+                title={`${bucket.label} sits in the ${pathwayStageLabel(bucket.key)} stage of the operational pathway (Entry → Coordination → Execution → Reporting).`}
                 style={{
                   fontSize: 11.5,
                   color: 'var(--color-text-light)',

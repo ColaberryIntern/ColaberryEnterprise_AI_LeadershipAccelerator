@@ -33,6 +33,7 @@ import WhyThisNextDrawer from '../../components/workspace/WhyThisNextDrawer';
 import RecentlyMovedCard from '../../components/workspace/RecentlyMovedCard';
 import OperationalHistoryStrip from '../../components/workspace/OperationalHistoryStrip';
 import ContinuationCard from '../../components/workspace/ContinuationCard';
+import FirstVisitFramingCard from '../../components/workspace/FirstVisitFramingCard';
 import OperatorFocusCard from '../../components/workspace/OperatorFocusCard';
 import { fireToast } from '../../components/workspace/MicroToast';
 import {
@@ -271,6 +272,17 @@ const CoryHome: React.FC = () => {
           {oneLineStatus}
         </div>
       </header>
+
+      {/* First-visit ambient framing. Appears ONLY when memory is empty
+          (no prior snapshot) AND the operator has not dismissed it. Once
+          dismissed via the "Got it" button, it never reappears for this
+          operator on this device. Operational Onboarding Sprint, 2026-05-16. */}
+      <FirstVisitFramingCard
+        surface="home"
+        isFirstVisit={memory.lastSnapshotAt == null}
+        eyebrow="WHAT YOU'RE LOOKING AT"
+        body="Cory reads your operational system every visit and surfaces one thing worth doing next. The tiles below show how the system is moving — readiness, coverage, health. The strip at the bottom remembers your last touch so you can pick up where you left off."
+      />
 
       {/* Today's one priority */}
       {state.next_action ? (

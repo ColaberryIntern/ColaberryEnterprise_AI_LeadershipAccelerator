@@ -76,8 +76,41 @@ export interface WorkspaceMemory {
     evolutionPhrase: string | null;
     at: string;
   };
+  /**
+   * Operational Onboarding Sprint, 2026-05-16. Per-surface "I've dismissed
+   * the first-visit framing card" flags. When a flag is true, the framing
+   * card for that surface never reappears for this operator on this device
+   * (cross-tab sync via the existing storage listener). The card itself
+   * also hides when the operator has touched the surface (independent
+   * first-visit detection via lastSnapshotAt / lastBpDomain), so this is
+   * an explicit-dismiss path on top of implicit "has been here" inference.
+   */
+  seenIntros?: {
+    home?: boolean;
+    systemBps?: boolean;
+  };
   /** ISO timestamp of last write, used by callers to detect freshness. */
   updatedAt?: string;
+}
+
+export type IntroSurface = 'home' | 'systemBps';
+
+/**
+ * Pure render-gate for FirstVisitFramingCard. Extracted as a helper so
+ * the decision logic is testable without requiring React render machinery
+ * (this frontend's test suite has no @testing-library/react).
+ *
+ * Returns true ONLY when the surface is genuinely first-visit AND the
+ * operator has not explicitly dismissed the framing card for this surface.
+ */
+export function shouldShowFirstVisitFraming(
+  memory: WorkspaceMemory,
+  surface: IntroSurface,
+  isFirstVisit: boolean,
+): boolean {
+  if (!isFirstVisit) return false;
+  if (memory.seenIntros?.[surface] === true) return false;
+  return true;
 }
 
 export interface StateSnapshotInput {
@@ -157,5 +190,19 @@ export function useWorkspaceMemory() {
     setMemory({});
   }, []);
 
-  return { memory, update, recordSnapshot, clear };
+  /**
+   * Mark a first-visit framing card as dismissed for this surface. Once
+   * marked, the card never reappears. Cross-tab sync via the existing
+   * storage listener — dismissing in one tab dismisses in all open tabs.
+   */
+  const markIntroSeen = useCallback((surface: IntroSurface) => {
+    setMemory(prev => {
+      const seenIntros = { ...(prev.seenIntros || {}), [surface]: true };
+      const next = { ...prev, seenIntros };
+      save(next);
+      return next;
+    });
+  }, []);
+
+  return { memory, update, recordSnapshot, clear, markIntroSeen };
 }

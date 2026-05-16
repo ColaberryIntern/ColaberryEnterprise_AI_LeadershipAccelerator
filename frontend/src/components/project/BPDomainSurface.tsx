@@ -30,6 +30,7 @@ import {
 } from '../../utils/bpDomainClassifier';
 import { useDomainMomentum } from '../../hooks/useDomainMomentum';
 import { useWorkspaceMemory } from '../../hooks/useWorkspaceMemory';
+import FirstVisitFramingCard from '../workspace/FirstVisitFramingCard';
 import { useUnifiedProjectState } from '../../hooks/useUnifiedProjectState';
 import { computeSystemLeverage, leverageHeadline, buildLeverageSummary } from '../../utils/operationalLeverage';
 import { systemResilienceSentence } from '../../utils/structuralConfidence';
@@ -243,7 +244,25 @@ const BPDomainSurface: React.FC = () => {
           <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{processes.length}</strong> business processes ·{' '}
           <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{overall.matched} of {overall.total}</strong> requirements matched
         </div>
+        {/* Phase C surgical reasoning hint — one trailing sentence framing
+            what domains and BPs are, for first-time operators. Visible
+            to everyone; calm enough to fade into background once known. */}
+        <div style={{ fontSize: 12, color: 'var(--color-text-light)', lineHeight: 1.5, maxWidth: 720, marginTop: 6, fontStyle: 'italic' }}>
+          Domains are grouped operational areas; expanding a domain shows the business processes inside it.
+        </div>
       </header>
+
+      {/* First-visit ambient framing card — appears ONLY when the
+          operator has never engaged a BP domain (memory.lastBpDomain
+          is null) AND has not dismissed this surface's intro. After
+          dismissal it never reappears. Operational Onboarding Sprint,
+          2026-05-16. */}
+      <FirstVisitFramingCard
+        surface="systemBps"
+        isFirstVisit={workspaceMemory.lastBpDomain == null}
+        eyebrow="HOW THIS SURFACE WORKS"
+        body="Your operational system is grouped into domains across four canonical stages — Entry, Coordination, Execution, Reporting. The 'Current priority' marker shows where Cory's attention sits today; the order adapts as the system evolves. Strengthening high-leverage areas ripples downstream."
+      />
 
       {/* Horizontal flow strip removed in the Operational Priority
           Topology Sprint, 2026-05-15 — operator feedback approved the

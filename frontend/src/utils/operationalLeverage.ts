@@ -151,9 +151,14 @@ export function leverageHeadline(sys: SystemLeverage): string | null {
       : `${bucket.label} currently supports the broadest operational surface.`;
   }
   // constrained_downstream
+  // Phase C reasoning hint: the mid-sentence clause makes "operational
+  // leverage" self-explanatory to a first-time operator without adding
+  // a separate explanatory line. The clause appears once on the surface
+  // (only this branch fires for projects with constrained downstream),
+  // not on every render of every domain row.
   const n = bucket.downstreamCount;
   const tail = joined ? ` (${joined})` : '';
-  return `Highest operational leverage currently sits in ${bucket.label} — strengthening it would unblock ${n} downstream area${n === 1 ? '' : 's'}${tail}.`;
+  return `Highest operational leverage — the area where strengthening ripples furthest — currently sits in ${bucket.label}; strengthening it would unblock ${n} downstream area${n === 1 ? '' : 's'}${tail}.`;
 }
 
 /**

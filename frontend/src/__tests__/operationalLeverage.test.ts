@@ -175,7 +175,9 @@ describe('leverageHeadline', () => {
       ],
     });
     const out = leverageHeadline(computeSystemLeverage([b]))!;
-    expect(out).toMatch(/^Highest operational leverage currently sits in Intake/);
+    expect(out).toMatch(/^Highest operational leverage/);
+    expect(out).toContain('currently sits in Intake');
+    expect(out).toContain('the area where strengthening ripples furthest');
     expect(out).toContain('would unblock 2 downstream areas');
     assertCalm(out);
   });
