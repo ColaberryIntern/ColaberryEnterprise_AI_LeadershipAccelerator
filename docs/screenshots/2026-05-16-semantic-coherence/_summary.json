@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-05-16T17:26:49.581Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "slug": "01-system-bps-full",
+      "label": "Full BPs surface — overall composition post-refinements",
+      "file": "01-system-bps-full.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "02-refined-chip-title-row",
+      "label": "Refined pathway-stage chip — text-only with leading dot",
+      "file": "02-refined-chip-title-row.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    },
+    {
+      "slug": "03-why-this-matters-with-stages",
+      "label": "Leverage block — \"Why this matters\" now composes pathway-stage parentheticals",
+      "file": "03-why-this-matters-with-stages.png",
+      "originalWidth": 1072,
+      "finalWidth": 1072,
+      "downscaled": false
+    },
+    {
+      "slug": "04-expanded-priority-single-section-header",
+      "label": "Expanded priority section — inherited context as ONE section header, BP rows no longer repeat it",
+      "file": "04-expanded-priority-single-section-header.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    }
+  ]
+}
