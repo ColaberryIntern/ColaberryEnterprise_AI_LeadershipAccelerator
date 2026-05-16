@@ -12,11 +12,17 @@
  * guidance that disappears once it's not needed.
  *
  * Behavior:
- *   - Renders ONLY when:
- *       (a) The surface is genuinely first-visit (caller passes
- *           `isFirstVisit`, derived from existing memory fields), AND
- *       (b) The operator has not explicitly dismissed THIS surface's
- *           framing card (memory.seenIntros[surface] !== true)
+ *   - Renders when `isFirstVisit` is true AND
+ *     `memory.seenIntros[surface] !== true`.
+ *   - In practice, callers pass `isFirstVisit={true}` and let the
+ *     seenIntros dismiss flag be the sole gate. Timing-based detection
+ *     ("is this REALLY the operator's first visit?") via memory fields
+ *     was tried and proved fragile across React strict-mode remounts +
+ *     the state-poll snapshot useEffect lifecycle — the framing card
+ *     raced off-screen before the operator could see it.
+ *   - The simpler model: show until dismissed, then never. Existing
+ *     operators see the framing card once on their next visit (a
+ *     one-time courtesy), then dismiss, then never see it again.
  *   - When dismissed, marks workspaceMemory.seenIntros[surface] = true.
  *     Persistent across visits and tabs (cross-tab via the existing
  *     storage listener on useWorkspaceMemory).

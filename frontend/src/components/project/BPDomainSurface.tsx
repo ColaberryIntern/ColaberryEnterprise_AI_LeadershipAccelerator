@@ -259,7 +259,7 @@ const BPDomainSurface: React.FC = () => {
           2026-05-16. */}
       <FirstVisitFramingCard
         surface="systemBps"
-        isFirstVisit={workspaceMemory.lastBpDomain == null}
+        isFirstVisit={true}
         eyebrow="HOW THIS SURFACE WORKS"
         body="Your operational system is grouped into domains across four canonical stages — Entry, Coordination, Execution, Reporting. The 'Current priority' marker shows where Cory's attention sits today; the order adapts as the system evolves. Strengthening high-leverage areas ripples downstream."
       />

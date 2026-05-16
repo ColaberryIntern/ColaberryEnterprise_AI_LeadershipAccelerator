@@ -62,12 +62,13 @@ const CoryHome: React.FC = () => {
   const { state, loading, error, refresh } = useUnifiedProjectState({ pollMs: 60_000 });
   const { memory, update, recordSnapshot } = useWorkspaceMemory();
 
-  // First-visit detection captured ONCE at mount, frozen for the
-  // session. memory.lastSnapshotAt gets written by recordSnapshot()
-  // moments after mount, so reading memory.lastSnapshotAt directly
-  // would race the framing card off-screen. The ref captures the
-  // truth at the moment of mount, before any auto-snapshot fires.
-  const isFirstVisitHome = useRef(memory.lastSnapshotAt == null).current;
+  // Framing card visibility is gated ONLY on seenIntros.home. Anyone
+  // who hasn't dismissed sees it once; after dismiss it never shows
+  // again. We don't try to detect "real" first visit — too racy with
+  // the snapshot poll. The one-time courtesy explanation for existing
+  // operators is acceptable; the alternative (timing-based detection)
+  // is fragile across React strict-mode remounts and the snapshot
+  // useEffect lifecycle.
 
   // Continuity inputs — sessionStorage signals the active-path hook needs.
   // Read once at mount; refreshed via state.built_at so we pick up changes
@@ -286,7 +287,7 @@ const CoryHome: React.FC = () => {
           operator on this device. Operational Onboarding Sprint, 2026-05-16. */}
       <FirstVisitFramingCard
         surface="home"
-        isFirstVisit={isFirstVisitHome}
+        isFirstVisit={true}
         eyebrow="WHAT YOU'RE LOOKING AT"
         body="Cory reads your operational system every visit and surfaces one thing worth doing next. The tiles below show how the system is moving — readiness, coverage, health. The strip at the bottom remembers your last touch so you can pick up where you left off."
       />
