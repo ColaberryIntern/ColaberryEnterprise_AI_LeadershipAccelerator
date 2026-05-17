@@ -29,6 +29,23 @@ const QUALITY_CRITERIA = {
     /discount/i,
     /\$\d+/,              // dollar amounts
     /100% guaranteed/i,
+    // Self-promotion / DM-bait patterns (added 2026-05-08 after Skool flag)
+    /\bdm me\b/i,
+    /\bmessage me\b/i,
+    /\bping me\b/i,
+    /\bhit me up\b/i,
+    /\bshoot me a (?:dm|message|note)\b/i,
+    /\bfeel free to (?:reach out|message|dm|ping|connect)/i,
+    /\breach out (?:to me|directly|if you)/i,
+    /\bhappy to (?:discuss|chat|connect|help|assist|hop on|jump on)/i,
+    /\bglad to (?:discuss|chat|help|assist)/i,
+    /\bi'?m here to (?:help|assist|support)/i,
+    /\bi can (?:help|assist) (?:you|with|refine|enhance)/i,
+    /\bif you want to (?:dive|chat|talk|discuss|connect|explore)/i,
+    /\blet me know if you (?:want|need|are interested|'?d like)/i,
+    /\bi recently helped (?:a|an|my)/i,        // case-study pivot to pitch
+    /\bi recently worked with (?:a|an|my)/i,
+    /\blooking to (?:enhance|improve|upgrade) your (?:system|workflow|process|stack)/i,
   ],
   must_contain_value: true, // must provide genuine insight, not just a plug
   max_link_count: 2,

@@ -337,39 +337,8 @@ router.post('/api/admin/campaigns/:id/generate-link', requireAdmin, async (req: 
   }
 });
 
-// ---------------------------------------------------------------------------
-// Scheduler Safety Controls
-// ---------------------------------------------------------------------------
-
-router.post('/api/admin/scheduler/pause', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const { pauseScheduler } = require('../../services/schedulerService');
-    await pauseScheduler((req as any).admin?.sub);
-    res.json({ ok: true, paused: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/api/admin/scheduler/resume', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const { resumeScheduler } = require('../../services/schedulerService');
-    await resumeScheduler((req as any).admin?.sub);
-    res.json({ ok: true, paused: false });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get('/api/admin/scheduler/status', requireAdmin, async (_req: Request, res: Response) => {
-  try {
-    const { getSchedulerStatus } = require('../../services/schedulerService');
-    const status = await getSchedulerStatus();
-    res.json(status);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Scheduler safety controls live in schedulerControlRoutes.ts (controller
+// pattern). Both registered the same routes; controller version wins.
 
 // Dashboard campaign performance summary
 router.get('/api/admin/dashboard/campaign-performance', requireAdmin, async (_req: Request, res: Response) => {

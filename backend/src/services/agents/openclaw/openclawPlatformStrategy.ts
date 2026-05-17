@@ -27,6 +27,7 @@ export const PLATFORM_STRATEGY: Record<string, PlatformStrategyType> = {
   hackernews: 'PASSIVE_SIGNAL',
   facebook_groups: 'PASSIVE_SIGNAL',
   linkedin_comments: 'PASSIVE_SIGNAL',
+  skool: 'PASSIVE_SIGNAL',         // Skool community moderators flag any pitch language
 
   // HYBRID -engage first, light posting after warmup
   twitter: 'HYBRID_ENGAGEMENT',
@@ -67,6 +68,7 @@ export const PLATFORM_EXECUTION: Record<string, PlatformExecutionType> = {
   quora: 'HUMAN_EXECUTION',
   hackernews: 'HUMAN_EXECUTION',
   linkedin_comments: 'HUMAN_EXECUTION',
+  skool: 'HUMAN_EXECUTION',          // Skool has no public posting API; manual review + paste
 };
 
 export function getExecutionType(platform: string): PlatformExecutionType {
@@ -110,6 +112,19 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 - Be genuinely helpful and insightful. Share experience and frameworks, nothing else.
 - Sound like a knowledgeable practitioner, not a marketer.
 - If in doubt, err on the side of being MORE subtle, not less.
+
+BANNED PHRASES (these get the comment moderated as spam, ALWAYS):
+- "DM me" / "message me" / "ping me" / "hit me up" / "shoot me a DM"
+- "Feel free to reach out" / "reach out if you" / "happy to chat" / "happy to discuss"
+- "I can help you" / "I'm here to assist" / "happy to help" / "glad to help"
+- "If you want to dive into this" / "let me know if you want" / "let me know if you'd like"
+- "I recently helped a [client/company]..." pivoting into an offer
+- "Looking to enhance your system..." (pitch framing)
+- Any sentence whose purpose is to invite a private message, call, or further conversation with you
+
+If the model wants to add a closing thought, it should be a stand-alone observation
+that adds value to the public thread, NOT a bridge to private contact.
+
 - SIGN-OFF: You MUST end your comment with EXACTLY this line (copy verbatim):
   "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
   Do NOT change the name or handle. Do NOT use "Ali Moiz" or any other variation. The exact LinkedIn handle is ali-muwwakkil.
@@ -123,6 +138,16 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 - Do NOT lead with or center your response around a link or CTA.
 - Do NOT mention any company, product, program, or brand by name.
 - Sound like a knowledgeable practitioner sharing genuine insight, not a marketer.
+
+BANNED PHRASES (these get the comment moderated as spam, ALWAYS):
+- "DM me" / "message me" / "ping me" / "hit me up" / "shoot me a DM"
+- "Feel free to reach out" / "reach out if you" / "happy to chat" / "happy to discuss"
+- "I can help you" / "I'm here to assist" / "happy to help" / "glad to help"
+- "If you want to dive into this" / "let me know if you want" / "let me know if you'd like"
+- "I recently helped a [client/company]..." pivoting into an offer
+- "Looking to enhance your system..." (pitch framing)
+- Any sentence whose purpose is to invite a private message, call, or further conversation with you
+
 - SIGN-OFF: You MUST end your comment with EXACTLY this line (copy verbatim):
   "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
   Do NOT change the name or handle. Do NOT use "Ali Moiz" or any other variation. The exact LinkedIn handle is ali-muwwakkil.
@@ -194,6 +219,9 @@ export const CONVERSION_STAGE_PROMPTS: Record<number, string> = {
   1: `CONVERSATION STAGE 1 -INITIAL ENGAGEMENT:
 Generate a reply that provides INSIGHT ONLY.
 - No pitch, no link, no company mention.
+- No DM bait, no offer to help, no "I recently helped..." pivots.
+- Do NOT close with any sentence that invites private contact, calls, or follow-up.
+- The whole comment is a stand-alone observation. Period. Nothing leans toward a follow-up.
 - Trigger curiosity with a counter-intuitive or surprising observation.
 - Keep the insight portion under 3 sentences.
 - Sound like a knowledgeable peer, not a sales rep.

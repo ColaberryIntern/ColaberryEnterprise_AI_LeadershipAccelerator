@@ -242,14 +242,23 @@ export function verifyWebhookSignature(
   payload: string,
   signature: string | undefined
 ): boolean {
+  // When no secret is configured, we have nothing to verify against — fall
+  // back to permissive (typical for local dev / pre-integration environments).
   if (!env.paysimpleWebhookSecret) {
     console.warn('[PaySimple] No webhook secret configured — skipping signature check');
     return true;
   }
 
+  // Behavioral change 2026-05-17: previously this branch returned true with
+  // a warning log, silently accepting unsigned webhooks even when a secret
+  // WAS configured. That was effectively a security vuln — anyone could
+  // POST to the webhook endpoint and claim to be PaySimple. Now we reject.
+  // If PaySimple is genuinely sending unsigned webhooks, the upstream
+  // integration needs to be fixed; falling back to "accept anyway" hid the
+  // real problem.
   if (!signature) {
-    console.warn('[PaySimple] Webhook received without signature header — processing anyway');
-    return true;
+    console.warn('[PaySimple] Webhook secret IS configured but request has no signature header — rejecting');
+    return false;
   }
 
   // PaySimple HMAC verification
