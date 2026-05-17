@@ -52,13 +52,36 @@ export async function generateAction(
     }
   }
 
+  // Telemetry-declared implementation files. The manifest → requirement
+  // linker (telemetryIngestionService.linkApisToRequirements) populates
+  // github_file_paths when an apis_added/apis_modified entry references a
+  // path the requirement names. If files are linked but no formal
+  // ArtifactDefinition row exists yet, the right ask is "create the
+  // formal artifact record" — NOT "create the implementation" (it exists).
+  const hasLinkedFiles = Array.isArray(github_file_paths) && github_file_paths.length > 0;
+
   // Determine action type
   let action_type: ActionType;
   let title: string;
   let reason: string;
   let confidence_score: number;
 
-  if (!linkedArtifact) {
+  if (!linkedArtifact && hasLinkedFiles) {
+    // Defensive gate added 2026-05-17 to fix finding #3 from the REQ-027
+    // real-operational-verification sprint: previously, any requirement
+    // without an ArtifactDefinition FK got a "Create artifact for X"
+    // action, even when telemetry already declared the implementation
+    // files. Now those requirements get a clearer "track formal artifact"
+    // action that names the existing files. The status-based prioritizer
+    // filter at requirementPriorityService.ts (status === 'unmatched' ||
+    // 'partial') is the primary gate; this is belt-and-suspenders.
+    action_type = 'update_artifact';
+    const filesPreview = (github_file_paths || []).slice(0, 2).join(', ');
+    const moreSuffix = (github_file_paths || []).length > 2 ? ', …' : '';
+    title = `Track formal artifact for: ${truncate(requirement_text, 80)}`;
+    reason = `Requirement ${requirement_key} has implementation files declared in telemetry (${filesPreview}${moreSuffix}) but no formal ArtifactDefinition record. Create one to formally close this requirement.`;
+    confidence_score = 0.85;
+  } else if (!linkedArtifact) {
     // No linked artifact exists for this requirement
     action_type = 'create_artifact';
     title = `Create artifact for: ${truncate(requirement_text, 80)}`;
