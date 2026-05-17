@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-05-17T13:21:31.223Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "slug": "01-priority-card-with-inline-reason",
+      "label": "NextActionCard — operational reason visible inline (no drawer click required)",
+      "file": "01-priority-card-with-inline-reason.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    },
+    {
+      "slug": "02-leverage-with-why-and-resilience",
+      "label": "Leverage block — operational consequence sentences, conditional + observational",
+      "file": "02-leverage-with-why-and-resilience.png",
+      "originalWidth": 1072,
+      "finalWidth": 1072,
+      "downscaled": false
+    },
+    {
+      "slug": "03-priority-domain-full-trust-stack",
+      "label": "Priority domain expanded — trust label + pathway stage + Current priority + accent + inherited context (all calm)",
+      "file": "03-priority-domain-full-trust-stack.png",
+      "originalWidth": 1064,
+      "finalWidth": 1064,
+      "downscaled": false
+    },
+    {
+      "slug": "04-cory-drawer-humility-disclosure",
+      "label": "CoryDrawer — explicit humility disclosure: \"I just summarize and suggest. Nothing here is autonomous.\"",
+      "file": "04-cory-drawer-humility-disclosure.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "slug": "05-history-strip-with-no-signal-fallbacks",
+      "label": "OperationalHistoryStrip — calm no-signal fallbacks (\"— not opened yet\", \"— none yet\")",
+      "file": "05-history-strip-with-no-signal-fallbacks.png",
+      "originalWidth": 1080,
+      "finalWidth": 1080,
+      "downscaled": false
+    }
+  ]
+}

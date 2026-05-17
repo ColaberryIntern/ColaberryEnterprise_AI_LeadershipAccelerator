@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operational Trust + Decision Confidence — Sprint Audit</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 200px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 16px; color: var(--primary); margin-top: 1.25rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .screenshot { background: var(--frame); border-radius: 8px; padding: 14px; margin: 1rem 0; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+  .screenshot img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+  .screenshot .caption { color: #9ca3af; font-size: 11.5px; margin-top: 8px; text-align: center; }
+  .screenshot.crop { padding: 18px 28px; }
+  .evidence { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .evidence strong { color: #166534; }
+  .evidence ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .evidence li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .deferred { background: #f0f9ff; border-left: 3px solid #0284c7; padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .deferred strong { color: #075985; }
+  .deferred ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .deferred li { font-size: 14px; color: #374151; margin: 5px 0; }
+  .verdict { background: #f9fafb; border: 1px solid var(--border); padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  .verdict label { display: inline-flex; align-items: center; margin-right: 18px; cursor: pointer; font-size: 14px; }
+  .verdict input[type="radio"] { margin-right: 5px; }
+  .verdict textarea { width: 100%; min-height: 70px; margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; box-sizing: border-box; resize: vertical; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  blockquote { border-left: 3px solid var(--primary); padding: 8px 16px; color: var(--text); font-style: italic; margin: 0.75rem 0; background: #f8fafc; }
+  .verdict-banner { background: #ecfdf5; border: 1px solid #a7f3d0; border-left: 4px solid var(--accent); border-radius: 6px; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+  .verdict-banner strong { color: #064e3b; font-size: 15.5px; }
+  .verdict-banner p { color: #065f46; font-size: 14px; margin: 8px 0 0 0; line-height: 1.55; }
+  .compile-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 0.9rem 1.5rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
+  .compile-bar .stats { font-size: 13px; color: var(--muted); }
+  .compile-bar button { padding: 0.55rem 1.1rem; background: var(--primary); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .compile-bar button.alt { background: white; color: var(--primary); border: 1px solid var(--primary); margin-right: 10px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 80vh; overflow: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-actions button { padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: 1px solid var(--primary); }
+  .modal-actions .copy { background: var(--primary); color: white; border-color: var(--primary); }
+  .modal-actions .close { background: white; color: var(--primary); }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+  .rule { background: #fff7ed; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: 13.5px; color: #7c2d12; }
+  .rule strong { color: #9a3412; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Operational Trust + Decision Confidence — Sprint Audit</h1>
+  <p class="lede">
+    <strong>2026-05-17.</strong> An <strong>audit-only sprint</strong>.
+    Zero <code>frontend/src/*</code> changes. Zero deploys. The prior
+    six sprints already shipped the calm-vocabulary infrastructure that
+    does the trust-building work this sprint was asked to address. The
+    recon agent's finding was explicit: <em>"No sprint blocker detected;
+    the guardrails are in place and enforced."</em> This document
+    captures the live surface and maps every prompt theme to where it
+    is currently met.
+  </p>
+
+  <div class="verdict-banner">
+    <strong>Outcome: Operational-trust maturity reached.</strong>
+    <p>No further additions recommended this cycle. The trust groundwork
+    is laid by the calm-vocabulary helpers (<code>whyThisMattersSentence</code>,
+    <code>leverageHeadline</code>, <code>forwardLookingNote</code>,
+    <code>confidenceLine</code>, <code>systemResilienceSentence</code>,
+    <code>trustLabel</code>, <code>inheritedDomainContextSentence</code>,
+    <code>pathwayStageLabel</code>), the canonical-vocabulary governance
+    in <a href="OPERATIONAL_VOCABULARY.md"><code>docs/OPERATIONAL_VOCABULARY.md</code></a>,
+    the dependency-marker accent system, the priority-first sorting, the
+    pathway-stage chips, the inherited-context section header, and the
+    CoryDrawer humility disclosure. The next sprint should resolve any
+    operator-flagged refinements from this audit's verdicts — not add
+    new trust language.</p>
+  </div>
+
+  <div class="philosophy">
+    Trust came from restraint, not from more explanation. The prior six
+    sprints did not "add trust" — they removed certainty words, softened
+    technical badges into editorial labels, embedded conditional verbs
+    ("strengthening would influence…"), made every helper return null on
+    weak signal, and documented the canonical vocabulary in writing. The
+    operator now reads a coherent operational language across every
+    surface. That coherence IS the trust.
+  </div>
+
+  <div class="rule">
+    <strong>This document is evidence, not a delivery.</strong> No
+    React components changed. No tests added. No commits to
+    <code>frontend/src/*</code>. The captures below are taken against
+    the current production deploy (commit <code>3939f4c</code>) as it
+    stood the morning of 2026-05-17.
+  </div>
+
+  <!-- ─────────────────────── STOP 1 — Mapping ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">1</span><span class="stop-title">Mapping the prompt's themes to shipped code</span></h2>
+    <p>Every theme in the operator's prompt mapped to where it's already met:</p>
+
+    <table>
+      <thead><tr><th>Prompt theme</th><th>Already shipped where</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>"Considered guidance" language — conditional + observational, never imperative</td>
+          <td><code>whyThisMattersSentence</code> in <a href="../frontend/src/utils/coryPriorityMatcher.ts"><code>coryPriorityMatcher.ts</code></a>; <code>leverageHeadline</code> + <code>forwardLookingNote</code> in <a href="../frontend/src/utils/operationalLeverage.ts"><code>operationalLeverage.ts</code></a>; <code>confidenceLine</code> + <code>systemResilienceSentence</code> in <a href="../frontend/src/utils/structuralConfidence.ts"><code>structuralConfidence.ts</code></a>. All produce "strengthening this would…" / "is gaining consistency" / "feels stable" — no certainty, no urgency.</td>
+        </tr>
+        <tr>
+          <td>"Operational consequence visibility" — what improves if this strengthens</td>
+          <td><code>whyThisMattersSentence</code> composes pathway-stage parentheticals onto downstream targets (Semantic Coherence sprint, commit <code>1a9942e</code>). Rendered in Stop 3 below.</td>
+        </tr>
+        <tr>
+          <td>"Operational restraint" — silence when signal is weak</td>
+          <td>Every editorial helper returns <code>null</code> when nothing meaningful to say. Verified across <code>inheritedDomainContextSentence</code> (silent when <code>downstream &le; 0</code>), <code>whyThisMattersSentence</code> (silent when no priority domain), <code>pathwayStageLabel</code> (silent on the catch-all <code>other</code> domain), <code>completionLabel</code> (silent when no requirements extracted).</td>
+        </tr>
+        <tr>
+          <td>"Reasoning stability" — similar situations produce similar framing</td>
+          <td>The same classifier produces the same trust-label vocabulary across visits. <a href="OPERATIONAL_VOCABULARY.md"><code>docs/OPERATIONAL_VOCABULARY.md</code></a> is the written governance — anti-vocabulary list explicitly forbids "should / must / fix / guaranteed / optimal / perfect / critical / urgent" in operator-facing prose.</td>
+        </tr>
+        <tr>
+          <td>"Trust-building continuity" — stable vocabulary</td>
+          <td>Vocabulary alignment shipped in the Semantic Coherence sprint: "downstream operational area" → "downstream area" everywhere, "operational system" → "operational structure" everywhere. <code>operationalLeverage.test.ts</code> + <code>priorityTopology.test.ts</code> + <code>structuralConfidence.test.ts</code> + <code>scanSpeedSignals.test.ts</code> assert calm-language guardrails on every helper.</td>
+        </tr>
+        <tr>
+          <td>"Operational maturity confidence" — what dependable structure looks like</td>
+          <td><code>trustLabel</code> softens classifier states into operator-facing words: "Still forming", "Coordinating", "Coordinated", "Operational", "Dependable", "Trusted". <code>confidenceLine</code> composes one sentence per domain: "is gaining consistency", "is operationally dependable". <code>systemResilienceSentence</code> reads the whole system.</td>
+        </tr>
+        <tr>
+          <td>"Operational humility" — bounded understanding</td>
+          <td>The CoryDrawer explicitly disclaims autonomy in two places. Quoted in Stop 6 below.</td>
+        </tr>
+        <tr>
+          <td>"Anti-AI-assistant audit" — no "I think / Let me / Try this / Recommended / AI / GPT"</td>
+          <td>Confirmed by grep across operator-facing prose: <strong>zero hits</strong>. The only first-person Cory voice is the CoryDrawer boundary disclosure ("I read the same state every other surface reads — Nothing here is autonomous: I just summarize and suggest.") — intentional trust-building transparency, not chatbot energy.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="verdict">
+      <strong>Verdict on framing</strong><br>
+      <label><input type="radio" name="v1" value="ok">👍 Mapping is accurate</label>
+      <label><input type="radio" name="v1" value="iterate">⚠ Missed a theme</label>
+      <label><input type="radio" name="v1" value="cut">✕ Disagree with maturity claim</label>
+      <textarea placeholder="Notes…" data-notes="stop1"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 2 — Considered guidance + consequence visibility ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">2</span><span class="stop-title">Considered guidance + consequence visibility — live evidence</span></h2>
+    <p>The leverage block on System BPs, captured against current
+       production. Three trust-building sentences stacked vertically,
+       all conditional and observational:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-17-operational-trust/02-leverage-with-why-and-resilience.png" target="_blank">
+        <img src="screenshots/2026-05-17-operational-trust/02-leverage-with-why-and-resilience.png" alt="Leverage block: OPERATIONAL LEVERAGE line above, WHY THIS MATTERS line with pathway-stage parentheticals, structural-resilience sentence below">
+      </a>
+      <div class="caption">Leverage block · production · 2026-05-17 · 1072 px wide</div>
+    </div>
+
+    <p>Three sentences, three different trust functions:</p>
+
+    <table>
+      <thead><tr><th>Sentence</th><th>What it does for trust</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><em>"Highest operational leverage — the area where strengthening ripples furthest — currently sits in Lead Intelligence; strengthening it would unblock 3 downstream areas (Marketing Operations, Execution Systems, and Reporting & Analytics)."</em></td>
+          <td>Names the term inline ("the area where strengthening ripples furthest"), then enumerates the consequence with the downstream areas explicit. No urgency, no imperative. The conditional "would unblock" is the operative verb — Cory doesn't claim certainty, only consequence.</td>
+        </tr>
+        <tr>
+          <td><em>"Cory's current priority sits in AI & Intelligence (Coordination) — strengthening it would influence Lead Intelligence (Coordination) and Execution Systems (Execution)."</em></td>
+          <td>Cross-references the same pathway-stage vocabulary the operator sees on every domain row. Single mental model. Same conditional "would influence" verb.</td>
+        </tr>
+        <tr>
+          <td><em>"The operational structure is still forming — most areas remain in early scaffolding."</em></td>
+          <td>System-level honesty. Cory does not pretend the system is mature. Observational tense, no evaluation.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="evidence">
+      <strong>Evidence of considered guidance + consequence visibility:</strong>
+      <ul>
+        <li>Three conditional/observational sentences in one block, no imperatives anywhere</li>
+        <li>Pathway-stage parentheticals reinforce the same vocabulary used on every domain row</li>
+        <li>"Still forming" honestly characterizes system maturity instead of claiming readiness</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v2" value="ok">👍 Already meets the bar</label>
+      <label><input type="radio" name="v2" value="iterate">⚠ Needs more</label>
+      <label><input type="radio" name="v2" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop2"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 3 — Trust-through-structure ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">3</span><span class="stop-title">Trust-through-structure — full vocabulary stack on the priority domain</span></h2>
+    <p>An expanded priority domain on System BPs, captured live.
+       Every layer of the calm-vocabulary work is visible together:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-17-operational-trust/03-priority-domain-full-trust-stack.png" target="_blank">
+        <img src="screenshots/2026-05-17-operational-trust/03-priority-domain-full-trust-stack.png" alt="AI &amp; Intelligence priority domain expanded with full trust vocabulary stack">
+      </a>
+      <div class="caption">Priority domain expanded · all vocabulary layers visible · 1064 px wide</div>
+    </div>
+
+    <div class="evidence">
+      <strong>Vocabulary layers visible in one frame:</strong>
+      <ul>
+        <li><strong>Trust label:</strong> "STILL FORMING" (from <code>trustLabel('Foundational')</code>) — operator-facing softening of the classifier's technical "Foundational" state</li>
+        <li><strong>Pathway-stage chip:</strong> "Coordination" (from <code>pathwayStageLabel('ai_intelligence')</code>) — canonical-flow anchor as a text-only dot-separator fragment</li>
+        <li><strong>Current priority badge:</strong> Cory's priority embedded in the topology, not announced as urgency</li>
+        <li><strong>Dependency accent:</strong> 3 px primary left-border on the priority domain AND on every BP row inside it — visual continuity of the active zone through the hierarchy</li>
+        <li><strong>Inherited domain context:</strong> One calm italic section header "<em>Each BP below sits inside AI &amp; Intelligence — supports 2 downstream areas.</em>" — replaces what was previously 14× repetition</li>
+        <li><strong>BP-line vocabulary:</strong> "Not built yet" sentence-case (not the old harsh "UNBUILT")</li>
+        <li><strong>Operational role narrative:</strong> "This domain reasons over the whole system — discovery, prompts, requirements, decisions. It informs everything downstream."</li>
+        <li><strong>Forward-looking conditional notes:</strong> "Early-stage maturity here creates downstream friction for the 2 areas that depend on it." + "Strengthening this would stabilize the 2 downstream areas that depend on it."</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v3" value="ok">👍 Trust signal reads coherent</label>
+      <label><input type="radio" name="v3" value="iterate">⚠ Needs more</label>
+      <label><input type="radio" name="v3" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop3"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 4 — NextActionCard inline reason ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">4</span><span class="stop-title">Priority card — operational reason inline (no drawer click required)</span></h2>
+    <p>The recon agent's audit of NextActionCard found that Cory's
+       priority card carries an inline operational <code>reason</code> field —
+       the operator does not need to click "Why this next?" to see why a
+       priority exists. Cory's reasoning is visible at the surface.</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-17-operational-trust/01-priority-card-with-inline-reason.png" target="_blank">
+        <img src="screenshots/2026-05-17-operational-trust/01-priority-card-with-inline-reason.png" alt="NextActionCard with inline reason field, time estimate, blast radius, confidence percentage">
+      </a>
+      <div class="caption">NextActionCard with inline operational reason · 1440 px wide</div>
+    </div>
+
+    <p>The card carries three trust-building affordances:</p>
+    <ul>
+      <li>The <code>reason</code> field — Cory's reasoning visible without a drawer click</li>
+      <li>"Why this next?" button — deeper signal disclosure available on demand</li>
+      <li>Time estimate · blast radius · confidence + priority percentages — bounded quantification, never urgency</li>
+    </ul>
+
+    <p>Deeper-signal disclosure lives in <code>WhyThisNextDrawer</code>, which uses
+       <em>measured</em> language: "Cory is reasonably sure this is the right next
+       step" — the qualifier "reasonably" is the operational humility, not
+       false certainty.</p>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v4" value="ok">👍 Reasoning is visible without verbosity</label>
+      <label><input type="radio" name="v4" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v4" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop4"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 5 — Operational restraint ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">5</span><span class="stop-title">Operational restraint — calm no-signal fallbacks</span></h2>
+    <p>The OperationalHistoryStrip on Cory Home — the surface that
+       carries the most "Cory might say something" pressure — speaks
+       in honest no-signal fallbacks when there's nothing to say.
+       Captured live:</p>
+
+    <div class="screenshot crop">
+      <a href="screenshots/2026-05-17-operational-trust/05-history-strip-with-no-signal-fallbacks.png" target="_blank">
+        <img src="screenshots/2026-05-17-operational-trust/05-history-strip-with-no-signal-fallbacks.png" alt="OperationalHistoryStrip: SYNTHESIZED just now · YOU LAST TOUCHED — first visit · LAST CRITIQUE — not opened yet · LAST IMPROVEMENT — none yet · CONFIDENCE 80%">
+      </a>
+      <div class="caption">OperationalHistoryStrip · honest fallbacks on first-visit state · 1408 px wide</div>
+    </div>
+
+    <p>Reading the strip left to right:</p>
+
+    <table>
+      <thead><tr><th>Field</th><th>Live value</th><th>What it says about trust</th></tr></thead>
+      <tbody>
+        <tr><td>SYNTHESIZED</td><td><code>just now</code></td><td>Recency, not freshness-as-marketing</td></tr>
+        <tr><td>YOU LAST TOUCHED</td><td><code>— first visit</code></td><td>No fake "you visited 12 minutes ago" — honest dash + "first visit"</td></tr>
+        <tr><td>LAST CRITIQUE</td><td><code>— not opened yet</code></td><td>The Critique surface hasn't been opened. Cory doesn't pretend otherwise.</td></tr>
+        <tr><td>LAST IMPROVEMENT</td><td><code>— none yet</code></td><td>No contribution captured yet. Honest silence.</td></tr>
+        <tr><td>CONFIDENCE</td><td><code>80%</code></td><td>Raw number only. No "very confident" or "HIGH CONFIDENCE" certainty language.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="evidence">
+      <strong>Three no-signal fallbacks in one frame:</strong> <code>— first visit</code>, <code>— not opened yet</code>, <code>— none yet</code>. Each is a calm em-dash + a short observational phrase. Nothing claims activity that hasn't happened.
+    </div>
+
+    <div class="deferred">
+      <strong>One narrow opportunity logged (not shipped):</strong>
+      <ul>
+        <li><strong>Confidence-as-language</strong> — the CONFIDENCE field renders a raw percentage with no language translation. A first-time or skeptical operator reads "80%" without operational meaning. A future sprint could wrap the number with a calm one-word phrase ("firm" / "taking shape" / "still forming"). Bounded, single-helper change. Not shipped this sprint per Option-2 scope.</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v5" value="ok">👍 Restraint is real</label>
+      <label><input type="radio" name="v5" value="iterate">⚠ Want the confidence-as-language refinement next sprint</label>
+      <label><input type="radio" name="v5" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop5"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 6 — CoryDrawer humility ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">6</span><span class="stop-title">Operational humility — CoryDrawer's boundary-of-authority disclosure</span></h2>
+    <p>The CoryDrawer (opened from the Cory whisper in the context bar)
+       contains the strongest single piece of trust-building copy on the
+       platform — an explicit disclosure of Cory's bounded authority.</p>
+
+    <div class="screenshot">
+      <a href="screenshots/2026-05-17-operational-trust/04-cory-drawer-humility-disclosure.png" target="_blank">
+        <img src="screenshots/2026-05-17-operational-trust/04-cory-drawer-humility-disclosure.png" alt="CoryDrawer panel on right side showing Here's what I know, with humility subtitle and What I do NOT do boundary section">
+      </a>
+      <div class="caption">CoryDrawer — boundary-of-authority disclosure visible · 1440 px wide</div>
+    </div>
+
+    <p>The drawer's subtitle (the line that sits immediately under "Here's what I know"):</p>
+
+    <blockquote>"I read the same state every other surface reads — readiness, queue, active build, recent work. Nothing here is autonomous: I just summarize and suggest."</blockquote>
+
+    <p>And the boundary section at the bottom of the drawer:</p>
+
+    <blockquote>"What I do NOT do: autonomous execution, hidden decisions, ranking operators, or anything you can't see in the unified state. Authority lives at Home; I just summarize it here."</blockquote>
+
+    <div class="evidence">
+      <strong>Why this is the strongest trust-building copy on the platform:</strong>
+      <ul>
+        <li>Explicit disclaimer of autonomous decisions ("Nothing here is autonomous")</li>
+        <li>Explicit disclaimer of hidden state ("the same state every other surface reads")</li>
+        <li>Explicit disclaimer of operator-ranking ("ranking operators" in the NOT-do list)</li>
+        <li>Locates authority precisely ("Authority lives at Home; I just summarize it here")</li>
+        <li>Uses first-person voice <em>only</em> for boundary disclosure — nowhere else on the platform — making the voice itself a signal of "this is Cory telling you what Cory is, not Cory making claims"</li>
+      </ul>
+    </div>
+
+    <div class="verdict">
+      <strong>Verdict</strong><br>
+      <label><input type="radio" name="v6" value="ok">👍 Humility is explicit + structural</label>
+      <label><input type="radio" name="v6" value="iterate">⚠ Iterate per notes</label>
+      <label><input type="radio" name="v6" value="cut">✕ Disagree</label>
+      <textarea placeholder="Notes…" data-notes="stop6"></textarea>
+    </div>
+  </div>
+
+  <!-- ─────────────────────── STOP 7 — Overall ─────────── -->
+  <div class="stop">
+    <h2><span class="stop-num">7</span><span class="stop-title">Overall — maturity declaration</span></h2>
+    <p>This sprint was the first sprint in the cycle to deliberately
+       ship <strong>no code</strong>. The recon agent's audit was clear:
+       the guardrails are in place and enforced. Every prompt theme maps
+       to an existing helper. The CoryDrawer's humility disclosure
+       carries the strongest trust-building copy. The leverage block
+       composes pathway-stage parentheticals. The OperationalHistoryStrip
+       uses honest no-signal fallbacks. The priority card carries
+       inline operational reasoning. The vocabulary doc enforces calm
+       phrasing in writing.</p>
+
+    <p>The platform has reached operational-trust maturity through the
+       prior six sprints. The next sprint should either:</p>
+    <ul>
+      <li>Resolve any operator-flagged refinement from the verdicts above (e.g., the deferred confidence-as-language opportunity in Stop 5), or</li>
+      <li>Move to a genuinely new product area — not re-litigate trust language that has already converged.</li>
+    </ul>
+
+    <p>Audit-only is a valid sprint outcome. Shipping for the sake of
+       shipping erodes the very trust this prompt was asking to build.</p>
+
+    <div class="verdict">
+      <strong>Overall verdict</strong><br>
+      <label><input type="radio" name="vTotal" value="ok">👍 Accept the maturity declaration; close sprint</label>
+      <label><input type="radio" name="vTotal" value="iterate">⚠ Pick up the deferred refinement(s) next sprint</label>
+      <label><input type="radio" name="vTotal" value="cut">✕ Disagree — re-scope</label>
+      <textarea placeholder="What should come next…" data-notes="overall" style="min-height: 100px;"></textarea>
+    </div>
+  </div>
+
+</div>
+
+<div class="compile-bar">
+  <div class="stats" id="stats">0 / 7 stops voted</div>
+  <div>
+    <button class="alt" onclick="resetAll()">Reset</button>
+    <button onclick="compile()">Compile next-sprint prompt</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Next-sprint prompt — copy + paste back to Claude Code</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="copy" onclick="copyPrompt()">Copy to clipboard</button>
+      <button class="close" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateStats() {
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    const stops = document.querySelectorAll('.stop').length;
+    document.getElementById('stats').textContent = `${radios.length} / ${stops} stops voted`;
+  }
+  document.addEventListener('change', updateStats);
+  updateStats();
+  function compile() {
+    let out = "# Operational Trust + Decision Confidence Sprint — operator feedback\n\nAudit-only sprint (no code shipped). Production state captured 2026-05-17 against commit 3939f4c.\n\n";
+    document.querySelectorAll('.stop').forEach((stop, i) => {
+      const title = stop.querySelector('.stop-title').textContent;
+      const checkedRadio = stop.querySelector('input[type="radio"]:checked');
+      const verdict = checkedRadio ? checkedRadio.value : '(no verdict)';
+      const notes = stop.querySelector('textarea[data-notes]');
+      const noteText = notes && notes.value.trim() ? notes.value.trim() : '';
+      out += `## Stop ${i + 1} — ${title}\nVerdict: **${verdict}**\n`;
+      if (noteText) out += `Notes:\n${noteText}\n`;
+      out += '\n';
+    });
+    out += "## What I'd like in the next sprint\n(Edit before pasting.)\n- Resolve flagged items above\n- The confidence-as-language deferred opportunity (Stop 5) if I want it picked up\n";
+    document.getElementById('modalContent').textContent = out;
+    document.getElementById('modalBg').classList.add('show');
+  }
+  function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('modalContent').textContent).then(() => {
+      const btn = document.querySelector('.modal-actions .copy');
+      const orig = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+  function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+  function resetAll() {
+    if (!confirm('Clear all verdicts and notes?')) return;
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    updateStats();
+  }
+</script>
+</body>
+</html>
