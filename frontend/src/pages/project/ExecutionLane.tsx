@@ -122,17 +122,27 @@ const ExecutionLane: React.FC = () => {
     setSubmittingReport(true);
     setVerifyResult(null);
     setVerifyMessage(null);
+    // 30s client-side timeout so the button can't hang forever. The
+    // backend /verify runs full requirement re-verification including
+    // an LLM call per requirement; on projects with many requirements
+    // it routinely takes 5-10+ minutes. Until the backend is split into
+    // a job + poll surface, surfacing a graceful timeout client-side is
+    // the bounded fix that protects the operator from a forever-spinner.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
     try {
-      // Lightweight verification: post-execution validation. Existing
-      // backend `/verify` endpoint is the canonical check. For V1, we
-      // simply call it; richer feedback is a follow-up.
-      await portalApi.post('/api/portal/project/verify');
+      await portalApi.post('/api/portal/project/verify', undefined, { signal: controller.signal });
       setVerifyResult('pass');
       setVerifyMessage('Verification passed. You can mark this step complete.');
     } catch (err: any) {
       setVerifyResult('fail');
-      setVerifyMessage(err.response?.data?.error || 'Verification failed. See server logs.');
+      if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || controller.signal.aborted) {
+        setVerifyMessage('Verification timed out after 30 s. The backend is still working — you can refresh in a few minutes to see the result, or continue without waiting.');
+      } else {
+        setVerifyMessage(err.response?.data?.error || 'Verification failed. See server logs.');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setSubmittingReport(false);
     }
   }, [reportText]);
