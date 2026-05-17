@@ -60,12 +60,100 @@ export async function ingest(rawPayload: unknown): Promise<IngestOutcome> {
     decision_trace: m.decision_trace ?? null,
   } as any);
 
-  // 4. fire-and-forget refresh — never blocks the request
+  // 4. link manifest APIs to matching requirements — best-effort, never
+  //    blocks the ingest result. Conservative substring match against
+  //    requirement_text for now (see linkApisToRequirements docstring).
+  try {
+    await linkApisToRequirements(m);
+  } catch (e: any) {
+    console.error('[telemetryIngestion] linker failed (non-fatal):', e?.message || e);
+  }
+
+  // 5. fire-and-forget refresh — never blocks the request
   try {
     refreshSystemState(m.project_id, 'manifest_ingested' as any);
   } catch { /* fire-and-forget */ }
 
   return { ok: true, manifest_id: (row as any).id, project_id: m.project_id };
+}
+
+// ---------------------------------------------------------------------------
+// Manifest → requirement linker
+// ---------------------------------------------------------------------------
+
+interface ApiEntry { method?: string; path?: string; handler_file?: string }
+type LinkableManifest = { project_id: string; apis_added?: ApiEntry[]; apis_modified?: ApiEntry[] };
+
+/**
+ * Best-effort auto-link of manifest API entries to RequirementsMap rows
+ * whose `requirement_text` references the same API path. Walks both
+ * `apis_added` and `apis_modified`. For each matched requirement, appends
+ * the manifest's `handler_file` to `github_file_paths` (deduped) and
+ * advances `status` from 'unmatched' to 'matched' when applicable.
+ *
+ * Matching is conservative: substring on requirement_text against the
+ * exact API path, scoped to the manifest's `project_id`. False-positive
+ * surface is small because requirement_text strings that include "/api/x"
+ * are almost always referencing that exact endpoint in this codebase.
+ *
+ * Does NOT set `source_artifact_id` — that's a FK to artifact_definitions
+ * and creating an ArtifactDefinition row is a separate concern (could be
+ * a follow-up sprint). Today the github_file_paths field is the
+ * machine-readable link the rest of the engine consumes.
+ *
+ * Idempotent: re-posting the same manifest leaves
+ * github_file_paths unchanged after the first append. Status only
+ * advances forward (unmatched → matched), never regresses.
+ *
+ * Returns the count of requirements updated. Never throws on a failed
+ * lookup — surfaces errors via the caller's try/catch wrapper.
+ *
+ * Added 2026-05-17 to fix product finding #2 from the REQ-027 real-
+ * operational-verification sprint: manifests were being ingested cleanly
+ * but the requirement layer was never updated, so the verification
+ * surface remained blind to the work declared in telemetry.
+ */
+export async function linkApisToRequirements(m: LinkableManifest): Promise<number> {
+  const allApis = [...(m.apis_added || []), ...(m.apis_modified || [])];
+  if (allApis.length === 0) return 0;
+
+  const { default: RequirementsMap } = await import('../../../models/RequirementsMap');
+  const { Op } = await import('sequelize');
+
+  // Pull all requirement rows for this project once — the candidate set
+  // for any single project is small (low hundreds) so an in-memory match
+  // is cheaper than N separate path-scoped LIKE queries.
+  const reqs = await RequirementsMap.findAll({
+    where: { project_id: m.project_id, is_active: { [Op.ne]: false } },
+  });
+  if (reqs.length === 0) return 0;
+
+  let updatedCount = 0;
+  for (const api of allApis) {
+    if (!api?.path || !api?.handler_file) continue;
+    for (const req of reqs) {
+      const text = (req as any).requirement_text || '';
+      if (!text.includes(api.path)) continue;
+      const existing: string[] = Array.isArray((req as any).github_file_paths)
+        ? (req as any).github_file_paths
+        : [];
+      const dirty: string[] = [];
+      if (!existing.includes(api.handler_file)) {
+        (req as any).github_file_paths = [...existing, api.handler_file];
+        dirty.push('github_file_paths');
+      }
+      if ((req as any).status === 'unmatched') {
+        (req as any).status = 'matched';
+        dirty.push('status');
+      }
+      if (dirty.length > 0) {
+        await (req as any).save();
+        updatedCount += 1;
+        console.log(`[telemetryIngestion] linked ${api.method} ${api.path} → ${(req as any).requirement_key} (${dirty.join('+')})`);
+      }
+    }
+  }
+  return updatedCount;
 }
 
 /** Read manifests for a project. Optional bp filter, optional `since` cutoff. */
