@@ -12,6 +12,23 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### REQ-048 full-pipeline run: example persona artifact shipped + Cory advances to REQ-085 (2026-05-17)
+Operator asked for a "full run" of Cory's surfaced priority. Used it as an end-to-end exercise of the artifact-creation pipeline.
+
+- [x] **Investigation:** REQ-048 ("Example Persona: **Mark Johnson, CEO of Tech Innovations Inc.**") traced to [Colaberry_Enterprise_AI_Leadership_Accelerator_Build_Guide_v1.md:295](Colaberry_Enterprise_AI_Leadership_Accelerator_Build_Guide_v1.md). The persona was embedded in the long-form Chapter 3 — verifier couldn't match it because the structured persona definition didn't have its own addressable home.
+- [x] **NEW** [docs/personas/example-personas.md](docs/personas/example-personas.md) — structured persona doc lifted from the build guide. Captures Mark Johnson (primary-persona example) plus the three secondary personas (IT Managers, Data Scientists, Corporate Trainers) using consistent table format. Standalone artifact the verifier can match against.
+- [x] **ArtifactDefinition row created on prod:** id=`39e5208c-21e3-4fde-8a5d-3206def0ee6e`, name=`Example User Personas`, type=`document`, github_file_path=`docs/personas/example-personas.md`. Matches the shape of existing documentation artifacts (Failure State Analysis, Complete Requirements Document).
+- [x] **requirements_maps.REQ-048 linked:** `source_artifact_id` set, `github_file_paths` populated, status flipped `unmatched` → `matched`. Verified via direct psql query.
+- [x] **BuildManifest emitted + accepted:** manifest_id=`28ee0586-f7fe-4f0d-9dd6-3c075cd1b144`. Declares files_created + database_changes + system_impacts + decision_trace. After 2 schema-correction iterations (`files_created` items are strings not objects; `database_changes.operation` enum restricted to schema-level ops, used `data_migration`; `system_impacts` items are objects not strings). Schema strictness held the line.
+- [x] **NextAction completed via /next-action/complete:** action_id=`a0ab636d-da79-4698-8d62-42afcbb0780d`. Cory advanced from REQ-048 → **REQ-085** (*User Authentication is handled using JWT tokens…*) — different requirement, prioritizer is healthy.
+
+**Result:** Full pipeline proven end-to-end on a real operator-surfaced task. File commit → DB linkage → manifest emission → action completion → queue advancement, all within one session.
+
+  - Date: 2026-05-17
+  - What changed: 1 new doc (68 lines), 2 prod DB rows (artifact_definitions insert + requirements_maps update), 1 manifest record, 1 completed action record.
+  - Verification: psql confirms REQ-048 now `matched` with github_file_paths + source_artifact_id; GET /next-action shows REQ-085 surfaced as new top priority.
+  - Notes: This is the canonical example of "fully run a Cory priority." Pattern for future documentation-style requirements: lift the relevant section into a structured standalone doc, create the ArtifactDefinition, link via source_artifact_id, emit manifest, complete the action. Took ~15 minutes including 3 schema correction iterations on the manifest payload.
+
 ### Audit follow-up part 2: all 3 deferred items resolved, backend Jest goes 100% green (2026-05-17)
 Operator authorized "can we make those fixes and then move on" — explicit clearance to close the 3 deferred items from the morning's audit. This entry covers the resulting work.
 
