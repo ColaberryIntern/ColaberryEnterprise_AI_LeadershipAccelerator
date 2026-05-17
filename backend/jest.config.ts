@@ -14,7 +14,14 @@ const config: Config = {
   ],
   coverageDirectory: 'coverage',
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', {
+      // Skip cross-file type checking during test runs. ts-jest's default
+      // type-checks the full import graph, which on this codebase pulls in
+      // 100+ Sequelize models (models/index.ts is 1000+ lines) and exhausts
+      // the V8 heap. `tsc --noEmit` is the canonical type gate; jest is the
+      // runtime gate.
+      isolatedModules: true,
+    }],
   },
 };
 

@@ -13,7 +13,20 @@ router.post('/api/create-invoice', handleCreateInvoice);
 router.post('/api/create-invoice-request', handleCreateInvoiceRequest);
 router.get('/api/enrollment/verify', handleVerifyEnrollment);
 
-// Public: list available courses (active program blueprints with modules)
+/**
+ * GET /api/courses
+ *
+ * REQ-027 — Retrieve available courses.
+ * Returns active ProgramBlueprint records with their CurriculumModule
+ * children. Public route (no auth).
+ *
+ * Verified by: backend/src/routes/__tests__/enrollmentRoutes.test.ts
+ *   - 200 status + array shape
+ *   - documented top-level fields (id, name, description, goals,
+ *     target_persona, learning_philosophy, core_competency_domains)
+ *   - embedded modules with documented attributes
+ *   - is_active: true filter applied to the query
+ */
 router.get('/api/courses', async (_req: Request, res: Response) => {
   try {
     const { ProgramBlueprint, CurriculumModule } = await import('../models');
