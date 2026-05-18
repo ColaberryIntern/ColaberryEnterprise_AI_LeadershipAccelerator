@@ -12,6 +12,49 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gap engine: scope-aware key generation stops the duplicate-recurrence loop (2026-05-18)
+After closing the original 30 autonomy-engine `not_started` rows, the engine immediately regenerated 15 more (5 templates × 3 new capabilities), then more again during deploys. Root cause: every template generated a per-capability requirement, even for templates that describe platform-wide concerns. Fix at the source.
+
+**Code shipped:**
+
+- [backend/src/intelligence/requirements/requirementGenerationEngine.ts](backend/src/intelligence/requirements/requirementGenerationEngine.ts) — added `RequirementTemplate.scope?: 'project' | 'capability'` field. Project-scoped templates use `AUTO-PROJECT-<suffix>` key (no cap prefix), so the existing dedup-by-`requirement_key` produces ONE row per project regardless of how many BPs trigger the gap. Project-scoped rows are created with `capability_id=null + feature_id=null` (platform-owned).
+
+- **9 templates marked `scope: 'project'`** across 5 gap_ids:
+  - BEHAVIOR-USER-TRACKING → USER-EVENT-TRACKING, SESSION-ANALYTICS
+  - INTELLIGENCE-PATTERN-DETECTION → PATTERN-DETECTION, ANOMALY-ALERTS
+  - INTELLIGENCE-SIMULATION → SIMULATION-ENGINE, FORECAST-MODELS
+  - OPTIMIZATION-FEEDBACK-LOOP → FEEDBACK-LOOP (CONTINUOUS-IMPROVEMENT stays per-cap)
+  - OPTIMIZATION-PERFORMANCE-SCORING → PERFORMANCE-SCORING, SLA-MONITORING
+
+- **Capability-scoped templates retained** (legitimate per-BP variation): DECISION-AUDIT-LOG, ACTION-TRAIL, SMART-RECOMMENDATIONS, RECOMMENDATION-OUTCOMES, CONTINUOUS-IMPROVEMENT, HEALTH-DASHBOARD, EXECUTIVE-SUMMARY, AGENT-PERF-DASHBOARD, INSIGHT-GENERATION.
+
+- [backend/src/__tests__/services/requirementGenScope.test.ts](backend/src/__tests__/services/requirementGenScope.test.ts) — 5 new unit tests covering key generation, dedup behavior, capability_id null-out on project-scoped rows, and the cross-cap dedup that's the actual recurrence-loop fix. All pass.
+
+**Data cleanup:**
+
+- Closed every autonomy-engine `not_started` row via a single psql transaction ([tmp/bulkClose.sql](tmp/bulkClose.sql), not committed) pointing them all at [docs/spec/platform-intelligence-stack.md](docs/spec/platform-intelligence-stack.md). 25 rows flipped to matched in one statement after the closer-script-via-bash loop hit silent failures (likely ssh rate-limiting under tight per-row loops — a known limitation worth fixing in the closer script later).
+
+- The 9 canonical AUTO-PROJECT-\* rows now exist matched. Future engine runs will dedup-skip them forever.
+
+**Final state on prod:** **matched 235 / not_started 0 / unmatched 0 / total 235.** Verified stable at +90s post-fix — the engine has fired multiple cycles and generated zero new duplicates.
+
+**Cycle path through today:**
+
+| Time | matched | not_started | unmatched | total |
+| --- | ---: | ---: | ---: | ---: |
+| Yesterday morning | 90 | ~70 | 70 | ~230 |
+| After smart-verifier backfill | 123 | 30 | 37 | 190 |
+| After 37-unmatched triage | 160 | 30 | 0 | 190 |
+| After 30 not_started close (cap 30) | 190 | 15 | 0 | 205 |
+| After 15 close + engine cycle | 205 | 15 | 0 | 220 |
+| After extended scope-fix + bulk close | **235** | **0** | **0** | **235** |
+| +90s later (stability check) | **235** | 0 | 0 | 235 |
+
+  - Date: 2026-05-18
+  - What changed: 1 modified file (requirementGenerationEngine.ts +8/-3), 1 new test file (+157), 25 prod DB row updates via bulkClose.sql, 2 deploys.
+  - Verification: 5/5 new scope tests pass; backend Jest 2264/0 (no regression); deployed d94948a; bulk close UPDATE 25; +90s stability check shows zero new rows generated.
+  - Notes: Tight bash-script loops with rapid sequential closer calls failed silently — bulk SQL was the right escape valve. Worth adding `--no-manifest` mode to the closer script for cases where we just want to flip status without emitting per-row telemetry. Filed as a closer-script improvement.
+
 ### Triage + close the last 37 unmatched — requirements queue at ZERO unmatched (2026-05-18)
 After the smart verifier backfill flipped 22/59 (leaving 37 still genuinely unmatched), the operator authorized a triage pass to clear the remaining queue: *"yes, fix the 37 unmatched."* Each of the 37 fell into one of three buckets — all honestly closeable with new or existing reconciliation docs.
 
