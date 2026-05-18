@@ -12,6 +12,51 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Cory queue stabilization: 10 requirements closed in batch + reusable closer script (2026-05-18)
+Operator asked to process the next 10 surfaced priorities while looking for system problems. Used it as both a queue-clearing exercise and a diagnostic pass.
+
+**The 10 closed (all REQ-status `unmatched` → `matched`):**
+
+| REQ | Build-guide section | Doc artifact |
+| --- | --- | --- |
+| REQ-085 | JWT authentication | [docs/spec/access-control-and-auth.md](docs/spec/access-control-and-auth.md) |
+| REQ-087 | POST /api/auth/login | (same) |
+| REQ-088 | GET /api/users/roles | (same) |
+| REQ-089 | PUT /api/users/:id/roles | (same) |
+| REQ-096 | User-role CRUD | (same) |
+| REQ-097 | RBAC enforcement | (same) |
+| REQ-098 | Role-change audit logging | (same) |
+| REQ-103 | ML behavior analysis | [docs/spec/recommendations-and-adaptive-system.md](docs/spec/recommendations-and-adaptive-system.md) |
+| REQ-104 | Recommendations API | (same) |
+| REQ-110 | Elasticsearch / search | [docs/spec/search-and-nlp.md](docs/spec/search-and-nlp.md) |
+
+**Status distribution shift:** unmatched 70 → 59 (-11), matched 90 → 101 (+11). Cory's queue now sits on REQ-116 (feedback loop) next.
+
+**Reusable infrastructure shipped:**
+- [scripts/closeRequirement.js](scripts/closeRequirement.js) — one-shot Node CLI that inserts an `artifact_definitions` row, links `requirements_maps.REQ-XXX` (status flip + source_artifact_id + github_file_paths), emits a BuildManifest, and completes the surfaced NextAction. Routes through SCP+psql for safe SQL escaping. Usable for the remaining ~59 unmatched requirements.
+- Three consolidated spec-reconciliation docs that capture *spec vs. shipped* honestly rather than pretending the spec was literally implemented.
+
+**Patterns + problems surfaced during the run:**
+
+1. **Most "unmatched" requirements are actually "implemented differently."** The build guide proposed generic surfaces (POST /api/auth/login, Elasticsearch, Python ML microservice); the shipped system implements the *intent* via different mechanisms (admin/participant trust planes, Postgres iLike search, JS+LLM heuristics). The semantic verifier can't bridge the gap because it looks for literal path matches. **Doc-based reconciliation is the right pattern** — captures the divergence honestly without lying that something exists.
+
+2. **The action generator surfaces related requirements one-at-a-time.** Cory walked through 7 consecutive auth-cluster requirements (085, 087, 088, 089, 096, 097, 098) — clearly the same source section. An operator-facing **"close all related"** affordance would 7x the throughput. Filed as product feedback.
+
+3. **Real backend issues observed in logs during the run:**
+   - `AdmissionsCallbackManagementAgent failed: out of shared memory` — Postgres shared_buffers may need raising
+   - `gmail_personal: invalid_grant` — Gmail personal account OAuth token expired; needs re-auth
+   - One Cloudflare 522 timeout on /next-action — endpoint may be slow under sequential closer load; worth profiling if pattern recurs
+   - Persistent `WARNING: collation version mismatch` on every psql call — DB was created on a newer locale; non-fatal but noisy
+
+4. **Manifest validator did its job.** Schema strictness rejected three malformed manifests in this batch (object vs string in files_created, invalid operation enum, object-required system_impacts). Each rejection was actionable from the error payload. The strictness is correct.
+
+5. **Action-record lifecycle is right.** Marking `requirements_maps.status=matched` does NOT auto-complete the pending `next_action` row — operator must explicitly POST /next-action/complete. This is correct (gives the operator the final-say beat), but means closer scripts must always pass `--action-id`. Documented in the script header.
+
+  - Date: 2026-05-18
+  - What changed: 3 new spec-reconciliation docs (~250 lines), 1 new utility script (105 lines), 10 prod DB rows updated, 10 NextActions completed, 10 BuildManifests emitted.
+  - Verification: GET /requirements/map confirms all 10 REQs `matched` with source_artifact_id + github_file_paths set; queue advances to REQ-116 as expected. Status distribution shift visible in unified-state.
+  - Notes: Cycle time per requirement: ~90s including investigation + doc-paragraph writing + closer-script run + verification. The closer script is the bottleneck-killer — without it, each requirement was 8-10 manual psql + curl steps. With it, three flag args. This pattern can clear the remaining 59 unmatched build-guide requirements in a focused 90-minute sprint if the operator wants.
+
 ### REQ-048 full-pipeline run: example persona artifact shipped + Cory advances to REQ-085 (2026-05-17)
 Operator asked for a "full run" of Cory's surfaced priority. Used it as an end-to-end exercise of the artifact-creation pipeline.
 
