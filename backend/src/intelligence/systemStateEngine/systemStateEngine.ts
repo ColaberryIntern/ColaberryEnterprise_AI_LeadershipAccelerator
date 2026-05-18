@@ -987,7 +987,13 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
       user_status: c.user_status || 'in_progress',
       applicability_status: c.applicability_status || 'active',
       frontend_route: c.frontend_route,
-      is_page_bp: c.source === 'frontend_page',
+      // is_page_bp: primary signal is source='frontend_page' (set by the
+      // frontend-page discovery scanner). Fallback: name ends in " Page" or
+      // " Landing Page" — covers brownfield-discovered caps that weren't
+      // routed through the page scanner. Added 2026-05-18 after the queue
+      // surfaced 7 "Page" items with source='brownfield_discovered' as
+      // backend-build tasks.
+      is_page_bp: c.source === 'frontend_page' || /\s(landing\s)?page$/i.test(c.name || ''),
       mode_override: c.mode_override,
       last_execution: c.last_execution,
       linked_backend_services: c.linked_backend_services || [],
