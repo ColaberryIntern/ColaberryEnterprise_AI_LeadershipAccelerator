@@ -128,8 +128,12 @@ function generateCapTasks(
   const hasFrontend = (cap.linked_frontend_components || []).length > 0 || !!cap.frontend_route;
   const hasAgents = (cap.linked_agents || []).length > 0;
 
-  // Backend gap
-  if (!hasBackend && score.coverage < 100) {
+  // Backend gap. Skip for Page BPs — pages are frontend routes with no
+  // backend layer to "build" (Not Found Page, Pricing Page, etc.).
+  // Their progress is measured by ui_review, not backend coverage.
+  // Added 2026-05-18 after the queue surfaced "Build backend for Trust
+  // Badges Page" as the operator's #1 priority.
+  if (!hasBackend && score.coverage < 100 && !cap.is_page_bp) {
     tasks.push(makeTask({
       id: `${cap.id}:build_backend`,
       project_id: project.id,
@@ -152,8 +156,11 @@ function generateCapTasks(
     }));
   }
 
-  // Frontend gap
-  if (hasBackend && !hasFrontend) {
+  // Frontend gap. Skip for Page BPs (they ARE the frontend) and for
+  // capabilities that don't surface to end users (background jobs,
+  // scheduled tasks) — those are identifiable by an empty frontend_route
+  // declaration on the BP plus no expectation of UI.
+  if (hasBackend && !hasFrontend && !cap.is_page_bp) {
     tasks.push(makeTask({
       id: `${cap.id}:add_frontend`,
       project_id: project.id,
