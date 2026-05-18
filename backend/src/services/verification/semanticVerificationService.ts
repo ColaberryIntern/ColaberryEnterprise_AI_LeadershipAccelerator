@@ -1,67 +1,71 @@
 import { callLLMWithAudit } from '../llmCallWrapper';
 import { CodeAnalysis } from './codeAnalysisService';
+import { CodeExcerpt, formatExcerptsForPrompt } from './smartCodeReader';
 
 export interface SemanticResult {
   semantic_status: 'semantic_not_aligned' | 'semantic_partial' | 'semantic_aligned' | 'unknown';
   semantic_confidence: number;
   semantic_reasoning: string;
   missing_elements: string[];
+  evidence_kind: 'path_only' | 'code_sampled';
+  files_read: string[];
 }
 
 const MODEL = 'gpt-4o-mini';
 
-// ---------------------------------------------------------------------------
-// Verify a requirement semantically using LLM
-// ---------------------------------------------------------------------------
-
 export async function verifySemantic(
   enrollmentId: string,
   requirementText: string,
-  analysis: CodeAnalysis
+  analysis: CodeAnalysis,
+  codeExcerpts: CodeExcerpt[] = []
 ): Promise<SemanticResult> {
+  const evidenceKind: 'path_only' | 'code_sampled' = codeExcerpts.length > 0 ? 'code_sampled' : 'path_only';
+
   try {
-    const systemPrompt = buildSystemPrompt();
-    const userPrompt = buildUserPrompt(requirementText, analysis);
+    const systemPrompt = buildSystemPrompt(evidenceKind);
+    const userPrompt = buildUserPrompt(requirementText, analysis, codeExcerpts);
 
     const result = await callLLMWithAudit({
       lessonId: 'semantic-verification',
       enrollmentId,
       generationType: 'admin_structure',
-      step: 'semantic_requirement_verification',
+      step: evidenceKind === 'code_sampled' ? 'deep_requirement_verification' : 'semantic_requirement_verification',
       systemPrompt,
       userPrompt,
       model: MODEL,
       temperature: 0.2,
-      maxTokens: 500,
+      maxTokens: 600,
       responseFormat: { type: 'json_object' },
     });
 
     const parsed = parseResponse(result.content);
 
     console.log(
-      `[SemanticVerification] ${parsed.semantic_status} (confidence: ${parsed.semantic_confidence}) ${result.cacheHit ? '[cached]' : '[fresh]'}`
+      `[SemanticVerification:${evidenceKind}] ${parsed.semantic_status} (confidence: ${parsed.semantic_confidence}) ${result.cacheHit ? '[cached]' : '[fresh]'}`
     );
 
-    return parsed;
+    return {
+      ...parsed,
+      evidence_kind: evidenceKind,
+      files_read: codeExcerpts.map((e) => e.path),
+    };
   } catch (err: any) {
-    console.error(`[SemanticVerification] LLM error: ${err.message}`);
+    console.error(`[SemanticVerification:${evidenceKind}] LLM error: ${err.message}`);
     return {
       semantic_status: 'unknown',
       semantic_confidence: 0,
       semantic_reasoning: `LLM unavailable: ${err.message}`,
       missing_elements: [],
+      evidence_kind: evidenceKind,
+      files_read: codeExcerpts.map((e) => e.path),
     };
   }
 }
 
-// ---------------------------------------------------------------------------
-// Prompt Builders
-// ---------------------------------------------------------------------------
+function buildSystemPrompt(evidenceKind: 'path_only' | 'code_sampled'): string {
+  const base = `You are a senior software architect performing code verification.
 
-function buildSystemPrompt(): string {
-  return `You are a senior software architect performing code verification.
-
-Your task: determine whether a software requirement is implemented in a codebase based on the detected features and file structure.
+Your task: determine whether a software requirement is implemented in a codebase based on the detected features${evidenceKind === 'code_sampled' ? ', file structure, and ACTUAL CODE EXCERPTS' : ' and file structure'}.
 
 You MUST return ONLY valid JSON with this exact structure:
 {
@@ -78,9 +82,26 @@ Rules:
 - confidence should reflect how certain you are (0.9+ for clear matches, 0.5-0.7 for uncertain)
 - missing_elements should list specific things that are not implemented (empty array if aligned)
 - Be concise and precise in reasoning`;
+
+  if (evidenceKind === 'code_sampled') {
+    return `${base}
+
+CRITICAL — recognize semantic equivalence:
+- A requirement asking for "POST /api/auth/login" is SATISFIED by "POST /api/admin/login" if the latter does equivalent JWT issuance + credential verification. The literal path does not have to match — what matters is whether the requirement's intent is fulfilled.
+- A requirement asking for "user roles CRUD" is SATISFIED by middleware-enforced role checks even if there is no dedicated roles table — the intent is access control, not a particular schema.
+- A requirement asking for "ML algorithms" is SATISFIED by rule-based + LLM heuristics if they accomplish the same outcome at the project's scale.
+- When code excerpts demonstrate equivalent functionality under a different name, mark "aligned" with high confidence and explain the equivalence in reasoning.
+- Mark "not_aligned" only when no equivalent functionality exists anywhere in the sampled code or detected features.`;
+  }
+
+  return base;
 }
 
-function buildUserPrompt(requirementText: string, analysis: CodeAnalysis): string {
+function buildUserPrompt(
+  requirementText: string,
+  analysis: CodeAnalysis,
+  codeExcerpts: CodeExcerpt[]
+): string {
   const features = analysis.detected_features.length > 0
     ? analysis.detected_features.join(', ')
     : 'none detected';
@@ -89,11 +110,14 @@ function buildUserPrompt(requirementText: string, analysis: CodeAnalysis): strin
     ? analysis.structural_signals.join(', ')
     : 'none detected';
 
-  // Summarize file map (top 15 most relevant files)
   const fileSummary = analysis.file_map
     .slice(0, 15)
     .map((f) => `  ${f.path} [${f.detected_keywords.join(', ')}]`)
     .join('\n');
+
+  const excerptSection = codeExcerpts.length > 0
+    ? `\n\n## Sampled Code Excerpts\n${formatExcerptsForPrompt(codeExcerpts)}`
+    : '';
 
   return `## Requirement
 "${requirementText}"
@@ -105,20 +129,15 @@ ${features}
 ${signals}
 
 ## Relevant Files
-${fileSummary || '  (no matching files detected)'}
+${fileSummary || '  (no matching files detected)'}${excerptSection}
 
 Evaluate whether this requirement is implemented based on the code evidence above.`;
 }
 
-// ---------------------------------------------------------------------------
-// Response Parser
-// ---------------------------------------------------------------------------
-
-function parseResponse(content: string): SemanticResult {
+function parseResponse(content: string): Omit<SemanticResult, 'evidence_kind' | 'files_read'> {
   try {
     const data = JSON.parse(content);
 
-    // Map LLM status to our enum
     const statusMap: Record<string, SemanticResult['semantic_status']> = {
       'not_aligned': 'semantic_not_aligned',
       'partial': 'semantic_partial',
