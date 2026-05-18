@@ -18,28 +18,40 @@ interface RequirementTemplate {
   text: string;
   category: string;
   impact_score: number;
+  // 'project': generate once at the project level — platform-wide concerns
+  //   (event tracking, anomaly detection) that don't need per-capability copies.
+  // 'capability' (default): generate once per capability — concerns that
+  //   genuinely vary per BP (decision logs, per-feature recommendations).
+  // Added 2026-05-18 after 30 duplicate platform-level rows surfaced.
+  scope?: 'project' | 'capability';
 }
 
 const GAP_TEMPLATES: Record<string, RequirementTemplate[]> = {
+  // Platform-wide event capture — one shared infrastructure, not per-cap copies.
   'BEHAVIOR-USER-TRACKING': [
-    { key_suffix: 'USER-EVENT-TRACKING', text: 'System must capture and store user interaction events (clicks, navigation, form submissions) with timestamps and context for behavioral analysis.', category: 'frontend', impact_score: 7 },
-    { key_suffix: 'SESSION-ANALYTICS', text: 'System must track user session duration, flow paths, and drop-off points to identify UX bottlenecks.', category: 'frontend', impact_score: 6 },
+    { key_suffix: 'USER-EVENT-TRACKING', text: 'System must capture and store user interaction events (clicks, navigation, form submissions) with timestamps and context for behavioral analysis.', category: 'frontend', impact_score: 7, scope: 'project' },
+    { key_suffix: 'SESSION-ANALYTICS', text: 'System must track user session duration, flow paths, and drop-off points to identify UX bottlenecks.', category: 'frontend', impact_score: 6, scope: 'project' },
   ],
+  // Decision-audit is per-BP — different processes have different decisions to log.
   'BEHAVIOR-DECISION-LOGGING': [
     { key_suffix: 'DECISION-AUDIT-LOG', text: 'All autonomous and semi-autonomous decisions must be logged with context, reasoning, confidence score, and outcome for audit and learning.', category: 'backend', impact_score: 8 },
     { key_suffix: 'ACTION-TRAIL', text: 'System must maintain an immutable action trail linking user actions to system responses and outcomes.', category: 'backend', impact_score: 6 },
   ],
+  // Recommendations are per-BP — each process recommends different things.
   'INTELLIGENCE-RECOMMENDATIONS': [
     { key_suffix: 'SMART-RECOMMENDATIONS', text: 'System should provide data-driven recommendations based on historical patterns, current context, and predicted outcomes.', category: 'agent', impact_score: 8 },
     { key_suffix: 'RECOMMENDATION-OUTCOMES', text: 'System must track which recommendations were accepted, rejected, or modified, and measure their actual outcomes for feedback learning.', category: 'backend', impact_score: 7 },
   ],
+  // Pattern detection + anomaly alerting are platform-wide infra (one detector,
+  // one alerter, all data). Don't generate per-cap copies.
   'INTELLIGENCE-PATTERN-DETECTION': [
-    { key_suffix: 'PATTERN-DETECTION', text: 'System should detect recurring behavioral patterns, anomalies, and trends using historical data analysis.', category: 'intelligence', impact_score: 7 },
-    { key_suffix: 'ANOMALY-ALERTS', text: 'System must generate alerts when detected patterns deviate significantly from baselines, with severity classification.', category: 'intelligence', impact_score: 6 },
+    { key_suffix: 'PATTERN-DETECTION', text: 'System should detect recurring behavioral patterns, anomalies, and trends using historical data analysis.', category: 'intelligence', impact_score: 7, scope: 'project' },
+    { key_suffix: 'ANOMALY-ALERTS', text: 'System must generate alerts when detected patterns deviate significantly from baselines, with severity classification.', category: 'intelligence', impact_score: 6, scope: 'project' },
   ],
+  // Simulation + forecasting infrastructure is platform-wide.
   'INTELLIGENCE-SIMULATION': [
-    { key_suffix: 'SIMULATION-ENGINE', text: 'System should support what-if scenario simulation, allowing users to preview predicted outcomes before committing to actions.', category: 'intelligence', impact_score: 7 },
-    { key_suffix: 'FORECAST-MODELS', text: 'System must generate forecasts based on historical trends and current trajectory for key process metrics.', category: 'intelligence', impact_score: 6 },
+    { key_suffix: 'SIMULATION-ENGINE', text: 'System should support what-if scenario simulation, allowing users to preview predicted outcomes before committing to actions.', category: 'intelligence', impact_score: 7, scope: 'project' },
+    { key_suffix: 'FORECAST-MODELS', text: 'System must generate forecasts based on historical trends and current trajectory for key process metrics.', category: 'intelligence', impact_score: 6, scope: 'project' },
   ],
   'OPTIMIZATION-FEEDBACK-LOOP': [
     { key_suffix: 'FEEDBACK-LOOP', text: 'System must implement a closed feedback loop: measure outcomes → compare to predictions → adjust future behavior automatically.', category: 'backend', impact_score: 8 },
@@ -120,9 +132,15 @@ export async function generateFromGaps(
     for (const template of templates) {
       if (bpCreated >= MAX_PER_BP || projectCreated >= MAX_PER_PROJECT) break;
 
-      const requirementKey = `AUTO-${slugify(capabilityId.substring(0, 8))}-${template.key_suffix}`;
+      // Project-scoped templates use a project-wide key so the existing
+      // dedup-by-requirement-key check produces ONE row per project regardless
+      // of how many capabilities triggered the gap. Capability-scoped
+      // templates keep the cap-derived prefix.
+      const requirementKey = template.scope === 'project'
+        ? `AUTO-PROJECT-${template.key_suffix}`
+        : `AUTO-${slugify(capabilityId.substring(0, 8))}-${template.key_suffix}`;
 
-      // Dedup: skip if already exists
+      // Dedup: skip if already exists (covers both project-scope and cap-scope)
       const existing = await RequirementsMap.findOne({
         where: { project_id: projectId, requirement_key: requirementKey },
       });
@@ -156,12 +174,14 @@ export async function generateFromGaps(
         continue;
       }
 
-      // Create RequirementsMap record for BP target
+      // Create RequirementsMap record for BP target. For project-scoped
+      // templates we null out capability_id / feature_id — the requirement
+      // is platform-level, not owned by the cap that happened to trigger it.
       try {
         await RequirementsMap.create({
           project_id: projectId,
-          capability_id: capabilityId,
-          feature_id: featureId,
+          capability_id: template.scope === 'project' ? null : capabilityId,
+          feature_id: template.scope === 'project' ? null : featureId,
           requirement_key: requirementKey,
           requirement_text: template.text,
           status: 'not_started',
