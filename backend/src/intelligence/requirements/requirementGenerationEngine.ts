@@ -53,13 +53,18 @@ const GAP_TEMPLATES: Record<string, RequirementTemplate[]> = {
     { key_suffix: 'SIMULATION-ENGINE', text: 'System should support what-if scenario simulation, allowing users to preview predicted outcomes before committing to actions.', category: 'intelligence', impact_score: 7, scope: 'project' },
     { key_suffix: 'FORECAST-MODELS', text: 'System must generate forecasts based on historical trends and current trajectory for key process metrics.', category: 'intelligence', impact_score: 6, scope: 'project' },
   ],
+  // Closed-feedback-loop infrastructure is platform-wide (one outcome-tracker,
+  // one prediction-adjuster). CONTINUOUS-IMPROVEMENT stays per-cap because
+  // different processes have different recurring failure patterns.
   'OPTIMIZATION-FEEDBACK-LOOP': [
-    { key_suffix: 'FEEDBACK-LOOP', text: 'System must implement a closed feedback loop: measure outcomes → compare to predictions → adjust future behavior automatically.', category: 'backend', impact_score: 8 },
+    { key_suffix: 'FEEDBACK-LOOP', text: 'System must implement a closed feedback loop: measure outcomes → compare to predictions → adjust future behavior automatically.', category: 'backend', impact_score: 8, scope: 'project' },
     { key_suffix: 'CONTINUOUS-IMPROVEMENT', text: 'System should identify recurring failure patterns and automatically suggest or apply corrective measures.', category: 'agent', impact_score: 7 },
   ],
+  // Performance scoring + SLA monitoring are platform-wide observability
+  // concerns — one APM-style infra, not per-cap copies.
   'OPTIMIZATION-PERFORMANCE-SCORING': [
-    { key_suffix: 'PERFORMANCE-SCORING', text: 'System must compute and track performance scores (latency, throughput, error rate, user satisfaction) with historical baselines.', category: 'backend', impact_score: 6 },
-    { key_suffix: 'SLA-MONITORING', text: 'System should monitor service level objectives and alert when performance degrades below defined thresholds.', category: 'backend', impact_score: 5 },
+    { key_suffix: 'PERFORMANCE-SCORING', text: 'System must compute and track performance scores (latency, throughput, error rate, user satisfaction) with historical baselines.', category: 'backend', impact_score: 6, scope: 'project' },
+    { key_suffix: 'SLA-MONITORING', text: 'System should monitor service level objectives and alert when performance degrades below defined thresholds.', category: 'backend', impact_score: 5, scope: 'project' },
   ],
   'REPORTING-DASHBOARD': [
     { key_suffix: 'HEALTH-DASHBOARD', text: 'Build a process health dashboard showing real-time metrics, trend lines, and status indicators for stakeholder visibility.', category: 'frontend', impact_score: 6 },
