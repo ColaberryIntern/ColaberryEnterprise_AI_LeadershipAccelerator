@@ -137,7 +137,21 @@ function generateCapTasks(
   // belt-and-suspenders covers older code paths and tests.
   const kind = cap.kind || 'service';
   const backendBuildEligible = kind === 'service' && !cap.is_page_bp;
-  const frontendAddEligible = (kind === 'service' || kind === 'agent') && !cap.is_page_bp;
+
+  // Internal-service heuristic (2026-05-18): caps named like backend
+  // infrastructure (*Service, *Engine, *Controller, *Middleware, *Logging,
+  // *Emission, *Validation, *Ingestion, *Detection, *Tracker, *Monitor,
+  // *Logger, *Reconciliation, *Normalization) don't need their own UI —
+  // operators interact with them through admin dashboards, which are
+  // separate caps. Only fire add_frontend for these if they have
+  // POSITIVE frontend evidence (frontend_route declared or some
+  // linked_frontend_components already shipped).
+  const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry)$/i.test(cap.name || '');
+  const hasUserSurface = !!cap.frontend_route || (cap.linked_frontend_components || []).length > 0;
+  const frontendAddEligible =
+    (kind === 'service' || kind === 'agent') &&
+    !cap.is_page_bp &&
+    (!looksInternal || hasUserSurface);
 
   // Backend gap. Skip for Page BPs — pages are frontend routes with no
   // backend layer to "build" (Not Found Page, Pricing Page, etc.).

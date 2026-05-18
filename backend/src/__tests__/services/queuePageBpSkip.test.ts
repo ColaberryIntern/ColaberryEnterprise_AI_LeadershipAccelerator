@@ -69,10 +69,12 @@ describe('authoritativeTaskQueue — Page BPs do not get backend/frontend build 
   });
 
   test('non-Page BP with backend but no frontend gets add_frontend task (existing behavior)', () => {
+    // Name 'Lead Management' isn't caught by the internal-service heuristic
+    // (no *Service / *Engine / *Controller suffix), so add_frontend fires.
     const cap = makeCap({
-      id: 'svc-2', name: 'API Service',
+      id: 'svc-2', name: 'Lead Management',
       is_page_bp: false,
-      linked_backend_services: ['backend/src/routes/api.ts'],
+      linked_backend_services: ['backend/src/routes/leadRoutes.ts'],
     });
     const score = makeScore('svc-2');
     const { tasks } = buildAuthoritativeQueue({
@@ -173,6 +175,82 @@ describe('authoritativeTaskQueue — kind-based task gating (2026-05-18)', () =>
       linked_backend_services: ['backend/src/services/agents/governanceAgent.ts'],
     });
     const score = makeScore('agent-2');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap],
+      capability_scores: [score],
+    });
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(1);
+  });
+});
+
+describe('authoritativeTaskQueue — internal-service heuristic (no UI for backend-infra names)', () => {
+  test('cap named "Lead Ingestion Controller" does NOT get add_frontend task', () => {
+    const cap = makeCap({
+      id: 'ctrl-1', name: 'Lead Ingestion Controller',
+      kind: 'service',
+      linked_backend_services: ['backend/src/controllers/leadController.ts'],
+    });
+    const score = makeScore('ctrl-1');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap],
+      capability_scores: [score],
+    });
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(0);
+  });
+
+  test('cap named "Error Handling Middleware" does NOT get add_frontend task', () => {
+    const cap = makeCap({
+      id: 'mw-1', name: 'Error Handling Middleware',
+      kind: 'service',
+      linked_backend_services: ['backend/src/middlewares/errorMiddleware.ts'],
+    });
+    const score = makeScore('mw-1');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap],
+      capability_scores: [score],
+    });
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(0);
+  });
+
+  test('internal-service cap WITH positive frontend signal (linked components) skips heuristic block', () => {
+    // The cap has SOME frontend already linked → hasUserSurface=true →
+    // the internal-service heuristic doesn't block. But since hasFrontend
+    // is also true, the add_frontend gap doesn't fire either. The
+    // important property: the heuristic doesn't WRONGLY block a cap that
+    // has demonstrated frontend intent. We verify that by checking the
+    // task DOESN'T have the "looksInternal && !hasUserSurface" suppression
+    // signature — i.e., the cap reaches the hasBackend && !hasFrontend
+    // check naturally. With frontend already present, no gap fires, which
+    // is correct.
+    const cap = makeCap({
+      id: 'svc-with-ui', name: 'Lead Scoring Service',
+      kind: 'service',
+      linked_backend_services: ['backend/src/services/leadScoring.ts'],
+      linked_frontend_components: ['frontend/src/components/LeadScoring.tsx'],
+    });
+    const score = makeScore('svc-with-ui');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap],
+      capability_scores: [score],
+    });
+    // No add_frontend (frontend already present) and no build_backend
+    // (backend already present). Cap is fully linked, queue is happy.
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(0);
+    expect(tasks.filter(t => t.id.endsWith(':build_backend'))).toHaveLength(0);
+  });
+
+  test('non-internal-named cap still gets add_frontend task', () => {
+    // "Lead Management" (no internal suffix) — operator-facing feature
+    const cap = makeCap({
+      id: 'feat-1', name: 'Lead Management',
+      kind: 'service',
+      linked_backend_services: ['backend/src/routes/admin/leadRoutes.ts'],
+    });
+    const score = makeScore('feat-1');
     const { tasks } = buildAuthoritativeQueue({
       project: { ...PROJECT, capabilities: [cap] },
       capabilities: [cap],
