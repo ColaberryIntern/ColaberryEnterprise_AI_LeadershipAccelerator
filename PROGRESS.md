@@ -39,6 +39,44 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Capability taxonomy + queue refinement: kind field, internal-service heuristic, 21 frontends linked (2026-05-18)
+Operator framed: *"yes and let's test 30 more after."* Sprint added the systemic fix recommended earlier (capability `kind` field) plus a derived internal-service heuristic, then linked 21 more frontend caps. Queue: 161 → **105** (-56 tasks); frontend false-positives: ~50 → 9 honest gaps.
+
+**`kind` taxonomy shipped** ([commit 01788aa](https://github.com/ColaberryIntern/accelerator/commit/01788aa)) — added `kind VARCHAR(20) NOT NULL DEFAULT 'service'` to capabilities. Backfilled all 156 caps via name patterns:
+
+| kind | count | task generators eligible |
+| --- | ---: | --- |
+| service | 106 | backend + frontend + verification |
+| page | 37 | ui_review + verification only |
+| agent | 7 | backend (agent IS the backend) + verification |
+| component | 6 | verification only — embedded in pages |
+
+Wired through Capability model → EngineCapabilityInput → systemStateEngine cap mapping → authoritativeTaskQueue. Backward-compatible with is_page_bp (still derived from kind='page' + legacy signals).
+
+**Internal-service heuristic** ([commit 9aff66d](https://github.com/ColaberryIntern/accelerator/commit/9aff66d)) — name-based pattern at queue layer: caps named like *Service / *Engine / *Controller / *Middleware / *Logging / *Emission / *Validation / *Ingestion / *Detection / *Tracker / *Monitor / *Logger / *Reconciliation / *Normalization / *Verification / *Snapshot / *Forwarding / *Registration / *Registry don't get add_frontend tasks. Operators interact with these through admin dashboards (separate caps). This pruned ~20 false-positive "Add UI for X" asks like "Add UI for Lead Ingestion Controller" and "Add UI for Error Handling Middleware".
+
+**Agent simplification** ([commit 3d3fd4d](https://github.com/ColaberryIntern/accelerator/commit/3d3fd4d)) — first attempt at "agents only get add_frontend with positive signal" had a logical contradiction (hasUserSurface and hasFrontend used the same signals). Simplified: agents NEVER get add_frontend tasks. If an agent needs a UI, that UI is a separate cap (governance dashboard, ops monitor, etc.). Pruned 4 false-positive "Add UI for X Agent" asks.
+
+**Frontend linker (wave 3)** ([tmp/linkFrontendDriver.js](tmp/linkFrontendDriver.js), not committed) — mirrors the backend linker pattern. Mapped 30 top-priority cap names → frontend file paths via grep. **Result: 21 of 30 caps linked to existing frontend code** (Lead Recommendation System, Project Setup, Analytics, Visitor Analytics, Admin Dashboard Management, System Health Monitoring, etc.). 9 NO_MATCH caps genuinely have no UI in the codebase (Webhook Integration, Query, Content Generation, Lead Scoring, Lead Routing, Project Scope Definition, Verification, Verification Framework, Cost Optimization) — these surface as honest "needs UI built" or out-of-scope work.
+
+**Queue state shift:**
+
+| Stage | Total tasks | Backend | Frontend | ui_review | optimization |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Start of session (pre-Page-BP fix) | 163 | 30 | 28 | 45 | 16 |
+| After Page-BP fixes + backend linker | 161 | 6 | 75 | 55 | 25 |
+| After kind taxonomy | 155 | **0** | 75 | 55 | 25 |
+| After internal-service heuristic | 134 | 0 | 54 | 55 | 25 |
+| After frontend linker | 112 | 0 | 33 | 55 | 24 |
+| After agent simplification | **105** | **0** | **26** | 55 | 24 |
+
+**Tests:** 13/13 queue tests pass (covers Page-BP, kind buckets, internal-service heuristic, agent gating).
+
+  - Date: 2026-05-18
+  - What changed: 1 schema migration (kind column), 4 modified files, 1 new test file (now 13 tests), 21 prod DB UPDATEs on capabilities.linked_frontend_components, 4 deploys.
+  - Verification: All tests pass; tsc clean; refreshSystemState confirms queue at 105 tasks with 0 backend false-positives; top 26 frontend tasks are arguably legitimate UI gaps; top ui_review tasks are correct asks for Pages.
+  - Notes: This sprint demonstrated the value of typed taxonomy. Before kind, the queue treated everything as a generic "service" and asked the same 3 questions of every cap. With kind, each cap type gets the right question. The 4-bucket taxonomy + 2 heuristics suppressed ~50 false-positive priorities. The remaining 26 frontend tasks split roughly: ~10 plausibly-need-UI, ~10 questionable, ~6 likely backend-only that slipped through the heuristic. Future tightening: add a kind='internal_service' subdivide, or use linked_backend_services patterns (e.g., file path contains 'controllers/') to further classify.
+
 ### Top-20 priorities sprint: 3 more systemic queue bugs found + fixed, 34 capabilities linked (2026-05-18)
 Operator framed: *"do 20 of the next priorities and fixing things along the way if seeing they are broken."* Sprint pattern: every "priority" Cory surfaced turned out to be either a bug in the queue generator or a discovery-linkage gap. Three real systemic bugs got fixed; 34 capabilities got their backend code linked (a meta-priority of clearing out false-positive build asks).
 
