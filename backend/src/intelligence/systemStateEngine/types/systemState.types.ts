@@ -822,6 +822,17 @@ export interface EngineCapabilityInput {
   readonly applicability_status: 'active' | 'deferred' | 'archived' | string;
   readonly frontend_route?: string | null;
   readonly is_page_bp?: boolean;
+  /**
+   * Capability taxonomy that drives queue task generation. See
+   * Capability.kind in the model for full semantics. Added 2026-05-18.
+   *
+   * Queue gating:
+   *   'service'   (default) — eligible for backend, frontend, verification tasks
+   *   'page'      — eligible for ui_review + verification only
+   *   'agent'     — skip backend-build (agent IS the backend code itself)
+   *   'component' — skip backend-build + skip add_frontend (component lives inside other UI)
+   */
+  readonly kind?: 'service' | 'page' | 'agent' | 'component';
   readonly mode_override?: string | null;
 
   readonly last_execution?: {

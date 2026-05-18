@@ -128,12 +128,25 @@ function generateCapTasks(
   const hasFrontend = (cap.linked_frontend_components || []).length > 0 || !!cap.frontend_route;
   const hasAgents = (cap.linked_agents || []).length > 0;
 
+  // kind-based gating (added 2026-05-18). Backend-build is only meaningful
+  // for kind='service'. Pages don't have a backend layer to build;
+  // agents ARE the backend (the linked_agents row IS the implementation);
+  // components are UI bits embedded in pages.
+  // is_page_bp kept as a defensive guard — if either signal says "not a
+  // backend service", skip. Engine mapping should keep them aligned, but
+  // belt-and-suspenders covers older code paths and tests.
+  const kind = cap.kind || 'service';
+  const backendBuildEligible = kind === 'service' && !cap.is_page_bp;
+  const frontendAddEligible = (kind === 'service' || kind === 'agent') && !cap.is_page_bp;
+
   // Backend gap. Skip for Page BPs — pages are frontend routes with no
   // backend layer to "build" (Not Found Page, Pricing Page, etc.).
   // Their progress is measured by ui_review, not backend coverage.
   // Added 2026-05-18 after the queue surfaced "Build backend for Trust
   // Badges Page" as the operator's #1 priority.
-  if (!hasBackend && score.coverage < 100 && !cap.is_page_bp) {
+  // Extended same day: also skip for kind='agent' (the agent code IS the
+  // backend) and kind='component' (UI widgets don't have backends).
+  if (!hasBackend && score.coverage < 100 && backendBuildEligible) {
     tasks.push(makeTask({
       id: `${cap.id}:build_backend`,
       project_id: project.id,
@@ -156,11 +169,12 @@ function generateCapTasks(
     }));
   }
 
-  // Frontend gap. Skip for Page BPs (they ARE the frontend) and for
-  // capabilities that don't surface to end users (background jobs,
-  // scheduled tasks) — those are identifiable by an empty frontend_route
-  // declaration on the BP plus no expectation of UI.
-  if (hasBackend && !hasFrontend && !cap.is_page_bp) {
+  // Frontend gap. Skip for Page BPs (they ARE the frontend), for
+  // kind='component' (already part of a frontend), and for kind='agent'
+  // unless explicitly expecting a UI surface. Agents get the option since
+  // some agent surfaces have admin UIs (governance, monitoring).
+  // frontendAddEligible already excludes 'component' and 'page'.
+  if (hasBackend && !hasFrontend && frontendAddEligible) {
     tasks.push(makeTask({
       id: `${cap.id}:add_frontend`,
       project_id: project.id,

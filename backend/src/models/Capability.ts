@@ -10,6 +10,16 @@ export interface CapabilityAttributes {
   priority?: string;
   sort_order?: number;
   source?: string;
+  /**
+   * Capability taxonomy. Drives queue task generation:
+   *   'service'   — default; gets backend + frontend + verification tasks
+   *   'page'      — frontend route; only gets ui_review + verification (no backend ask)
+   *   'agent'     — runs as backend agent code; skip backend-build (agent IS the backend)
+   *   'component' — UI widget/panel/tabs; doesn't have its own backend or page
+   *
+   * Backfilled 2026-05-18 from name patterns. New caps default 'service'.
+   */
+  kind?: 'service' | 'page' | 'agent' | 'component';
   // BPOS fields
   process_type?: string;
   autonomy_level?: string;
@@ -59,6 +69,7 @@ class Capability extends Model<CapabilityAttributes> implements CapabilityAttrib
   declare priority: string;
   declare sort_order: number;
   declare source: string;
+  declare kind: 'service' | 'page' | 'agent' | 'component';
   declare process_type: string;
   declare autonomy_level: string;
   declare confidence_score: number;
@@ -89,6 +100,7 @@ Capability.init(
     priority: { type: DataTypes.STRING(20), defaultValue: 'medium' },
     sort_order: { type: DataTypes.INTEGER, defaultValue: 0 },
     source: { type: DataTypes.STRING(30), defaultValue: 'parsed' },
+    kind: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'service' },
     // BPOS fields
     process_type: { type: DataTypes.STRING(30), defaultValue: 'student_project' },
     autonomy_level: { type: DataTypes.STRING(30), defaultValue: 'manual' },

@@ -992,8 +992,11 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
       // " Landing Page" — covers brownfield-discovered caps that weren't
       // routed through the page scanner. Added 2026-05-18 after the queue
       // surfaced 7 "Page" items with source='brownfield_discovered' as
-      // backend-build tasks.
-      is_page_bp: c.source === 'frontend_page' || /\s(landing\s)?page$/i.test(c.name || ''),
+      // backend-build tasks. The kind field below is the authoritative
+      // taxonomy; is_page_bp is kept derived for backward compat with
+      // older callers (CapabilityGrid, coverageScorer page logic).
+      is_page_bp: (c as any).kind === 'page' || c.source === 'frontend_page' || /\s(landing\s)?page$/i.test(c.name || ''),
+      kind: ((c as any).kind || 'service') as 'service' | 'page' | 'agent' | 'component',
       mode_override: c.mode_override,
       last_execution: c.last_execution,
       linked_backend_services: c.linked_backend_services || [],
