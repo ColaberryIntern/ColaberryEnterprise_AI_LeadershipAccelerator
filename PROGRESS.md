@@ -12,6 +12,42 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Smart semantic verifier shipped + backfilled — 22/59 unmatched requirements flipped to matched (2026-05-18)
+Operator framed this as a recurring problem across builds: *"I've noticed this issue in order builds and really want to rectify this issue moving forward."* Yesterday's manual batch closure of 10 requirements proved the same root cause every time — the verifier was blind to file contents and to spec/shipped equivalence. This sprint fixes it at the platform level.
+
+**Three phases shipped + one deferred:**
+
+**Phase A — verifier reads actual code.** New [backend/src/services/verification/smartCodeReader.ts](backend/src/services/verification/smartCodeReader.ts) (95 lines) fetches candidate file contents via the existing `readFileFromRepo()` helper, truncates to 3 files × 200 lines × 12K chars total, and enforces a per-project 150/day budget. [semanticVerificationService.ts](backend/src/services/verification/semanticVerificationService.ts) now accepts `codeExcerpts` and includes a `## Sampled Code Excerpts` section in the LLM prompt. New system-prompt addendum teaches the LLM to recognize semantic equivalence ("POST /api/admin/login satisfies a spec for POST /api/auth/login if it does equivalent JWT issuance"). Tagged with `evidence_kind: 'path_only' | 'code_sampled'` so callers can distinguish.
+
+**Phase B — status promotion (the actual unlock).** [verificationOrchestrator.ts](backend/src/services/verification/verificationOrchestrator.ts) extracted `verifySingleRequirement` (reusable from backfill) and added `decidePromotedStatus()` — pure function gating: `verified_complete + semantic_confidence>=0.75 -> 'verified'`; `verified_partial + >=0.70 -> 'matched'`. Downgrade guard protects manually-promoted statuses ('matched'/'verified' set via artifact links) from being regressed by a heuristic verdict. **This was the bigger bug than blindness:** the verifier was already producing high-confidence `verified_partial` verdicts (semantic_confidence 0.85-0.95) but they never propagated to the operator-facing `status` column. The coverage tile, scorer, and action generator only read `status`. Bridging this was the dominant source of the 22 flips.
+
+**Phase C — one-shot backfill across all 59 unmatched.** New [scripts/backfillSmartVerification.js](scripts/backfillSmartVerification.js) ships its driver as stdin to `docker exec accelerator-backend node` so it runs in-process on prod with the compiled models. Streams NDJSON outcomes line-by-line. **Result:**
+
+| Bucket | Count |
+| --- | ---: |
+| Total processed | 59 |
+| **Status flipped (unmatched -> matched)** | **22** |
+| Verifier agrees: still unmatched (genuine gaps) | 37 |
+| Errors | 0 |
+
+Status distribution shift: matched 101 -> **123** (+22); unmatched 59 -> **37** (-22). Full report: [docs/SMART_VERIFIER_BACKFILL_2026-05-18.md](docs/SMART_VERIFIER_BACKFILL_2026-05-18.md). Time: ~3 min for 59 LLM calls + DB writes; cost: ~$0.10.
+
+Examples of high-value flips:
+- REQ-121 ("CSS frameworks (e.g., Bootstrap) for responsive design") — LLM recognized Bootstrap 5 is documented in the frontend-design skill, semantic_confidence 0.95
+- REQ-116 ("Feedback loop mechanisms") — recognized the `ContentFeedback` + `UIElementFeedback` models satisfy the intent, 0.90
+- REQ-148 ("Adapted recommendations") — flipped from `not_verified` (0.10) to `verified_partial` (0.90) once the LLM saw `LeadRecommendationsTab` code excerpts. **This one was a clear deep-verify win** — path-only confidence was 0.10, code-sampled confidence was 0.90.
+
+**Phase D — operator-visible status-source chip (DEFERRED).** The plan called for a small chip on `CapabilityDetail.tsx` distinguishing rule-match vs deep-verify vs manual-link. To do it properly requires extending `/api/portal/project/capabilities` to expose `evidence_kind` from `VerificationLog.evidence`. Scope creeps from "small UI tweak" to "API contract change + new field down the response shape." Deferred as a focused follow-up. Data is already captured in `VerificationLog.evidence.evidence_kind` from Phase A, so the UI work is independently shippable when prioritized.
+
+**Coverage tile note:** the project-wide coverage score didn't move much (30 -> 30 immediate post-run) because [coverageScorer.ts](backend/src/intelligence/systemStateEngine/scoring/coverageScorer.ts) averages per-capability, and the 22 flips clustered in a few capabilities. The fix landed correctly at the requirements_maps level — every consumer that reads `status` sees the truth. The aggregate-coverage-tile averaging is a separate UX surface we can address if the operator wants a sharper score response.
+
+**The big-picture impact:** every future project this platform onboards gets deep-verified for free. The "60+ unmatched requirements that turn out to be implemented differently" pattern that ate the morning yesterday won't repeat — the verifier now reads actual code and the orchestrator now bridges verifier verdicts to operator status.
+
+  - Date: 2026-05-18
+  - What changed: 3 new files (smartCodeReader.ts, smartCodeReader.test.ts, statusPromotion.test.ts), 1 new script (backfillSmartVerification.js), 2 modified verifier files (semanticVerificationService.ts, verificationOrchestrator.ts), 1 backfill report. 22 prod database rows updated via the smart verifier path.
+  - Verification: backend tsc clean; backend Jest 2259/0 (no regression); 24/24 new tests pass (smartCodeReader 11, statusPromotion 13); deployed `1cf7e16`; backend HTTP 200 after deploy; backfill exit 0; psql confirms matched count 101 -> 123, unmatched 59 -> 37.
+  - Notes: The dominant bug was downstream coupling (Phase B), not LLM blindness (Phase A). The verifier was doing more correct work than anyone realized — its high-confidence `verified_partial` verdicts just never made it to the `status` column the rest of the system reads. Phase A's deep code reading added value on the cases where path-only confidence was genuinely low (REQ-148 went 0.10 -> 0.90), but the bulk-flip leverage was Phase B. Worth remembering: when downstream consumers ignore upstream signals, the upstream signal effectively doesn't exist.
+
 ### Cory queue stabilization: 10 requirements closed in batch + reusable closer script (2026-05-18)
 Operator asked to process the next 10 surfaced priorities while looking for system problems. Used it as both a queue-clearing exercise and a diagnostic pass.
 
