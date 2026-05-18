@@ -35,6 +35,9 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: frontend tsc clean
   - Note: deliberately did NOT add a per-site filter to the existing visitor list view (would have required touching ~10 backend list endpoints + the filter UI). The By-Site panel gives the operator the per-site rollup; drilling into a specific site's visitors is a follow-up.
+- [x] `backend/src/scripts/sendVisitorTrackerInstallEmails.js` — Mandrill SMTP send loop, 4 install emails to the per-site owners (Ali for advisor; Tejesh for colaberry.ai; Ram + Tejesh CC for trustbeforeintelligence.ai and worldoftaxonomy.com). Per Ali's explicit instruction, the body tells recipients (most of whom use Claude Code for installs) to paste back the literal `[colaberry-track]`-prefixed console error, the non-200/204 HTTP status with response body, or any Claude Code terminal error verbatim if installation fails. No paraphrasing. No em-dashes (outside-comms rule).
+  - Date: 2026-05-18
+  - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
 ### Gap engine: scope-aware key generation stops the duplicate-recurrence loop (2026-05-18)
 After closing the original 30 autonomy-engine `not_started` rows, the engine immediately regenerated 15 more (5 templates × 3 new capabilities), then more again during deploys. Root cause: every template generated a per-capability requirement, even for templates that describe platform-wide concerns. Fix at the source.
