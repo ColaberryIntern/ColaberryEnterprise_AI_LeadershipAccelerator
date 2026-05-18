@@ -167,12 +167,12 @@ describe('authoritativeTaskQueue — kind-based task gating (2026-05-18)', () =>
     expect(tasks.filter(t => t.id.endsWith(':build_backend'))).toHaveLength(1);
   });
 
-  test('kind=agent gets add_frontend task when backend exists (agent may need admin UI)', () => {
+  test('kind=agent never gets add_frontend task (agents are consumed by separate dashboards)', () => {
     const cap = makeCap({
-      id: 'agent-2', name: 'Governance Agent',
+      id: 'agent-2', name: 'Cost Optimization Agent',
       is_page_bp: false,
       kind: 'agent',
-      linked_backend_services: ['backend/src/services/agents/governanceAgent.ts'],
+      linked_backend_services: ['backend/src/services/agents/costOptim.ts'],
     });
     const score = makeScore('agent-2');
     const { tasks } = buildAuthoritativeQueue({
@@ -180,7 +180,7 @@ describe('authoritativeTaskQueue — kind-based task gating (2026-05-18)', () =>
       capabilities: [cap],
       capability_scores: [score],
     });
-    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(1);
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(0);
   });
 });
 

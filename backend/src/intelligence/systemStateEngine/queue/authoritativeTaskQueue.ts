@@ -147,11 +147,15 @@ function generateCapTasks(
   // POSITIVE frontend evidence (frontend_route declared or some
   // linked_frontend_components already shipped).
   const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry)$/i.test(cap.name || '');
-  const hasUserSurface = !!cap.frontend_route || (cap.linked_frontend_components || []).length > 0;
-  const frontendAddEligible =
-    (kind === 'service' || kind === 'agent') &&
-    !cap.is_page_bp &&
-    (!looksInternal || hasUserSurface);
+  // add_frontend gating:
+  //   kind=service, non-internal-named → fire (existing user-facing feature)
+  //   kind=service, internal-named → skip (backend infra; admin dashboards
+  //     are separate caps with their own user-facing names)
+  //   kind=agent → skip (agents are consumed by governance/ops dashboards,
+  //     which exist as separate caps)
+  //   kind=component → skip (handled by parent kind exclusion)
+  //   kind=page → skip via is_page_bp
+  const frontendAddEligible = kind === 'service' && !looksInternal && !cap.is_page_bp;
 
   // Backend gap. Skip for Page BPs — pages are frontend routes with no
   // backend layer to "build" (Not Found Page, Pricing Page, etc.).
