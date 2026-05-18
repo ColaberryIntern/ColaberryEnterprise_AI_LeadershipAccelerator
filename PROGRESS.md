@@ -39,6 +39,36 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Top-20 priorities sprint: 3 more systemic queue bugs found + fixed, 34 capabilities linked (2026-05-18)
+Operator framed: *"do 20 of the next priorities and fixing things along the way if seeing they are broken."* Sprint pattern: every "priority" Cory surfaced turned out to be either a bug in the queue generator or a discovery-linkage gap. Three real systemic bugs got fixed; 34 capabilities got their backend code linked (a meta-priority of clearing out false-positive build asks).
+
+**3 more systemic bugs found + fixed:**
+
+1. **Queue generates "Build backend for X" for Page BPs** ([commit 2cf7f69](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/commit/2cf7f69)) — [authoritativeTaskQueue.ts:131](backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts) was generating backend-build tasks for every capability without a backend, including Page BPs. *Symptom: queue's #1 priority was "Build backend services for Trust Badges Page" — operator-visible nonsense.* Fix: added `!cap.is_page_bp` guard to both backend-gap and frontend-gap generators. **5/5 new tests pass.** Pages keep their ui_review and verification tasks.
+
+2. **`is_page_bp` single-signal detection misses brownfield-discovered Pages** ([commit 0d9322d](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/commit/0d9322d)) — 7 page-named capabilities (AI Architect Landing Page, Case Studies Page, etc.) were `source='brownfield_discovered'` instead of `'frontend_page'`, so the Page-BP guard didn't catch them. Fix: added a name-pattern fallback in [systemStateEngine.ts:990](backend/src/intelligence/systemStateEngine/systemStateEngine.ts) — any cap whose name ends in " Page" or " Landing Page" is treated as a Page BP regardless of source. Source remains primary signal; pattern is safety net.
+
+3. **Brownfield discovery silently skipped existing caps** ([commit 5343e17](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/commit/5343e17)) — [brownfieldDiscoveryService.ts:933](backend/src/services/brownfieldDiscoveryService.ts) had a `findOne → if exists, continue` pattern. Effect: `linked_backend_services` / `linked_frontend_components` arrays were frozen at whatever the FIRST scan found. Backend services that landed in later commits never got linked, so the queue surfaced "Build backend for Marketing Dashboard" even though adminMarketingController.ts + marketingFunnelRoutes.ts existed. Fix: when existing cap matches by name, MERGE newly-discovered files into linked_\* arrays (idempotent — duplicates dedup via Set) and save. Brownfield scan is now truly rescannable.
+
+**34 capabilities linked across 2 waves** ([tmp/linkBackendDriver.js](tmp/linkBackendDriver.js), not committed — one-shot) — built a one-shot in-container Node driver that maps cap names → backend file paths via grep, then UPDATEs `linked_backend_services` in bulk. Wave 1 covered the original top 18 (Marketing Dashboard, Visitor Tracking, Content Generation, Project Dashboard, Event Ledger, Revenue Dashboard, Discovery, Execution Planning, Artifact Generation, Discovery Engine, Action Planner, Cost Optimization, Dataset Registration, Impact Estimator, Revenue Optimization, Website Behavior Agent, Requirements Management, Requirements Engine). Wave 2 covered the 16 new caps the brownfield rediscovery surfaced (Admin AI Settings Management, Event Ledger Tracking, Revenue Dashboard Insights, Project Portfolio Overview, Telemetry Emission, Manifest Validation, Decision Trace Logging, Telemetry Ingestion, Content Optimization, Runtime Threat Monitoring, Action Planner Agent, Cost Optimization Agent, Dataset Registration Agent, Growth Experiment Agent, Risk Evaluator Agent, Website Conversion Flow Agent).
+
+**Final queue state:**
+
+| Metric | Before sprint | After sprint |
+| --- | ---: | ---: |
+| Backend tasks ("Build backend for X") | 30 | **6** (-24) |
+| Of which are false positives | ~28 | **6** (all UI components) |
+| Total queue tasks | 119 | 161 (+42 from rediscovery surfacing genuine new caps) |
+| Cory's #1 priority (was Trust Badges Page = nonsense) | nonsense | "Visual Workspace" (still wrong category — UI component, not backend; surfaces next anti-pattern to fix) |
+| Requirements status | 235/235 matched | **240/240 matched** (+5 cleared 5 autonomy regenerations) |
+
+**Next anti-pattern surfaced (deferred):** the 6 remaining backend tasks are all UI components (Visual Workspace, Tabs Component, Charts Visualization, Entity Panel, Toast Notifications, Protected Routes). These were added by brownfield discovery as caps but they're clearly frontend concerns, not services. The fix would be either (a) a `kind: 'ui_component'` field on capability with a guard parallel to `is_page_bp`, or (b) brownfield discovery should NOT create caps for raw UI components, only for end-to-end features. Either way, separate sprint.
+
+  - Date: 2026-05-18
+  - What changed: 3 modified files + 1 new test file (queuePageBpSkip.test.ts), 34 prod DB UPDATEs on capabilities.linked_backend_services, 3 deploys.
+  - Verification: All new tests pass (5/5); backend Jest 2268/0 + the pre-existing enrollmentRoutes flake (passes in isolation); refreshSystemState confirmed queue shrunk from 23 → 6 backend tasks; the 6 remaining are diagnosable as a separate anti-pattern.
+  - Notes: This sprint demonstrated the meta-pattern that's been showing up all day — when the operator asks me to "process the top N priorities," half the work ends up being "fix why the queue is wrong about what the top priorities are." Each iteration narrows the problem. Today started with 70 wrongly-unmatched requirements and a queue dominated by Page-BP and discovery-gap false positives; ended with 0 unmatched, 240 matched, and a queue where the false-positive class has narrowed to UI components. Three more sprints of this pace would zero out the queue's noise entirely.
+
 ### Gap engine: scope-aware key generation stops the duplicate-recurrence loop (2026-05-18)
 After closing the original 30 autonomy-engine `not_started` rows, the engine immediately regenerated 15 more (5 templates × 3 new capabilities), then more again during deploys. Root cause: every template generated a per-capability requirement, even for templates that describe platform-wide concerns. Fix at the source.
 
