@@ -934,7 +934,33 @@ export async function discoverBrownfieldCapabilities(
       where: { project_id: projectId, name: cap.name },
     });
     if (existing) {
-      console.log(`[Brownfield] Skipping cap "${cap.name}" — already exists`);
+      // Merge newly-discovered files into the existing cap's linked_* arrays
+      // instead of skipping. The original "skip" caused caps to be permanently
+      // stuck with whatever files the first scan found — re-runs couldn't
+      // pick up backend services that landed later. Surfaced 2026-05-18 when
+      // the queue surfaced "Build backend for Marketing Dashboard" even
+      // though adminMarketingController etc. existed in the repo.
+      const mergedBackend = Array.from(new Set([...(existing.linked_backend_services || []), ...backend, ...models]));
+      const mergedFrontend = Array.from(new Set([...(existing.linked_frontend_components || []), ...frontend]));
+      const mergedAgents = Array.from(new Set([...(existing.linked_agents || []), ...agents]));
+
+      const backendGained = mergedBackend.length - (existing.linked_backend_services || []).length;
+      const frontendGained = mergedFrontend.length - (existing.linked_frontend_components || []).length;
+      const agentsGained = mergedAgents.length - (existing.linked_agents || []).length;
+
+      if (backendGained === 0 && frontendGained === 0 && agentsGained === 0) {
+        console.log(`[Brownfield] Cap "${cap.name}" already up to date — no new files to merge`);
+        continue;
+      }
+
+      existing.linked_backend_services = mergedBackend;
+      existing.linked_frontend_components = mergedFrontend;
+      existing.linked_agents = mergedAgents;
+      await existing.save();
+
+      console.log(
+        `[Brownfield] Updated cap "${cap.name}": +${backendGained} backend, +${frontendGained} frontend, +${agentsGained} agents`
+      );
       continue;
     }
 
