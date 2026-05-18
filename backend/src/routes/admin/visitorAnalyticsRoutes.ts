@@ -46,6 +46,20 @@ router.get('/api/admin/visitor-analytics/pages', requireAdmin, async (req: Reque
   }
 });
 
+// ── Sites Breakdown (per-site traffic for cross-site visibility) ──────────────
+
+router.get('/api/admin/visitor-analytics/sites', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { getSitesBreakdown } = await import('../../services/visitorAnalyticsService');
+    const days = Math.max(1, parseInt(req.query.days as string, 10) || 30);
+    const data = await getSitesBreakdown(days);
+    res.json(data);
+  } catch (err: any) {
+    console.error('[VisitorAnalytics] Sites breakdown error:', err.message);
+    res.status(500).json({ error: 'Failed to load sites breakdown' });
+  }
+});
+
 // ── Device Breakdown ──────────────────────────────────────────────────────────
 
 router.get('/api/admin/visitor-analytics/devices', requireAdmin, async (req: Request, res: Response) => {

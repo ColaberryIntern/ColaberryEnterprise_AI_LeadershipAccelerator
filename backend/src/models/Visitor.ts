@@ -20,6 +20,7 @@ interface VisitorAttributes {
   utm_campaign?: string | null;
   utm_medium?: string | null;
   referrer_domain?: string | null;
+  site_slug?: string | null;
   campaign_id?: string | null;
   campaign_type?: string | null;
   platform?: string | null;
@@ -47,6 +48,7 @@ class Visitor extends Model<VisitorAttributes> implements VisitorAttributes {
   declare utm_campaign: string | null;
   declare utm_medium: string | null;
   declare referrer_domain: string | null;
+  declare site_slug: string | null;
   declare campaign_id: string | null;
   declare campaign_type: string | null;
   declare platform: string | null;
@@ -134,6 +136,10 @@ Visitor.init(
     },
     referrer_domain: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    site_slug: {
+      type: DataTypes.STRING(64),
       allowNull: true,
     },
     campaign_id: {

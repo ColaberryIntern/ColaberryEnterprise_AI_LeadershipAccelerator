@@ -59,6 +59,42 @@ function extractReferrerDomain(referrerUrl?: string): string | undefined {
   }
 }
 
+/**
+ * Site slug normalization.
+ *
+ * Prefer the `site_slug` explicitly sent by the standalone tracker.js
+ * (read from <script data-site="...">). Fall back to deriving from the
+ * page URL hostname so events still get attributed when the snippet was
+ * installed without data-site, or for traffic from the main React app.
+ *
+ * Map matches lead_sources.slug values; anything else returns `'unknown'`
+ * so the row is still queryable.
+ */
+const HOST_TO_SITE_SLUG: Record<string, string> = {
+  'enterprise.colaberry.ai': 'enterprise',
+  'colaberry.ai': 'colaberry',
+  'www.colaberry.ai': 'colaberry',
+  'advisor.colaberry.ai': 'advisor',
+  'trustbeforeintelligence.ai': 'trustbeforeintelligence',
+  'www.trustbeforeintelligence.ai': 'trustbeforeintelligence',
+  'worldoftaxonomy.com': 'worldoftaxonomy',
+  'www.worldoftaxonomy.com': 'worldoftaxonomy',
+};
+
+function normalizeSiteSlug(raw: unknown, pageUrl?: string): string | undefined {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim().toLowerCase();
+    if (/^[a-z0-9-]{1,64}$/.test(trimmed)) return trimmed;
+  }
+  if (!pageUrl) return undefined;
+  try {
+    const host = new URL(pageUrl).hostname.toLowerCase();
+    return HOST_TO_SITE_SLUG[host] || 'unknown';
+  } catch {
+    return undefined;
+  }
+}
+
 function validateTrackEvent(body: Record<string, unknown>): string | null {
   const { fingerprint, event_type, page_url, page_path } = body;
 
@@ -105,6 +141,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       email,
       lid,
       timestamp,
+      site_slug: rawSiteSlug,
     } = req.body;
 
     const validationError = validateTrackEvent(req.body);
@@ -114,6 +151,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
     }
 
     const referrer_domain = extractReferrerDomain(referrer_url);
+    const site_slug = normalizeSiteSlug(rawSiteSlug, page_url);
 
     const visitorId = await findOrCreateVisitor(fingerprint, {
       ip_address: req.ip,
@@ -126,6 +164,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       utm_medium,
       referrer_domain,
       campaign_id,
+      site_slug,
     });
 
     // Identity resolution: link visitor to existing lead via email or lead ID
@@ -165,6 +204,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       utm_medium,
       ip_address: req.ip,
       device_type,
+      site_slug,
     });
 
     const page_category = categorizePagePath(page_path);
@@ -216,6 +256,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       utm_medium,
       campaign_id,
       lead_id,
+      site_slug: rawSiteSlug,
     } = req.body;
 
     if (!fingerprint || typeof fingerprint !== 'string' || fingerprint.length > 64) {
@@ -228,6 +269,8 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
     }
 
     const referrer_domain = extractReferrerDomain(referrer_url);
+    const firstPageUrl = events[0] && events[0].page_url;
+    const site_slug = normalizeSiteSlug(rawSiteSlug, firstPageUrl);
 
     const visitorId = await findOrCreateVisitor(fingerprint, {
       ip_address: req.ip,
@@ -240,6 +283,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       utm_medium,
       referrer_domain,
       campaign_id,
+      site_slug,
     });
 
     // Identity resolution via lead_id (from lid= URL param in email links)
@@ -265,6 +309,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       utm_medium,
       ip_address: req.ip,
       device_type,
+      site_slug,
     });
 
     let eventsRecorded = 0;

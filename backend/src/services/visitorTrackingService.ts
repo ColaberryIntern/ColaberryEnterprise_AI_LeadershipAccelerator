@@ -72,6 +72,7 @@ export async function findOrCreateVisitor(
     utm_medium?: string;
     referrer_domain?: string;
     campaign_id?: string;
+    site_slug?: string;
   }
 ): Promise<string> {
   const now = new Date();
@@ -94,6 +95,7 @@ export async function findOrCreateVisitor(
       utm_medium: data.utm_medium || null,
       referrer_domain: data.referrer_domain || null,
       campaign_id: data.campaign_id || null,
+      site_slug: data.site_slug || null,
     } as any,
   });
 
@@ -104,6 +106,10 @@ export async function findOrCreateVisitor(
     // First-touch attribution: only set campaign_id if not already set
     if (data.campaign_id && !visitor.campaign_id) {
       updates.campaign_id = data.campaign_id;
+    }
+    // First-touch site attribution: only set site_slug if not already set
+    if (data.site_slug && !visitor.site_slug) {
+      updates.site_slug = data.site_slug;
     }
     await visitor.update(updates);
   }
@@ -128,6 +134,7 @@ export async function getOrCreateSession(
     utm_medium?: string;
     ip_address?: string;
     device_type?: string;
+    site_slug?: string;
   }
 ): Promise<string> {
   const timeoutMs = env.visitorSessionTimeoutMinutes * 60 * 1000;
@@ -173,6 +180,7 @@ export async function getOrCreateSession(
     device_type: data.device_type || null,
     is_bounce: true,
     landing_page_category: landingCategory,
+    site_slug: data.site_slug || null,
   } as any);
 
   // Increment visitor total_sessions

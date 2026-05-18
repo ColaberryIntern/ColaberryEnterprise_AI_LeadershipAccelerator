@@ -21,6 +21,7 @@ interface VisitorSessionAttributes {
   device_type?: string | null;
   is_bounce: boolean;
   landing_page_category?: string | null;
+  site_slug?: string | null;
   metadata?: Record<string, any> | null;
   created_at?: Date;
 }
@@ -45,6 +46,7 @@ class VisitorSession extends Model<VisitorSessionAttributes> implements VisitorS
   declare device_type: string | null;
   declare is_bounce: boolean;
   declare landing_page_category: string | null;
+  declare site_slug: string | null;
   declare metadata: Record<string, any> | null;
   declare created_at: Date;
 }
@@ -133,6 +135,10 @@ VisitorSession.init(
     },
     landing_page_category: {
       type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    site_slug: {
+      type: DataTypes.STRING(64),
       allowNull: true,
     },
     metadata: {

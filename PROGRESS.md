@@ -12,6 +12,30 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Portable Visitor Tracker — Cross-Site Visibility for All 4 External Sites (2026-05-18)
+- [x] `frontend/public/v1/track.js` (new) — standalone IIFE tracker that drops into any external Colaberry-owned site as a single `<script src="https://enterprise.colaberry.ai/v1/track.js" data-site="<slug>" defer>` tag. No build dependency, no React. Reads its `data-site` attribute off its own script tag, sends `site_slug` on every event. Captures pageview, scroll milestones (25/50/75/90/100), CTA + click + media + iframe events, time-on-page, heartbeats, fingerprint, browser/device/OS, UTM params, referrer, identity via `?email=` + localStorage `cb_lead_id`. Honors `navigator.doNotTrack`, skips `/admin` paths. POSTs to existing `/api/t/event` and `/api/t/batch` endpoints. **Surfaces clear console errors when misconfigured** (missing `data-site`, network failures) so an operator's Claude Code can paste the exact error back for fixing — per the operator instruction on 2026-05-18.
+  - Date: 2026-05-18
+  - Verification: frontend `npx tsc --noEmit` exit 0 (the file itself is plain ES5 JS, no compilation)
+- [x] DB migration (applied to prod directly): `ALTER TABLE visitors ADD COLUMN IF NOT EXISTS site_slug VARCHAR(64)`; same for `visitor_sessions`. Added `idx_visitors_site_slug` + `idx_visitor_sessions_site_slug` indexes. Backfilled 1598 sessions + 236 visitors to `site_slug = 'enterprise'` (everything currently in the table comes from the enterprise.colaberry.ai React app).
+  - Date: 2026-05-18
+  - Verification: psql `UPDATE 1598` + `UPDATE 236`, post-update count confirms `enterprise` = 1598 sessions / 236 visitors
+- [x] `backend/src/models/Visitor.ts` + `backend/src/models/VisitorSession.ts` — added `site_slug` to both attribute interfaces and Sequelize column definitions.
+  - Date: 2026-05-18
+  - Verification: backend tsc clean
+- [x] `backend/src/controllers/trackingController.ts` — extracts `site_slug` from request body, normalizes via new `normalizeSiteSlug(raw, page_url)` helper that prefers an explicit slug from the script tag and falls back to a hostname→slug lookup (`HOST_TO_SITE_SLUG` map covering all 4 external sites + enterprise). Unknown hosts get `'unknown'` rather than null so they remain queryable. Passes `site_slug` to both `findOrCreateVisitor` and `getOrCreateSession` in both single-event and batch handlers.
+  - Date: 2026-05-18
+  - Verification: backend tsc clean
+- [x] `backend/src/services/visitorTrackingService.ts` — `findOrCreateVisitor` and `getOrCreateSession` both accept and persist `site_slug`. Visitor uses **first-touch attribution** (only sets site_slug if not already set), session captures it at creation time. Matches the existing pattern for `campaign_id` first-touch.
+  - Date: 2026-05-18
+  - Verification: backend tsc clean
+- [x] `backend/src/services/visitorAnalyticsService.ts` + `backend/src/routes/admin/visitorAnalyticsRoutes.ts` — new `getSitesBreakdown(days)` service returns `[{site_slug, display_name, sessions, unique_visitors, pageviews, last_seen_at}]` grouped by `site_slug` from `visitor_sessions` over last N days. New admin route `GET /api/admin/visitor-analytics/sites?days=N`.
+  - Date: 2026-05-18
+  - Verification: backend tsc clean
+- [x] `frontend/src/pages/admin/AdminVisitorsPage.tsx` — added `sitesBreakdown` state, `fetchAnalytics` now also pulls `/api/admin/visitor-analytics/sites`, and the Analytics tab renders a new "By Site (last 30d)" panel above Top Pages with one row per site_slug (Site, Sessions, Unique visitors, Pageviews, Last seen). Empty-state message tells the operator the snippet install command so anyone looking at the page knows what to do if a site row is missing.
+  - Date: 2026-05-18
+  - Verification: frontend tsc clean
+  - Note: deliberately did NOT add a per-site filter to the existing visitor list view (would have required touching ~10 backend list endpoints + the filter UI). The By-Site panel gives the operator the per-site rollup; drilling into a specific site's visitors is a follow-up.
+
 ### Gap engine: scope-aware key generation stops the duplicate-recurrence loop (2026-05-18)
 After closing the original 30 autonomy-engine `not_started` rows, the engine immediately regenerated 15 more (5 templates × 3 new capabilities), then more again during deploys. Root cause: every template generated a per-capability requirement, even for templates that describe platform-wide concerns. Fix at the source.
 

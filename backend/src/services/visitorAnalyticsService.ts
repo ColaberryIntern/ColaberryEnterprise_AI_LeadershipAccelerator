@@ -495,3 +495,60 @@ export async function getDeviceBreakdown(days = 30): Promise<DeviceBreakdown[]> 
 
   return rows;
 }
+
+export interface SiteBreakdown {
+  site_slug: string;
+  display_name: string;
+  sessions: number;
+  unique_visitors: number;
+  pageviews: number;
+  last_seen_at: string | null;
+}
+
+const SITE_DISPLAY_NAMES: Record<string, string> = {
+  enterprise: 'Enterprise (enterprise.colaberry.ai)',
+  colaberry: 'Colaberry (colaberry.ai)',
+  advisor: 'AI Workforce Designer (advisor.colaberry.ai)',
+  trustbeforeintelligence: 'Trust Before Intelligence',
+  worldoftaxonomy: 'World of Taxonomy',
+  unknown: 'Unknown / not tagged',
+};
+
+/**
+ * Per-site visitor breakdown. Joins visitor_sessions for session/visitor counts
+ * and page_events for pageview totals, scoped to last N days. Powers the "By Site"
+ * panel on the admin visitor analytics page so we can see traffic per external site.
+ */
+export async function getSitesBreakdown(days = 30): Promise<SiteBreakdown[]> {
+  const rows = await sequelize.query<{
+    site_slug: string;
+    sessions: string;
+    unique_visitors: string;
+    pageviews: string;
+    last_seen_at: Date | null;
+  }>(
+    `SELECT
+       COALESCE(vs.site_slug, 'unknown')          AS site_slug,
+       COUNT(DISTINCT vs.id)                       AS sessions,
+       COUNT(DISTINCT vs.visitor_id)               AS unique_visitors,
+       COALESCE(SUM(vs.pageview_count), 0)         AS pageviews,
+       MAX(vs.started_at)                          AS last_seen_at
+     FROM visitor_sessions vs
+     WHERE vs.started_at >= NOW() - INTERVAL ':days days'
+     GROUP BY 1
+     ORDER BY sessions DESC`,
+    {
+      replacements: { days },
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  return rows.map((r) => ({
+    site_slug: r.site_slug,
+    display_name: SITE_DISPLAY_NAMES[r.site_slug] || r.site_slug,
+    sessions: parseInt(r.sessions as any, 10) || 0,
+    unique_visitors: parseInt(r.unique_visitors as any, 10) || 0,
+    pageviews: parseInt(r.pageviews as any, 10) || 0,
+    last_seen_at: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
+  }));
+}

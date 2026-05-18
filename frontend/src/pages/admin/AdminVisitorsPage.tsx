@@ -243,6 +243,16 @@ function AdminVisitorsPage() {
   /* --- Sessions --- */
   const [sessions, setSessions] = useState<VisitorSession[]>([]);
 
+  /* --- Per-site breakdown (cross-site visibility, lights up when external sites install the snippet) --- */
+  const [sitesBreakdown, setSitesBreakdown] = useState<Array<{
+    site_slug: string;
+    display_name: string;
+    sessions: number;
+    unique_visitors: number;
+    pageviews: number;
+    last_seen_at: string | null;
+  }>>([]);
+
   /* --- Detail modal --- */
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
   const [visitorSessions, setVisitorSessions] = useState<VisitorSession[]>([]);
@@ -313,14 +323,16 @@ function AdminVisitorsPage() {
 
   const fetchAnalytics = useCallback(async () => {
     try {
-      const [trendRes, topRes, srcRes] = await Promise.all([
+      const [trendRes, topRes, srcRes, sitesRes] = await Promise.all([
         api.get('/api/admin/visitors/trend'),
         api.get('/api/admin/visitors/stats'),
         api.get('/api/admin/visitors/stats'),
+        api.get('/api/admin/visitor-analytics/sites', { params: { days: 30 } }).catch(() => null),
       ]);
       setTopPages(trendRes.data.topPages || []);
       setTrafficSources(trendRes.data.trafficSources || []);
       setStats(topRes.data.stats || topRes.data);
+      setSitesBreakdown(sitesRes?.data || []);
     } catch (err) {
       console.error('Failed to fetch analytics:', err);
     }
@@ -758,6 +770,54 @@ function AdminVisitorsPage() {
           </div>
         </div>
       )}
+
+      {/* By Site (cross-site visibility — lights up as external sites install /v1/track.js) */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+          <span>By Site (last 30d)</span>
+          <span className="text-muted small">visitor_sessions.site_slug</span>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Site</th>
+                  <th className="text-end">Sessions</th>
+                  <th className="text-end">Unique visitors</th>
+                  <th className="text-end">Pageviews</th>
+                  <th>Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sitesBreakdown.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-muted text-center py-3">
+                      No site-tagged sessions yet. External sites light up here once they install
+                      <code className="mx-1">&lt;script src="https://enterprise.colaberry.ai/v1/track.js" data-site="&lt;slug&gt;"&gt;</code>
+                    </td>
+                  </tr>
+                ) : (
+                  sitesBreakdown.map((row) => (
+                    <tr key={row.site_slug}>
+                      <td>
+                        <div className="fw-semibold">{row.display_name}</div>
+                        <code className="text-muted small">{row.site_slug}</code>
+                      </td>
+                      <td className="text-end">{row.sessions.toLocaleString()}</td>
+                      <td className="text-end">{row.unique_visitors.toLocaleString()}</td>
+                      <td className="text-end">{row.pageviews.toLocaleString()}</td>
+                      <td className="text-muted small">
+                        {row.last_seen_at ? new Date(row.last_seen_at).toLocaleString() : '-'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
       <div className="row g-4">
         {/* Top Pages */}
