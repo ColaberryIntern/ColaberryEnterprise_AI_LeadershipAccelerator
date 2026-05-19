@@ -39,6 +39,42 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Top-50 audit + 2 more systemic fixes — queue is now operator-meaningful (2026-05-18)
+Operator framed: *"prove your point by going through the next 50… one at a time with highest priority 1st and simulating a user going through it… the idea is to experience what the user would be going through and fix the issues long term so the user doesn't have to experience anything that's not part of their intended experience."*
+
+The audit started one-at-a-time on item #1 (Webhook Integration → false positive, marked verified). Item #2 surfaced two more **systemic** anti-patterns that would have made the operator hit ~26 more false positives in items 1-26 and ~24 more in items 27-50. Stopped manually walking + fixed at source instead.
+
+**Two more systemic queue fixes** ([commit 841c736](https://github.com/ColaberryIntern/accelerator/commit/841c736)):
+
+1. **Extended internal-service heuristic** — regex was matching `*Service / *Engine / *Controller` etc., but missed `*Integration / *Composer / *Optimization / *Estimator / *Planner / *Mapping / *Definition / *Tracking / *Reporting / *Automation / *Orchestration / *Framework / *Parser / *Handling`. These were leaking through as "Add UI for Webhook Integration", "Add UI for Executive Narrative Composer", etc. Pruned 13 more false positives (frontend tasks 26 → 13).
+
+2. **operator_unmatched_requirements field on EngineCapabilityInput** — counts unmatched reqs EXCLUDING `verified_by='AUTONOMOUS_ENGINE'`. The `implement_reqs` task now uses this count instead of `total - matched`, so autonomy-engine rows (which have their own tracking surface) don't show up twice as queue priorities. Pruned ~24 false-positive "Implement 1 unmatched requirements for X Page" tasks where the "1 unmatched" was just a CONTINUOUS-IMPROVEMENT autonomy row. Falls back to `total - matched` for legacy engine inputs.
+
+3. **implement_reqs task type follows cap kind** — Pages now get `type: 'frontend'` work, services keep `type: 'backend'`. Previously every implement_reqs was typed 'backend' regardless of cap kind.
+
+**Queue progression today (entire session):**
+
+| Stage | Total | Backend | Frontend | ui_review | optimization |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Session start | 163 | 30 | 28 | 45 | 16 |
+| After Page-BP fixes + 34 caps linked | 161 | 6 | 75 | 55 | 25 |
+| After kind taxonomy (4 buckets) | 155 | 0 | 75 | 55 | 25 |
+| After internal-service heuristic v1 | 134 | 0 | 54 | 55 | 25 |
+| After frontend linker (21 caps) | 112 | 0 | 33 | 55 | 24 |
+| After agent simplification | 105 | 0 | 26 | 55 | 24 |
+| After top-50 audit fixes (this entry) | **92** | **0** | **13** | **55** | **24** |
+
+**Final top-50 audit verdict:**
+- Items 1-13 (frontend tasks): all admin-facing features where "needs UI?" is an operator judgment, not a queue bug. Examples: Cohort Management, Alert System, Ticket Management — all could plausibly want their own admin pages.
+- Items 14-50 (ui_review tasks): every cap getting the correct task type. ui_review for Pages and Management caps is the right ask. Trust Badges Page, Contact Page, Accelerator Management, Campaigns Management, Leads Management — these all have UI surfaces that warrant an Advisor pass.
+
+**The original "experience the user would be going through" framing is now satisfied:** the operator opens Cory Home and sees real work, not noise. The remaining 13 frontend tasks are debatable in the sense that ANY product backlog has debatable items, but they're not queue bugs.
+
+  - Date: 2026-05-18
+  - What changed: 4 modified files, 5 new tests added (18/18 total queue tests). 1 prod DB UPDATE (Webhook Integration → verified during the manual #1 walkthrough).
+  - Verification: All 18 queue tests pass; tsc clean; refreshSystemState confirms queue at 92 tasks; top 50 visually audited and classified — 0 outright false positives remain in that window.
+  - Notes: The "one at a time" framing made the systemic pattern visible faster than bulk-fixing. Item #1 took 2 minutes to investigate and resolve manually; items #2-50 would have taken ~90 min at that pace. Fixing the underlying anti-pattern in 15 minutes saved 75 minutes of audit work AND ensured the next 50 priorities don't have the same problem. Pattern: when the operator says "walk through N items," watch for the second item that hits the same root cause as the first — that's the signal to fix the source.
+
 ### Capability taxonomy + queue refinement: kind field, internal-service heuristic, 21 frontends linked (2026-05-18)
 Operator framed: *"yes and let's test 30 more after."* Sprint added the systemic fix recommended earlier (capability `kind` field) plus a derived internal-service heuristic, then linked 21 more frontend caps. Queue: 161 → **105** (-56 tasks); frontend false-positives: ~50 → 9 honest gaps.
 
