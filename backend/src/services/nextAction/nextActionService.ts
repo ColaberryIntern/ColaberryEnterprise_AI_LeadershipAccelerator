@@ -1,4 +1,4 @@
-import { NextAction, ArtifactDefinition, AssignmentSubmission } from '../../models';
+import { NextAction, ArtifactDefinition, AssignmentSubmission, RequirementsMap } from '../../models';
 import { getProjectByEnrollment } from '../projectService';
 import { getRequirementsStatus } from '../requirementsMatchingService';
 import { getFileTree } from '../githubService';
@@ -22,12 +22,38 @@ export async function getNextAction(enrollmentId: string): Promise<NextAction | 
     order: [['created_at', 'DESC']],
   });
 
-  // If a pending action exists and is less than 1 hour old, return it
+  // If a pending action exists, validate that its underlying requirement is
+  // still actionable before returning the cached value. Without this check
+  // the operator can see a stale priority for hours after the requirement
+  // was already closed (via the closer script, manual artifact link, or
+  // another flow that doesn't go through completeAction). Surfaced
+  // 2026-05-18 audit when REQ-122's matched requirement was still showing
+  // as "Today's One Priority" on Cory Home.
   if (existing && existing.created_at) {
-    const ageMs = Date.now() - new Date(existing.created_at).getTime();
-    if (ageMs < 60 * 60 * 1000) {
-      console.log(`[NextAction] Returning cached action: ${existing.title}`);
-      return existing;
+    const reqKey = (existing.metadata as any)?.requirement_key;
+    if (reqKey) {
+      const req = await RequirementsMap.findOne({
+        where: { project_id: project.id, requirement_key: reqKey },
+      });
+      if (req && (req.status === 'matched' || req.status === 'verified')) {
+        existing.status = 'completed';
+        await existing.save();
+        console.log(`[NextAction] Auto-completed stale action for ${reqKey} (req already ${req.status}); falling through to generate fresh`);
+        // Fall through to generate a fresh action below
+      } else {
+        const ageMs = Date.now() - new Date(existing.created_at).getTime();
+        if (ageMs < 60 * 60 * 1000) {
+          console.log(`[NextAction] Returning cached action: ${existing.title}`);
+          return existing;
+        }
+      }
+    } else {
+      // No requirement_key in metadata (action_type may not be requirement-based)
+      const ageMs = Date.now() - new Date(existing.created_at).getTime();
+      if (ageMs < 60 * 60 * 1000) {
+        console.log(`[NextAction] Returning cached action: ${existing.title}`);
+        return existing;
+      }
     }
   }
 
