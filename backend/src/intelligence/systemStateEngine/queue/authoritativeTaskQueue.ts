@@ -346,8 +346,15 @@ function generateCapTasks(
     const hasActionableLowDim = !!hbForGate && hbForGate.applicable_dimensions.some(d => {
       // Same dimension actionability logic as the gap-driven generator
       // below (kept inline for now; refactor if a third caller appears).
+      // Threshold (2026-05-19, cycle 3): aligned with improve_<weakest>
+      // at < 50. The generic "Add tests, observability, or hardening"
+      // suggestion is only worth surfacing when at least one actionable
+      // dim is truly weak (not just sub-70). Below this threshold, the
+      // suggestion is too vague to be useful — if the cap has dims in
+      // the 50-70 range with nothing under 50, it's "fine but could be
+      // tighter," which isn't an actionable priority.
       const value = (hbForGate as any)[d] as number;
-      if (typeof value !== 'number' || value >= 70) return false;
+      if (typeof value !== 'number' || value >= 50) return false;
       switch (d) {
         case 'ux_exposure': {
           if (!frontendAddEligible) return false;
