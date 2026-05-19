@@ -234,3 +234,38 @@ describe('inferAgentRole (Tier-2 #4)', () => {
     expect(inferAgentRole('genericAgent.ts', null)).toBe('core');
   });
 });
+
+describe('computeCodeEvidence preFetchedAgentContents path (Tier-3 #9)', () => {
+  it('uses pre-fetched content for role classification when supplied', () => {
+    // Filename is generic — only content can drive role classification.
+    // Without preFetched, local fs read fails (file doesn't exist) → core.
+    // With preFetched supplying monitor-keyword content → monitor.
+    const preFetched = new Map<string, string | null>([
+      ['fake/agent.ts', 'setInterval(checkHealth, 60000); metric.gauge("active", count);'],
+    ]);
+    const evidence = computeCodeEvidence({
+      kind: 'service',
+      linked_backend_services: [],
+      linked_agents: ['fake/agent.ts'],
+      preFetchedAgentContents: preFetched,
+    } as any);
+    expect(evidence.agent_roles?.detected).toContain('monitor');
+    expect(evidence.agent_roles?.files_inspected).toBe(1);
+  });
+
+  it('handles pre-fetched null entries (GitHub fetch failed) — falls back to filename-only', () => {
+    const preFetched = new Map<string, string | null>([
+      ['fake/leadMonitor.ts', null],  // fetch returned null
+    ]);
+    const evidence = computeCodeEvidence({
+      kind: 'service',
+      linked_backend_services: [],
+      linked_agents: ['fake/leadMonitor.ts'],
+      preFetchedAgentContents: preFetched,
+    } as any);
+    // Filename still classifies via tokenizer
+    expect(evidence.agent_roles?.detected).toContain('monitor');
+    // Not counted as inspected since content wasn't read
+    expect(evidence.agent_roles?.files_inspected).toBe(0);
+  });
+});

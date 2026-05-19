@@ -185,23 +185,46 @@ export function inferAgentRole(filename: string, content: string | null): AgentR
 }
 
 /**
- * Read an agent file with caching and return its inferred role. Cache
- * key is the path + 'role' suffix to keep separate from FileEvidence
- * entries.
+ * Read an agent file and return its inferred role. Two read paths:
+ *   1. preFetchedContents (optional) — when the caller (engine refresh)
+ *      has bulk-fetched contents via GitHub API. Used in production
+ *      where the dist-only container has no local source files.
+ *   2. Local filesystem — used in dev + tests.
+ *
+ * If neither source yields content, falls back to filename-only
+ * inference. `read` flag distinguishes "we actually inspected content"
+ * from "filename-only guess" so the caller can decide whether to
+ * trust the result (via files_inspected count).
  */
-function readAgentRole(relPath: string): { role: AgentRole; read: boolean } {
-  // Fast path: filename-only when we can't read content
+function readAgentRole(
+  relPath: string,
+  preFetchedContents?: ReadonlyMap<string, string | null>,
+): { role: AgentRole; read: boolean } {
   let content: string | null = null;
   let read = false;
-  try {
-    const abs = path.resolve(REPO_ROOT, relPath);
-    if (abs.startsWith(REPO_ROOT)) {
-      content = fs.readFileSync(abs, 'utf8');
+
+  // Path 1: pre-fetched contents (prod / async caller).
+  if (preFetchedContents && preFetchedContents.has(relPath)) {
+    const fetched = preFetchedContents.get(relPath);
+    if (typeof fetched === 'string') {
+      content = fetched;
       read = true;
     }
-  } catch {
-    // unreadable — fall through to filename-only inference
   }
+
+  // Path 2: local filesystem (dev / tests).
+  if (!read) {
+    try {
+      const abs = path.resolve(REPO_ROOT, relPath);
+      if (abs.startsWith(REPO_ROOT)) {
+        content = fs.readFileSync(abs, 'utf8');
+        read = true;
+      }
+    } catch {
+      // unreadable — fall through to filename-only inference
+    }
+  }
+
   const role = inferAgentRole(relPath, content);
   return { role, read };
 }
@@ -215,6 +238,14 @@ export function computeCodeEvidence(input: {
   kind?: string;
   linked_backend_services?: ReadonlyArray<string> | null;
   linked_agents?: ReadonlyArray<string> | null;
+  /**
+   * Optional map of agent-file path → content fetched by the caller
+   * (e.g., engine refresh in prod uses GitHub API). When provided,
+   * readAgentRole consults this map first before falling back to the
+   * local filesystem. Lets role detection work in dist-only
+   * containers where the source filesystem isn't present.
+   */
+  preFetchedAgentContents?: ReadonlyMap<string, string | null>;
 }): CodeEvidence {
   const backendFiles = (input.linked_backend_services || [])
     .filter(isSupportedSource)
@@ -272,7 +303,7 @@ export function computeCodeEvidence(input: {
   const detectedRoles = new Set<AgentRole>();
   let filesInspected = 0;
   for (const f of agentFiles) {
-    const { role, read } = readAgentRole(f);
+    const { role, read } = readAgentRole(f, input.preFetchedAgentContents);
     if (read) filesInspected++;
     detectedRoles.add(role);
   }

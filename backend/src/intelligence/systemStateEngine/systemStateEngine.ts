@@ -1247,6 +1247,45 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
     console.warn(`[Engine] frontend_route validation skipped: ${err?.message}`);
   }
 
+  // Pre-fetch agent file contents (2026-05-19, Tier-3 #9). The prod
+  // container is built from compiled dist/ and has no source files —
+  // codeEvidence.readAgentRole's local-fs path returns nothing there,
+  // so role classification falls back to filename-only inference.
+  // Bulk-fetch unique agent file paths via GitHub API, build a content
+  // map, and pass it to computeCodeEvidence. Bounded by the union of
+  // each cap's first 5 agent files — typically ~100-300 unique paths.
+  //
+  // Skipped on errors / no enrollment — falls back to filename-only
+  // (still better than nothing; tokenizer catches operator-named
+  // intent like "leadMonitor.ts" without reading content).
+  const preFetchedAgentContents = new Map<string, string | null>();
+  try {
+    const enrollmentIdForAgents = (project as any).enrollment_id as string | undefined;
+    if (enrollmentIdForAgents) {
+      const { readFileFromRepo } = await import('../../services/githubService');
+      const uniqueAgentPaths = new Set<string>();
+      for (const c of caps as any[]) {
+        const agents = (c.linked_agents || []) as string[];
+        for (const a of agents.slice(0, 5)) {
+          if (/\.(ts|tsx|js|jsx)$/.test(a)) uniqueAgentPaths.add(a);
+        }
+      }
+      if (uniqueAgentPaths.size > 0) {
+        const paths = [...uniqueAgentPaths];
+        const contents = await Promise.all(
+          paths.map(p => readFileFromRepo(enrollmentIdForAgents, p).catch(() => null)),
+        );
+        for (let i = 0; i < paths.length; i++) {
+          preFetchedAgentContents.set(paths[i], contents[i]);
+        }
+        const hits = contents.filter(c => c !== null).length;
+        console.log(`[Engine] Pre-fetched ${hits}/${paths.length} agent files via GitHub API for role classification`);
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[Engine] agent-file pre-fetch skipped: ${err?.message}`);
+  }
+
   const capabilities: EngineCapabilityInput[] = caps.map(cap => {
     const c = cap as any;
     const counts = reqsByCap.get(c.id) || { total: 0, matched: 0, verified: 0, operator_unmatched: 0 };
@@ -1303,6 +1342,7 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
             kind: (c as any).kind,
             linked_backend_services: c.linked_backend_services,
             linked_agents: c.linked_agents,
+            preFetchedAgentContents,  // wired Tier-3 #9
           });
           return {
             reliability_signal: ev.reliability_signal,
