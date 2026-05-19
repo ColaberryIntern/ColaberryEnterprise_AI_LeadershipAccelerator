@@ -28,6 +28,11 @@ export interface SnapshotPayload {
   blocking_issues: ContradictionFlag[];
   authoritative_queue: any[];        // typed AuthoritativeTask[] but JSONB-stored as plain object
   state_graph: any;                  // typed StateGraph
+  accounting: {                      // honest scoring accounting (Phase B, 2026-05-19)
+    operator_bounded_count: number;
+    system_actionable_count: number;
+    fully_built_count: number;
+  } | null;
 }
 
 export function buildSnapshot(state: AuthoritativeSystemState): SnapshotPayload {
@@ -51,6 +56,7 @@ export function buildSnapshot(state: AuthoritativeSystemState): SnapshotPayload 
     blocking_issues: blockingIssues,
     authoritative_queue: state.queue.map(t => ({ ...t })),
     state_graph: { nodes: [...state.graph.nodes], edges: [...state.graph.edges] },
+    accounting: state.scores.accounting ? { ...state.scores.accounting } : null,
   };
 }
 

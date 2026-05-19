@@ -46,6 +46,16 @@ interface SystemStateSnapshotAttributes {
   authoritative_queue: AuthoritativeTask[];
   state_graph: StateGraph;
 
+  // Score accounting: split of how the score gap breaks down between
+  // operator-bounded caps and system-actionable caps. Added 2026-05-19.
+  // Nullable so older snapshots written before this column was added
+  // still load cleanly.
+  accounting?: {
+    operator_bounded_count: number;
+    system_actionable_count: number;
+    fully_built_count: number;
+  } | null;
+
   created_at?: Date;
 }
 
@@ -72,6 +82,7 @@ class SystemStateSnapshot extends Model<SystemStateSnapshotAttributes> implement
   declare blocking_issues: ContradictionFlag[];
   declare authoritative_queue: AuthoritativeTask[];
   declare state_graph: StateGraph;
+  declare accounting: { operator_bounded_count: number; system_actionable_count: number; fully_built_count: number } | null;
 
   declare created_at: Date;
 }
@@ -100,6 +111,7 @@ SystemStateSnapshot.init(
     blocking_issues: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     authoritative_queue: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     state_graph: { type: DataTypes.JSONB, allowNull: false, defaultValue: { nodes: [], edges: [] } },
+    accounting: { type: DataTypes.JSONB, allowNull: true },
 
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   },

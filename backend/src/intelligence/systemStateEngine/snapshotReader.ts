@@ -60,6 +60,9 @@ export async function getLatestSystemSnapshot(projectId: string): Promise<Snapsh
       intelligence: r.intelligence_score,
       observability: r.observability_score,
       per_capability: [],   // not denormalized — would need separate column
+      // accounting was added 2026-05-19. Older snapshots have it as null;
+      // newer ones include the operator_bounded vs system_actionable split.
+      accounting: r.accounting || undefined,
     },
     queue: r.authoritative_queue || [],
     contradictions: r.contradiction_flags || [],
