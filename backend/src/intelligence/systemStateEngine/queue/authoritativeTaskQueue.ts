@@ -156,15 +156,34 @@ function generateCapTasks(
   // automation|orchestration|management|framework|parser to cover the
   // residual backend-infra patterns surfaced by the top-50 review.
   const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry|integration|composer|generation|optimization|estimator|planner|mapping|definition|tracking|reporting|automation|orchestration|framework|parser|handling|composer)$/i.test(cap.name || '');
+
+  // Positive frontend signal: explicit route declaration OR existing UI
+  // components. Either is operator-declared "this cap wants a UI" intent.
+  const hasUserSurface = !!cap.frontend_route || (cap.linked_frontend_components || []).length > 0;
+
+  // Brownfield-only caps with no UI signal: these were discovered by the
+  // code scanner from backend file patterns. If they were user-facing,
+  // either a frontend route would be declared or components would already
+  // exist. Without either, treat them as internal backend services —
+  // operators interact with them through other dashboards. Surfaced
+  // 2026-05-18 audit by caps like Query / Verification / Lead Scoring /
+  // Discovery / Execution Planning / Runtime Threat Monitoring whose
+  // descriptions explicitly call them backend services.
+  const isBrownfieldOnlyWithoutUISignal =
+    cap.source === 'brownfield_discovered' && !hasUserSurface;
+
   // add_frontend gating:
-  //   kind=service, non-internal-named → fire (existing user-facing feature)
-  //   kind=service, internal-named → skip (backend infra; admin dashboards
-  //     are separate caps with their own user-facing names)
-  //   kind=agent → skip (agents are consumed by governance/ops dashboards,
-  //     which exist as separate caps)
-  //   kind=component → skip (handled by parent kind exclusion)
+  //   kind=service, non-internal-named, NOT brownfield-without-UI-signal → fire
+  //   kind=service, internal-named → skip (backend infra)
+  //   kind=service, brownfield-discovered without UI signal → skip (backend infra)
+  //   kind=agent → skip (consumed by governance/ops dashboards)
+  //   kind=component → skip (handled by kind exclusion)
   //   kind=page → skip via is_page_bp
-  const frontendAddEligible = kind === 'service' && !looksInternal && !cap.is_page_bp;
+  const frontendAddEligible =
+    kind === 'service' &&
+    !looksInternal &&
+    !cap.is_page_bp &&
+    !isBrownfieldOnlyWithoutUISignal;
 
   // Backend gap. Skip for Page BPs — pages are frontend routes with no
   // backend layer to "build" (Not Found Page, Pricing Page, etc.).

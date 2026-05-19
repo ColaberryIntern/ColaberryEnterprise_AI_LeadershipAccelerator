@@ -287,6 +287,62 @@ describe('authoritativeTaskQueue — internal-service heuristic (no UI for backe
   });
 });
 
+describe('authoritativeTaskQueue — brownfield-without-UI-signal heuristic (2026-05-18 audit)', () => {
+  test('brownfield-discovered service with no frontend signal does NOT get add_frontend', () => {
+    // E.g., "Query" / "Verification" / "Lead Scoring" caps that the code
+    // scanner discovered but have no UI intent declared.
+    const cap = makeCap({
+      id: 'bf-1', name: 'Query',  // single-word, doesn't match suffix heuristic
+      kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['backend/src/services/queryService.ts'],
+      // no frontend_route, no linked_frontend_components
+    } as any);
+    const score = makeScore('bf-1');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap], capability_scores: [score],
+    });
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(0);
+  });
+
+  test('brownfield-discovered service WITH frontend_route DOES get add_frontend (operator declared intent)', () => {
+    const cap = makeCap({
+      id: 'bf-2', name: 'Query Dashboard',
+      kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['backend/src/services/queryService.ts'],
+      frontend_route: '/admin/query',
+    } as any);
+    const score = makeScore('bf-2');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap], capability_scores: [score],
+    });
+    // frontend_route satisfies hasFrontend → no gap → no task. Important
+    // contract: the heuristic doesn't suppress caps that have declared UI intent.
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(0);
+  });
+
+  test('parsed-from-requirements service still gets add_frontend (came from operator-written spec)', () => {
+    // Caps with source='parsed' came from the requirements doc — they
+    // represent explicit operator intent. Don't suppress them with the
+    // brownfield heuristic.
+    const cap = makeCap({
+      id: 'pa-1', name: 'Some Feature',
+      kind: 'service',
+      source: 'parsed',
+      linked_backend_services: ['backend/src/services/someFeature.ts'],
+    } as any);
+    const score = makeScore('pa-1');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap], capability_scores: [score],
+    });
+    expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(1);
+  });
+});
+
 describe('authoritativeTaskQueue — implement_reqs uses operator_unmatched_requirements (2026-05-18)', () => {
   test('implement_reqs uses operator_unmatched_requirements when provided', () => {
     const cap = makeCap({
