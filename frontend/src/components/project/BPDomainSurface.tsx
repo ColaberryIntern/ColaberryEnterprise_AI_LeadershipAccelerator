@@ -242,16 +242,23 @@ const BPDomainSurface: React.FC = () => {
         <div style={{ fontSize: 13, color: 'var(--color-text-light)', lineHeight: 1.6, maxWidth: 720 }}>
           {buckets.length} operational domain{buckets.length === 1 ? '' : 's'} ·{' '}
           <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{processes.length}</strong> business processes ·{' '}
-          {/* Prefer project-wide req count from unified-state so this surface
-              agrees with Cory Home + Critique + Blueprint. Falls back to
-              per-BP sum (which understates because not every req has a
-              capability_id link). Sync fix added 2026-05-19 after operator
-              caught 0/71 vs Cory Home's 240/270. */}
-          <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>
-            {unifiedState?.coverage?.requirements_matched ?? overall.matched}
-            {' of '}
-            {unifiedState?.coverage?.requirements_total ?? overall.total}
-          </strong>{' '}requirements matched
+          {/* Always show the project-wide req count from unified-state so this
+              surface agrees with Cory Home + Critique + Blueprint. Falling back
+              to the per-BP sum produced "0 of 71" on initial render because
+              most reqs don't have capability_id links — misleading flash that
+              the operator caught 2026-05-19. Now shows "—" while loading
+              instead of the misleading fallback. */}
+          {unifiedState?.coverage ? (
+            <>
+              <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>
+                {unifiedState.coverage.requirements_matched}
+                {' of '}
+                {unifiedState.coverage.requirements_total}
+              </strong>{' '}requirements matched
+            </>
+          ) : (
+            <em style={{ color: 'var(--color-text-light)' }}>loading coverage…</em>
+          )}
         </div>
         {/* Phase C surgical reasoning hint — one trailing sentence framing
             what domains and BPs are, for first-time operators. Visible
