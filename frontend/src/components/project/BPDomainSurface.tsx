@@ -242,7 +242,16 @@ const BPDomainSurface: React.FC = () => {
         <div style={{ fontSize: 13, color: 'var(--color-text-light)', lineHeight: 1.6, maxWidth: 720 }}>
           {buckets.length} operational domain{buckets.length === 1 ? '' : 's'} ·{' '}
           <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{processes.length}</strong> business processes ·{' '}
-          <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{overall.matched} of {overall.total}</strong> requirements matched
+          {/* Prefer project-wide req count from unified-state so this surface
+              agrees with Cory Home + Critique + Blueprint. Falls back to
+              per-BP sum (which understates because not every req has a
+              capability_id link). Sync fix added 2026-05-19 after operator
+              caught 0/71 vs Cory Home's 240/270. */}
+          <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>
+            {unifiedState?.coverage?.requirements_matched ?? overall.matched}
+            {' of '}
+            {unifiedState?.coverage?.requirements_total ?? overall.total}
+          </strong>{' '}requirements matched
         </div>
         {/* Phase C surgical reasoning hint — one trailing sentence framing
             what domains and BPs are, for first-time operators. Visible

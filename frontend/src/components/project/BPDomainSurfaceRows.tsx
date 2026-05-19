@@ -348,8 +348,29 @@ export const BPLine: React.FC<{
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
   const usable = bp.usability?.usable === true;
-  const word = usable ? 'Usable' : pct >= 50 ? 'Forming' : pct > 0 ? 'Early' : 'Not built yet';
-  const wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
+  // Page-aware labeling (2026-05-19). For a Page BP the detection IS the
+  // evidence — if the brownfield scanner found it, the page exists. Telling
+  // the operator "Not built yet" is contradictory and pushed real built
+  // pages into a build queue that wasn't appropriate. Pages get
+  // "Built · awaits review" / "Built" instead of the legacy harsh labels.
+  const isPage = !!(bp as any).is_page_bp
+    || (bp as any).source === 'frontend_page'
+    || /\s(landing\s)?page$/i.test((bp as any).name || '');
+  const pageHasFrontend = isPage && (
+    !!(bp as any).frontend_route
+    || ((bp as any).usability?.frontend && (bp as any).usability.frontend !== 'missing')
+  );
+
+  let word: string;
+  let wordColor: string;
+  if (pageHasFrontend) {
+    // Page is built; remaining work (if any) is operator-judgment review.
+    if (usable) { word = 'Built'; wordColor = '#15803d'; }
+    else { word = 'Built · awaits review'; wordColor = '#1d4ed8'; }
+  } else {
+    word = usable ? 'Usable' : pct >= 50 ? 'Forming' : pct > 0 ? 'Early' : 'Not built yet';
+    wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
+  }
   const accentBorderLeft = inheritedAccent === 'priority'
     ? '3px solid var(--color-primary)'
     : inheritedAccent === 'downstream'
