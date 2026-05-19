@@ -719,17 +719,34 @@ export function buildAuthoritativeStateFromInputs(input: PureBuildInput): Author
  * readiness, health, and agent_stack thresholds) and produce
  * misleading queue decisions.
  *
- * Skipped entirely when the file tree is empty (e.g., no GitHub
- * connection): we can't validate without ground truth, and wiping
- * everything would falsely zero out every cap.
+ * Safety nets (added after first prod measurement surfaced a
+ * file-tree-mismatch bug):
+ *   1. Empty file tree → no-op (no ground truth)
+ *   2. Tiny file tree (< MIN_TREE_SIZE) → no-op (likely a partial
+ *      fetch or wrong-repo connection)
+ *   3. > MAX_PRUNE_RATIO of refs would be wiped → abort (the tree
+ *      probably represents a DIFFERENT repo than the one the caps
+ *      were discovered from; trust the cap data over a suspicious
+ *      tree). Logs a warning so the operator can investigate the
+ *      GitHub connection.
  *
  * Pruning is in-memory only — the DB rows stay untouched. The engine
  * refresh re-prunes every cycle; persistence is intentionally NOT a
- * side effect of scoring. If we ever want a durable cleanup, a
- * separate write-side script can apply the same logic.
+ * side effect of scoring.
  *
  * Exported for unit tests.
  */
+const PRUNE_MIN_TREE_SIZE = 100;
+const PRUNE_MAX_RATIO = 0.5;  // abort if pruning would wipe > 50% of refs
+
+export interface PruneSummary {
+  readonly totalPruned: number;
+  readonly fileTreeSize: number;
+  readonly capsWithStaleRefs: number;
+  readonly aborted: boolean;
+  readonly abortReason?: string;
+}
+
 export function pruneCapLinkedFiles(
   caps: ReadonlyArray<{
     linked_backend_services?: string[] | null;
@@ -737,11 +754,40 @@ export function pruneCapLinkedFiles(
     linked_agents?: string[] | null;
   }>,
   repoFileTree: ReadonlyArray<string>,
-): { totalPruned: number; fileTreeSize: number; capsWithStaleRefs: number } {
+): PruneSummary {
   const fileTreeSet = new Set(repoFileTree);
   if (fileTreeSet.size === 0) {
-    return { totalPruned: 0, fileTreeSize: 0, capsWithStaleRefs: 0 };
+    return { totalPruned: 0, fileTreeSize: 0, capsWithStaleRefs: 0, aborted: true, abortReason: 'empty file tree' };
   }
+  if (fileTreeSet.size < PRUNE_MIN_TREE_SIZE) {
+    return { totalPruned: 0, fileTreeSize: fileTreeSet.size, capsWithStaleRefs: 0, aborted: true, abortReason: `tree size ${fileTreeSet.size} below min ${PRUNE_MIN_TREE_SIZE} (likely partial fetch)` };
+  }
+
+  // Dry-run first: count what WOULD be pruned, abort if the ratio
+  // suggests the tree represents a different repo.
+  let dryTotal = 0;
+  let dryStale = 0;
+  for (const cap of caps) {
+    const all = [
+      ...(cap.linked_backend_services || []),
+      ...(cap.linked_frontend_components || []),
+      ...(cap.linked_agents || []),
+    ];
+    dryTotal += all.length;
+    for (const f of all) if (!fileTreeSet.has(f)) dryStale++;
+  }
+  if (dryTotal > 0 && dryStale / dryTotal > PRUNE_MAX_RATIO) {
+    const pct = Math.round((dryStale / dryTotal) * 100);
+    return {
+      totalPruned: 0,
+      fileTreeSize: fileTreeSet.size,
+      capsWithStaleRefs: 0,
+      aborted: true,
+      abortReason: `would prune ${pct}% of refs (${dryStale}/${dryTotal}) — file tree probably represents a different repo`,
+    };
+  }
+
+  // Real pass: mutate the caps.
   let totalPruned = 0;
   let capsWithStaleRefs = 0;
   const pruneList = (files: string[] | null | undefined): { kept: string[]; dropped: number } => {
@@ -760,7 +806,7 @@ export function pruneCapLinkedFiles(
     if (droppedHere > 0) capsWithStaleRefs++;
     totalPruned += droppedHere;
   }
-  return { totalPruned, fileTreeSize: fileTreeSet.size, capsWithStaleRefs };
+  return { totalPruned, fileTreeSize: fileTreeSet.size, capsWithStaleRefs, aborted: false };
 }
 
 export interface BuildOptions {
@@ -1072,10 +1118,12 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
 
   // Linked-file validation (2026-05-19, Tier-1 #3): prune stale file
   // references from caps' linked_* arrays. See pruneCapLinkedFiles for
-  // the full rationale.
+  // the full rationale + safety nets.
   const pruneSummary = pruneCapLinkedFiles(caps, repoFileTree);
-  if (pruneSummary.totalPruned > 0) {
-    console.log(`[Engine] Pruned ${pruneSummary.totalPruned} stale file refs from cap linked_* arrays (validated against current repo file tree, ${pruneSummary.fileTreeSize} files)`);
+  if (pruneSummary.aborted) {
+    console.warn(`[Engine] Linked-file pruning ABORTED: ${pruneSummary.abortReason}`);
+  } else if (pruneSummary.totalPruned > 0) {
+    console.log(`[Engine] Pruned ${pruneSummary.totalPruned} stale file refs from ${pruneSummary.capsWithStaleRefs} caps (file tree: ${pruneSummary.fileTreeSize} files)`);
   }
 
   const capabilities: EngineCapabilityInput[] = caps.map(cap => {
