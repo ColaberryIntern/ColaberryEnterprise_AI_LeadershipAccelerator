@@ -39,6 +39,47 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### 2nd 10-priority walk — page-kind derivation bug + determinism actionability gate (2026-05-19)
+Operator request: *"let's move through 10 more starting with top priority"* — re-walked the top 10 after yesterday's evidence-scoring sprint dropped the queue from 167 → 88. The walk surfaced two more systemic bugs hiding behind the now-cleaner queue.
+
+**Walk results — top 10:**
+
+| # | Priority | Cap | Verdict |
+| --- | --- | --- | --- |
+| 1 | Improve determinism for Query | service (1 backend / 2 agents) | False positive — intelligence-layer by design |
+| 2 | Improve ux exposure for Analytics | service (1 be / 1 ag / 3 fe, no route) | Borderline — link a route or accept |
+| 3 | Improve determinism for Verification | service (1 be / 4 ag) | False positive — intelligence-layer |
+| 4 | Improve determinism for Accelerator Management | **page** (treated as service) | False positive — kind-derivation bug |
+| 5 | Improve determinism for Verification Framework | service (1 be / 4 ag) | False positive — intelligence-layer |
+| 6 | Improve determinism for Apollo Management | **page** | False positive — kind-derivation bug |
+| 7 | Improve determinism for Campaigns Management | **page** | False positive — kind-derivation bug |
+| 8 | Improve determinism for Communications Management | **page** | False positive — kind-derivation bug |
+| 9 | Improve determinism for Funnel Management | **page** | False positive — kind-derivation bug |
+| 10 | Improve determinism for Generator Management | **page** | False positive — kind-derivation bug |
+
+**9 of 10 false positives, two distinct root causes — both fixed:**
+
+**Bug 1: Kind-derivation gap.** [systemStateEngine.ts:1037](backend/src/intelligence/systemStateEngine/systemStateEngine.ts#L1037) was reading `c.kind` only and defaulting to `'service'` when the DB column was null. Meanwhile `is_page_bp` on line 1036 correctly derived page-ness from a 3-signal chain (`kind || source==='frontend_page' || name endsWith ' Page'`). Result: 6 page caps had `is_page_bp=true` AND `kind='service'` simultaneously — and the healthScorer keyed off `kind`, scoring them on backend-only dimensions (determinism, automation). Fix: `kind` now mirrors the same 3-signal chain.
+
+**Bug 2: Determinism dimension was always actionable.** Even on real service caps, the "add rule-based fallbacks where the agent currently makes the call" suggestion misses the point when agents structurally OUTNUMBER backend files — those caps exist specifically to leverage LLMs. Added an actionability gate in [authoritativeTaskQueue.ts:379](backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts#L379): determinism is only an actionable optimization when `backendCount > 0 AND agentCount <= backendCount`. Intelligence-layer caps (Query, Verification, Verification Framework — each 1 backend / 4-5 agents) no longer surface as "improve determinism."
+
+**Production verification** (post-deploy, fresh refresh):
+
+| Metric | After 1st sprint | After 2nd-walk fixes |
+| --- | ---: | ---: |
+| Total queue length | 88 | **67** (-24%) |
+| `improve determinism for X` tasks | 21 | **0** |
+| Optimization tasks total | 33 | 12 |
+| All 6 former page-cap offenders | 6 wrong (optimization) | 0 wrong, 6 correctly in ui_review |
+| All 3 intelligence-layer caps | 3 wrong | 0 wrong |
+
+The new top of queue: 4 "improve ux exposure" (caps with components but no explicit `frontend_route` — borderline real signal worth investigating) + 8 "improve health" (the older heuristic optimization generator, fires when coverage>60 + health<60 + PROGRESS mentions). The "improve determinism" cluster is fully gone.
+
+  - Date: 2026-05-19
+  - What changed: 2 modified (systemStateEngine.ts kind derivation, authoritativeTaskQueue.ts determinism actionability gate), 1 new test file (determinismGate.test.ts, 4 tests covering both gates)
+  - Verification: 4 new tests pass, 42 engine integration tests still green, evidence suite (12) still green, `npx tsc --noEmit` clean. Deployed commit 54d02ae. Production state confirms 0 "improve determinism" and all 6 former page-cap offenders flipped from optimization to ui_review correctly.
+  - Notes: The pattern that's emerging across two walks: every time we kill one false-positive cluster, the next layer of false positives surfaces. Yesterday: reliability + automation (90% noise). Today: determinism (page-kind + intelligence-layer noise). Tomorrow's candidate from this walk: "improve ux exposure" (4 caps at top — Analytics, Validation, System Health Monitoring, Autonomous Decision Making — none of which are obviously user-facing). The deeper systemic fix is *not* per-dimension gating — it's making the optimization generator require positive evidence the suggestion is actionable, not just absence of evidence that it isn't. But each gate ships in days and removes ~half the next noise tier, so the iteration is paying off.
+
 ### Evidence-based health scoring — closes the 90% false-positive sprint (2026-05-19)
 Directly resolves the deferred follow-up flagged in the 10-priority walkthrough below. The walk surfaced that the gap-driven generator was 90% noise because `healthScorer.ts` counted *files*, not actual code signals. A pure-function service with 1 file got `reliability=15` and was flagged for hardening. A CRUD admin controller with 0 agents got `automation=0` and was flagged for an agent. Wrong on both counts.
 
