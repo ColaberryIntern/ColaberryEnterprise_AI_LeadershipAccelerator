@@ -45,6 +45,16 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 - [x] `backend/src/scripts/uploadDetroitTask1Matrix.js` (new) — orchestrator that (1) creates or reuses the `AI Drafts` sub-folder under the Detroit proposal folder, (2) uploads the matrix Markdown + XLSX (skipping if already present by filename), (3) finds Task #1 in the bid To-Do List by content match, (4) posts (or PUT-updates) an explanatory comment with a stable `<!-- ai-task-1-matrix-v1 -->` signature for idempotency. Pattern reusable for the remaining 4 AI-eligible tasks (Att B, Att F, capability statement, executive summary).
   - Date: 2026-05-19
   - Verification: ran successfully; folder, both uploads, and comment all created on first try (URLs in script output).
+- [x] **Tasks #4, #6, #9, #12 — remaining AI-assigned bid drafts shipped.** Produced first drafts for all 4 CB-System-assigned tasks in the formats best suited to each artifact: Attachment B (DOCX, ~3 pages, mirrors Detroit's Att B section structure verbatim, every section cross-references requirements-matrix IDs); Attachment F (filled vendor responses in Detroit's original xlsx — 46 security items: 39 C + 7 A + 0 N, 30 cloud prompts: all written responses); Capability Statement (1-page PDF in SBA format with header band, contact bar, 5 sections, [VINAY-VERIFY] placeholders for company-data fields); Executive Summary (DOCX, 1.5 pages, ~600 words, 7 sections designed for a 3-minute first read).
+  - Date: 2026-05-19
+  - Verification: all 4 generator scripts ran successfully; all 4 outputs uploaded to Basecamp AI Drafts sub-folder (uploads 9908833802, 9908833817, 9908833856, 9908833874); each task received an explanatory comment; one consolidated Message Board status update posted (id 9908833966) summarizing all 5 AI drafts with cross-links so anyone with project access can reconstruct full state from MB + List + Todos alone.
+  - Open: 3 [VINAY-VERIFY] items in Att F (BAA, SOC 2 status, ISO statement); 3 past-performance refs + 6 corporate-data fields in capability statement; Ali sign-off on 7 default judgments encoded in Att B (firm-for 180 days, SPOC = Ali, Design House as named sub, per-population scale-up pricing, multi-municipality resale revenue framing, no Detroit-resident sub for Equalization, TBD Att E redlines).
+- [x] `tmp/gov-bids/.../ai-drafts/generate-attF.js` + `generate-attB.js` + `generate-capability-statement.js` + `generate-exec-summary.js` (new, 4 scripts) — deterministic per-artifact generators using `xlsx`, `docx`, and `pdfkit` packages. Each runs in <1 sec, output overwrites the same filename, edit script header to update default judgments and regenerate.
+  - Date: 2026-05-19
+  - Verification: all 4 produced expected output sizes (Att F xlsx with 76 filled cells, Att B 14.7 KB DOCX with 70 blocks, capability PDF 6.3 KB single page, exec summary 10.8 KB DOCX)
+- [x] `backend/src/scripts/uploadDetroitAiDraftsBatch.js` (new) — batch orchestrator that uploads all 4 remaining drafts to the AI Drafts sub-folder, posts (or PUT-updates) an explanatory comment on each corresponding Basecamp task, and posts (or PUT-updates) a consolidated Message Board status message designed so a person granted project access can reconstruct the full bid state from MB + List + Todos alone (per Ali's explicit instruction). Idempotent via stable HTML-comment signatures.
+  - Date: 2026-05-19
+  - Verification: ran successfully; 4 uploads + 4 task comments + 1 MB message all created on first try
 
 ### Claude Code Architecture Remediation — Waves 1-4 (2026-05-19)
 Per Ram's request, audited the repo against [Anthropic's Claude Code best-practices article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start). Initial score: ~35/100. Executed top 5 + small cleanups; new score: ~70/100. Zero production code touched — config only. Full reports at `docs/CLAUDE_CODE_ARCHITECTURE_AUDIT.md` (the audit) and `docs/CLAUDE_CODE_REMEDIATION_REVIEW.html` (interactive review with verdicts + compile button per the screenshot-review skill pattern).
@@ -127,6 +137,36 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
 - [x] `backend/src/scripts/sendVisitorTrackerInstallEmails.js` — Mandrill SMTP send loop, 4 install emails to the per-site owners (Ali for advisor; Tejesh for colaberry.ai; Ram + Tejesh CC for trustbeforeintelligence.ai and worldoftaxonomy.com). Per Ali's explicit instruction, the body tells recipients (most of whom use Claude Code for installs) to paste back the literal `[colaberry-track]`-prefixed console error, the non-200/204 HTTP status with response body, or any Claude Code terminal error verbatim if installation fails. No paraphrasing. No em-dashes (outside-comms rule).
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
+
+### Agent role classification (2026-05-19, Tier-2 #4)
+Pattern-based role detection layered on top of the count-based agent_stack gate. The previous gate was `< 3 agents` — a crude proxy for "stack complete." Operators with 1 monitor + 1 alert agent had a complete stack but the system kept proposing more. Operators with 2 core workers had no monitoring but the system stopped at 3.
+
+**Role taxonomy** — 4 mutually-exclusive roles inferred from agent file name + contents:
+- `monitor` — `monitor|watcher|observer|healthcheck|heartbeat|telemetry` keywords OR setInterval+metrics in content
+- `alert` — `alert|notify|notification|pager|escalator|warn` keywords OR sendAlert/pagerduty in content
+- `follow_up` — `followup|reminder|retry|nudge` keywords OR scheduleFollowUp/reminderEmail in content
+- `core` — default; the agent IS the work
+
+**Tokenizer handles camelCase.** "alertDispatcher.ts" → `['alert', 'dispatcher', 'ts']`. Word-boundary regex `\balert\b` doesn't match camelCase compounds because "tD" isn't a word boundary. Tokenizer fixes that.
+
+**New gate logic:**
+```
+if (haveRoleEvidence && hasMonitor && hasAlert) → suppress (stack complete)
+elif (!haveRoleEvidence && count >= AGENT_STACK_FLOOR) → suppress (count fallback)
+else → fire
+```
+
+**Description now lists present + missing roles** when role evidence is available:
+> "Has 1 agent (roles detected: monitor). Missing roles: alert, follow_up. Add agents to cover these roles."
+
+**Prod limitation (known):** `codeEvidence` reads from local filesystem, which doesn't exist in the dist-only prod container. Role evidence is null in prod → gate falls back to count-based (current behavior preserved; reasons line transparently says "no role evidence available"). Activating role detection in prod needs the same GitHub-API fetch treatment as readRegisteredRoutes — ~800 HTTP reads per cold refresh (141 caps × ~5 files, 1h cached). Deferred until needed.
+
+**11 new tests** (7 for `inferAgentRole` filename + content patterns, 4 for gate behavior). 48/48 across scoring + gate suites.
+
+  - Date: 2026-05-19
+  - What changed: codeEvidence.ts gains `inferAgentRole` + role aggregation. systemState.types.ts extends `code_evidence` with optional `agent_roles`. authoritativeTaskQueue.ts gate uses missing-roles when evidence available, count-based fallback otherwise. Commit 62c46338.
+  - Verification: 48/48 tests pass; tsc clean; prod deploy succeeded; queue unchanged (silent fallback to count gate confirms the intended degraded-mode behavior).
+  - Notes: Closes the count-as-proxy concern from Option B. Future: GitHub-API fetch in codeEvidence to activate role detection in prod when there's operator demand for it.
 
 ### Maturity-aware ranking within triage + agent_stack tiers (2026-05-19, Tier-2 #5)
 Within each tier, all tasks today had identical priority_score and scoring components — so ordering devolved to internal id sort. Result: brownfield caps with 38 backend files ranked the same as caps with 1 file. Operator saw "decide on Marketing Dashboard" (12 files) before "decide on Content Generation for Marketing" (41 files) with no signal that the larger one represented more accumulated work.
