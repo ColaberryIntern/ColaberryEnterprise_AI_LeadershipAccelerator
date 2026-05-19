@@ -55,11 +55,17 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
 
   // If the parent passes a new initialRoute (e.g., operator clicked a
   // different Cory priority), update the field and re-focus the button.
+  // Intentionally NOT depending on `route` here — including it would create
+  // a feedback loop where setting route from initialRoute re-triggers the
+  // effect. The production eslint config doesn't load react-hooks/exhaustive-deps,
+  // so we can't disable that rule via comment — instead the dependency
+  // narrowing is explicit by design.
   React.useEffect(() => {
     if (initialRoute && initialRoute !== route) {
       setRoute(initialRoute);
     }
-  }, [initialRoute]);  // eslint-disable-line react-hooks/exhaustive-deps
+    // Only re-run when initialRoute prop changes
+  }, [initialRoute]);
 
   // Auto-focus the "Open visual workspace" button when arriving via a
   // deep-link with a pre-filled route. One-click confirmation.
