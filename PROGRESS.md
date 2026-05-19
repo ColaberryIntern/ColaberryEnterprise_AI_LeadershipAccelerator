@@ -39,6 +39,34 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Stale-loop fix + brownfield-without-UI-signal heuristic — every queue item is now legitimate (2026-05-18)
+Operator screenshot showed Cory Home with REQ-122 ("Dynamic layout adjustments...") as Today's Priority — but REQ-122 was matched hours earlier. Stale loop. Operator framing: *"prove that by processing the next 50 request starting with current priority… I just don't want the user to experience stale treatment where they are stuck in these loops."*
+
+**Two fixes shipped:**
+
+1. **Stale NextAction cache** ([commit 26bf927](https://github.com/ColaberryIntern/accelerator/commit/26bf927)) — [nextActionService.ts:25-32](backend/src/services/nextAction/nextActionService.ts) returned cached pending actions for up to 1 hour without checking the underlying requirement's status. When the closer script (or any flow that doesn't call completeAction) flipped a req to matched, the pending NextAction record persisted and kept surfacing as the operator's "Today's Priority" for the full TTL. **Fix:** when a cached action exists, validate its `requirement_key` is still actionable. If the req is matched/verified, auto-complete the action in-place and fall through to generate a fresh one. One-shot DB cleanup cleared 2 stale actions (REQ-122, REQ-071). **3/3 new tests.**
+
+2. **Brownfield-without-UI-signal heuristic** ([commit b8cb40d](https://github.com/ColaberryIntern/accelerator/commit/b8cb40d)) — top-50 audit surfaced 8 caps getting "Add UI for X" despite being explicitly-described backend services in their own descriptions (Query, Verification, Lead Scoring, Lead Routing, Discovery, Execution Planning, Alert System, Runtime Threat Monitoring). All `source='brownfield_discovered'`, 0 linked_frontend_components, no frontend_route. AI-generated descriptions all started with backend verbs (*Facilitates / Handles / Calculates / Monitors / Orchestrates / Determines*). **Fix:** brownfield-discovered services without operator-declared UI intent (no frontend_route AND no linked_frontend_components) skip add_frontend. Parsed-from-requirements caps and brownfield-with-UI-signal caps unaffected. **3/3 new tests.** Pruned 13 more false positives.
+
+**Queue progression today:**
+
+| Stage | Total | Frontend false positives in top 50 | Cory's #1 priority |
+| --- | ---: | ---: | --- |
+| Session start | 163 | ~30 (Page-BP, etc.) | "Build backend services for Trust Badges Page" (nonsense) |
+| After Page-BP + linker waves | 161 | ~75 | "Build backend services for Visual Workspace" (UI component) |
+| After kind taxonomy | 105 | ~26 (single-word infra) | "Add UI for Webhook Integration" (backend service) |
+| After internal-service heuristic v2 | 92 | ~13 (vague brownfield-only) | "Add UI for Query" (backend service) |
+| After **stale-loop + brownfield-without-UI fixes** | **79** | **0** | "Run UI Advisor on Trust Badges Page" ✓ |
+
+**Final top-50 verdict: every item legitimate.** 50/50 are ui_review tasks for real Pages or Management caps — exactly the right ask for each cap. No stale loops. No false positives. The operator opens Cory Home and sees genuine work.
+
+**Total queue tests: 21/21 pass** (covers Page-BP, kind buckets, internal-service heuristic, brownfield-no-UI, autonomy-reqs filter, implement_reqs typing, stale-cache invalidation).
+
+  - Date: 2026-05-18
+  - What changed: 3 modified files + 1 new test file (24/24 across queue test files total). 2 prod DB UPDATEs (stale next_actions cleanup).
+  - Verification: 24/24 new+existing tests pass; tsc clean; both fixes deployed; refreshSystemState confirms queue at 79 tasks, Cory's #1 is a legitimate Page-level UI Advisor task; manual review of top 50 finds 0 false positives.
+  - Notes: This iteration captured the meta-insight cleanly: when the operator says "walk through N items," watch what happens at item #2. If it hits the same root cause as item #1, fix the source. The session went from "stale REQ-122 priority loop" → "audit top 50" → "found 2 systemic patterns" → "fixed in 30 minutes" → "queue is now genuinely operator-meaningful." Every false-positive class addressed today (Page-BP backend asks, kind-blind generators, autonomy-reqs in implement_reqs, brownfield-only UI asks, stale next_action cache) was a separate root cause. The pattern: each false-positive class hides the next one until removed. Total false-positive classes fixed today: 7. Total queue tests covering them: 21.
+
 ### Top-50 audit + 2 more systemic fixes — queue is now operator-meaningful (2026-05-18)
 Operator framed: *"prove your point by going through the next 50… one at a time with highest priority 1st and simulating a user going through it… the idea is to experience what the user would be going through and fix the issues long term so the user doesn't have to experience anything that's not part of their intended experience."*
 
