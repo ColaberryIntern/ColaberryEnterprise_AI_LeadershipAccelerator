@@ -39,6 +39,40 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Phantom-page fix: route-aware discovery + 404-elimination backfill (2026-05-19)
+Operator clicked the top ui_review priority ("Run UI Advisor on Trust Badges Page" → `/trust-badges`) and got a 404. Asked: *"how is it missing the actual page? Don't we have record of the URL within the project."*
+
+We had a `frontend_route` field on the cap, but the value was a *guess* — the discovery scanner had auto-created a "Trust Badges Page" cap from `src/components/TrustBadges.tsx`, inferring the route from the filename. `<TrustBadges>` is just an embedded section inside `HomePage`; it was never registered as a React Router path. Cross-referencing the 44 frontend_page caps against `frontend/src/App.tsx` + `frontend/src/routes/*.tsx` showed **24 caps with routes that don't exist in React Router**.
+
+Two failure shapes:
+- **13 pure phantoms**: components mistakenly classified as pages (TrustBadges, MayaAvatar, DreamBigSection, RoiHighlightSection, IndustryDemoCard, IndustryDemoGrid, InlineDemoPlayer, LiveDemoStrip, TemperatureBadge, CommunicationLogPanel, SeoHead, HomeLearningMediaSection, EmailPreview). Each is embedded inside another page, not a route on its own.
+- **10 wrong-format routes**: real pages where the cap stored a stale route format (e.g., `/enroll-cancel` when the registered route is `/enroll/cancel`; `/pilot-ai-team` vs `/pilot/ai-team`; `/exec-overview-thank-you` vs `/executive-overview/thank-you`; `/home` vs `/`; `/instructor` vs `/ai-architect/instructor`).
+
+Plus a second pass surfaced **8 brownfield page caps with no route attached** (Advisory Page, Agency Partner Page, AI Architect Landing Page, AI Workforce Designer Page, AIXcelerator Landing Page, Alumni Champion Page, Case Studies Page, Executive ROI Calculator Page) and **2 brownfield duplicates** of route-fixed caps.
+
+**Two changes:**
+
+1. **`discoverFrontendPages` is now route-aware** ([frontendPageDiscovery.ts:31](backend/src/services/frontendPageDiscovery.ts#L31)). New `readRegisteredRoutes(fileTree)` helper parses `App.tsx` + `routes/*.tsx` for `path="..."` declarations. The component-as-page heuristic paths (the ones that scan `src/components/*Page.tsx` and `src/components/{PascalCase}.tsx`) now require the inferred route to be registered. Permissive fallback when no route registry is found, so projects without React Router files behave as before. 7 new tests cover the gate.
+
+2. **`backfillPhantomPages.js`** ([backend/src/scripts/backfillPhantomPages.js](backend/src/scripts/backfillPhantomPages.js)) ran twice on prod:
+   - First pass: 10 routes fixed, 13 phantoms downgraded to `kind='component'` (`applicability_status='inactive'`, name stripped of "Page" suffix).
+   - Second pass: 8 brownfield routes attached, 2 duplicates deactivated.
+
+**Production state:**
+
+| Snapshot | Queue | Phantoms |
+| --- | ---: | ---: |
+| Before phantom fix | 55 | 24 |
+| After scanner change + 1st backfill | 42 | 0 |
+| After 2nd backfill (route binding + dedup) | **40** | **0** |
+
+Every top-10 priority now points at a route that exists in React Router. Operator clicking the top ui_review task gets the real page, not a 404.
+
+  - Date: 2026-05-19
+  - What changed: 1 modified ([frontendPageDiscovery.ts](backend/src/services/frontendPageDiscovery.ts)), 1 plumbing ([projectRoutes.ts](backend/src/routes/projectRoutes.ts)), 1 new test file (7 tests), 1 new backfill script. Commits f47e0cc + 5d768d6.
+  - Verification: 7 new scanner tests pass. Backfill ran cleanly in prod container — 21 caps updated, 0 errors, idempotent on re-run. Fresh engine refresh confirms 0 phantoms in queue. Top ui_review priority "Contact Page" → /contact (registered route).
+  - Notes: The systemic principle this enforces: a cap's `frontend_route` field is a CLAIM that must be VALIDATED against the actual router. The previous scanner trusted filename heuristics for both kind-classification AND route inference, which conflated "exists as a tsx file" with "is a page at /name-of-file." Future similar bugs are prevented by route-validating the cap's claim at write time. Operators who manually set a route via the existing `PUT /api/portal/project/business-processes/:id/frontend-route` endpoint already get validation against the repo's discovered routes — this fix brings the auto-discovery path to the same standard.
+
 ### 3rd/4th/5th walks: full noise-elimination sprint to stop condition (2026-05-19)
 Operator request: *"Fix and then keep going in cycles of 10 until you either run out of tasks or you fix all the issues. The goal is to eliminate the false positives and make sure the system can flow smooth and as functional as intended."*
 
