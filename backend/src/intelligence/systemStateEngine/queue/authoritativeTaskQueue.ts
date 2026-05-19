@@ -344,7 +344,7 @@ function generateCapTasks(
   // Phase C (2026-05-19): gap-driven task — for caps that aren't
   // operator-bounded but have a specific weak dimension, surface it as
   // an actionable task. Targets the dimension scoring lowest among the
-  // cap's applicable dimensions. Only fires when the cap is otherwise
+  // cap's actionable dimensions. Only fires when the cap is otherwise
   // built (has backend OR frontend) and isn't operator-bounded.
   // Total transparency principle: every score gap should have either
   // a task that would close it or a label saying "needs operator".
@@ -352,23 +352,52 @@ function generateCapTasks(
   const isOperatorBounded = !!score.operator_bounded;
   const hb = score.health_breakdown;
   if (isBuilt && !isOperatorBounded && hb && hb.applicable_dimensions.length > 0 && score.health < 70) {
-    // Find the lowest-scoring applicable dimension
-    const dimValues = hb.applicable_dimensions.map(d => ({
-      name: d,
-      value: (hb as any)[d] as number,
-    }));
+    // Per-dimension actionability gate. A dimension may APPLY to a cap's
+    // kind (so it counts in the average) but still not be actionable to
+    // ASK the operator to improve. ux_exposure for an internal-named
+    // service is a typical case: the dim applies (frontend isn't loaded),
+    // but "add UI to Lead Ingestion Controller" is wrong because that
+    // cap isn't meant to have its own UI.
+    const isDimActionable = (dim: string): boolean => {
+      switch (dim) {
+        case 'ux_exposure':
+          // Same gate as add_frontend: only suggest improving UX on caps
+          // that legitimately should have a UI (service, non-internal,
+          // non-page). Otherwise the suggestion repeats add_frontend's
+          // false positive in a different shape.
+          return frontendAddEligible;
+        case 'automation':
+          // Suggest adding agents only for service-kind caps (page/component
+          // never own their own agents; agent-kind already IS an agent).
+          return kind === 'service' && !looksInternal;
+        case 'determinism':
+        case 'reliability':
+        case 'observability':
+        case 'production_readiness':
+          // These apply broadly — any built cap can benefit from harder
+          // error handling, more logging, fuller deploy artifacts.
+          return true;
+        default:
+          return true;
+      }
+    };
+
+    // Find the lowest-scoring ACTIONABLE applicable dimension
+    const dimValues = hb.applicable_dimensions
+      .filter(d => isDimActionable(d))
+      .map(d => ({ name: d, value: (hb as any)[d] as number }));
     dimValues.sort((a, b) => a.value - b.value);
     const weakest = dimValues[0];
     if (weakest && weakest.value < 50) {
-      const dimLabels: Record<string, { title: string; ask: string }> = {
-        determinism:          { title: 'reduce LLM dependency',       ask: 'add rule-based fallbacks where the agent currently makes the call' },
-        reliability:          { title: 'harden error handling',       ask: 'add try/catch + retry + idempotency to the main path' },
-        observability:        { title: 'add observability',           ask: 'add structured logging + metrics + correlation IDs' },
-        ux_exposure:          { title: 'expose more UI',              ask: 'either link a frontend_route or add components' },
-        automation:           { title: 'add agent automation',        ask: 'either link an existing agent or add one' },
-        production_readiness: { title: 'tighten production readiness', ask: 'check deploy artifacts (Dockerfile, env, secrets) and any missing layers' },
+      const dimLabels: Record<string, { ask: string }> = {
+        determinism:          { ask: 'add rule-based fallbacks where the agent currently makes the call' },
+        reliability:          { ask: 'add try/catch + retry + idempotency to the main path' },
+        observability:        { ask: 'add structured logging + metrics + correlation IDs' },
+        ux_exposure:          { ask: 'either link a frontend_route or add components' },
+        automation:           { ask: 'either link an existing agent or add one' },
+        production_readiness: { ask: 'check deploy artifacts (Dockerfile, env, secrets) and any missing layers' },
       };
-      const label = dimLabels[weakest.name] || { title: weakest.name, ask: 'review the dimension and address gaps' };
+      const label = dimLabels[weakest.name] || { ask: 'review the dimension and address gaps' };
       tasks.push(makeTask({
         id: `${cap.id}:improve_${weakest.name}`,
         project_id: project.id,
@@ -384,7 +413,7 @@ function generateCapTasks(
         confidence_score: 75,
         execution_cost: 25,
         reasons: [
-          `${weakest.name} at ${weakest.value}/100 (weakest applicable dimension)`,
+          `${weakest.name} at ${weakest.value}/100 (weakest actionable dimension)`,
           `kind=${cap.kind || 'service'}`,
         ],
         cap, cap_score: score,
