@@ -855,6 +855,15 @@ export interface EngineCapabilityInput {
   readonly total_requirements: number;
   readonly matched_requirements: number;
   readonly verified_requirements: number;
+  /**
+   * Count of unmatched requirements EXCLUDING autonomy-engine-generated rows.
+   * The queue's implement_reqs task generator should use this, not the raw
+   * (total - matched) delta, because autonomy-generated requirements have
+   * their own tracking surface and showing them in both places confuses
+   * the operator. Added 2026-05-18 audit. May be undefined for older
+   * inputs; queue should default to 0 in that case.
+   */
+  readonly operator_unmatched_requirements?: number;
 }
 
 export interface EngineProjectInput {

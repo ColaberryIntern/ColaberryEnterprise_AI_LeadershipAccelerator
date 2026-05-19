@@ -258,4 +258,100 @@ describe('authoritativeTaskQueue — internal-service heuristic (no UI for backe
     });
     expect(tasks.filter(t => t.id.endsWith(':add_frontend'))).toHaveLength(1);
   });
+
+  test('extended internal suffixes (Integration, Composer, Optimization, etc.) all skip add_frontend', () => {
+    const internalNames = [
+      'Webhook Integration', 'Executive Narrative Composer', 'Cost Optimization',
+      'Impact Estimator', 'Action Planner', 'User Journey Mapping',
+      'Project Scope Definition', 'Visitor Analytics Tracking',
+      'Health Reporting', 'Verification Framework',
+      'Validation Parser', 'Dashboard Data Handling',
+      // Single-word names like "Automation" / "Orchestration" don't match
+      // the heuristic by design — too generic to definitively call internal.
+    ];
+    for (const name of internalNames) {
+      const cap = makeCap({
+        id: `int-${name.replace(/\s+/g, '-')}`, name, kind: 'service',
+        linked_backend_services: ['backend/src/services/x.ts'],
+      });
+      const score = makeScore(cap.id);
+      const { tasks } = buildAuthoritativeQueue({
+        project: { ...PROJECT, capabilities: [cap] },
+        capabilities: [cap], capability_scores: [score],
+      });
+      const frontendTasks = tasks.filter(t => t.id.endsWith(':add_frontend'));
+      if (frontendTasks.length !== 0) {
+        throw new Error(`Cap "${name}" unexpectedly got add_frontend task; should be suppressed by internal-service heuristic`);
+      }
+    }
+  });
+});
+
+describe('authoritativeTaskQueue — implement_reqs uses operator_unmatched_requirements (2026-05-18)', () => {
+  test('implement_reqs uses operator_unmatched_requirements when provided', () => {
+    const cap = makeCap({
+      id: 'feat-2', name: 'Lead Management', kind: 'service',
+      total_requirements: 5,
+      matched_requirements: 2,
+      operator_unmatched_requirements: 1, // 1 operator-unmatched, 2 are autonomy
+    } as any);
+    const score = makeScore('feat-2');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap], capability_scores: [score],
+    });
+    const implTasks = tasks.filter(t => t.id.endsWith(':implement_reqs'));
+    expect(implTasks).toHaveLength(1);
+    // Should say "1 unmatched" not "3 unmatched"
+    expect(implTasks[0].title).toBe('Implement 1 unmatched requirement for Lead Management');
+  });
+
+  test('implement_reqs suppressed entirely when all unmatched are autonomy-generated', () => {
+    const cap = makeCap({
+      id: 'feat-3', name: 'Lead Management', kind: 'service',
+      total_requirements: 3,
+      matched_requirements: 2,
+      operator_unmatched_requirements: 0, // 1 autonomy-only unmatched
+    } as any);
+    const score = makeScore('feat-3');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap], capability_scores: [score],
+    });
+    expect(tasks.filter(t => t.id.endsWith(':implement_reqs'))).toHaveLength(0);
+  });
+
+  test('implement_reqs falls back to total - matched when operator_unmatched_requirements is undefined', () => {
+    const cap = makeCap({
+      id: 'feat-4', name: 'Lead Management', kind: 'service',
+      total_requirements: 5,
+      matched_requirements: 2,
+      // operator_unmatched_requirements omitted (legacy input)
+    });
+    const score = makeScore('feat-4');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap], capability_scores: [score],
+    });
+    const implTasks = tasks.filter(t => t.id.endsWith(':implement_reqs'));
+    expect(implTasks).toHaveLength(1);
+    expect(implTasks[0].title).toContain('Implement 3 unmatched requirements');
+  });
+
+  test('implement_reqs for Page BP is typed frontend, not backend', () => {
+    const cap = makeCap({
+      id: 'page-4', name: 'Pricing Page', kind: 'page', is_page_bp: true,
+      total_requirements: 2,
+      matched_requirements: 0,
+      operator_unmatched_requirements: 2,
+    } as any);
+    const score = makeScore('page-4');
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [cap] },
+      capabilities: [cap], capability_scores: [score],
+    });
+    const implTasks = tasks.filter(t => t.id.endsWith(':implement_reqs'));
+    expect(implTasks).toHaveLength(1);
+    expect(implTasks[0].type).toBe('frontend');
+  });
 });

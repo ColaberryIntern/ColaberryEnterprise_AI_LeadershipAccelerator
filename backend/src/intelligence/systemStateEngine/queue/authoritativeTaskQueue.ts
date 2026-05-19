@@ -146,7 +146,16 @@ function generateCapTasks(
   // separate caps. Only fire add_frontend for these if they have
   // POSITIVE frontend evidence (frontend_route declared or some
   // linked_frontend_components already shipped).
-  const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry)$/i.test(cap.name || '');
+  // Internal-service suffixes — caps whose names end with any of these are
+  // backend infrastructure consumed by other surfaces (admin dashboards,
+  // ops monitors) and don't need their own UIs. Operators encountering
+  // "Add UI for Webhook Integration" / "Add UI for Executive Narrative
+  // Composer" are seeing a queue bug, not a real ask.
+  // Extended 2026-05-18 audit pass: added integration|composer|generation|
+  // optimization|estimator|planner|mapping|definition|tracking|reporting|
+  // automation|orchestration|management|framework|parser to cover the
+  // residual backend-infra patterns surfaced by the top-50 review.
+  const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry|integration|composer|generation|optimization|estimator|planner|mapping|definition|tracking|reporting|automation|orchestration|framework|parser|handling|composer)$/i.test(cap.name || '');
   // add_frontend gating:
   //   kind=service, non-internal-named → fire (existing user-facing feature)
   //   kind=service, internal-named → skip (backend infra; admin dashboards
@@ -214,17 +223,23 @@ function generateCapTasks(
     }));
   }
 
-  // Coverage gap (greenfield only — has requirements)
+  // Coverage gap (greenfield only — has operator-actionable requirements).
+  // Uses operator_unmatched_requirements (NOT total - matched) so that
+  // autonomy-engine-generated rows don't surface here — they have their
+  // own tracking surface and counting them twice confuses operators.
+  // Falls back to (total - matched) for older engine inputs.
+  // Task type follows cap kind: Page BPs get frontend work, services get
+  // backend work.
   if (cap.total_requirements > 0) {
-    const unmatched = cap.total_requirements - cap.matched_requirements;
+    const unmatched = cap.operator_unmatched_requirements ?? (cap.total_requirements - cap.matched_requirements);
     if (unmatched > 0) {
       tasks.push(makeTask({
         id: `${cap.id}:implement_reqs`,
         project_id: project.id,
         bp_id: cap.id,
-        title: `Implement ${unmatched} unmatched requirements for ${cap.name}`,
+        title: `Implement ${unmatched} unmatched requirement${unmatched === 1 ? '' : 's'} for ${cap.name}`,
         description: `${unmatched} of ${cap.total_requirements} requirements are not yet matched to code.`,
-        type: 'backend',
+        type: cap.is_page_bp ? 'frontend' : 'backend',
         priority_score: 75,
         blocking_score: 30,
         dependency_score: 60,
