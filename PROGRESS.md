@@ -32,6 +32,10 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 - [x] `backend/src/scripts/fixDetroitBidValueCorrection.js` (new, one-off) — the script that did (3) and (4) above. Reusable as a template for similar "fix a wrong field on a posted bid" corrections.
   - Date: 2026-05-19
   - Verification: ran successfully; both kickoff edit and correction post returned 200
+- [x] `backend/src/scripts/assignDetroitBidTasks.js` (new) — assigned all 14 tasks in the Detroit bid list to the right owners per Ali's framework: CB System (AI-handled), Vinay (Colaberry company info + forms), Design House (production-quality engineering build), Ali (strategic + sign-off + unknowns). Multi-assignee tasks for draft+review patterns. PUT-updates each todo with `assignee_ids`. Posts a summary table to the Message Board so the team sees the ownership distribution at a glance. Idempotent (re-running updates the summary message via PUT).
+  - Date: 2026-05-19
+  - Verification: all 14 tasks assigned, summary message posted (id 9908694874). Breakdown: Ali on 8 tasks (sole on 5), CB System on 6 tasks, Vinay on 5 tasks, Design House on 1 task (the POC build).
+  - Note: Ali's heavy load is mostly review-gates (proposal voice review, exec summary review, sign-off, submission) rather than independent work. The actual "doing" load is split CB System + Vinay + Design House.
 
 ### Claude Code Architecture Remediation — Waves 1-4 (2026-05-19)
 Per Ram's request, audited the repo against [Anthropic's Claude Code best-practices article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start). Initial score: ~35/100. Executed top 5 + small cleanups; new score: ~70/100. Zero production code touched — config only. Full reports at `docs/CLAUDE_CODE_ARCHITECTURE_AUDIT.md` (the audit) and `docs/CLAUDE_CODE_REMEDIATION_REVIEW.html` (interactive review with verdicts + compile button per the screenshot-review skill pattern).
