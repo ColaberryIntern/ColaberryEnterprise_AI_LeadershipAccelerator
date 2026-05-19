@@ -61,6 +61,21 @@ export function buildAuthoritativeQueue(input: BuildQueueInput): {
     candidates.push(...generateCapTasks(cap, score, input.project));
   }
 
+  // 2b. Agent-stack proposals (added 2026-05-19). Runs as a separate
+  // pass because it's the EXPLICIT next-tier ask AFTER a cap is built
+  // — including verified caps which the main per-cap loop skips. The
+  // operator's instruction was: "fires when a cap crosses readiness
+  // >= 80 AND has no monitoring stack." Verified caps are by definition
+  // the strongest candidates for this — they're done, what comes next?
+  for (const cap of input.capabilities) {
+    if (cap.applicability_status !== 'active') continue;
+    if (cap.user_status === 'archived') continue;
+    const score = input.capability_scores.find(s => s.capability_id === cap.id);
+    if (!score) continue;
+    const agentStackTask = generateAgentStackTask(cap, score, input.project);
+    if (agentStackTask) candidates.push(agentStackTask);
+  }
+
   // 3. Resolve dependencies
   const resolved = resolveDependencies(candidates);
 
@@ -543,6 +558,76 @@ function generateCapTasks(
   }
 
   return tasks;
+}
+
+/**
+ * Agent-stack proposal generator (added 2026-05-19). Fires when a cap
+ * is mature enough that the next-tier ask is "what agents should run
+ * on or around it." Covers both directions the operator described:
+ *
+ *   PAGES (kind=page) at coverage >= 100: UI Advisor is done, the page
+ *     ships, time to layer monitoring + alerting + follow-up agents
+ *     (page-load tracking, conversion alerts, error capture).
+ *
+ *   SERVICES (kind=service) at readiness >= 80: the cap is built and
+ *     stable enough that backend agents become the right next move
+ *     (scheduled jobs, workflow automation, data monitors, alert
+ *     triggers).
+ *
+ * Both fire under the same generator so a project rolling out a new
+ * module gets BOTH page-side and service-side proposals at the same
+ * readiness threshold — matches the operator's "triggered at the same
+ * time" instruction. Skipped when the cap already has linked_agents
+ * (it chose its agent footprint; "propose more" mirrors the
+ * improve_automation false-positive shape we just gated). Lives in
+ * its own loop in buildAuthoritativeQueue so verified caps — the
+ * strongest candidates — aren't excluded by the main per-cap skip.
+ *
+ * Priority 50 — above ui_review (25) and optimization (40-45), below
+ * build/implement (70-80).
+ */
+function generateAgentStackTask(
+  cap: EngineCapabilityInput,
+  score: CapabilityScores,
+  project: EngineProjectInput,
+): AuthoritativeTask | null {
+  const kind = cap.kind || 'service';
+  const linkedAgentCount = (cap.linked_agents || []).length;
+  if (linkedAgentCount > 0) return null;
+  const matureForAgentStack =
+    (kind === 'page' && score.coverage >= 100)
+    || (kind === 'service' && score.readiness >= 80);
+  if (!matureForAgentStack) return null;
+  // Same internal-suffix filter the rest of the queue uses.
+  const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry|integration|composer|generation|optimization|estimator|planner|mapping|definition|tracking|reporting|automation|orchestration|framework|parser|handling)$/i.test(cap.name || '');
+  if (kind === 'service' && looksInternal) return null;
+
+  const description = kind === 'page'
+    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). Propose the agent stack that captures value on top of it: page-load monitoring, error capture, conversion alerts, follow-up sequences.`
+    : `${cap.name} is built (readiness ${score.readiness}%) with no agent layer linked. Propose the backend agents that extend it: scheduled jobs, workflow automation, data monitors, alert triggers.`;
+
+  return makeTask({
+    id: `${cap.id}:propose_agent_stack`,
+    project_id: project.id,
+    bp_id: cap.id,
+    title: `Propose agent stack for ${cap.name}`,
+    description,
+    type: 'agent_stack',
+    priority_score: 50,
+    blocking_score: 20,
+    dependency_score: 40,
+    maturity_gain: 25,
+    readiness_gain: 15,
+    confidence_score: 75,
+    execution_cost: 40,
+    reasons: [
+      kind === 'page'
+        ? `coverage=${score.coverage}% (page is shipped — next tier is the agent layer)`
+        : `readiness=${score.readiness}% (service is built — next tier is the agent layer)`,
+      `linked_agents=0 (no stack yet)`,
+    ],
+    cap, cap_score: score,
+  });
 }
 
 interface TaskShortInput {

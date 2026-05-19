@@ -71,6 +71,11 @@ const REQUIREMENTS: Record<AuthoritativeTaskType, ReadonlyArray<TelemetryRequire
     { kind: 'files_changed',        severity: 'required',    rationale: 'optimization tasks must change at least one file' },
     { kind: 'validation_results',   severity: 'required',    rationale: 'must show the optimization didn\'t regress tests' },
   ],
+  agent_stack: [
+    { kind: 'files_changed',        severity: 'required',    rationale: 'agent-stack proposals land as new agent files or wiring changes' },
+    { kind: 'tests_added',          severity: 'recommended', rationale: 'new agents should ship with at least a smoke test' },
+    { kind: 'validation_results',   severity: 'required',    rationale: 'tsc + jest must pass after adding the agent layer' },
+  ],
 };
 
 /** Returns the full checklist for a task type. */

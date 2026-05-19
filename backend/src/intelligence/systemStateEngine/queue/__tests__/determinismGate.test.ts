@@ -299,6 +299,133 @@ describe('automation actionability gate (cycle 2 fix)', () => {
   });
 });
 
+describe('propose_agent_stack generator (next-tier work after build)', () => {
+  it('fires for a service cap at readiness >= 80 with no agents linked', () => {
+    // A mature, well-built service: backend+frontend layers present,
+    // requirements fully matched, enough file evidence to push the
+    // quality contribution over the 80-readiness line. The "next thing"
+    // is the agent stack (jobs, monitors, alerts).
+    const cap = mkCap({
+      id: 'mature-svc',
+      name: 'Lead Pipeline Manager',
+      kind: 'service',
+      source: 'parsed',
+      linked_backend_services: [
+        'leadPipeline.ts', 'leadPipelineHelper.ts', 'leadPipelineModel.ts',
+        'leadPipelineRoutes.ts', 'leadPipelineMiddleware.ts',
+      ],
+      linked_frontend_components: [
+        'LeadPipelinePanel.tsx', 'LeadPipelineRow.tsx', 'LeadPipelineFilter.tsx',
+      ],
+      linked_agents: [],
+      frontend_route: '/admin/lead-pipeline',
+      total_requirements: 8,
+      matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.type).toBe('agent_stack');
+    expect(t!.description).toMatch(/scheduled jobs|workflow automation|data monitors|alert triggers/);
+  });
+
+  it('fires for a page cap at coverage >= 100 with no agents linked', () => {
+    // A page that has completed its UI review (coverage 100). Next tier
+    // is monitoring + alerting + conversion tracking agents.
+    const cap = mkCap({
+      id: 'mature-page',
+      name: 'Contact Page',
+      kind: 'page',
+      source: 'frontend_page',
+      is_page_bp: true,
+      frontend_route: '/contact',
+      linked_frontend_components: ['ContactPage.tsx'],
+      linked_agents: [],
+      user_status: 'verified',
+      ui_element_map: { category_scores: { layout: { verified: true }, accessibility: { verified: true }, performance: { verified: true } } } as any,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.type).toBe('agent_stack');
+    expect(t!.description).toMatch(/page-load monitoring|conversion alerts|error capture|follow-up sequences/);
+  });
+
+  it('does NOT fire when cap already has linked agents (operator chose footprint)', () => {
+    const cap = mkCap({
+      id: 'has-agents',
+      name: 'Lead Pipeline Manager',
+      kind: 'service',
+      linked_backend_services: ['leadPipeline.ts'],
+      linked_agents: ['leadPipelineAgent.ts'],
+      frontend_route: '/admin/lead-pipeline',
+      total_requirements: 5,
+      matched_requirements: 5,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 1,
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeUndefined();
+  });
+
+  it('does NOT fire for internal-named services even when mature', () => {
+    // Internal infra (loggers, validators, monitors) rarely benefit from
+    // their own agent stack — they ARE the plumbing other things sit on.
+    const cap = mkCap({
+      id: 'internal',
+      name: 'Validation Results Emission',
+      kind: 'service',
+      linked_backend_services: ['x.ts', 'y.ts'],
+      linked_agents: [],
+      total_requirements: 5,
+      matched_requirements: 5,
+      user_status: 'verified',
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeUndefined();
+  });
+
+  it('does NOT fire for an immature service (readiness < 80)', () => {
+    const cap = mkCap({
+      id: 'immature',
+      name: 'Half Built Service',
+      kind: 'service',
+      linked_backend_services: ['x.ts'],
+      linked_agents: [],
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeUndefined();
+  });
+});
+
 describe('kind derivation from source/name (engine input mapping)', () => {
   // Note: the kind-derivation fix lives in buildAuthoritativeState (the
   // full project loader), not in the pure entry buildAuthoritativeStateFromInputs
