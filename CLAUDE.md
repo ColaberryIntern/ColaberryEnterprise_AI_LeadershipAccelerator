@@ -665,3 +665,30 @@ Claude is the planner, validator, and system hardener, not the worker.
 - Escalation replaces paralysis
 
 Be deliberate. Be testable. Be autonomous. Be governed only where necessary.
+
+---
+
+# Subagent Usage Pattern
+
+Per the [Claude Code best-practices article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start), subagents are isolated Claude instances with their own context windows. Use them to **split exploration from editing** rather than burning the main session's context on research.
+
+## When to spin up a subagent (default to YES)
+- **Any research task that will read more than 5 files** to answer a question (e.g., "find every place X is referenced," "map the data flow from A to B," "audit Y for pattern Z"). Use the `Explore` subagent.
+- **Any cross-codebase impact analysis** before a refactor or rename.
+- **Any open-ended question requiring web search across multiple sources** (e.g., the Coca-Cola industry research, the proven-AI-use-case research). Use 2-3 `general-purpose` subagents in parallel.
+- **Any independent piece of work** that doesn't depend on prior context (run in parallel via multiple `Agent` calls in one message).
+
+## When to stay in the main session
+- Single-file edits.
+- Tasks where the main session already has the relevant context loaded.
+- Anything < 3 file reads to complete.
+- Anything where the agent's findings need to be re-verified before action (research subagents return summaries that describe intent, not necessarily fact — see "Trust but verify" in the harness rules).
+
+## Pattern: read-only exploration → main agent edits
+The article's canonical example: spin up a read-only `Explore` subagent to map a subsystem and write findings to a file, then have the main agent edit with the full picture. Use this when an edit requires understanding code spread across many files.
+
+## Recent good examples (in this repo)
+- 2026-05-14 Coca-Cola use-case taxonomy: 3 parallel `general-purpose` subagents (company research, bottling operations research, proven AI use cases) executed in one message, returned in ~2 minutes total. The main session synthesized them into the validated 12-use-case taxonomy.
+- 2026-05-19 Claude Code audit: read-only inventory via Bash + Glob across `.claude/`, no subagent needed (single-pass, <10 reads).
+
+The bar is: would research take more than 5 file reads OR more than 1 round of web search? If yes, spin up a subagent. If no, stay in-session.

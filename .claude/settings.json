@@ -102,5 +102,40 @@
     "additionalDirectories": [
       "c:\\Users\\ali_m\\Downloads"
     ]
+  },
+  "mcpServers": {
+    "colaberry-portal-api": {
+      "command": "node",
+      "args": ["./backend/src/mcp/portalApiServer.js"],
+      "env": {}
+    },
+    "colaberry-postgres-analytics": {
+      "command": "node",
+      "args": ["./backend/src/mcp/postgresAnalyticsServer.js"],
+      "env": {}
+    }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-emdash.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-end-progress-audit.sh"
+          }
+        ]
+      }
+    ]
   }
 }

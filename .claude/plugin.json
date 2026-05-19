@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "colaberry-enterprise-ai",
+  "version": "1.0.0",
+  "description": "Colaberry Enterprise AI Leadership Accelerator project plugin. Bundles every Claude Code asset (settings, skills, hooks, MCP servers, ignore rules, subdirectory CLAUDE.md hierarchy) so any developer onboarding to this repo gets the same context and capabilities on day one.",
+  "author": {
+    "name": "Ali Muwwakkil",
+    "email": "ali@colaberry.com",
+    "url": "https://colaberry.com"
+  },
+  "homepage": "https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator",
+  "license": "Proprietary",
+  "keywords": ["claude-code", "colaberry", "enterprise-ai", "internal"],
+
+  "_assets_summary": {
+    "settings": ".claude/settings.json",
+    "claudeignore": ".claudeignore",
+    "root_claude_md": "CLAUDE.md",
+    "subdirectory_claude_md": [
+      "backend/CLAUDE.md",
+      "frontend/CLAUDE.md",
+      "backend/src/scripts/CLAUDE.md",
+      "directives/CLAUDE.md",
+      "system/CLAUDE.md",
+      "tests/CLAUDE.md"
+    ],
+    "skills": [
+      ".claude/skills/baseline-ui",
+      ".claude/skills/frontend-design",
+      ".claude/skills/fixing-accessibility",
+      ".claude/skills/fixing-motion-performance",
+      ".claude/skills/ui-ux-design",
+      ".claude/skills/telemetry-emission",
+      ".claude/skills/screenshot-review",
+      ".claude/skills/openclaw-outreach"
+    ],
+    "hooks": [
+      ".claude/hooks/check-emdash.sh",
+      ".claude/hooks/session-end-progress-audit.sh"
+    ],
+    "mcp_servers": [
+      "backend/src/mcp/portalApiServer.js",
+      "backend/src/mcp/postgresAnalyticsServer.js"
+    ]
+  },
+
+  "_install_notes": [
+    "This plugin is installed automatically when a developer clones the repo and opens it in Claude Code — Claude Code reads .claude/settings.json and CLAUDE.md from the working directory.",
+    "There is currently no separate install step; the plugin is the repo's own .claude/ tree.",
+    "Per-developer overrides go in .claude/settings.local.json (gitignored) so individual preferences don't fight the team baseline.",
+    "If we later want to distribute this plugin to OTHER Colaberry repos (e.g., AI Project Architect & Build Companion / advisor.colaberry.ai), we package this directory + the subdir CLAUDE.md files + the MCP server scripts + the hooks as a tarball or git submodule and reference from those repos.",
+    "DRI: Ali Muwwakkil (see CLAUDE.md > Claude Code Configuration Ownership)."
+  ],
+
+  "requirements": {
+    "claude_code_minimum_version": "1.0.0",
+    "node_minimum_version": "18.0.0",
+    "platform": ["windows", "macos", "linux"],
+    "npm_dev_dependencies": [
+      "@modelcontextprotocol/sdk@^1.29.0",
+      "pdfkit@^0.18.0",
+      "playwright@^1.58.0",
+      "adm-zip@^0.5.0",
+      "sharp@^0.33.0"
+    ]
+  },
+
+  "review_cadence": {
+    "frequency": "quarterly",
+    "next_review": "2026-08-19",
+    "owner": "ali@colaberry.com"
+  }
+}
