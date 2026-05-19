@@ -47,10 +47,22 @@ export async function buildUnifiedProjectState(input: BuildInput): Promise<Unifi
     return emptyState(input);
   }
 
-  const readiness = buildReadiness(progress);
-  const coverage = buildCoverage(progress);
+  // The systemStateEngine is the authoritative source for readiness /
+  // coverage / health and the queue. Pull its snapshot here so Cory Home,
+  // Blueprint, and System tabs all see the same numbers. The legacy
+  // calculateProgress() output is kept for context (artifact / github /
+  // workflow signals) but the *score* now comes from the engine. Added
+  // 2026-05-19 after operator confirmed Cory Home showed 40 / empty queue
+  // while engine had 62 / 167 tasks.
+  const engineState = await safeAsync(async () => {
+    const { readOrRebuild } = await import('../systemStateEngine');
+    return readOrRebuild(project.id);
+  }, null);
+
+  const readiness = buildReadiness(progress, engineState);
+  const coverage = buildCoverage(progress, engineState);
   const confidence = buildConfidence(progress, nextActionRow, governanceRecs);
-  const health = buildHealth(progress, recentActionRows);
+  const health = buildHealth(progress, recentActionRows, engineState);
 
   const candidates: PriorityCandidate[] = [];
 
@@ -85,6 +97,27 @@ export async function buildUnifiedProjectState(input: BuildInput): Promise<Unifi
       blast_radius: blastFromActionType(row.action_type),
       target_route: '/portal/project/blueprint',
       metadata: { action_type: row.action_type, status: row.status },
+    });
+  }
+
+  // Engine queue tasks feed into the operational queue too. Without this,
+  // Cory Home shows "Nothing in the queue" even when the engine has
+  // 100+ ranked tasks (ui_review, optimization, gap-driven improvements).
+  // Engine task IDs look like 'cap-id:task-type' so they can't collide
+  // with NextAction UUIDs or governance UUIDs. Added 2026-05-19.
+  const engineTasks = (engineState?.queue || []) as any[];
+  for (const t of engineTasks.slice(0, 30)) {
+    candidates.push({
+      source_id: t.id,
+      source: 'engine_task' as any,
+      title: t.title,
+      reason: t.description || (t.reasoning || []).join(' · ') || 'Engine-prioritized work.',
+      raw_priority: clamp(t.priority_score ?? 50),
+      confidence: clamp(t.confidence_score ?? 75),
+      time_est_minutes: estimateTimeFromEngineTaskType(t.type),
+      blast_radius: blastFromEngineTaskType(t.type),
+      target_route: t.type === 'ui_review' ? '/portal/project/system' : '/portal/project/blueprint',
+      metadata: { engine_task_type: t.type, bp_id: t.bp_id, state: t.state },
     });
   }
 
@@ -178,7 +211,46 @@ async function loadPendingGovernanceRecs(enrollment_id: string): Promise<any[]> 
 
 // -------------------------- profile builders --------------------------------
 
-function buildReadiness(progress: any): ReadinessProfile {
+function buildReadiness(progress: any, engineState: any | null): ReadinessProfile {
+  // Engine-first: the systemStateEngine's per-cap kind-aware readiness is
+  // authoritative. Falls back to legacy progress composite if engine state
+  // is unavailable.
+  const engineScore = engineState?.scores?.readiness;
+  if (typeof engineScore === 'number') {
+    const accounting = engineState.scores.accounting;
+    const reasons: string[] = [];
+    if (accounting) {
+      const { operator_bounded_count, system_actionable_count, fully_built_count } = accounting;
+      if (operator_bounded_count > 0) {
+        reasons.push(`${operator_bounded_count} capability${operator_bounded_count === 1 ? '' : 'ies'} awaiting your review (run UI Advisor / verify).`);
+      }
+      if (system_actionable_count > 0) {
+        reasons.push(`${system_actionable_count} capability${system_actionable_count === 1 ? ' has' : 'ies have'} system-actionable improvements queued.`);
+      }
+      if (fully_built_count > 0) {
+        reasons.push(`${fully_built_count} capability${fully_built_count === 1 ? ' is' : 'ies are'} fully built.`);
+      }
+    }
+    if (reasons.length === 0 && engineScore >= 70) reasons.push('All capabilities are healthy.');
+    if (reasons.length === 0 && engineScore < 70) reasons.push('Composite score is below the green threshold; no single dimension dominates.');
+    return {
+      score: clamp(engineScore),
+      band: scoreToBand(engineScore),
+      reasons,
+      breakdown: {
+        // Legacy breakdown kept for the dashboard's UI — these are
+        // student-project-style signals (artifact submissions, github
+        // activity). Real per-cap breakdown lives on engineState.scores.
+        artifact_completion: pct(progress?.breakdown?.artifactCompletion?.score),
+        requirements_coverage: pct(progress?.breakdown?.requirementsCoverage?.score),
+        github_health: pct(progress?.breakdown?.githubHealth?.score),
+        portfolio_quality: pct(progress?.breakdown?.portfolioQuality?.score),
+        workflow_progress: pct(progress?.breakdown?.workflowProgress?.score),
+      },
+    };
+  }
+
+  // Legacy fallback (no engine state)
   if (!progress) {
     return {
       score: 0,
@@ -214,25 +286,23 @@ function buildReadiness(progress: any): ReadinessProfile {
   };
 }
 
-function buildCoverage(progress: any): CoverageProfile {
-  if (!progress) {
-    return {
-      score: 0,
-      requirements_matched: 0,
-      requirements_total: 0,
-      bps_complete: 0,
-      bps_total: 0,
-    };
-  }
-  const matched = progress.breakdown?.requirementsCoverage?.matched ?? 0;
-  const total = progress.breakdown?.requirementsCoverage?.total ?? 0;
-  const score = total > 0 ? Math.round((matched / total) * 100) : 0;
+function buildCoverage(progress: any, engineState: any | null): CoverageProfile {
+  // Engine-first for coverage score. Requirement counts still come from
+  // progress (the underlying matched/total math is the same regardless
+  // of which scorer we expose), but the SCORE shown follows the engine.
+  const matched = progress?.breakdown?.requirementsCoverage?.matched ?? 0;
+  const total = progress?.breakdown?.requirementsCoverage?.total ?? 0;
+  const fallbackScore = total > 0 ? Math.round((matched / total) * 100) : 0;
+  const accounting = engineState?.scores?.accounting;
+  // Engine's coverage averages per-cap; for the operator's bird's-eye view
+  // the requirements-matched ratio is more legible. Prefer the ratio.
+  const score = fallbackScore;
   return {
     score,
     requirements_matched: matched,
     requirements_total: total,
-    bps_complete: 0,
-    bps_total: 0,
+    bps_complete: accounting?.fully_built_count ?? 0,
+    bps_total: accounting ? (accounting.fully_built_count + accounting.operator_bounded_count + accounting.system_actionable_count) : 0,
   };
 }
 
@@ -257,12 +327,19 @@ function buildConfidence(progress: any, nextAction: any, governanceRecs: any[]):
  *
  * Future: wire SystemStateEngine summary in as a third dimension.
  */
-function buildHealth(progress: any, recentActions: any[]): HealthProfile {
-  let healthScore = 60; // neutral default if progress not yet computed
-  if (progress?.breakdown) {
+function buildHealth(progress: any, recentActions: any[], engineState: any | null): HealthProfile {
+  // Engine-first: per-cap kind-aware health average. Fallback to legacy
+  // github+workflow composite.
+  let healthScore: number;
+  const engineHealth = engineState?.scores?.health;
+  if (typeof engineHealth === 'number') {
+    healthScore = engineHealth;
+  } else if (progress?.breakdown) {
     const githubPct = pct(progress.breakdown.githubHealth?.score);
     const workflowPct = pct(progress.breakdown.workflowProgress?.score);
     healthScore = Math.round(githubPct * 0.5 + workflowPct * 0.5);
+  } else {
+    healthScore = 60;
   }
   // Verification pass rate: completed vs (completed + dismissed) recently.
   // V1 uses NextAction lifecycle as the proxy until a real verification feed lands.
@@ -341,6 +418,36 @@ function scoreToBand(score: number): 'red' | 'amber' | 'green' {
   if (score >= 80) return 'green';
   if (score >= 50) return 'amber';
   return 'red';
+}
+
+// Engine task type -> rough time-to-do estimate. Used to populate
+// time_est_minutes on operational queue rows so Cory Home / operator
+// surfaces can show "25m" / "1h" badges. Added 2026-05-19.
+function estimateTimeFromEngineTaskType(t: string | undefined): number | null {
+  switch (t) {
+    case 'foundation':   return 60;   // kickoff session
+    case 'backend':      return 60;   // build backend trio
+    case 'frontend':     return 45;   // add UI surface
+    case 'database':     return 30;
+    case 'validation':   return 10;   // verify a built cap
+    case 'testing':      return 30;
+    case 'intelligence': return 45;
+    case 'ui_review':    return 20;   // UI Advisor run + per-issue Fix
+    case 'optimization': return 25;   // gap-driven improvements
+    default:             return 20;
+  }
+}
+
+function blastFromEngineTaskType(t: string | undefined): BlastRadiusProfile {
+  switch (t) {
+    case 'foundation':   return { band: 'medium', reason: 'Kickoff touches all foundation phases.' };
+    case 'backend':      return { band: 'medium', reason: 'New backend code may affect users.' };
+    case 'frontend':     return { band: 'medium', reason: 'New UI surface visible to users.' };
+    case 'validation':   return { band: 'low', reason: 'Read-only verification.' };
+    case 'ui_review':    return { band: 'low', reason: 'Surfaces issues for operator to fix per-item.' };
+    case 'optimization': return { band: 'low', reason: 'Localized improvement — single dimension.' };
+    default:             return { band: 'low' };
+  }
 }
 
 function estimateTimeFromActionType(action_type: string | undefined): number | null {
