@@ -12,6 +12,20 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Bid Intake — Detroit AI for Muni-Code Search staged in Basecamp (2026-05-19)
+- [x] `backend/src/scripts/processGovBid.js` (new) — reusable template script that takes one BID_CONFIG block (opportunity UUID, zip path, display title, phases, fit thesis) and creates the full Basecamp workspace end-to-end: extracts zip → fetches opportunity detail from Opportunity Pulse → creates a vault sub-folder → uploads all RFP files ONCE → creates a To-Do List with rich HTML description (key facts + fit thesis + 4-phase game plan + file links) → creates one task per RFP attachment + cross-cutting prep work (POC, capability statement, executive summary, review, submit) → posts a kickoff message to the Message Board linking back to List + Folder. Fully idempotent (re-running reuses folder, skips existing files/tasks, updates list description, skips duplicate message). Writes a `basecamp-summary.json` audit file. Reusable for every future gov bid by editing BID_CONFIG.
+  - Date: 2026-05-19
+  - Verification: dry-run validated all 8 file uploads + 14 task creations + kickoff message; live run created Basecamp resources successfully on first try.
+- [x] **Live Basecamp resources** (project 47346103 "Gov Contracts"):
+  - Folder: `Detroit - AI for Muni-Code Search (RFP 544695)` (id 9908585734) — 8 RFP files uploaded
+  - To-Do List: id 9908586327 — 14 tasks (1 RFP read, 1 bid/no-bid gate, 1 POC, 1 capability statement, 5 attachment completions, 1 contract redline, 1 equalization check, 1 executive summary, 1 internal review, 1 final submission). Description contains all key facts + 4-phase game plan + file links.
+  - Kickoff message: id 9908586715 — "Bid kickoff: Detroit - AI for Muni-Code Search (RFP 544695)" with deadline 2026-06-12, $30M value, links to List + Folder
+  - Date: 2026-05-19
+  - Verification: live run output captured to `tmp/gov-bids/Detroit_-_AI_for_Muni-Code_Search__RFP_544695_/basecamp-summary.json` with all IDs and URLs.
+- [x] `directives/gov-bid-intake.md` (new) — Standing Operating Procedure documenting how to use `processGovBid.js` for any future gov bid: inputs, Basecamp token refresh via VPS, BID_CONFIG fields to edit, dry-run + live-run commands, verification checklist, idempotency guarantees, status-update conventions, post-submission steps, when NOT to use, open improvements (auto-fetch zips from Bonfire, auto-update pursuit status, generate requirements matrix from RFP text). This is the procedural side of the bid intake; the script is the executor.
+  - Date: 2026-05-19
+  - Verification: file present in directives/; checked against script behavior
+
 ### Claude Code Architecture Remediation — Waves 1-4 (2026-05-19)
 Per Ram's request, audited the repo against [Anthropic's Claude Code best-practices article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start). Initial score: ~35/100. Executed top 5 + small cleanups; new score: ~70/100. Zero production code touched — config only. Full reports at `docs/CLAUDE_CODE_ARCHITECTURE_AUDIT.md` (the audit) and `docs/CLAUDE_CODE_REMEDIATION_REVIEW.html` (interactive review with verdicts + compile button per the screenshot-review skill pattern).
 
