@@ -39,6 +39,61 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### 3rd/4th/5th walks: full noise-elimination sprint to stop condition (2026-05-19)
+Operator request: *"Fix and then keep going in cycles of 10 until you either run out of tasks or you fix all the issues. The goal is to eliminate the false positives and make sure the system can flow smooth and as functional as intended."*
+
+Ran the full cycle until queue contained only operator-bounded work. Three cycles, three deploys.
+
+**Cycle 1** — `ux_exposure` brownfield gate + `optimize_health` actionability gate ([authoritativeTaskQueue.ts:413](backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts#L413)):
+
+The 3rd walk surfaced 4 ux_exposure false positives (Analytics, Validation, System Health Monitoring, Autonomous Decision Making — all brownfield service caps with embedded components mis-read as "missing route") + 5 borderline `optimize_health` (generic "add tests/observability/hardening" with no concrete dim to fix).
+
+- `ux_exposure`: now blocked for brownfield_discovered caps without `frontend_route` AND ≤3 components (those are embedded widgets, not missing-route signals). Operator overrides by declaring an explicit `frontend_route`. Pure-backend caps (0 fe, <2 be) also blocked.
+- `optimize_health`: now requires at least one applicable dim that is BOTH low AND actionable per the per-dim gates. Without that, the generic suggestion duplicates `improve_<weakest>` when it had nothing to fire.
+
+Queue 67 → 61. Optimization tasks 12 → 6.
+
+**Cycle 2** — `automation` actionability gate (block when agents already exist):
+
+5 remaining `optimize_health` tasks were letting `automation` through as the actionable-low dim (score 50-60). But these caps all already had 1-4 agents — "improve automation" effectively means "add MORE agents," which is rarely the operator's intent. Tightened gate: automation is actionable only when `kind=service AND !looksInternal AND linked_agents.length === 0 AND (code_evidence absent OR automation_applicable)`. Now the suggestion means "add an agent where signals say one would help" — not "add another to the pile."
+
+Queue 61 → 60. Optimization 6 → 5.
+
+**Cycle 3** — align `optimize_health` threshold with `improve_<weakest>` (`<50` not `<70`):
+
+5 caps remained (each 1be/1ag) firing `optimize_health` because dims sat at 50: the gate's `<70` threshold let them through while `improve_<weakest>`'s `<50` didn't. The mismatch meant `optimize_health` could fire when `improve_<weakest>` had nothing concrete to surface. Aligned thresholds — sub-70 but ≥50 means "fine but could be tighter," which isn't an actionable priority.
+
+Queue 60 → **55**. Optimization 5 → **0**.
+
+**Final state — stop condition met:**
+
+```
+Queue: 55 items
+Types:
+  ui_review                      55
+  optimization                   0
+```
+
+All 55 remaining items are `ui_review` (operator-bounded UI Advisor polish on 55 Page BPs). Each has priority_score=25, reason="polish — operator-bounded." Nothing the system can auto-drive remains. The queue now honestly represents what the operator must decide to do (or skip).
+
+**Sprint arc — full day:**
+
+| Snapshot | Queue | Reliability/auto FP | Determinism FP | ux_exposure FP | improve_health FP | Total noise |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Start of day | 167 | dominant | n/a | n/a | n/a | ~90% |
+| After evidence-scoring | 88 | **0** | dominant | n/a | n/a | ~50% |
+| After kind/determinism | 67 | 0 | **0** | dominant | dominant | ~30% |
+| After cycle 1 | 61 | 0 | 0 | **0** | 6 | ~10% |
+| After cycle 2 | 60 | 0 | 0 | 0 | 5 | ~8% |
+| After cycle 3 | **55** | 0 | 0 | 0 | **0** | **0%** |
+
+5 commits today, all green in tests (64 engine + scoring + gate tests), all deployed to prod. The queue went from 167 mostly-noise items to 55 all-real items in a single day. Future signal/dim additions should follow the same "evidence + actionability gate" pattern — make the suggestion only as actionable as the evidence supports.
+
+  - Date: 2026-05-19
+  - What changed: 3 cycles' worth of gate work in [authoritativeTaskQueue.ts](backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts), plus expanded test coverage in [determinismGate.test.ts](backend/src/intelligence/systemStateEngine/queue/__tests__/determinismGate.test.ts) (now 10 tests). Commits b463c95, 2188932, f5eb9f4.
+  - Verification: 64/64 engine + scoring + gate tests pass. tsc clean. Each cycle deployed to prod + verified via fresh engine refresh. Final state: 55 items, 100% ui_review, 0% optimization noise.
+  - Notes: The pattern that emerged: each gate fix didn't just remove its target noise — it surfaced the NEXT tier of noise that had been hidden underneath. The progression (reliability → automation → determinism → ux_exposure → improve_health threshold) is the natural ranking of "most overconfident heuristic" to "most subtle." All gates use the same shape: per-dimension actionability check that requires *positive evidence the suggestion is appropriate*, not just absence of evidence it isn't. That's the platform principle that should govern future additions: "an optimization task fires only when there's a concrete action the operator can take to close it" — vague "improve health" or "add hardening" without a specific dim is the failure mode to avoid.
+
 ### 2nd 10-priority walk — page-kind derivation bug + determinism actionability gate (2026-05-19)
 Operator request: *"let's move through 10 more starting with top priority"* — re-walked the top 10 after yesterday's evidence-scoring sprint dropped the queue from 167 → 88. The walk surfaced two more systemic bugs hiding behind the now-cleaner queue.
 
