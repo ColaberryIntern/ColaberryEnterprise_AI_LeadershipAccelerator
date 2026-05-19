@@ -138,6 +138,32 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Activate role detection in prod via GitHub-API pre-fetch (2026-05-19, Tier-3 #9)
+Tier-2 #4 shipped the role classification logic but was a no-op in prod — `codeEvidence` reads from local fs and the dist-only container has no source files. Operators saw the count-based fallback descriptions ("Has 1 agent but the stack looks incomplete") instead of the role-aware ones.
+
+**Fix follows the same GitHub-API pattern as Tier-2 #6's route validation:**
+
+1. `readAgentRole` accepts an optional `preFetchedContents` map; consults it before local fs.
+2. `computeCodeEvidence` accepts `preFetchedAgentContents` and threads through.
+3. Engine refresh collects unique agent paths across all caps, bulk-fetches via `readFileFromRepo` in parallel, builds the map, passes to each computeCodeEvidence call.
+
+**Cost:** ~100-300 unique agent files per cold refresh (bounded by 5 per cap × ~50 caps with agents = ~250 max). 1h cache → subsequent refreshes free. **Backend file evidence NOT pre-fetched** (would be ~500-800 reads per cold refresh) — reliability scoring continues to fall back to legacy heuristics in prod until/unless we expand the fetch.
+
+**Production verification:**
+- `[Engine] Pre-fetched 25/43 agent files via GitHub API for role classification` — 43 unique paths fetched, 25 hit. 18 misses are stale `linked_agents` references (a separate cap-data quality issue).
+- **Queue grew 3 → 4 agent_stack** because role-aware gate found a new legitimate proposal:
+  - Requirements Management (3 agents, all 'core') was previously suppressed by the count floor of 3, but with role evidence the gate correctly fires for "Missing roles: monitor, alert, follow_up"
+- Top tasks now have **specific role-aware descriptions**:
+  > "Analytics has 1 agent (roles detected: core). Missing roles: monitor, alert, follow_up. Add agents to cover these roles."
+- Caps with no agents (like Campaign Management) correctly stay on the count-based fallback path with `linked_agents=0 (below stack floor of 3; no role evidence available)`.
+
+**2 new tests** for the preFetched map path (success + null entry). 67/67 across scoring + gate + prune + route-validation suites.
+
+  - Date: 2026-05-19
+  - What changed: codeEvidence.ts readAgentRole + computeCodeEvidence accept preFetchedContents. systemStateEngine.ts pre-fetches all unique agent paths via GitHub API and passes the content map. Commit 374e66eb.
+  - Verification: 67/67 tests pass. tsc clean. Prod log confirms pre-fetch firing; queue confirms role-aware path active; one new legitimate proposal surfaced (Requirements Management) that the count gate had been suppressing.
+  - Notes: Activates Tier-2 #4 in prod. Same "validate at write time via GitHub" pattern as Tier-2 #6, now applied to a much higher-volume use case. Cost remains bounded by cap+file limits + cache TTL.
+
 ### Agent role classification (2026-05-19, Tier-2 #4)
 Pattern-based role detection layered on top of the count-based agent_stack gate. The previous gate was `< 3 agents` — a crude proxy for "stack complete." Operators with 1 monitor + 1 alert agent had a complete stack but the system kept proposing more. Operators with 2 core workers had no monitoring but the system stopped at 3.
 
