@@ -62,12 +62,21 @@ Directly resolves the deferred follow-up flagged in the 10-priority walkthrough 
 
 **Why regex not AST:** AST parsing adds 50ms+ per file and a heavy dependency. For a *heuristic signal that drives which dimensions to APPLY* (not what to fix), regex on token-level patterns (`} catch (`, `async function`, `cron.schedule`, `.process(`) is adequate.
 
-**Expected operator impact:** The 9 false positives from yesterday's walk (improve-reliability for pure-function services, improve-automation for CRUD admin) should disappear from the queue on the next engine refresh. The pre-flight check yesterday: ~90% of the gap-driven queue. Post-fix prediction: ~30-40% of the same queue, all on caps with actual async + low try/catch density or actual scheduled-job signals without a wired agent.
+**Production verification** (post-deploy, fresh engine refresh):
+
+| Metric | Yesterday (pre-fix) | Now (post-fix) |
+| --- | ---: | ---: |
+| Total queue length | 167 | **88** (-47%) |
+| `improve_reliability` tasks | dominant (4+ in top 10) | **0** |
+| `improve_automation` tasks | dominant (3+ in top 10) | **0** |
+| Optimization tasks remaining | (mixed noise) | 33 (21 determinism, 4 ux_exposure, 0 noise dimensions) |
+
+The two specific noise patterns the operator flagged are eliminated. The remaining `determinism` cluster (21 tasks) is a separate signal — it fires when a cap has high agent-to-backend ratio, which is debatable but not in scope for this sprint.
 
   - Date: 2026-05-19
   - What changed: 1 new file (codeEvidence.ts, 178 lines), 1 new test file (evidenceScoring.test.ts, 12 tests), 3 modified (healthScorer.ts evidence-aware, systemStateEngine.ts wiring, systemState.types.ts type extension)
-  - Verification: 12/12 new tests pass, 42/42 engine integration tests pass, `npx tsc --noEmit` exit 0. Two pre-existing DB-coupling test timeouts (phase11/phase12) unrelated to this change.
-  - Notes: The fix preserves the legacy file-count heuristic as fallback so caps without evidence (e.g., from a cold cache or unreadable file paths) don't regress. Once the next refresh lands in prod, re-walk the top 10 priorities; expectation is conversion rate moves from 1/10 to 4+/10.
+  - Verification: 12/12 new tests pass, 42/42 engine integration tests pass, `npx tsc --noEmit` exit 0. Deployed to prod (commit ce2eb7f). Fresh engine refresh confirms 0 reliability + 0 automation false positives, queue down from 167 → 88. Two pre-existing DB-coupling test timeouts (phase11/phase12) unrelated to this change.
+  - Notes: The fix preserves the legacy file-count heuristic as fallback so caps without evidence (e.g., from a cold cache or unreadable file paths) don't regress. The remaining 21 "improve determinism for X" tasks at the top of the queue suggest the next sprint candidate: either evidence-gate the determinism dimension too (ratio-based formula has the same coarseness as the old reliability formula), or accept it as a real signal that the platform is over-leveraged on agents relative to deterministic backend logic.
 
 ### 10-priority operator walkthrough — 1 real fix shipped, 9 heuristic false positives surfaced a meta-pattern (2026-05-19)
 Operator: *"let's start with the highest priority and work our way through 10 of the next priorities. Following just as a user would if they were working through it."*
