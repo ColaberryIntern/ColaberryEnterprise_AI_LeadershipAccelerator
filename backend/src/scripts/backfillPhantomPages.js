@@ -53,6 +53,30 @@ const ROUTE_FIXUPS = {
   '/not-found': '*',
 };
 
+// Brownfield-discovered page caps that already exist at a real registered
+// route — attach the route so they participate in ui_review correctly.
+// Picked by hand because the brownfield scanner derived these names from
+// backend/doc evidence without route attribution, and we want to bind them
+// to the live React routes rather than create yet more page caps.
+const BROWNFIELD_ROUTE_ASSIGNMENTS = {
+  'Advisory Page':                 '/advisory',
+  'Agency Partner Page':           '/partners',
+  'AI Architect Landing Page':     '/ai-architect',
+  'AI Workforce Designer Page':    '/ai-workforce-designer',
+  'AIXcelerator Landing Page':     '/aixcelerator',
+  'Alumni Champion Page':          '/alumni-ai-champion',
+  'Case Studies Page':             '/case-studies',
+  'Executive ROI Calculator Page': '/executive-roi-calculator',
+};
+
+// Pure duplicates: brownfield-discovered cap with same conceptual name as
+// a frontend_page cap that's already correctly bound. Deactivate the
+// brownfield one (it's redundant and pollutes the ui_review queue).
+const DUPLICATE_NAMES = new Set([
+  'Enrollment Success Page', // duplicate of "Enroll Success Page" → /enroll/success
+  'Pilot AI Team Page',      // duplicate of "Pilot Ai Team Page" → /pilot/ai-team
+]);
+
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -75,11 +99,36 @@ async function main() {
 
   let fixedRoutes = 0;
   let downgradedPhantoms = 0;
+  let assignedBrownfield = 0;
+  let deactivatedDuplicates = 0;
   let untouched = 0;
 
   for (const cap of caps) {
     const route = cap.frontend_route;
     if (!route) {
+      // Brownfield page cap with no route attached. Two cases:
+      // 1) Known duplicate of a frontend_page cap → deactivate
+      // 2) Known assignment → attach the registered route
+      // 3) Unknown → leave alone (operator will set the route manually)
+      if (DUPLICATE_NAMES.has(cap.name)) {
+        await sequelize.query(
+          `UPDATE capabilities SET applicability_status = 'inactive', updated_at = NOW() WHERE id = :id`,
+          { replacements: { id: cap.id } },
+        );
+        console.log(`  [duplicate]  "${cap.name}" → inactive (already covered by frontend_page cap)`);
+        deactivatedDuplicates++;
+        continue;
+      }
+      const assigned = BROWNFIELD_ROUTE_ASSIGNMENTS[cap.name];
+      if (assigned) {
+        await sequelize.query(
+          `UPDATE capabilities SET frontend_route = :r, source = 'frontend_page', updated_at = NOW() WHERE id = :id`,
+          { replacements: { r: assigned, id: cap.id } },
+        );
+        console.log(`  [bind-route] "${cap.name}" → ${assigned}`);
+        assignedBrownfield++;
+        continue;
+      }
       untouched++;
       continue;
     }
@@ -117,7 +166,7 @@ async function main() {
   }
 
   console.log();
-  console.log(`Summary: ${fixedRoutes} routes fixed, ${downgradedPhantoms} phantoms downgraded, ${untouched} left as-is.`);
+  console.log(`Summary: ${fixedRoutes} routes fixed, ${downgradedPhantoms} phantoms downgraded, ${assignedBrownfield} brownfield routes attached, ${deactivatedDuplicates} duplicates deactivated, ${untouched} left as-is.`);
   await sequelize.close();
 }
 
