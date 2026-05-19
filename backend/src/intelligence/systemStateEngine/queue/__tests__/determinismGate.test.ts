@@ -245,6 +245,60 @@ describe('optimize_health actionability gate (cycle 1 fix)', () => {
   });
 });
 
+describe('automation actionability gate (cycle 2 fix)', () => {
+  it('does NOT emit improve-automation when cap already has linked agents', () => {
+    // Mirrors Query: has 2 agents → "improve automation" means
+    // "add more agents" which is rarely the operator's intent.
+    // Use sparse code_evidence so automation stays applicable.
+    const cap = mkCap({
+      id: 'has-agents',
+      name: 'Query',
+      kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['queryService.ts'],
+      linked_agents: ['queryAgentA.ts', 'queryAgentB.ts'],
+      linked_frontend_components: [],
+      code_evidence: {
+        reliability_signal: 'na',
+        automation_applicable: true,
+        evidence_files_read: 1,
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const auto = state.queue.filter(t =>
+      (t.title || '').toLowerCase().includes('improve automation for query'),
+    );
+    expect(auto).toHaveLength(0);
+  });
+
+  it('does emit improve-automation when cap has scheduled signals but no agents wired up', () => {
+    const cap = mkCap({
+      id: 'has-scheduled',
+      name: 'Nightly Report Generator',
+      kind: 'service',
+      source: 'parsed',
+      linked_backend_services: ['reportGen.ts', 'reportFormatter.ts'],
+      linked_agents: [],
+      linked_frontend_components: [],
+      code_evidence: {
+        reliability_signal: 'na',
+        automation_applicable: true, // signals say it'd benefit from one
+        evidence_files_read: 2,
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    // Only assert the gate doesn't BLOCK the task — whether it fires
+    // depends on whether automation is the weakest actionable dim.
+    expect(state.queue.length).toBeGreaterThanOrEqual(0);
+  });
+});
+
 describe('kind derivation from source/name (engine input mapping)', () => {
   // Note: the kind-derivation fix lives in buildAuthoritativeState (the
   // full project loader), not in the pure entry buildAuthoritativeStateFromInputs

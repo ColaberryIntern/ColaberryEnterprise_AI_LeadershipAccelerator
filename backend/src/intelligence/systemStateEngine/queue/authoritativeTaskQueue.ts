@@ -357,8 +357,14 @@ function generateCapTasks(
           if (feCount === 0 && beCount < 2) return false;
           return true;
         }
-        case 'automation':
-          return kind === 'service' && !looksInternal;
+        case 'automation': {
+          if (kind !== 'service' || looksInternal) return false;
+          const agCount = (cap.linked_agents || []).length;
+          if (agCount > 0) return false;
+          const ev = cap.code_evidence;
+          if (ev && !ev.automation_applicable) return false;
+          return true;
+        }
         case 'determinism': {
           const beCount = (cap.linked_backend_services || []).length;
           const agCount = (cap.linked_agents || []).length;
@@ -442,10 +448,24 @@ function generateCapTasks(
           if (feCount === 0 && beCount < 2) return false;
           return true;
         }
-        case 'automation':
-          // Suggest adding agents only for service-kind caps (page/component
+        case 'automation': {
+          // Base: only service-kind, non-internal-named caps (page/component
           // never own their own agents; agent-kind already IS an agent).
-          return kind === 'service' && !looksInternal;
+          if (kind !== 'service' || looksInternal) return false;
+          // Tightened gate (2026-05-19, 3rd walk): if the cap already has
+          // linked agents, "improve automation" effectively means "add MORE
+          // agents" — which is rarely the operator's intent. The cap has
+          // already chosen its agent footprint. Only fire when the cap has
+          // NO agents AND positive evidence agents would help (scheduled
+          // jobs or queue handlers in the linked files, surfaced via
+          // code_evidence). Without code_evidence, fall back to the
+          // legacy "no agents, kind=service, non-internal" gate.
+          const agCount = (cap.linked_agents || []).length;
+          if (agCount > 0) return false;
+          const ev = cap.code_evidence;
+          if (ev && !ev.automation_applicable) return false;
+          return true;
+        }
         case 'determinism': {
           // Determinism gate (2026-05-19): the "add rule-based fallbacks
           // where the agent currently makes the call" suggestion only
