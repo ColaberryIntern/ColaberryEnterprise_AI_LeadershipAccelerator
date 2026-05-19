@@ -39,6 +39,44 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### 10-priority operator walkthrough — 1 real fix shipped, 9 heuristic false positives surfaced a meta-pattern (2026-05-19)
+Operator: *"let's start with the highest priority and work our way through 10 of the next priorities. Following just as a user would if they were working through it."*
+
+Walked each one as if I were the operator clicking through. Honest results:
+
+| # | Priority | Verdict | Action |
+| --- | --- | --- | --- |
+| 1 | Improve reliability for Lead Ingestion Controller | **Real gap** — no try/catch around handleIngest call; service had it but controller didn't | ✅ Added outer try/catch + error_class logging |
+| 2 | Improve reliability for Lead Classification Service | Already hardened (functions fail loud) | ✗ No change |
+| 3 | Improve reliability for Lead Scoring Engine | Pure deterministic functions — nothing to wrap | ✗ No change |
+| 4 | Improve reliability for Lead Data Normalization | Same file as #1 — duplicate cap | ✗ Covered |
+| 5 | Improve automation for Lead Management Dashboard | CRUD admin — agent not appropriate | ✗ False positive |
+| 6 | Improve automation for Governance Policy Configuration | Same pattern as #5 | ✗ False positive |
+| 7 | Improve reliability for Event Ledger Tracking | 10 try/catch blocks already | ✗ No change |
+| 8 | Improve automation for Project Portfolio Overview | Operator-driven, no agent need | ✗ False positive |
+| 9 | Improve reliability for Validation Results Emission | Mis-linked to frontend file | ✗ False positive |
+| 10 | Improve reliability for Decision Trace Logging | Pure functions + Sequelize model | ✗ No change |
+
+**Conversion rate: 1/10.** Honest math: the gap-driven generator shipped 9 false positives. Worse than the 50/50 it felt like — turns out 90% of "Improve reliability for X" and "Improve automation for X" are noise because the heuristic is too coarse.
+
+**Root cause:** [healthScorer.ts](backend/src/intelligence/systemStateEngine/scoring/healthScorer.ts) computes:
+- `reliability = Math.min(100, backendCount * 15)` — file count, not actual try/catch density
+- `automation = hasAgents ? Math.min(100, 40 + agentCount * 10) : 0` — file presence, not whether agents make sense for the cap
+
+A pure-function service with 1 file gets reliability=15 → flagged. A CRUD controller with no need for agents gets automation=0 → flagged.
+
+**Follow-up sprint scope (deferred):** make health scoring evidence-based.
+- `reliability`: count actual try/catch blocks per linked file; recognize pure-function services as N/A
+- `automation`: only applicable when cap genuinely has autonomous workflow potential (signals: scheduled jobs, queue handlers, agent registry membership)
+- More precise per-dimension applicability gates in the gap-driven generator so the operator sees fewer queue items but each is real
+
+**The one real fix:** [leadIngestionController.ts](backend/src/controllers/leadIngestionController.ts) wrapped in try/catch — uncaught exceptions during arg parsing or DB drop during initial `raw` create no longer leak the stack to the webhook sender. Service-level try/catch existed; controller-level was the gap.
+
+  - Date: 2026-05-19
+  - What changed: 1 modified file (leadIngestionController.ts), 52 lines added / 30 modified. 1 deploy.
+  - Verification: tsc clean. Functionality unchanged for happy path; failure mode now returns clean 500 with structured log.
+  - Notes: The "walk 10 priorities as operator" exercise produced exactly the right output — a quantified false-positive rate that justifies a specific follow-up sprint scope. Without the walk we'd be guessing about whether the scoring is calibrated. Now we have data: it isn't, 9/10 surfaced asks are noise. Pattern observation worth keeping: when a queue item type has a >50% false-positive rate during a walked audit, the scoring formula or generator needs an evidence-based rewrite, not just tighter gating.
+
 ### Surface sync: Home + Critique + Blueprint + System all read the same source of truth (2026-05-19)
 Operator screenshot revealed Cory Home (readiness 40, empty queue) didn't match the engine state (readiness 62, queue 167) we'd just shipped. Then System tab showed 0/71 requirements matched while Cory Home showed 240/270. Then Page BPs were labeled "Not built yet" despite being detected by the brownfield scanner (= they exist). Three separate sync breaks in three operator surfaces.
 
