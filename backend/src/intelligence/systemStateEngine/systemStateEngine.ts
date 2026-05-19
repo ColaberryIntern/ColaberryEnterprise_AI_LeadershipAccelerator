@@ -83,7 +83,9 @@ export interface PureBuildInput {
 export function buildAuthoritativeStateFromInputs(input: PureBuildInput): AuthoritativeSystemState {
   const generated_at = new Date().toISOString();
 
-  // 1. Per-cap scoring
+  // 1. Per-cap scoring. Preserve breakdowns + operator_bounded so the
+  // operator-facing UI can render WHY a score is what it is, and the
+  // queue can distinguish system-actionable gaps from operator-bounded ones.
   const capability_scores: CapabilityScores[] = input.capabilities.map(cap => {
     const readiness = scoreReadiness(cap);
     const coverage = scoreCoverage(cap);
@@ -97,6 +99,21 @@ export function buildAuthoritativeStateFromInputs(input: PureBuildInput): Author
       maturity_level: maturity.level,
       health: health.score,
       sync_health: 0,    // placeholder; sync_health is project-level
+      operator_bounded: !!readiness.operator_bounded,
+      readiness_breakdown: {
+        layer: readiness.layer_score,
+        coverage: readiness.coverage_score,
+        quality: readiness.quality_score,
+      },
+      health_breakdown: {
+        applicable_dimensions: health.applicable_dimensions,
+        determinism: health.determinism,
+        reliability: health.reliability,
+        observability: health.observability,
+        ux_exposure: health.ux_exposure,
+        automation: health.automation,
+        production_readiness: health.production_readiness,
+      },
     };
   });
 
@@ -905,6 +922,14 @@ function aggregateProjectScores(
     : 0;
   const observability = avg(capScores.map(s => s.health));   // proxy until we surface observability separately
 
+  // Honest accounting of the readiness gap. Added 2026-05-19.
+  // For each cap below readiness=100: is the remaining work operator-bounded
+  // (e.g., Page awaiting ui_review) or system-actionable (e.g., missing
+  // observability files)?
+  const fully_built_count = capScores.filter(s => s.readiness >= 100).length;
+  const operator_bounded_count = capScores.filter(s => s.readiness < 100 && s.operator_bounded === true).length;
+  const system_actionable_count = capScores.length - fully_built_count - operator_bounded_count;
+
   return Object.freeze({
     project_id: projectId,
     readiness,
@@ -917,6 +942,11 @@ function aggregateProjectScores(
     intelligence,
     observability,
     per_capability: Object.freeze(capScores),
+    accounting: Object.freeze({
+      operator_bounded_count,
+      system_actionable_count,
+      fully_built_count,
+    }),
   });
 }
 

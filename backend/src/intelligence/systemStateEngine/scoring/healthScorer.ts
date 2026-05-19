@@ -12,6 +12,12 @@
  *   ux_exposure            — frontend coverage / accessibility / responsiveness
  *   automation             — agent / worker presence
  *   production_readiness   — composite readiness (deploy artifacts, config, secrets)
+ *
+ * Kind-aware (2026-05-19): not every dimension applies to every cap. A
+ * Page has no determinism (no backend logic). An agent has no ux_exposure
+ * (no UI). A component has only ux_exposure + reliability. Score averages
+ * over APPLICABLE dimensions only — caps aren't penalized for dimensions
+ * that don't make sense for what they are.
  */
 import type { EngineCapabilityInput, Score0to100 } from '../types/systemState.types';
 
@@ -24,6 +30,38 @@ export interface HealthBreakdown {
   readonly automation: Score0to100;
   readonly production_readiness: Score0to100;
   readonly reasons: ReadonlyArray<string>;
+  /**
+   * Names of dimensions that contributed to the final score for this kind.
+   * Dimensions NOT in this list were skipped as N/A for the cap's kind.
+   */
+  readonly applicable_dimensions: ReadonlyArray<string>;
+}
+
+type DimensionKey = 'determinism' | 'reliability' | 'observability' | 'ux_exposure' | 'automation' | 'production_readiness';
+
+/**
+ * Which dimensions apply to each cap kind. Dimensions not in the list
+ * are N/A — they don't contribute to the average. Conservative defaults:
+ * if a kind isn't recognized, treat all dimensions as applicable.
+ */
+function getApplicableDimensions(kind: string | undefined): DimensionKey[] {
+  switch (kind) {
+    case 'page':
+      // Pages: UX-driven, deploy as part of frontend bundle. No backend logic
+      // (no determinism), no agent (no automation).
+      return ['ux_exposure', 'reliability', 'observability', 'production_readiness'];
+    case 'agent':
+      // Agents: backend code that runs autonomously. No UI surface.
+      return ['determinism', 'reliability', 'observability', 'automation', 'production_readiness'];
+    case 'component':
+      // Components: UI widgets embedded in pages. Just need to be reliable
+      // and exposed correctly. No backend, no agents, no observability of
+      // their own.
+      return ['ux_exposure', 'reliability'];
+    case 'service':
+    default:
+      return ['determinism', 'reliability', 'observability', 'ux_exposure', 'automation', 'production_readiness'];
+  }
 }
 
 export function scoreHealth(
@@ -31,6 +69,10 @@ export function scoreHealth(
   projectFileTree: ReadonlyArray<string>,
 ): HealthBreakdown {
   const reasons: string[] = [];
+  const kind = cap.kind || 'service';
+  const applicable = getApplicableDimensions(kind);
+  const applicableSet = new Set<DimensionKey>(applicable);
+
   const backendCount = (cap.linked_backend_services || []).length;
   const frontendCount = (cap.linked_frontend_components || []).length;
   const agentCount = (cap.linked_agents || []).length;
@@ -41,7 +83,7 @@ export function scoreHealth(
 
   // determinism: backend presence with low agent ratio = more deterministic
   let determinism = 0;
-  if (hasBackend) {
+  if (applicableSet.has('determinism') && hasBackend) {
     const ratio = backendCount / Math.max(1, backendCount + agentCount);
     determinism = Math.round(ratio * 100);
     reasons.push(`determinism: ${determinism} (${backendCount} backend / ${agentCount} agent files)`);
@@ -49,45 +91,79 @@ export function scoreHealth(
 
   // reliability: rough — high if backend has many files (suggests proper structure)
   let reliability = 0;
-  if (hasBackend) {
-    reliability = Math.min(100, backendCount * 15);
-    reasons.push(`reliability: ${reliability} (heuristic from backend file count)`);
+  if (applicableSet.has('reliability')) {
+    if (hasBackend) {
+      reliability = Math.min(100, backendCount * 15);
+      reasons.push(`reliability: ${reliability} (heuristic from backend file count)`);
+    } else if (kind === 'page' || kind === 'component') {
+      // Pages/components: reliability ~= having a route + components shipped
+      reliability = (cap.frontend_route ? 50 : 0) + Math.min(50, frontendCount * 20);
+      reasons.push(`reliability: ${reliability} (page/component frontend signals)`);
+    }
   }
 
   // observability: project-wide signal — does the repo have monitoring/logging files
-  const observabilityFiles = projectFileTree.filter(f =>
-    /(monitor|metric|log|logger|telemetr|tracer?|trac(e|ing)|observ|alerts?)/i.test(f)
-    && /\.(ts|tsx|js|jsx|py|go|rs|java)$/.test(f)
-  ).length;
-  const observability = Math.min(100, observabilityFiles * 5);
-  reasons.push(`observability: ${observability} (${observabilityFiles} matching files in project)`);
+  let observability = 0;
+  if (applicableSet.has('observability')) {
+    const observabilityFiles = projectFileTree.filter(f =>
+      /(monitor|metric|log|logger|telemetr|tracer?|trac(e|ing)|observ|alerts?)/i.test(f)
+      && /\.(ts|tsx|js|jsx|py|go|rs|java)$/.test(f)
+    ).length;
+    observability = Math.min(100, observabilityFiles * 5);
+    reasons.push(`observability: ${observability} (${observabilityFiles} matching files in project)`);
+  }
 
   // ux_exposure: frontend presence + frontend_route
   let ux_exposure = 0;
-  if (hasFrontend) {
+  if (applicableSet.has('ux_exposure') && hasFrontend) {
     ux_exposure = cap.frontend_route ? 80 : 40;
     if (frontendCount > 3) ux_exposure = Math.min(100, ux_exposure + 20);
     reasons.push(`ux_exposure: ${ux_exposure} (route ${cap.frontend_route ? 'set' : 'not set'}, ${frontendCount} components)`);
   }
 
   // automation: agent layer presence
-  const automation = hasAgents ? Math.min(100, 40 + agentCount * 10) : 0;
-  if (hasAgents) reasons.push(`automation: ${automation} (${agentCount} agent files)`);
+  let automation = 0;
+  if (applicableSet.has('automation')) {
+    automation = hasAgents ? Math.min(100, 40 + agentCount * 10) : 0;
+    if (hasAgents) reasons.push(`automation: ${automation} (${agentCount} agent files)`);
+  }
 
   // production_readiness: composite of all-layers + repo-level deploy artifacts
-  const hasDeployArtifacts = projectFileTree.some(f => /Dockerfile|docker-compose|\.github\/workflows/i.test(f));
   let production_readiness = 0;
-  if (hasBackend) production_readiness += 30;
-  if (hasFrontend) production_readiness += 30;
-  if (hasAgents) production_readiness += 20;
-  if (hasDeployArtifacts) production_readiness += 20;
-  production_readiness = Math.min(100, production_readiness);
-  reasons.push(`production_readiness: ${production_readiness} (deploy artifacts: ${hasDeployArtifacts})`);
+  if (applicableSet.has('production_readiness')) {
+    const hasDeployArtifacts = projectFileTree.some(f => /Dockerfile|docker-compose|\.github\/workflows/i.test(f));
+    // For services: backend + frontend + agents + deploy
+    // For pages/components: frontend + deploy
+    // For agents: backend + agents + deploy
+    if (kind === 'page' || kind === 'component') {
+      if (hasFrontend) production_readiness += 60;
+      if (hasDeployArtifacts) production_readiness += 40;
+    } else if (kind === 'agent') {
+      if (hasBackend) production_readiness += 40;
+      if (hasAgents) production_readiness += 40;
+      if (hasDeployArtifacts) production_readiness += 20;
+    } else {
+      // service
+      if (hasBackend) production_readiness += 30;
+      if (hasFrontend) production_readiness += 30;
+      if (hasAgents) production_readiness += 20;
+      if (hasDeployArtifacts) production_readiness += 20;
+    }
+    production_readiness = Math.min(100, production_readiness);
+    reasons.push(`production_readiness: ${production_readiness} (deploy artifacts: ${hasDeployArtifacts})`);
+  }
 
-  // Final composite — equal weighting across 6 dimensions
-  const score = Math.round(
-    (determinism + reliability + observability + ux_exposure + automation + production_readiness) / 6
-  );
+  // Final composite — average over APPLICABLE dimensions only.
+  // Each dimension's value is 0-100; sum and divide by applicable count.
+  const allValues: Record<DimensionKey, number> = {
+    determinism, reliability, observability, ux_exposure, automation, production_readiness,
+  };
+  const applicableValues = applicable.map(d => allValues[d]);
+  const score = applicableValues.length === 0
+    ? 0
+    : Math.round(applicableValues.reduce((s, v) => s + v, 0) / applicableValues.length);
+
+  reasons.push(`kind=${kind}, applicable dimensions: [${applicable.join(', ')}]`);
 
   return {
     score: clamp(score),
@@ -98,6 +174,7 @@ export function scoreHealth(
     automation: clamp(automation),
     production_readiness: clamp(production_readiness),
     reasons,
+    applicable_dimensions: Object.freeze([...applicable]),
   };
 }
 

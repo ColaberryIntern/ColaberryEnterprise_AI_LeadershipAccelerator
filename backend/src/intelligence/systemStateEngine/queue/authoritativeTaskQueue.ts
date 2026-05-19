@@ -341,6 +341,57 @@ function generateCapTasks(
     }));
   }
 
+  // Phase C (2026-05-19): gap-driven task — for caps that aren't
+  // operator-bounded but have a specific weak dimension, surface it as
+  // an actionable task. Targets the dimension scoring lowest among the
+  // cap's applicable dimensions. Only fires when the cap is otherwise
+  // built (has backend OR frontend) and isn't operator-bounded.
+  // Total transparency principle: every score gap should have either
+  // a task that would close it or a label saying "needs operator".
+  const isBuilt = hasBackend || hasFrontend;
+  const isOperatorBounded = !!score.operator_bounded;
+  const hb = score.health_breakdown;
+  if (isBuilt && !isOperatorBounded && hb && hb.applicable_dimensions.length > 0 && score.health < 70) {
+    // Find the lowest-scoring applicable dimension
+    const dimValues = hb.applicable_dimensions.map(d => ({
+      name: d,
+      value: (hb as any)[d] as number,
+    }));
+    dimValues.sort((a, b) => a.value - b.value);
+    const weakest = dimValues[0];
+    if (weakest && weakest.value < 50) {
+      const dimLabels: Record<string, { title: string; ask: string }> = {
+        determinism:          { title: 'reduce LLM dependency',       ask: 'add rule-based fallbacks where the agent currently makes the call' },
+        reliability:          { title: 'harden error handling',       ask: 'add try/catch + retry + idempotency to the main path' },
+        observability:        { title: 'add observability',           ask: 'add structured logging + metrics + correlation IDs' },
+        ux_exposure:          { title: 'expose more UI',              ask: 'either link a frontend_route or add components' },
+        automation:           { title: 'add agent automation',        ask: 'either link an existing agent or add one' },
+        production_readiness: { title: 'tighten production readiness', ask: 'check deploy artifacts (Dockerfile, env, secrets) and any missing layers' },
+      };
+      const label = dimLabels[weakest.name] || { title: weakest.name, ask: 'review the dimension and address gaps' };
+      tasks.push(makeTask({
+        id: `${cap.id}:improve_${weakest.name}`,
+        project_id: project.id,
+        bp_id: cap.id,
+        title: `Improve ${weakest.name.replace(/_/g, ' ')} for ${cap.name}`,
+        description: `${cap.name}'s ${weakest.name} dimension is at ${weakest.value}/100. Action: ${label.ask}.`,
+        type: 'optimization',
+        priority_score: 45,
+        blocking_score: 15,
+        dependency_score: 35,
+        maturity_gain: 15,
+        readiness_gain: 10,
+        confidence_score: 75,
+        execution_cost: 25,
+        reasons: [
+          `${weakest.name} at ${weakest.value}/100 (weakest applicable dimension)`,
+          `kind=${cap.kind || 'service'}`,
+        ],
+        cap, cap_score: score,
+      }));
+    }
+  }
+
   return tasks;
 }
 

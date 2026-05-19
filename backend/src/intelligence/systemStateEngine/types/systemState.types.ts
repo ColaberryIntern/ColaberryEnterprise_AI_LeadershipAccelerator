@@ -25,6 +25,32 @@ export interface CapabilityScores {
   readonly maturity_level: 0 | 1 | 2 | 3 | 4;
   readonly health: Score0to100;
   readonly sync_health: Score0to100;
+  /**
+   * True when the cap's score gap requires operator judgment to close
+   * (e.g., Page awaiting ui_review verification). False when the gap
+   * is system-actionable (e.g., missing observability files, missing
+   * agent layer). Added 2026-05-19 for score-task transparency.
+   */
+  readonly operator_bounded?: boolean;
+  /**
+   * Per-dimension breakdown so the operator can see WHY a score is what
+   * it is. Surfaces in the API response so the UI can render "Health
+   * 49% because: ux_exposure=80, reliability=20, ...".
+   */
+  readonly readiness_breakdown?: {
+    readonly layer: Score0to100;
+    readonly coverage: Score0to100;
+    readonly quality: Score0to100;
+  };
+  readonly health_breakdown?: {
+    readonly applicable_dimensions: ReadonlyArray<string>;
+    readonly determinism: Score0to100;
+    readonly reliability: Score0to100;
+    readonly observability: Score0to100;
+    readonly ux_exposure: Score0to100;
+    readonly automation: Score0to100;
+    readonly production_readiness: Score0to100;
+  };
 }
 
 export interface ProjectScores {
@@ -39,6 +65,21 @@ export interface ProjectScores {
   readonly intelligence: Score0to100;
   readonly observability: Score0to100;
   readonly per_capability: ReadonlyArray<CapabilityScores>;
+  /**
+   * Honest accounting of where the score gap comes from. Added 2026-05-19.
+   *   operator_bounded_count: caps below 100 readiness whose gap is
+   *     operator-judgment (e.g., Pages awaiting ui_review verification).
+   *     The system can't push the score higher without operator input.
+   *   system_actionable_count: caps below 100 whose gap can be addressed
+   *     by system-generated tasks (e.g., missing observability files).
+   *   fully_built_count: caps at 100.
+   * sum = total caps.
+   */
+  readonly accounting?: {
+    readonly operator_bounded_count: number;
+    readonly system_actionable_count: number;
+    readonly fully_built_count: number;
+  };
 }
 
 // ---------------------------------------------------------------------------
