@@ -809,6 +809,95 @@ export function pruneCapLinkedFiles(
   return { totalPruned, fileTreeSize: fileTreeSet.size, capsWithStaleRefs, aborted: false };
 }
 
+/**
+ * Frontend route validation helper (2026-05-19, Tier-2 #6). Mirror of
+ * pruneCapLinkedFiles but for cap.frontend_route — clears the route
+ * (in memory only) when it doesn't resolve to a registered React
+ * Router path.
+ *
+ * Why this matters: the phantom-page scanner fix validates routes at
+ * cap-CREATION time, but routes can be removed from React Router
+ * AFTER a cap is created. The cap's frontend_route field then becomes
+ * stale, deep-links 404, and operator clicks dead-end. This runs at
+ * every engine refresh so stale routes are caught immediately rather
+ * than only at the next discovery scan.
+ *
+ * Tolerant matching: a route like /admin/generator that matches
+ * /admin/generator/:foo (parameterized base) is treated as valid.
+ *
+ * Safety nets identical to pruneCapLinkedFiles:
+ *   - Empty route registry → no-op
+ *   - Tiny registry (< 10 routes) → no-op (likely a partial parse)
+ *   - > 50% of caps' routes would be invalidated → ABORT (probable
+ *     registry-fetch failure or wrong-repo connection)
+ *
+ * In-memory only. DB rows untouched. Engine re-validates each refresh.
+ *
+ * Exported for tests.
+ */
+const ROUTE_VALIDATION_MIN_REGISTRY = 10;
+const ROUTE_VALIDATION_MAX_RATIO = 0.5;
+
+export interface FrontendRouteValidationSummary {
+  readonly totalCleared: number;
+  readonly registrySize: number;
+  readonly aborted: boolean;
+  readonly abortReason?: string;
+  readonly clearedRoutes: ReadonlyArray<{ capName: string; staleRoute: string }>;
+}
+
+export function validateCapFrontendRoutes(
+  caps: ReadonlyArray<{ name?: string; frontend_route?: string | null }>,
+  registeredRoutes: ReadonlySet<string> | null,
+): FrontendRouteValidationSummary {
+  if (!registeredRoutes || registeredRoutes.size === 0) {
+    return { totalCleared: 0, registrySize: 0, aborted: true, abortReason: 'empty route registry', clearedRoutes: [] };
+  }
+  if (registeredRoutes.size < ROUTE_VALIDATION_MIN_REGISTRY) {
+    return { totalCleared: 0, registrySize: registeredRoutes.size, aborted: true, abortReason: `registry size ${registeredRoutes.size} below min ${ROUTE_VALIDATION_MIN_REGISTRY} (likely partial parse)`, clearedRoutes: [] };
+  }
+
+  const resolves = (route: string): boolean => {
+    if (registeredRoutes.has(route)) return true;
+    // Parameterized base match: /admin/generator vs registered /admin/generator/:id
+    for (const r of registeredRoutes) {
+      const base = r.replace(/\/:[^/]+/g, '');
+      if (base === route) return true;
+    }
+    return false;
+  };
+
+  // Dry-run first.
+  let totalRoutes = 0;
+  let staleRoutes = 0;
+  for (const cap of caps) {
+    if (!cap.frontend_route) continue;
+    totalRoutes++;
+    if (!resolves(cap.frontend_route)) staleRoutes++;
+  }
+  if (totalRoutes > 0 && staleRoutes / totalRoutes > ROUTE_VALIDATION_MAX_RATIO) {
+    const pct = Math.round((staleRoutes / totalRoutes) * 100);
+    return {
+      totalCleared: 0,
+      registrySize: registeredRoutes.size,
+      aborted: true,
+      abortReason: `would clear ${pct}% of routes (${staleRoutes}/${totalRoutes}) — registry probably stale or wrong-repo`,
+      clearedRoutes: [],
+    };
+  }
+
+  // Real pass.
+  const cleared: Array<{ capName: string; staleRoute: string }> = [];
+  for (const cap of caps as Array<{ name?: string; frontend_route?: string | null }>) {
+    if (!cap.frontend_route) continue;
+    if (!resolves(cap.frontend_route)) {
+      cleared.push({ capName: cap.name || '(unnamed)', staleRoute: cap.frontend_route });
+      cap.frontend_route = null;
+    }
+  }
+  return { totalCleared: cleared.length, registrySize: registeredRoutes.size, aborted: false, clearedRoutes: cleared };
+}
+
 export interface BuildOptions {
   readonly persist?: boolean;     // default true
 }
@@ -1124,6 +1213,24 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
     console.warn(`[Engine] Linked-file pruning ABORTED: ${pruneSummary.abortReason}`);
   } else if (pruneSummary.totalPruned > 0) {
     console.log(`[Engine] Pruned ${pruneSummary.totalPruned} stale file refs from ${pruneSummary.capsWithStaleRefs} caps (file tree: ${pruneSummary.fileTreeSize} files)`);
+  }
+
+  // Frontend-route validation (2026-05-19, Tier-2 #6): clear cap
+  // frontend_route values that no longer resolve to a registered
+  // React Router path. Prevents stale routes from generating 404
+  // deep-links (the Trust Badges incident). See
+  // validateCapFrontendRoutes for the rationale + safety nets.
+  try {
+    const { readRegisteredRoutes } = await import('../../services/frontendPageDiscovery');
+    const registeredRoutes = readRegisteredRoutes(repoFileTree);
+    const routeSummary = validateCapFrontendRoutes(caps, registeredRoutes);
+    if (routeSummary.aborted) {
+      console.warn(`[Engine] frontend_route validation ABORTED: ${routeSummary.abortReason}`);
+    } else if (routeSummary.totalCleared > 0) {
+      console.log(`[Engine] Cleared ${routeSummary.totalCleared} stale frontend_route refs (registry: ${routeSummary.registrySize} routes). Sample: ${routeSummary.clearedRoutes.slice(0, 3).map(c => `"${c.capName}"→${c.staleRoute}`).join(', ')}`);
+    }
+  } catch (err: any) {
+    console.warn(`[Engine] frontend_route validation skipped: ${err?.message}`);
   }
 
   const capabilities: EngineCapabilityInput[] = caps.map(cap => {
