@@ -44,7 +44,7 @@ type DimensionKey = 'determinism' | 'reliability' | 'observability' | 'ux_exposu
  * are N/A — they don't contribute to the average. Conservative defaults:
  * if a kind isn't recognized, treat all dimensions as applicable.
  */
-function getApplicableDimensions(kind: string | undefined): DimensionKey[] {
+function getKindApplicableDimensions(kind: string | undefined): DimensionKey[] {
   switch (kind) {
     case 'page':
       // Pages: UX-driven, deploy as part of frontend bundle. No backend logic
@@ -64,14 +64,40 @@ function getApplicableDimensions(kind: string | undefined): DimensionKey[] {
   }
 }
 
+/**
+ * Apply evidence-based gating on top of kind-based applicability.
+ * Added 2026-05-19 after the operator audit showed 90% false-positive
+ * rate on heuristic reliability + automation tasks.
+ *
+ *   reliability is skipped if code_evidence.reliability_signal === 'na'
+ *     (pure-function service has nothing to wrap)
+ *   automation is skipped if code_evidence.automation_applicable === false
+ *     (CRUD admin etc. don't need agents)
+ *
+ * When code_evidence is absent, only kind-based gating applies (legacy
+ * behavior).
+ */
+function getApplicableDimensions(cap: EngineCapabilityInput): DimensionKey[] {
+  const kindApplicable = getKindApplicableDimensions(cap.kind);
+  if (!cap.code_evidence) return kindApplicable;
+  return kindApplicable.filter(d => {
+    if (d === 'reliability' && cap.code_evidence!.reliability_signal === 'na') return false;
+    if (d === 'automation' && !cap.code_evidence!.automation_applicable) return false;
+    return true;
+  });
+}
+
 export function scoreHealth(
   cap: EngineCapabilityInput,
   projectFileTree: ReadonlyArray<string>,
 ): HealthBreakdown {
   const reasons: string[] = [];
   const kind = cap.kind || 'service';
-  const applicable = getApplicableDimensions(kind);
+  const applicable = getApplicableDimensions(cap);
   const applicableSet = new Set<DimensionKey>(applicable);
+  if (cap.code_evidence) {
+    reasons.push(`code-evidence: reliability=${cap.code_evidence.reliability_signal}, automation_applicable=${cap.code_evidence.automation_applicable} (${cap.code_evidence.evidence_files_read} files read)`);
+  }
 
   const backendCount = (cap.linked_backend_services || []).length;
   const frontendCount = (cap.linked_frontend_components || []).length;
@@ -89,14 +115,20 @@ export function scoreHealth(
     reasons.push(`determinism: ${determinism} (${backendCount} backend / ${agentCount} agent files)`);
   }
 
-  // reliability: rough — high if backend has many files (suggests proper structure)
+  // reliability: prefer evidence-based scoring (try/catch density) when
+  // code_evidence is present. Falls back to file-count heuristic for legacy.
   let reliability = 0;
   if (applicableSet.has('reliability')) {
-    if (hasBackend) {
+    const sig = cap.code_evidence?.reliability_signal;
+    if (sig === 'high')   { reliability = 90; reasons.push(`reliability: 90 (evidence: high try/catch density)`); }
+    else if (sig === 'medium') { reliability = 65; reasons.push(`reliability: 65 (evidence: medium try/catch density)`); }
+    else if (sig === 'low') { reliability = 30; reasons.push(`reliability: 30 (evidence: low try/catch density — hardening helps)`); }
+    // sig === 'na' wouldn't reach here (gate filters it out)
+    else if (hasBackend) {
+      // legacy fallback when no code evidence available
       reliability = Math.min(100, backendCount * 15);
-      reasons.push(`reliability: ${reliability} (heuristic from backend file count)`);
+      reasons.push(`reliability: ${reliability} (heuristic from backend file count — no code evidence)`);
     } else if (kind === 'page' || kind === 'component') {
-      // Pages/components: reliability ~= having a route + components shipped
       reliability = (cap.frontend_route ? 50 : 0) + Math.min(50, frontendCount * 20);
       reasons.push(`reliability: ${reliability} (page/component frontend signals)`);
     }

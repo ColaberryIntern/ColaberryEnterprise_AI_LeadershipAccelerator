@@ -911,6 +911,27 @@ export interface EngineCapabilityInput {
    * inputs; queue should default to 0 in that case.
    */
   readonly operator_unmatched_requirements?: number;
+  /**
+   * File-content-based signals that gate health scoring. Computed once per
+   * engine refresh (cached per file 1hr) by reading the cap's linked
+   * backend files. Replaces the file-count heuristics that produced a
+   * 90% false-positive rate on 'Improve reliability/automation for X'
+   * priorities (2026-05-19 operator audit).
+   *
+   * When present:
+   *   reliability dimension is skipped if reliability_signal === 'na'
+   *     (pure-function service has nothing to wrap)
+   *   automation dimension is skipped if automation_applicable === false
+   *     (CRUD admin etc. don't need agents)
+   *
+   * When absent (old engine inputs / tests), scorer falls back to the
+   * legacy file-count heuristics so behavior stays backward compatible.
+   */
+  readonly code_evidence?: {
+    readonly reliability_signal: 'high' | 'medium' | 'low' | 'na';
+    readonly automation_applicable: boolean;
+    readonly evidence_files_read: number;
+  };
 }
 
 export interface EngineProjectInput {

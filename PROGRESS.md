@@ -39,6 +39,36 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Evidence-based health scoring — closes the 90% false-positive sprint (2026-05-19)
+Directly resolves the deferred follow-up flagged in the 10-priority walkthrough below. The walk surfaced that the gap-driven generator was 90% noise because `healthScorer.ts` counted *files*, not actual code signals. A pure-function service with 1 file got `reliability=15` and was flagged for hardening. A CRUD admin controller with 0 agents got `automation=0` and was flagged for an agent. Wrong on both counts.
+
+**What shipped:**
+
+1. **New `codeEvidence.ts`** ([backend/src/intelligence/systemStateEngine/scoring/codeEvidence.ts](backend/src/intelligence/systemStateEngine/scoring/codeEvidence.ts)) — reads each cap's linked backend files (capped at 5 per cap, 1-hour in-memory cache for repeat reads) and computes:
+   - `reliability_signal: 'high' | 'medium' | 'low' | 'na'` — based on try/catch density per async function. `na` when async_functions === 0 (pure-function service has nothing to wrap)
+   - `automation_applicable: boolean` — true when cap is kind='agent', has linked agents, or any linked file shows scheduled-job / queue-handler signals. Otherwise "Improve automation for X" is the wrong ask
+   - `evidence_files_read` — for transparency in the breakdown UI
+
+2. **`EngineCapabilityInput.code_evidence` field** ([systemState.types.ts](backend/src/intelligence/systemStateEngine/types/systemState.types.ts)) — optional; scorers fall back to legacy file-count heuristics when absent.
+
+3. **`systemStateEngine.ts` wires evidence per cap** during refresh — wrapped in try/catch so file-read failures degrade gracefully to legacy scoring.
+
+4. **`healthScorer.ts` is now evidence-aware** ([healthScorer.ts](backend/src/intelligence/systemStateEngine/scoring/healthScorer.ts)):
+   - `getApplicableDimensions(cap)` filters out reliability when `reliability_signal === 'na'` and automation when `automation_applicable === false`, on top of the existing kind-based gating
+   - Reliability score uses the evidence signal directly (high=90, medium=65, low=30) instead of `backendCount * 15`
+   - When evidence is missing, legacy heuristic still runs (no regression for caps that haven't been re-scored)
+
+5. **12 new tests** ([scoring/__tests__/evidenceScoring.test.ts](backend/src/intelligence/systemStateEngine/scoring/__tests__/evidenceScoring.test.ts)) — cover the helper end-to-end (real repo file reads) plus the scorer gating logic. All pass; full engine integration suite (42 tests) also still green.
+
+**Why regex not AST:** AST parsing adds 50ms+ per file and a heavy dependency. For a *heuristic signal that drives which dimensions to APPLY* (not what to fix), regex on token-level patterns (`} catch (`, `async function`, `cron.schedule`, `.process(`) is adequate.
+
+**Expected operator impact:** The 9 false positives from yesterday's walk (improve-reliability for pure-function services, improve-automation for CRUD admin) should disappear from the queue on the next engine refresh. The pre-flight check yesterday: ~90% of the gap-driven queue. Post-fix prediction: ~30-40% of the same queue, all on caps with actual async + low try/catch density or actual scheduled-job signals without a wired agent.
+
+  - Date: 2026-05-19
+  - What changed: 1 new file (codeEvidence.ts, 178 lines), 1 new test file (evidenceScoring.test.ts, 12 tests), 3 modified (healthScorer.ts evidence-aware, systemStateEngine.ts wiring, systemState.types.ts type extension)
+  - Verification: 12/12 new tests pass, 42/42 engine integration tests pass, `npx tsc --noEmit` exit 0. Two pre-existing DB-coupling test timeouts (phase11/phase12) unrelated to this change.
+  - Notes: The fix preserves the legacy file-count heuristic as fallback so caps without evidence (e.g., from a cold cache or unreadable file paths) don't regress. Once the next refresh lands in prod, re-walk the top 10 priorities; expectation is conversion rate moves from 1/10 to 4+/10.
+
 ### 10-priority operator walkthrough — 1 real fix shipped, 9 heuristic false positives surfaced a meta-pattern (2026-05-19)
 Operator: *"let's start with the highest priority and work our way through 10 of the next priorities. Following just as a user would if they were working through it."*
 

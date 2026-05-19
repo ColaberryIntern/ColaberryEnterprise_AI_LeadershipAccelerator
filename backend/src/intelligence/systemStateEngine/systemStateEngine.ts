@@ -1045,6 +1045,27 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
       matched_requirements: counts.matched,
       verified_requirements: counts.verified,
       operator_unmatched_requirements: counts.operator_unmatched,
+      // Evidence-based scoring signals (2026-05-19). Pre-computed here once
+      // per refresh so the scorers stay pure. Best-effort: if file reads
+      // fail, evidence is undefined and scorers fall back to legacy
+      // file-count heuristics.
+      code_evidence: (() => {
+        try {
+          const { computeCodeEvidence } = require('./scoring/codeEvidence');
+          const ev = computeCodeEvidence({
+            kind: (c as any).kind,
+            linked_backend_services: c.linked_backend_services,
+            linked_agents: c.linked_agents,
+          });
+          return {
+            reliability_signal: ev.reliability_signal,
+            automation_applicable: ev.automation_applicable,
+            evidence_files_read: ev.evidence_files_read,
+          };
+        } catch {
+          return undefined;
+        }
+      })(),
     };
   });
 
