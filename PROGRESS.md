@@ -94,6 +94,38 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### triage task type: surface the 100+ unspec'd brownfield caps (2026-05-19)
+Tier-1 item #2 of [docs/FALSE_POSITIVE_ELIMINATION_PLAN.md](docs/FALSE_POSITIVE_ELIMINATION_PLAN.md). The project has 141 active caps but the queue was surfacing only ~43 — the other 100 were brownfield-discovered code with no requirements attached, so no concrete generator (build_backend, implement_reqs, etc.) had a task to fire. Those caps stayed invisible while readiness sat at 56%.
+
+triage is the fallback task: when there's no concrete BUILD/IMPLEMENT/REVIEW action for a cap, ask the operator for a DECISION:
+- (a) **spec 3-5 requirements** to drive implementation
+- (b) **mark verified** if the cap is complete as-is
+- (c) **archive** if it's not real work
+
+**Gates:**
+- `kind === 'service'` (pages get ui_review, agents are their own thing)
+- `source === 'brownfield_discovered'` (spec-driven caps already have reqs by definition)
+- `total_requirements === 0` (nothing to implement yet)
+- `!looksInternal AND !isAgentLayerNamed` (infra and agent-layer caps aren't candidates for operator-spec'd requirements)
+- No CONCRETE task already firing for the cap (build/implement/ui_review/verify/agent_stack) — triage is the floor, not a duplicate
+- When triage fires, any `optimization` tasks for the same cap are **suppressed** (they're noise when triage is the actual operator action)
+
+**Priority 35** — above ui_review (25), below agent_stack (50) and build/implement (70-80).
+
+**Production verification (full walk):**
+
+Queue 43 → 79 items:
+- 3 agent_stack (next-tier work on mature caps)
+- 36 triage (decisions on under-spec'd brownfield caps)
+- 40 ui_review (operator polish)
+
+**Top 5 walked: 5/5 real** (Marketing Dashboard 8be/4fe, Content Generation for Marketing 38be/3fe, Lead Management Dashboard, Revenue Dashboard Insights, Project Portfolio Overview). **Tail 15 walked: 15/15 real** (smallest are still legit caps just under-spec'd). **0 noise across all 36.**
+
+  - Date: 2026-05-19
+  - What changed: AuthoritativeTaskType extended with `triage`; new `generateTriageTask()` function; cap-class dedup logic (triage suppresses sibling optimization tasks); telemetry requirements wired (lightweight — operator's action is a decision, not necessarily a code change). Commit 6cddcb0.
+  - Verification: 6 new tests pass (23/23 in determinismGate). tsc clean. Production fresh-refresh confirms 36 triage tasks firing with descriptive file-count context, 0 false positives across full walk.
+  - Notes: The triage tier is the durable mechanism for "we found this code but don't know what it should do." Operators can drain the 36 to 0 over time by spec'ing/verifying/archiving each. After the drain, the queue will naturally focus on the agent_stack and ui_review tiers (real value creation). Future enhancement (Tier-1 item C from the plan): LLM-generated requirements that read cap name + linked file contents and draft 3-5 starter requirements per cap, so the operator can review and accept rather than write from scratch.
+
 ### agent_stack task type: next-tier work after a cap is built (2026-05-19)
 Operator's ask: *"fires when a cap crosses readiness ≥ 80 AND has no monitoring stack. Make sure there are back end agents in this process as well, not just on top of the reports. Triggered at the same time as page BP agents."*
 
