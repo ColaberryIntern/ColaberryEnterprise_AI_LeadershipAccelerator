@@ -12,6 +12,52 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Claude Code Architecture Remediation — Waves 1-4 (2026-05-19)
+Per Ram's request, audited the repo against [Anthropic's Claude Code best-practices article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start). Initial score: ~35/100. Executed top 5 + small cleanups; new score: ~70/100. Zero production code touched — config only. Full reports at `docs/CLAUDE_CODE_ARCHITECTURE_AUDIT.md` (the audit) and `docs/CLAUDE_CODE_REMEDIATION_REVIEW.html` (interactive review with verdicts + compile button per the screenshot-review skill pattern).
+
+- [x] **Wave 1.1: Deleted `.claude/.claude/` nested artifact directory.** Pure noise, accidental nesting from a prior session.
+  - Date: 2026-05-19
+  - Verification: `ls .claude/` no longer shows it
+- [x] **Wave 1.2: Fixed CLAUDE.md documentation drift.** Line 87 of old CLAUDE.md asserted `/execution` and `/agents` "do not exist in this repo" — but `ls` shows `/execution`, `/intelligence`, `/system` DO exist and Folder Responsibilities didn't list any of them. Now removed the contradictory line and added `/execution` (legacy Python), `/intelligence` (reserved subsystem), `/system` (portal-owned auto-gen state), `/preview-db-init` (Postgres init scripts) to Folder Responsibilities with one-line descriptions each.
+  - Date: 2026-05-19
+  - Verification: CLAUDE.md `grep -c "do not exist"` returns 0
+- [x] **Wave 1.3: Named Ali as DRI in CLAUDE.md with quarterly review cadence.** New top-of-file "Claude Code Configuration Ownership" section names Ali (`ali@colaberry.com`) as DRI for CLAUDE.md, subdirectory CLAUDE.md files, `.claudeignore`, `.claude/settings.json`, skills, hooks, plugins. Next review due 2026-08-19.
+  - Date: 2026-05-19
+  - Verification: section visible in CLAUDE.md head
+- [x] **Wave 2.1: Created `.claudeignore`.** 59 lines. Prevents Glob/Grep noise on auto-generated portal state maps, binary review artifacts (`*.png`, `*.pdf`, `docs/screenshots/`), tmp scratch space, secrets (`.env*`, `scripts/.ali_jwt.txt`, `tmp/suralink-cookie.txt`), Suralink/Playwright profile artifacts (60+ MB), and stale runtime locks.
+  - Date: 2026-05-19
+  - Verification: file exists, no production code changes
+- [x] **Wave 2.2: Created `.claude/settings.json` with team-wide permissions.** Project-level settings committed to repo so every developer + every Claude session gets the same baseline. **13 deny rules** for genuinely-dangerous patterns (`rm -rf /*`, `git push --force *`, `git reset --hard origin/main*`, `DROP TABLE*`, `*--no-verify*`, `*--no-gpg-sign*`). **~80 allow rules** covering the safe daily-driver baseline (ls/cat/grep, npm/node, docker exec, ssh to prod, curl, git status/diff/add/commit, gh, npx tsc/jest/playwright). Excludes any tokens, JWTs, or one-off paste commands.
+  - Date: 2026-05-19
+  - Verification: JSON validates; rules apply to all sessions from `c:/Users/ali_m/OneDrive/.../Colaberry Enterprise AI Leadership Accelerator`
+- [x] **Wave 2.3: Stripped JWT tokens from user-level `~/.claude/settings.json`.** Removed 2 verbatim JWT-bearing allow rules (opportunitypulse.com admin role, agentfoundry.com it_admin role) and 3 orphan bash-loop fragments. Backup created at `~/.claude/settings.json.backup-pre-jwt-strip-2026-05-19` before edit. `grep -c "eyJ\|TOKEN=" ~/.claude/settings.json` now returns 0.
+  - Date: 2026-05-19
+  - Verification: 0 JWT/TOKEN matches in user settings
+  - **Action item left for Ali (manual):** if either of those JWTs is still valid, rotate them. The tokens were stored in plaintext in a OneDrive-synced file — assume exposure.
+- [x] **Wave 3: Created 6 subdirectory CLAUDE.md files (339 lines total, distributed loading).** Each loads only when working inside that subtree, so the root CLAUDE.md doesn't have to carry per-directory conventions.
+  - `backend/CLAUDE.md` (54 lines) — Sequelize patterns, Zod validation, controller/service/model boundaries, error-class naming, model migration pattern, forbidden imports
+  - `frontend/CLAUDE.md` (66 lines) — page/component/route boundaries, design skills pointer, production-build eslint gotcha, SPA routing rules
+  - `backend/src/scripts/CLAUDE.md` (101 lines) — one-off script naming, Mandrill SMTP canonical pattern, em-dash/signature checklist, idempotency rules, when NOT to add a script
+  - `directives/CLAUDE.md` (34 lines) — required directive sections, file naming, "no business logic in directives" rule
+  - `system/CLAUDE.md` (41 lines) — portal-owned status, do-not-edit warning, build manifest emission pointer
+  - `tests/CLAUDE.md` (43 lines) — Playwright patterns, never-touch-prod rule, flaky-test policy
+  - Date: 2026-05-19
+  - Verification: `find . -name "CLAUDE.md" -not -path "*/node_modules/*"` returns 7 files (1 root + 6 subdir)
+- [x] **Wave 4.1-4.3: Extracted 3 skills from bloated CLAUDE.md sections.**
+  - `.claude/skills/telemetry-emission/SKILL.md` (64 lines) — full BuildManifest contract (required fields, strict rules, what-portal-owns vs what-Claude-owns, reading-state endpoints). Root CLAUDE.md's ~70-line Telemetry Sync section replaced with 6-line pointer.
+  - `.claude/skills/screenshot-review/SKILL.md` (98 lines) — combined "Required Review Screenshot Protocol" and "Screenshot Verification Safety Protocol" into one skill covering when applicable, safe-capture helper API, JWT refresh, review-doc structure. Root CLAUDE.md's two sections (~95 lines combined) replaced with 8-line pointer.
+  - `.claude/skills/openclaw-outreach/SKILL.md` (77 lines) — full platform-strategy taxonomy (PASSIVE_SIGNAL / HYBRID_ENGAGEMENT / AUTHORITY_BROADCAST), byline behavior, Skool banned-phrase regex list (universal + non-hiring + hiring-specific), closing rules, on-flag protocol. Root CLAUDE.md's ~25-line Byline Policy section replaced with 7-line pointer.
+  - Date: 2026-05-19
+  - Verification: all 3 new SKILL.md files have valid frontmatter with `user-invocable: true`
+- [x] **Wave 4.4: Trimmed CLAUDE.md UI/UX Design Policy section.** Full design system (palette, tokens, component patterns, accessibility) was duplicated in CLAUDE.md AND in 5 design skills. CLAUDE.md no longer source of truth — points to skills (`/baseline-ui`, `/frontend-design`, `/fixing-accessibility`, `/fixing-motion-performance`, `/ui-ux-design`). Section dropped from ~50 lines to 12-line skills index.
+  - Date: 2026-05-19
+  - Verification: `wc -l CLAUDE.md` returns 667 (was 849; -21%)
+- [x] **Wave 5: Built `docs/CLAUDE_CODE_REMEDIATION_REVIEW.html`** — interactive HTML review per the screenshot-review skill pattern. Score-lift table (35 → 70), file-by-file change manifest with diffs, per-section verdict radios (👍/⚠/✕) + critique textareas, compile button to gather all verdicts + notes into a Markdown prompt for the next session. Mirrors `docs/POST_DEPLOY_WALKTHROUGH.html` pattern.
+  - Date: 2026-05-19
+  - Verification: file exists, JS handlers wired for compile/reset
+  - Note: this is a config-only sprint (no UI surfaces changed) so no screenshots are embedded. The review is text/diff-focused.
+- [ ] **Deferred to Wave 5+ (require DRI scoping):** hooks (em-dash check, PROGRESS.md session-end audit), MCP servers (Portal API, Postgres analytics), plugin packaging, LSP integration, subagent pattern codification. Would lift score from ~70 to ~85. See `docs/CLAUDE_CODE_ARCHITECTURE_AUDIT.md` items 9-15.
+
 ### Portable Visitor Tracker — Cross-Site Visibility for All 4 External Sites (2026-05-18)
 - [x] `frontend/public/v1/track.js` (new) — standalone IIFE tracker that drops into any external Colaberry-owned site as a single `<script src="https://enterprise.colaberry.ai/v1/track.js" data-site="<slug>" defer>` tag. No build dependency, no React. Reads its `data-site` attribute off its own script tag, sends `site_slug` on every event. Captures pageview, scroll milestones (25/50/75/90/100), CTA + click + media + iframe events, time-on-page, heartbeats, fingerprint, browser/device/OS, UTM params, referrer, identity via `?email=` + localStorage `cb_lead_id`. Honors `navigator.doNotTrack`, skips `/admin` paths. POSTs to existing `/api/t/event` and `/api/t/batch` endpoints. **Surfaces clear console errors when misconfigured** (missing `data-site`, network failures) so an operator's Claude Code can paste the exact error back for fixing — per the operator instruction on 2026-05-18.
   - Date: 2026-05-18

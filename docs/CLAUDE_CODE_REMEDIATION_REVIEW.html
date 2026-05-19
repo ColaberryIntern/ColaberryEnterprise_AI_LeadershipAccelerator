@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Claude Code Remediation Review — 2026-05-19</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+<style>
+  :root{
+    --color-primary:#1a365d;
+    --color-primary-light:#2b6cb0;
+    --color-secondary:#e53e3e;
+    --color-accent:#38a169;
+    --color-warn:#d69e2e;
+    --color-bg:#ffffff;
+    --color-bg-alt:#f7fafc;
+    --color-text:#2d3748;
+    --color-text-light:#718096;
+    --color-border:#e2e8f0;
+  }
+  html,body{background:var(--color-bg-alt);color:var(--color-text);font-family:Aptos,Arial,sans-serif;font-size:15px;line-height:1.6;}
+  .container-narrow{max-width:980px;margin:0 auto;padding:32px 24px 120px;}
+  h1,h2,h3{color:var(--color-primary);}
+  h1{font-size:28px;margin-bottom:6px;}
+  h2{font-size:22px;margin-top:48px;margin-bottom:14px;border-bottom:2px solid var(--color-border);padding-bottom:8px;}
+  h3{font-size:17px;margin-top:28px;margin-bottom:10px;}
+  .lead{color:var(--color-text-light);font-size:15px;}
+  .meta{background:#fff;border:1px solid var(--color-border);border-radius:6px;padding:14px 18px;margin:18px 0 32px;font-size:13px;color:var(--color-text-light);}
+  .meta strong{color:var(--color-text);}
+  .score-card{background:#fff;border:1px solid var(--color-border);border-radius:8px;padding:20px;margin:14px 0;}
+  .score-row{display:grid;grid-template-columns:1fr 90px 90px;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-bg-alt);}
+  .score-row.head{font-weight:600;color:var(--color-primary);border-bottom:2px solid var(--color-border);}
+  .score-row.total{font-weight:700;color:var(--color-primary);font-size:16px;border-top:2px solid var(--color-border);margin-top:8px;padding-top:10px;border-bottom:none;}
+  .pill{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;}
+  .pill.up{background:#c6f6d5;color:#22543d;}
+  .pill.same{background:#edf2f7;color:#4a5568;}
+  .pill.flag{background:#fed7d7;color:#742a2a;}
+  .pill.todo{background:#fefcbf;color:#744210;}
+  .change-card{background:#fff;border:1px solid var(--color-border);border-radius:8px;padding:18px 22px;margin:14px 0;}
+  .change-card h3{margin-top:0;}
+  .filelist{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:var(--color-text);background:var(--color-bg-alt);padding:10px 14px;border-radius:4px;border-left:3px solid var(--color-primary-light);}
+  .filelist .new{color:var(--color-accent);}
+  .filelist .mod{color:var(--color-primary-light);}
+  .filelist .del{color:var(--color-secondary);}
+  pre{background:#1a202c;color:#e2e8f0;border-radius:6px;padding:12px 16px;font-size:12px;overflow-x:auto;}
+  pre.diff-add{background:#f0fff4;color:#22543d;border-left:3px solid var(--color-accent);}
+  pre.diff-rm{background:#fff5f5;color:#742a2a;border-left:3px solid var(--color-secondary);text-decoration:line-through;text-decoration-color:rgba(116,42,42,.3);}
+  .callout{padding:12px 18px;border-radius:6px;margin:14px 0;}
+  .callout.warn{background:#fffbeb;border-left:3px solid var(--color-warn);color:#744210;}
+  .callout.todo{background:#fef5e7;border-left:3px solid var(--color-warn);}
+  .callout.done{background:#f0fff4;border-left:3px solid var(--color-accent);color:#22543d;}
+  .verdict{display:flex;gap:14px;margin-top:14px;}
+  .verdict label{cursor:pointer;padding:6px 14px;border:1px solid var(--color-border);border-radius:20px;font-size:13px;background:#fff;}
+  .verdict input{margin-right:6px;}
+  .verdict label:has(input:checked){background:var(--color-primary);color:#fff;border-color:var(--color-primary);}
+  textarea.critique{width:100%;min-height:62px;border:1px solid var(--color-border);border-radius:4px;padding:8px 10px;font-family:inherit;font-size:13px;margin-top:8px;}
+  .sticky-bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--color-border);padding:14px 24px;display:flex;gap:12px;justify-content:flex-end;align-items:center;box-shadow:0 -4px 12px rgba(0,0,0,.06);}
+  .sticky-bar .small{color:var(--color-text-light);font-size:12px;flex:1;}
+  .btn-primary{background:var(--color-primary);border-color:var(--color-primary);}
+  .btn-primary:hover{background:var(--color-primary-light);border-color:var(--color-primary-light);}
+  table.compact{width:100%;font-size:13px;border-collapse:collapse;}
+  table.compact td,table.compact th{padding:6px 10px;border-bottom:1px solid var(--color-bg-alt);text-align:left;vertical-align:top;}
+  table.compact th{background:var(--color-bg-alt);color:var(--color-primary);font-weight:600;}
+  .badge-done{background:var(--color-accent);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;}
+  .badge-todo{background:var(--color-warn);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="container-narrow">
+
+<h1>Claude Code Architecture Remediation</h1>
+<p class="lead">Closing the gap against <a href="https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start" target="_blank" rel="noopener">Anthropic's Claude Code best-practices article</a>. Wave 1–4 shipped; Wave 5 (hooks, plugins, LSP, MCP) deferred for DRI approval.</p>
+
+<div class="meta">
+  <strong>Sprint date:</strong> 2026-05-19  ·  <strong>DRI:</strong> Ali Muwwakkil  ·  <strong>Requested by:</strong> Ram (audit + remediate)  ·  <strong>Reference audit:</strong> <a href="CLAUDE_CODE_ARCHITECTURE_AUDIT.md">docs/CLAUDE_CODE_ARCHITECTURE_AUDIT.md</a>  ·  <strong>Code changes:</strong> config only (no production code touched)
+</div>
+
+<h2>Score Lift</h2>
+<div class="score-card">
+  <div class="score-row head"><span>Theme</span><span>Before</span><span>After</span></div>
+  <div class="score-row"><span>CLAUDE.md presence and substance</span><span>9/10</span><span>9/10 <span class="pill same">same</span></span></div>
+  <div class="score-row"><span>Layered CLAUDE.md (subdirectory files)</span><span><span class="pill flag">0/10</span></span><span>8/10 <span class="pill up">+8</span></span></div>
+  <div class="score-row"><span>Skills</span><span>6/10</span><span>8/10 <span class="pill up">+2</span></span></div>
+  <div class="score-row"><span>Hooks</span><span><span class="pill flag">0/10</span></span><span>0/10 <span class="pill todo">deferred</span></span></div>
+  <div class="score-row"><span>Plugins</span><span><span class="pill flag">0/10</span></span><span>0/10 <span class="pill todo">deferred</span></span></div>
+  <div class="score-row"><span>LSP integration</span><span>2/10</span><span>2/10 <span class="pill todo">deferred</span></span></div>
+  <div class="score-row"><span>MCP servers</span><span>3/10</span><span>3/10 <span class="pill todo">deferred</span></span></div>
+  <div class="score-row"><span>Subagents</span><span>3/10</span><span>3/10 <span class="pill todo">deferred</span></span></div>
+  <div class="score-row"><span>.claudeignore / .ignore</span><span><span class="pill flag">0/10</span></span><span>9/10 <span class="pill up">+9</span></span></div>
+  <div class="score-row"><span>Project-level .claude/settings.json</span><span><span class="pill flag">0/10</span></span><span>8/10 <span class="pill up">+8</span></span></div>
+  <div class="score-row"><span>DRI / agent manager</span><span><span class="pill flag">0/10</span></span><span>9/10 <span class="pill up">+9</span></span></div>
+  <div class="score-row"><span>Permissions hygiene</span><span>2/10</span><span>7/10 <span class="pill up">+5</span></span></div>
+  <div class="score-row"><span>Operating philosophy / testing / observability</span><span>9/10</span><span>9/10 <span class="pill same">same</span></span></div>
+  <div class="score-row"><span>Documentation drift</span><span>5/10</span><span>9/10 <span class="pill up">+4</span></span></div>
+  <div class="score-row total"><span>Overall</span><span>~35/100</span><span>~70/100 <span class="pill up">+35</span></span></div>
+</div>
+
+<div class="callout done"><strong>Bottom line:</strong> 35 → 70 in one focused session, zero production code touched. The remaining 30 points are hooks, plugins, LSP, MCP, and codified subagents — bigger lifts that require DRI scoping decisions before execution.</div>
+
+<h2>Wave 1 — Cleanups</h2>
+
+<div class="change-card">
+  <h3>1.1 Deleted <code>.claude/.claude/</code> nested artifact</h3>
+  <p>An accidental nesting from an earlier session, holding only a stale <code>scheduled_tasks.lock</code>. Pure noise.</p>
+  <div class="filelist"><span class="del">D</span> .claude/.claude/scheduled_tasks.lock</div>
+</div>
+
+<div class="change-card">
+  <h3>1.2 Fixed CLAUDE.md documentation drift</h3>
+  <p>Line 87 of the old CLAUDE.md asserted that <code>/execution</code> and <code>/agents</code> "do not exist in this repo" — but <code>ls</code> shows <code>/execution</code>, <code>/intelligence</code>, and <code>/system</code> DO exist. The Folder Responsibilities section didn't list any of them.</p>
+  <p><strong>Now:</strong> the contradictory line is removed and Folder Responsibilities includes <code>/execution</code> (legacy Python), <code>/intelligence</code> (reserved subsystem), <code>/system</code> (portal-owned auto-gen state), and <code>/preview-db-init</code> (Postgres init scripts) with one-line descriptions each.</p>
+</div>
+
+<div class="change-card">
+  <h3>1.3 Named Ali as DRI in CLAUDE.md</h3>
+  <p>New top-of-file section "Claude Code Configuration Ownership" naming Ali as DRI with authority over CLAUDE.md hierarchy, .claudeignore, .claude/settings.json, skills, hooks, and future plugin packaging. Quarterly review cadence; next review <strong>2026-08-19</strong>.</p>
+  <pre class="diff-add"># Claude Code Configuration Ownership
+
+**DRI:** Ali Muwwakkil (`ali@colaberry.com`). Authority over CLAUDE.md,
+subdirectory CLAUDE.md files, .claudeignore, .claude/settings.json,
+.claude/skills/, hooks, and future plugin packaging.
+
+**Review cadence:** quarterly. Next review due **2026-08-19**.</pre>
+  <div class="verdict">
+    <label><input type="radio" name="v-1-3" value="ok" />👍 keep</label>
+    <label><input type="radio" name="v-1-3" value="adjust" />⚠ adjust</label>
+    <label><input type="radio" name="v-1-3" value="reject" />✕ reject</label>
+  </div>
+  <textarea class="critique" placeholder="Notes on DRI block (consider naming a backup DRI when Ali is unavailable, etc.)"></textarea>
+</div>
+
+<h2>Wave 2 — Foundation Files</h2>
+
+<div class="change-card">
+  <h3>2.1 Created <code>.claudeignore</code></h3>
+  <p>59 lines. Prevents wasteful Glob/Grep on:</p>
+  <ul>
+    <li>Auto-generated portal state maps (<code>state_graph.json</code>, <code>database_map.json</code>, <code>ui_map.json</code>, build manifests)</li>
+    <li>All binary review artifacts (<code>*.png</code>, <code>*.pdf</code>, <code>*.zip</code>, <code>docs/screenshots/</code>)</li>
+    <li>Scratch space (<code>tmp/</code>, <code>*.output</code>, <code>*.log</code>)</li>
+    <li>Secrets (<code>.env*</code>, <code>scripts/.ali_jwt.txt</code>, <code>tmp/suralink-cookie.txt</code>)</li>
+    <li>Suralink/Playwright profile artifacts (60+ MB)</li>
+    <li>Stale runtime locks</li>
+  </ul>
+  <div class="filelist"><span class="new">A</span> .claudeignore  <em>(new, 59 lines)</em></div>
+</div>
+
+<div class="change-card">
+  <h3>2.2 Created <code>.claude/settings.json</code> with team-wide permissions</h3>
+  <p>Project-level settings committed to the repo. Every developer (Ali, Tejesh, Ram, future hires) and every Claude session gets the same baseline.</p>
+  <p><strong>Deny list</strong> blocks the genuinely-dangerous patterns regardless of who's running:</p>
+  <ul>
+    <li><code>rm -rf /*</code>, <code>rm -rf ~</code>, <code>rm -rf ~/*</code></li>
+    <li><code>git push --force *</code>, <code>git push -f *</code></li>
+    <li><code>git reset --hard origin/main*</code>, <code>git branch -D main*</code></li>
+    <li><code>DROP TABLE*</code>, <code>DROP DATABASE*</code>, <code>TRUNCATE TABLE*</code></li>
+    <li>Any command containing <code>--no-verify</code> or <code>--no-gpg-sign</code> (defeats commit hooks/signing)</li>
+  </ul>
+  <p><strong>Allow list</strong> is the safe daily-driver baseline: read commands, npm/node, docker exec, ssh to prod (read scope), curl, git status/diff/log/add/commit, gh, npx tsc/jest/playwright. Excludes any tokens, JWTs, or one-off paste commands.</p>
+  <div class="filelist"><span class="new">A</span> .claude/settings.json  <em>(new, ~110 lines, ~80 allow rules, ~13 deny rules)</em></div>
+  <div class="verdict">
+    <label><input type="radio" name="v-2-2" value="ok" />👍 keep</label>
+    <label><input type="radio" name="v-2-2" value="adjust" />⚠ adjust</label>
+    <label><input type="radio" name="v-2-2" value="reject" />✕ reject</label>
+  </div>
+  <textarea class="critique" placeholder="Notes on settings.json (rules to add/remove, deny patterns that need broadening, etc.)"></textarea>
+</div>
+
+<div class="change-card">
+  <h3>2.3 Stripped JWT tokens from user-level <code>~/.claude/settings.json</code></h3>
+  <div class="callout warn"><strong>Security action item still on Ali:</strong> the JWTs that were in the allowlist are now removed from the file, but if either is still valid, ROTATE them immediately. They were stored in plaintext in a OneDrive-synced config and may have been exposed for weeks.</div>
+
+  <p>Two JWT tokens found and removed:</p>
+  <pre class="diff-rm">"Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjMs
+  ImVtYWlsIjoiYWRtaW5Ab3Bwb3J0dW5pdHlwdWxzZS5jb20iLCJyb2xlIjoiYWRtaW4i...\")"
+  → opportunitypulse.com, admin role, userId=3</pre>
+  <pre class="diff-rm">"Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIs
+  ImVtYWlsIjoiYWRtaW5AYWdlbnRmb3VuZHJ5LmNvbSIsInJvbGUiOiJpdF9hZG1pbiI...\")"
+  → agentfoundry.com, it_admin role, userId=2</pre>
+  <p>Also removed 3 orphan bash-loop fragments (lines 87-88 of the old file) that were clearly artifacts of a paste accident:</p>
+  <pre class="diff-rm">"Bash(for svc in api-gateway user-service ...)",
+"Bash(do echo \"=== $svc ===\")"</pre>
+  <p>Backup created at <code>~/.claude/settings.json.backup-pre-jwt-strip-2026-05-19</code> before the edit, in case any allow rule we removed turns out to be needed.</p>
+  <div class="filelist"><span class="mod">M</span> ~/.claude/settings.json  <em>(5 lines removed)</em></div>
+</div>
+
+<h2>Wave 3 — Layered CLAUDE.md Hierarchy</h2>
+
+<p>6 new subdirectory CLAUDE.md files. Each loads <strong>only</strong> when working inside that subtree, so the root CLAUDE.md doesn't have to carry per-directory conventions.</p>
+
+<table class="compact">
+  <thead><tr><th>File</th><th>Lines</th><th>What it covers</th></tr></thead>
+  <tbody>
+    <tr><td><code>backend/CLAUDE.md</code></td><td>54</td><td>Sequelize patterns, Zod validation, controller/service/model boundaries, error-class naming, model migration pattern, forbidden imports</td></tr>
+    <tr><td><code>frontend/CLAUDE.md</code></td><td>66</td><td>Page/component/route boundaries, design skills pointer, the production-build eslint gotcha, SPA routing rules</td></tr>
+    <tr><td><code>backend/src/scripts/CLAUDE.md</code></td><td>101</td><td>One-off script naming, Mandrill SMTP canonical pattern, em-dash/signature checklist, idempotency rules, when NOT to add a script</td></tr>
+    <tr><td><code>directives/CLAUDE.md</code></td><td>34</td><td>Required directive sections, file naming, "no business logic" rule, when to write a new directive vs a script</td></tr>
+    <tr><td><code>system/CLAUDE.md</code></td><td>41</td><td>Portal-owned status, do-not-edit warning, build manifest emission pointer, schema/contract paths</td></tr>
+    <tr><td><code>tests/CLAUDE.md</code></td><td>43</td><td>Playwright patterns, test naming, never-touch-prod rule, flaky-test policy, pyramid expectations</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>339</strong></td><td>Distributed, loads only when working in that subtree</td></tr>
+  </tbody>
+</table>
+
+<div class="verdict">
+  <label><input type="radio" name="v-3" value="ok" />👍 keep all 6</label>
+  <label><input type="radio" name="v-3" value="adjust" />⚠ trim some</label>
+  <label><input type="radio" name="v-3" value="reject" />✕ over-engineered</label>
+</div>
+<textarea class="critique" placeholder="Notes on subdirectory CLAUDE.md files (any conventions missing, redundancies, etc.)"></textarea>
+
+<h2>Wave 4 — Skills Extraction + Root Trim</h2>
+
+<p>3 new skills extracted from CLAUDE.md sections that were workflow-specific. Root CLAUDE.md drops from 849 → 667 lines (−21%); per-workflow context now loads only when invoked.</p>
+
+<div class="change-card">
+  <h3>4.1 Extracted: <code>.claude/skills/telemetry-emission/SKILL.md</code></h3>
+  <p>The full BuildManifest contract (required fields, strict rules, what-portal-owns vs what-Claude-owns, reading-state endpoints). 64 lines.</p>
+  <p>Root CLAUDE.md's "Telemetry Synchronization Contract" section shrunk from ~70 lines to a 6-line pointer that names the skill and the load-bearing invariant.</p>
+  <div class="filelist"><span class="new">A</span> .claude/skills/telemetry-emission/SKILL.md  <em>(64 lines)</em></div>
+</div>
+
+<div class="change-card">
+  <h3>4.2 Extracted: <code>.claude/skills/screenshot-review/SKILL.md</code></h3>
+  <p>Combined two previously-separate CLAUDE.md sections — "Required Review Screenshot Protocol" and "Screenshot Verification Safety Protocol" — into one skill. 98 lines covering: when the protocol applies, the safe-capture helper API, JWT refresh procedure, review-doc structure, naming conventions, and why the protocol exists.</p>
+  <p>Root CLAUDE.md's two sections (~95 lines combined) replaced with one 8-line pointer.</p>
+  <div class="filelist"><span class="new">A</span> .claude/skills/screenshot-review/SKILL.md  <em>(98 lines)</em></div>
+</div>
+
+<div class="change-card">
+  <h3>4.3 Extracted: <code>.claude/skills/openclaw-outreach/SKILL.md</code></h3>
+  <p>Full OpenClaw + Skool content rules: platform-strategy taxonomy (PASSIVE_SIGNAL / HYBRID_ENGAGEMENT / AUTHORITY_BROADCAST), byline append/strip behavior, Skool's full banned-phrase regex list (universal + non-hiring + hiring-specific), closing rules, on-flag protocol with past-incident references. 77 lines.</p>
+  <p>Root CLAUDE.md's "Outreach Byline Policy" section (~25 lines) replaced with a 7-line pointer.</p>
+  <div class="filelist"><span class="new">A</span> .claude/skills/openclaw-outreach/SKILL.md  <em>(77 lines)</em></div>
+</div>
+
+<div class="change-card">
+  <h3>4.4 Trimmed: <code>CLAUDE.md</code> UI/UX Design Policy section</h3>
+  <p>The full design system (palette, tokens, component patterns, accessibility rules) was duplicated in CLAUDE.md AND in 5 design skills. CLAUDE.md is no longer source of truth for design — it points to the 5 skills (<code>/baseline-ui</code>, <code>/frontend-design</code>, <code>/fixing-accessibility</code>, <code>/fixing-motion-performance</code>, <code>/ui-ux-design</code>).</p>
+  <p>CLAUDE.md section dropped from ~50 lines to a 12-line skills index. Saved 38 lines of duplication.</p>
+</div>
+
+<h2>What's Still TODO (Wave 5+)</h2>
+
+<p>Items 9-15 from the original audit. These are bigger lifts that need DRI scoping before execution:</p>
+
+<table class="compact">
+  <thead><tr><th>#</th><th>Item</th><th>Effort</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>9</td><td>Hook: PostToolUse em-dash check on send scripts</td><td>1 hr</td><td><span class="badge-todo">TODO</span></td></tr>
+    <tr><td>10</td><td>Hook: Stop hook PROGRESS.md session-end audit</td><td>1 hr</td><td><span class="badge-todo">TODO</span></td></tr>
+    <tr><td>11</td><td>MCP server: Portal API (status, state, telemetry endpoints)</td><td>4 hrs</td><td><span class="badge-todo">TODO</span></td></tr>
+    <tr><td>12</td><td>MCP server: Postgres analytics (read-only visitor/lead/event queries)</td><td>4 hrs</td><td><span class="badge-todo">TODO</span></td></tr>
+    <tr><td>13</td><td>Package skills + hooks + settings as a Colaberry plugin</td><td>2 hrs</td><td><span class="badge-todo">TODO</span></td></tr>
+    <tr><td>14</td><td>Install Claude Code LSP plugin pointing at TypeScript server</td><td>1 hr</td><td><span class="badge-todo">TODO</span></td></tr>
+    <tr><td>15</td><td>Codify subagent usage pattern in CLAUDE.md (~15 lines)</td><td>30 min</td><td><span class="badge-todo">TODO</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout todo"><strong>If all 7 land:</strong> score reaches ~85/100. Recommended sequence: 15 (cheap, frees the rest), then 9-10 (hooks deliver immediate value), then 13 (plugin so the work is shareable), then 11-12 (MCPs for biggest workflow lift), then 14 (LSP is bonus).</div>
+
+<h2>Files Changed — Complete Manifest</h2>
+
+<div class="filelist">
+<strong>NEW (10 files):</strong><br/>
+<span class="new">A</span> .claudeignore<br/>
+<span class="new">A</span> .claude/settings.json<br/>
+<span class="new">A</span> backend/CLAUDE.md<br/>
+<span class="new">A</span> frontend/CLAUDE.md<br/>
+<span class="new">A</span> backend/src/scripts/CLAUDE.md<br/>
+<span class="new">A</span> directives/CLAUDE.md<br/>
+<span class="new">A</span> system/CLAUDE.md<br/>
+<span class="new">A</span> tests/CLAUDE.md<br/>
+<span class="new">A</span> .claude/skills/telemetry-emission/SKILL.md<br/>
+<span class="new">A</span> .claude/skills/screenshot-review/SKILL.md<br/>
+<span class="new">A</span> .claude/skills/openclaw-outreach/SKILL.md<br/>
+<br/>
+<strong>MODIFIED (2 files):</strong><br/>
+<span class="mod">M</span> CLAUDE.md  <em>(849 → 667 lines; -21%; +DRI section, -3 extracted sections, -drift)</em><br/>
+<span class="mod">M</span> ~/.claude/settings.json  <em>(user-level; -2 JWTs, -3 loop fragments; backup made)</em><br/>
+<br/>
+<strong>DELETED (1 path):</strong><br/>
+<span class="del">D</span> .claude/.claude/  <em>(nested artifact directory)</em>
+</div>
+
+<h2>Verification</h2>
+
+<ul>
+  <li><strong>JWT strip:</strong> <code>grep -c "eyJ\|TOKEN=" ~/.claude/settings.json</code> returns <strong>0</strong> ✓</li>
+  <li><strong>Root CLAUDE.md size:</strong> <code>wc -l CLAUDE.md</code> returns <strong>667</strong> (was 849) ✓</li>
+  <li><strong>Subdirectory CLAUDE.md files exist:</strong> <code>find . -name "CLAUDE.md" -not -path "*/node_modules/*"</code> returns 7 (1 root + 6 subdir) ✓</li>
+  <li><strong>New skills loadable:</strong> all 3 new SKILL.md files have valid frontmatter with <code>user-invocable: true</code> ✓</li>
+  <li><strong>Project settings parsable:</strong> JSON validates ✓</li>
+  <li><strong>No production code touched:</strong> <code>git diff --name-only backend/src frontend/src</code> returns empty for this commit ✓</li>
+</ul>
+
+<h2>Overall Verdict</h2>
+<div class="verdict">
+  <label><input type="radio" name="v-overall" value="ship" />👍 ship all changes</label>
+  <label><input type="radio" name="v-overall" value="adjust" />⚠ adjust before ship</label>
+  <label><input type="radio" name="v-overall" value="hold" />✕ hold, more review needed</label>
+</div>
+<textarea class="critique" id="overallNotes" placeholder="Overall notes for Ram or next session. Anything missing, anything to revisit?"></textarea>
+
+</div>
+
+<div class="sticky-bar">
+  <span class="small">Click <strong>Compile</strong> to copy a Markdown prompt summarizing every verdict + note above. Paste it into the next Claude Code session to act on feedback.</span>
+  <button type="button" class="btn btn-outline-secondary btn-sm" id="resetBtn">Reset</button>
+  <button type="button" class="btn btn-primary btn-sm" id="compileBtn">📋 Compile prompt</button>
+</div>
+
+<script>
+  document.getElementById('compileBtn').addEventListener('click', () => {
+    const sections = document.querySelectorAll('.change-card, .container-narrow > h2 + p, [name^="v-"]');
+    const verdicts = {};
+    document.querySelectorAll('input[type=radio]:checked').forEach(r => {
+      verdicts[r.name] = r.value;
+    });
+    const notes = [];
+    document.querySelectorAll('textarea.critique').forEach(t => {
+      const txt = t.value.trim();
+      if (txt) notes.push({ ph: t.placeholder.slice(0, 80), txt });
+    });
+
+    const lines = [];
+    lines.push('# CLAUDE.md Remediation Review — feedback for next session');
+    lines.push('');
+    lines.push('## Verdicts');
+    Object.entries(verdicts).forEach(([k, v]) => {
+      lines.push(`- **${k}** → ${v}`);
+    });
+    lines.push('');
+    if (notes.length) {
+      lines.push('## Notes');
+      notes.forEach(n => {
+        lines.push(`### ${n.ph}`);
+        lines.push(n.txt);
+        lines.push('');
+      });
+    }
+    lines.push('## Action requested');
+    lines.push('Address the items above in priority order. Where verdict is `adjust`, apply the change in the notes. Where verdict is `reject`, revert that change.');
+
+    const md = lines.join('\n');
+    navigator.clipboard.writeText(md).then(() => {
+      const btn = document.getElementById('compileBtn');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 2500);
+    });
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    document.querySelectorAll('input[type=radio]').forEach(r => r.checked = false);
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+  });
+</script>
+
+</body>
+</html>

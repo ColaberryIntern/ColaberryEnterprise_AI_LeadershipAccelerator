@@ -1,0 +1,75 @@
+# Claude Code ignore file — prevents wasteful Glob/Grep on large auto-generated
+# artifacts, binary blobs, and disposable scratch space.
+#
+# This complements .gitignore but is Claude-specific: some files (like state
+# maps and screenshots) ARE committed but should not be opened by Claude during
+# searches because they are auto-generated and not source-of-truth for Claude
+# decisions.
+#
+# Owner: see "Claude Code Configuration Ownership" in CLAUDE.md.
+
+# ── Dependencies and build artifacts ─────────────────────────────────────────
+node_modules/
+dist/
+build/
+coverage/
+.next/
+out/
+.cache/
+
+# ── Auto-generated state maps (portal-owned, see system/CLAUDE.md) ───────────
+system/intelligence/state_graph.json
+system/database/database_map.json
+system/ui/ui_map.json
+system/intelligence/manifests/builds/
+
+# ── Screenshots and binary review artifacts ──────────────────────────────────
+docs/screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.tif
+*.tiff
+*.heic
+*.webp
+*.ico
+*.pdf
+*.zip
+*.docx
+*.xlsx
+*.tar
+*.gz
+
+# ── Scratch space and background-task output ─────────────────────────────────
+tmp/
+*.output
+*.log
+npm-debug.log*
+
+# ── Environment / secrets (never read these by accident) ─────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+scripts/.ali_jwt.txt
+scripts/.*.txt
+
+# ── Suralink / Playwright profile artifacts (huge, transient) ────────────────
+tmp/suralink/
+tmp/suralink-profile/
+tmp/suralink-zips/
+tmp/suralink-cookie.txt
+
+# ── OS noise ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Local IDE state ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── Stale runtime locks ──────────────────────────────────────────────────────
+.claude/scheduled_tasks.lock

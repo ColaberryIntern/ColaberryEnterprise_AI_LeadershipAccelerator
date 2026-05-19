@@ -5,6 +5,14 @@ This file defines how Claude (and other AI coding agents) must behave when worki
 
 ---
 
+# Claude Code Configuration Ownership
+
+**DRI:** Ali Muwwakkil (`ali@colaberry.com`). The DRI has authority over `CLAUDE.md`, all subdirectory `CLAUDE.md` files, `.claudeignore`, `.claude/settings.json`, `.claude/skills/`, hooks, and any future plugin packaging. Changes to those files should be reviewed by the DRI before merge.
+
+**Review cadence:** quarterly. Next review due **2026-08-19**. The review checks whether each CLAUDE.md rule is still earning its context cost, whether any skills or hooks have become unnecessary as models evolve, and whether the layered CLAUDE.md hierarchy still matches the codebase.
+
+---
+
 # Core Principle
 
 LLMs are probabilistic. Production systems must be deterministic.
@@ -15,61 +23,11 @@ Claude's role: reason, plan, orchestrate, validate, and modify instructions/code
 
 ---
 
-# Telemetry Synchronization Contract (Phase 3)
+# Telemetry Synchronization Contract
 
-The portal no longer reverse-engineers projects. It consumes **authoritative telemetry** emitted during builds. Claude Code is one half of a synchronized intelligence system; the SystemStateEngine is the other half.
+After every non-trivial build, emit a `BuildManifest` to `/api/portal/project/telemetry` so the portal can rebuild its state maps. **Full rules, schema, and reading-state endpoints live in the `telemetry-emission` skill.** Invoke via `/telemetry-emission` when you've completed a feature/fix/refactor.
 
-## Required emissions (after every non-trivial build operation)
-
-After Claude Code completes a build (a feature, a fix, a refactor) it MUST emit a `BuildManifest` that conforms to [`/system/intelligence/manifests/build_manifest.schema.json`](system/intelligence/manifests/build_manifest.schema.json). The contract: [`/system/intelligence/contracts/BUILD_MANIFEST_CONTRACT.md`](system/intelligence/contracts/BUILD_MANIFEST_CONTRACT.md).
-
-Required fields:
-- `manifest_version: "1.0"`, `telemetry_version: "1.0"`
-- `task_id`, `project_id` (UUIDs); `bp_id` if the build targeted a specific BP
-- `execution_timestamp` (ISO-8601)
-- Whatever changed: `files_created`, `files_modified`, `files_deleted`, `database_changes`, `apis_added`, `apis_modified`, `frontend_routes_added`, `ui_components_added`, `ui_components_modified`, `tests_added`, `validation_results`, `dependencies_added`
-- `system_impacts` (qualitative deltas)
-- Optionally: `decision_trace` (why the build chose this approach)
-
-POST to `/api/portal/project/telemetry`. The portal validates, ingests, and triggers a state rebuild — fire-and-forget.
-
-## Strict rules
-
-- **Manifest authority:** When telemetry exists, the engine prefers it over repo heuristics. Do not assume the engine will "figure it out from the file tree" — emit the manifest.
-- **No secrets in manifests.** The validator scans for AWS keys, GitHub PATs, OpenAI keys, JWTs, and private key blocks. A manifest that contains any will be rejected at ingest with status 400. Redact before emitting.
-- **No `..` traversal in paths.** Repo-relative POSIX only. The validator rejects leading `/` and `../`.
-- **Append-only.** Never modify or delete an emitted manifest. To correct a stale state, emit a new one with a later `execution_timestamp` — the resolver picks the later one as the winner.
-- **Validation results are first-class.** Emit `validation_results` with every manifest when a check ran (`tsc`, `jest`, `playwright`, `build`, `lint`). Manifests without validation results contribute to the `missing_validation_telemetry` health score.
-- **Database, API, UI changes flow through the manifest.** Do not assume out-of-band documentation will catch up. The manifest IS the documentation.
-- **Decision tracing.** Where Claude Code's build choices were non-obvious (alternative approach considered, trade-off accepted, dependency surfaced), include a `decision_trace` block — even a short one. This is what powers the "Why is this next?" panel.
-
-## What the portal owns (do NOT duplicate)
-
-- The state graph: `system/intelligence/state_graph.json` — auto-maintained by `graphSynchronizer`. Manual edits will be overwritten.
-- The DB map: `system/database/database_map.json` — auto-maintained by `databaseSynchronizer`.
-- The UI map: `system/ui/ui_map.json` — auto-maintained by `uiSynchronizer`.
-- The queue: read via `GET /api/portal/project/system-state` — never invent a parallel queue.
-
-## What Claude Code owns
-
-- `BuildManifest` emission for every non-trivial build.
-- Updating `PROGRESS.md` (the human-readable log — required by Phase 1's gate).
-- Updating directives in `/directives` when scope changes.
-- Updating `CLAUDE.md` itself for new operational rules.
-
-The portal **never** writes to PROGRESS.md or directives. Claude Code **never** writes to the maps in `/system/`.
-
-## Reading state
-
-If you need to understand the current project state during a build, read:
-- `GET /api/portal/project/system-state` (full state)
-- `GET /api/portal/project/system-state/explain/:taskId` (Why is this task next?)
-- `GET /api/portal/project/telemetry` (recent manifests)
-- `GET /api/portal/project/telemetry/health` (telemetry health summary)
-- `GET /api/portal/project/graph` (state graph)
-- `GET /api/portal/project/database-map` / `/ui-map` (declared topology)
-
-Do not re-read the codebase to derive state when an endpoint already answers the question.
+Key invariant: Claude Code owns `BuildManifest` emission, `PROGRESS.md`, `/directives`, and `CLAUDE.md`. The portal owns `/system/intelligence/state_graph.json`, `/system/database/database_map.json`, `/system/ui/ui_map.json`. Don't cross those streams.
 
 ---
 
@@ -84,7 +42,7 @@ Do not re-read the codebase to derive state when an endpoint already answers the
 | 3. Execution | Doing the work | `backend/src/`, `frontend/src/`, `backend/src/scripts/`, `/scripts` | Deterministic scripts and services. Repeatable, testable, auditable, safe to rerun. |
 | 4. Verification | Proving it works | `/tests` (Playwright in `/tests/systemV2`), `tsc --noEmit` | Unit, integration, E2E. Tests are first-class citizens, not afterthoughts. |
 
-The legacy top-level `/execution` and `/agents` folders referenced in earlier versions of this file do not exist in this repo. Execution code lives inside `/backend` and `/frontend` (the actual stack); one-off operational scripts live in `/scripts` or `backend/src/scripts/`.
+Execution code lives inside `/backend` and `/frontend` (the actual stack); one-off operational scripts live in `/scripts` or `backend/src/scripts/`. The `/execution`, `/intelligence`, and `/system` top-level directories also exist (see Folder Responsibilities below); each has its own subdirectory CLAUDE.md that defines local conventions.
 
 ---
 
@@ -113,8 +71,14 @@ Claude must respect these boundaries.
 - **`/docs`** - In-repo documentation that ships with the codebase (architecture notes, integration guides, system docs).
 - **`/nginx`** - Production nginx config (multi-stage Docker build context).
 - **`/tmp`** - Scratch space. Always safe to delete. Never committed.
+- **`/execution`** - Legacy Python execution scripts (pre-Node migration). Read-only reference; new work goes in `/backend` or `/scripts`.
+- **`/intelligence`** - Reserved/in-flight intelligence subsystem outside the main backend tree. Check before adding here vs `backend/src/intelligence/`.
+- **`/system`** - Portal-owned auto-generated state maps. **DO NOT manually edit.** See `system/CLAUDE.md`.
+- **`/preview-db-init`** - Postgres init scripts for the preview-stack Docker images.
 
 No business logic in directives. No orchestration in disposable scripts. No execution or testing inside Claude responses.
+
+**Subdirectory CLAUDE.md files** define local conventions per top-level dir. Claude loads them additively when working inside that subtree. See `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `backend/src/scripts/CLAUDE.md`, `directives/CLAUDE.md`, `system/CLAUDE.md`, `tests/CLAUDE.md`.
 
 ---
 
@@ -599,186 +563,41 @@ Every caught exception is tagged with a stable `error_class` string before being
 
 ---
 
-# UI/UX Design Policy
+# UI/UX Design
 
-## Design system
+**The full design system (palette, tokens, component patterns, accessibility rules, target audience) lives in 5 design skills.** Invoke whichever fits:
 
-- **Framework:** Bootstrap 5 (CDN), utility-first. No custom CSS unless a class exists in `global.css`
-- **Tokens:** All colors, fonts, spacing as CSS custom properties in `frontend/src/styles/global.css`
-- **Never hardcode hex values.** Use `var(--color-*)` or Bootstrap utility classes
+| Skill | When |
+|---|---|
+| `/baseline-ui` | Output the complete design system reference (colors, tokens, components) |
+| `/frontend-design` | Generate any React + Bootstrap page, component, or layout |
+| `/fixing-accessibility` | WCAG 2.1 AA audit and remediation |
+| `/fixing-motion-performance` | Animation, rendering, bundle optimization |
+| `/ui-ux-design` | Strategic design: research, wireframes, prototyping, design review |
 
-## Color palette
+Also see `frontend/CLAUDE.md` for frontend-local conventions. The design system itself is NOT duplicated in this root file (it would drift). Skills are the source of truth.
 
-| Token | Value | Usage |
-|---|---|---|
-| `--color-primary` | `#1a365d` | Navy: headings, primary buttons, brand |
-| `--color-primary-light` | `#2b6cb0` | Links, hover states, focus outlines |
-| `--color-secondary` | `#e53e3e` | Red: CTAs, warnings, destructive actions |
-| `--color-accent` | `#38a169` | Green: success states, positive indicators |
-| `--color-bg` | `#ffffff` | Page background |
-| `--color-bg-alt` | `#f7fafc` | Alternate section backgrounds |
-| `--color-text` | `#2d3748` | Body text |
-| `--color-text-light` | `#718096` | Muted/secondary text |
-| `--color-border` | `#e2e8f0` | Card borders, dividers |
-
-## Component patterns
-
-- **Cards:** `card border-0 shadow-sm` with `card-header bg-white fw-semibold`
-- **Tables:** `table-responsive > table table-hover mb-0`, `thead table-light`
-- **Badges:** `badge bg-{success|warning|info|secondary|danger}`
-- **Tabs:** `nav nav-tabs mb-4` with `nav-link active` buttons
-- **Modals:** `modal show d-block` with backdrop, `role="dialog"`, `aria-modal="true"`
-- **Forms:** `form-control-sm`, `form-select-sm`, `form-label small fw-medium`
-- **Buttons:** Always `btn-sm` in admin UI; `btn-primary`, `btn-outline-secondary`, `btn-outline-danger`
-- **Filter bars:** `d-flex gap-2 mb-3 flex-wrap align-items-center`
-
-## Accessibility (WCAG 2.1 AA required)
-
-- **Focus indicators:** `3px solid var(--color-primary-light)` on `:focus-visible` (in `responsive.css`)
-- **Touch targets:** Min 44x44px on mobile (in `responsive.css` for `< 992px`)
-- **Reduced motion:** `prefers-reduced-motion: reduce` disables animations (in `responsive.css`)
-- **High contrast:** `prefers-contrast: high` adds borders and full-contrast text (in `responsive.css`)
-- **Screen readers:** Loading spinners need `role="status"` + `visually-hidden` text
-
-## Available design skills
-
-| Skill | Invocation | Purpose |
-|---|---|---|
-| Baseline UI | `/baseline-ui` | Output the complete design system reference |
-| Accessibility | `/fixing-accessibility` | WCAG 2.1 AA audit and remediation |
-| Performance | `/fixing-motion-performance` | Animation, rendering, bundle optimization |
-| Frontend Design | `/frontend-design` | Generate React + Bootstrap components and pages |
-| UI/UX Design | `/ui-ux-design` | Strategic design: research, wireframes, prototyping, review |
-
-## Target audience
-
-**Enterprise executives, aged 35-60.** Design must be clean, calm, and authoritative. Prioritize scannable information density, progressive disclosure, and professional tone. Think Bloomberg meets Salesforce, not consumer SaaS.
+**Target audience:** enterprise executives, 35-60. Clean, calm, authoritative. Bloomberg meets Salesforce, not consumer SaaS.
 
 ---
 
-# Outreach Byline Policy
+# Outreach Content Policy
 
-The "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)" byline appended to outbound social content is conditional on platform strategy. It is NOT universal.
+Outbound social content (Reddit, Quora, HN, LinkedIn, Dev.to, Skool, etc.) follows the OpenClaw platform strategy: PASSIVE_SIGNAL / HYBRID_ENGAGEMENT / AUTHORITY_BROADCAST. Byline rules differ per strategy; Skool-specific banned-phrase patterns are enforced at both generation and quality-gate layers.
 
-| Strategy | Examples | Byline behavior |
-|---|---|---|
-| `PASSIVE_SIGNAL` (cross-platform comments) | Reddit, Quora, Hacker News, Facebook Groups, LinkedIn comments on others' posts | Append byline. Reader cannot natively tell the commenter is Ali. |
-| `HYBRID_ENGAGEMENT` (engagement-first, light posting) | Dev.to, Hashnode, Twitter, Bluesky, ProductHunt, Discourse | Append byline (short form for char-limited platforms). |
-| `AUTHORITY_BROADCAST` (Ali's own channel) | LinkedIn native posts, YouTube | **STRIP byline.** The platform identifies the author inherently; a manual sign-off reads as redundant ("Hi I'm Ali, and also I'm Ali") and looks LLM-generated. |
+**Full strategy taxonomy, byline rules, banned-phrase list, and on-flag protocol live in the `openclaw-outreach` skill.** Invoke via `/openclaw-outreach`.
 
-The deterministic enforcement lives in `enforceSignOff()` in `openclawPlatformStrategy.ts`. It appends the byline for non-AUTHORITY platforms and actively strips it from AUTHORITY_BROADCAST output, regardless of what the LLM (or a human drafter) emitted.
-
-When hand-drafting LinkedIn-native posts (e.g., for Dhee or another assistant to publish on Ali's profile), follow the same rule: no byline.
+Code locations: `backend/src/services/agents/openclaw/openclawPlatformStrategy.ts` (`enforceSignOff()`), `backend/src/services/agents/skool/skoolQualityGateAgent.ts`, `backend/src/services/agents/skool/skoolPlatformStrategy.ts`.
 
 ---
 
-# Required Review Screenshot Protocol
+# Screenshot Capture + Review HTML
 
-Every sprint that touches the user-facing portal must end with a review HTML doc that **embeds real production screenshots**, not CSS mockups. Stakeholders should be able to verify "yes, this is what shipped" without logging in or running a dev server.
+Sprints that ship user-facing portal changes end with an HTML review doc embedding real production screenshots (not CSS mockups). All capture scripts route through `scripts/captureHelpers.js` for safe-width downscaling (1800px ceiling).
 
-## When this protocol applies
+**Full capture protocol (safe-width rules, helper API, JWT refresh) and review-doc structure (per-stop pattern, compile button, naming conventions) live in the `screenshot-review` skill.** Invoke via `/screenshot-review`.
 
-Required for any sprint that:
-- Changes a route, page, or component visible at `enterprise.colaberry.ai/portal/*`
-- Adds a new surface (Cory Home, ExecutionLane, SystemView, Critique, Setup, etc.)
-- Modifies UnifiedProjectState or other state surfaced on Cory Home
-- Touches navigation, layout, or a verdict-bearing surface
-
-Not required for:
-- Backend-only changes that don't surface to the user (governance memory, Phase 16-32 plumbing, etc.)
-- Internal scripts in `backend/src/scripts/` or `scripts/`
-
-## How to capture
-
-The capture script lives at `scripts/captureProductionScreenshots.js`. It uses Playwright (already in root `package.json`) + a JWT token at `scripts/.ali_jwt.txt` (gitignored — never commit) to authenticate against `enterprise.colaberry.ai` and screenshot every primary surface.
-
-```
-node scripts/captureProductionScreenshots.js
-```
-
-Output lands in `docs/screenshots/<YYYY-MM-DD>-deploy/` as full-page PNGs at retina quality (1440×900 viewport, deviceScaleFactor=2). Override base URL with `CAPTURE_BASE` env, override token with `CAPTURE_TOKEN` env, override output dir with `CAPTURE_OUT`.
-
-If the token expires (the JWT has an `exp` claim), grab a fresh one from the operator's authenticated browser:
-1. F12 → Console (type `allow pasting` first to bypass Chrome's anti-XSS warning)
-2. `copy(localStorage.getItem('participant_token'))`
-3. Paste the result into `scripts/.ali_jwt.txt` (replace the file contents)
-
-## What every review HTML must include
-
-For each user-facing change shipped in the sprint:
-
-1. **The live screenshot embedded inline** — wrapped in a dark frame card with the URL caption + "open full size" link to the underlying PNG. Use the existing `.screenshot` CSS pattern in `docs/POST_DEPLOY_WALKTHROUGH.html` for consistency.
-2. **Before/after pairs** when the change is a redesign (legacy on the left or top, new on the right or bottom).
-3. **A clear caption** stating what the user is looking at.
-
-The review HTML structure should follow the per-stop pattern:
-- `① See it` — the screenshot card + a "Open in new tab" button to the live URL
-- `② What shipped here` — bullet list of the change
-- `③ Possible changes` — pre-flagged issues with checkboxes for the operator to investigate
-- `④ Your verdict + notes` — 👍/⚠/✕ radio + free-form textarea
-
-## What every review HTML must support
-
-- **Inline critique** — every section ends with a real `<textarea>` so the operator can leave notes without leaving the doc
-- **Compile button** — at the bottom of the page, a button that gathers all checkbox + radio + textarea state into a single Markdown prompt the operator pastes back to start the next sprint
-- **Reset button** — a way to clear all the state and start fresh
-
-The compile-prompt mechanism is reference-implemented in `docs/POST_DEPLOY_WALKTHROUGH.html` — copy that pattern.
-
-## Naming + location
-
-- Walkthroughs: `docs/<SPRINT>_REVIEW.html` — one per sprint
-- Screenshots: `docs/screenshots/<YYYY-MM-DD>-<context>/<NN>-<slug>.png`
-- Token (gitignored): `scripts/.ali_jwt.txt`
-- Capture script: `scripts/captureProductionScreenshots.js`
-
-The screenshot folder may be committed if the operator decides; the token file may NOT.
-
-## Why this exists
-
-Two failure modes the protocol prevents:
-1. **CSS mockups drift from reality.** Stakeholders look at a CSS wireframe in a review doc, sign off, then discover production looks subtly different. Real screenshots eliminate that drift.
-2. **Setup friction blocks review.** Without embedded screenshots, every reviewer needs the dev environment running OR a production login to verify the change. With them, the review HTML is self-contained and shareable.
-
----
-
-# Screenshot Verification Safety Protocol
-
-A prior session died because a single screenshot at 2128×266 pushed the cumulative many-image context past Claude Code's 2000px ceiling, and every reply after that hit the dimension-limit error and could not recover. The verification workflow itself is now hardened so this is not possible.
-
-## Hard rules (enforced)
-
-- **Max safe width is 1800px.** Every PNG that Claude will be asked to `Read` must be ≤1800px wide. Anything wider must be downscaled before it lands on disk.
-- **Default capture viewport is `SAFE_VIEWPORT` (1440×900 at `deviceScaleFactor=1`).** DSF 2 (retina) is permitted only when the PNG will exclusively be embedded into a review-doc HTML for human inspection — never when Claude will `Read` it.
-- **All capture scripts must route through `scripts/captureHelpers.js`.** Direct `page.screenshot(...)` calls in capture scripts are a violation. The helper provides `safeScreenshot`, `safeCrop`, `boundedFullPage`, and `maxWidthGuard`, each of which downscales in place if the captured PNG exceeds the safe width.
-- **Three-image read budget per conversation turn.** Claude reads at most three PNGs in any single turn during verification. Subsequent images go through a focused crop, not a re-`Read` of the same surface.
-- **`_summary.json` is mandatory.** Every capture batch writes `_summary.json` next to the PNGs via `writeCaptureSummary(...)`. Each entry must include `originalWidth`, `finalWidth`, `downscaled`. Any `finalWidth > 1800` is a process violation.
-
-## The helper API
-
-`scripts/captureHelpers.js` is the single sanctioned capture path:
-
-| Export | Use |
-| --- | --- |
-| `MAX_SAFE_WIDTH` (=1800) | Hard cap referenced throughout |
-| `SAFE_VIEWPORT` | Default: 1440×900, DSF 1 |
-| `RETINA_REVIEW_VIEWPORT` | 1440×900, DSF 2 — review-doc embeds only |
-| `createSafeContext(browser, { token, viewport, seededMemory, label })` | Returns a Playwright context with auth injected via `addInitScript` and viewport set per `label` |
-| `safeScreenshot(page, outPath, { fullPage, clip, label })` | Wraps `page.screenshot`; downscales to ≤1800px after capture |
-| `safeCrop(page, selector, outPath, { padding, label })` | Bounding-rect crop with width clamp |
-| `boundedFullPage(page, outPath, { label })` | Full-page convenience that asserts DSF 1 |
-| `maxWidthGuard(pngPath, { label })` | Standalone downscale check for non-Playwright captures |
-| `writeCaptureSummary(outDir, entries)` | Writes `_summary.json` with `max_safe_width`, `safe_viewport`, and the per-PNG `final_width` ledger |
-
-Use `label: 'retina-review'` only for explicitly human-reviewed embeds; any other label routes through the safe-width clamp.
-
-## Dependency
-
-This protocol depends on `sharp` (^0.33) at the repo-root `devDependencies` for in-place PNG downscaling. Added 2026-05-16.
-
-## When the protocol is triggered
-
-The full protocol applies to **every** Playwright capture script in `scripts/` that produces PNGs into `docs/screenshots/` or `tmp/`. A new capture script that does not import from `captureHelpers.js` is a defect, regardless of how small.
+Quick reference: capture script at `scripts/captureProductionScreenshots.js`, output to `docs/screenshots/<YYYY-MM-DD>-deploy/`, walkthrough naming `docs/<SPRINT>_REVIEW.html`, reference pattern at `docs/POST_DEPLOY_WALKTHROUGH.html`.
 
 ---
 
