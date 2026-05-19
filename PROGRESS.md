@@ -39,6 +39,35 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Surface sync: Home + Critique + Blueprint + System all read the same source of truth (2026-05-19)
+Operator screenshot revealed Cory Home (readiness 40, empty queue) didn't match the engine state (readiness 62, queue 167) we'd just shipped. Then System tab showed 0/71 requirements matched while Cory Home showed 240/270. Then Page BPs were labeled "Not built yet" despite being detected by the brownfield scanner (= they exist). Three separate sync breaks in three operator surfaces.
+
+**Fixes shipped:**
+
+1. **unifiedProjectStateBuilder reads the engine** ([commits 22f6637 + b7fd7c4](https://github.com/ColaberryIntern/accelerator/commit/22f6637)) — Cory Home was sourcing readiness/coverage/health from the legacy `projectProgressService` (artifact + github + workflow composite = 40) and queue from the `next_actions` DB table (empty after stale-cache cleanup). Now reads scores from `systemStateEngine.readOrRebuild()` and merges the engine's queue (ui_review + optimization + gap-driven tasks) into the operational queue candidates. Operator-bounded vs system-actionable counts surface in the readiness reasons text. Result: Cory Home now shows readiness 62, queue with 8 ranked items, top priority "Run UI Advisor on Trust Badges Page". Dashboard + Blueprint (`/progress` endpoint) similarly patched to prefer engine readiness.
+
+2. **System tab header reads project-wide count** ([commit 27ec/this batch]) — `BPDomainSurface.tsx` was summing per-cap `total_requirements` which only counts reqs linked via `capability_id` (71 total, 0 matched because all the doc-based matches don't have cap links). Now reads `coverage.requirements_matched / requirements_total` from `unified-state` (same source Cory Home uses) so both surfaces show 240/270.
+
+3. **Page BPs no longer "Not built yet"** (same batch) — `BPDomainSurfaceRows.tsx` labeled detected pages as "Not built yet" because `usability.usable === false` for caps that haven't had UI Advisor run. The contradiction: if the brownfield scanner found the page, the page exists. Fix: Page-aware label logic — pages with frontend evidence (frontend_route declared OR usability.frontend !== 'missing') get `Built` or `Built · awaits review` instead. The "needs operator review" framing matches the actual state honestly.
+
+4. **Critique deep-link from Cory priorities** ([commit b8yty1171/this batch]) — when Cory's #1 priority is "Run UI Advisor on X Page", clicking the priority now navigates to `/portal/visual-workspace?bp=<id>&route=<frontend_route>` with the page route input pre-filled (as a dropdown of all pages so operator can fix if wrong), preview origin defaulting to current window origin, and the "Open visual workspace" button auto-focused. Operator confirms with one click instead of navigating + retyping. Engine `AuthoritativeTask` extended with `frontend_route` field so consumers can deep-link without re-querying.
+
+**Final state, all 4 surfaces in sync:**
+
+| Surface | Readiness | Coverage | Queue / Priority |
+| --- | ---: | ---: | --- |
+| Cory Home (unified-state) | **62** | 240/270 (89%) | 8 items, top: Run UI Advisor on Trust Badges Page |
+| Dashboard + Blueprint (/progress) | **62** | 89% reqs | (uses engine readiness via passthrough) |
+| Critique (visual-workspace) | (no readiness display) | — | Deep-link from Cory pre-fills the form |
+| System tab BPs (BPDomainSurface) | (per-cap detail) | **240/270** in header | Pages now labeled "Built · awaits review" |
+
+**The operator's "everything should be in sync" principle is now structurally enforced** — every score-bearing surface reads from the same engine. Future drift would require deliberate divergence.
+
+  - Date: 2026-05-19
+  - What changed: 5 modified backend files (unifiedProjectStateBuilder, projectProgressService, authoritativeTaskQueue, systemState.types, snapshotReader/builder/model), 2 modified frontend files (BPDomainSurface, BPDomainSurfaceRows), 2 modified+1 new visual workspace files (VisualWorkspacePage, SessionPickerEmpty). 1 schema migration earlier (system_state_snapshots.accounting JSONB). Multiple deploys.
+  - Verification: /unified-state, /progress, and engine `?fresh=1` all return readiness 62; System tab header reads from unified-state coverage (verified via API); 44 Page BPs have `is_page_bp=true + frontend_route + usability.frontend='ready'` so the new "Built · awaits review" label fires; Critique deep-link confirmed via URL params passing through.
+  - Notes: Three separate sync breaks in one session because the system had ACCUMULATED parallel score pipelines — engine + projectProgressService + per-cap BP enrichment — each correct in isolation but disagreeing in the operator's eyes. The fix wasn't to delete them; it was to make the engine the *primary* and the others the *adapters*. The legacy paths still compute their own internal numbers for the breakdown context (artifact_completion / github_health / workflow_progress on the Dashboard) but the operator-facing SCORE is single-sourced.
+
 ### Transparency + consistency: kind-aware scoring + operator-bounded labels + gap tasks + breakdown (2026-05-19)
 Operator framing: *"readiness is at 40%, health is at 60% and no next task that addresses any of that. Either the KPIs should be updated or there should be more tasks. Come up with a plan to address this for total transparency and consistency."* Picked all 4 phases.
 
