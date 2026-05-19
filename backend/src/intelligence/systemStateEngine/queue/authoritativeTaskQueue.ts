@@ -376,7 +376,25 @@ function generateCapTasks(
           // Suggest adding agents only for service-kind caps (page/component
           // never own their own agents; agent-kind already IS an agent).
           return kind === 'service' && !looksInternal;
-        case 'determinism':
+        case 'determinism': {
+          // Determinism gate (2026-05-19): the "add rule-based fallbacks
+          // where the agent currently makes the call" suggestion only
+          // makes sense when the cap COULD be made more deterministic.
+          // For caps that are intelligence-layer by design — agents
+          // outnumber backend files — that suggestion misses the point.
+          // The cap exists specifically to leverage LLMs.
+          //
+          // Surfaced by the operator's 2nd walk: 3 of top 10 were
+          // intelligence-layer caps (Query, Verification, Verification
+          // Framework) with 4-5x more agent files than backend files.
+          // Gate: backend must outnumber agents AND there must be some
+          // backend at all.
+          const beCount = (cap.linked_backend_services || []).length;
+          const agCount = (cap.linked_agents || []).length;
+          if (beCount === 0) return false;
+          if (agCount > beCount) return false;
+          return true;
+        }
         case 'reliability':
         case 'observability':
         case 'production_readiness':

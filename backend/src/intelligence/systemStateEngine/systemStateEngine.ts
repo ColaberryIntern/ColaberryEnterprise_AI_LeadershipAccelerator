@@ -1033,8 +1033,21 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
       // backend-build tasks. The kind field below is the authoritative
       // taxonomy; is_page_bp is kept derived for backward compat with
       // older callers (CapabilityGrid, coverageScorer page logic).
+      //
+      // Kind derivation (2026-05-19): mirror the is_page_bp signal chain.
+      // Previously kind fell through to 'service' whenever the DB column
+      // was null, which made page caps from the frontend_page scanner
+      // get scored on backend-only dimensions like determinism. Surfaced
+      // by the operator walk: 6 of top-10 "Improve determinism for X"
+      // tasks were for caps with source='frontend_page'. Now: if any
+      // signal says it's a page, kind='page'.
       is_page_bp: (c as any).kind === 'page' || c.source === 'frontend_page' || /\s(landing\s)?page$/i.test(c.name || ''),
-      kind: ((c as any).kind || 'service') as 'service' | 'page' | 'agent' | 'component',
+      kind: (
+        (c as any).kind
+        || (c.source === 'frontend_page' ? 'page' : null)
+        || (/\s(landing\s)?page$/i.test(c.name || '') ? 'page' : null)
+        || 'service'
+      ) as 'service' | 'page' | 'agent' | 'component',
       mode_override: c.mode_override,
       last_execution: c.last_execution,
       linked_backend_services: c.linked_backend_services || [],
