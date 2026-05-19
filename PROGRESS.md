@@ -36,6 +36,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-19
   - Verification: all 14 tasks assigned, summary message posted (id 9908694874). Breakdown: Ali on 8 tasks (sole on 5), CB System on 6 tasks, Vinay on 5 tasks, Design House on 1 task (the POC build).
   - Note: Ali's heavy load is mostly review-gates (proposal voice review, exec summary review, sign-off, submission) rather than independent work. The actual "doing" load is split CB System + Vinay + Design House.
+- [x] **Task #1 (Read RFP 544695) — requirements matrix drafted (CB-System-assigned AI task).** Extracted text from all 8 RFP files (main RFP + Attachments A, B, C, D-1, F including both xlsx tabs). Decomposed every "shall/must/should" into 139 atomic requirements with stable IDs (RFP-§-N, SEC-1..44, CLD-1..26, ATTA-*, ATTB-*, ATTC-*, ATTD-*, EVAL-*). Each row has Source, Category, Type, Owner (CB-AI/CB-CO/DH/ALI), Status, Requirement text, Evidence location, and Notes. Surfaced 12 hard constraints (closed-corpus, 60-day operational deadline, $50K ceiling, Bonfire-only submission, notarization, etc.) and 7 open questions for Ali. Industry-standard compliance-matrix format that drives the Att B outline + Att F responses + executive summary.
+  - Date: 2026-05-19
+  - Verification: Markdown + XLSX (3 sheets: Summary, Requirements w/ autofilter, By Owner) generated; both uploaded to a new `AI Drafts` sub-folder under the Detroit proposal folder (Basecamp folder id 9908752577); Task #1 in Basecamp received an explanatory comment (recording id 9908752669) linking to both drafts.
+- [x] `tmp/gov-bids/Detroit_-_AI_for_Muni-Code_Search__RFP_544695_/ai-drafts/generate-requirements-matrix.js` (new) — deterministic generator: pure-data REQUIREMENTS array + XLSX/Markdown rendering. Re-run after any RFP amendment to refresh both outputs. Outputs land in the `ai-drafts/` folder under the bid's tmp directory.
+  - Date: 2026-05-19
+  - Verification: ran successfully, output verified row count (139) matches manual count of decomposed requirements
+- [x] `backend/src/scripts/uploadDetroitTask1Matrix.js` (new) — orchestrator that (1) creates or reuses the `AI Drafts` sub-folder under the Detroit proposal folder, (2) uploads the matrix Markdown + XLSX (skipping if already present by filename), (3) finds Task #1 in the bid To-Do List by content match, (4) posts (or PUT-updates) an explanatory comment with a stable `<!-- ai-task-1-matrix-v1 -->` signature for idempotency. Pattern reusable for the remaining 4 AI-eligible tasks (Att B, Att F, capability statement, executive summary).
+  - Date: 2026-05-19
+  - Verification: ran successfully; folder, both uploads, and comment all created on first try (URLs in script output).
 
 ### Claude Code Architecture Remediation — Waves 1-4 (2026-05-19)
 Per Ram's request, audited the repo against [Anthropic's Claude Code best-practices article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start). Initial score: ~35/100. Executed top 5 + small cleanups; new score: ~70/100. Zero production code touched — config only. Full reports at `docs/CLAUDE_CODE_ARCHITECTURE_AUDIT.md` (the audit) and `docs/CLAUDE_CODE_REMEDIATION_REVIEW.html` (interactive review with verdicts + compile button per the screenshot-review skill pattern).
@@ -118,6 +127,32 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
 - [x] `backend/src/scripts/sendVisitorTrackerInstallEmails.js` — Mandrill SMTP send loop, 4 install emails to the per-site owners (Ali for advisor; Tejesh for colaberry.ai; Ram + Tejesh CC for trustbeforeintelligence.ai and worldoftaxonomy.com). Per Ali's explicit instruction, the body tells recipients (most of whom use Claude Code for installs) to paste back the literal `[colaberry-track]`-prefixed console error, the non-200/204 HTTP status with response body, or any Claude Code terminal error verbatim if installation fails. No paraphrasing. No em-dashes (outside-comms rule).
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
+
+### Maturity-aware ranking within triage + agent_stack tiers (2026-05-19, Tier-2 #5)
+Within each tier, all tasks today had identical priority_score and scoring components — so ordering devolved to internal id sort. Result: brownfield caps with 38 backend files ranked the same as caps with 1 file. Operator saw "decide on Marketing Dashboard" (12 files) before "decide on Content Generation for Marketing" (41 files) with no signal that the larger one represented more accumulated work.
+
+**Fix:** scaled scoring components by total file count, bounded so a single mega-cap doesn't dominate the queue.
+
+| Tier | sizeBoost formula | blocking_score | maturity_gain |
+|---|---|---|---|
+| triage | `min(20, totalFiles)` | `25 + boost` (25-45) | `10 + boost` (10-30) |
+| agent_stack | `min(15, be+fe)` | `20 + boost` (20-35) | `25 + boost` (25-40) |
+
+**Production verification — triage queue re-ranked exactly as designed:**
+
+| Before | After (Tier-2 #5) |
+|---|---|
+| #1 Marketing Dashboard (12 files) | #1 Content Generation for Marketing (41 files, saturated) |
+| #2 Content Generation for Marketing (41) | #2 Execution Planning (61 files, saturated) |
+| #3 Lead Management Dashboard | #3 Requirements Management (15 files) |
+| #4 Revenue Dashboard Insights | #4 Marketing Dashboard (12 files) |
+
+**reasons[] surfaces the boost** so operator sees WHY a cap ranked higher: `"accumulated work bonus: +18 (total 18 files)"`.
+
+  - Date: 2026-05-19
+  - What changed: scaled blocking_score + maturity_gain in [authoritativeTaskQueue.ts](backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts) generateTriageTask + generateAgentStackTask. 2 new tests verify ordering + saturation. Commit 3d1079a8.
+  - Verification: 25/25 gate tests. Prod refresh confirms top-4 triage tasks now ordered by accumulated work (Content Generation 41 → Execution Planning 61 → Requirements Management 15 → Marketing Dashboard 12).
+  - Notes: First "intra-tier ranking" tuning. Future enhancements: weight by downstream dependency count (caps that unblock more downstream work rank higher), weight by recent operator-mentions (caps the operator has been working on recently rank higher).
 
 ### Frontend route revalidation per refresh (2026-05-19, Tier-2 #6)
 Phantom-page scanner fix (earlier today) validated cap routes at CREATION time. Today's frontend_route revalidator validates them at every engine refresh — same shape, applied to cap-side data.
