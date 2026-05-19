@@ -495,6 +495,111 @@ describe('propose_agent_stack generator (next-tier work after build)', () => {
   });
 });
 
+describe('triage task generator (brownfield + 0 reqs fallback)', () => {
+  it('fires for a brownfield service cap with linked code and 0 requirements', () => {
+    const cap = mkCap({
+      id: 'orphan-svc',
+      name: 'Lead Scoring Engine Wrapper',
+      kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['leadScoring.ts', 'leadScoringHelper.ts'],
+      linked_frontend_components: [],
+      linked_agents: [],
+      total_requirements: 0,
+      matched_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage'));
+    expect(t).toBeDefined();
+    expect(t!.type).toBe('triage');
+    expect(t!.description).toMatch(/spec 3-5 requirements|mark verified|archive/);
+    expect(t!.description).toMatch(/2 backend files/);
+  });
+
+  it('does NOT fire when cap has any requirements specified', () => {
+    const cap = mkCap({
+      id: 'has-reqs',
+      name: 'Some Service',
+      kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['svc.ts'],
+      total_requirements: 3,
+      matched_requirements: 1, // 2 unmatched → implement_reqs fires; triage shouldn't
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage'));
+    expect(t).toBeUndefined();
+  });
+
+  it('does NOT fire for pages (they get ui_review)', () => {
+    const cap = mkCap({
+      id: 'page', name: 'About Page', kind: 'page', is_page_bp: true,
+      source: 'frontend_page', frontend_route: '/about',
+      linked_frontend_components: ['About.tsx'],
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage'));
+    expect(t).toBeUndefined();
+  });
+
+  it('does NOT fire for internal-named infra services', () => {
+    const cap = mkCap({
+      id: 'infra', name: 'Validation Results Emission', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['vre.ts'],
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage'));
+    expect(t).toBeUndefined();
+  });
+
+  it('does NOT fire for agent-layer-named caps', () => {
+    const cap = mkCap({
+      id: 'agentish', name: 'Autonomous Decision Making', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['adm.ts'],
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage'));
+    expect(t).toBeUndefined();
+  });
+
+  it('does NOT fire when cap also has a concrete actionable task firing', () => {
+    // Cap with no backend triggers build_backend (concrete). Triage should
+    // not also fire — it's the fallback for caps with nothing concrete.
+    const cap = mkCap({
+      id: 'no-be', name: 'Nascent Service', kind: 'service',
+      source: 'parsed', // not brownfield, but the test is about dedup
+      linked_backend_services: [],
+      total_requirements: 5, matched_requirements: 1, // would fire implement_reqs
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const triage = state.queue.find(x => x.title.startsWith('Triage'));
+    expect(triage).toBeUndefined();
+  });
+});
+
 describe('kind derivation from source/name (engine input mapping)', () => {
   // Note: the kind-derivation fix lives in buildAuthoritativeState (the
   // full project loader), not in the pure entry buildAuthoritativeStateFromInputs

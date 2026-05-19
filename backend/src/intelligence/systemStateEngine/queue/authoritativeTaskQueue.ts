@@ -76,6 +76,49 @@ export function buildAuthoritativeQueue(input: BuildQueueInput): {
     if (agentStackTask) candidates.push(agentStackTask);
   }
 
+  // 2c. Triage proposals (added 2026-05-19). Brownfield caps that were
+  // discovered from code but have no requirements attached. The system
+  // has nothing concrete to ask the operator to BUILD because nothing
+  // is specified. Fallback ask: "decide what this is."
+  //
+  // Fires when no CONCRETE actionable task already exists for the cap.
+  // Concrete = build_backend, add_frontend, implement_reqs, ui_review,
+  // verify, agent_stack. NOT optimization tasks — those are themselves
+  // fallbacks and surfacing them alongside triage is redundant noise
+  // ("improve observability for X" + "triage X" for the same cap).
+  // When triage fires, also REMOVE any optimization tasks for that cap
+  // from candidates — triage IS the operator action; optimization is
+  // premature until the cap is spec'd.
+  //
+  // Priority 35 — above ui_review (25) since triage is a decision the
+  // operator must make to unblock downstream work, below agent_stack
+  // (50) and any build task (70-80) since those have concrete actions.
+  const concreteTaskBpIds = new Set<string>();
+  for (const t of candidates) {
+    if (!t.bp_id) continue;
+    if (t.type === 'optimization') continue;
+    concreteTaskBpIds.add(t.bp_id);
+  }
+  for (const cap of input.capabilities) {
+    if (cap.applicability_status !== 'active') continue;
+    if (cap.user_status === 'archived' || cap.user_status === 'verified') continue;
+    const score = input.capability_scores.find(s => s.capability_id === cap.id);
+    if (!score) continue;
+    if (concreteTaskBpIds.has(cap.id)) continue;
+    const triageTask = generateTriageTask(cap, score, input.project);
+    if (triageTask) {
+      candidates.push(triageTask);
+      // Suppress any optimization tasks for this cap — they're noise
+      // when triage is the operator action.
+      for (let i = candidates.length - 1; i >= 0; i--) {
+        const c = candidates[i];
+        if (c.bp_id === cap.id && c.type === 'optimization' && c.id !== triageTask.id) {
+          candidates.splice(i, 1);
+        }
+      }
+    }
+  }
+
   // 3. Resolve dependencies
   const resolved = resolveDependencies(candidates);
 
@@ -652,6 +695,80 @@ function generateAgentStackTask(
         ? `coverage=${score.coverage}% (page is shipped — next tier is the agent layer)`
         : `readiness=${score.readiness}% (service is built — next tier is the agent layer)`,
       `linked_agents=${linkedAgentCount} (below stack floor of ${AGENT_STACK_FLOOR})`,
+    ],
+    cap, cap_score: score,
+  });
+}
+
+/**
+ * Triage task generator (added 2026-05-19). For brownfield-discovered
+ * service caps that have linked code but no requirements specified —
+ * the system has nothing concrete to BUILD because nothing is spec'd.
+ * The operator's action is a DECISION: spec requirements, mark
+ * verified, or archive.
+ *
+ * Gates:
+ *   - kind=service (pages get ui_review, agents are their own thing,
+ *     components live inside pages)
+ *   - !looksInternal (loggers/validators/normalizers aren't candidates
+ *     for operator-driven requirement specification)
+ *   - !isAgentLayerNamed (same exclusion as agent_stack)
+ *   - source=brownfield_discovered (only auto-discovered caps; spec-
+ *     driven caps already have requirements by definition)
+ *   - total_requirements === 0 (no spec attached yet)
+ *
+ * Fires only when no other concrete task is firing for the cap (gate
+ * lives in the caller). Triage is the fallback that drains the
+ * "discovered-but-undecided" pollution out of the queue.
+ *
+ * Priority 35 — above ui_review (25), below agent_stack (50) and
+ * build/implement tasks (70-80). The signal: "you need to decide
+ * what this cap is, but it's not blocking immediate next-tier work."
+ */
+function generateTriageTask(
+  cap: EngineCapabilityInput,
+  score: CapabilityScores,
+  project: EngineProjectInput,
+): AuthoritativeTask | null {
+  const kind = cap.kind || 'service';
+  if (kind !== 'service') return null;
+  if (cap.is_page_bp) return null;
+  if (cap.source !== 'brownfield_discovered') return null;
+  if (cap.total_requirements > 0) return null;
+
+  const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry|integration|composer|generation|optimization|estimator|planner|mapping|definition|tracking|reporting|automation|orchestration|framework|parser|handling)$/i.test(cap.name || '');
+  if (looksInternal) return null;
+  const isAgentLayerNamed = /\b(monitoring|autonomous|advisor|orchestrator|orchestration|telemetry|alerting|decision\s+making|policy\s+enforcer|governance)\b/i.test(cap.name || '');
+  if (isAgentLayerNamed) return null;
+
+  const beCount = (cap.linked_backend_services || []).length;
+  const feCount = (cap.linked_frontend_components || []).length;
+  const agCount = (cap.linked_agents || []).length;
+  const fileSummary = [
+    beCount > 0 ? `${beCount} backend file${beCount === 1 ? '' : 's'}` : null,
+    feCount > 0 ? `${feCount} frontend component${feCount === 1 ? '' : 's'}` : null,
+    agCount > 0 ? `${agCount} agent${agCount === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(', ') || 'no linked files';
+
+  const description = `${cap.name} was discovered from code (${fileSummary}) but has no requirements specified. Decide: (a) spec 3-5 requirements to drive implementation and verification, (b) mark verified if it's complete as-is, or (c) archive if it's not real work.`;
+
+  return makeTask({
+    id: `${cap.id}:triage`,
+    project_id: project.id,
+    bp_id: cap.id,
+    title: `Triage ${cap.name} — no requirements specified`,
+    description,
+    type: 'triage',
+    priority_score: 35,
+    blocking_score: 25,
+    dependency_score: 30,
+    maturity_gain: 10,
+    readiness_gain: 15,
+    confidence_score: 70,
+    execution_cost: 15,
+    reasons: [
+      `source=brownfield_discovered with 0 requirements (${fileSummary})`,
+      `no other actionable task fires for this cap — triage is the floor`,
     ],
     cap, cap_score: score,
   });

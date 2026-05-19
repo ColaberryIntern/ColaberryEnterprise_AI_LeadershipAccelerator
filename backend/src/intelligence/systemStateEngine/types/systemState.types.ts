@@ -96,7 +96,8 @@ export type AuthoritativeTaskType =
   | 'intelligence'
   | 'ui_review'
   | 'optimization'
-  | 'agent_stack';
+  | 'agent_stack'
+  | 'triage';
 
 export type AuthoritativeTaskState =
   | 'pending'

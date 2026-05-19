@@ -76,6 +76,15 @@ const REQUIREMENTS: Record<AuthoritativeTaskType, ReadonlyArray<TelemetryRequire
     { kind: 'tests_added',          severity: 'recommended', rationale: 'new agents should ship with at least a smoke test' },
     { kind: 'validation_results',   severity: 'required',    rationale: 'tsc + jest must pass after adding the agent layer' },
   ],
+  triage: [
+    // Triage is a DECISION task — the operator either specs requirements,
+    // marks the cap verified, or archives it. None of those guarantee a
+    // code change (verification + archival are DB state changes). So
+    // telemetry requirements are intentionally minimal: just declare
+    // SOMETHING happened. The cap_status field on the manifest records
+    // which decision was made.
+    { kind: 'files_changed',        severity: 'recommended', rationale: 'requirement spec usually edits a doc; verify/archive may be DB-only' },
+  ],
 };
 
 /** Returns the full checklist for a task type. */
