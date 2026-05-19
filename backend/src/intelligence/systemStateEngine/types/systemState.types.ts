@@ -145,6 +145,12 @@ export interface AuthoritativeTask {
   // because synthetic tasks (e.g. foundation kickoff) can be built without
   // a full trace in tests.
   readonly decision_trace?: DecisionTrace;
+
+  // Deep-link payload — when the operator clicks a task on Cory Home,
+  // the consumer surface uses these to pre-fill its form fields so
+  // the operator doesn't have to re-pick the BP / route. Added 2026-05-19.
+  // Optional because not every task type has a target frontend surface.
+  readonly frontend_route?: string;
 }
 
 /**

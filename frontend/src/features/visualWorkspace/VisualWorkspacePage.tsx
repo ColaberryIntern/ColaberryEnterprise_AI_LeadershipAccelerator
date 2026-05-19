@@ -55,6 +55,18 @@ const VisualWorkspacePage: React.FC = () => {
   const [sessions, setSessions] = useState<SessionStub[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
+  // Deep-link pre-fill from Cory queue. When Cory's #1 priority is a
+  // ui_review task, the operator clicks through to
+  // /portal/visual-workspace?bp=<id>&route=<frontend_route> so the
+  // Session picker can pre-fill the page route input + focus the button.
+  const dlBp = searchParams.get('bp');
+  const dlRoute = searchParams.get('route');
+
+  // Catalog of all pages (caps with a frontend_route) for the picker's
+  // dropdown. Loaded once on mount; not refreshed because pages don't
+  // change mid-session for a single operator.
+  const [pageOptions, setPageOptions] = useState<{ route: string; name: string }[]>([]);
+
   const [previewOrigin, setPreviewOrigin] = useState<string>(DEFAULT_PREVIEW_ORIGIN);
   const [iframeKey, setIframeKey] = useState<number>(0);
 
@@ -84,6 +96,27 @@ const VisualWorkspacePage: React.FC = () => {
   }, []);
 
   useEffect(() => { void refreshSessions(); }, [refreshSessions]);
+
+  // One-shot load of pages with frontend_route for the dropdown picker.
+  // Tolerant of failure: empty list falls back to free-text input.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await portalApi.get('/api/portal/project/business-processes');
+        const rows = (r.data || []) as Array<{ id: string; name?: string; frontend_route?: string | null }>;
+        if (cancelled) return;
+        const opts = rows
+          .filter(r => !!r.frontend_route)
+          .map(r => ({ route: r.frontend_route as string, name: r.name || (r.frontend_route as string) }))
+          // dedupe by route — different caps may share a route
+          .filter((p, i, arr) => arr.findIndex(x => x.route === p.route) === i)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setPageOptions(opts);
+      } catch { /* silent — picker falls back to free-text input */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     // keep URL in sync with sessionId
@@ -352,6 +385,8 @@ const VisualWorkspacePage: React.FC = () => {
       <SessionPickerEmpty
         recent={sessions}
         loading={sessionsLoading}
+        initialRoute={dlRoute || undefined}
+        pageOptions={pageOptions}
         onPick={(id) => setSessionId(id)}
         onCreate={openNewSession}
       />

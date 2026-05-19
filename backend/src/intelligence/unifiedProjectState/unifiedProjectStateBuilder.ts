@@ -105,8 +105,21 @@ export async function buildUnifiedProjectState(input: BuildInput): Promise<Unifi
   // 100+ ranked tasks (ui_review, optimization, gap-driven improvements).
   // Engine task IDs look like 'cap-id:task-type' so they can't collide
   // with NextAction UUIDs or governance UUIDs. Added 2026-05-19.
+  //
+  // Deep-link routing per task type:
+  //   ui_review    → /portal/visual-workspace (Critique) with bp + route
+  //                  pre-filled so operator just clicks "Open visual workspace"
+  //   optimization → /portal/project/blueprint (where build prompts live)
+  //   default      → /portal/project/blueprint
   const engineTasks = (engineState?.queue || []) as any[];
   for (const t of engineTasks.slice(0, 30)) {
+    let target_route = '/portal/project/blueprint';
+    if (t.type === 'ui_review') {
+      const params = new URLSearchParams();
+      if (t.bp_id) params.set('bp', t.bp_id);
+      if (t.frontend_route) params.set('route', t.frontend_route);
+      target_route = '/portal/visual-workspace' + (params.toString() ? `?${params.toString()}` : '');
+    }
     candidates.push({
       source_id: t.id,
       source: 'engine_task' as any,
@@ -116,8 +129,8 @@ export async function buildUnifiedProjectState(input: BuildInput): Promise<Unifi
       confidence: clamp(t.confidence_score ?? 75),
       time_est_minutes: estimateTimeFromEngineTaskType(t.type),
       blast_radius: blastFromEngineTaskType(t.type),
-      target_route: t.type === 'ui_review' ? '/portal/project/system' : '/portal/project/blueprint',
-      metadata: { engine_task_type: t.type, bp_id: t.bp_id, state: t.state },
+      target_route,
+      metadata: { engine_task_type: t.type, bp_id: t.bp_id, frontend_route: t.frontend_route, state: t.state },
     });
   }
 

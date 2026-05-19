@@ -13,14 +13,34 @@ interface SessionStub {
   opened_at: string;
 }
 
+interface PageOption {
+  /** route to render (path on the preview origin) */
+  route: string;
+  /** human-readable cap name for the dropdown label */
+  name: string;
+}
+
 interface Props {
   recent: SessionStub[];
   onPick: (id: string) => void;
   onCreate: (route: string, origin: string) => Promise<void>;
   loading: boolean;
+  /**
+   * When the operator landed here via a Cory priority deep-link, these
+   * pre-fill the form. The button gets auto-focused so the operator can
+   * confirm with one keypress (or click). Added 2026-05-19.
+   */
+  initialRoute?: string;
+  /**
+   * All pages the project knows about. When provided, the page-route input
+   * renders as a dropdown of friendly names instead of free text — easier
+   * to switch to a different page if the queued one isn't what the operator
+   * meant. Falls back to free-text when no options provided.
+   */
+  pageOptions?: PageOption[];
 }
 
-const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading }) => {
+const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading, initialRoute, pageOptions }) => {
   // Default to the current page origin so production operators don't
   // land on a stale `http://localhost:8888` default that would fail to
   // load (mixed-content blocked on HTTPS portals, plus localhost can't
@@ -29,8 +49,25 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
   const [origin, setOrigin] = useState(
     typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8888'
   );
-  const [route, setRoute] = useState('/');
+  const [route, setRoute] = useState(initialRoute || '/');
   const [submitting, setSubmitting] = useState(false);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+
+  // If the parent passes a new initialRoute (e.g., operator clicked a
+  // different Cory priority), update the field and re-focus the button.
+  React.useEffect(() => {
+    if (initialRoute && initialRoute !== route) {
+      setRoute(initialRoute);
+    }
+  }, [initialRoute]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-focus the "Open visual workspace" button when arriving via a
+  // deep-link with a pre-filled route. One-click confirmation.
+  React.useEffect(() => {
+    if (initialRoute && buttonRef.current) {
+      buttonRef.current.focus();
+    }
+  }, [initialRoute]);
 
   const handleCreate = async () => {
     if (!route) return;
@@ -192,15 +229,37 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
             </div>
             <div className="col-md-5">
               <label className="form-label small fw-medium">Page route</label>
-              <input
-                className="form-control form-control-sm font-monospace"
-                placeholder="/portal/project/blueprint"
-                value={route}
-                onChange={(e) => setRoute(e.target.value)}
-              />
+              {pageOptions && pageOptions.length > 0 ? (
+                <select
+                  className="form-select form-select-sm font-monospace"
+                  value={route}
+                  onChange={(e) => setRoute(e.target.value)}
+                  aria-label="Page route"
+                >
+                  {/* Show the current route up top even if it's not in the
+                      page options list (operator may have typed a custom one
+                      or the queued route isn't in the catalog). */}
+                  {!pageOptions.some(p => p.route === route) && route && (
+                    <option value={route}>{route}{' '}(custom)</option>
+                  )}
+                  {pageOptions.map(p => (
+                    <option key={p.route} value={p.route}>
+                      {p.name} {p.route !== p.name ? `(${p.route})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="form-control form-control-sm font-monospace"
+                  placeholder="/portal/project/blueprint"
+                  value={route}
+                  onChange={(e) => setRoute(e.target.value)}
+                />
+              )}
             </div>
           </div>
           <button
+            ref={buttonRef}
             type="button"
             className="btn btn-sm btn-primary"
             onClick={handleCreate}

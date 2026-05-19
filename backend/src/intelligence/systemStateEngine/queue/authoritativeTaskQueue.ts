@@ -444,6 +444,10 @@ interface TaskShortInput {
   // Optional: provide cap context to populate decision_trace.
   cap?: EngineCapabilityInput;
   cap_score?: CapabilityScores;
+  // Deep-link target route (added 2026-05-19) — for ui_review tasks
+  // this is the cap's frontend_route so consumers can pre-fill the
+  // Critique page route field instead of asking the operator to retype.
+  frontend_route?: string;
 }
 
 function makeTask(input: TaskShortInput): AuthoritativeTask {
@@ -466,6 +470,7 @@ function makeTask(input: TaskShortInput): AuthoritativeTask {
     state: input.state || 'pending',
     reasoning: Object.freeze(input.reasons),
     decision_trace: input.cap ? buildDecisionTrace(input) : undefined,
+    frontend_route: input.frontend_route || input.cap?.frontend_route || undefined,
   };
 }
 
