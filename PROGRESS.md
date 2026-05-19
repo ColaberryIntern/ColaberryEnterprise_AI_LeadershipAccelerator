@@ -108,6 +108,31 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Linked-file pruning + VPS disk recovery (2026-05-19)
+Tier-1 #3 from [docs/FALSE_POSITIVE_ELIMINATION_PLAN.md](docs/FALSE_POSITIVE_ELIMINATION_PLAN.md). Same "validate at write time" principle as the route-aware phantom-page fix, applied to cap-side data.
+
+**The change:** new `pruneCapLinkedFiles` helper that drops any references in `linked_backend_services` / `linked_frontend_components` / `linked_agents` to files not present in the current repo file tree. Runs in `buildAuthoritativeState` before scoring, using the same GitHub file tree the engine already pulls. In-memory only — DB stays untouched, engine re-prunes every refresh.
+
+**Three safety nets** (added after first prod measurement caught a multi-project scoring risk):
+1. **Empty tree → no-op** — can't validate without ground truth
+2. **Tree < 100 files → no-op** — likely partial fetch
+3. **Pruning would wipe > 50% of refs → ABORT** — file tree probably represents a different repo. Logs a warning; cap data stays intact.
+
+The third gate exists because a misleading `LIMIT 1` query on `github_connections` originally surfaced a "100% of 665 refs are stale" measurement. The actual Colaberry project's GitHub connection turned out to match perfectly — but the false alarm proved the safety net is necessary for multi-project deployments where one enrollment's misconfigured GitHub connection shouldn't silently corrupt scoring for everyone.
+
+**Production verification:**
+- Colaberry file tree: 2615 blobs, all `backend/src/...` paths match cap data
+- Pruner ran: 0 stale refs found, no abort, silent happy path
+- Queue: 79 items unchanged (3 agent_stack + 36 triage + 40 ui_review)
+- Readiness 56, coverage 37 — no regression
+
+**Bonus find: VPS at 100% disk.** Deploy failed mid-cycle with apt signing errors. Root cause was 122GB of Docker build cache filling `/dev/sda1` (144G/150G used). Ran `docker builder prune -a -f` to free 112GB; disk now at 32G/150G (23%). Deploy succeeded immediately after.
+
+  - Date: 2026-05-19
+  - What changed: pruneCapLinkedFiles helper + 3 safety nets in [systemStateEngine.ts](backend/src/intelligence/systemStateEngine/systemStateEngine.ts), 9 tests in [pruneCapLinkedFiles.test.ts](backend/src/intelligence/systemStateEngine/__tests__/pruneCapLinkedFiles.test.ts). Commits 306a63e + f9ac660.
+  - Verification: 71 → 80 engine tests green (9 new prune tests). tsc clean. Prod deploy succeeded after VPS disk recovery (112GB freed). Pruner is no-op on Colaberry (file tree matches), proving the abort safety net works AND the live code path stays clean.
+  - Notes: Third application of "validate at write time" in two days. Routes go to the React Router registry. Cap-side file references go to the GitHub file tree. Pattern is durable. Future enhancement: write-side cleanup script that persists the pruned state for caps that consistently show stale refs across N refreshes — but only after operator has manually confirmed. In-memory-only is the right default for now.
+
 ### triage task type: surface the 100+ unspec'd brownfield caps (2026-05-19)
 Tier-1 item #2 of [docs/FALSE_POSITIVE_ELIMINATION_PLAN.md](docs/FALSE_POSITIVE_ELIMINATION_PLAN.md). The project has 141 active caps but the queue was surfacing only ~43 — the other 100 were brownfield-discovered code with no requirements attached, so no concrete generator (build_backend, implement_reqs, etc.) had a task to fire. Those caps stayed invisible while readiness sat at 56%.
 
