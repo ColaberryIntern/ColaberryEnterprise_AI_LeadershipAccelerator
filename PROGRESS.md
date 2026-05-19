@@ -119,6 +119,34 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Frontend route revalidation per refresh (2026-05-19, Tier-2 #6)
+Phantom-page scanner fix (earlier today) validated cap routes at CREATION time. Today's frontend_route revalidator validates them at every engine refresh — same shape, applied to cap-side data.
+
+**Why this matters:** routes can be removed from React Router AFTER a cap is created. The cap's `frontend_route` then becomes stale, the deep-link 404s, and the operator clicks dead-end — the exact failure mode that produced the original Trust Badges incident. The scanner fix prevents NEW phantom routes from being created; this fix catches existing routes that drift stale.
+
+**Two new exports in [systemStateEngine.ts](backend/src/intelligence/systemStateEngine/systemStateEngine.ts):**
+- `validateCapFrontendRoutes(caps, registeredRoutes)` — clears cap.frontend_route in-memory when not in the registry. Tolerant matching for parameterized routes (`/admin/generator` matches registered `/admin/generator/:id`).
+- Three safety nets mirror pruneCapLinkedFiles: empty registry → no-op, < 10 routes → no-op, > 50% would clear → ABORT.
+
+**Two new exports in [frontendPageDiscovery.ts](backend/src/services/frontendPageDiscovery.ts):**
+- `readRegisteredRoutesFromContents(contents)` — parses `path="..."` declarations from pre-fetched file contents (decoupled from local fs).
+- `ROUTE_FILE_PATHS` — canonical 5-file list (`App.tsx` + 4 route trees).
+
+**Why GitHub-API fetch instead of local fs:** the production container is built from compiled `dist/` and doesn't carry source. First deploy aborted with "empty route registry" because `readRegisteredRoutes` tried local fs. Fix: engine refresh now calls `readFileFromRepo` for each of the 5 route files, then passes contents to the new helper. Bounded cost (5 GitHub API calls per refresh).
+
+**Production verification:**
+- Registry size: 97 routes parsed from `App.tsx` + 4 route trees
+- Caps with frontend_route: 39
+- Matched: 39, Stale: 0
+- Silent happy path — proves the validation runs cleanly AND no stale routes survived the morning's phantom-page backfill
+
+**11 new tests** (8 for `validateCapFrontendRoutes` + 3 for `readRegisteredRoutesFromContents`). 89 → 100 total across the engine suites.
+
+  - Date: 2026-05-19
+  - What changed: 2 new helpers + engine refresh wiring + test coverage. Commits bd852258 + 015e04d1.
+  - Verification: 100/100 tests across systemStateEngine + frontendPageDiscovery. Prod deploy succeeded after Debian apt issue (separate VPS disk recovery). Probe confirms: 97 registry routes, 39 cap routes, 39/39 matched.
+  - Notes: Fourth application of "validate at write time" today. The pattern's converging: every cap-side data field that's derived from external state (filesystem, router, GitHub) gets re-validated at refresh time with safety nets.
+
 ### Linked-file pruning + VPS disk recovery (2026-05-19)
 Tier-1 #3 from [docs/FALSE_POSITIVE_ELIMINATION_PLAN.md](docs/FALSE_POSITIVE_ELIMINATION_PLAN.md). Same "validate at write time" principle as the route-aware phantom-page fix, applied to cap-side data.
 
