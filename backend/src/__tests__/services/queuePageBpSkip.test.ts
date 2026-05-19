@@ -118,6 +118,39 @@ describe('authoritativeTaskQueue — Page BPs do not get backend/frontend build 
     expect(uiReviewTasks).toHaveLength(1);
     expect(uiReviewTasks[0].title).toContain('UI Advisor');
   });
+
+  test('ui_review ranks BELOW system-actionable optimization in the queue (2026-05-19)', () => {
+    // A Page BP that needs ui_review + a service that needs an
+    // observability improvement. Operator should see optimization first.
+    const pageCap = makeCap({
+      id: 'page-rk', name: 'Some Page', kind: 'page', is_page_bp: true,
+      ui_element_map: { steps: {} },
+    });
+    const serviceCap = makeCap({
+      id: 'svc-rk', name: 'Lead Management', kind: 'service',
+      linked_backend_services: ['backend/src/routes/lead.ts'],
+    });
+    const pageScore = makeScore('page-rk');
+    const serviceScore = {
+      ...makeScore('svc-rk', { health: 50 }),
+      health_breakdown: {
+        applicable_dimensions: ['determinism', 'reliability', 'observability', 'ux_exposure', 'automation', 'production_readiness'],
+        determinism: 60, reliability: 60, observability: 20, ux_exposure: 60, automation: 60, production_readiness: 60,
+      },
+    } as any;
+    const { tasks } = buildAuthoritativeQueue({
+      project: { ...PROJECT, capabilities: [pageCap, serviceCap] },
+      capabilities: [pageCap, serviceCap],
+      capability_scores: [pageScore, serviceScore],
+    });
+    // Find the optimization task + the ui_review task
+    const optimization = tasks.find(t => t.id.endsWith(':improve_observability'));
+    const uiReview = tasks.find(t => t.id.endsWith(':ui_review'));
+    expect(optimization).toBeDefined();
+    expect(uiReview).toBeDefined();
+    // Lower calculated_rank = earlier in queue. Optimization should rank first.
+    expect((optimization as any).calculated_rank).toBeLessThan((uiReview as any).calculated_rank);
+  });
 });
 
 describe('authoritativeTaskQueue — kind-based task gating (2026-05-18)', () => {

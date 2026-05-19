@@ -272,7 +272,13 @@ function generateCapTasks(
     }
   }
 
-  // UI review gap (Page BP only)
+  // UI review gap (Page BP only) — operator-bounded polish, NOT a build task.
+  // Re-ranked 2026-05-19 to surface BELOW system-actionable optimization
+  // tasks. Operator framing: "pages were built with Claude Code outside this
+  // process; UI Advisor is enhancement/audit, not building. Should come
+  // after any work the system itself can drive." Lowering priority + maturity
+  // + readiness so the composite ranks below optimization tasks (~23pts)
+  // while staying above truly low-value work.
   if (cap.is_page_bp && score.coverage < 100) {
     const stepsRun = cap.ui_element_map?.steps || {};
     const allSteps = ['layout_hierarchy', 'usability', 'mobile_responsiveness'];
@@ -285,14 +291,14 @@ function generateCapTasks(
         title: `Run UI Advisor on ${cap.name}`,
         description: `${unrun.length} of 3 visual review steps haven't run yet.`,
         type: 'ui_review',
-        priority_score: 50,
-        blocking_score: 20,
-        dependency_score: 40,
-        maturity_gain: 25,
-        readiness_gain: 20,
+        priority_score: 25,   // was 50 — explicit deprioritization
+        blocking_score: 10,   // was 20 — review doesn't block downstream builds
+        dependency_score: 20, // was 40 — doesn't gate other work
+        maturity_gain: 15,    // was 25 — moves the needle less than build work
+        readiness_gain: 10,   // was 20 — same rationale
         confidence_score: 75,
         execution_cost: 20,
-        reasons: [`${unrun.length} UI Advisor steps pending`],
+        reasons: [`${unrun.length} UI Advisor steps pending (polish — operator-bounded)`],
         cap, cap_score: score,
       }));
     }
