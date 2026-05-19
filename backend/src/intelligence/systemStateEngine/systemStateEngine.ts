@@ -1220,9 +1220,23 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
   // React Router path. Prevents stale routes from generating 404
   // deep-links (the Trust Badges incident). See
   // validateCapFrontendRoutes for the rationale + safety nets.
+  //
+  // Route file CONTENTS come via GitHub API rather than local fs
+  // because the production container is built from compiled dist/
+  // and doesn't carry source. ROUTE_FILE_PATHS is the canonical
+  // set of files we parse for `path="..."` declarations. Bounded
+  // (5 files) so the GitHub round-trip cost per refresh is small.
   try {
-    const { readRegisteredRoutes } = await import('../../services/frontendPageDiscovery');
-    const registeredRoutes = readRegisteredRoutes(repoFileTree);
+    const { readRegisteredRoutesFromContents, ROUTE_FILE_PATHS } = await import('../../services/frontendPageDiscovery');
+    const { readFileFromRepo } = await import('../../services/githubService');
+    const enrollmentIdForRoutes = (project as any).enrollment_id as string | undefined;
+    let registeredRoutes: Set<string> | null = null;
+    if (enrollmentIdForRoutes) {
+      const contents = await Promise.all(
+        ROUTE_FILE_PATHS.map(p => readFileFromRepo(enrollmentIdForRoutes, p).catch(() => null)),
+      );
+      registeredRoutes = readRegisteredRoutesFromContents(contents);
+    }
     const routeSummary = validateCapFrontendRoutes(caps, registeredRoutes);
     if (routeSummary.aborted) {
       console.warn(`[Engine] frontend_route validation ABORTED: ${routeSummary.abortReason}`);

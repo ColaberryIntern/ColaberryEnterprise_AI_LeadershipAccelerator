@@ -67,6 +67,35 @@ describe('discoverFrontendPages route-aware gate', () => {
   });
 });
 
+describe('readRegisteredRoutesFromContents', () => {
+  it('extracts path declarations from raw file contents', () => {
+    const { readRegisteredRoutesFromContents } = require('../frontendPageDiscovery');
+    const contents = [
+      `<Route path="/contact" element={<Contact />} />\n<Route path="/about" element={<About />} />`,
+      `<Route path="/admin/dashboard" element={<Dashboard />} />`,
+    ];
+    const result = readRegisteredRoutesFromContents(contents);
+    expect(result).not.toBeNull();
+    expect(result!.has('/contact')).toBe(true);
+    expect(result!.has('/about')).toBe(true);
+    expect(result!.has('/admin/dashboard')).toBe(true);
+    expect(result!.size).toBe(3);
+  });
+
+  it('skips null/undefined contents', () => {
+    const { readRegisteredRoutesFromContents } = require('../frontendPageDiscovery');
+    const result = readRegisteredRoutesFromContents([null, undefined, '<Route path="/x" />']);
+    expect(result).not.toBeNull();
+    expect(result!.has('/x')).toBe(true);
+  });
+
+  it('returns null when no paths are found', () => {
+    const { readRegisteredRoutesFromContents } = require('../frontendPageDiscovery');
+    expect(readRegisteredRoutesFromContents([null])).toBeNull();
+    expect(readRegisteredRoutesFromContents(['no paths here'])).toBeNull();
+  });
+});
+
 describe('readRegisteredRoutes', () => {
   it('returns null when no route files in tree', () => {
     expect(readRegisteredRoutes(['backend/src/foo.ts'])).toBeNull();

@@ -59,22 +59,57 @@ export function readRegisteredRoutes(fileTree: string[], repoRoot?: string): Set
   if (routeFiles.length === 0) return null;
 
   const root = repoRoot || path.resolve(__dirname, '../../..');
-  const pattern = /path\s*=\s*"([^"]+)"/g;
   const out = new Set<string>();
   for (const rel of routeFiles) {
     try {
       const abs = path.resolve(root, rel);
       if (!abs.startsWith(root)) continue;
       const content = fs.readFileSync(abs, 'utf8');
-      let m: RegExpExecArray | null;
-      while ((m = pattern.exec(content)) !== null) {
-        out.add(m[1]);
-      }
+      extractPathsInto(content, out);
     } catch {
       // file unreadable — skip
     }
   }
   return out.size > 0 ? out : null;
+}
+
+/**
+ * Same parser as readRegisteredRoutes but for callers that have
+ * already fetched file CONTENTS (e.g., via GitHub API rather than
+ * local filesystem). Used by the engine refresh path in production
+ * where the container doesn't carry source files.
+ *
+ * Returns null when no path declarations were extracted (caller
+ * treats null as "no registry available" — same as the local-fs
+ * variant).
+ */
+export function readRegisteredRoutesFromContents(
+  contents: ReadonlyArray<string | null | undefined>,
+): Set<string> | null {
+  const out = new Set<string>();
+  for (const c of contents) {
+    if (!c) continue;
+    extractPathsInto(c, out);
+  }
+  return out.size > 0 ? out : null;
+}
+
+/** Canonical route-files list (paths relative to repo root) — used by
+ * both readRegisteredRoutes (local fs) and engine refresh (GitHub API). */
+export const ROUTE_FILE_PATHS: ReadonlyArray<string> = [
+  'frontend/src/App.tsx',
+  'frontend/src/routes/publicRoutes.tsx',
+  'frontend/src/routes/adminRoutes.tsx',
+  'frontend/src/routes/portalRoutes.tsx',
+  'frontend/src/routes/referralRoutes.tsx',
+];
+
+function extractPathsInto(content: string, out: Set<string>): void {
+  const pattern = /path\s*=\s*"([^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(content)) !== null) {
+    out.add(m[1]);
+  }
 }
 
 /**
