@@ -8782,8 +8782,8 @@ router.get('/api/portal/project/frontend-routes', requireParticipant, async (req
     const conn = await getConnection(req.participant!.sub);
     const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
     if (fileTree.length === 0) { res.json({ routes: [] }); return; }
-    const { discoverFrontendPages } = await import('../services/frontendPageDiscovery');
-    const pages = discoverFrontendPages(fileTree);
+    const { discoverFrontendPages, readRegisteredRoutes } = await import('../services/frontendPageDiscovery');
+    const pages = discoverFrontendPages(fileTree, readRegisteredRoutes(fileTree));
     const routes = [...new Set(pages.map(p => p.route))].sort();
     res.json({ routes });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -8799,8 +8799,8 @@ router.post('/api/portal/project/auto-map-routes', requireParticipant, async (re
     const conn = await getConnection(req.participant!.sub);
     const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
     if (fileTree.length === 0) { res.status(400).json({ error: 'No repo file tree. Connect GitHub first.' }); return; }
-    const { discoverFrontendPages } = await import('../services/frontendPageDiscovery');
-    const pages = discoverFrontendPages(fileTree);
+    const { discoverFrontendPages, readRegisteredRoutes } = await import('../services/frontendPageDiscovery');
+    const pages = discoverFrontendPages(fileTree, readRegisteredRoutes(fileTree));
     const availableRoutes = pages.map(p => p.route);
     if (availableRoutes.length === 0) { res.status(400).json({ error: 'No frontend pages found in repo.' }); return; }
     const { dryRun } = req.body;

@@ -25,12 +25,82 @@ interface DiscoveredPage {
 }
 
 /**
+ * Read the registered React Router paths from the repo. These are the
+ * AUTHORITATIVE pages — any cap whose frontend_route isn't in this set
+ * is either a phantom (component mistakenly classified as a page) or
+ * uses a stale route format that needs fixing.
+ *
+ * Added 2026-05-19 after the operator surfaced a 404 on the top
+ * ui_review priority: /trust-badges was stored on a "Trust Badges Page"
+ * cap that the scanner auto-created from src/components/TrustBadges.tsx,
+ * but `<TrustBadges>` is just an embedded section inside HomePage,
+ * never registered as a route. Cross-referencing showed 24 of 44 page
+ * caps had routes that don't exist in React Router.
+ *
+ * Source files we scan for `path="..."`:
+ *   - frontend/src/App.tsx
+ *   - frontend/src/routes/*.tsx (publicRoutes, adminRoutes, etc.)
+ *
+ * Patterns we match:
+ *   - <Route path="/foo" element={...} />
+ *   - <Route path="/foo/:id" element={...} />
+ *
+ * Returns null when no route files were found in the tree (caller falls
+ * back to the legacy heuristic-only behavior).
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+
+export function readRegisteredRoutes(fileTree: string[], repoRoot?: string): Set<string> | null {
+  const routeFiles = fileTree.filter(f =>
+    /(?:^|\/)frontend\/src\/App\.tsx$/.test(f)
+    || /(?:^|\/)frontend\/src\/routes\/[^/]+\.tsx$/.test(f),
+  );
+  if (routeFiles.length === 0) return null;
+
+  const root = repoRoot || path.resolve(__dirname, '../../..');
+  const pattern = /path\s*=\s*"([^"]+)"/g;
+  const out = new Set<string>();
+  for (const rel of routeFiles) {
+    try {
+      const abs = path.resolve(root, rel);
+      if (!abs.startsWith(root)) continue;
+      const content = fs.readFileSync(abs, 'utf8');
+      let m: RegExpExecArray | null;
+      while ((m = pattern.exec(content)) !== null) {
+        out.add(m[1]);
+      }
+    } catch {
+      // file unreadable — skip
+    }
+  }
+  return out.size > 0 ? out : null;
+}
+
+/**
  * Extract all frontend routes from a repo file tree.
  * Supports Next.js app router AND React CRA pages.
+ *
+ * When registeredRoutes is supplied, the component-as-page heuristic
+ * paths (lines that infer routes from filenames) are gated against the
+ * actual React Router registrations. Files that LOOK like pages but
+ * don't correspond to any registered route are treated as embedded
+ * components and skipped. This is what prevents phantom-page caps.
  */
-export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
+export function discoverFrontendPages(fileTree: string[], registeredRoutes?: Set<string> | null): DiscoveredPage[] {
   const pages: DiscoveredPage[] = [];
   const seen = new Set<string>();
+  const hasRegistry = registeredRoutes !== undefined && registeredRoutes !== null;
+  const isRegistered = (route: string): boolean => {
+    if (!hasRegistry || !registeredRoutes) return true; // permissive fallback
+    if (registeredRoutes.has(route)) return true;
+    // Tolerate parameterized variants: /foo/:id matches /foo
+    for (const r of registeredRoutes) {
+      const base = r.replace(/\/:[^/]+/g, '');
+      if (base === route) return true;
+    }
+    return false;
+  };
 
   for (const f of fileTree) {
     // Next.js app router: frontend/app/{route}/page.tsx
@@ -75,6 +145,12 @@ export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
 
     // Generic component-as-page: src/components/*Page.tsx or *Console.tsx or *Home.tsx
     // Also handles: services/web/src/components/AdminPage.tsx
+    //
+    // Route-aware gate (2026-05-19): when registeredRoutes is supplied,
+    // only create a page entry if the inferred route is actually
+    // registered. Files in src/components/ are MORE often embedded
+    // components than real pages — without this gate, the scanner
+    // creates phantom-page caps for every PascalCase component file.
     const compPageMatch = f.match(/(?:src|web)\/components\/(\w+(?:Page|Console|Home|Dashboard|View))\.tsx$/);
     if (compPageMatch) {
       const rawName = compPageMatch[1];
@@ -84,7 +160,7 @@ export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
         .replace(/([a-z])([A-Z])/g, '$1-$2')
         .toLowerCase();
 
-      if (!seen.has(route)) {
+      if (!seen.has(route) && isRegistered(route)) {
         seen.add(route);
         pages.push({
           route,
@@ -112,7 +188,11 @@ export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
         .replace(/([a-z])([A-Z])/g, '$1-$2')
         .toLowerCase();
 
-      if (!seen.has(route)) {
+      // Route-aware gate (2026-05-19): same as the *Page heuristic above.
+      // This was the biggest phantom-page source — TrustBadges, MayaAvatar,
+      // DreamBigSection etc. all matched this path despite being
+      // embedded-only components.
+      if (!seen.has(route) && isRegistered(route)) {
         seen.add(route);
         pages.push({
           route,
@@ -149,7 +229,8 @@ export async function processOrphanedPages(options: {
   dryRun?: boolean;
 }): Promise<OrphanResult> {
   const { projectId, fileTree, dryRun = false } = options;
-  const pages = discoverFrontendPages(fileTree);
+  const registeredRoutes = readRegisteredRoutes(fileTree);
+  const pages = discoverFrontendPages(fileTree, registeredRoutes);
   const result: OrphanResult = { total_pages: pages.length, mapped_pages: 0, orphaned_pages: 0, created_bps: 0, details: [] };
 
   // Get all existing BPs with their frontend_route
