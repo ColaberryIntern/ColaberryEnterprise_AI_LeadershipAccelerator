@@ -221,14 +221,15 @@ function buildReadiness(progress: any, engineState: any | null): ReadinessProfil
     const reasons: string[] = [];
     if (accounting) {
       const { operator_bounded_count, system_actionable_count, fully_built_count } = accounting;
+      const cap = (n: number) => n === 1 ? 'capability' : 'capabilities';
       if (operator_bounded_count > 0) {
-        reasons.push(`${operator_bounded_count} capability${operator_bounded_count === 1 ? '' : 'ies'} awaiting your review (run UI Advisor / verify).`);
+        reasons.push(`${operator_bounded_count} ${cap(operator_bounded_count)} awaiting your review (run UI Advisor / verify).`);
       }
       if (system_actionable_count > 0) {
-        reasons.push(`${system_actionable_count} capability${system_actionable_count === 1 ? ' has' : 'ies have'} system-actionable improvements queued.`);
+        reasons.push(`${system_actionable_count} ${cap(system_actionable_count)} ${system_actionable_count === 1 ? 'has' : 'have'} system-actionable improvements queued.`);
       }
       if (fully_built_count > 0) {
-        reasons.push(`${fully_built_count} capability${fully_built_count === 1 ? ' is' : 'ies are'} fully built.`);
+        reasons.push(`${fully_built_count} ${cap(fully_built_count)} ${fully_built_count === 1 ? 'is' : 'are'} fully built.`);
       }
     }
     if (reasons.length === 0 && engineScore >= 70) reasons.push('All capabilities are healthy.');

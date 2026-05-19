@@ -35,14 +35,29 @@ export async function calculateProgress(enrollmentId: string): Promise<ProjectPr
     ? Math.round((breakdown.requirementsCoverage.matched / breakdown.requirementsCoverage.total) * 100)
     : 0;
 
-  // Production readiness score (weighted composite)
-  const productionReadinessScore = Math.round(
+  // Production readiness score — prefer the systemStateEngine's kind-aware
+  // composite when available. Falls back to the legacy weighted composite
+  // (artifact + reqs + github + portfolio + workflow) only when the engine
+  // hasn't produced a snapshot yet. This keeps Dashboard + Blueprint
+  // (which call /progress) in sync with Cory Home (which reads engine
+  // state via /unified-state). Added 2026-05-19 after operator confirmed
+  // surfaces showed different numbers.
+  let productionReadinessScore = Math.round(
     breakdown.artifactCompletion.score * 25 +
     breakdown.requirementsCoverage.score * 25 +
     breakdown.githubHealth.score * 20 +
     breakdown.portfolioQuality.score * 20 +
     breakdown.workflowProgress.score * 10
   );
+  try {
+    const { readOrRebuild } = await import('../intelligence/systemStateEngine');
+    const engineState = await readOrRebuild(project.id);
+    if (engineState?.scores?.readiness != null) {
+      productionReadinessScore = engineState.scores.readiness;
+    }
+  } catch {
+    // engine unavailable — fall back to legacy composite (already computed above)
+  }
 
   // Cache on project
   project.requirements_completion_pct = requirementsCompletionPct;
