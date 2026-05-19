@@ -600,6 +600,61 @@ describe('triage task generator (brownfield + 0 reqs fallback)', () => {
   });
 });
 
+describe('maturity-aware ranking within a tier (Tier-2 #5)', () => {
+  it('larger triage cap ranks above smaller triage cap (more accumulated work = earlier)', () => {
+    const small = mkCap({
+      id: 'small', name: 'Small Cap', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['a.ts'],
+      total_requirements: 0,
+    });
+    const large = mkCap({
+      id: 'large', name: 'Large Cap', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: Array.from({ length: 30 }, (_, i) => `b${i}.ts`),
+      linked_frontend_components: Array.from({ length: 5 }, (_, i) => `c${i}.tsx`),
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [small, large] }),
+      capabilities: [small, large],
+    });
+    const triageOrder = state.queue
+      .filter(t => t.type === 'triage')
+      .map(t => t.title);
+    // Large cap's triage task appears BEFORE small cap's triage task
+    const largeIdx = triageOrder.findIndex(t => t.includes('Large Cap'));
+    const smallIdx = triageOrder.findIndex(t => t.includes('Small Cap'));
+    expect(largeIdx).toBeGreaterThanOrEqual(0);
+    expect(smallIdx).toBeGreaterThan(largeIdx);
+  });
+
+  it('triage scoring scales with file count up to the cap (20 files saturates)', () => {
+    const tiny = mkCap({
+      id: 'tiny', name: 'Tiny', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: ['a.ts'],
+      total_requirements: 0,
+    });
+    const huge = mkCap({
+      id: 'huge', name: 'Huge', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: Array.from({ length: 50 }, (_, i) => `b${i}.ts`),
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [tiny, huge] }),
+      capabilities: [tiny, huge],
+    });
+    const tinyTask = state.queue.find(t => t.title.includes('Tiny'));
+    const hugeTask = state.queue.find(t => t.title.includes('Huge'));
+    expect(tinyTask!.blocking_score).toBe(26);  // 25 + 1
+    expect(hugeTask!.blocking_score).toBe(45);  // 25 + 20 (capped)
+    expect(tinyTask!.maturity_gain).toBe(11);   // 10 + 1
+    expect(hugeTask!.maturity_gain).toBe(30);   // 10 + 20 (capped)
+  });
+});
+
 describe('kind derivation from source/name (engine input mapping)', () => {
   // Note: the kind-derivation fix lives in buildAuthoritativeState (the
   // full project loader), not in the pure entry buildAuthoritativeStateFromInputs

@@ -684,9 +684,11 @@ function generateAgentStackTask(
     description,
     type: 'agent_stack',
     priority_score: 50,
-    blocking_score: 20,
+    // Maturity-aware (Tier-2 #5): bigger caps within the agent_stack
+    // tier rank higher. Same shape as the triage scaling.
+    blocking_score: 20 + Math.min(15, (cap.linked_backend_services || []).length + (cap.linked_frontend_components || []).length),
     dependency_score: 40,
-    maturity_gain: 25,
+    maturity_gain: 25 + Math.min(15, (cap.linked_backend_services || []).length + (cap.linked_frontend_components || []).length),
     readiness_gain: 15,
     confidence_score: 75,
     execution_cost: 40,
@@ -744,6 +746,7 @@ function generateTriageTask(
   const beCount = (cap.linked_backend_services || []).length;
   const feCount = (cap.linked_frontend_components || []).length;
   const agCount = (cap.linked_agents || []).length;
+  const totalFiles = beCount + feCount + agCount;
   const fileSummary = [
     beCount > 0 ? `${beCount} backend file${beCount === 1 ? '' : 's'}` : null,
     feCount > 0 ? `${feCount} frontend component${feCount === 1 ? '' : 's'}` : null,
@@ -751,6 +754,14 @@ function generateTriageTask(
   ].filter(Boolean).join(', ') || 'no linked files';
 
   const description = `${cap.name} was discovered from code (${fileSummary}) but has no requirements specified. Decide: (a) spec 3-5 requirements to drive implementation and verification, (b) mark verified if it's complete as-is, or (c) archive if it's not real work.`;
+
+  // Maturity-aware scoring (2026-05-19, Tier-2 #5): within the triage
+  // tier, caps with more accumulated code represent more unspec'd
+  // work and rank higher. Operator sees the biggest decisions first.
+  // Bounded so a 50-file cap doesn't completely dominate the queue.
+  const sizeBoost = Math.min(20, totalFiles);  // 0-20 boost
+  const maturityGain = 10 + sizeBoost;          // 10-30
+  const blockingScore = 25 + sizeBoost;         // 25-45
 
   return makeTask({
     id: `${cap.id}:triage`,
@@ -760,15 +771,16 @@ function generateTriageTask(
     description,
     type: 'triage',
     priority_score: 35,
-    blocking_score: 25,
+    blocking_score: blockingScore,
     dependency_score: 30,
-    maturity_gain: 10,
+    maturity_gain: maturityGain,
     readiness_gain: 15,
     confidence_score: 70,
     execution_cost: 15,
     reasons: [
       `source=brownfield_discovered with 0 requirements (${fileSummary})`,
       `no other actionable task fires for this cap — triage is the floor`,
+      sizeBoost > 0 ? `accumulated work bonus: +${sizeBoost} (total ${totalFiles} files)` : 'no accumulated-work bonus',
     ],
     cap, cap_score: score,
   });
