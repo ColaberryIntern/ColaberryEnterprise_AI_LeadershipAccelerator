@@ -94,6 +94,34 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### agent_stack task type: next-tier work after a cap is built (2026-05-19)
+Operator's ask: *"fires when a cap crosses readiness ≥ 80 AND has no monitoring stack. Make sure there are back end agents in this process as well, not just on top of the reports. Triggered at the same time as page BP agents."*
+
+Now shipped as a new task tier above ui_review (25) and optimization (40-45). Same generator handles both directions the operator described:
+
+- **PAGES** at coverage ≥ 100: page is reviewed and shipped → propose page-load monitoring, error capture, conversion alerts, follow-up sequences
+- **SERVICES** at readiness ≥ 80: service is built and stable → propose scheduled jobs, workflow automation, data monitors, alert triggers
+
+Both kinds surface concurrently — so when a new module rolls out, the operator sees BOTH page-side and service-side agent proposals at the same readiness threshold.
+
+**Gates:**
+- `linked_agents.length === 0` — cap has no agent layer yet (conservative; can be relaxed to `< 3` later if operator wants to also propose stack completion for caps with one core agent)
+- `kind === 'page'` OR (`kind === 'service'` AND `!looksInternal`) — agents on top of plumbing services (loggers, validators) rarely make sense
+- Runs in its own pass in `buildAuthoritativeQueue` so verified caps participate — the main per-cap loop skips verified, but those are by definition the strongest candidates for "what's next on top of this finished thing?"
+
+**Production state:**
+- Queue now: 41 items (40 ui_review + 1 agent_stack at the top)
+- Top priority: "Propose agent stack for Campaign Management" (priority 50, readiness 80%, 0 agents linked) — the only service that fires today
+- 16 mature services exist but 12 already have 1+ agents (operator-chosen footprint) and 3 are internal-named infra
+- Funnel: as the 40 ui_review tasks complete, pages hit coverage=100 and start firing agent_stack at the top of the queue — the system naturally progresses operator from polish to next-tier value creation
+
+**5 new tests** cover both kinds, the linked_agents skip, the internal-name filter, and the immature-cap skip. Full engine suite 1775/1779 green (4 pre-existing test-pollution flakes unrelated).
+
+  - Date: 2026-05-19
+  - What changed: AuthoritativeTaskType extended with `agent_stack`; new `generateAgentStackTask()` function with separate per-cap pass in `buildAuthoritativeQueue` so verified caps participate; telemetry requirements wired for the new type. Commit d62b7cf.
+  - Verification: 15/15 determinismGate tests pass including 5 new agent_stack cases. tsc clean. Production refresh confirms task is firing and ranks at the top of the queue above all ui_review items.
+  - Notes: Conservative `linked_agents === 0` gate matches the "no monitoring stack" framing literally. If/when the operator wants more proposals for caps with 1-2 agents (incomplete stack), relax the threshold. Future enhancement: categorize agents by role (monitor, alert, follow-up) so the gate can ask "no MONITORING agent" specifically rather than "no agents at all."
+
 ### Phantom-page fix: route-aware discovery + 404-elimination backfill (2026-05-19)
 Operator clicked the top ui_review priority ("Run UI Advisor on Trust Badges Page" → `/trust-badges`) and got a 404. Asked: *"how is it missing the actual page? Don't we have record of the URL within the project."*
 
