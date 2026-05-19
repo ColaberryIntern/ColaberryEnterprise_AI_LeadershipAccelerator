@@ -39,6 +39,55 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Transparency + consistency: kind-aware scoring + operator-bounded labels + gap tasks + breakdown (2026-05-19)
+Operator framing: *"readiness is at 40%, health is at 60% and no next task that addresses any of that. Either the KPIs should be updated or there should be more tasks. Come up with a plan to address this for total transparency and consistency."* Picked all 4 phases.
+
+**Phase A — Kind-aware scoring** ([commit e5ca8a9](https://github.com/ColaberryIntern/accelerator/commit/e5ca8a9))
+- [readinessScorer.ts](backend/src/intelligence/systemStateEngine/scoring/readinessScorer.ts): per-kind expected layer weights. service: 50/30/20 unchanged. page: 0/100/0. agent: 40/0/60. component: 0/100/0. Layers with weight=0 don't penalize a cap for missing them.
+- [healthScorer.ts](backend/src/intelligence/systemStateEngine/scoring/healthScorer.ts): per-kind applicable dimensions. page averages over 4 (ux/reliability/obs/prod). agent averages over 5 (skips ux). component averages over 2 (ux + reliability). service unchanged (all 6).
+- Result on prod: readiness 49 → 62 (+13), health 49 → 60 (+11), frontend 46 → 65 (+19). Pages stopped being penalized for missing backend layers that don't apply to them.
+
+**Phase B — Operator-bounded labeling** (same commit)
+- CapabilityScores.operator_bounded: true when a page/component is built but ui_review categories aren't all verified. The system's done its part; the operator owes review.
+- ProjectScores.accounting: { operator_bounded_count, system_actionable_count, fully_built_count }. Operator now sees the score gap broken down honestly.
+
+**Phase C — Gap-driven optimization tasks** (same commit + [1bf16fc](https://github.com/ColaberryIntern/accelerator/commit/1bf16fc))
+- For caps that are built (have backend or frontend), NOT operator-bounded, with health < 70 and a weakest applicable dimension < 50: generate a focused `improve_<dimension>` task with concrete remediation guidance. First version surfaced its own false-positive class ("Improve ux exposure for Lead Ingestion Controller") — fixed with per-dimension actionability gate:
+  - `ux_exposure`: only fires when cap is frontendAddEligible (same gate as add_frontend)
+  - `automation`: only kind=service && non-internal (page/component never own agents)
+  - `reliability/observability/determinism/production_readiness`: apply broadly
+- Result: 112 actionable optimization tasks now live in the queue.
+
+**Phase D — Breakdown surface** (same commit + [4cd0a0f](https://github.com/ColaberryIntern/accelerator/commit/4cd0a0f))
+- CapabilityScores carries `readiness_breakdown` (layer/coverage/quality) and `health_breakdown` (applicable_dimensions + per-dim values).
+- ProjectScores carries `accounting`. Persisted via new `system_state_snapshots.accounting` JSONB column (ALTER TABLE applied to prod). Older snapshots load with accounting=null.
+- API responses (`/system-state` and `/system-state?fresh=1`) now include all breakdowns. UI consumers can render *"Health 60% because: observability 40, reliability 70, ..."*.
+
+**Final state on prod:**
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| Readiness | 49 | **62** |
+| Health | 49 | **60** |
+| Coverage | 36 | 36 (different scorer) |
+| Maturity | 25 | 25 (different scorer) |
+| Frontend | 46 | **65** |
+| Operator-bounded caps | (not exposed) | **40** |
+| System-actionable caps | (not exposed) | **116** |
+| Fully built caps | (not exposed) | 0 |
+| Queue total | 79 | 167 |
+| ui_review tasks | 55 | 55 (unchanged, operator-bounded) |
+| optimization tasks | 24 | **112** (gap-driven, system-actionable) |
+
+**Operator's question fully answered.** Every score gap now has either a task that would close it (112 optimization tasks for system-actionable gaps) or a label saying "needs operator" (40 operator-bounded caps with 55 ui_review tasks). The KPIs are honest AND there's matching work for every actionable gap. No more "queue empty + scores stuck + no path forward."
+
+**Tests:** 31/31 queue + scoring tests pass (10 new kind-aware scoring + 21 queue tests). Full backend Jest 2298/0. tsc clean.
+
+  - Date: 2026-05-19
+  - What changed: 6 modified files + 1 new test file + 1 schema migration (accounting JSONB column on system_state_snapshots). 3 deploys (initial all-four, snapshot-persistence fix, gap-task actionability gate fix).
+  - Verification: 31/31 tests pass; tsc clean; `?fresh=1` returns full accounting + per-cap breakdowns; snapshot read returns accounting after the column was added; queue top 30 unchanged (all ui_review — correctly highest priority since they're operator-bounded with concrete next steps).
+  - Notes: This sprint demonstrated the value of the "every score gap needs a task or a label" rule. Pre-fix, the operator looked at readiness=49 with an empty actionable queue and had no path. Post-fix, the operator sees readiness=62, accounting={40 operator/116 system/0 done}, and a queue that splits cleanly into "your review needed" + "system improvement work." Three layers of false-positive prevention applied: kind-aware scoring (don't penalize for N/A layers), operator-bounded labeling (don't expect system to close operator-judgment gaps), per-dimension actionability gate (don't suggest fixing dims that aren't actionable for the cap's nature).
+
 ### Stale-loop fix + brownfield-without-UI-signal heuristic — every queue item is now legitimate (2026-05-18)
 Operator screenshot showed Cory Home with REQ-122 ("Dynamic layout adjustments...") as Today's Priority — but REQ-122 was matched hours earlier. Stale loop. Operator framing: *"prove that by processing the next 50 request starting with current priority… I just don't want the user to experience stale treatment where they are stuck in these loops."*
 
