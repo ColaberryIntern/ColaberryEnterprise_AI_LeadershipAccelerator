@@ -47,7 +47,13 @@ const BID_CONFIG = {
   ],
 
   // Why we are bidding — the strategic-fit thesis
-  fit_thesis: 'This is verbatim a RAG / document-intelligence build over a regulated corpus. Colaberry skills (Document Intelligence, AI/ML, Conversational AI, Cloud Architecture, Predictive Analytics) map 1:1. Detroit framed it as a "Tech Innovation Challenge," signaling openness to new vendors over entrenched incumbents.',
+  fit_thesis: 'This is verbatim a RAG / document-intelligence build over a regulated corpus. Colaberry skills (Document Intelligence, AI/ML, Conversational AI, Cloud Architecture, Predictive Analytics) map 1:1. Detroit framed it as a "Tech Innovation Challenge" pilot, signaling openness to new vendors over entrenched incumbents. The pilot is $50K for 6 months with an explicit scale-up path to a full production contract if successful (per Pricing Attachment C, which asks for both pilot and full-contract pricing).',
+
+  // Override the value from Opportunity Pulse (which estimates by category and
+  // is often wrong). Leave as null to use OP's value. Always validate against
+  // the RFP itself before trusting OP.
+  value_override: '50000',
+  term_override: 'Pilot: 6 months ($50K). Optional scale-up to full production contract per RFP §1.3 + Pricing Attachment C.',
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -232,7 +238,12 @@ async function uploadFilesToFolder(token, folder, filesDir) {
 // Step 3: build descriptions (Trix HTML, what Basecamp accepts)
 // ────────────────────────────────────────────────────────────────────────────
 function buildListDescription({ opp, folder, uploaded }) {
-  const value = opp?.estimatedValue ? `$${Number(opp.estimatedValue).toLocaleString()}` : 'unknown';
+  const rawValue = BID_CONFIG.value_override || opp?.estimatedValue;
+  const value = rawValue ? `$${Number(rawValue).toLocaleString()}` : 'unknown';
+  const valueNote = BID_CONFIG.value_override
+    ? ` (validated against RFP source. Opportunity Pulse estimated $${Number(opp?.estimatedValue || 0).toLocaleString()} which was wrong - OP estimates by category, always validate against the actual RFP.)`
+    : '';
+  const termNote = BID_CONFIG.term_override ? `<li><strong>Contract term:</strong> ${BID_CONFIG.term_override}</li>` : '';
   const closeDate = opp?.closeDate ? new Date(opp.closeDate).toISOString().split('T')[0] : 'unknown';
   const agency = opp?.agency || 'unknown';
   const sourceUrl = opp?.sourceUrl || '';
@@ -252,7 +263,8 @@ function buildListDescription({ opp, folder, uploaded }) {
 <ul>
   <li><strong>Agency:</strong> ${agency}</li>
   <li><strong>AI category:</strong> ${aiCategory} | <strong>Recommended product:</strong> ${recommendedProduct}</li>
-  <li><strong>Estimated value:</strong> ${value}</li>
+  <li><strong>Contract value:</strong> ${value}${valueNote}</li>
+  ${termNote}
   <li><strong>Submission deadline:</strong> ${closeDate}</li>
   <li><strong>Bonfire source:</strong> <a href="${sourceUrl}">${sourceUrl}</a></li>
   <li><strong>Opportunity Pulse submission readiness:</strong> <a href="${opPulseUrl}">view in OP</a></li>
@@ -281,7 +293,9 @@ function buildTaskDescription({ filename, folder, uploaded, extraNote }) {
 }
 
 function buildKickoffMessage({ opp, folder, list, uploaded }) {
-  const value = opp?.estimatedValue ? `$${Number(opp.estimatedValue).toLocaleString()}` : 'unknown';
+  const rawValue = BID_CONFIG.value_override || opp?.estimatedValue;
+  const value = rawValue ? `$${Number(rawValue).toLocaleString()}` : 'unknown';
+  const termLine = BID_CONFIG.term_override ? `<li><strong>Term:</strong> ${BID_CONFIG.term_override}</li>` : '';
   const closeDate = opp?.closeDate ? new Date(opp.closeDate).toISOString().split('T')[0] : 'unknown';
   const opPulseUrl = `http://95.216.199.47/admin/bonfire/${BID_CONFIG.opportunity_uuid}/submission-readiness`;
   return `<div>
@@ -289,6 +303,7 @@ function buildKickoffMessage({ opp, folder, list, uploaded }) {
 
 <ul>
   <li><strong>Value:</strong> ${value}</li>
+  ${termLine}
   <li><strong>Deadline:</strong> ${closeDate}</li>
   <li><strong>To-Do List (game plan + tasks):</strong> <a href="${list.app_url}">${list.title}</a></li>
   <li><strong>Docs &amp; Files folder (${uploaded.length} RFP files):</strong> <a href="${folder.app_url}">${folder.title}</a></li>
