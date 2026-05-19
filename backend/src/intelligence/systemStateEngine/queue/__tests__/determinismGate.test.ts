@@ -450,6 +450,34 @@ describe('propose_agent_stack generator (next-tier work after build)', () => {
     expect(t).toBeUndefined();
   });
 
+  it('does NOT fire for agent-layer-named caps (recursive proposal)', () => {
+    // Walk-5 finding: caps whose name implies they ARE the monitoring/
+    // agent layer (System Health Monitoring, Autonomous Decision
+    // Making, etc.) get a recursive proposal — "monitor the monitor"
+    // — which is wrong. Word-anywhere filter catches these even when
+    // the keyword isn't a suffix.
+    const monitor = mkCap({
+      id: 'mon', name: 'System Health Monitoring', kind: 'service',
+      linked_backend_services: ['hm.ts', 'hm2.ts', 'hm3.ts', 'hm4.ts', 'hm5.ts'],
+      linked_frontend_components: ['HMPanel.tsx', 'HMRow.tsx', 'HMFilter.tsx'],
+      linked_agents: ['monitorAgent.ts'],
+      total_requirements: 5, matched_requirements: 5, user_status: 'verified',
+    });
+    const autonomous = mkCap({
+      id: 'auto', name: 'Autonomous Decision Making', kind: 'service',
+      linked_backend_services: ['ad.ts', 'ad2.ts', 'ad3.ts', 'ad4.ts', 'ad5.ts'],
+      linked_frontend_components: ['ADPanel.tsx', 'ADRow.tsx', 'ADFilter.tsx'],
+      linked_agents: ['decisionAgent.ts'],
+      total_requirements: 5, matched_requirements: 5, user_status: 'verified',
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [monitor, autonomous] }),
+      capabilities: [monitor, autonomous],
+    });
+    const tasks = state.queue.filter(x => x.title.startsWith('Propose agent stack for'));
+    expect(tasks).toHaveLength(0);
+  });
+
   it('does NOT fire for an immature service (readiness < 80)', () => {
     const cap = mkCap({
       id: 'immature',

@@ -610,6 +610,18 @@ function generateAgentStackTask(
   const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry|integration|composer|generation|optimization|estimator|planner|mapping|definition|tracking|reporting|automation|orchestration|framework|parser|handling)$/i.test(cap.name || '');
   if (kind === 'service' && looksInternal) return null;
 
+  // Agent-layer self-reference filter (2026-05-19, walk-5 finding):
+  // skip caps whose NAME implies they ARE the monitoring/agent layer
+  // already. "Propose monitoring stack for System Health Monitoring"
+  // is recursive; same for "agent stack for Autonomous Decision Making"
+  // (the cap IS an agent system). Word-level match anywhere in the
+  // name, not just suffix — these tokens carry the meaning regardless
+  // of position. The existing looksInternal regex only catches them
+  // as suffixes preceded by whitespace, which misses single-word and
+  // mid-name occurrences.
+  const isAgentLayerNamed = /\b(monitoring|autonomous|advisor|orchestrator|orchestration|telemetry|alerting|decision\s+making|policy\s+enforcer|governance)\b/i.test(cap.name || '');
+  if (isAgentLayerNamed) return null;
+
   // Description varies by whether ANY agent exists yet. Caps with a
   // core agent but no monitoring layer get a "complete the stack" ask
   // rather than a "start the stack" ask.
