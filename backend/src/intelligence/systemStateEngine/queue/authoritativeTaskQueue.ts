@@ -326,25 +326,69 @@ function generateCapTasks(
   }
 
   // Optimization gap (mature cap with unverified PROGRESS.md mentions)
+  //
+  // Actionability gate (2026-05-19): the generic "Add tests, observability,
+  // or hardening" suggestion is only meaningful when at least one
+  // applicable dimension is BOTH low AND actionable — otherwise this
+  // duplicates the more specific improve_<weakest> task, and when no
+  // dim is actionable the suggestion is empty ("improve health" with
+  // nothing concrete to fix).
+  //
+  // Surfaced by the operator's 3rd walk: 5 of top 10 were borderline
+  // "Improve health of X" tasks against caps whose only low dims had
+  // already been gated as non-actionable (determinism for
+  // intelligence-layer caps, ux_exposure for brownfield-embedded
+  // components). With those gates, optimize_health was effectively
+  // un-actionable for the same caps.
   const mentions = cap.last_execution?.progress_md_mentions || 0;
   if (score.coverage > 60 && score.health < 60 && mentions > 0) {
-    tasks.push(makeTask({
-      id: `${cap.id}:optimize_health`,
-      project_id: project.id,
-      bp_id: cap.id,
-      title: `Improve health of ${cap.name}`,
-      description: `${cap.name} has working code but health score is ${score.health}/100. Add tests, observability, or hardening.`,
-      type: 'optimization',
-      priority_score: 40,
-      blocking_score: 10,
-      dependency_score: 30,
-      maturity_gain: 15,
-      readiness_gain: 10,
-      confidence_score: 70,
-      execution_cost: 30,
-      reasons: [`Health at ${score.health}, ${mentions} PROGRESS.md mentions`],
-      cap, cap_score: score,
-    }));
+    const hbForGate = score.health_breakdown;
+    const hasActionableLowDim = !!hbForGate && hbForGate.applicable_dimensions.some(d => {
+      // Same dimension actionability logic as the gap-driven generator
+      // below (kept inline for now; refactor if a third caller appears).
+      const value = (hbForGate as any)[d] as number;
+      if (typeof value !== 'number' || value >= 70) return false;
+      switch (d) {
+        case 'ux_exposure': {
+          if (!frontendAddEligible) return false;
+          const beCount = (cap.linked_backend_services || []).length;
+          const feCount = (cap.linked_frontend_components || []).length;
+          if (cap.source === 'brownfield_discovered' && !cap.frontend_route && feCount <= 3) return false;
+          if (feCount === 0 && beCount < 2) return false;
+          return true;
+        }
+        case 'automation':
+          return kind === 'service' && !looksInternal;
+        case 'determinism': {
+          const beCount = (cap.linked_backend_services || []).length;
+          const agCount = (cap.linked_agents || []).length;
+          if (beCount === 0) return false;
+          if (agCount > beCount) return false;
+          return true;
+        }
+        default:
+          return true;
+      }
+    });
+    if (hasActionableLowDim) {
+      tasks.push(makeTask({
+        id: `${cap.id}:optimize_health`,
+        project_id: project.id,
+        bp_id: cap.id,
+        title: `Improve health of ${cap.name}`,
+        description: `${cap.name} has working code but health score is ${score.health}/100. Add tests, observability, or hardening.`,
+        type: 'optimization',
+        priority_score: 40,
+        blocking_score: 10,
+        dependency_score: 30,
+        maturity_gain: 15,
+        readiness_gain: 10,
+        confidence_score: 70,
+        execution_cost: 30,
+        reasons: [`Health at ${score.health}, ${mentions} PROGRESS.md mentions`],
+        cap, cap_score: score,
+      }));
+    }
   }
 
   // Phase C (2026-05-19): gap-driven task — for caps that aren't
@@ -366,12 +410,38 @@ function generateCapTasks(
     // cap isn't meant to have its own UI.
     const isDimActionable = (dim: string): boolean => {
       switch (dim) {
-        case 'ux_exposure':
-          // Same gate as add_frontend: only suggest improving UX on caps
-          // that legitimately should have a UI (service, non-internal,
-          // non-page). Otherwise the suggestion repeats add_frontend's
-          // false positive in a different shape.
-          return frontendAddEligible;
+        case 'ux_exposure': {
+          // Base gate: only suggest improving UX on caps that legitimately
+          // should have a UI (service, non-internal, non-page). Otherwise
+          // the suggestion repeats add_frontend's false positive.
+          if (!frontendAddEligible) return false;
+          // Brownfield-specific gate (2026-05-19): for brownfield-discovered
+          // service caps, having linked_frontend_components does NOT prove
+          // the cap intends to own a user-facing route. Those components
+          // may be embedded widgets consumed by other pages (admin
+          // dashboards, ops panels). "Improve ux_exposure" — which
+          // suggests linking a route or adding components — is a false
+          // positive in that case.
+          //
+          // Require positive evidence of own-surface intent:
+          //   - explicit frontend_route declared, OR
+          //   - rich-enough UI presence (>3 components, satisfies the
+          //     scoring threshold for a "loaded" frontend)
+          //
+          // Surfaced by the operator's 3rd walk: 4 of top 10 were
+          // brownfield service caps with 1-3 embedded components.
+          const beCount = (cap.linked_backend_services || []).length;
+          const feCount = (cap.linked_frontend_components || []).length;
+          if (cap.source === 'brownfield_discovered' && !cap.frontend_route && feCount <= 3) {
+            return false;
+          }
+          // Pure backend caps (no fe at all): only actionable if the cap
+          // has enough backend logic to plausibly warrant a user surface.
+          // A single backend file with no UI is more likely an internal
+          // helper than a missing-UI candidate.
+          if (feCount === 0 && beCount < 2) return false;
+          return true;
+        }
         case 'automation':
           // Suggest adding agents only for service-kind caps (page/component
           // never own their own agents; agent-kind already IS an agent).
