@@ -363,13 +363,20 @@ describe('propose_agent_stack generator (next-tier work after build)', () => {
     expect(t!.description).toMatch(/page-load monitoring|conversion alerts|error capture|follow-up sequences/);
   });
 
-  it('does NOT fire when cap already has linked agents (operator chose footprint)', () => {
+  it('does NOT fire when cap already has 3+ linked agents (stack floor reached)', () => {
+    // Threshold is "fewer than 3 agents = surface as incomplete stack."
+    // 3+ agents means the operator built out the stack (monitor, alert,
+    // follow-up etc.) and we stop proposing.
     const cap = mkCap({
-      id: 'has-agents',
+      id: 'full-stack',
       name: 'Lead Pipeline Manager',
       kind: 'service',
-      linked_backend_services: ['leadPipeline.ts'],
-      linked_agents: ['leadPipelineAgent.ts'],
+      linked_backend_services: [
+        'leadPipeline.ts', 'leadPipelineHelper.ts', 'leadPipelineModel.ts',
+        'leadPipelineRoutes.ts', 'leadPipelineMiddleware.ts',
+      ],
+      linked_frontend_components: ['LeadPipelinePanel.tsx', 'LeadPipelineRow.tsx', 'LeadPipelineFilter.tsx'],
+      linked_agents: ['leadPipelineCoreAgent.ts', 'leadPipelineMonitorAgent.ts', 'leadPipelineAlertAgent.ts'],
       frontend_route: '/admin/lead-pipeline',
       total_requirements: 5,
       matched_requirements: 5,
@@ -377,7 +384,7 @@ describe('propose_agent_stack generator (next-tier work after build)', () => {
       code_evidence: {
         reliability_signal: 'high',
         automation_applicable: true,
-        evidence_files_read: 1,
+        evidence_files_read: 5,
       },
     });
     const state = buildAuthoritativeStateFromInputs({
@@ -386,6 +393,40 @@ describe('propose_agent_stack generator (next-tier work after build)', () => {
     });
     const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
     expect(t).toBeUndefined();
+  });
+
+  it('still fires when cap has 1-2 agents (stack incomplete) — Option B', () => {
+    // Operator's wording: "monitoring stack" implies layers. One core
+    // agent does not constitute a stack; the proposal should surface
+    // to add monitor/alert/follow-up layers.
+    const cap = mkCap({
+      id: 'partial-stack',
+      name: 'Lead Pipeline Manager',
+      kind: 'service',
+      linked_backend_services: [
+        'leadPipeline.ts', 'leadPipelineHelper.ts', 'leadPipelineModel.ts',
+        'leadPipelineRoutes.ts', 'leadPipelineMiddleware.ts',
+      ],
+      linked_frontend_components: ['LeadPipelinePanel.tsx', 'LeadPipelineRow.tsx', 'LeadPipelineFilter.tsx'],
+      linked_agents: ['leadPipelineCoreAgent.ts'], // just one — core worker, no monitoring/alerting
+      frontend_route: '/admin/lead-pipeline',
+      total_requirements: 8,
+      matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.description).toMatch(/stack looks incomplete/);
+    expect(t!.description).toMatch(/scheduled jobs|workflow automation/);
   });
 
   it('does NOT fire for internal-named services even when mature', () => {

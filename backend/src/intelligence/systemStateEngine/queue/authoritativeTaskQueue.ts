@@ -593,7 +593,15 @@ function generateAgentStackTask(
 ): AuthoritativeTask | null {
   const kind = cap.kind || 'service';
   const linkedAgentCount = (cap.linked_agents || []).length;
-  if (linkedAgentCount > 0) return null;
+  // Threshold (2026-05-19, Option B): fire when fewer than 3 agents
+  // are linked. A "stack" implies multiple roles — monitor, alert,
+  // follow-up — not one. Three agents is the soft floor that says
+  // "stack is in place." Caps with 1-2 agents probably have the core
+  // worker but lack the monitoring/alerting layer the operator wants
+  // to surface. Caps with 3+ are treated as having chosen their
+  // footprint and not re-prompted.
+  const AGENT_STACK_FLOOR = 3;
+  if (linkedAgentCount >= AGENT_STACK_FLOOR) return null;
   const matureForAgentStack =
     (kind === 'page' && score.coverage >= 100)
     || (kind === 'service' && score.readiness >= 80);
@@ -602,9 +610,16 @@ function generateAgentStackTask(
   const looksInternal = /\s(service|engine|controller|middleware|logging|emission|validation|ingestion|detection|tracker|monitor|logger|reconciliation|normalization|verification|snapshot|forwarding|registration|registry|integration|composer|generation|optimization|estimator|planner|mapping|definition|tracking|reporting|automation|orchestration|framework|parser|handling)$/i.test(cap.name || '');
   if (kind === 'service' && looksInternal) return null;
 
+  // Description varies by whether ANY agent exists yet. Caps with a
+  // core agent but no monitoring layer get a "complete the stack" ask
+  // rather than a "start the stack" ask.
+  const hasSomeAgent = linkedAgentCount > 0;
+  const stackPrefix = hasSomeAgent
+    ? `${cap.name} has ${linkedAgentCount} agent${linkedAgentCount === 1 ? '' : 's'} but the stack looks incomplete.`
+    : `${cap.name} has no agent layer linked.`;
   const description = kind === 'page'
-    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). Propose the agent stack that captures value on top of it: page-load monitoring, error capture, conversion alerts, follow-up sequences.`
-    : `${cap.name} is built (readiness ${score.readiness}%) with no agent layer linked. Propose the backend agents that extend it: scheduled jobs, workflow automation, data monitors, alert triggers.`;
+    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). ${stackPrefix} Propose the rest of the stack: page-load monitoring, error capture, conversion alerts, follow-up sequences.`
+    : `${cap.name} is built (readiness ${score.readiness}%). ${stackPrefix} Propose the backend agents that extend it: scheduled jobs, workflow automation, data monitors, alert triggers.`;
 
   return makeTask({
     id: `${cap.id}:propose_agent_stack`,
@@ -624,7 +639,7 @@ function generateAgentStackTask(
       kind === 'page'
         ? `coverage=${score.coverage}% (page is shipped — next tier is the agent layer)`
         : `readiness=${score.readiness}% (service is built — next tier is the agent layer)`,
-      `linked_agents=0 (no stack yet)`,
+      `linked_agents=${linkedAgentCount} (below stack floor of ${AGENT_STACK_FLOOR})`,
     ],
     cap, cap_score: score,
   });
