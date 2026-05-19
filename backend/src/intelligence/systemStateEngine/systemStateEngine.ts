@@ -1308,6 +1308,10 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
             reliability_signal: ev.reliability_signal,
             automation_applicable: ev.automation_applicable,
             evidence_files_read: ev.evidence_files_read,
+            agent_roles: ev.agent_roles ? {
+              detected: ev.agent_roles.detected,
+              files_inspected: ev.agent_roles.files_inspected,
+            } : undefined,
           };
         } catch {
           return undefined;

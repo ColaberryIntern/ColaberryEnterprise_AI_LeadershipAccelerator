@@ -10,7 +10,7 @@
  * file-reader path. The remaining tests feed synthetic evidence directly
  * to scoreHealth so the logic is exercised without filesystem coupling.
  */
-import { computeCodeEvidence, _resetCodeEvidenceCacheForTests } from '../codeEvidence';
+import { computeCodeEvidence, _resetCodeEvidenceCacheForTests, inferAgentRole } from '../codeEvidence';
 import { scoreHealth } from '../healthScorer';
 import type { EngineCapabilityInput } from '../../types/systemState.types';
 
@@ -182,7 +182,7 @@ describe('scoreHealth — evidence-aware applicability', () => {
         reliability_signal: 'na',     // skip reliability
         automation_applicable: false, // skip automation
         evidence_files_read: 1,
-      },
+      } as any,
     });
     const health = scoreHealth(cap, []);
     // Should average over remaining dimensions only:
@@ -192,5 +192,45 @@ describe('scoreHealth — evidence-aware applicability', () => {
     );
     expect(health.applicable_dimensions).not.toContain('reliability');
     expect(health.applicable_dimensions).not.toContain('automation');
+  });
+});
+
+describe('inferAgentRole (Tier-2 #4)', () => {
+  it('detects monitor role from filename keywords', () => {
+    expect(inferAgentRole('src/agents/leadMonitor.ts', null)).toBe('monitor');
+    expect(inferAgentRole('healthCheck.js', null)).toBe('monitor');
+    expect(inferAgentRole('queueWatcher.ts', null)).toBe('monitor');
+    expect(inferAgentRole('telemetryAgent.ts', null)).toBe('monitor');
+  });
+
+  it('detects alert role from filename keywords', () => {
+    expect(inferAgentRole('alertDispatcher.ts', null)).toBe('alert');
+    expect(inferAgentRole('notifyOnFailure.ts', null)).toBe('alert');
+    expect(inferAgentRole('pagerEscalator.ts', null)).toBe('alert');
+  });
+
+  it('detects follow_up role from filename keywords', () => {
+    expect(inferAgentRole('reminderAgent.ts', null)).toBe('follow_up');
+    expect(inferAgentRole('retryNudger.ts', null)).toBe('follow_up');
+  });
+
+  it('falls back to core when no role-specific filename signal', () => {
+    expect(inferAgentRole('leadProcessor.ts', null)).toBe('core');
+    expect(inferAgentRole('contentGenerator.ts', null)).toBe('core');
+  });
+
+  it('uses content signals when filename is generic', () => {
+    expect(inferAgentRole('processor.ts', 'setInterval(checkHealth, 60000); metric.gauge("active", count);')).toBe('monitor');
+    expect(inferAgentRole('processor.ts', 'const result = await sendAlert(payload); pagerduty.trigger(...)')).toBe('alert');
+    expect(inferAgentRole('processor.ts', 'await reminderEmail(user); await scheduleFollowUp(...)')).toBe('follow_up');
+  });
+
+  it('filename signal beats content signal (higher confidence)', () => {
+    // Even if content has alert keywords, monitor filename wins
+    expect(inferAgentRole('healthCheckAgent.ts', 'sendAlert(...); pagerduty.trigger()')).toBe('monitor');
+  });
+
+  it('returns core when content is unreadable AND filename is generic', () => {
+    expect(inferAgentRole('genericAgent.ts', null)).toBe('core');
   });
 });

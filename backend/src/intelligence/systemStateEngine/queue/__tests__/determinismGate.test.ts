@@ -600,6 +600,124 @@ describe('triage task generator (brownfield + 0 reqs fallback)', () => {
   });
 });
 
+describe('agent role-aware gate (Tier-2 #4)', () => {
+  it('suppresses agent_stack when monitor AND alert roles are both detected (stack complete)', () => {
+    const cap = mkCap({
+      id: 'role-complete', name: 'Lead Pipeline Manager', kind: 'service',
+      linked_backend_services: [
+        'leadPipeline.ts', 'leadPipelineHelper.ts', 'leadPipelineModel.ts',
+        'leadPipelineRoutes.ts', 'leadPipelineMiddleware.ts',
+      ],
+      linked_frontend_components: ['LeadPipelinePanel.tsx', 'LeadPipelineRow.tsx', 'LeadPipelineFilter.tsx'],
+      linked_agents: ['leadCore.ts', 'leadMonitor.ts'],  // 2 agents — would normally fire under count gate
+      frontend_route: '/admin/lead-pipeline',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+        agent_roles: {
+          detected: ['core', 'monitor', 'alert'],  // monitor + alert covered
+          files_inspected: 2,
+        },
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeUndefined();
+  });
+
+  it('fires when role evidence shows monitor missing (even if count >= floor)', () => {
+    const cap = mkCap({
+      id: 'no-monitor', name: 'Lead Pipeline Manager', kind: 'service',
+      linked_backend_services: [
+        'leadPipeline.ts', 'leadPipelineHelper.ts', 'leadPipelineModel.ts',
+        'leadPipelineRoutes.ts', 'leadPipelineMiddleware.ts',
+      ],
+      linked_frontend_components: ['LeadPipelinePanel.tsx', 'LeadPipelineRow.tsx', 'LeadPipelineFilter.tsx'],
+      // 3 agents but ALL classified as 'core' — count gate would skip, role gate fires
+      linked_agents: ['leadCore.ts', 'leadCore2.ts', 'leadCore3.ts'],
+      frontend_route: '/admin/lead-pipeline',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+        agent_roles: {
+          detected: ['core'],
+          files_inspected: 3,
+        },
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.description).toMatch(/Missing roles: monitor, alert, follow_up/);
+    expect(t!.description).toMatch(/roles detected: core/);
+  });
+
+  it('falls back to count gate when no role evidence is available (files_inspected=0)', () => {
+    // 3 agents, no role evidence → count gate skips (>= floor).
+    const cap = mkCap({
+      id: 'fallback', name: 'Lead Pipeline Manager', kind: 'service',
+      linked_backend_services: [
+        'a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts',
+      ],
+      linked_frontend_components: ['x.tsx', 'y.tsx', 'z.tsx'],
+      linked_agents: ['ag1.ts', 'ag2.ts', 'ag3.ts'],
+      frontend_route: '/admin/x',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+        agent_roles: { detected: [], files_inspected: 0 },  // no evidence
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeUndefined();  // count gate hit (3 >= floor)
+  });
+
+  it('description lists present roles when role evidence available', () => {
+    const cap = mkCap({
+      id: 'partial-roles', name: 'Order Processor', kind: 'service',
+      linked_backend_services: ['o.ts', 'o2.ts', 'o3.ts', 'o4.ts', 'o5.ts'],
+      linked_frontend_components: ['OrderPanel.tsx', 'OrderRow.tsx', 'OrderFilter.tsx'],
+      linked_agents: ['orderMonitor.ts'],  // 1 monitor only
+      frontend_route: '/admin/orders',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+        agent_roles: { detected: ['monitor'], files_inspected: 1 },
+      },
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.description).toMatch(/roles detected: monitor/);
+    expect(t!.description).toMatch(/Missing roles: alert, follow_up/);
+  });
+});
+
 describe('maturity-aware ranking within a tier (Tier-2 #5)', () => {
   it('larger triage cap ranks above smaller triage cap (more accumulated work = earlier)', () => {
     const small = mkCap({

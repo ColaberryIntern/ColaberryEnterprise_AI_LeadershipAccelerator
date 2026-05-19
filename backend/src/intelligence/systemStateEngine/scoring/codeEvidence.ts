@@ -35,10 +35,27 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+export type AgentRole = 'monitor' | 'alert' | 'follow_up' | 'core';
+
+export interface AgentRoleEvidence {
+  /** Set of distinct roles detected across the cap's agent files. */
+  readonly detected: ReadonlyArray<AgentRole>;
+  /** Number of agent files actually read (0 when prod container lacks source). */
+  readonly files_inspected: number;
+}
+
 export interface CodeEvidence {
   readonly reliability_signal: 'high' | 'medium' | 'low' | 'na';
   readonly automation_applicable: boolean;
   readonly evidence_files_read: number;
+  /**
+   * Agent role classification (2026-05-19, Tier-2 #4). Lets the
+   * agent_stack generator distinguish "operator added 2 core agents"
+   * (still incomplete stack) from "operator added 1 monitor + 1 alert
+   * agent" (complete stack). Empty `detected` array when no agent
+   * files were readable — caller should fall back to count-based gate.
+   */
+  readonly agent_roles?: AgentRoleEvidence;
   readonly raw_counts?: {
     try_catch: number;
     async_functions: number;
@@ -111,6 +128,85 @@ function readFileEvidence(relPath: string): FileEvidence {
 }
 
 /**
+ * Classify an agent file's role from filename + contents. Two layers
+ * of signal:
+ *   1. Filename keywords (high confidence) — operator deliberately
+ *      named the file `monitorX.ts` or `alertY.ts`
+ *   2. Content keywords (medium confidence) — code uses APIs that
+ *      indicate the role (setInterval+metrics → monitor;
+ *      sendAlert/pagerduty → alert; setTimeout+enqueue+nudge →
+ *      follow_up)
+ *
+ * Default 'core' when no role-specific signals are found — the agent
+ * IS the work, not the layer around it.
+ *
+ * `content` may be null when the file isn't readable from this
+ * environment (e.g., prod container lacks source). In that case
+ * only the filename signal applies; if filename is generic, default
+ * to 'core'.
+ *
+ * Exported for tests.
+ */
+export function inferAgentRole(filename: string, content: string | null): AgentRole {
+  // Tokenize camelCase + path segments + extensions into lowercase words.
+  // "src/agents/alertDispatcher.ts" → ['src', 'agents', 'alert', 'dispatcher', 'ts']
+  // Lets keyword sets match without worrying about \b boundaries on
+  // camelCase compounds (where "alertDispatcher" wouldn't match
+  // /\balert\b/ since "tD" isn't a word boundary).
+  const tokens = filename
+    .replace(/[A-Z]/g, c => ' ' + c.toLowerCase())
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter(Boolean);
+  const tokenSet = new Set(tokens);
+
+  const MONITOR_TOKENS = new Set(['monitor', 'monitoring', 'watcher', 'observer', 'healthcheck', 'health', 'heartbeat', 'telemetry']);
+  const ALERT_TOKENS = new Set(['alert', 'alerting', 'notify', 'notification', 'pager', 'escalator', 'escalate', 'warn', 'warning']);
+  const FOLLOWUP_TOKENS = new Set(['followup', 'reminder', 'retry', 'nudge', 'nudger', 'dripcampaign']);
+
+  for (const t of tokenSet) {
+    if (MONITOR_TOKENS.has(t)) return 'monitor';
+    if (ALERT_TOKENS.has(t)) return 'alert';
+    if (FOLLOWUP_TOKENS.has(t)) return 'follow_up';
+  }
+
+  // "healthcheck" written as one word vs split "health" + "check"
+  if (tokenSet.has('health') && tokenSet.has('check')) return 'monitor';
+
+  // Content signals — only when we could read the file. Case-insensitive
+  // contains to avoid \b issues on camelCase here too.
+  if (content) {
+    const lc = content.toLowerCase();
+    if (/setinterval|prometheus|healthcheck|metric\.gauge|metric\.counter|pollfor|watchfor/.test(lc)) return 'monitor';
+    if (/sendalert|notifyon|triggeralert|pagerduty|slackalert|notificationservice/.test(lc)) return 'alert';
+    if (/reminderemail|nudge|schedulefollowup|delayedretry|schedulereminder/.test(lc)) return 'follow_up';
+  }
+  return 'core';
+}
+
+/**
+ * Read an agent file with caching and return its inferred role. Cache
+ * key is the path + 'role' suffix to keep separate from FileEvidence
+ * entries.
+ */
+function readAgentRole(relPath: string): { role: AgentRole; read: boolean } {
+  // Fast path: filename-only when we can't read content
+  let content: string | null = null;
+  let read = false;
+  try {
+    const abs = path.resolve(REPO_ROOT, relPath);
+    if (abs.startsWith(REPO_ROOT)) {
+      content = fs.readFileSync(abs, 'utf8');
+      read = true;
+    }
+  } catch {
+    // unreadable — fall through to filename-only inference
+  }
+  const role = inferAgentRole(relPath, content);
+  return { role, read };
+}
+
+/**
  * Compute per-cap evidence by aggregating across linked backend files.
  * Pure besides the file-cache side effect. Safe to call during engine
  * refresh; bounded by MAX_FILES_PER_CAP.
@@ -162,10 +258,33 @@ export function computeCodeEvidence(input: {
     || scheduled_signals > 0
     || queue_signals > 0;
 
+  // Agent role classification (2026-05-19, Tier-2 #4).
+  // Read each linked agent file (bounded) and infer its role from
+  // filename + contents. The aggregated set of detected roles tells
+  // the agent_stack generator whether the cap's agent layer covers
+  // the monitor/alert layers or just has core workers.
+  //
+  // Files-inspected count: how many agent files we could actually read
+  // (filename-only inference still happens for files we can't read,
+  // but only the filename keyword applies). If 0, caller should fall
+  // back to count-based gate.
+  const agentFiles = (input.linked_agents || []).filter(isSupportedSource).slice(0, MAX_FILES_PER_CAP);
+  const detectedRoles = new Set<AgentRole>();
+  let filesInspected = 0;
+  for (const f of agentFiles) {
+    const { role, read } = readAgentRole(f);
+    if (read) filesInspected++;
+    detectedRoles.add(role);
+  }
+
   return {
     reliability_signal,
     automation_applicable,
     evidence_files_read: backendFiles.length,
+    agent_roles: {
+      detected: Object.freeze([...detectedRoles]),
+      files_inspected: filesInspected,
+    },
     raw_counts: { try_catch, async_functions, scheduled_signals, queue_signals },
   };
 }

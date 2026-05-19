@@ -636,15 +636,24 @@ function generateAgentStackTask(
 ): AuthoritativeTask | null {
   const kind = cap.kind || 'service';
   const linkedAgentCount = (cap.linked_agents || []).length;
-  // Threshold (2026-05-19, Option B): fire when fewer than 3 agents
-  // are linked. A "stack" implies multiple roles — monitor, alert,
-  // follow-up — not one. Three agents is the soft floor that says
-  // "stack is in place." Caps with 1-2 agents probably have the core
-  // worker but lack the monitoring/alerting layer the operator wants
-  // to surface. Caps with 3+ are treated as having chosen their
-  // footprint and not re-prompted.
+  // Role-aware gate (2026-05-19, Tier-2 #4) layered on top of the
+  // count-based gate. When code_evidence has classified the cap's
+  // agents into roles (monitor/alert/follow_up/core), we use missing
+  // roles instead of pure count:
+  //   - Stack complete = monitor AND alert roles both present →
+  //     suppress regardless of count
+  //   - Stack incomplete = either role missing → fire even if count
+  //     reaches floor
+  // When role classification isn't available (no code_evidence, no
+  // files inspected), fall back to the count-based floor of 3.
   const AGENT_STACK_FLOOR = 3;
-  if (linkedAgentCount >= AGENT_STACK_FLOOR) return null;
+  const roleEvidence = cap.code_evidence?.agent_roles;
+  const detectedRoles = new Set<string>(roleEvidence?.detected || []);
+  const hasMonitor = detectedRoles.has('monitor');
+  const hasAlert = detectedRoles.has('alert');
+  const haveRoleEvidence = !!roleEvidence && roleEvidence.files_inspected > 0;
+  if (haveRoleEvidence && hasMonitor && hasAlert) return null; // stack complete by roles
+  if (!haveRoleEvidence && linkedAgentCount >= AGENT_STACK_FLOOR) return null; // fallback floor
   const matureForAgentStack =
     (kind === 'page' && score.coverage >= 100)
     || (kind === 'service' && score.readiness >= 80);
@@ -665,16 +674,35 @@ function generateAgentStackTask(
   const isAgentLayerNamed = /\b(monitoring|autonomous|advisor|orchestrator|orchestration|telemetry|alerting|decision\s+making|policy\s+enforcer|governance)\b/i.test(cap.name || '');
   if (isAgentLayerNamed) return null;
 
-  // Description varies by whether ANY agent exists yet. Caps with a
-  // core agent but no monitoring layer get a "complete the stack" ask
-  // rather than a "start the stack" ask.
+  // Description: specific when we have role evidence, generic otherwise.
+  // Role-aware path enumerates which roles are present (operator can
+  // see what's covered) and which are missing (operator knows exactly
+  // what to add).
   const hasSomeAgent = linkedAgentCount > 0;
-  const stackPrefix = hasSomeAgent
-    ? `${cap.name} has ${linkedAgentCount} agent${linkedAgentCount === 1 ? '' : 's'} but the stack looks incomplete.`
-    : `${cap.name} has no agent layer linked.`;
+  let stackPrefix: string;
+  let askSuffix: string;
+  if (haveRoleEvidence) {
+    const presentList = [...detectedRoles].sort().join(', ') || 'none';
+    const allRoles: Array<'monitor' | 'alert' | 'follow_up'> = ['monitor', 'alert', 'follow_up'];
+    const missing = allRoles.filter(r => !detectedRoles.has(r));
+    const missingList = missing.join(', ');
+    stackPrefix = hasSomeAgent
+      ? `${cap.name} has ${linkedAgentCount} agent${linkedAgentCount === 1 ? '' : 's'} (roles detected: ${presentList}).`
+      : `${cap.name} has no agent layer linked.`;
+    askSuffix = missing.length > 0
+      ? ` Missing roles: ${missingList}. Add agent${missing.length === 1 ? '' : 's'} to cover ${missing.length === 1 ? 'this role' : 'these roles'}.`
+      : ` Stack roles look covered; consider adding follow-up or specialized agents.`;
+  } else {
+    stackPrefix = hasSomeAgent
+      ? `${cap.name} has ${linkedAgentCount} agent${linkedAgentCount === 1 ? '' : 's'} but the stack looks incomplete.`
+      : `${cap.name} has no agent layer linked.`;
+    askSuffix = kind === 'page'
+      ? ' Propose the rest of the stack: page-load monitoring, error capture, conversion alerts, follow-up sequences.'
+      : ' Propose the backend agents that extend it: scheduled jobs, workflow automation, data monitors, alert triggers.';
+  }
   const description = kind === 'page'
-    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). ${stackPrefix} Propose the rest of the stack: page-load monitoring, error capture, conversion alerts, follow-up sequences.`
-    : `${cap.name} is built (readiness ${score.readiness}%). ${stackPrefix} Propose the backend agents that extend it: scheduled jobs, workflow automation, data monitors, alert triggers.`;
+    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). ${stackPrefix}${askSuffix}`
+    : `${cap.name} is built (readiness ${score.readiness}%). ${stackPrefix}${askSuffix}`;
 
   return makeTask({
     id: `${cap.id}:propose_agent_stack`,
@@ -696,7 +724,9 @@ function generateAgentStackTask(
       kind === 'page'
         ? `coverage=${score.coverage}% (page is shipped — next tier is the agent layer)`
         : `readiness=${score.readiness}% (service is built — next tier is the agent layer)`,
-      `linked_agents=${linkedAgentCount} (below stack floor of ${AGENT_STACK_FLOOR})`,
+      haveRoleEvidence
+        ? `agent roles detected: [${[...detectedRoles].join(', ') || 'none'}] (${roleEvidence?.files_inspected} file${roleEvidence?.files_inspected === 1 ? '' : 's'} inspected)`
+        : `linked_agents=${linkedAgentCount} (below stack floor of ${AGENT_STACK_FLOOR}; no role evidence available)`,
     ],
     cap, cap_score: score,
   });

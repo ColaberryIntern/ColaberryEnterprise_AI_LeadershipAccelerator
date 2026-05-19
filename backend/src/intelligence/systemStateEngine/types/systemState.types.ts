@@ -933,6 +933,17 @@ export interface EngineCapabilityInput {
     readonly reliability_signal: 'high' | 'medium' | 'low' | 'na';
     readonly automation_applicable: boolean;
     readonly evidence_files_read: number;
+    /**
+     * Agent role classification (2026-05-19, Tier-2 #4). When present,
+     * the agent_stack generator uses missing-roles instead of pure
+     * count to decide whether to fire. Empty `detected` array (or
+     * `files_inspected === 0`) means we couldn't read agent files —
+     * generator falls back to count-based gate.
+     */
+    readonly agent_roles?: {
+      readonly detected: ReadonlyArray<'monitor' | 'alert' | 'follow_up' | 'core'>;
+      readonly files_inspected: number;
+    };
   };
 }
 
