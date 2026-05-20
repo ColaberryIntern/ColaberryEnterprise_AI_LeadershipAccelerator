@@ -1959,11 +1959,24 @@ function enrichCapability(cap: any) {
       // fallback was lighting up Frontend/Agents filters for every
       // capability the moment any frontend/agent code existed
       // anywhere in the repo.
-      const realBackend = hasBackend || ctxHasBackend;
-      const realAgents = hasAgents || ctxHasAgents;
+      // 2026-05-20: usability signals must reflect real linked files, not
+      // the keyword-only heuristic. Alert System (name stem "system") was
+      // matching every .tsx file with "system" in the path → false-positive
+      // amber F pillar even though linked_frontend_components is empty.
+      // The persisted linked_* arrays are the authoritative signal; the
+      // heuristic scan is allowed only as a fallback when nothing is stored
+      // (legacy caps that pre-date brownfield discovery).
+      const storedBackendCount = ((cap as any).linked_backend_services || []).length;
+      const storedFrontendCount = ((cap as any).linked_frontend_components || []).length;
+      const storedAgentsCount = ((cap as any).linked_agents || []).length;
+      const realBackend = storedBackendCount > 0 || ctxHasBackend
+        || (storedFrontendCount === 0 && storedAgentsCount === 0 && hasBackend);
+      const realAgents = storedAgentsCount > 0 || ctxHasAgents
+        || (storedBackendCount === 0 && storedFrontendCount === 0 && hasAgents);
       const realFrontend = (cap as any).frontend_route
         || (cap as any).source === 'frontend_page'
-        || hasFrontend;
+        || storedFrontendCount > 0
+        || (storedBackendCount === 0 && storedAgentsCount === 0 && hasFrontend);
 
       if (isPageBP) {
         return { backend: ctxHasBackend ? 'ready' : 'n/a', frontend: realFrontend ? 'ready' : 'missing', agent: ctxHasAgents ? 'ready' : 'n/a', usable: isPageBPComplete, why_not: isPageBPComplete ? [] : ['Connect a frontend route to mark as ready'] };

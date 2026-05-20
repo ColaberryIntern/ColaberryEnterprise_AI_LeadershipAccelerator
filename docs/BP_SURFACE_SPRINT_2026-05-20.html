@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BP Surface Sprint — Report (2026-05-20)</title>
+<style>
+  :root {
+    --primary: #1a365d;
+    --primary-light: #3b82f6;
+    --text: #1f2937;
+    --text-light: #6b7280;
+    --bg: #f8fafc;
+    --bg-alt: #f1f5f9;
+    --border: #e5e7eb;
+    --green: #15803d;
+    --green-bg: #dcfce7;
+    --amber: #b45309;
+    --amber-bg: #fef3c7;
+    --purple: #7c3aed;
+    --purple-bg: rgba(124, 58, 237, 0.08);
+    --teal: #0e7490;
+    --teal-bg: rgba(14, 116, 144, 0.08);
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+    line-height: 1.55;
+  }
+  .shell { max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  .eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-light);
+    font-weight: 600;
+  }
+  h1 {
+    margin: 4px 0 4px;
+    font-size: 26px;
+    color: var(--primary);
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--text-light); font-size: 14px; }
+  h2 {
+    margin-top: 2.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 18px;
+    color: var(--primary);
+  }
+  h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 15px;
+    color: var(--text);
+  }
+  p { margin: 0.5rem 0; font-size: 14px; }
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.4rem;
+    margin: 1rem 0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  .card.accent { border-left: 3px solid var(--primary-light); }
+  .card .label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-light);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 12px;
+    font-size: 12px;
+    color: var(--text-light);
+  }
+  code {
+    font-family: var(--mono);
+    background: var(--bg-alt);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12.5px;
+    color: var(--primary);
+  }
+  pre {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--bg-alt); font-weight: 600; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-radius: 3px;
+    border: 1px solid;
+  }
+  .chip-green { color: var(--green); background: var(--green-bg); border-color: var(--green-bg); }
+  .chip-amber { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-bg); }
+  .chip-purple { color: var(--purple); background: var(--purple-bg); border-color: rgba(124,58,237,0.25); }
+  .chip-teal { color: var(--teal); background: var(--teal-bg); border-color: rgba(14,116,144,0.25); }
+  .chip-gray { color: var(--text-light); background: transparent; border-color: var(--border); }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.6rem 1rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 0.5rem 0;
+    font-size: 13px;
+  }
+  .status-row .name { flex: 1; font-weight: 500; }
+  .commit-link {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-light);
+  }
+  .footnote { font-size: 12.5px; color: var(--text-light); font-style: italic; margin-top: 1rem; }
+  .blockers {
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin: 1rem 0;
+    font-size: 13px;
+  }
+  .blockers strong { color: #c2410c; }
+  ul { padding-left: 1.4rem; margin: 0.5rem 0; }
+  li { margin: 4px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<header>
+  <div class="eyebrow">Sprint Report</div>
+  <h1>BP Surface — pillar palette, +N modal, agent names, FE→BE call graph</h1>
+  <div class="sub">2026-05-20 · 4 items shipped end-to-end · 1 deployment · 2 backfills run</div>
+</header>
+
+<div class="card accent">
+  <div class="label">Operator asks (this session)</div>
+  <ul>
+    <li>Pillar colors are too alarming — gray for absent layers instead of red</li>
+    <li>Name the agents when I click into a BP</li>
+    <li>Show me which backends a frontend page calls (connect them visually)</li>
+    <li>What does the "+1" pill mean? Make it auditable.</li>
+  </ul>
+</div>
+
+<h2>1. Gray-for-absent pillar palette</h2>
+
+<div class="card">
+  <p><strong>Problem.</strong> The red <code>A</code> on rows like User Journey Mapping read as alarming — like the agent was broken — when it really just meant "this BP doesn't have an agent." Red next to green implies pass/fail; the operator wanted a calmer "present or not" scan.</p>
+  <p><strong>Change.</strong> Collapsed the four-state palette on BP rows to three: green (present), amber (partial), gray (absent OR not-applicable). The Components tab keeps the four-state red-for-missing palette because it's asking the deeper "is this BP wired?" question.</p>
+  <p><strong>Before / after on the Marketing Operations domain:</strong></p>
+  <table>
+    <thead><tr><th>Cap</th><th>Before</th><th>After</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>User Journey Mapping</td>
+        <td>
+          <span class="chip chip-amber"><span class="dot"></span>B</span>
+          <span class="chip chip-green"><span class="dot"></span>F</span>
+          <span class="chip" style="color:#b91c1c;background:#fee2e2;border-color:#fee2e2"><span class="dot"></span>A</span>
+        </td>
+        <td>
+          <span class="chip chip-amber"><span class="dot"></span>B</span>
+          <span class="chip chip-green"><span class="dot"></span>F</span>
+          <span class="chip chip-gray"><span class="dot"></span>A</span>
+        </td>
+      </tr>
+      <tr>
+        <td>Marketing Dashboard</td>
+        <td>
+          <span class="chip chip-amber"><span class="dot"></span>B</span>
+          <span class="chip chip-green"><span class="dot"></span>F</span>
+          <span class="chip chip-green"><span class="dot"></span>A</span>
+        </td>
+        <td>
+          <span class="chip chip-amber"><span class="dot"></span>B</span>
+          <span class="chip chip-green"><span class="dot"></span>F</span>
+          <span class="chip chip-green"><span class="dot"></span>A</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="footnote">Hover any pillar for the precise status (<code>ready</code> / <code>partial</code> / <code>missing</code> / <code>na</code>) and file count.</p>
+  <p><span class="meta">file</span> <code>frontend/src/components/project/BPDomainSurfaceRows.tsx</code></p>
+</div>
+
+<h2>2. +N merged-caps modal</h2>
+
+<div class="card">
+  <p><strong>Problem.</strong> Earlier this session I shipped a dedup helper that collapses caps sharing a <code>frontend_route</code> into one row, marked with a <code>+N</code> pill. But the merge was silent — you saw "+1" on Visitor Tracking with no way to audit which cap was folded in.</p>
+  <p><strong>Change.</strong> The pill is now clickable. Click opens a modal listing every cap in the merge with name + source + linked-file counts + an "Open this cap" button that drills into the specific cap (not just the primary). Tooltip on hover still spells it out before clicking.</p>
+  <p><strong>Example — Visitor Tracking row:</strong></p>
+  <pre>
++ Visitor Tracking          ↘  /admin/visitors
+
+  Caps sharing this route
+  • Visitor Tracking          [PRIMARY] brownfield_discovered · BE 9 · FE 2 · AG 0
+  • Visitors Management                  frontend_page         · BE 0 · FE 0 · AG 0
+  </pre>
+  <p>Primary selection (most linked code wins, tiebreak by shortest name) is shown explicitly so you can spot when the wrong cap is being treated as canonical.</p>
+  <p><span class="meta">files</span>
+    <code>frontend/src/components/project/MergedCapsModal.tsx</code> (new) ·
+    <code>BPDomainSurfaceRows.tsx</code> ·
+    <code>BPDomainSurface.tsx</code> ·
+    <code>utils/bpRowDedup.ts</code></p>
+</div>
+
+<h2>3. Agent names in cap detail</h2>
+
+<div class="card">
+  <p><strong>Problem.</strong> If a BP had an agent, you had no way to see which one(s) without grepping the repo. The pillar told you "agent present" but didn't name it.</p>
+  <p><strong>Change.</strong> New <em>Agents (N)</em> section on BPDetailV2 — fires whenever <code>cap.linked_agents</code> is non-empty. Lists each agent's file name + derived role + directory path. Roles come from <code>agent_roles_cache</code> (Tier-3 work — now backfilled for this project).</p>
+  <p><strong>Example — Manifest Validation cap detail now shows:</strong></p>
+  <pre>
+AGENTS (4)
+  • verificationOrchestrator                  role: monitor    backend/src/intelligence/verification/
+  • manifestEmitter                           role: monitor    backend/src/intelligence/verification/
+  • regressionDetector                        role: monitor    backend/src/intelligence/verification/
+  • contractValidator                                          backend/src/intelligence/verification/
+  </pre>
+  <p>If <code>agent_roles_cache</code> is empty for a project, the section shows a hint to run <code>backfillAgentRolesCache.js</code>. Trigger detection (cron schedule / route handler / scheduler entry) is a follow-up sprint — file paths give you "where," not "when."</p>
+  <p><strong>Backfill result on prod (Colaberry project):</strong></p>
+  <ul>
+    <li>29 caps classified with at least one agent role</li>
+    <li>10 skipped (cache still fresh)</li>
+    <li>99 skipped (no linked agents)</li>
+    <li>0 errors</li>
+  </ul>
+  <p><span class="meta">files</span>
+    <code>frontend/src/components/project/BPDetailV2.tsx</code> ·
+    <code>backend/src/routes/projectRoutes.ts</code> (extended <code>/business-processes/:id</code> attributes)</p>
+</div>
+
+<h2>4. Frontend → Backend call graph</h2>
+
+<div class="card">
+  <p><strong>Problem.</strong> If the Marketing Dashboard page calls the User Journey Mapping backend, nothing in the system surfaced that relationship. You couldn't see which pages consume which services, or spot orphaned backends with no page coverage.</p>
+  <p><strong>Change.</strong> New scanner builds a bidirectional cap-to-cap call graph.</p>
+  <h3>How it works</h3>
+  <ol>
+    <li>For every cap's backend files, parse <code>router.get/post/put/delete/patch('/api/...')</code> registrations → learn which capability <em>owns</em> which API path.</li>
+    <li>For every cap's frontend files, scan <code>fetch / axios / portalApi</code> calls for string-literal API paths.</li>
+    <li>Match each frontend cap's referenced paths back to the owner cap (parameterized routes like <code>/api/admin/leads/:id</code> match on segment count + named-param tolerance).</li>
+    <li>Persist the result on a new <code>capabilities.frontend_calls_capability_ids</code> JSONB column.</li>
+  </ol>
+  <h3>What you'll see on the row</h3>
+  <p>Two new chips alongside the B/F/A pillars (suppressed when there's no signal):</p>
+  <p>
+    <span class="chip chip-purple">↘ uses 3</span>
+    — this cap's frontend calls 3 other caps' backends. Tooltip lists them.
+  </p>
+  <p>
+    <span class="chip chip-teal">↗ used by 2</span>
+    — 2 caps' frontends call this cap's backend. Derived client-side from the forward map.
+  </p>
+  <p>An empty "used by" chip on a backend cap is a real signal: <em>no page consumes this</em> — either it's orphaned or someone needs to build the dashboard for it.</p>
+  <h3>Files</h3>
+  <p><span class="meta">backend</span>
+    <code>backend/src/services/frontendCallGraphScanner.ts</code> (new) ·
+    <code>backend/src/models/Capability.ts</code> (column) ·
+    <code>backend/src/scripts/backfillFrontendCallGraph.js</code> (new)</p>
+  <p><span class="meta">frontend</span>
+    <code>frontend/src/components/project/BPDomainSurfaceRows.tsx</code> (chips) ·
+    <code>BPDomainSurface.tsx</code> (project-wide map) ·
+    <code>utils/bpDomainClassifier.ts</code> (type)</p>
+</div>
+
+<div class="blockers">
+  <strong>⚠ Blocker on the call-graph backfill: GitHub anonymous rate limit.</strong>
+  <p style="margin:6px 0 0">The Accelerator's GitHub connection has no auth token (<code>access_token_encrypted</code> is null). Anonymous GitHub API is capped at 60 requests/hour; this project has ~580 unique files across the backend + frontend caps. The scan exhausts the limit immediately and every <code>readFileFromRepo</code> returns null.</p>
+  <p style="margin:6px 0 0"><strong>Effect now:</strong> column populated for all 138 caps with empty arrays. Chips don't render until a successful scan happens.</p>
+  <p style="margin:6px 0 0"><strong>Unblock:</strong> add a GitHub personal access token to the connection's <code>access_token_encrypted</code> field (5,000 req/hr), then re-run <code>backfillFrontendCallGraph.js</code>. All code shipped; the result will appear immediately on next refresh.</p>
+</div>
+
+<h2>Deployment + verification</h2>
+
+<div class="card">
+  <div class="status-row">
+    <span class="name">Frontend bundle deployed</span>
+    <span class="chip chip-green">✓ shipped</span>
+  </div>
+  <div class="status-row">
+    <span class="name">Backend deployed (linked_* attrs + inline maturity + new BP-detail attrs + scanner module)</span>
+    <span class="chip chip-green">✓ shipped</span>
+  </div>
+  <div class="status-row">
+    <span class="name">Prod migration: <code>ALTER TABLE capabilities ADD COLUMN frontend_calls_capability_ids JSONB</code></span>
+    <span class="chip chip-green">✓ applied</span>
+  </div>
+  <div class="status-row">
+    <span class="name">Backfill: <code>backfillAgentRolesCache.js</code> (29 caps classified)</span>
+    <span class="chip chip-green">✓ run</span>
+  </div>
+  <div class="status-row">
+    <span class="name">Backfill: <code>backfillFrontendCallGraph.js</code> (column populated, content scan blocked on GH rate limit)</span>
+    <span class="chip chip-amber">partial</span>
+  </div>
+</div>
+
+<h2>Commits</h2>
+<div class="card">
+  <p><code>1a5a8745</code> — BP surface: gray pillars, +N modal, agent names, FE→BE call graph (all four items)</p>
+  <p><code>99b73609</code> — B/F/A pillar dots + builtness icon + single-drill-down <span class="footnote">(earlier in this session)</span></p>
+  <p><code>0d3a622f</code> — BP API: load linked_* arrays + compute maturity inline <span class="footnote">(earlier in this session)</span></p>
+</div>
+
+<h2>What's next (suggested follow-ups, not started)</h2>
+
+<div class="card">
+  <ul>
+    <li><strong>Add a GitHub auth token</strong> to the Accelerator's connection (operator action), then re-run <code>backfillFrontendCallGraph.js</code> → unlocks the FE→BE chips with real data.</li>
+    <li><strong>Trigger detection for agents.</strong> Parse cron schedules + scheduler.ts entries + route handlers per agent file. Surface "Triggered every 15 min" / "Triggered on POST /api/x" on the agent rows in cap detail. ~2 hours.</li>
+    <li><strong>Use the same call-graph column for "reports on / reported by"</strong> (your earlier ask). The relationship type is the same — we'd just add a <code>relationship_kind</code> discriminator so dashboards can declare "reports on Lead Scoring" beyond the implicit "calls Lead Scoring API." ~1.5 hours.</li>
+    <li><strong>Orphan detector.</strong> Caps with backend but zero "used by" chips after a successful scan = orphaned APIs. Surface as a queue task. ~30 min once the call graph is populated.</li>
+  </ul>
+</div>
+
+<div class="footnote" style="margin-top:2.5rem; padding-top:1rem; border-top:1px solid var(--border)">
+  Report generated 2026-05-20 · Live site: <a href="https://enterprise.colaberry.ai/portal/project/system?tab=bps">enterprise.colaberry.ai · System / BPs</a>
+</div>
+
+</div>
+</body>
+</html>
