@@ -12,6 +12,18 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### BP row enrichment — layer badges + maturity chip + dedup (2026-05-20)
+Operator asked for KPIs at the BP row level: "I want to know if Manifest Validation has a backend, frontend, agent etc... without clicking on it." Also flagged duplicate rows (Lead Management twice, Visitor Tracking + Visitors Management both pointing to /admin/visitors).
+
+- [x] `frontend/src/utils/bpDomainClassifier.ts` — extended `BPLike` interface with `linked_backend_services`, `linked_frontend_components`, `linked_agents`, `frontend_route`, `maturity`, and `_dupe_count` / `_dupe_names` metadata fields. Fields already flow from `/api/portal/project/business-processes` but weren't typed here.
+  - Date: 2026-05-20
+- [x] `frontend/src/utils/bpRowDedup.ts` (new) — `dedupByFrontendRoute(processes)` collapses caps sharing a `frontend_route` into one primary row. Primary selection: highest linked-code count wins, tiebreak by shortest name (canonical name beats Dashboard/Service suffixes). Inherits the longest linked array from each layer (overlapping files don't double-count). Carries `_dupe_count` so the row can surface "+N".
+  - Date: 2026-05-20
+- [x] `frontend/src/components/project/BPDomainSurfaceRows.tsx` — added three `LayerBadge` chips (BE / FE / AG) and one `MaturityChip` (L0-L4 with palette: muted / blue / purple / green / teal) inline on every BP row. Counts come straight from the cap's `linked_*` arrays. Maturity from engine-overlaid `maturity.level`. Also wired `dedupByFrontendRoute` into the per-domain process list so duplicates collapse with a "+N" pill on the primary.
+  - Date: 2026-05-20
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [ ] **Open:** if the new maturity chip shows L1 everywhere, the engine maturity computation is stale or the brownfield evidence path isn't reaching the scorer. Data audit on prod shows Campaign Management has 79% evidence + 7 BE + 3 FE which should compute to L3 (Production). Post-deploy spot-check determines whether this is a row-binding bug or an engine bug.
+
 ### Phase 0 follow-up — "Not built yet" label fix for backfilled routes (2026-05-20)
 Operator caught: Marketing Dashboard + Visitor Tracking BP rows on the System / BPs tab still show "Not built yet" even though the Phase 0 backfill set their `frontend_route` (to `/admin/marketing` and `/admin/visitors`). Root cause: `isPage` in `BPDomainSurfaceRows.tsx` only considered `is_page_bp` flag, `source==='frontend_page'`, or a name suffix. Brownfield-discovered caps with backfilled routes fell through. Now `isPage` also returns true when `frontend_route` is non-empty.
 

@@ -23,6 +23,7 @@ import { type Direction } from '../../hooks/useDomainMomentum';
 import { forwardLookingNote } from '../../utils/operationalLeverage';
 import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
 import { metadataItems } from '../../utils/scanSpeedSignals';
+import { dedupByFrontendRoute } from '../../utils/bpRowDedup';
 import { inheritedDomainContextSentence } from '../../utils/bpInheritedContext';
 import { pathwayStageLabel } from '../../utils/pathwayStage';
 
@@ -320,7 +321,7 @@ export const DomainRow: React.FC<{
               {inheritedDomainContextSentence(bucket.label, bucket.downstreamCount)}
             </div>
           )}
-          {bucket.processes.map(p => (
+          {dedupByFrontendRoute(bucket.processes).map(p => (
             <BPLine
               key={p.id}
               bp={p}
@@ -418,7 +419,31 @@ export const BPLine: React.FC<{
     >
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {bp.name}
+        {(bp as any)._dupe_count > 0 && (
+          <span
+            title={`Also includes: ${((bp as any)._dupe_names || []).join(', ')}`}
+            style={{
+              marginLeft: 6, padding: '1px 6px',
+              fontSize: 10, fontWeight: 600,
+              color: 'var(--color-text-light)',
+              background: 'var(--color-bg-alt)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 10,
+            }}
+          >
+            +{(bp as any)._dupe_count}
+          </span>
+        )}
       </span>
+      {/* 2026-05-20: layer badges so operator sees what's built per BP
+          without clicking. BE = backend services, FE = frontend components,
+          AG = linked agents. Counts come directly from the cap row's
+          linked_* arrays. Empty layers shown muted; populated layers
+          shown in the primary palette. */}
+      <LayerBadge label="BE" count={(bp.linked_backend_services || []).length} title="Backend services linked" />
+      <LayerBadge label="FE" count={(bp.linked_frontend_components || []).length} title="Frontend components linked" />
+      <LayerBadge label="AG" count={(bp.linked_agents || []).length} title="Agents linked" />
+      <MaturityChip level={bp.maturity?.level} label={bp.maturity?.label} />
       {total > 0 && (
         <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
           {matched}/{total}
@@ -433,5 +458,65 @@ export const BPLine: React.FC<{
       </span>
       <i className="bi bi-chevron-right" style={{ fontSize: 10, color: 'var(--color-text-light)', flexShrink: 0, opacity: 0.6 }}></i>
     </button>
+  );
+};
+
+const LayerBadge: React.FC<{ label: 'BE' | 'FE' | 'AG'; count: number; title: string }> = ({ label, count, title }) => {
+  const has = count > 0;
+  return (
+    <span
+      title={`${title}: ${count}`}
+      style={{
+        flexShrink: 0,
+        padding: '1px 6px',
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: '0.02em',
+        color: has ? 'var(--color-primary)' : 'var(--color-text-light)',
+        background: has ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+        border: `1px solid ${has ? 'rgba(37, 99, 235, 0.25)' : 'var(--color-border)'}`,
+        borderRadius: 4,
+        fontVariantNumeric: 'tabular-nums',
+        opacity: has ? 1 : 0.55,
+      }}
+    >
+      {label} {count}
+    </span>
+  );
+};
+
+const MATURITY_TONES: Record<number, { fg: string; bg: string; border: string }> = {
+  0: { fg: 'var(--color-text-light)', bg: 'transparent', border: 'var(--color-border)' },
+  1: { fg: '#1d4ed8', bg: 'rgba(37, 99, 235, 0.08)', border: 'rgba(37, 99, 235, 0.25)' },
+  2: { fg: '#7c3aed', bg: 'rgba(124, 58, 237, 0.08)', border: 'rgba(124, 58, 237, 0.25)' },
+  3: { fg: '#15803d', bg: 'rgba(21, 128, 61, 0.08)', border: 'rgba(21, 128, 61, 0.25)' },
+  4: { fg: '#0f766e', bg: 'rgba(15, 118, 110, 0.10)', border: 'rgba(15, 118, 110, 0.30)' },
+};
+
+const MATURITY_LABEL: Record<number, string> = {
+  0: 'Not Started', 1: 'Prototype', 2: 'Functional', 3: 'Production', 4: 'Autonomous',
+};
+
+const MaturityChip: React.FC<{ level?: number; label?: string }> = ({ level, label }) => {
+  if (typeof level !== 'number') return null;
+  const tone = MATURITY_TONES[level] || MATURITY_TONES[0];
+  const fullLabel = label || MATURITY_LABEL[level] || '';
+  return (
+    <span
+      title={`Maturity L${level} — ${fullLabel}`}
+      style={{
+        flexShrink: 0,
+        padding: '1px 6px',
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.03em',
+        color: tone.fg,
+        background: tone.bg,
+        border: `1px solid ${tone.border}`,
+        borderRadius: 4,
+      }}
+    >
+      L{level}
+    </span>
   );
 };

@@ -79,6 +79,18 @@ export interface BPLike {
   usability?: { backend?: string; frontend?: string; agent?: string; usable?: boolean };
   is_page_bp?: boolean;
   source?: string;
+  // 2026-05-20: layer + maturity surfacing on the BP row. Operators wanted
+  // to see what's built per BP without clicking into detail. These fields
+  // already flow from the BP API but weren't typed here.
+  linked_backend_services?: string[];
+  linked_frontend_components?: string[];
+  linked_agents?: string[];
+  frontend_route?: string | null;
+  maturity?: { level?: number; label?: string };
+  // Dedup metadata — populated client-side when two caps share a
+  // frontend_route within a domain. The primary cap inherits these.
+  _dupe_count?: number;
+  _dupe_names?: string[];
 }
 
 interface DomainSpec {
