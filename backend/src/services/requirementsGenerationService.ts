@@ -18,7 +18,7 @@ import RequirementsGenerationJob from '../models/RequirementsGenerationJob';
 import { ArtifactDefinition, AssignmentSubmission } from '../models';
 import { buildProjectRequirementsContext } from './projectRequirementsContextService';
 import { createNewVersion } from './artifactVersionService';
-import { attachArtifactToProject } from './projectService';
+import { attachArtifactToProject, createProjectForEnrollment } from './projectService';
 import { refreshProjectOutputs } from './portfolioEnhancementService';
 import OpenAI from 'openai';
 
@@ -154,9 +154,14 @@ export async function startRequirementsGeneration(
   mode: 'professional' | 'autonomous' = 'professional',
   userPrompt?: string,
 ): Promise<{ job_id: string }> {
-  const project = await Project.findOne({ where: { enrollment_id: enrollmentId } });
+  // First-run flow: the requirements builder generates BEFORE the user saves,
+  // so a project may not exist yet for this enrollment. Create it idempotently
+  // (findOrCreate on enrollment_id) so the generation job has a project to
+  // attach to. The later Save (POST /setup/requirements) calls the same helper
+  // and finds this exact row — no duplicate is created.
+  let project = await Project.findOne({ where: { enrollment_id: enrollmentId } });
   if (!project) {
-    throw new Error('No project found for this enrollment');
+    project = await createProjectForEnrollment(enrollmentId);
   }
 
   // Check for existing running job
@@ -273,6 +278,11 @@ export async function getJobStatus(jobId: string): Promise<{
   error_message: string | null;
   created_at: Date;
   completed_at: Date | null;
+  // The generated document, surfaced so the polling client (RequirementsBuilder)
+  // can render the review screen. Frontend reads `result.content`; without this
+  // the review screen showed an empty doc and saved empty content.
+  result: { content: string } | null;
+  output_document: string | null;
 } | null> {
   const job = await RequirementsGenerationJob.findByPk(jobId);
   if (!job) return null;
@@ -285,5 +295,7 @@ export async function getJobStatus(jobId: string): Promise<{
     error_message: job.error_message || null,
     created_at: job.created_at,
     completed_at: job.completed_at || null,
+    result: job.output_document ? { content: job.output_document } : null,
+    output_document: job.output_document || null,
   };
 }
