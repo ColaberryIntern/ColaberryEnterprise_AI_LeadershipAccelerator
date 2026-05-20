@@ -12,6 +12,13 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Phase 0 follow-up — "Not built yet" label fix for backfilled routes (2026-05-20)
+Operator caught: Marketing Dashboard + Visitor Tracking BP rows on the System / BPs tab still show "Not built yet" even though the Phase 0 backfill set their `frontend_route` (to `/admin/marketing` and `/admin/visitors`). Root cause: `isPage` in `BPDomainSurfaceRows.tsx` only considered `is_page_bp` flag, `source==='frontend_page'`, or a name suffix. Brownfield-discovered caps with backfilled routes fell through. Now `isPage` also returns true when `frontend_route` is non-empty.
+
+- [x] `frontend/src/components/project/BPDomainSurfaceRows.tsx` — added `!!frontend_route` as a fourth `isPage` condition with a comment naming the Phase 0 backfill as the trigger.
+  - Date: 2026-05-20
+  - Verification: frontend `npx tsc --noEmit` exit 0; affects ~21 caps whose frontend_route was backfilled (Marketing Dashboard, Visitor Tracking, Campaign Management, Lead Management, Revenue Dashboard, etc.)
+
 ### Phase D — Smart cap-queue filters: custom selection + last-filter memory (2026-05-20)
 The fourth and final piece of the CAP_WALK_AND_COMMENT plan. Operator can now hand-pick which caps to walk via a search box (the `custom` filter), and the picker remembers their last-used filter across sessions.
 

@@ -353,9 +353,16 @@ export const BPLine: React.FC<{
   // the operator "Not built yet" is contradictory and pushed real built
   // pages into a build queue that wasn't appropriate. Pages get
   // "Built · awaits review" / "Built" instead of the legacy harsh labels.
+  // 2026-05-20: a non-empty frontend_route is now a reliable page signal
+  // regardless of source (brownfield-discovered caps can have routes after
+  // the Phase 0 backfill that derived them from linked components). Without
+  // this, caps like "Marketing Dashboard" (source=brownfield_discovered,
+  // frontend_route=/admin/marketing) showed "Not built yet" even though
+  // the page renders. Adds frontend_route as a fourth way to be a Page.
   const isPage = !!(bp as any).is_page_bp
     || (bp as any).source === 'frontend_page'
-    || /\s(landing\s)?page$/i.test((bp as any).name || '');
+    || /\s(landing\s)?page$/i.test((bp as any).name || '')
+    || !!(bp as any).frontend_route;
   const pageHasFrontend = isPage && (
     !!(bp as any).frontend_route
     || ((bp as any).usability?.frontend && (bp as any).usability.frontend !== 'missing')
