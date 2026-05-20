@@ -69,37 +69,9 @@ const CoryHome: React.FC = () => {
   const { state, loading, error, refresh } = useUnifiedProjectState({ pollMs: 60_000 });
   const { memory, update, recordSnapshot } = useWorkspaceMemory();
 
-  // First-run gate: short-circuit to the requirements builder when the
-  // backend says we haven't accepted a requirements doc yet. We still
-  // run the hooks above (one render, no early return before hooks).
-  if (onboarding.state?.stage === 'needs_requirements') {
-    return (
-      <div>
-        <div style={{
-          maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 1rem',
-        }}>
-          <div style={{
-            fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
-            color: 'var(--color-text-light)', fontWeight: 600,
-          }}>
-            Welcome
-          </div>
-          <h1 style={{
-            fontSize: 22, fontWeight: 600, color: 'var(--color-primary)',
-            margin: '4px 0 6px', letterSpacing: '-0.01em',
-          }}>
-            Let&rsquo;s start by capturing what you want to build.
-          </h1>
-          <p style={{ fontSize: 14, color: 'var(--color-text-light)', lineHeight: 1.55, margin: 0 }}>
-            The portal needs a requirements document before it can show progress,
-            queue work, or surface gaps. Describe your idea below — Cory will turn
-            it into a structured requirements set with a short Q&amp;A.
-          </p>
-        </div>
-        <RequirementsBuilder />
-      </div>
-    );
-  }
+  // First-run gate signal — checked below the rest of the hooks so we
+  // never violate the Rules of Hooks across renders.
+  const isFirstRun = onboarding.state?.stage === 'needs_requirements';
 
   // Framing card visibility is gated ONLY on seenIntros.home. Anyone
   // who hasn't dismissed sees it once; after dismiss it never shows
@@ -277,6 +249,37 @@ const CoryHome: React.FC = () => {
       snapshotNow();
     };
   }, [recordSnapshot, update]);
+
+  // 2026-05-20: first-run short-circuit. Comes AFTER every hook above so
+  // we never violate the Rules of Hooks across the loading → loaded
+  // transition of useOnboardingState (a prior version of this guard sat
+  // before later hooks and crashed with React error #300).
+  if (isFirstRun) {
+    return (
+      <div>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 1rem' }}>
+          <div style={{
+            fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+            color: 'var(--color-text-light)', fontWeight: 600,
+          }}>
+            Welcome
+          </div>
+          <h1 style={{
+            fontSize: 22, fontWeight: 600, color: 'var(--color-primary)',
+            margin: '4px 0 6px', letterSpacing: '-0.01em',
+          }}>
+            Let&rsquo;s start by capturing what you want to build.
+          </h1>
+          <p style={{ fontSize: 14, color: 'var(--color-text-light)', lineHeight: 1.55, margin: 0 }}>
+            The portal needs a requirements document before it can show progress,
+            queue work, or surface gaps. Describe your idea below — Cory will turn
+            it into a structured requirements set with a short Q&amp;A.
+          </p>
+        </div>
+        <RequirementsBuilder />
+      </div>
+    );
+  }
 
   if (loading && !state) {
     return (
