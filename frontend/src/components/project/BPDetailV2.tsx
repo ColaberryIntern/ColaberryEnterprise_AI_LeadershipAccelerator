@@ -80,7 +80,7 @@ function toast(msg: string) {
   setTimeout(() => el.remove(), 2800);
 }
 
-const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate: _onUpdate }) => {
+const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
   const navigate = useNavigate();
   const [p, setP] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -368,12 +368,16 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate: _onUpdate }
         </div>
       </section>
 
-      {/* ─── Agents (2026-05-20) — name each linked agent + show its role
-            from agent_roles_cache when populated. Trigger detection is a
-            follow-up sprint. ─── */}
+      {/* ─── Agents (2026-05-20) — surfaces LLM agent-attribution
+            classification per cap. Each agent shows decision +
+            confidence + reasoning + one-click confirm/reject override.
+            Reads agent_roles_cache.classifications[] populated by
+            agentAttributionClassifier. ─── */}
       <AgentsSection
+        capId={p.id}
         linkedAgents={(p as any).linked_agents || []}
         rolesCache={(p as any).agent_roles_cache || null}
+        onReload={onUpdate}
       />
 
       {/* ─── Maturity progression strip ─── */}
@@ -575,89 +579,192 @@ function buildIntro(name: string, description: string, state: LifecycleState): s
 }
 
 /**
- * AgentsSection — names each agent linked to this BP. Source paths come
- * from cap.linked_agents (always present). Role classifications come from
- * cap.agent_roles_cache.roles when the Tier-3 backfill has been run for
- * this project; otherwise we just show the file name.
+ * AgentsSection — surfaces LLM-classified agent attribution per cap.
+ *
+ * 2026-05-20: rewired to read from agent_roles_cache.classifications[]
+ * (populated by agentAttributionClassifier). Three groups:
+ *   • Confirmed (decision='confirmed' OR operator confirmed) — green
+ *   • Uncertain (decision='uncertain' AND no override) — amber
+ *   • Rejected (decision='rejected' OR operator rejected) — gray, collapsed
+ *
+ * Each row shows confidence + role + one-line reasoning + per-row
+ * confirm/reject buttons that hit the override endpoint.
  */
-const AgentsSection: React.FC<{
-  linkedAgents: string[];
-  rolesCache: { roles?: Array<{ file: string; role?: string; confidence?: number }> } | null;
-}> = ({ linkedAgents, rolesCache }) => {
-  if (!linkedAgents || linkedAgents.length === 0) return null;
+interface AgentClassification {
+  agent_path: string;
+  confidence: number;
+  role: string;
+  reasoning: string;
+  decision: 'confirmed' | 'uncertain' | 'rejected';
+  operator_override?: 'confirm' | 'reject' | null;
+}
 
-  // Build path → role map from cache (defensive: cache may be null/empty).
-  const roleByPath = new Map<string, { role?: string; confidence?: number }>();
-  for (const r of rolesCache?.roles || []) {
-    if (r.file) roleByPath.set(r.file, { role: r.role, confidence: r.confidence });
+const AgentsSection: React.FC<{
+  capId: string;
+  linkedAgents: string[];
+  rolesCache: { classifications?: AgentClassification[]; classified_at?: string } | null;
+  onReload: () => void;
+}> = ({ capId, linkedAgents, rolesCache, onReload }) => {
+  const classifications = rolesCache?.classifications || [];
+
+  // If the classifier hasn't run yet for this cap, fall back to the raw
+  // file list so the operator at least sees what brownfield discovered.
+  if (classifications.length === 0 && linkedAgents.length === 0) return null;
+  if (classifications.length === 0) {
+    return (
+      <section style={{ marginBottom: '1.5rem' }}>
+        <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-text-light)', fontWeight: 600, marginBottom: '0.65rem' }}>
+          Agents (unclassified)
+        </div>
+        <div style={{ padding: '0.85rem 1rem', background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)', borderRadius: 6 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontStyle: 'italic', marginBottom: 8 }}>
+            Brownfield discovery attached {linkedAgents.length} candidate agent file(s) by keyword match.
+            They have not yet been validated by the LLM classifier.
+          </div>
+          {linkedAgents.map(p => (
+            <div key={p} style={{ fontSize: 11.5, fontFamily: 'var(--font-mono)', color: 'var(--color-text-light)' }}>
+              · {p}
+            </div>
+          ))}
+        </div>
+      </section>
+    );
   }
+
+  // Effective decision: operator override always wins.
+  const effective = (c: AgentClassification) =>
+    c.operator_override === 'confirm' ? 'confirmed'
+    : c.operator_override === 'reject' ? 'rejected'
+    : c.decision;
+  const confirmed = classifications.filter(c => effective(c) === 'confirmed');
+  const uncertain = classifications.filter(c => effective(c) === 'uncertain');
+  const rejected = classifications.filter(c => effective(c) === 'rejected');
 
   return (
     <section style={{ marginBottom: '1.5rem' }}>
-      <div style={{
-        fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: 'var(--color-text-light)', fontWeight: 600, marginBottom: '0.65rem',
-      }}>
-        Agents ({linkedAgents.length})
+      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-text-light)', fontWeight: 600, marginBottom: '0.65rem' }}>
+        Agents — {confirmed.length} confirmed · {uncertain.length} uncertain · {rejected.length} rejected
       </div>
-      <div style={{
-        padding: '0.85rem 1rem',
-        background: 'var(--color-bg-alt)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 6,
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {linkedAgents.map(filePath => {
-            const fileName = (filePath.split('/').pop() || filePath).replace(/\.(ts|js|tsx|jsx|py)$/i, '');
-            const dirPath = filePath.includes('/')
-              ? filePath.slice(0, filePath.lastIndexOf('/'))
-              : '';
-            const meta = roleByPath.get(filePath);
-            return (
-              <div key={filePath} style={{
-                display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
-                fontSize: 12, color: 'var(--color-text)', lineHeight: 1.5,
-              }}>
-                <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-primary)' }}>
-                  {fileName}
-                </span>
-                {meta?.role && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    color: '#15803d', background: '#dcfce7',
-                    padding: '1px 6px', borderRadius: 3,
-                  }}>
-                    role: {meta.role}
-                  </span>
-                )}
-                {dirPath && (
-                  <span style={{
-                    fontSize: 10, color: 'var(--color-text-light)',
-                    fontFamily: 'var(--font-mono)',
-                  }}>
-                    {dirPath}/
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {(!rolesCache || !rolesCache.roles || rolesCache.roles.length === 0) && (
-          <div style={{
-            fontSize: 11, color: 'var(--color-text-light)', fontStyle: 'italic',
-            marginTop: 10, paddingTop: 8, borderTop: '1px dashed var(--color-border)',
-          }}>
-            Role classification not yet populated for this project. Run
-            <code style={{ background: 'white', padding: '0 4px', borderRadius: 3, margin: '0 4px' }}>
-              backfillAgentRolesCache.js
-            </code>
-            to enrich each agent with a derived role (response, classifier, scheduler, etc.).
-            Trigger detection is a follow-up sprint.
+      <div style={{ padding: '0.85rem 1rem', background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)', borderRadius: 6 }}>
+        {confirmed.length === 0 && uncertain.length === 0 && (
+          <div style={{ fontSize: 12, color: 'var(--color-text-light)', fontStyle: 'italic' }}>
+            No agents serve this cap. (LLM rejected {rejected.length} keyword-attributed candidate{rejected.length === 1 ? '' : 's'}.)
           </div>
+        )}
+        {confirmed.map(c => (
+          <AgentRow key={c.agent_path + '-c'} cap={capId} c={c} tone="confirmed" onReload={onReload} />
+        ))}
+        {uncertain.map(c => (
+          <AgentRow key={c.agent_path + '-u'} cap={capId} c={c} tone="uncertain" onReload={onReload} />
+        ))}
+        {rejected.length > 0 && (
+          <details style={{ marginTop: 10 }}>
+            <summary style={{ fontSize: 11, color: 'var(--color-text-light)', cursor: 'pointer' }}>
+              Show {rejected.length} rejected candidate{rejected.length === 1 ? '' : 's'} (keyword false positives)
+            </summary>
+            <div style={{ marginTop: 8 }}>
+              {rejected.map(c => (
+                <AgentRow key={c.agent_path + '-r'} cap={capId} c={c} tone="rejected" onReload={onReload} />
+              ))}
+            </div>
+          </details>
         )}
       </div>
     </section>
+  );
+};
+
+const TONE_STYLES = {
+  confirmed: { bg: '#dcfce7', border: '#bbf7d0', fg: '#15803d', label: 'CONFIRMED' },
+  uncertain: { bg: '#fef3c7', border: '#fde68a', fg: '#b45309', label: 'UNCERTAIN' },
+  rejected:  { bg: '#f3f4f6', border: '#e5e7eb', fg: '#6b7280', label: 'REJECTED' },
+} as const;
+
+const AgentRow: React.FC<{
+  cap: string;
+  c: AgentClassification;
+  tone: 'confirmed' | 'uncertain' | 'rejected';
+  onReload: () => void;
+}> = ({ cap, c, tone, onReload }) => {
+  const [saving, setSaving] = React.useState<'confirm' | 'reject' | null>(null);
+  const fileName = (c.agent_path.split('/').pop() || c.agent_path).replace(/\.(ts|tsx|js|jsx|py)$/i, '');
+  const dirPath = c.agent_path.includes('/') ? c.agent_path.slice(0, c.agent_path.lastIndexOf('/')) : '';
+  const style = TONE_STYLES[tone];
+
+  const override = async (decision: 'confirm' | 'reject') => {
+    setSaving(decision);
+    try {
+      // Lazy import to avoid pulling axios into this file when not needed
+      const { default: portalApi } = await import('../../utils/portalApi');
+      await portalApi.patch(
+        `/api/portal/project/capabilities/${encodeURIComponent(cap)}/agents/${encodeURIComponent(fileName)}/override`,
+        { decision },
+      );
+      onReload();
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert('Failed to update — try again');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div style={{
+      padding: '8px 10px',
+      background: 'white',
+      border: `1px solid ${style.border}`,
+      borderLeft: `3px solid ${style.fg}`,
+      borderRadius: 4,
+      marginBottom: 6,
+      fontSize: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-primary)' }}>
+          {fileName}
+        </span>
+        <span style={{ fontSize: 9.5, fontWeight: 700, color: style.fg, background: style.bg, padding: '1px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>
+          {style.label}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--color-text-light)' }}>
+          conf {(c.confidence * 100).toFixed(0)}%
+        </span>
+        {c.role && (
+          <span style={{ fontSize: 10, color: 'var(--color-text-light)' }}>
+            role: {c.role}
+          </span>
+        )}
+        {c.operator_override && (
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1d4ed8', background: 'rgba(37,99,235,0.10)', padding: '1px 5px', borderRadius: 3, letterSpacing: '0.04em' }}>
+            OPERATOR {c.operator_override.toUpperCase()}
+          </span>
+        )}
+      </div>
+      {dirPath && (
+        <div style={{ fontSize: 10, color: 'var(--color-text-light)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
+          {dirPath}/
+        </div>
+      )}
+      {c.reasoning && (
+        <div style={{ fontSize: 11.5, color: 'var(--color-text)', marginTop: 5, fontStyle: 'italic', lineHeight: 1.4 }}>
+          {c.reasoning}
+        </div>
+      )}
+      <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+        {tone !== 'confirmed' && (
+          <button type="button" disabled={saving !== null} onClick={() => override('confirm')}
+            className="btn btn-sm btn-outline-success" style={{ fontSize: 10, padding: '2px 8px' }}>
+            {saving === 'confirm' ? 'Saving…' : 'Confirm'}
+          </button>
+        )}
+        {tone !== 'rejected' && (
+          <button type="button" disabled={saving !== null} onClick={() => override('reject')}
+            className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10, padding: '2px 8px' }}>
+            {saving === 'reject' ? 'Saving…' : 'Reject'}
+          </button>
+        )}
+      </div>
+    </div>
   );
 };
 

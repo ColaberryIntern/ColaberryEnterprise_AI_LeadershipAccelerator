@@ -1971,8 +1971,19 @@ function enrichCapability(cap: any) {
       const storedAgentsCount = ((cap as any).linked_agents || []).length;
       const realBackend = storedBackendCount > 0 || ctxHasBackend
         || (storedFrontendCount === 0 && storedAgentsCount === 0 && hasBackend);
-      const realAgents = storedAgentsCount > 0 || ctxHasAgents
-        || (storedBackendCount === 0 && storedFrontendCount === 0 && hasAgents);
+      // 2026-05-20 (refined): A pillar reads ONLY the authoritative
+      // capability_agent_maps. linked_agents is keyword-attribution
+      // noise that lights up every cap with an overlapping name stem
+      // (operator caught: contentGenerationAgent.ts attributed to 5
+      // different caps). Confirmed by capability_agent_maps row OR by
+      // cap kind explicitly = agent OR by source explicitly tagged
+      // as an agent file. ctxHasAgents (backend_context.agents from
+      // route reading) also counts as authoritative.
+      const confirmedAgentCount = (cap as any)._confirmed_agent_count || 0;
+      const realAgents = confirmedAgentCount > 0
+        || ctxHasAgents
+        || (cap as any).kind === 'agent'
+        || (cap as any).source === 'agent_explicit';
       // 2026-05-20 (refined): a cap should only show a frontend pillar
       // when it has its OWN page. Lead Classification had 5
       // linked_frontend_components (LeadCaptureForm, LeadDetailModal,
@@ -2141,6 +2152,20 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     const { Capability: CapabilityModel } = await import('../models');
     const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at', 'ui_element_map', 'linked_backend_services', 'linked_frontend_components', 'linked_agents', 'frontend_calls_capability_ids'] });
     const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context, user_status: c.user_status, user_status_set_at: c.user_status_set_at, ui_element_map: c.ui_element_map, linked_backend_services: c.linked_backend_services, linked_frontend_components: c.linked_frontend_components, linked_agents: c.linked_agents, frontend_calls_capability_ids: c.frontend_calls_capability_ids }]));
+
+    // 2026-05-20: authoritative agent attribution. capability_agent_maps
+    // is the source of truth for "this cap has an agent" — pillar reads
+    // confirmedAgentCountByCap, not the noisy linked_agents.
+    const { default: CapabilityAgentMap } = await import('../models/CapabilityAgentMap');
+    const allMaps: any[] = await CapabilityAgentMap.findAll({
+      where: { status: 'active' },
+      attributes: ['capability_id'],
+    });
+    const confirmedAgentCountByCap = new Map<string, number>();
+    for (const m of allMaps) {
+      const id = (m as any).capability_id;
+      confirmedAgentCountByCap.set(id, (confirmedAgentCountByCap.get(id) || 0) + 1);
+    }
     const projectMode = (project as any).target_mode || 'production';
     // Load campaign mode overrides for capabilities that have linked campaigns
     let campaignModeMap = new Map<string, string>();
@@ -2195,6 +2220,10 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         cap.linked_frontend_components = (extra as any).linked_frontend_components || [];
         cap.linked_agents = (extra as any).linked_agents || [];
         cap.frontend_calls_capability_ids = (extra as any).frontend_calls_capability_ids || [];
+        // 2026-05-20: confirmed agent count from capability_agent_maps —
+        // the strict signal that the A pillar reads. Distinct from
+        // linked_agents (keyword discovery noise).
+        cap._confirmed_agent_count = confirmedAgentCountByCap.get(cap.id) || 0;
       }
     });
 
@@ -2456,6 +2485,82 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
 // Query params:
 //   ?fresh=true    — force rebuild (skip snapshot cache, re-run engine)
 //   default        — read snapshot if recent, rebuild if stale (>5 min)
+/**
+ * POST /api/portal/project/agents/reclassify — 2026-05-20.
+ *
+ * Manual trigger for LLM agent-attribution classification. Useful when
+ * brownfield discovery wasn't re-run but linked_agents drifted, or for
+ * the one-shot backfill against existing projects.
+ */
+router.post('/api/portal/project/agents/reclassify', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { classifyProjectAgentAttribution } = await import('../services/agentAttributionClassifier');
+    const result = await classifyProjectAgentAttribution(req.participant!.sub, project.id);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[agents/reclassify]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/portal/project/capabilities/:capId/agents/:agentName/override
+ * — 2026-05-20.
+ *
+ * Operator override on an LLM verdict. body: { decision: 'confirm' | 'reject' }
+ * Writes to cap.agent_roles_cache.classifications[].operator_override and
+ * syncs capability_agent_maps accordingly.
+ */
+router.patch('/api/portal/project/capabilities/:capId/agents/:agentName/override', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const decision = String(req.body?.decision || '');
+    if (!['confirm', 'reject'].includes(decision)) {
+      res.status(400).json({ error: 'decision must be confirm or reject' }); return;
+    }
+    const capId = req.params.capId as string;
+    const agentName = decodeURIComponent(req.params.agentName as string);
+    const { default: Capability } = await import('../models/Capability');
+    const cap: any = await Capability.findByPk(capId);
+    if (!cap || cap.project_id !== project.id) { res.status(404).json({ error: 'Cap not found' }); return; }
+
+    const existing = (cap.agent_roles_cache || {}) as any;
+    const classifications: any[] = Array.isArray(existing.classifications) ? existing.classifications : [];
+    const target = classifications.find((c: any) => agentNameMatches(c.agent_path, agentName));
+    if (!target) { res.status(404).json({ error: 'No classification for that agent' }); return; }
+    target.operator_override = decision === 'confirm' ? 'confirm' : 'reject';
+    target.classified_at = new Date().toISOString();
+    await Capability.update(
+      { agent_roles_cache: { ...existing, classifications } } as any,
+      { where: { id: capId } },
+    );
+    const { linkAgent, unlinkAgent } = await import('../services/capabilityAgentMapService');
+    if (decision === 'confirm') {
+      await linkAgent(capId, agentName, {
+        role: target.role || 'executor',
+        linkedBy: 'operator',
+        config: { agent_path: target.agent_path, confidence: target.confidence, reasoning: target.reasoning, overridden: true },
+      });
+    } else {
+      await unlinkAgent(capId, agentName);
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[agents/override]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function agentNameMatches(agentPath: string, agentName: string): boolean {
+  const file = (agentPath.split('/').pop() || agentPath).replace(/\.(ts|tsx|js|jsx)$/i, '');
+  return file === agentName;
+}
+
 /**
  * GET /api/portal/onboarding/state — 2026-05-20.
  *

@@ -1132,6 +1132,22 @@ export async function discoverBrownfieldCapabilities(
     console.warn('[Brownfield] Page BP scan failed:', err?.message);
   }
 
+  // Step 5 (2026-05-20): LLM agent-attribution classification. The
+  // brownfield scan attributes agent files to caps by keyword name
+  // match (linked_agents), which over-fires across caps with
+  // overlapping name stems. The classifier asks gpt-4o-mini to confirm
+  // each (cap, agent) pair and writes confirmed rows to
+  // capability_agent_maps. The A pillar reads from that map, not
+  // from linked_agents. Runs after every discovery refresh so new
+  // projects get authoritative attribution out of the box.
+  try {
+    const { classifyProjectAgentAttribution } = await import('./agentAttributionClassifier');
+    const cls = await classifyProjectAgentAttribution(enrollmentId, projectId);
+    console.log(`[Brownfield] Agent attribution: ${cls.caps_scanned} caps scanned, ${cls.confirmed} confirmed, ${cls.uncertain} uncertain, ${cls.rejected} rejected (${cls.pairs_cache_hit} cache hits)`);
+  } catch (err: any) {
+    console.warn('[Brownfield] Agent attribution classifier failed (non-fatal):', err?.message);
+  }
+
   return {
     capabilitiesCreated: created.length,
     capabilities: created,
