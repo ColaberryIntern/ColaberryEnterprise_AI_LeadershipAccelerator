@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Test Account Walkthrough — Fresh Onboarding (2026-05-20)</title>
+<style>
+  :root {
+    --primary: #1a365d;
+    --primary-light: #3b82f6;
+    --text: #1f2937;
+    --text-light: #6b7280;
+    --bg: #f8fafc;
+    --bg-alt: #f1f5f9;
+    --border: #e5e7eb;
+    --green: #15803d;
+    --green-bg: #dcfce7;
+    --amber: #b45309;
+    --amber-bg: #fef3c7;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); background: var(--bg); margin: 0; padding: 0; line-height: 1.6; }
+  .shell { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-light); font-weight: 600; }
+  h1 { margin: 4px 0 4px; font-size: 26px; color: var(--primary); letter-spacing: -0.01em; }
+  .sub { color: var(--text-light); font-size: 14px; }
+  h2 { margin-top: 2.5rem; margin-bottom: 0.75rem; font-size: 18px; color: var(--primary); }
+  h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 15px; color: var(--text); }
+  p { margin: 0.55rem 0; font-size: 14.5px; }
+  ul, ol { padding-left: 1.4rem; margin: 0.5rem 0; }
+  li { margin: 4px 0; font-size: 14.5px; }
+  code { font-family: var(--mono); background: var(--bg-alt); padding: 1px 6px; border-radius: 3px; font-size: 12.5px; color: var(--primary); }
+  pre { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 0.9rem 1rem; font-family: var(--mono); font-size: 12.5px; overflow-x: auto; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .card { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem 1.4rem; margin: 1rem 0; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04); }
+  .card.accent { border-left: 3px solid var(--primary-light); }
+  .card.success { border-left: 3px solid var(--green); background: #f0fdf4; }
+  .card.warn { border-left: 3px solid var(--amber); background: #fffbeb; }
+  .card .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-light); font-weight: 600; margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--bg-alt); font-weight: 600; }
+  td.k { width: 180px; font-weight: 500; color: var(--text-light); }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--primary-light); color: white; border-radius: 50%; font-weight: 700; font-size: 13px; margin-right: 10px; flex-shrink: 0; }
+  .step { display: flex; align-items: flex-start; gap: 4px; padding: 1.1rem 0; border-bottom: 1px dashed var(--border); }
+  .step:last-child { border-bottom: none; }
+  .step .body { flex: 1; min-width: 0; }
+  .step h3 { margin: 2px 0 4px; font-size: 16px; }
+  .step .why { color: var(--text-light); font-size: 13px; font-style: italic; margin-top: 6px; }
+  img.shot { max-width: 100%; border: 1px solid var(--border); border-radius: 4px; display: block; margin: 0.6rem 0; box-shadow: 0 2px 8px rgba(15,23,42,0.06); }
+  .shot-caption { font-size: 11.5px; color: var(--text-light); font-style: italic; margin: -2px 0 12px; }
+  .link-btn { display: inline-block; background: var(--primary); color: white; padding: 0.6rem 1.2rem; border-radius: 6px; font-weight: 600; text-decoration: none; font-size: 14px; margin: 0.5rem 0; }
+  .link-btn:hover { background: #15294a; }
+  .footnote { font-size: 12px; color: var(--text-light); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<header>
+  <div class="eyebrow">Test Account · Onboarding Walkthrough · v2 (real screenshots)</div>
+  <h1>Run the requirements-builder flow end-to-end</h1>
+  <div class="sub">Captured live from the demo enrollment on 2026-05-20 after the first-run onboarding fix shipped. Every screenshot below was taken by a headless browser hitting production — no mockups.</div>
+</header>
+
+<div class="card accent">
+  <div class="label">Test account credentials</div>
+  <table>
+    <tbody>
+      <tr><td class="k">Email</td><td><code>ali+demo@colaberry.com</code></td></tr>
+      <tr><td class="k">Display name</td><td>Ali Demo Before Reqs</td></tr>
+      <tr><td class="k">Enrollment ID</td><td><code>e1d9cacd-53b1-41ac-92a1-97ed48165efc</code></td></tr>
+      <tr><td class="k">Project</td><td><em>none yet</em> — auto-created on first requirements save</td></tr>
+      <tr><td class="k">Requirements</td><td>0 (clean slate)</td></tr>
+      <tr><td class="k">Capabilities</td><td>0 (clean slate)</td></tr>
+      <tr><td class="k">Portal token expires</td><td>2026-05-30 (10 days)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>How to sign in</h2>
+
+<div class="card">
+  <p>The portal uses passwordless magic-link auth. This account has a live token; the link below logs you in directly.</p>
+  <p><strong>Open in a fresh browser (or incognito):</strong></p>
+  <pre>https://enterprise.colaberry.ai/portal/verify?token=f513f18e-4c84-4876-b7f9-49021f94a910</pre>
+  <p><a class="link-btn" href="https://enterprise.colaberry.ai/portal/verify?token=f513f18e-4c84-4876-b7f9-49021f94a910" target="_blank">Open sign-in link →</a></p>
+  <p class="footnote">Token is reusable until expiry — bookmark the link if you need to revisit.</p>
+</div>
+
+<h2>The walkthrough — what you'll actually see</h2>
+
+<div class="card">
+
+<div class="step">
+  <span class="step-num">1</span>
+  <div class="body">
+    <h3>You land directly on the requirements builder</h3>
+    <p>After the magic link verifies, the portal sets a 7-day cookie and routes you to <code>/portal/home</code>. Because this account has no project yet, Home recognizes "first-run" state and embeds the requirements builder inline — no empty 0% dashboard, no misleading "you're caught up" message.</p>
+    <p>Top nav: <strong>Home</strong> is active in primary blue. <strong>Critique / Blueprint / System</strong> are grayed out — they're not useful until requirements exist. Hover any disabled tab for the tooltip <em>"Add a requirements document on Home first."</em></p>
+    <img class="shot" src="screenshots/2026-05-20-firstrun-v2/02-home-first-run.png" alt="Home page with embedded requirements builder + disabled top-nav tabs" />
+    <div class="shot-caption">Live capture · home with embedded builder · Critique/Blueprint/System grayed</div>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-num">2</span>
+  <div class="body">
+    <h3>Describe your idea (30+ characters)</h3>
+    <p>Type into the textarea — a real description of what you want to build. The Continue button is gated until your idea is at least 30 characters long; until then the helper text reads <em>"30 more characters needed."</em></p>
+    <p>Example seed: <em>"A small-business CRM that automatically tags leads by industry, routes hot ones to a single owner, and emails a weekly digest of pipeline health."</em></p>
+    <p class="why">Behind the scenes: <code>POST /api/portal/project/requirements/expand-questions</code> sends your idea to gpt-4o-mini, which derives 6–10 capability questions tailored to it.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-num">3</span>
+  <div class="body">
+    <h3>Answer the AI-generated questions</h3>
+    <p>You'll see one question at a time with three buttons:</p>
+    <ul>
+      <li><strong>Yes</strong> — include this capability in your requirements doc</li>
+      <li><strong>No</strong> — skip it</li>
+      <li><strong>Modify</strong> — opens an inline textarea where you can rewrite the requirement before answering yes</li>
+    </ul>
+    <p>Progress bar and "Question N of M" counter run along the top. You can use Back to revise previous answers before generation starts.</p>
+    <p class="why">All answers are captured client-side and stored in localStorage so you can close the tab + come back. Nothing persists server-side until Phase 3 finishes.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-num">4</span>
+  <div class="body">
+    <h3>Wait for multi-pass generation (~1–2 min)</h3>
+    <p>After the last question, the page enters <strong>Generating Requirements</strong>. The progress bar walks four stages: <code>Generating Requirements</code> → <code>Creating Document Outline</code> → <code>Expanding Sections</code> → <code>Refining &amp; Polishing</code>. Each stage updates the progress percentage and a short status line.</p>
+    <p>Backend: <code>POST /api/portal/project/requirements/generate</code> returns a job_id; the page polls every ~3 seconds for progress + the final document.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-num">5</span>
+  <div class="body">
+    <h3>Review the generated document</h3>
+    <p>You land on <strong>Ready for Review</strong>. The full requirements doc renders — sections, numbered requirements, success criteria. Two actions:</p>
+    <ul>
+      <li><strong>Save to Project</strong> — first DB write. Auto-creates a project for your enrollment, stores the doc, parses requirements, kicks off cap discovery.</li>
+      <li><strong>Start Over</strong> — discards and lets you re-describe the idea.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-num">6</span>
+  <div class="body">
+    <h3>After Save — Home flips to the real dashboard</h3>
+    <p>Once you click Save, the next page render detects <code>stage === 'has_requirements'</code> and the embedded builder swaps out for the regular Cory Home dashboard. The disabled top-nav tabs unlock: Blueprint and System become clickable. (Critique stays disabled until a frontend route exists — that's the next stage.)</p>
+    <p class="why">All of this is driven by <code>GET /api/portal/onboarding/state</code>, which returns <code>{ stage, gates }</code>. The hook <code>useOnboardingState()</code> on the home page + nav layout reads it and branches.</p>
+  </div>
+</div>
+
+</div>
+
+<h2>What I verified live before publishing this doc</h2>
+
+<div class="card success">
+  <p>The screenshot at step 1 is the actual rendered home for this account, taken by <code>scripts/captureFirstRunOnboarding.js</code> just before this doc was written. The headless harness:</p>
+  <ol>
+    <li>Hits the magic-link URL with a fresh browser context (no cookies, no localStorage)</li>
+    <li>Captures full-page screenshots at each onboarding stop</li>
+    <li>Records all console errors</li>
+    <li>Writes a stamped report under <code>docs/screenshots/&lt;date&gt;-firstrun-v2/REPORT.html</code></li>
+  </ol>
+  <p>If this doc ever drifts from reality, the fix is to re-run <code>node scripts/captureFirstRunOnboarding.js</code> and replace the screenshot.</p>
+</div>
+
+<h2>What to validate during your test</h2>
+
+<div class="card">
+  <ul>
+    <li><strong>Home renders the builder, not a dashboard.</strong> No "You're caught up" message. No 0% Readiness/Coverage/Health tiles.</li>
+    <li><strong>Top-nav: Home active, Critique/Blueprint/System grayed out with tooltip.</strong> Sessions clickable.</li>
+    <li><strong>The questions feel relevant to your idea.</strong> If you described a CRM and the questions are about pizza delivery, the LLM prompt is broken.</li>
+    <li><strong>Resume works.</strong> Halfway through, close + reopen — your idea and answered questions persist via localStorage.</li>
+    <li><strong>After Save, the dashboard appears + tabs unlock.</strong> Refresh Home; readiness tiles + queue should populate (or show empty-but-honest "no caps yet" until brownfield discovery runs).</li>
+  </ul>
+</div>
+
+<h2>If you want to reset the account</h2>
+
+<div class="card warn">
+  <p>Tell me and I'll run the cleanup SQL on prod:</p>
+  <pre>DELETE FROM requirements_maps WHERE project_id = (SELECT id FROM projects WHERE enrollment_id = 'e1d9cacd-53b1-41ac-92a1-97ed48165efc');
+DELETE FROM features WHERE project_id = (SELECT id FROM projects WHERE enrollment_id = 'e1d9cacd-53b1-41ac-92a1-97ed48165efc');
+DELETE FROM capabilities WHERE project_id = (SELECT id FROM projects WHERE enrollment_id = 'e1d9cacd-53b1-41ac-92a1-97ed48165efc');
+DELETE FROM projects WHERE enrollment_id = 'e1d9cacd-53b1-41ac-92a1-97ed48165efc';
+-- Enrollment row stays — project auto-created on next save.</pre>
+</div>
+
+<h2>Quick reference — endpoints exercised</h2>
+
+<div class="card">
+  <table>
+    <thead><tr><th>When</th><th>Endpoint</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>Magic link click</td><td><code>GET /api/portal/verify?token=…</code></td><td>Issues a 7-day JWT cookie</td></tr>
+      <tr><td>Home mount</td><td><code>GET /api/portal/onboarding/state</code></td><td>Returns stage + gates so home knows whether to embed builder or dashboard</td></tr>
+      <tr><td>After idea submit</td><td><code>POST /api/portal/project/requirements/expand-questions</code></td><td>LLM generates dynamic questions</td></tr>
+      <tr><td>After last question</td><td><code>POST /api/portal/project/requirements/generate</code></td><td>Async multi-pass generation; returns job_id</td></tr>
+      <tr><td>During generation</td><td><code>GET /api/portal/project/requirements/job/:id</code></td><td>Polled every ~3s for progress + final doc</td></tr>
+      <tr><td>On Save</td><td><code>POST /api/portal/project/setup/requirements</code></td><td>Persists doc; auto-creates project; parses into requirements</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card success">
+  <div class="label">Ready to go</div>
+  <p>Open the magic link in a fresh browser, watch Home render the builder, and run through phases 1–6.</p>
+  <p><a class="link-btn" href="https://enterprise.colaberry.ai/portal/verify?token=f513f18e-4c84-4876-b7f9-49021f94a910" target="_blank">Sign in as Ali Demo Before Reqs →</a></p>
+</div>
+
+<div class="footnote" style="margin-top:2.5rem; padding-top:1rem; border-top:1px solid var(--border)">
+  v2 regenerated 2026-05-20 from live capture after first-run onboarding fix shipped (commits 4af835ea + a44f573a). Headless capture: <code>scripts/captureFirstRunOnboarding.js</code>. Source screenshots: <code>docs/screenshots/2026-05-20-firstrun-v2/</code>.
+</div>
+
+</div>
+</body>
+</html>
