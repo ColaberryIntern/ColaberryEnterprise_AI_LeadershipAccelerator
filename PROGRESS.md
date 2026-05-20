@@ -138,6 +138,48 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Strict tier ordering + brownfield dedup + GitHub-fetch caching (2026-05-20)
+Operator request after walking the queue: *"(a) investigate Discovery / Requirements Management cap-naming overlap; (b) change ranking so agent_stack always beats triage regardless of size."*
+
+**(a) Dedup investigation — 3 pairs confirmed via identical linked_backend_services:**
+
+| Pair | Files | Action |
+|---|---|---|
+| Requirements Engine ≡ Requirements Management | 11/11 identical | Deactivated Engine |
+| Revenue Dashboard Insights ≡ Revenue Dashboard | 7/7 identical | Deactivated Insights |
+| Discovery Engine ⊂ Discovery | Engine is 1-file subset | Deactivated Engine |
+
+All three from the LLM brownfield consolidation pass producing two names for the same code grouping. Added to backfillPhantomPages.js DUPLICATE_NAMES; the SQL query was expanded to also pull brownfield service caps matching those names. Sequelize array binding required `IN (:dupNames)` with `QueryTypes.SELECT` (not `ANY(:dupNames)`). Ran in prod: 5 duplicates deactivated (3 new + 2 idempotent from earlier passes).
+
+**(b) Strict tier ordering — 3 attempts to land:**
+
+First pass at priority 50→60 + triage boost cap 20→15 was close but failed: agent_stack `exec_cost=40` (real build work) vs triage `exec_cost=15` (just a decision) = 5-point composite swing favoring triage that wasn't in the original math. Validation agent_stack lost to max-size triage by 0.05.
+
+Settled at priority 70 with composite advantage gap of 10.5, comfortably above the worst-case combined boost+exec_cost differential of ~9. Agent_stack still ranks below `implement_reqs` (75) and `build_backend` (80) since those represent REQUIRED build work, not elective next-tier additions.
+
+**Final prod queue ordering:**
+
+```
+#1 Campaign Management        agent_stack  rank=-60.75
+#2 Analytics                  agent_stack  rank=-58.35
+#3 Validation                 agent_stack  rank=-57.95
+#4 Content Generation for Marketing  triage  rank=-55  (41 files)
+#5 Execution Planning         triage  rank=-55  (61 files)
+#6 Requirements Management    triage  rank=-55  (15 files)
+... triage tier continues by size ...
+```
+
+All 3 agent_stack at top regardless of triage size; triage in size-descending order within tier. Exactly what was asked.
+
+**Bonus: 1h cache for pre-fetched agent contents.** Tier-3 #9's first prod day showed "Pre-fetched 25/43" on cold deploy then "0/43" thereafter. Root cause: the project's GitHub connection has no auth token (`has_token: false`) → 60/hr anonymous rate limit → every refresh re-fetching 40+ files exhausted it in two cycles. Added per-enrollment in-memory cache: cold-fetch once per enrollment per hour, reuse the map. Stops the hammering and preserves role evidence between refreshes.
+
+**Long-term follow-up (out of scope):** the GitHub connection needs an auth token to get 5000/hr instead of 60/hr. The cache mitigates but doesn't fix the underlying auth issue.
+
+  - Date: 2026-05-20
+  - What changed: agent_stack priority 50→60→70; triage boost cap 20→15; backfillPhantomPages DUPLICATE_NAMES extended + SQL fixed; AGENT_CONTENTS_CACHE in systemStateEngine for prod GitHub-fetch caching. Commits d635d2bf, 8f6bfbdb, 3fde6c68, 9ea80728.
+  - Verification: 30/30 gate tests including new tier-ordering test (agent_stack always above triage regardless of size). 68/68 total across affected suites. 4 prod deploys, 1 dedup-script run (5 caps deactivated). Final walk confirms strict tier order #1-3 = agent_stack, #4+ = triage.
+  - Notes: The 3-attempt landing on the priority bump is a lesson in math diligence — the exec_cost differential between tiers was the unaccounted variable. For any future ranker tuning, write out the full composite formula for both worst-case caps in each tier before shipping. Tests caught the synthetic case but the real-prod case used a different file-count profile.
+
 ### Activate role detection in prod via GitHub-API pre-fetch (2026-05-19, Tier-3 #9)
 Tier-2 #4 shipped the role classification logic but was a no-op in prod — `codeEvidence` reads from local fs and the dist-only container has no source files. Operators saw the count-based fallback descriptions ("Has 1 agent but the stack looks incomplete") instead of the role-aware ones.
 
