@@ -17,7 +17,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 
 type Verdict = 'pending' | 'reviewed' | 'follow_up' | 'skip';
-type Filter = 'all' | 'pending_review' | 'top_10' | 'with_notes';
+type Filter = 'all' | 'pending_review' | 'top_10' | 'with_notes' | 'custom';
+
+const FILTER_MEMORY_KEY = 'walkCaps:lastFilter';
 
 interface CapItem {
   index: number;
@@ -47,7 +49,14 @@ const FILTER_OPTIONS: { value: Filter; label: string; help: string }[] = [
   { value: 'pending_review', label: 'Pending UI review', help: 'Pages built but UI review not yet completed' },
   { value: 'top_10', label: 'Top 10 (alphabetical)', help: 'First 10 by name — quick spot check' },
   { value: 'with_notes', label: 'Has prior notes', help: 'Caps where you (or another operator) already left a cap-level note' },
+  { value: 'custom', label: 'Custom selection', help: 'Search caps by name and pick exactly the ones you want to walk' },
 ];
+
+interface CapOption {
+  id: string;
+  name: string;
+  frontend_route: string | null;
+}
 
 const PREVIEW_ORIGIN =
   process.env.REACT_APP_VISUAL_WORKSPACE_ORIGIN ||
@@ -63,9 +72,50 @@ const WalkCapsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [picker, setPicker] = useState<{ filter: Filter; creating: boolean; error: string | null }>({
-    filter: 'pending_review', creating: false, error: null,
+  const [picker, setPicker] = useState<{ filter: Filter; creating: boolean; error: string | null }>(() => {
+    // Phase D (2026-05-20): remember last filter the operator chose. Falls
+    // back to pending_review for first-time use.
+    let stored: Filter = 'pending_review';
+    try {
+      const v = (typeof window !== 'undefined' ? window.localStorage.getItem(FILTER_MEMORY_KEY) : null) || '';
+      if (['all', 'pending_review', 'top_10', 'with_notes', 'custom'].includes(v)) stored = v as Filter;
+    } catch { /* localStorage may be blocked — silent fallback */ }
+    return { filter: stored, creating: false, error: null };
   });
+
+  // Phase D (2026-05-20): custom cap picker state.
+  const [allCaps, setAllCaps] = useState<CapOption[]>([]);
+  const [capSearch, setCapSearch] = useState('');
+  const [selectedCapIds, setSelectedCapIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Load the cap catalog when the picker is open. Only when custom is the
+    // active filter (avoids the BP fetch when operator picks a named filter).
+    if (walkId || picker.filter !== 'custom' || allCaps.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await portalApi.get('/api/portal/project/business-processes');
+        const rows = (r.data || []) as Array<{ id: string; name?: string; frontend_route?: string | null }>;
+        if (cancelled) return;
+        const opts = rows
+          .filter(b => !!b.frontend_route)
+          .map(b => ({ id: b.id, name: b.name || '(unnamed)', frontend_route: b.frontend_route || null }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setAllCaps(opts);
+      } catch { /* silent — picker just shows empty list */ }
+    })();
+    return () => { cancelled = true; };
+  }, [walkId, picker.filter, allCaps.length]);
+
+  const filteredCaps = useMemo(() => {
+    const q = capSearch.trim().toLowerCase();
+    if (!q) return allCaps;
+    return allCaps.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      (c.frontend_route || '').toLowerCase().includes(q),
+    );
+  }, [allCaps, capSearch]);
 
   const refresh = useCallback(async () => {
     if (!walkId) { setWalk(null); return; }
@@ -86,7 +136,18 @@ const WalkCapsPage: React.FC = () => {
   const startWalk = useCallback(async () => {
     setPicker(p => ({ ...p, creating: true, error: null }));
     try {
-      const r = await portalApi.post('/api/portal/project/walk', { filter: picker.filter });
+      const body: any = { filter: picker.filter };
+      if (picker.filter === 'custom') {
+        const capIds = Array.from(selectedCapIds);
+        if (capIds.length === 0) {
+          setPicker(p => ({ ...p, creating: false, error: 'Pick at least one cap to walk.' }));
+          return;
+        }
+        body.cap_ids = capIds;
+      }
+      // Remember choice for next time
+      try { window.localStorage.setItem(FILTER_MEMORY_KEY, picker.filter); } catch { /* blocked */ }
+      const r = await portalApi.post('/api/portal/project/walk', body);
       const id = r.data?.id;
       if (id) {
         const next = new URLSearchParams(searchParams);
@@ -96,7 +157,7 @@ const WalkCapsPage: React.FC = () => {
     } catch (err: any) {
       setPicker(p => ({ ...p, creating: false, error: err?.response?.data?.error || err?.message || 'Failed to start' }));
     }
-  }, [picker.filter, searchParams, setSearchParams]);
+  }, [picker.filter, selectedCapIds, searchParams, setSearchParams]);
 
   const current = useMemo<CapItem | null>(() => {
     if (!walk) return null;
@@ -160,6 +221,72 @@ const WalkCapsPage: React.FC = () => {
                 </div>
               ))}
             </div>
+            {picker.filter === 'custom' && (
+              <div className="border rounded p-2 mb-3" style={{ background: 'var(--color-bg-alt)' }}>
+                <input
+                  type="search"
+                  className="form-control form-control-sm mb-2"
+                  placeholder="Search caps by name or route…"
+                  value={capSearch}
+                  onChange={(e) => setCapSearch(e.target.value)}
+                />
+                <div className="small text-muted mb-2">
+                  {selectedCapIds.size} selected · {filteredCaps.length} match
+                </div>
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {filteredCaps.length === 0 && (
+                    <div className="text-muted small p-2">
+                      {allCaps.length === 0 ? 'Loading caps…' : 'No caps match this search.'}
+                    </div>
+                  )}
+                  {filteredCaps.map(c => (
+                    <div className="form-check" key={c.id}>
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id={`cap-${c.id}`}
+                        checked={selectedCapIds.has(c.id)}
+                        onChange={(e) => {
+                          setSelectedCapIds(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(c.id); else next.delete(c.id);
+                            return next;
+                          });
+                        }}
+                      />
+                      <label className="form-check-label small" htmlFor={`cap-${c.id}`}>
+                        {c.name}
+                        {c.frontend_route && (
+                          <span className="text-muted ms-2" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                            {c.frontend_route}
+                          </span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {filteredCaps.length > 0 && (
+                  <div className="d-flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm p-0"
+                      style={{ fontSize: 11 }}
+                      onClick={() => setSelectedCapIds(new Set(filteredCaps.map(c => c.id)))}
+                    >
+                      Select all visible
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm p-0 text-secondary"
+                      style={{ fontSize: 11 }}
+                      onClick={() => setSelectedCapIds(new Set())}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {picker.error && (
               <div className="alert alert-warning py-2 small">{picker.error}</div>
             )}
@@ -167,7 +294,7 @@ const WalkCapsPage: React.FC = () => {
               type="button"
               className="btn btn-primary"
               onClick={startWalk}
-              disabled={picker.creating}
+              disabled={picker.creating || (picker.filter === 'custom' && selectedCapIds.size === 0)}
             >
               {picker.creating ? 'Starting…' : 'Start walk'}
             </button>

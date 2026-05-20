@@ -12,6 +12,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Phase D — Smart cap-queue filters: custom selection + last-filter memory (2026-05-20)
+The fourth and final piece of the CAP_WALK_AND_COMMENT plan. Operator can now hand-pick which caps to walk via a search box (the `custom` filter), and the picker remembers their last-used filter across sessions.
+
+- [x] `frontend/src/pages/portal/WalkCapsPage.tsx` — added 'custom' filter option to the picker. When selected, loads the project's cap catalog (caps with a `frontend_route` via `/business-processes`), shows a search box (matches against name + route), a scrollable checkbox list, "Select all visible" / "Clear" shortcuts, and a live selected-count. Posts `cap_ids` array with the create-walk request; backend's `buildCapQueue` already handles `filter='custom'` via the `capIds` opts.
+  - Date: 2026-05-20
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `frontend/src/pages/portal/WalkCapsPage.tsx` — picker state hydrates from `localStorage['walkCaps:lastFilter']`. On Start walk, persists the chosen filter so next session lands on the operator's preferred view. Safe fallback to `pending_review` when localStorage is blocked or empty.
+  - Date: 2026-05-20
+
 ### Phase B + C — Walk Caps + Summary (2026-05-20)
 The third piece of the operator's CAP_WALK_AND_COMMENT plan: a guided pass through every cap one at a time, with verdict + note per cap, refresh-safe URL, and a summary view that compiles all notes into a Markdown prompt for the next Claude Code session.
 
