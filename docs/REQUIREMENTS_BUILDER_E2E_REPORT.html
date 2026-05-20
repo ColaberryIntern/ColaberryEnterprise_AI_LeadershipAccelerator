@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Requirements-Builder E2E — 3 Documents in a Row (2026-05-20)</title>
+<style>
+  :root { --primary:#1a365d; --blue:#3b82f6; --green:#15803d; --red:#b91c1c; --amber:#b45309; --text:#1f2937; --muted:#6b7280; --bg:#f8fafc; --border:#e5e7eb; --mono:ui-monospace,Menlo,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; color:var(--text); background:var(--bg); margin:0; line-height:1.55; }
+  .shell { max-width:1080px; margin:0 auto; padding:2rem 1.5rem 4rem; }
+  header { border-bottom:1px solid var(--border); padding-bottom:1.25rem; margin-bottom:1.5rem; }
+  .eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-weight:600; }
+  h1 { margin:4px 0; font-size:25px; color:var(--primary); }
+  h2 { margin-top:2.25rem; font-size:18px; color:var(--primary); border-bottom:1px solid var(--border); padding-bottom:6px; }
+  h3 { font-size:16px; color:var(--primary); margin-top:1.5rem; }
+  .verdict { display:inline-block; padding:.6rem 1.1rem; border-radius:8px; font-weight:700; font-size:15px; margin:.5rem 0; }
+  .v-ok { background:#dcfce7; color:var(--green); border:1px solid #86efac; }
+  .v-err { background:#fee2e2; color:var(--red); border:1px solid #fca5a5; }
+  table { width:100%; border-collapse:collapse; margin:.75rem 0; font-size:13.5px; }
+  th,td { text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:#f1f5f9; font-weight:600; }
+  td.k { width:130px; font-weight:600; color:var(--muted); }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; width:80px; }
+  .bar-cell { width:40%; }
+  .bar { display:inline-block; height:10px; background:linear-gradient(90deg,#3b82f6,#8b5cf6); border-radius:5px; }
+  code { font-family:var(--mono); background:#f1f5f9; padding:1px 5px; border-radius:3px; font-size:12px; color:var(--primary); }
+  .muted { color:var(--muted); font-size:12.5px; }
+  .ok { color:var(--green); font-weight:600; }
+  .err { color:var(--red); font-weight:600; }
+  .bf { background:#fff; border:1px solid var(--border); border-left:3px solid var(--red); border-radius:8px; padding:1rem 1.2rem; margin:1rem 0; }
+  .bf-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .bf-num { display:inline-flex; width:24px; height:24px; align-items:center; justify-content:center; background:var(--red); color:#fff; border-radius:50%; font-weight:700; font-size:13px; }
+  .bf-when { color:var(--muted); font-size:12.5px; }
+  .sev { font-size:10px; text-transform:uppercase; letter-spacing:.08em; font-weight:700; padding:2px 7px; border-radius:10px; }
+  .sev-blocker { background:#fee2e2; color:var(--red); }
+  .badge { font-size:11px; padding:3px 9px; border-radius:10px; font-weight:600; margin-left:8px; }
+  .b-ok { background:#dcfce7; color:var(--green); } .b-err { background:#fee2e2; color:var(--red); }
+  .run { background:#fff; border:1px solid var(--border); border-radius:8px; padding:1.2rem 1.4rem; margin:1rem 0; box-shadow:0 1px 3px rgba(15,23,42,.04); }
+  .gallery { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:1rem; }
+  figure { margin:0; }
+  figure img { width:100%; border:1px solid var(--border); border-radius:5px; display:block; }
+  figcaption { font-size:11px; color:var(--muted); margin-top:4px; font-family:var(--mono); }
+  .card { background:#fff; border:1px solid var(--border); border-radius:8px; padding:1rem 1.2rem; margin:1rem 0; }
+</style>
+</head>
+<body>
+<div class="shell">
+<header>
+  <div class="eyebrow">Production · Headless E2E · enterprise.colaberry.ai</div>
+  <h1>Requirements-Builder: 3 Documents in a Row</h1>
+  <div class="muted">Generated 2026-05-20T22:48:50.843Z · base https://enterprise.colaberry.ai · budget 30 min/document</div>
+  <div class="verdict v-ok">✓ 3 / 3 documents created consecutively, all within the 30-minute budget</div>
+</header>
+
+<h2>What this proves</h2>
+<div class="card">
+  <p>The portal first-run requirements-builder flow was driven end-to-end by a headless browser against <b>production</b>, three times in a row, for three different projects — each on a fresh demo enrollment in genuine first-run state (<code>needs_requirements</code>, no project). Every run: typed the idea, generated and answered the AI questions, generated the full requirements document, saved it, and confirmed the home page flipped from the builder to the dashboard. Persistence was re-checked via the onboarding-state API after each save.</p>
+  <p>It did not work on the first attempt. Two blocking backend bugs were found and fixed (below) before the three consecutive runs succeeded.</p>
+</div>
+
+<h2>What broke and what was fixed (Build → Break → Harden)</h2>
+
+    <div class="bf">
+      <div class="bf-head"><span class="bf-num">1</span> <span class="sev sev-blocker">blocker</span> <span class="bf-when">Run 1, first attempt — failed at the &quot;generation&quot; step in 0.8 min</span></div>
+      <table class="kv">
+        <tr><td class="k">What broke</td><td>POST /api/portal/project/requirements/generate started a job that immediately failed with &quot;No project found for this enrollment&quot;. The review screen never appeared.</td></tr>
+        <tr><td class="k">Root cause</td><td>startRequirementsGeneration() looked up the enrollment's Project and threw if none existed. But the first-run flow only creates the project at Save — which happens AFTER generation. So no genuine first-run user could ever generate a document. The documented walkthrough described a flow that did not actually complete end-to-end on production.</td></tr>
+        <tr><td class="k">The fix</td><td>Create the project idempotently at the start of generation via createProjectForEnrollment() (findOrCreate on enrollment_id). The later Save calls the same helper and finds the same row — no duplicate project is created.</td></tr>
+        <tr><td class="k">Where</td><td><code>backend/src/services/requirementsGenerationService.ts</code> · commit <code>c53a105b</code></td></tr>
+      </table>
+    </div>
+
+    <div class="bf">
+      <div class="bf-head"><span class="bf-num">2</span> <span class="sev sev-blocker">blocker</span> <span class="bf-when">Caught by code review during the same fix; confirmed on Run 1 review screen</span></div>
+      <table class="kv">
+        <tr><td class="k">What broke</td><td>Even once generation completed, the review screen would render an empty document (0 words) and Save would persist empty content.</td></tr>
+        <tr><td class="k">Root cause</td><td>The polling endpoint GET /requirements/job/:id returns getJobStatus(), which omitted the document entirely. The frontend reads result.content on completion, so it always resolved to &quot;&quot;. The generated text was persisted on the job row (output_document) but never returned by the read path.</td></tr>
+        <tr><td class="k">The fix</td><td>getJobStatus() now returns result: { content: output_document } (and a top-level output_document). The review screen now renders the real document with its word count.</td></tr>
+        <tr><td class="k">Where</td><td><code>backend/src/services/requirementsGenerationService.ts</code> · commit <code>c53a105b</code></td></tr>
+      </table>
+    </div>
+<p class="muted">Both fixes shipped in commit <code>c53a105b</code>, deployed to the production backend, after which the three consecutive runs below all passed with zero console errors.</p>
+
+<h2>Final timings</h2>
+<table>
+  <thead><tr><th>Run</th><th>Account</th><th>Result</th><th>Total</th><th>Budget</th><th>Console errors</th><th>Persisted stage</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>Run 1</b><div class="muted">LeadFlow CRM</div></td>
+      <td>ali+demo-run1@colaberry.com</td>
+      <td class="ok">PASS</td>
+      <td>2.61 min</td>
+      <td class="ok">within 30 min</td>
+      <td>0</td>
+      <td>has_requirements</td>
+    </tr>
+
+    <tr>
+      <td><b>Run 2</b><div class="muted">ShelfSense Inventory</div></td>
+      <td>ali+demo-run2@colaberry.com</td>
+      <td class="ok">PASS</td>
+      <td>1.68 min</td>
+      <td class="ok">within 30 min</td>
+      <td>0</td>
+      <td>has_requirements</td>
+    </tr>
+
+    <tr>
+      <td><b>Run 3</b><div class="muted">CareBridge Intake</div></td>
+      <td>ali+demo-run3@colaberry.com</td>
+      <td class="ok">PASS</td>
+      <td>1.9 min</td>
+      <td class="ok">within 30 min</td>
+      <td>0</td>
+      <td>has_requirements</td>
+    </tr></tbody>
+</table>
+<p class="muted">The two LLM calls dominate every run: question generation (~23–37s) and document generation (~70–112s). All client/auth/save/verify steps are sub-3s. The 30-minute budget is never remotely approached — actual totals are 1.7–2.6 minutes.</p>
+
+<h2>Step-by-step timing + screenshots (follow the whole process)</h2>
+
+    <section class="run">
+      <h3>Run 1 — LeadFlow CRM <span class="badge b-ok">PASS · 2.61 min</span></h3>
+      <p class="muted">Idea: LeadFlow CRM · enrollment <code>b57da7f7-0dd6-4dc8-bbb2-22095303ca9d</code> · persisted stage <code>has_requirements</code></p>
+      <table class="steps">
+        <thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead>
+        <tbody><tr>
+        <td>Authenticate (magic-link → JWT)</td>
+        <td class="num">0.6s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Pre-check: first-run state</td>
+        <td class="num">0.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Load /portal/home (builder embedded)</td>
+        <td class="num">1.0s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Type the idea</td>
+        <td class="num">0.0s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Generate questions (LLM)</td>
+        <td class="num">36.8s</td>
+        <td class="bar-cell"><span class="bar" style="width:33%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Answer all questions</td>
+        <td class="num">1.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Click &quot;Generate My Requirements&quot;</td>
+        <td class="num">0.1s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Generate document (LLM, polled)</td>
+        <td class="num">111.8s</td>
+        <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Save &amp; Continue Setup</td>
+        <td class="num">0.3s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Verify persistence (API)</td>
+        <td class="num">0.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Home flips to dashboard</td>
+        <td class="num">2.8s</td>
+        <td class="bar-cell"><span class="bar" style="width:2%"></span></td>
+        <td class="ok">✓</td>
+      </tr></tbody>
+      </table>
+      <div class="gallery">
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/01-home-first-run.png" alt="home-first-run" />
+        <figcaption>home-first-run</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/02-idea-filled.png" alt="idea-filled" />
+        <figcaption>idea-filled</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/03-questions-first.png" alt="questions-first" />
+        <figcaption>questions-first</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/04-questions-answered.png" alt="questions-answered" />
+        <figcaption>questions-answered</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/05-generating.png" alt="generating" />
+        <figcaption>generating</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/06-review.png" alt="review" />
+        <figcaption>review</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/07-complete.png" alt="complete" />
+        <figcaption>complete</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run1/08-home-dashboard.png" alt="home-dashboard" />
+        <figcaption>home-dashboard</figcaption>
+      </figure></div>
+    </section>
+
+    <section class="run">
+      <h3>Run 2 — ShelfSense Inventory <span class="badge b-ok">PASS · 1.68 min</span></h3>
+      <p class="muted">Idea: ShelfSense Inventory · enrollment <code>e2ad9c4b-0bd6-4eb9-a0d5-b0f1d8f78603</code> · persisted stage <code>has_requirements</code></p>
+      <table class="steps">
+        <thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead>
+        <tbody><tr>
+        <td>Authenticate (magic-link → JWT)</td>
+        <td class="num">0.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Pre-check: first-run state</td>
+        <td class="num">0.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Load /portal/home (builder embedded)</td>
+        <td class="num">1.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:2%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Type the idea</td>
+        <td class="num">0.0s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Generate questions (LLM)</td>
+        <td class="num">23.3s</td>
+        <td class="bar-cell"><span class="bar" style="width:34%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Answer all questions</td>
+        <td class="num">1.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:2%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Click &quot;Generate My Requirements&quot;</td>
+        <td class="num">0.1s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Generate document (LLM, polled)</td>
+        <td class="num">69.5s</td>
+        <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Save &amp; Continue Setup</td>
+        <td class="num">0.3s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Verify persistence (API)</td>
+        <td class="num">0.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Home flips to dashboard</td>
+        <td class="num">2.8s</td>
+        <td class="bar-cell"><span class="bar" style="width:4%"></span></td>
+        <td class="ok">✓</td>
+      </tr></tbody>
+      </table>
+      <div class="gallery">
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/01-home-first-run.png" alt="home-first-run" />
+        <figcaption>home-first-run</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/02-idea-filled.png" alt="idea-filled" />
+        <figcaption>idea-filled</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/03-questions-first.png" alt="questions-first" />
+        <figcaption>questions-first</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/04-questions-answered.png" alt="questions-answered" />
+        <figcaption>questions-answered</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/05-generating.png" alt="generating" />
+        <figcaption>generating</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/06-review.png" alt="review" />
+        <figcaption>review</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/07-complete.png" alt="complete" />
+        <figcaption>complete</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run2/08-home-dashboard.png" alt="home-dashboard" />
+        <figcaption>home-dashboard</figcaption>
+      </figure></div>
+    </section>
+
+    <section class="run">
+      <h3>Run 3 — CareBridge Intake <span class="badge b-ok">PASS · 1.9 min</span></h3>
+      <p class="muted">Idea: CareBridge Intake · enrollment <code>dadc3262-32fc-465e-9612-996e469cf5e7</code> · persisted stage <code>has_requirements</code></p>
+      <table class="steps">
+        <thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead>
+        <tbody><tr>
+        <td>Authenticate (magic-link → JWT)</td>
+        <td class="num">0.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Pre-check: first-run state</td>
+        <td class="num">0.2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Load /portal/home (builder embedded)</td>
+        <td class="num">1.6s</td>
+        <td class="bar-cell"><span class="bar" style="width:2%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Type the idea</td>
+        <td class="num">0.0s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Generate questions (LLM)</td>
+        <td class="num">36.3s</td>
+        <td class="bar-cell"><span class="bar" style="width:52%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Answer all questions</td>
+        <td class="num">1.3s</td>
+        <td class="bar-cell"><span class="bar" style="width:2%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Click &quot;Generate My Requirements&quot;</td>
+        <td class="num">0.1s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Generate document (LLM, polled)</td>
+        <td class="num">69.5s</td>
+        <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Save &amp; Continue Setup</td>
+        <td class="num">0.3s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Verify persistence (API)</td>
+        <td class="num">0.4s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+        <td class="ok">✓</td>
+      </tr>
+<tr>
+        <td>Home flips to dashboard</td>
+        <td class="num">2.8s</td>
+        <td class="bar-cell"><span class="bar" style="width:4%"></span></td>
+        <td class="ok">✓</td>
+      </tr></tbody>
+      </table>
+      <div class="gallery">
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/01-home-first-run.png" alt="home-first-run" />
+        <figcaption>home-first-run</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/02-idea-filled.png" alt="idea-filled" />
+        <figcaption>idea-filled</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/03-questions-first.png" alt="questions-first" />
+        <figcaption>questions-first</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/04-questions-answered.png" alt="questions-answered" />
+        <figcaption>questions-answered</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/05-generating.png" alt="generating" />
+        <figcaption>generating</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/06-review.png" alt="review" />
+        <figcaption>review</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/07-complete.png" alt="complete" />
+        <figcaption>complete</figcaption>
+      </figure>
+
+      <figure>
+        <img loading="lazy" src="screenshots/2026-05-20-onboarding-e2e/run3/08-home-dashboard.png" alt="home-dashboard" />
+        <figcaption>home-dashboard</figcaption>
+      </figure></div>
+    </section>
+
+<div class="card">
+  <div class="eyebrow">Reproduce</div>
+  <p class="muted">Provision/reset 3 demo enrollments (in prod backend container):<br>
+  <code>ssh root@95.216.199.47 'docker exec -i -w /app -e RESET=1 accelerator-backend node' &lt; backend/src/scripts/provisionDemoOnboardingRuns.js</code></p>
+  <p class="muted">Drive all three:<br><code>node scripts/driveRequirementsBuilder.js</code> &nbsp;·&nbsp; rebuild this report: <code>node scripts/buildOnboardingRunReport.js</code></p>
+</div>
+
+</div>
+</body>
+</html>
