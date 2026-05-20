@@ -711,12 +711,17 @@ function generateAgentStackTask(
     title: `Propose agent stack for ${cap.name}`,
     description,
     type: 'agent_stack',
-    // Priority 60 (was 50, bumped 2026-05-20): widens the gap over
-    // triage (35) so agent_stack always wins the composite even when
-    // a 20-file triage cap has max size boost. Operator's stated
-    // intent: agent_stack is next-tier value creation and should be
-    // tier-dominant over triage's housekeeping decisions.
-    priority_score: 60,
+    // Priority 70 (was 50→60→70, settled 2026-05-20): a first attempt
+    // at 60 still let a max-size triage cap (with size boost cap=15
+    // AND triage's lower exec_cost=15 vs agent_stack's 40) edge out a
+    // small agent_stack cap by 0.05. The exec_cost differential
+    // (5-point composite swing) was the unaccounted factor. Priority
+    // 70 widens the gap to 35*0.30=10.5, comfortably above the worst
+    // case where triage outscores by ~9 on combined boost + exec_cost.
+    // Still ranks below implement_reqs (75) and build_backend (80)
+    // since those represent required build work, not elective next-
+    // tier additions.
+    priority_score: 70,
     // Maturity-aware (Tier-2 #5): bigger caps within the agent_stack
     // tier rank higher. Same shape as the triage scaling.
     blocking_score: 20 + Math.min(15, (cap.linked_backend_services || []).length + (cap.linked_frontend_components || []).length),
