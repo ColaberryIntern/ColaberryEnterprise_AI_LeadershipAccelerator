@@ -368,6 +368,14 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate: _onUpdate }
         </div>
       </section>
 
+      {/* ─── Agents (2026-05-20) — name each linked agent + show its role
+            from agent_roles_cache when populated. Trigger detection is a
+            follow-up sprint. ─── */}
+      <AgentsSection
+        linkedAgents={(p as any).linked_agents || []}
+        rolesCache={(p as any).agent_roles_cache || null}
+      />
+
       {/* ─── Maturity progression strip ─── */}
       <section style={{ marginBottom: '1.5rem' }}>
         <div style={{
@@ -565,5 +573,92 @@ function buildIntro(name: string, description: string, state: LifecycleState): s
   if (!description) return intro;
   return `${description.trim()} ${intro}`;
 }
+
+/**
+ * AgentsSection — names each agent linked to this BP. Source paths come
+ * from cap.linked_agents (always present). Role classifications come from
+ * cap.agent_roles_cache.roles when the Tier-3 backfill has been run for
+ * this project; otherwise we just show the file name.
+ */
+const AgentsSection: React.FC<{
+  linkedAgents: string[];
+  rolesCache: { roles?: Array<{ file: string; role?: string; confidence?: number }> } | null;
+}> = ({ linkedAgents, rolesCache }) => {
+  if (!linkedAgents || linkedAgents.length === 0) return null;
+
+  // Build path → role map from cache (defensive: cache may be null/empty).
+  const roleByPath = new Map<string, { role?: string; confidence?: number }>();
+  for (const r of rolesCache?.roles || []) {
+    if (r.file) roleByPath.set(r.file, { role: r.role, confidence: r.confidence });
+  }
+
+  return (
+    <section style={{ marginBottom: '1.5rem' }}>
+      <div style={{
+        fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: 'var(--color-text-light)', fontWeight: 600, marginBottom: '0.65rem',
+      }}>
+        Agents ({linkedAgents.length})
+      </div>
+      <div style={{
+        padding: '0.85rem 1rem',
+        background: 'var(--color-bg-alt)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 6,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {linkedAgents.map(filePath => {
+            const fileName = (filePath.split('/').pop() || filePath).replace(/\.(ts|js|tsx|jsx|py)$/i, '');
+            const dirPath = filePath.includes('/')
+              ? filePath.slice(0, filePath.lastIndexOf('/'))
+              : '';
+            const meta = roleByPath.get(filePath);
+            return (
+              <div key={filePath} style={{
+                display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
+                fontSize: 12, color: 'var(--color-text)', lineHeight: 1.5,
+              }}>
+                <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-primary)' }}>
+                  {fileName}
+                </span>
+                {meta?.role && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    color: '#15803d', background: '#dcfce7',
+                    padding: '1px 6px', borderRadius: 3,
+                  }}>
+                    role: {meta.role}
+                  </span>
+                )}
+                {dirPath && (
+                  <span style={{
+                    fontSize: 10, color: 'var(--color-text-light)',
+                    fontFamily: 'var(--font-mono)',
+                  }}>
+                    {dirPath}/
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {(!rolesCache || !rolesCache.roles || rolesCache.roles.length === 0) && (
+          <div style={{
+            fontSize: 11, color: 'var(--color-text-light)', fontStyle: 'italic',
+            marginTop: 10, paddingTop: 8, borderTop: '1px dashed var(--color-border)',
+          }}>
+            Role classification not yet populated for this project. Run
+            <code style={{ background: 'white', padding: '0 4px', borderRadius: 3, margin: '0 4px' }}>
+              backfillAgentRolesCache.js
+            </code>
+            to enrich each agent with a derived role (response, classifier, scheduler, etc.).
+            Trigger detection is a follow-up sprint.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
 
 export default BPDetailV2;

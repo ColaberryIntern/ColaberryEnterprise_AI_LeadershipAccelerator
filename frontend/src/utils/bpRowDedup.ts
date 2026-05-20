@@ -59,6 +59,14 @@ function mergeGroup(group: BPLike[]): BPLike {
     total_requirements: Math.max(...group.map(p => p.total_requirements || 0)),
     _dupe_count: others.length,
     _dupe_names: others.map(p => p.name),
+    _dupe_caps: group.map(p => ({
+      id: p.id,
+      name: p.name,
+      source: p.source,
+      linked_backend_services_count: (p.linked_backend_services || []).length,
+      linked_frontend_components_count: (p.linked_frontend_components || []).length,
+      linked_agents_count: (p.linked_agents || []).length,
+    })),
     maturity: pickHighestMaturity(group),
   };
 }

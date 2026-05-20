@@ -87,10 +87,22 @@ export interface BPLike {
   linked_agents?: string[];
   frontend_route?: string | null;
   maturity?: { level?: number; label?: string };
+  // 2026-05-20: FE→BE call graph. Populated server-side by
+  // frontendCallGraphScanner; each ID is a cap whose backend handlers this
+  // cap's frontend calls.
+  frontend_calls_capability_ids?: string[];
   // Dedup metadata — populated client-side when two caps share a
   // frontend_route within a domain. The primary cap inherits these.
   _dupe_count?: number;
   _dupe_names?: string[];
+  _dupe_caps?: Array<{
+    id: string;
+    name: string;
+    source?: string;
+    linked_backend_services_count?: number;
+    linked_frontend_components_count?: number;
+    linked_agents_count?: number;
+  }>;
 }
 
 interface DomainSpec {

@@ -80,6 +80,17 @@ export interface CapabilityAttributes {
     classified_at: string;
     agent_paths: string[];
   } | null;
+  /**
+   * frontend_calls_capability_ids — populated by frontendCallGraphScanner
+   * (2026-05-20). Each cap whose frontend components import / call API
+   * endpoints owned by another cap's backend gets the downstream cap IDs
+   * listed here. Powers the "uses: Lead Scoring +2" chip on page rows and
+   * the inverse "used by" chip on backend rows (derived client-side).
+   *
+   * Empty array = no outgoing calls detected (or no frontend files).
+   * Refresh via scripts/runFrontendCallGraph.js.
+   */
+  frontend_calls_capability_ids?: string[] | null;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -157,6 +168,8 @@ Capability.init(
     // See CapabilityAttributes.agent_roles_cache doc above. JSONB so
     // shape can evolve without further migrations.
     agent_roles_cache: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
+    // FE→BE call graph (2026-05-20). Populated by frontendCallGraphScanner.
+    frontend_calls_capability_ids: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

@@ -66,7 +66,15 @@ export const DomainRow: React.FC<{
   onToggle: () => void;
   onNavigate: (key: DomainKey) => void;
   onPickBp: (id: string) => void;
-}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp }) => {
+  onShowMergedCaps?: (bp: BPLike) => void;
+  /** Project-wide name lookup + inverse call graph for the "uses / used by"
+   *  chips on BP rows. Passed in from the surface so each row doesn't
+   *  rebuild it. (2026-05-20) */
+  callGraph?: {
+    nameById: Map<string, string>;
+    usedByMap: Map<string, string[]>; // cap_id -> list of cap_ids that call it
+  };
+}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp, onShowMergedCaps, callGraph }) => {
   const tone = LIFECYCLE_TONE[bucket.lifecycleState];
   const mom = momentum || { delta: null, direction: 'first-visit' as Direction, label: 'baseline', minutesSince: null };
   const momTone = MOMENTUM_TONE[mom.direction];
@@ -328,6 +336,8 @@ export const DomainRow: React.FC<{
               bp={p}
               inheritedAccent={isCoryPriority ? 'priority' : isDownstreamOfPriority ? 'downstream' : null}
               onPick={() => onPickBp(p.id)}
+              onShowMergedCaps={onShowMergedCaps}
+              callGraph={callGraph}
             />
           ))}
         </div>
@@ -345,7 +355,16 @@ export const BPLine: React.FC<{
    *  and see at a glance which ones sit inside the active zone. */
   inheritedAccent?: 'priority' | 'downstream' | null;
   onPick: () => void;
-}> = ({ bp, inheritedAccent, onPick }) => {
+  /** 2026-05-20: fired when the +N dedup pill is clicked. Surface owns
+   *  the modal so the overlay can sit above the page chrome. */
+  onShowMergedCaps?: (bp: BPLike) => void;
+  /** Optional project-wide name + inverse map for the "uses / used by"
+   *  call-graph chips (2026-05-20). When omitted, chips don't render. */
+  callGraph?: {
+    nameById: Map<string, string>;
+    usedByMap: Map<string, string[]>;
+  };
+}> = ({ bp, inheritedAccent, onPick, onShowMergedCaps, callGraph }) => {
   const matched = bp.matched_requirements || 0;
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
@@ -422,14 +441,29 @@ export const BPLine: React.FC<{
         {bp.name}
         {(bp as any)._dupe_count > 0 && (
           <span
-            title={`Also includes: ${((bp as any)._dupe_names || []).join(', ')}`}
+            role="button"
+            tabIndex={0}
+            title={`Click to see the ${(bp as any)._dupe_count} other cap${(bp as any)._dupe_count === 1 ? '' : 's'} merged into this row`}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onShowMergedCaps?.(bp);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                e.preventDefault();
+                onShowMergedCaps?.(bp);
+              }
+            }}
             style={{
               marginLeft: 6, padding: '1px 6px',
               fontSize: 10, fontWeight: 600,
-              color: 'var(--color-text-light)',
-              background: 'var(--color-bg-alt)',
-              border: '1px solid var(--color-border)',
+              color: 'var(--color-primary)',
+              background: 'rgba(37, 99, 235, 0.08)',
+              border: '1px solid rgba(37, 99, 235, 0.25)',
               borderRadius: 10,
+              cursor: 'pointer',
             }}
           >
             +{(bp as any)._dupe_count}
@@ -442,6 +476,7 @@ export const BPLine: React.FC<{
           usability isn't populated. Tooltip shows the file count so the
           operator can still get to the underlying number on hover. */}
       <BPRowPillars bp={bp} />
+      <CallGraphChips bp={bp} callGraph={callGraph} />
       <MaturityChip level={bp.maturity?.level} label={bp.maturity?.label} />
       {total > 0 && (
         <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
@@ -473,7 +508,9 @@ const BPRowPillars: React.FC<{ bp: any }> = ({ bp }) => {
   );
   let pillars: PillarSignal[];
   if (usabilityPresent) {
-    pillars = bpPillars(bp);
+    // Swap to the row-local palette (gray for missing) so the BP row
+    // doesn't show red for legitimately-absent layers.
+    pillars = bpPillars(bp).map(p => ({ ...p, tone: PILLAR_TONES[p.status] }));
   } else {
     pillars = [
       synthPillar('backend', (bp.linked_backend_services || []).length),
@@ -507,10 +544,15 @@ const BPRowPillars: React.FC<{ bp: any }> = ({ bp }) => {
   );
 };
 
+// 2026-05-20: collapse missing → gray on the BP row. The Components tab
+// keeps the four-state palette (red for missing) because it's deciding
+// "is this BP wired?" — different question. Here the operator just wants
+// to scan "what's present" without red implying broken-ness for a layer
+// the BP may legitimately not need.
 const PILLAR_TONES: Record<PillarStatus, { fg: string; bg: string }> = {
   ready:   { fg: '#15803d', bg: '#dcfce7' },
   partial: { fg: '#b45309', bg: '#fef3c7' },
-  missing: { fg: '#b91c1c', bg: '#fee2e2' },
+  missing: { fg: '#9ca3af', bg: 'transparent' },
   na:      { fg: '#9ca3af', bg: 'transparent' },
 };
 
@@ -580,6 +622,64 @@ const MATURITY_TONES: Record<number, { fg: string; bg: string; border: string }>
 
 const MATURITY_LABEL: Record<number, string> = {
   0: 'Not Started', 1: 'Prototype', 2: 'Functional', 3: 'Production', 4: 'Autonomous',
+};
+
+/**
+ * CallGraphChips — surfaces the FE→BE call relationships on each BP row.
+ *
+ * Two directions:
+ *   - "↘ uses N" — this cap's frontend calls N other caps' backends
+ *   - "↗ used by N" — N caps' frontends call this cap's backend
+ *
+ * Both chips suppress when the project's call graph hasn't been scanned
+ * (callGraph prop omitted) so the surface degrades cleanly. Tooltip on
+ * each chip lists the actual cap names. (2026-05-20)
+ */
+const CallGraphChips: React.FC<{ bp: any; callGraph?: { nameById: Map<string, string>; usedByMap: Map<string, string[]> } }> = ({ bp, callGraph }) => {
+  if (!callGraph) return null;
+  const uses = bp.frontend_calls_capability_ids || [];
+  const usedBy = callGraph.usedByMap.get(bp.id) || [];
+  const usesNames = uses.map((id: string) => callGraph.nameById.get(id) || '?').filter((n: string) => n !== '?');
+  const usedByNames = usedBy.map((id: string) => callGraph.nameById.get(id) || '?').filter((n: string) => n !== '?');
+  if (usesNames.length === 0 && usedByNames.length === 0) return null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+      {usesNames.length > 0 && (
+        <span
+          title={`This cap's frontend calls: ${usesNames.join(', ')}`}
+          style={{
+            padding: '1px 6px',
+            fontSize: 10,
+            fontWeight: 600,
+            color: '#7c3aed',
+            background: 'rgba(124, 58, 237, 0.08)',
+            border: '1px solid rgba(124, 58, 237, 0.25)',
+            borderRadius: 4,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          ↘ uses {usesNames.length}
+        </span>
+      )}
+      {usedByNames.length > 0 && (
+        <span
+          title={`Caps that call this one: ${usedByNames.join(', ')}`}
+          style={{
+            padding: '1px 6px',
+            fontSize: 10,
+            fontWeight: 600,
+            color: '#0e7490',
+            background: 'rgba(14, 116, 144, 0.08)',
+            border: '1px solid rgba(14, 116, 144, 0.25)',
+            borderRadius: 4,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          ↗ used by {usedByNames.length}
+        </span>
+      )}
+    </span>
+  );
 };
 
 const MaturityChip: React.FC<{ level?: number; label?: string }> = ({ level, label }) => {

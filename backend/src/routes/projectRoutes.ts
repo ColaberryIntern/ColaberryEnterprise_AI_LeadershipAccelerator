@@ -2117,8 +2117,8 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     } catch {}
     // Inject last_execution from Capability models (hierarchy doesn't include JSONB fields)
     const { Capability: CapabilityModel } = await import('../models');
-    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at', 'ui_element_map', 'linked_backend_services', 'linked_frontend_components', 'linked_agents'] });
-    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context, user_status: c.user_status, user_status_set_at: c.user_status_set_at, ui_element_map: c.ui_element_map, linked_backend_services: c.linked_backend_services, linked_frontend_components: c.linked_frontend_components, linked_agents: c.linked_agents }]));
+    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at', 'ui_element_map', 'linked_backend_services', 'linked_frontend_components', 'linked_agents', 'frontend_calls_capability_ids'] });
+    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context, user_status: c.user_status, user_status_set_at: c.user_status_set_at, ui_element_map: c.ui_element_map, linked_backend_services: c.linked_backend_services, linked_frontend_components: c.linked_frontend_components, linked_agents: c.linked_agents, frontend_calls_capability_ids: c.frontend_calls_capability_ids }]));
     const projectMode = (project as any).target_mode || 'production';
     // Load campaign mode overrides for capabilities that have linked campaigns
     let campaignModeMap = new Map<string, string>();
@@ -2172,6 +2172,7 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         cap.linked_backend_services = (extra as any).linked_backend_services || [];
         cap.linked_frontend_components = (extra as any).linked_frontend_components || [];
         cap.linked_agents = (extra as any).linked_agents || [];
+        cap.frontend_calls_capability_ids = (extra as any).frontend_calls_capability_ids || [];
       }
     });
 
@@ -6537,7 +6538,7 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     // Inject Capability model fields not in hierarchy (JSONB + mode fields)
     const { Capability: CapExec } = await import('../models');
-    const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'user_status', 'user_status_set_at', 'ui_element_map'] });
+    const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'user_status', 'user_status_set_at', 'ui_element_map', 'linked_backend_services', 'linked_frontend_components', 'linked_agents', 'agent_roles_cache', 'frontend_route'] });
     if (capExec) {
       (cap as any).last_execution = (capExec as any).last_execution;
       (cap as any).mode_override = (capExec as any).mode_override;
@@ -6547,6 +6548,14 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       (cap as any).user_status = (capExec as any).user_status || 'in_progress';
       (cap as any).user_status_set_at = (capExec as any).user_status_set_at || null;
       (cap as any).ui_element_map = (capExec as any).ui_element_map || null;
+      // 2026-05-20: surface linked-file arrays + agent role cache so the
+      // cap detail panel can name each agent + render BE/FE/AG pillars
+      // with real signal (matches the BP list endpoint).
+      (cap as any).linked_backend_services = (capExec as any).linked_backend_services || [];
+      (cap as any).linked_frontend_components = (capExec as any).linked_frontend_components || [];
+      (cap as any).linked_agents = (capExec as any).linked_agents || [];
+      (cap as any).agent_roles_cache = (capExec as any).agent_roles_cache || null;
+      if ((capExec as any).frontend_route) (cap as any).frontend_route = (capExec as any).frontend_route;
     }
     (cap as any)._projectMode = (project as any).target_mode || 'production';
     // Inject repo file tree for agent detection

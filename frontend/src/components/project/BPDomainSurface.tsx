@@ -39,6 +39,7 @@ import { sortByOperationalPriority, downstreamKeysOf } from '../../utils/domainP
 import BPDetailV2 from './BPDetailV2';
 import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
 import { DomainRow } from './BPDomainSurfaceRows';
+import MergedCapsModal from './MergedCapsModal';
 
 const BPDomainSurface: React.FC = () => {
   const [processes, setProcesses] = useState<BPLike[]>([]);
@@ -48,6 +49,27 @@ const BPDomainSurface: React.FC = () => {
   const [showFullInventory, setShowFullInventory] = useState(false);
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [pulsedKey, setPulsedKey] = useState<DomainKey | null>(null);
+  // 2026-05-20: state for the +N merged-caps overlay surfaced on BP rows
+  // whose frontend_route is shared by multiple caps (dedup hint).
+  const [mergedBp, setMergedBp] = useState<BPLike | null>(null);
+
+  // 2026-05-20: project-wide call graph (FE→BE) derived once from the
+  // loaded processes. Powers the "uses N / used by N" chips on each row.
+  // Reverse-direction lookup built locally so the BP API doesn't have to
+  // emit a separate inverse map.
+  const callGraph = useMemo(() => {
+    const nameById = new Map<string, string>();
+    const usedByMap = new Map<string, string[]>();
+    for (const p of processes) nameById.set(p.id, p.name);
+    for (const p of processes) {
+      for (const downstreamId of (p as any).frontend_calls_capability_ids || []) {
+        const arr = usedByMap.get(downstreamId) || [];
+        arr.push(p.id);
+        usedByMap.set(downstreamId, arr);
+      }
+    }
+    return { nameById, usedByMap };
+  }, [processes]);
 
   // Refs to each domain row <section> so clicks on the flow strip or a
   // relationship chip can smooth-scroll the target into view.
@@ -381,9 +403,22 @@ const BPDomainSurface: React.FC = () => {
             }}
             onNavigate={navigateToDomain}
             onPickBp={setSelectedBp}
+            onShowMergedCaps={(bp) => setMergedBp(bp)}
+            callGraph={callGraph}
           />
         ))}
       </div>
+
+      {/* 2026-05-20: +N merged-caps overlay. Driven by the dedup pill on
+          any BP row whose frontend_route is shared by multiple caps. */}
+      <MergedCapsModal
+        open={!!mergedBp}
+        route={(mergedBp as any)?.frontend_route || ''}
+        caps={(mergedBp as any)?._dupe_caps || []}
+        primaryId={(mergedBp as any)?.id || ''}
+        onClose={() => setMergedBp(null)}
+        onPickCap={(id) => { setMergedBp(null); setSelectedBp(id); }}
+      />
 
       {/* ─── Power-user escape hatch ─── */}
       <div style={{
