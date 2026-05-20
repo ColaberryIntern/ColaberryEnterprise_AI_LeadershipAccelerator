@@ -185,6 +185,13 @@ function generateCapTasks(
   const hasBackend = (cap.linked_backend_services || []).length > 0;
   const hasFrontend = (cap.linked_frontend_components || []).length > 0 || !!cap.frontend_route;
   const hasAgents = (cap.linked_agents || []).length > 0;
+  // "Has any backend-side code" — backend service OR agent. Agents
+  // run server-side too, so a cap with only agent files isn't
+  // "no backend layer." Used by build_backend's gate so the
+  // 2026-05-20 reclassification (intelligence/ → agents bucket)
+  // doesn't falsely fire "Build backend services for X" against
+  // caps that already have agent code under intelligence/.
+  const hasAnyBackendCode = hasBackend || hasAgents;
 
   // kind-based gating (added 2026-05-18). Backend-build is only meaningful
   // for kind='service'. Pages don't have a backend layer to build;
@@ -250,7 +257,13 @@ function generateCapTasks(
   // Badges Page" as the operator's #1 priority.
   // Extended same day: also skip for kind='agent' (the agent code IS the
   // backend) and kind='component' (UI widgets don't have backends).
-  if (!hasBackend && score.coverage < 100 && backendBuildEligible) {
+  //
+  // 2026-05-20: gate on hasAnyBackendCode (backend OR agents) instead
+  // of hasBackend alone. After the file-classifier fix moved many
+  // intelligence/ files from the backend bucket to the agents bucket,
+  // caps with only agent code falsely satisfied !hasBackend and got
+  // a "Build backend services for X" task. Agents ARE backend code.
+  if (!hasAnyBackendCode && score.coverage < 100 && backendBuildEligible) {
     tasks.push(makeTask({
       id: `${cap.id}:build_backend`,
       project_id: project.id,
