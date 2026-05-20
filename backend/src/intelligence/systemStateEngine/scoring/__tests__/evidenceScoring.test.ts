@@ -195,6 +195,27 @@ describe('scoreHealth — evidence-aware applicability', () => {
   });
 });
 
+describe('computeCodeEvidence agent_roles omitted for 0-agent caps (walk #2 fix)', () => {
+  it('returns agent_roles undefined when linked_agents is empty', () => {
+    const ev = computeCodeEvidence({
+      kind: 'service',
+      linked_backend_services: ['svc.ts'],
+      linked_agents: [],  // no agents to classify
+    });
+    expect(ev.agent_roles).toBeUndefined();
+  });
+
+  it('returns agent_roles object when linked_agents has entries', () => {
+    const ev = computeCodeEvidence({
+      kind: 'service',
+      linked_backend_services: [],
+      linked_agents: ['someAgent.ts'],
+    });
+    expect(ev.agent_roles).toBeDefined();
+    expect(ev.agent_roles!.detected).toContain('core');
+  });
+});
+
 describe('inferAgentRole (Tier-2 #4)', () => {
   it('detects monitor role from filename keywords', () => {
     expect(inferAgentRole('src/agents/leadMonitor.ts', null)).toBe('monitor');

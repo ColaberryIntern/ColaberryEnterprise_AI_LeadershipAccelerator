@@ -312,10 +312,19 @@ export function computeCodeEvidence(input: {
     reliability_signal,
     automation_applicable,
     evidence_files_read: backendFiles.length,
-    agent_roles: {
-      detected: Object.freeze([...detectedRoles]),
-      files_inspected: filesInspected,
-    },
+    // agent_roles is omitted entirely when there are no agent files to
+    // classify (2026-05-20 walk #2 finding). Returning an empty
+    // {detected:[], files_inspected:0} object was being treated by the
+    // queue gate as the "filenameOnly tier" and adding the misleading
+    // "⚠ Roles inferred from filename only (file content unavailable)"
+    // warning to caps that simply have no agent layer at all. Undefined
+    // is the honest signal: no agents, no classification, no warning.
+    agent_roles: agentFiles.length > 0
+      ? {
+          detected: Object.freeze([...detectedRoles]) as any,
+          files_inspected: filesInspected,
+        }
+      : undefined,
     raw_counts: { try_catch, async_functions, scheduled_signals, queue_signals },
   };
 }
