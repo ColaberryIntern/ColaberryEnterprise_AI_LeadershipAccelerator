@@ -19,6 +19,7 @@ import portalApi from '../../utils/portalApi';
 import { useVisualReviewSession } from '../../hooks/useVisualReviewSession';
 
 import WorkspaceSidebar, { type SidebarIssue } from './components/WorkspaceSidebar';
+import CapNotesPanel from './components/CapNotesPanel';
 import VisualStage, { type StagePin } from './components/VisualStage';
 import IssueDetailsPanel from './components/IssueDetailsPanel';
 import ActionBar from './components/ActionBar';
@@ -406,6 +407,14 @@ const VisualWorkspacePage: React.FC = () => {
           onSelect={(id) => { setSelectedCritiqueId(id); setAnnotateMode(false); }}
           onCloseSession={() => { setSessionId(null); setSelectedCritiqueId(null); }}
           counts={counts}
+          capNotesSlot={
+            <CapNotesPanel
+              sessionId={sessionId}
+              bpId={session.data?.session?.bp_id || null}
+              notes={session.data?.session?.notes || ''}
+              onPersist={session.updateNotes}
+            />
+          }
         />
 
         <div className="vw-canvas">

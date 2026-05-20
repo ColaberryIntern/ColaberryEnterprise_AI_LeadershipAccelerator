@@ -12,6 +12,45 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Phase A — Cap-level free-form notes in Visual Workspace (2026-05-20)
+Operator surfaced the gap: "comments locked to region pins, no way to say 'this whole cap is the wrong cardinality' without picking a pixel region." Per the CAP_WALK_AND_COMMENT_PLAN.md Phase A scope, added a cap-level note field that lives next to the per-region critiques.
+
+- [x] `backend/src/intelligence/systemStateEngine/visual/visualReviewSessionService.ts` — added `updateNotes(sessionId, notes)` (clamps to 8000 chars; persists to existing `VisualReviewSession.notes` column, no migration needed) and `listCapNotes(projectId, bpId, opts)` returning prior sessions' notes for the same cap (newest-first, only non-empty, excludes current session).
+  - Date: 2026-05-20
+  - Verification: backend `npx tsc --noEmit` exit 0
+- [x] `backend/src/routes/projectRoutes.ts` — added `PATCH /api/portal/project/visual-review/session/:id/notes` (project-scoped auth) and `GET /api/portal/project/visual-review/cap-notes?bp_id=X&exclude=Y` for listing prior notes for a cap across sessions.
+  - Date: 2026-05-20
+  - Verification: backend `npx tsc --noEmit` exit 0
+- [x] `frontend/src/hooks/useVisualReviewSession.ts` — extended with `updateNotes(text)`. Optimistic local update keeps the textarea responsive; PATCH writes to backend on blur.
+  - Date: 2026-05-20
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `frontend/src/features/visualWorkspace/components/CapNotesPanel.tsx` (new) — sidebar section with a 4-row textarea that persists on blur (only writes if dirty; surfaces "Saving…" / "Saved" / "Unsaved" status). Below the textarea: collapsed "N earlier notes for this cap" link that expands to show prior sessions' notes (date + page_route + body, scrollable up to 220px).
+  - Date: 2026-05-20
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `frontend/src/features/visualWorkspace/components/WorkspaceSidebar.tsx` — accepts new `capNotesSlot` prop and renders it between the page picker and the filter input. Sidebar stays a layout shell; the notes UI is self-contained.
+  - Date: 2026-05-20
+- [x] `frontend/src/features/visualWorkspace/VisualWorkspacePage.tsx` — wires `CapNotesPanel` into the sidebar, passing through `session.data.session.notes`, `bp_id`, and `session.updateNotes` from the hook.
+  - Date: 2026-05-20
+
+### Phase 0 — Auto-derive frontend_route from linked components (2026-05-20)
+Operator hit a cap detail (Marketing Dashboard) with 4 linked frontend page components but no live preview because `frontend_route` was null. Root cause: `syncFileTree` persisted `route_registry_json` but had no notion of which component a route renders, so derivation was impossible.
+
+- [x] `backend/src/services/frontendPageDiscovery.ts` — added `extractRouteComponentBindings(contents)` that parses `<Route path="x" element={<ComponentName />}` declarations across App.tsx + the 4 route files; returns a `Map<componentName, route>`. Also added `deriveFrontendRouteFromComponents(capName, linkedComponents, bindings)` that picks the best route from a cap's linked components using stem-similarity tie-breaking.
+  - Date: 2026-05-20
+  - Verification: backend `npx tsc --noEmit` exit 0
+- [x] `backend/src/models/GitHubConnection.ts` + `backend/src/services/githubService.ts` — added `route_component_bindings_json` JSONB column. `syncFileTree` now persists the bindings alongside `route_registry_json`. Best-effort: parse failures don't fail sync.
+  - Date: 2026-05-20
+  - Verification: prod ALTER TABLE applied; live syncFileTree run on Accelerator enrollment persisted 97 routes + 89 component→route bindings
+- [x] `frontend/src/components/project/BPDomainSurfaceRows.tsx` — relabeled "Built · Awaits Review" → "Page built · UI review pending" with tooltip clarifying that the matched/total count beside the chip is a separate dimension (requirement→code matching, not page-built status). Per operator feedback ("not sure what that's supposed to mean").
+  - Date: 2026-05-20
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `backend/src/scripts/backfillFrontendRoutes.js` (new) — one-shot backfill that derives `frontend_route` for caps whose linked frontend components map cleanly to a registered route. Run in prod against Accelerator project: **21 of 49 unmatched caps got routes assigned**, including the operator-visible "Marketing Dashboard → /admin/marketing". Remaining 28 are caps whose linked components are leaf/internal pieces (charts, panels, validators) that don't map to a registered route — expected.
+  - Date: 2026-05-20
+  - Verification: psql query confirmed `SELECT frontend_route FROM capabilities WHERE name='Marketing Dashboard'` returns `/admin/marketing`
+- [x] `backend/src/scripts/triggerAcceleratorSyncFileTree.js` (new, one-off) — fires `syncFileTree` for the Accelerator enrollment to populate the new `route_component_bindings_json` column. Used once post-deploy; safe to re-run.
+  - Date: 2026-05-20
+  - Verification: ran successfully in prod container
+
 ### Gov Bid Intake — Detroit AI for Muni-Code Search staged in Basecamp (2026-05-19)
 - [x] `backend/src/scripts/processGovBid.js` (new) — reusable template script that takes one BID_CONFIG block (opportunity UUID, zip path, display title, phases, fit thesis) and creates the full Basecamp workspace end-to-end: extracts zip → fetches opportunity detail from Opportunity Pulse → creates a vault sub-folder → uploads all RFP files ONCE → creates a To-Do List with rich HTML description (key facts + fit thesis + 4-phase game plan + file links) → creates one task per RFP attachment + cross-cutting prep work (POC, capability statement, executive summary, review, submit) → posts a kickoff message to the Message Board linking back to List + Folder. Fully idempotent (re-running reuses folder, skips existing files/tasks, updates list description, skips duplicate message). Writes a `basecamp-summary.json` audit file. Reusable for every future gov bid by editing BID_CONFIG.
   - Date: 2026-05-19

@@ -2962,6 +2962,46 @@ router.post('/api/portal/project/visual-review/session/:id/critique', requirePar
   }
 });
 
+// Phase A (2026-05-20): persist a cap-level free-form note on the session.
+// Triggered by the sidebar textarea's onBlur. Empty string clears the note.
+router.patch('/api/portal/project/visual-review/session/:id/notes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getSession, updateNotes } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const sessionId = req.params.id as string;
+    const session = await getSession(sessionId);
+    if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+    if (session.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : '';
+    await updateNotes(sessionId, notes);
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[visual-review/notes]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Phase A (2026-05-20): list prior sessions for a given cap (bp_id) that
+// have non-empty notes. Used by the sidebar to surface "earlier notes for
+// this cap." Excludes the current session via ?exclude=<id> so the
+// operator doesn't see their own draft echoed back.
+router.get('/api/portal/project/visual-review/cap-notes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const bpId = typeof req.query.bp_id === 'string' ? req.query.bp_id : '';
+    if (!bpId) { res.status(400).json({ error: 'bp_id required' }); return; }
+    const { listCapNotes } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const excludeSessionId = typeof req.query.exclude === 'string' ? req.query.exclude : undefined;
+    const notes = await listCapNotes(project.id, bpId, { excludeSessionId, limit: Number(req.query.limit) || 20 });
+    res.json({ notes, count: notes.length });
+  } catch (err: any) {
+    console.error('[visual-review/cap-notes]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Record a verdict on an AI suggestion or critique item.
 router.post('/api/portal/project/visual-review/session/:id/decision', requireParticipant, async (req: Request, res: Response) => {
   try {

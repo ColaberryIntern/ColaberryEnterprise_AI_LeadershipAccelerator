@@ -32,6 +32,9 @@ interface Props {
   onSelect: (id: string) => void;
   onCloseSession: () => void;
   counts: SidebarSectionCount;
+  // Phase A (2026-05-20): cap-level free-form note panel. Rendered above
+  // the filter so it sits in the operator's primary eye-path.
+  capNotesSlot?: React.ReactNode;
 }
 
 const SECTIONS: { key: IssueStatus; label: string; icon: string }[] = [
@@ -52,6 +55,7 @@ const WorkspaceSidebar: React.FC<Props> = ({
   onSelect,
   onCloseSession,
   counts,
+  capNotesSlot,
 }) => {
   const [expanded, setExpanded] = useState<Record<IssueStatus, boolean>>({
     open: true,
@@ -105,6 +109,9 @@ const WorkspaceSidebar: React.FC<Props> = ({
           <i className="bi bi-arrow-left-circle me-1"></i>Pick another session
         </button>
       </div>
+
+      {/* Cap-level note (Phase A, 2026-05-20) */}
+      {capNotesSlot}
 
       {/* Filter */}
       <div className="vw-sidebar-section">

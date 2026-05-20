@@ -219,3 +219,45 @@ export async function persistGeneratedPrompt(sessionId: string, prompt: string):
     { where: { id: sessionId } },
   );
 }
+
+// Phase A (2026-05-20): cap-level free-form note. Operator types in the
+// sidebar textarea; persists on blur. Stored on the existing
+// VisualReviewSession.notes column.
+export async function updateNotes(sessionId: string, notes: string | null): Promise<void> {
+  const { default: VisualReviewSession } = await import('../../../models/VisualReviewSession');
+  await VisualReviewSession.update(
+    { notes: (notes ?? '').slice(0, 8000) || null } as any,
+    { where: { id: sessionId } },
+  );
+}
+
+// Returns prior sessions for a given cap (bp_id), surfaced in the sidebar as
+// "earlier notes for this cap." Only includes sessions whose notes are
+// non-empty, ordered newest-first.
+export async function listCapNotes(
+  projectId: string,
+  bpId: string,
+  opts: { excludeSessionId?: string; limit?: number } = {},
+): Promise<Array<{ session_id: string; page_route: string; opened_at: string; notes: string }>> {
+  const { default: VisualReviewSession } = await import('../../../models/VisualReviewSession');
+  const { Op } = await import('sequelize');
+  const where: any = {
+    project_id: projectId,
+    bp_id: bpId,
+    notes: { [Op.ne]: null },
+  };
+  if (opts.excludeSessionId) where.id = { [Op.ne]: opts.excludeSessionId };
+  const rows = await VisualReviewSession.findAll({
+    where,
+    order: [['opened_at', 'DESC']],
+    limit: opts.limit ?? 20,
+  });
+  return rows
+    .map((r: any) => ({
+      session_id: r.id,
+      page_route: r.page_route,
+      opened_at: new Date(r.opened_at).toISOString(),
+      notes: (r.notes || '').trim(),
+    }))
+    .filter(r => r.notes.length > 0);
+}

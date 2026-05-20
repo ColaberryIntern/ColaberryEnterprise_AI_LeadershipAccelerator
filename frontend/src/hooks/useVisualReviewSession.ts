@@ -24,6 +24,7 @@ export interface UseVisualReviewSession {
   }) => Promise<void>;
   decide: (input: { suggestion_id?: string; critique_id?: string; verdict: 'accepted' | 'rejected' | 'deferred'; rationale?: string }) => Promise<void>;
   generatePrompt: () => Promise<any>;
+  updateNotes: (notes: string) => Promise<void>;
 }
 
 export function useVisualReviewSession(sessionId: string | null): UseVisualReviewSession {
@@ -64,7 +65,15 @@ export function useVisualReviewSession(sessionId: string | null): UseVisualRevie
     return r.data;
   }, [sessionId, refresh]);
 
+  // Phase A (2026-05-20): persist sidebar cap-level note. Optimistic local
+  // update keeps the textarea responsive; refresh syncs the canonical value.
+  const updateNotes = useCallback(async (notes: string) => {
+    if (!sessionId) return;
+    setData(prev => prev ? { ...prev, session: { ...prev.session, notes } } : prev);
+    await portalApi.patch(`/api/portal/project/visual-review/session/${encodeURIComponent(sessionId)}/notes`, { notes });
+  }, [sessionId]);
+
   useEffect(() => { void refresh(); }, [refresh]);
 
-  return { data, loading, error, refresh, addCritique, decide, generatePrompt };
+  return { data, loading, error, refresh, addCritique, decide, generatePrompt, updateNotes };
 }
