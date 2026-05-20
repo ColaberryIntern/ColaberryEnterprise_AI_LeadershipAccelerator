@@ -2447,6 +2447,82 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
 // Query params:
 //   ?fresh=true    — force rebuild (skip snapshot cache, re-run engine)
 //   default        — read snapshot if recent, rebuild if stale (>5 min)
+/**
+ * GET /api/portal/onboarding/state — 2026-05-20.
+ *
+ * Returns the onboarding stage for the signed-in enrollment + a `gates`
+ * object indicating which top-nav tabs should be enabled. Pure read.
+ *
+ * Stages:
+ *   - 'needs_requirements': no project OR project has no requirements doc
+ *                           AND no requirements_maps rows
+ *   - 'has_requirements':   doc saved, requirements parsed, no caps yet
+ *                           (or caps exist but no frontend_route on any)
+ *   - 'has_code':           caps with frontend_route exist (built surface)
+ *   - 'ready':              alias for has_code; reserved for future signals
+ *
+ * Gates the home shell uses to render disabled top-nav items.
+ */
+router.get('/api/portal/onboarding/state', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+
+    if (!project) {
+      res.json({
+        stage: 'needs_requirements',
+        project_id: null,
+        has_project: false,
+        has_requirements_doc: false,
+        requirements_count: 0,
+        capability_count: 0,
+        capabilities_with_routes: 0,
+        gates: { home: true, critique: false, blueprint: false, system: false, sessions: true },
+      });
+      return;
+    }
+
+    const { RequirementsMap, Capability } = await import('../models');
+    const [reqCount, capCount, capsWithRoutes] = await Promise.all([
+      RequirementsMap.count({ where: { project_id: project.id } }),
+      Capability.count({ where: { project_id: project.id, applicability_status: 'active' } }),
+      Capability.count({ where: {
+        project_id: project.id,
+        applicability_status: 'active',
+        frontend_route: { [require('sequelize').Op.ne]: null },
+      } }),
+    ]);
+
+    const hasReqDoc = !!(project as any).requirements_document
+      && String((project as any).requirements_document).trim().length > 0;
+
+    let stage: 'needs_requirements' | 'has_requirements' | 'has_code' | 'ready';
+    if (!hasReqDoc && reqCount === 0) stage = 'needs_requirements';
+    else if (capsWithRoutes === 0) stage = 'has_requirements';
+    else stage = 'has_code';
+
+    res.json({
+      stage,
+      project_id: project.id,
+      has_project: true,
+      has_requirements_doc: hasReqDoc,
+      requirements_count: reqCount,
+      capability_count: capCount,
+      capabilities_with_routes: capsWithRoutes,
+      gates: {
+        home: true,
+        critique: stage === 'has_code',
+        blueprint: stage !== 'needs_requirements',
+        system: stage !== 'needs_requirements',
+        sessions: true,
+      },
+    });
+  } catch (err: any) {
+    console.error('[onboarding/state]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/api/portal/project/system-state', requireParticipant, async (req: Request, res: Response) => {
   try {
     const project = await getParticipantProject(req.participant!.sub);

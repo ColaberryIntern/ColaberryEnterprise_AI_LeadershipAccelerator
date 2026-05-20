@@ -22,6 +22,8 @@ import {
   useUnifiedProjectState,
   type BlockerEntry,
 } from '../../hooks/useUnifiedProjectState';
+import { useOnboardingState } from '../../hooks/useOnboardingState';
+import RequirementsBuilder from '../project/RequirementsBuilder';
 import { useWorkspaceMemory, type DrawerId } from '../../hooks/useWorkspaceMemory';
 import { useOperationalMomentum } from '../../hooks/useOperationalMomentum';
 import { useActivePath } from '../../hooks/useActivePath';
@@ -59,8 +61,45 @@ const SEVERITY_COLOR: Record<BlockerEntry['severity'], string> = {
 const CoryHome: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // 2026-05-20: first-run detection. If the user has no project or no
+  // requirements yet, render the requirements builder INLINE instead of
+  // the dashboard. The dashboard is meaningless without a project and
+  // surfaces 0% tiles that confuse new users.
+  const onboarding = useOnboardingState();
   const { state, loading, error, refresh } = useUnifiedProjectState({ pollMs: 60_000 });
   const { memory, update, recordSnapshot } = useWorkspaceMemory();
+
+  // First-run gate: short-circuit to the requirements builder when the
+  // backend says we haven't accepted a requirements doc yet. We still
+  // run the hooks above (one render, no early return before hooks).
+  if (onboarding.state?.stage === 'needs_requirements') {
+    return (
+      <div>
+        <div style={{
+          maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 1rem',
+        }}>
+          <div style={{
+            fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+            color: 'var(--color-text-light)', fontWeight: 600,
+          }}>
+            Welcome
+          </div>
+          <h1 style={{
+            fontSize: 22, fontWeight: 600, color: 'var(--color-primary)',
+            margin: '4px 0 6px', letterSpacing: '-0.01em',
+          }}>
+            Let&rsquo;s start by capturing what you want to build.
+          </h1>
+          <p style={{ fontSize: 14, color: 'var(--color-text-light)', lineHeight: 1.55, margin: 0 }}>
+            The portal needs a requirements document before it can show progress,
+            queue work, or surface gaps. Describe your idea below — Cory will turn
+            it into a structured requirements set with a short Q&amp;A.
+          </p>
+        </div>
+        <RequirementsBuilder />
+      </div>
+    );
+  }
 
   // Framing card visibility is gated ONLY on seenIntros.home. Anyone
   // who hasn't dismissed sees it once; after dismiss it never shows

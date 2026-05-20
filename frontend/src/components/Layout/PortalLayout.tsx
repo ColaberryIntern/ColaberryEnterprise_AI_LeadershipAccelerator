@@ -5,6 +5,7 @@ import { MentorContextProvider } from '../../contexts/MentorContext';
 import CoryAvatar from '../cory/CoryAvatar';
 import WorkspaceContextBar from './WorkspaceContextBar';
 import ToastHost from '../workspace/MicroToast';
+import { useOnboardingState, type OnboardingGates } from '../../hooks/useOnboardingState';
 // Workspace Presence Sprint, 2026-05-12 — ambient breath/fresh/shimmer
 // animation primitives. Loaded once at layout level so any portal page
 // can opt in via class name without re-importing.
@@ -14,6 +15,11 @@ function PortalLayout() {
   const { logout } = useParticipantAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // 2026-05-20: read onboarding gates so we can disable top-nav items the
+  // user hasn't unlocked yet. Until the requirements doc is saved,
+  // Critique / Blueprint / System are dead ends — gray them out + tooltip.
+  const onboarding = useOnboardingState();
 
   const handleLogout = () => {
     logout();
@@ -28,13 +34,23 @@ function PortalLayout() {
   // Curriculum/coaching live at the end (orthogonal to the build loop).
   // Version-labelled and duplicated entries remain routed for rollback,
   // but are not surfaced here.
-  const navItems = [
-    { to: '/portal/home', label: 'Home', icon: 'bi-house' },
-    { to: '/portal/visual-workspace', label: 'Critique', icon: 'bi-bullseye' },
-    { to: '/portal/project/blueprint', label: 'Blueprint', icon: 'bi-map' },
-    { to: '/portal/project/system', label: 'System', icon: 'bi-grid-3x3-gap' },
-    { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
+  const navItems: Array<{ to: string; label: string; icon: string; gateKey: keyof OnboardingGates }> = [
+    { to: '/portal/home',                label: 'Home',      icon: 'bi-house',           gateKey: 'home' },
+    { to: '/portal/visual-workspace',    label: 'Critique',  icon: 'bi-bullseye',        gateKey: 'critique' },
+    { to: '/portal/project/blueprint',   label: 'Blueprint', icon: 'bi-map',             gateKey: 'blueprint' },
+    { to: '/portal/project/system',      label: 'System',    icon: 'bi-grid-3x3-gap',    gateKey: 'system' },
+    { to: '/portal/sessions',            label: 'Sessions',  icon: 'bi-calendar-event',  gateKey: 'sessions' },
   ];
+
+  // Until the onboarding state loads, treat everything as enabled (don't
+  // flash a disabled state for an instant on every nav). Once loaded,
+  // respect the gates server-side.
+  const gates = onboarding.state?.gates;
+  const stageHint = onboarding.state?.stage === 'needs_requirements'
+    ? 'Add a requirements document on Home first.'
+    : onboarding.state?.stage === 'has_requirements'
+      ? 'Connect a GitHub repo to unlock this.'
+      : 'Not available yet.';
 
   return (
     <MentorContextProvider>
@@ -71,23 +87,45 @@ function PortalLayout() {
               </ul>
             ) : (
               <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-                {navItems.map((item) => (
-                  <li className="nav-item" key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end
-                      className={({ isActive }) =>
-                        `nav-link ${isActive ? 'fw-semibold' : ''}`
-                      }
-                      style={({ isActive }) => ({
-                        color: isActive ? 'var(--color-primary)' : 'var(--color-text-light)',
-                      })}
-                    >
-                      <i className={`bi ${item.icon} me-1`}></i>
-                      {item.label}
-                    </NavLink>
-                  </li>
-                ))}
+                {navItems.map((item) => {
+                  const enabled = !gates || gates[item.gateKey] !== false;
+                  if (!enabled) {
+                    return (
+                      <li className="nav-item" key={item.to}>
+                        <span
+                          className="nav-link"
+                          title={stageHint}
+                          aria-disabled="true"
+                          style={{
+                            color: 'var(--color-text-light)',
+                            opacity: 0.45,
+                            cursor: 'not-allowed',
+                          }}
+                        >
+                          <i className={`bi ${item.icon} me-1`}></i>
+                          {item.label}
+                        </span>
+                      </li>
+                    );
+                  }
+                  return (
+                    <li className="nav-item" key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end
+                        className={({ isActive }) =>
+                          `nav-link ${isActive ? 'fw-semibold' : ''}`
+                        }
+                        style={({ isActive }) => ({
+                          color: isActive ? 'var(--color-primary)' : 'var(--color-text-light)',
+                        })}
+                      >
+                        <i className={`bi ${item.icon} me-1`}></i>
+                        {item.label}
+                      </NavLink>
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <button

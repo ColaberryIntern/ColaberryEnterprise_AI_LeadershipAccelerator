@@ -31,7 +31,26 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 
-const STORAGE_KEY = 'workspaceMemory:v1';
+// 2026-05-20: scope the storage key by enrollment so signing in as a
+// different user in the same browser doesn't surface the prior user's
+// "YOU WERE WORKING ON: BP <id>" widget. Falls back to legacy v1 key
+// only when no token is present (anonymous mode, unlikely in portal).
+function currentEnrollmentId(): string | null {
+  try {
+    const token = localStorage.getItem('participant_token');
+    if (!token) return null;
+    // JWT payload is the middle segment, base64url-encoded.
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return json?.sub || null;
+  } catch { return null; }
+}
+
+function storageKey(): string {
+  const sub = currentEnrollmentId();
+  return sub ? `workspaceMemory:v2:${sub}` : 'workspaceMemory:v1';
+}
 
 export type DrawerId = 'readiness' | 'coverage' | 'why-this-next' | 'cory';
 
@@ -123,7 +142,7 @@ export interface StateSnapshotInput {
 
 function load(): WorkspaceMemory {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     if (!raw) return {};
     return JSON.parse(raw);
   } catch {
@@ -134,7 +153,7 @@ function load(): WorkspaceMemory {
 function save(memory: WorkspaceMemory) {
   try {
     const updated = { ...memory, updatedAt: new Date().toISOString() };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(storageKey(), JSON.stringify(updated));
   } catch {
     /* localStorage unavailable — degrade silently */
   }
@@ -146,8 +165,9 @@ export function useWorkspaceMemory() {
   // Listen for cross-tab updates so the memory stays consistent if the
   // user has multiple portal tabs open.
   useEffect(() => {
+    const currentKey = storageKey();
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
+      if (e.key === currentKey && e.newValue) {
         try { setMemory(JSON.parse(e.newValue)); } catch { /* ignore */ }
       }
     };
@@ -186,7 +206,7 @@ export function useWorkspaceMemory() {
   }, []);
 
   const clear = useCallback(() => {
-    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(storageKey()); } catch { /* ignore */ }
     setMemory({});
   }, []);
 
