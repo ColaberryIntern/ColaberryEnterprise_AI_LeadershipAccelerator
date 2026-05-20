@@ -113,6 +113,88 @@ function extractPathsInto(content: string, out: Set<string>): void {
 }
 
 /**
+ * Extract path → component-name bindings from route file contents.
+ * Looks for `<Route path="/x" element={<ComponentName .../>} />` patterns.
+ * Lets the engine derive cap.frontend_route from a cap's
+ * linked_frontend_components by looking up which route renders each
+ * component.
+ *
+ * Returns a Map<componentName, route>. When multiple routes share a
+ * component (rare), the last one wins — fine for our use case since
+ * the operator only needs one canonical URL per cap.
+ */
+export function extractRouteComponentBindings(
+  contents: ReadonlyArray<string | null | undefined>,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  // Matches: <Route path="/foo" element={<BarPage ...prop/>} />
+  //          <Route path="/foo" element={<BarPage />} />
+  const pattern = /<Route\s+path\s*=\s*"([^"]+)"\s+element\s*=\s*\{\s*<(\w+)/g;
+  for (const c of contents) {
+    if (!c) continue;
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(c)) !== null) {
+      const [, route, componentName] = m;
+      out.set(componentName, route);
+    }
+  }
+  return out;
+}
+
+/**
+ * Given a cap's linked_frontend_components + the component→route
+ * binding map, derive the cap's canonical frontend_route. Picks the
+ * route whose component name most closely matches the cap name.
+ * Falls back to the first matched component.
+ *
+ * Returns null when no linked component resolves to a registered
+ * route (caller should leave frontend_route unset rather than
+ * inventing one).
+ */
+export function deriveFrontendRouteFromComponents(
+  capName: string,
+  linkedComponents: ReadonlyArray<string>,
+  componentToRoute: ReadonlyMap<string, string>,
+): string | null {
+  if (linkedComponents.length === 0 || componentToRoute.size === 0) return null;
+
+  const candidates: Array<{ component: string; route: string }> = [];
+  for (const comp of linkedComponents) {
+    // Component name = filename without .tsx/.jsx extension
+    const filename = comp.split('/').pop() || '';
+    const compName = filename.replace(/\.(tsx?|jsx?)$/, '');
+    const route = componentToRoute.get(compName);
+    if (route) candidates.push({ component: compName, route });
+  }
+
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0].route;
+
+  // Multiple candidates: pick the one whose component name most closely
+  // matches the cap name. Strip common suffixes for the comparison.
+  const normalize = (s: string) => s.toLowerCase()
+    .replace(/(page|view|screen|dashboard|admin)$/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  const capKey = normalize(capName);
+
+  // Best match by stem overlap
+  let best = candidates[0];
+  let bestScore = 0;
+  for (const c of candidates) {
+    const compKey = normalize(c.component);
+    // Score = length of longest shared substring (cheap heuristic)
+    let score = 0;
+    for (let i = 2; i <= Math.min(compKey.length, capKey.length); i++) {
+      for (let j = 0; j <= compKey.length - i; j++) {
+        if (capKey.includes(compKey.substring(j, j + i))) score = Math.max(score, i);
+      }
+    }
+    if (score > bestScore) { bestScore = score; best = c; }
+  }
+  return best.route;
+}
+
+/**
  * Extract all frontend routes from a repo file tree.
  * Supports Next.js app router AND React CRA pages.
  *

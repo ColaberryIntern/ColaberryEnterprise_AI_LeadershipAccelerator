@@ -163,13 +163,14 @@ export async function syncFileTree(enrollmentId: string): Promise<{
   // even if route fetching fails (engine will fall back to existing
   // safety nets).
   try {
-    const { ROUTE_FILE_PATHS, readRegisteredRoutesFromContents } = await import('./frontendPageDiscovery');
+    const { ROUTE_FILE_PATHS, readRegisteredRoutesFromContents, extractRouteComponentBindings } = await import('./frontendPageDiscovery');
     const treePathSet = new Set(files.map((f: any) => f.path));
     const presentRoutePaths = ROUTE_FILE_PATHS.filter(p => treePathSet.has(p));
     const contents = await Promise.all(
       presentRoutePaths.map(p => readFileFromRepo(enrollmentId, p).catch(() => null)),
     );
     const registry = readRegisteredRoutesFromContents(contents);
+    const componentBindings = extractRouteComponentBindings(contents);
     let parsedCount = 0;
     for (const c of contents) if (typeof c === 'string') parsedCount++;
     if (registry && registry.size > 0) {
@@ -182,6 +183,13 @@ export async function syncFileTree(enrollmentId: string): Promise<{
       console.log(`[GitHub] Persisted route registry: ${registry.size} routes from ${parsedCount}/${presentRoutePaths.length} files`);
     } else {
       console.warn(`[GitHub] Route registry parse yielded zero routes (${parsedCount}/${presentRoutePaths.length} files parsed) — leaving previous registry unchanged`);
+    }
+    if (componentBindings.size > 0) {
+      (connection as any).route_component_bindings_json = {
+        bindings: Object.fromEntries(componentBindings),
+        captured_at: new Date().toISOString(),
+      };
+      console.log(`[GitHub] Persisted ${componentBindings.size} component→route bindings`);
     }
   } catch (err: any) {
     console.warn(`[GitHub] route registry persist skipped: ${err?.message}`);

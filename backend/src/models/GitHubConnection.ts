@@ -34,6 +34,16 @@ export interface GitHubConnectionAttributes {
     source_files: string[];
     parsed_count: number;
   } | null;
+  /**
+   * Component → route bindings (2026-05-20). Map of React component
+   * name to the route that renders it, parsed from <Route path="x"
+   * element={<Comp />}/> declarations. Lets the engine derive
+   * cap.frontend_route from a cap's linked_frontend_components.
+   */
+  route_component_bindings_json?: {
+    bindings: Record<string, string>; // componentName → route
+    captured_at: string;
+  } | null;
 }
 
 class GitHubConnection extends Model<GitHubConnectionAttributes> implements GitHubConnectionAttributes {
@@ -118,6 +128,8 @@ GitHubConnection.init(
     // Tier-3 A+E extension (2026-05-20): persisted React Router registry.
     // See route_registry_json doc above. Populated by syncFileTree.
     route_registry_json: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
+    // Component → route bindings (2026-05-20). See doc above.
+    route_component_bindings_json: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
   },
   {
     sequelize,

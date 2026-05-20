@@ -363,13 +363,30 @@ export const BPLine: React.FC<{
 
   let word: string;
   let wordColor: string;
+  let wordTooltip: string;
   if (pageHasFrontend) {
     // Page is built; remaining work (if any) is operator-judgment review.
-    if (usable) { word = 'Built'; wordColor = '#15803d'; }
-    else { word = 'Built · awaits review'; wordColor = '#1d4ed8'; }
+    // 2026-05-20: language sharpened after operator confusion — the
+    // previous "Built · awaits review" merged two unrelated things
+    // (page exists vs. UI Advisor not run yet). Now split the signals:
+    //   "Page built"            = renders + UI Advisor passed
+    //   "Page built · UI review pending" = renders, UI Advisor not yet run
+    // The "X/Y" requirements count next to this chip is a SEPARATE
+    // dimension (req→code matching) — different concern, surfaced
+    // independently.
+    if (usable) {
+      word = 'Page built';
+      wordColor = '#15803d';
+      wordTooltip = 'The page renders and operator has run UI Advisor + verified categories.';
+    } else {
+      word = 'Page built · UI review pending';
+      wordColor = '#1d4ed8';
+      wordTooltip = 'The page renders. The matched/total count beside it is a separate dimension (requirement→code matching). "UI review pending" means run UI Advisor on this page to complete it.';
+    }
   } else {
     word = usable ? 'Usable' : pct >= 50 ? 'Forming' : pct > 0 ? 'Early' : 'Not built yet';
     wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
+    wordTooltip = `Coverage state: ${matched}/${total} requirements matched (${pct}%).`;
   }
   const accentBorderLeft = inheritedAccent === 'priority'
     ? '3px solid var(--color-primary)'
@@ -400,10 +417,10 @@ export const BPLine: React.FC<{
           {matched}/{total}
         </span>
       )}
-      <span style={{
+      <span title={wordTooltip} style={{
         fontSize: 11, letterSpacing: '0.01em',
         color: wordColor, fontWeight: 600, flexShrink: 0,
-        minWidth: 80, textAlign: 'right',
+        textAlign: 'right',
       }}>
         {word}
       </span>
