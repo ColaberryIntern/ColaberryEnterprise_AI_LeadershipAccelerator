@@ -1973,10 +1973,19 @@ function enrichCapability(cap: any) {
         || (storedFrontendCount === 0 && storedAgentsCount === 0 && hasBackend);
       const realAgents = storedAgentsCount > 0 || ctxHasAgents
         || (storedBackendCount === 0 && storedFrontendCount === 0 && hasAgents);
-      const realFrontend = (cap as any).frontend_route
+      // 2026-05-20 (refined): a cap should only show a frontend pillar
+      // when it has its OWN page. Lead Classification had 5
+      // linked_frontend_components (LeadCaptureForm, LeadDetailModal,
+      // ClassificationBadge etc.) but no frontend_route — those are
+      // shared / utility components attributed by keyword match, not a
+      // page that IS Lead Classification. Operator flagged it as a
+      // false-positive amber F. Now strict: frontend = ready/partial
+      // only when the cap has its own route or is explicitly a page BP.
+      // Sub-component participation is preserved in linked_frontend_components
+      // for the detail panel but does NOT light the row pillar.
+      const realFrontend = !!(cap as any).frontend_route
         || (cap as any).source === 'frontend_page'
-        || storedFrontendCount > 0
-        || (storedBackendCount === 0 && storedAgentsCount === 0 && hasFrontend);
+        || (cap as any).is_page_bp === true;
 
       if (isPageBP) {
         return { backend: ctxHasBackend ? 'ready' : 'n/a', frontend: realFrontend ? 'ready' : 'missing', agent: ctxHasAgents ? 'ready' : 'n/a', usable: isPageBPComplete, why_not: isPageBPComplete ? [] : ['Connect a frontend route to mark as ready'] };
