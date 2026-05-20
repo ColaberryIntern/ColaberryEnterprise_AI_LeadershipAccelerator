@@ -25,6 +25,7 @@
  */
 import OpenAI from 'openai';
 import { Capability } from '../models';
+import { classifyAgentRoles, AgentRolesCachePayload } from './classifyAgentRoles';
 
 interface RawCandidate {
   stem: string;                        // normalized name stem (e.g. "lead")
@@ -856,6 +857,44 @@ Output JSON:
 // Main entry point
 // ---------------------------------------------------------------------------
 
+/**
+ * Bulk-fetch agent file contents via GitHub API for role classification
+ * at scan time (Tier-3 A+E 2026-05-20). Bounded by MAX_FILES_PER_CAP
+ * downstream; here we just fetch every unique path requested. Best-
+ * effort — paths that fail to fetch get null and downstream
+ * classification falls back to filename-only inference.
+ */
+async function fetchAgentContents(
+  enrollmentId: string,
+  agentPaths: ReadonlyArray<string>,
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (agentPaths.length === 0) return out;
+  const { readFileFromRepo } = await import('./githubService');
+  const contents = await Promise.all(
+    agentPaths.map(p => readFileFromRepo(enrollmentId, p).catch(() => null)),
+  );
+  for (let i = 0; i < agentPaths.length; i++) {
+    out.set(agentPaths[i], contents[i]);
+  }
+  return out;
+}
+
+/**
+ * Classify agent roles for a cap's linked_agents and return the
+ * persistable payload. Used by both brownfield create + merge paths.
+ * Returns null when there are no agent files to classify.
+ */
+async function buildAgentRolesCache(
+  enrollmentId: string,
+  agentPaths: ReadonlyArray<string>,
+): Promise<AgentRolesCachePayload | null> {
+  const supported = agentPaths.filter(p => /\.(ts|tsx|js|jsx)$/.test(p));
+  if (supported.length === 0) return null;
+  const contents = await fetchAgentContents(enrollmentId, supported);
+  return classifyAgentRoles(supported, contents);
+}
+
 export async function discoverBrownfieldCapabilities(
   enrollmentId: string,
   projectId: string,
@@ -956,6 +995,14 @@ export async function discoverBrownfieldCapabilities(
       existing.linked_backend_services = mergedBackend;
       existing.linked_frontend_components = mergedFrontend;
       existing.linked_agents = mergedAgents;
+
+      // Tier-3 A+E (2026-05-20): re-classify agent roles when the
+      // agent set actually changed. Persisting at scan time means
+      // the engine refresh doesn't need to hit GitHub per refresh.
+      if (agentsGained > 0 || !(existing as any).agent_roles_cache) {
+        const roleCache = await buildAgentRolesCache(enrollmentId, mergedAgents);
+        if (roleCache) (existing as any).agent_roles_cache = roleCache;
+      }
       await existing.save();
 
       console.log(
@@ -976,6 +1023,12 @@ export async function discoverBrownfieldCapabilities(
     const progressMentions = countProgressMentions(cap.name, progressMd);
     const evidenceCompletionPct = computeEvidenceCompletion(layerCounts, progressMentions);
 
+    // Tier-3 A+E: classify agent roles at scan time, persist with the
+    // cap. Engine refresh reads from this column instead of hitting
+    // GitHub per refresh.
+    const linkedAgents = [...new Set(agents)];
+    const roleCache = await buildAgentRolesCache(enrollmentId, linkedAgents);
+
     const newCap = await Capability.create({
       project_id: projectId,
       name: cap.name,
@@ -994,7 +1047,8 @@ export async function discoverBrownfieldCapabilities(
       },
       linked_backend_services: [...new Set([...backend, ...models])],
       linked_frontend_components: [...new Set(frontend)],
-      linked_agents: [...new Set(agents)],
+      linked_agents: linkedAgents,
+      agent_roles_cache: roleCache,
     } as any);
 
     created.push({

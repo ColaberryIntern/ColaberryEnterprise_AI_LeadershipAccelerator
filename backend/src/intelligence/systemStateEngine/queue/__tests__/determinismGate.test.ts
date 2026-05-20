@@ -425,7 +425,10 @@ describe('propose_agent_stack generator (next-tier work after build)', () => {
     });
     const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
     expect(t).toBeDefined();
-    expect(t!.description).toMatch(/stack looks incomplete/);
+    // Description varies by whether persisted role evidence is present.
+    // Without it (no agent_roles_cache in test), the no-evidence path
+    // surfaces "role classification hasn't run yet" then the generic ask.
+    expect(t!.description).toMatch(/role classification hasn't run yet|stack looks incomplete/);
     expect(t!.description).toMatch(/scheduled jobs|workflow automation/);
   });
 
@@ -689,6 +692,69 @@ describe('agent role-aware gate (Tier-2 #4)', () => {
     });
     const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
     expect(t).toBeUndefined();  // count gate hit (3 >= floor)
+  });
+
+  it('surfaces staleness in description when classification > 7 days old (Tier-3 E)', () => {
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    const cap = mkCap({
+      id: 'stale-class', name: 'Order Processor', kind: 'service',
+      linked_backend_services: ['o.ts', 'o2.ts', 'o3.ts', 'o4.ts', 'o5.ts'],
+      linked_frontend_components: ['OP.tsx', 'OP2.tsx', 'OP3.tsx'],
+      linked_agents: ['orderCore.ts'],
+      frontend_route: '/admin/orders',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+        agent_roles: {
+          detected: ['core'],
+          files_inspected: 1,
+          classified_at: eightDaysAgo,
+          agent_paths: ['orderCore.ts'],
+        },
+      } as any,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.description).toMatch(/Classification is \d+ days old/);
+    expect(t!.description).toMatch(/re-scan to refresh/);
+  });
+
+  it('surfaces drift in description when agent_paths changed since classification (Tier-3 E)', () => {
+    const cap = mkCap({
+      id: 'drifted', name: 'Order Processor', kind: 'service',
+      linked_backend_services: ['o.ts', 'o2.ts', 'o3.ts', 'o4.ts', 'o5.ts'],
+      linked_frontend_components: ['OP.tsx', 'OP2.tsx', 'OP3.tsx'],
+      // Current linked_agents includes new files not in cache.agent_paths
+      linked_agents: ['orderCore.ts', 'orderMonitor.ts'],
+      frontend_route: '/admin/orders',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+        agent_roles: {
+          detected: ['core'],
+          files_inspected: 1,
+          classified_at: new Date().toISOString(), // fresh timestamp
+          agent_paths: ['orderCore.ts'],            // but agent set drifted
+        },
+      } as any,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.description).toMatch(/drifted since last classification/);
   });
 
   it('description lists present roles when role evidence available', () => {

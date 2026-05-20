@@ -898,60 +898,10 @@ export function validateCapFrontendRoutes(
   return { totalCleared: cleared.length, registrySize: registeredRoutes.size, aborted: false, clearedRoutes: cleared };
 }
 
-// Per-enrollment cache of pre-fetched agent file contents (Tier-3 #9
-// 2026-05-20). GitHub anonymous rate limit is 60/hr; without this
-// cache, every engine refresh re-fetches 40+ files and exhausts the
-// limit in two refreshes, silently degrading role classification to
-// filename-only. With 1h TTL, the engine fetches once per enrollment
-// per hour and reuses the map.
-const AGENT_CONTENTS_CACHE = new Map<string, { contents: Map<string, string | null>; cached_at: number }>();
-const AGENT_CONTENTS_TTL_MS = 60 * 60 * 1000;
-
-async function getOrFetchAgentContents(
-  project: { id?: string; enrollment_id?: any },
-  caps: ReadonlyArray<any>,
-): Promise<Map<string, string | null>> {
-  const enrollmentId = (project as any).enrollment_id as string | undefined;
-  if (!enrollmentId) return new Map();
-
-  const cached = AGENT_CONTENTS_CACHE.get(enrollmentId);
-  if (cached && Date.now() - cached.cached_at < AGENT_CONTENTS_TTL_MS) {
-    return cached.contents;
-  }
-
-  const out = new Map<string, string | null>();
-  try {
-    const { readFileFromRepo } = await import('../../services/githubService');
-    const uniqueAgentPaths = new Set<string>();
-    for (const c of caps as any[]) {
-      const agents = (c.linked_agents || []) as string[];
-      for (const a of agents.slice(0, 5)) {
-        if (/\.(ts|tsx|js|jsx)$/.test(a)) uniqueAgentPaths.add(a);
-      }
-    }
-    if (uniqueAgentPaths.size > 0) {
-      const paths = [...uniqueAgentPaths];
-      const contents = await Promise.all(
-        paths.map(p => readFileFromRepo(enrollmentId, p).catch(() => null)),
-      );
-      for (let i = 0; i < paths.length; i++) {
-        out.set(paths[i], contents[i]);
-      }
-      const hits = contents.filter(c => c !== null).length;
-      console.log(`[Engine] Fetched ${hits}/${paths.length} agent files via GitHub API (cached for next 1h)`);
-    }
-  } catch (err: any) {
-    console.warn(`[Engine] agent-file pre-fetch skipped: ${err?.message}`);
-  }
-
-  AGENT_CONTENTS_CACHE.set(enrollmentId, { contents: out, cached_at: Date.now() });
-  return out;
-}
-
-/** Test-only helper to clear the agent-contents cache. */
-export function _resetAgentContentsCacheForTests(): void {
-  AGENT_CONTENTS_CACHE.clear();
-}
+// AGENT_CONTENTS_CACHE was removed 2026-05-20 (Tier-3 A+E). Agent role
+// classification now lives in cap.agent_roles_cache (persisted at
+// brownfield-scan time). Engine refresh reads from DB, no runtime
+// GitHub fetch, no in-memory cache needed.
 
 export interface BuildOptions {
   readonly persist?: boolean;     // default true
@@ -1302,25 +1252,13 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
     console.warn(`[Engine] frontend_route validation skipped: ${err?.message}`);
   }
 
-  // Pre-fetch agent file contents (2026-05-19, Tier-3 #9). The prod
-  // container is built from compiled dist/ and has no source files —
-  // codeEvidence.readAgentRole's local-fs path returns nothing there,
-  // so role classification falls back to filename-only inference.
-  // Bulk-fetch unique agent file paths via GitHub API, build a content
-  // map, and pass it to computeCodeEvidence. Bounded by the union of
-  // each cap's first 5 agent files — typically ~100-300 unique paths.
-  //
-  // Caching (2026-05-20): per-enrollment in-memory cache with 1h TTL
-  // to avoid hammering the GitHub API. Connections without an auth
-  // token are subject to a 60/hr anonymous rate limit; every engine
-  // refresh re-fetching all 40+ files used to exhaust it in two
-  // cycles, then degrade silently to filename-only inference. Cache
-  // means cold-fetch once per hour per enrollment, then reuse.
-  //
-  // Skipped on errors / no enrollment — falls back to filename-only
-  // (still better than nothing; tokenizer catches operator-named
-  // intent like "leadMonitor.ts" without reading content).
-  const preFetchedAgentContents = await getOrFetchAgentContents(project, caps);
+  // Tier-3 A+E (2026-05-20): role classification is now PERSISTED at
+  // brownfield-scan time (cap.agent_roles_cache). Engine refresh reads
+  // it from DB — no GitHub API calls per refresh, no silent
+  // degradation when rate-limited. Staleness (> 7 days) surfaces in
+  // task descriptions so the operator knows when re-classification is
+  // due. The old runtime pre-fetch path is gone.
+  const preFetchedAgentContents = new Map<string, string | null>();
 
   const capabilities: EngineCapabilityInput[] = caps.map(cap => {
     const c = cap as any;
@@ -1378,16 +1316,32 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
             kind: (c as any).kind,
             linked_backend_services: c.linked_backend_services,
             linked_agents: c.linked_agents,
-            preFetchedAgentContents,  // wired Tier-3 #9
+            // No runtime GitHub fetch (Tier-3 A+E 2026-05-20). Agent
+            // role evidence is read from the cap's persisted
+            // agent_roles_cache below instead.
           });
+          // Prefer persisted classification (Tier-3 A+E): set at
+          // brownfield-scan time, fresh for 7 days, drift-checked
+          // against current linked_agents in the queue gate.
+          // Falls back to codeEvidence's filename-only inference
+          // when cache is null (new caps haven't been re-scanned yet).
+          const persistedRoles = (c as any).agent_roles_cache;
+          const agentRoles = persistedRoles
+            ? {
+                detected: persistedRoles.detected,
+                files_inspected: persistedRoles.files_inspected,
+                classified_at: persistedRoles.classified_at,
+                agent_paths: persistedRoles.agent_paths,
+              }
+            : (ev.agent_roles ? {
+                detected: ev.agent_roles.detected,
+                files_inspected: ev.agent_roles.files_inspected,
+              } : undefined);
           return {
             reliability_signal: ev.reliability_signal,
             automation_applicable: ev.automation_applicable,
             evidence_files_read: ev.evidence_files_read,
-            agent_roles: ev.agent_roles ? {
-              detected: ev.agent_roles.detected,
-              files_inspected: ev.agent_roles.files_inspected,
-            } : undefined,
+            agent_roles: agentRoles,
           };
         } catch {
           return undefined;

@@ -678,10 +678,32 @@ function generateAgentStackTask(
   // Role-aware path enumerates which roles are present (operator can
   // see what's covered) and which are missing (operator knows exactly
   // what to add).
+  //
+  // Honest degradation (Tier-3 A+E 2026-05-20): when role evidence
+  // comes from a persisted classification, also surface the age and
+  // any drift. If classified_at > 7 days OR the agent_paths snapshot
+  // doesn't match current linked_agents, append "(classification N
+  // days old — re-scan to refresh)" so the operator knows when data
+  // is degraded rather than silently using stale roles.
   const hasSomeAgent = linkedAgentCount > 0;
   let stackPrefix: string;
   let askSuffix: string;
+  let stalenessSuffix = '';
   if (haveRoleEvidence) {
+    const classifiedAt = roleEvidence?.classified_at;
+    if (classifiedAt) {
+      const ageMs = Date.now() - new Date(classifiedAt).getTime();
+      const ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+      const cachedPaths = new Set(roleEvidence?.agent_paths || []);
+      const currentPaths = new Set(cap.linked_agents || []);
+      const drifted = cachedPaths.size !== currentPaths.size
+        || [...currentPaths].some(p => !cachedPaths.has(p));
+      if (drifted) {
+        stalenessSuffix = ` ⚠ Agent file set drifted since last classification — re-scan to refresh role detection.`;
+      } else if (ageDays > 7) {
+        stalenessSuffix = ` ⚠ Classification is ${ageDays} days old — re-scan to refresh role detection.`;
+      }
+    }
     const presentList = [...detectedRoles].sort().join(', ') || 'none';
     const allRoles: Array<'monitor' | 'alert' | 'follow_up'> = ['monitor', 'alert', 'follow_up'];
     const missing = allRoles.filter(r => !detectedRoles.has(r));
@@ -694,15 +716,15 @@ function generateAgentStackTask(
       : ` Stack roles look covered; consider adding follow-up or specialized agents.`;
   } else {
     stackPrefix = hasSomeAgent
-      ? `${cap.name} has ${linkedAgentCount} agent${linkedAgentCount === 1 ? '' : 's'} but the stack looks incomplete.`
+      ? `${cap.name} has ${linkedAgentCount} agent${linkedAgentCount === 1 ? '' : 's'} but role classification hasn't run yet for this cap.`
       : `${cap.name} has no agent layer linked.`;
     askSuffix = kind === 'page'
       ? ' Propose the rest of the stack: page-load monitoring, error capture, conversion alerts, follow-up sequences.'
       : ' Propose the backend agents that extend it: scheduled jobs, workflow automation, data monitors, alert triggers.';
   }
   const description = kind === 'page'
-    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). ${stackPrefix}${askSuffix}`
-    : `${cap.name} is built (readiness ${score.readiness}%). ${stackPrefix}${askSuffix}`;
+    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). ${stackPrefix}${askSuffix}${stalenessSuffix}`
+    : `${cap.name} is built (readiness ${score.readiness}%). ${stackPrefix}${askSuffix}${stalenessSuffix}`;
 
   return makeTask({
     id: `${cap.id}:propose_agent_stack`,

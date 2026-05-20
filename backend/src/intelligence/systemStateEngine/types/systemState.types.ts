@@ -943,6 +943,15 @@ export interface EngineCapabilityInput {
     readonly agent_roles?: {
       readonly detected: ReadonlyArray<'monitor' | 'alert' | 'follow_up' | 'core'>;
       readonly files_inspected: number;
+      /**
+       * Tier-3 A+E (2026-05-20): when this comes from the persisted
+       * cap.agent_roles_cache, classified_at + agent_paths let the
+       * gate detect staleness (> 7 days) AND drift (agent set changed
+       * since classification). Absent when role evidence is computed
+       * on-the-fly via filename-only fallback.
+       */
+      readonly classified_at?: string;
+      readonly agent_paths?: ReadonlyArray<string>;
     };
   };
 }

@@ -58,6 +58,28 @@ export interface CapabilityAttributes {
   user_status?: 'in_progress' | 'verified' | 'archived';
   user_status_set_at?: Date | null;
   user_status_set_by?: string | null;
+  /**
+   * Persisted agent-role classification (2026-05-20, Tier-3 A+E).
+   * Populated at brownfield-discovery scan time so the engine refresh
+   * can read role evidence without per-refresh GitHub API calls
+   * (which silently degrade when rate-limited or token-less).
+   *
+   * Shape:
+   *   detected:        roles found across linked_agents files
+   *   files_inspected: how many agent files content was actually read
+   *   classified_at:   ISO timestamp of last classification
+   *   agent_paths:     snapshot of linked_agents at classification time
+   *                    (lets the engine detect drift and re-classify)
+   *
+   * Stale if classified_at > 7 days ago. Engine surfaces staleness
+   * in task descriptions so the operator knows when data is degraded.
+   */
+  agent_roles_cache?: {
+    detected: Array<'monitor' | 'alert' | 'follow_up' | 'core'>;
+    files_inspected: number;
+    classified_at: string;
+    agent_paths: string[];
+  } | null;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -131,6 +153,10 @@ Capability.init(
     user_status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'in_progress' },
     user_status_set_at: { type: DataTypes.DATE, allowNull: true },
     user_status_set_by: { type: DataTypes.STRING(255), allowNull: true },
+    // Tier-3 A+E (2026-05-20): persisted agent-role classification.
+    // See CapabilityAttributes.agent_roles_cache doc above. JSONB so
+    // shape can evolve without further migrations.
+    agent_roles_cache: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,
