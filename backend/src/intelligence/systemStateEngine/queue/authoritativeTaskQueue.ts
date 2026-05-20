@@ -751,9 +751,32 @@ function generateAgentStackTask(
       ? ' Propose the rest of the stack: page-load monitoring, error capture, conversion alerts, follow-up sequences.'
       : ' Propose the backend agents that extend it: scheduled jobs, workflow automation, data monitors, alert triggers.';
   }
+  // Oversized-cap detection (walk #5/#6 finding, also applies to
+  // agent_stack — operator can't meaningfully add monitor+alert agents
+  // to a cap that lumps 7 unrelated subsystems under one name).
+  // Same sub-domain detection as the triage path.
+  const agentStackAllPaths = [
+    ...(cap.linked_backend_services || []),
+    ...(cap.linked_agents || []),
+  ];
+  const agentStackSubdomains = new Set<string>();
+  for (const p of agentStackAllPaths) {
+    const segs = p.split('/');
+    const beIdx = segs.indexOf('backend');
+    const start = beIdx >= 0 ? beIdx + 2 : 0;
+    const rest = segs.slice(start).filter(s => !['services', 'intelligence', 'agents', 'controllers', 'routes', 'models'].includes(s));
+    if (rest.length > 1) agentStackSubdomains.add(rest[0]);
+    else agentStackSubdomains.add('_root');
+  }
+  const agentStackTotal = agentStackAllPaths.length;
+  const agentStackOversized = agentStackTotal > 20 && agentStackSubdomains.size >= 3;
+  const agentStackOversizedSuffix = agentStackOversized
+    ? ` ⚠ This cap spans ${agentStackSubdomains.size} sub-domains (${[...agentStackSubdomains].sort().slice(0, 4).join(', ')}${agentStackSubdomains.size > 4 ? '…' : ''}) — likely over-merged. Split into focused caps BEFORE adding an agent layer; monitoring agents can't meaningfully cover unrelated subsystems.`
+    : '';
+
   const description = kind === 'page'
-    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). ${stackPrefix}${askSuffix}${stalenessSuffix}`
-    : `${cap.name} is built (readiness ${score.readiness}%). ${stackPrefix}${askSuffix}${stalenessSuffix}`;
+    ? `${cap.name} is built and reviewed (coverage ${score.coverage}%). ${stackPrefix}${askSuffix}${stalenessSuffix}${agentStackOversizedSuffix}`
+    : `${cap.name} is built (readiness ${score.readiness}%). ${stackPrefix}${askSuffix}${stalenessSuffix}${agentStackOversizedSuffix}`;
 
   return makeTask({
     id: `${cap.id}:propose_agent_stack`,
