@@ -138,6 +138,35 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Tier-3 A+E extension: route registry persisted at sync time (2026-05-20)
+Natural follow-up to the agent_roles_cache fix. `validateCapFrontendRoutes` still made 5 GitHub API calls per engine refresh to fetch the React Router files. Same fragility shape — silent degradation when rate-limited.
+
+**Persist:**
+- New `route_registry_json` JSONB column on `github_connections` (added via ALTER TABLE + Sequelize model updated)
+- `syncFileTree` now fetches the 5 route files alongside the file tree, parses `path="..."` declarations, persists the registry with `captured_at` timestamp + `source_files` + `parsed_count`
+- Best-effort: sync still succeeds if route fetching fails (engine falls back to existing safety-net abort)
+
+**Engine read:**
+- `frontend_route` validation reads from `connection.route_registry_json` instead of refetching
+- Zero GitHub API calls per refresh for route validation
+- Engine log includes registry capture timestamp so operator can see freshness
+
+**Production verification:**
+- Manually triggered `syncFileTree`: `[GitHub] Persisted route registry: 97 routes from 5/5 files`
+- Triggered fresh engine refresh after persist: zero `ABORTED` logs (registry now present)
+- Rate-limit probe: 38/60 remaining (4-point delta from sync, 0 from the refresh that followed) — confirms engine reads from DB, not GitHub
+- DB query confirms: 97 routes captured at 2026-05-20T14:23:17.757Z
+
+**Combined impact today (both A+E applications):**
+- agent_roles_cache: 28 caps persisted, engine reads from DB, three-tier honest degradation
+- route_registry_json: 97 routes persisted, engine reads from DB
+- Total per-refresh GitHub calls eliminated: ~45 (5 route files + 40+ agent files at cold cache)
+
+  - Date: 2026-05-20
+  - What changed: new route_registry_json column + model field. syncFileTree fetches + parses + persists. Engine refresh reads from connection. Commit adca6558.
+  - Verification: 62/62 tests across validateCapFrontendRoutes + scoring + gate suites. tsc clean. Prod manual syncFileTree populated registry; subsequent refresh used DB without hitting GitHub (verified via rate-limit delta).
+  - Notes: The "validate at write time, persist the result, treat runtime calls as confirmations not requirements" principle now applies to all external-state fields in cap/connection data: linked files (pruneCapLinkedFiles), agent roles (agent_roles_cache), router registry (route_registry_json). New caps in future projects will need a one-time syncFileTree to populate; existing projects get the registry the next time their tree syncs.
+
 ### Tier-3 A+E: persist agent_roles at scan time + honest degradation (2026-05-20)
 Operator concern: *"the 'Description quality degraded' process sounds problematic across every users/accounts."* The previous design (Tier-3 #9 + 1h cache) relied on a runtime GitHub API call for every engine refresh. When that call failed silently (60/hr anonymous rate limit, expired token, network error, GitHub outage), descriptions degraded to generic without telling the operator. Fragility shape would affect every project/account.
 
