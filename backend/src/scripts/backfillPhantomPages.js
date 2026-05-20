@@ -101,13 +101,13 @@ async function main() {
   // code grouping). The DUPLICATE_NAMES set tells us which ones to
   // touch.
   const duplicateNamesList = [...DUPLICATE_NAMES];
-  const [caps] = await sequelize.query(
+  const caps = await sequelize.query(
     `SELECT id, name, kind, source, frontend_route
        FROM capabilities
       WHERE project_id = :pid
-        AND (source = 'frontend_page' OR kind = 'page' OR name = ANY(:dupNames))
+        AND (source = 'frontend_page' OR kind = 'page' OR name IN (:dupNames))
       ORDER BY name`,
-    { replacements: { pid: PROJECT_ID, dupNames: duplicateNamesList } },
+    { replacements: { pid: PROJECT_ID, dupNames: duplicateNamesList }, type: Sequelize.QueryTypes.SELECT },
   );
 
   console.log(`Found ${caps.length} candidate caps in project.\n`);
