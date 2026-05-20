@@ -1220,33 +1220,34 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
     console.log(`[Engine] Pruned ${pruneSummary.totalPruned} stale file refs from ${pruneSummary.capsWithStaleRefs} caps (file tree: ${pruneSummary.fileTreeSize} files)`);
   }
 
-  // Frontend-route validation (2026-05-19, Tier-2 #6): clear cap
-  // frontend_route values that no longer resolve to a registered
-  // React Router path. Prevents stale routes from generating 404
-  // deep-links (the Trust Badges incident). See
-  // validateCapFrontendRoutes for the rationale + safety nets.
+  // Frontend-route validation (2026-05-19, Tier-2 #6 + Tier-3 A+E
+  // extension 2026-05-20): clear cap frontend_route values that no
+  // longer resolve to a registered React Router path. Prevents stale
+  // routes from generating 404 deep-links (the Trust Badges incident).
   //
-  // Route file CONTENTS come via GitHub API rather than local fs
-  // because the production container is built from compiled dist/
-  // and doesn't carry source. ROUTE_FILE_PATHS is the canonical
-  // set of files we parse for `path="..."` declarations. Bounded
-  // (5 files) so the GitHub round-trip cost per refresh is small.
+  // 2026-05-20 (Tier-3 A+E): registry is now PERSISTED at GitHub-sync
+  // time in connection.route_registry_json. Engine refresh reads from
+  // DB — zero GitHub API calls per refresh for route validation. Same
+  // shape as the agent_roles_cache fix.
   try {
-    const { readRegisteredRoutesFromContents, ROUTE_FILE_PATHS } = await import('../../services/frontendPageDiscovery');
-    const { readFileFromRepo } = await import('../../services/githubService');
     const enrollmentIdForRoutes = (project as any).enrollment_id as string | undefined;
     let registeredRoutes: Set<string> | null = null;
+    let registryCapturedAt: string | undefined;
     if (enrollmentIdForRoutes) {
-      const contents = await Promise.all(
-        ROUTE_FILE_PATHS.map(p => readFileFromRepo(enrollmentIdForRoutes, p).catch(() => null)),
-      );
-      registeredRoutes = readRegisteredRoutesFromContents(contents);
+      const { getConnection } = await import('../../services/githubService');
+      const conn = await getConnection(enrollmentIdForRoutes);
+      const registry = (conn as any)?.route_registry_json;
+      if (registry && Array.isArray(registry.routes) && registry.routes.length > 0) {
+        registeredRoutes = new Set<string>(registry.routes);
+        registryCapturedAt = registry.captured_at;
+      }
     }
     const routeSummary = validateCapFrontendRoutes(caps, registeredRoutes);
     if (routeSummary.aborted) {
       console.warn(`[Engine] frontend_route validation ABORTED: ${routeSummary.abortReason}`);
     } else if (routeSummary.totalCleared > 0) {
-      console.log(`[Engine] Cleared ${routeSummary.totalCleared} stale frontend_route refs (registry: ${routeSummary.registrySize} routes). Sample: ${routeSummary.clearedRoutes.slice(0, 3).map(c => `"${c.capName}"→${c.staleRoute}`).join(', ')}`);
+      const ageNote = registryCapturedAt ? ` (registry captured ${new Date(registryCapturedAt).toISOString()})` : '';
+      console.log(`[Engine] Cleared ${routeSummary.totalCleared} stale frontend_route refs (registry: ${routeSummary.registrySize} routes${ageNote}). Sample: ${routeSummary.clearedRoutes.slice(0, 3).map(c => `"${c.capName}"→${c.staleRoute}`).join(', ')}`);
     }
   } catch (err: any) {
     console.warn(`[Engine] frontend_route validation skipped: ${err?.message}`);

@@ -155,6 +155,38 @@ export async function syncFileTree(enrollmentId: string): Promise<{
   connection.file_count = fileCount;
   connection.repo_language = language || '';
   connection.last_sync_at = new Date();
+
+  // Tier-3 A+E extension (2026-05-20): fetch + parse the React Router
+  // registry at sync time and persist alongside file_tree_json.
+  // Engine refresh reads route_registry_json instead of making 5
+  // GitHub API calls per refresh. Best-effort — sync still succeeds
+  // even if route fetching fails (engine will fall back to existing
+  // safety nets).
+  try {
+    const { ROUTE_FILE_PATHS, readRegisteredRoutesFromContents } = await import('./frontendPageDiscovery');
+    const treePathSet = new Set(files.map((f: any) => f.path));
+    const presentRoutePaths = ROUTE_FILE_PATHS.filter(p => treePathSet.has(p));
+    const contents = await Promise.all(
+      presentRoutePaths.map(p => readFileFromRepo(enrollmentId, p).catch(() => null)),
+    );
+    const registry = readRegisteredRoutesFromContents(contents);
+    let parsedCount = 0;
+    for (const c of contents) if (typeof c === 'string') parsedCount++;
+    if (registry && registry.size > 0) {
+      (connection as any).route_registry_json = {
+        routes: [...registry].sort(),
+        captured_at: new Date().toISOString(),
+        source_files: presentRoutePaths,
+        parsed_count: parsedCount,
+      };
+      console.log(`[GitHub] Persisted route registry: ${registry.size} routes from ${parsedCount}/${presentRoutePaths.length} files`);
+    } else {
+      console.warn(`[GitHub] Route registry parse yielded zero routes (${parsedCount}/${presentRoutePaths.length} files parsed) — leaving previous registry unchanged`);
+    }
+  } catch (err: any) {
+    console.warn(`[GitHub] route registry persist skipped: ${err?.message}`);
+  }
+
   await connection.save();
 
   return { fileCount, language };

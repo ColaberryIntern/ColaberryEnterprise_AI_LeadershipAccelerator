@@ -16,6 +16,24 @@ export interface GitHubConnectionAttributes {
   repo_language?: string;
   file_count?: number;
   created_at?: Date;
+  /**
+   * Persisted React Router registry (2026-05-20, Tier-3 A+E extension).
+   * Populated by syncFileTree alongside file_tree_json. Engine refresh
+   * reads this column instead of making per-refresh GitHub API calls
+   * to fetch the 5 route files (App.tsx + 4 routes/*.tsx).
+   *
+   * Shape:
+   *   routes:         registered paths from `path="..."` declarations
+   *   captured_at:    ISO timestamp of last sync
+   *   source_files:   which files contributed (for transparency)
+   *   parsed_count:   number of source files successfully parsed
+   */
+  route_registry_json?: {
+    routes: string[];
+    captured_at: string;
+    source_files: string[];
+    parsed_count: number;
+  } | null;
 }
 
 class GitHubConnection extends Model<GitHubConnectionAttributes> implements GitHubConnectionAttributes {
@@ -97,6 +115,9 @@ GitHubConnection.init(
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    // Tier-3 A+E extension (2026-05-20): persisted React Router registry.
+    // See route_registry_json doc above. Populated by syncFileTree.
+    route_registry_json: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
   },
   {
     sequelize,
