@@ -138,6 +138,53 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Long-term fixes from walk-10 findings (2026-05-20)
+Operator request: *"I want you to long term fix all issues right now. I am trying to get this production ready for use and that is my priority so long fixes are ok to handle right away."*
+
+The walk-10 doc surfaced 3 root-cause issues. All durable fixes shipped + backfill data cleaned.
+
+**Fix #1: classifyFile prefix handling** ([brownfieldDiscoveryService.ts:127](backend/src/services/brownfieldDiscoveryService.ts#L127))
+Pre-fix, the frontend-prefix check used `/frontend/` substring — GitHub-tree paths that START with "frontend/" (no leading slash) missed it. Files like `frontend/src/services/validationStore.ts` fell through to the backend `/service` rule (substring matching `/services/`) and got mis-bucketed as backend. The Validation cap's only "backend" file was a frontend store.
+
+Fix puts frontend-prefix check FIRST, supports both with/without leading slash, and folder-anchors all subsequent checks (`/services/` not `/service`). 8 new classifier tests.
+
+**Fix #2: brownfield merge size guard** ([brownfieldDiscoveryService.ts:~1010](backend/src/services/brownfieldDiscoveryService.ts#L1010))
+The LLM consolidation pass kept assigning unrelated files to existing caps across runs. Over multiple scans, caps accumulated to 38-58 files spanning unrelated subsystems (Content Generation for Marketing: 36 OpenClaw files; Execution Planning: 8+ distinct subsystems).
+
+New `MAX_FILES_PER_CAP_LINKED = 25`. If a merge would push a cap over the ceiling, it's refused with a warning. Operator sees the cap surfaced via the oversized-triage hint and splits before more files accumulate.
+
+**Fix #3: oversized hint in triage + agent_stack descriptions** ([authoritativeTaskQueue.ts](backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts))
+When a cap spans 3+ distinct sub-domains AND has > 20 files, the queue surfaces "⚠ This cap spans N sub-domains — likely over-merged. Consider splitting BEFORE spec'ing requirements." (triage) or "⚠ spans N sub-domains — split into focused caps BEFORE adding an agent layer; monitoring agents can't meaningfully cover unrelated subsystems." (agent_stack). 3 new triage tests.
+
+**Fix #4: build_backend gate counts agents as backend code** ([authoritativeTaskQueue.ts:185](backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts#L185))
+After the reclass moved many `intelligence/*` files from backend to agents bucket, caps like Discovery (8 agents, 0 backend) falsely tripped the `!hasBackend` gate and got "Build backend services for Discovery" tasks. Agents ARE backend code. New gate: `hasAnyBackendCode = hasBackend || hasAgents`. build_backend only fires for caps truly empty of server-side code.
+
+**Backfill: 37 caps re-bucketed, 490 file moves** via `backfillReclassifyLinkedFiles.js`. Notable shifts:
+- Validation: 1 backend → 0 (the misclassified frontend store moved out)
+- Execution Planning: 58 backend → 4 backend + 55 agents (most files live under `intelligence/`)
+- Content Optimization: 50 backend → 14 backend + 37 agents
+- Discovery: 8 backend → 0 backend + 8 agents
+
+**Production verification — final walk after all fixes:**
+
+| # | Task | Honest signal shown |
+|---|---|---|
+| 1 | Campaign Management agent_stack | clean (0 agents) |
+| 2 | Marketing Dashboard agent_stack | "⚠ Roles inferred from filename only" |
+| 3 | Requirements Management agent_stack | "⚠ Agent file set drifted since last classification" |
+| 4 | Content Generation for Marketing agent_stack | "⚠ This cap spans 3 sub-domains — split before adding agents" |
+| 5 | Revenue Dashboard agent_stack | filename-only warning |
+| 6 | Analytics agent_stack | full evidence |
+| 7 | Execution Planning triage | "⚠ This cap spans 7 sub-domains — consider splitting" |
+| 8 | Lead Ingestion Pipeline triage | clean (focused) |
+
+**8/8 real. Zero false positives. Honest degradation visible on every cap with imperfect data.**
+
+  - Date: 2026-05-20
+  - What changed: classifyFile rewrite (export + frontend-first ordering); MAX_FILES_PER_CAP_LINKED guard in brownfield merge path; oversized-cap detection in triage + agent_stack descriptions; build_backend gate counts agents; backfillReclassifyLinkedFiles.js for one-time data cleanup. 6 commits across `aa575636 → 5aac0ba4`.
+  - Verification: 67/67 tests across classifyFile + scoring + gate + scoring suites. Prod backfill: 37 caps re-bucketed cleanly. Final walk: 8/8 conversion rate.
+  - Notes: This closes the walk-10 findings (#4 Validation classifier bug, #5+#6 over-merged caps). The system now (a) classifies files correctly going forward, (b) refuses to grow caps beyond the size ceiling, (c) tells the operator when a cap is over-merged so they split before spec'ing, (d) doesn't falsely suggest building backend on caps that have agent code. Production-ready data hygiene baseline established.
+
 ### Tier-3 A+E extension: route registry persisted at sync time (2026-05-20)
 Natural follow-up to the agent_roles_cache fix. `validateCapFrontendRoutes` still made 5 GitHub API calls per engine refresh to fetch the React Router files. Same fragility shape — silent degradation when rate-limited.
 
