@@ -24,6 +24,7 @@ import { forwardLookingNote } from '../../utils/operationalLeverage';
 import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
 import { metadataItems } from '../../utils/scanSpeedSignals';
 import { dedupByFrontendRoute } from '../../utils/bpRowDedup';
+import { bpPillars, type PillarSignal, type PillarStatus } from '../../utils/bpSignals';
 import { inheritedDomainContextSentence } from '../../utils/bpInheritedContext';
 import { pathwayStageLabel } from '../../utils/pathwayStage';
 
@@ -435,53 +436,137 @@ export const BPLine: React.FC<{
           </span>
         )}
       </span>
-      {/* 2026-05-20: layer badges so operator sees what's built per BP
-          without clicking. BE = backend services, FE = frontend components,
-          AG = linked agents. Counts come directly from the cap row's
-          linked_* arrays. Empty layers shown muted; populated layers
-          shown in the primary palette. */}
-      <LayerBadge label="BE" count={(bp.linked_backend_services || []).length} title="Backend services linked" />
-      <LayerBadge label="FE" count={(bp.linked_frontend_components || []).length} title="Frontend components linked" />
-      <LayerBadge label="AG" count={(bp.linked_agents || []).length} title="Agents linked" />
+      {/* 2026-05-20: same B/F/A pillar dots as the Components tab.
+          Sources usability first (richer signal: ready/partial/missing/na);
+          falls back to linked_*.length presence for brownfield caps whose
+          usability isn't populated. Tooltip shows the file count so the
+          operator can still get to the underlying number on hover. */}
+      <BPRowPillars bp={bp} />
       <MaturityChip level={bp.maturity?.level} label={bp.maturity?.label} />
       {total > 0 && (
         <span style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
           {matched}/{total}
         </span>
       )}
-      <span title={wordTooltip} style={{
-        fontSize: 11, letterSpacing: '0.01em',
-        color: wordColor, fontWeight: 600, flexShrink: 0,
-        textAlign: 'right',
-      }}>
-        {word}
-      </span>
+      <BuiltnessIcon
+        isPage={isPage}
+        pageHasFrontend={pageHasFrontend}
+        usable={usable}
+        pct={pct}
+        tooltip={wordTooltip}
+      />
       <i className="bi bi-chevron-right" style={{ fontSize: 10, color: 'var(--color-text-light)', flexShrink: 0, opacity: 0.6 }}></i>
     </button>
   );
 };
 
-const LayerBadge: React.FC<{ label: 'BE' | 'FE' | 'AG'; count: number; title: string }> = ({ label, count, title }) => {
-  const has = count > 0;
+/**
+ * BP row pillars — same shape as the Components tab. Reuses bpPillars()
+ * which reads `usability.{backend,frontend,agent}` first. When usability
+ * is unset (common for brownfield-discovered caps), synthesizes a
+ * "ready / na" status from the linked_* array lengths so the dots still
+ * carry honest signal instead of all reading "missing."
+ */
+const BPRowPillars: React.FC<{ bp: any }> = ({ bp }) => {
+  const usabilityPresent = !!bp.usability && (
+    !!bp.usability.backend || !!bp.usability.frontend || !!bp.usability.agent
+  );
+  let pillars: PillarSignal[];
+  if (usabilityPresent) {
+    pillars = bpPillars(bp);
+  } else {
+    pillars = [
+      synthPillar('backend', (bp.linked_backend_services || []).length),
+      synthPillar('frontend', (bp.linked_frontend_components || []).length),
+      synthPillar('agent', (bp.linked_agents || []).length),
+    ];
+  }
+  // Tooltip carries the raw file count so the operator can still see "5 files"
+  // on hover — the previous LayerBadge showed counts inline which prompted
+  // the "what does BE 4 mean?" question. Counts go on hover, dots on screen.
+  const counts: Record<PillarSignal['label'], number> = {
+    backend: (bp.linked_backend_services || []).length,
+    frontend: (bp.linked_frontend_components || []).length,
+    agent: (bp.linked_agents || []).length,
+  };
   return (
-    <span
-      title={`${title}: ${count}`}
-      style={{
-        flexShrink: 0,
-        padding: '1px 6px',
-        fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: '0.02em',
-        color: has ? 'var(--color-primary)' : 'var(--color-text-light)',
-        background: has ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
-        border: `1px solid ${has ? 'rgba(37, 99, 235, 0.25)' : 'var(--color-border)'}`,
-        borderRadius: 4,
-        fontVariantNumeric: 'tabular-nums',
-        opacity: has ? 1 : 0.55,
-      }}
-    >
-      {label} {count}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+      {pillars.map(p => (
+        <span key={p.label} title={`${p.description} (${counts[p.label]} file${counts[p.label] === 1 ? '' : 's'})`} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          fontSize: 9.5, fontWeight: 600, color: p.tone.fg,
+          background: p.tone.bg, padding: '1px 5px', borderRadius: 3,
+          textTransform: 'uppercase', letterSpacing: '0.05em',
+          opacity: p.status === 'na' ? 0.4 : 1,
+        }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }}></span>
+          {p.label[0].toUpperCase()}
+        </span>
+      ))}
     </span>
+  );
+};
+
+const PILLAR_TONES: Record<PillarStatus, { fg: string; bg: string }> = {
+  ready:   { fg: '#15803d', bg: '#dcfce7' },
+  partial: { fg: '#b45309', bg: '#fef3c7' },
+  missing: { fg: '#b91c1c', bg: '#fee2e2' },
+  na:      { fg: '#9ca3af', bg: 'transparent' },
+};
+
+function synthPillar(label: PillarSignal['label'], count: number): PillarSignal {
+  const status: PillarStatus = count > 0 ? 'ready' : 'na';
+  return {
+    label, status, tone: PILLAR_TONES[status],
+    description: count > 0
+      ? `${cap1(label)} present (${count} file${count === 1 ? '' : 's'})`
+      : `${cap1(label)} not detected`,
+  };
+}
+
+function cap1(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+/**
+ * BuiltnessIcon — replaces the long "Page built · UI review pending" text
+ * chip with a compact icon + tooltip. Operator scans icons left-to-right;
+ * full meaning on hover.
+ *   - check-circle (green) → page built + UI Advisor verified
+ *   - eye (blue)           → page built, UI Advisor pending
+ *   - circle (muted)       → no signal yet (Not built yet)
+ *   - dot-circle (blue)    → partial/forming (non-page BPs with some coverage)
+ */
+const BuiltnessIcon: React.FC<{
+  isPage: boolean;
+  pageHasFrontend: boolean;
+  usable: boolean;
+  pct: number;
+  tooltip: string;
+}> = ({ isPage, pageHasFrontend, usable, pct, tooltip }) => {
+  let icon: string;
+  let color: string;
+  let label: string;
+  if (pageHasFrontend) {
+    if (usable) { icon = 'bi-check-circle-fill'; color = '#15803d'; label = 'Page built · UI Advisor verified'; }
+    else        { icon = 'bi-eye'; color = '#1d4ed8'; label = 'Page built · UI review pending'; }
+  } else if (usable) {
+    icon = 'bi-check-circle-fill'; color = '#15803d'; label = 'Usable';
+  } else if (pct >= 50) {
+    icon = 'bi-dot'; color = '#1d4ed8'; label = 'Forming';
+  } else if (pct > 0) {
+    icon = 'bi-circle-half'; color = '#1d4ed8'; label = 'Early';
+  } else {
+    icon = 'bi-circle'; color = 'var(--color-text-light)'; label = 'Not built yet';
+  }
+  return (
+    <i
+      className={`bi ${icon}`}
+      title={`${label}\n${tooltip}`}
+      aria-label={label}
+      style={{
+        fontSize: 14, color, flexShrink: 0,
+        opacity: icon === 'bi-circle' ? 0.55 : 1,
+      }}
+    />
   );
 };
 

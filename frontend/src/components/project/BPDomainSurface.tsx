@@ -132,9 +132,12 @@ const BPDomainSurface: React.FC = () => {
 
   // Navigate to a domain: expand it, smooth-scroll it into view, pulse it.
   // Used by the flow strip stops AND every relationship chip.
+  // 2026-05-20: operator requested single-drill-down — opening one domain
+  // collapses all others so the page never carries more than one drawer of
+  // detail at a time.
   const navigateToDomain = useCallback((key: DomainKey) => {
     rememberDomain(key);
-    setExpanded(e => ({ ...e, [key]: true }));
+    setExpanded({ [key]: true });
     setPulsedKey(key);
     // Let the expand paint, then scroll.
     requestAnimationFrame(() => {
@@ -366,8 +369,15 @@ const BPDomainSurface: React.FC = () => {
             isDownstreamOfPriority={priorityDownstream.has(b.key)}
             registerRef={(el) => { rowRefs.current[b.key] = el; }}
             onToggle={() => {
-              if (!expanded[b.key]) rememberDomain(b.key); // about to expand — operator engagement
-              setExpanded(e => ({ ...e, [b.key]: !e[b.key] }));
+              // Single-drill-down: clicking opens this domain (collapsing
+              // all others) or closes it if already open. Keeps the page
+              // calm and prevents stacked drawers.
+              if (!expanded[b.key]) {
+                rememberDomain(b.key);
+                setExpanded({ [b.key]: true });
+              } else {
+                setExpanded({});
+              }
             }}
             onNavigate={navigateToDomain}
             onPickBp={setSelectedBp}
