@@ -72,9 +72,19 @@ const BROWNFIELD_ROUTE_ASSIGNMENTS = {
 // Pure duplicates: brownfield-discovered cap with same conceptual name as
 // a frontend_page cap that's already correctly bound. Deactivate the
 // brownfield one (it's redundant and pollutes the ui_review queue).
+//
+// 2026-05-20 extension: also dedup brownfield-vs-brownfield duplicates
+// where the LLM consolidation pass produced two names for the same
+// code grouping. Verified by linked_backend_services equality:
+//   - Requirements Engine ≡ Requirements Management (11/11 files identical)
+//   - Revenue Dashboard Insights ≡ Revenue Dashboard (7/7 files identical)
+//   - Discovery Engine ⊂ Discovery (Discovery is the 8-file superset)
 const DUPLICATE_NAMES = new Set([
   'Enrollment Success Page', // duplicate of "Enroll Success Page" → /enroll/success
   'Pilot AI Team Page',      // duplicate of "Pilot Ai Team Page" → /pilot/ai-team
+  'Requirements Engine',     // duplicate of "Requirements Management"
+  'Revenue Dashboard Insights', // duplicate of "Revenue Dashboard"
+  'Discovery Engine',        // subset of "Discovery"
 ]);
 
 async function main() {
@@ -85,17 +95,22 @@ async function main() {
   }
   const sequelize = new Sequelize(url, { logging: false });
 
-  // Pull all frontend_page caps for the project
+  // Pull all candidate caps for the project. Expanded 2026-05-20 to
+  // also include brownfield service duplicates by name (the LLM
+  // consolidation pass occasionally produced two names for the same
+  // code grouping). The DUPLICATE_NAMES set tells us which ones to
+  // touch.
+  const duplicateNamesList = [...DUPLICATE_NAMES];
   const [caps] = await sequelize.query(
     `SELECT id, name, kind, source, frontend_route
        FROM capabilities
       WHERE project_id = :pid
-        AND (source = 'frontend_page' OR kind = 'page')
+        AND (source = 'frontend_page' OR kind = 'page' OR name = ANY(:dupNames))
       ORDER BY name`,
-    { replacements: { pid: PROJECT_ID } },
+    { replacements: { pid: PROJECT_ID, dupNames: duplicateNamesList } },
   );
 
-  console.log(`Found ${caps.length} page caps in project.\n`);
+  console.log(`Found ${caps.length} candidate caps in project.\n`);
 
   let fixedRoutes = 0;
   let downgradedPhantoms = 0;

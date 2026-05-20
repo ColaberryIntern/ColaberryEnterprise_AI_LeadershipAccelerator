@@ -711,7 +711,12 @@ function generateAgentStackTask(
     title: `Propose agent stack for ${cap.name}`,
     description,
     type: 'agent_stack',
-    priority_score: 50,
+    // Priority 60 (was 50, bumped 2026-05-20): widens the gap over
+    // triage (35) so agent_stack always wins the composite even when
+    // a 20-file triage cap has max size boost. Operator's stated
+    // intent: agent_stack is next-tier value creation and should be
+    // tier-dominant over triage's housekeeping decisions.
+    priority_score: 60,
     // Maturity-aware (Tier-2 #5): bigger caps within the agent_stack
     // tier rank higher. Same shape as the triage scaling.
     blocking_score: 20 + Math.min(15, (cap.linked_backend_services || []).length + (cap.linked_frontend_components || []).length),
@@ -789,9 +794,15 @@ function generateTriageTask(
   // tier, caps with more accumulated code represent more unspec'd
   // work and rank higher. Operator sees the biggest decisions first.
   // Bounded so a 50-file cap doesn't completely dominate the queue.
-  const sizeBoost = Math.min(20, totalFiles);  // 0-20 boost
-  const maturityGain = 10 + sizeBoost;          // 10-30
-  const blockingScore = 25 + sizeBoost;         // 25-45
+  //
+  // Boost cap reduced 20→15 (2026-05-20) to preserve tier ordering:
+  // agent_stack (priority 60) now always outranks triage (priority 35)
+  // because triage max boost (15*0.25 + 15*0.15 = 6) < priority gap
+  // (25 * 0.30 = 7.5). Triage still has size differentiation within
+  // its own tier, just doesn't break into the agent_stack tier above.
+  const sizeBoost = Math.min(15, totalFiles);  // 0-15 boost
+  const maturityGain = 10 + sizeBoost;          // 10-25
+  const blockingScore = 25 + sizeBoost;         // 25-40
 
   return makeTask({
     id: `${cap.id}:triage`,

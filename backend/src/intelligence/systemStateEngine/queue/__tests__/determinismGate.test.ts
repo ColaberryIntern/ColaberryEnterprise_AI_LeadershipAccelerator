@@ -747,7 +747,7 @@ describe('maturity-aware ranking within a tier (Tier-2 #5)', () => {
     expect(smallIdx).toBeGreaterThan(largeIdx);
   });
 
-  it('triage scoring scales with file count up to the cap (20 files saturates)', () => {
+  it('triage scoring scales with file count up to the cap (15 files saturates)', () => {
     const tiny = mkCap({
       id: 'tiny', name: 'Tiny', kind: 'service',
       source: 'brownfield_discovered',
@@ -767,9 +767,50 @@ describe('maturity-aware ranking within a tier (Tier-2 #5)', () => {
     const tinyTask = state.queue.find(t => t.title.includes('Tiny'));
     const hugeTask = state.queue.find(t => t.title.includes('Huge'));
     expect(tinyTask!.blocking_score).toBe(26);  // 25 + 1
-    expect(hugeTask!.blocking_score).toBe(45);  // 25 + 20 (capped)
+    expect(hugeTask!.blocking_score).toBe(40);  // 25 + 15 (capped)
     expect(tinyTask!.maturity_gain).toBe(11);   // 10 + 1
-    expect(hugeTask!.maturity_gain).toBe(30);   // 10 + 20 (capped)
+    expect(hugeTask!.maturity_gain).toBe(25);   // 10 + 15 (capped)
+  });
+
+  it('agent_stack always outranks triage regardless of size (2026-05-20)', () => {
+    // Even a max-size triage cap (15+ files = saturated boost) must
+    // rank below a small agent_stack cap. The priority gap (60-35=25
+    // weighted 0.30 = 7.5) > max triage boost (15*0.25 + 15*0.15 = 6).
+    const bigTriage = mkCap({
+      id: 'big-triage', name: 'Massive Service', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: Array.from({ length: 50 }, (_, i) => `b${i}.ts`),
+      total_requirements: 0,
+    });
+    const smallAgentStack = mkCap({
+      id: 'small-as', name: 'Small Mature Cap', kind: 'service',
+      source: 'parsed',
+      linked_backend_services: [
+        'sm.ts', 'sm2.ts', 'sm3.ts', 'sm4.ts', 'sm5.ts',
+      ],
+      linked_frontend_components: ['SmPanel.tsx', 'SmRow.tsx', 'SmFilter.tsx'],
+      linked_agents: [],
+      frontend_route: '/admin/small',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+      } as any,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({
+        capabilities: [bigTriage, smallAgentStack],
+        repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'],
+      }),
+      capabilities: [bigTriage, smallAgentStack],
+    });
+    const titles = state.queue.map(t => t.title);
+    const triageIdx = titles.findIndex(t => t.includes('Massive Service'));
+    const stackIdx = titles.findIndex(t => t.includes('Small Mature Cap'));
+    expect(stackIdx).toBeGreaterThanOrEqual(0);
+    expect(triageIdx).toBeGreaterThan(stackIdx);  // agent_stack first
   });
 });
 
