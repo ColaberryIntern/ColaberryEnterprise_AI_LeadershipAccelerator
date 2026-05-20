@@ -498,6 +498,75 @@ describe('propose_agent_stack generator (next-tier work after build)', () => {
   });
 });
 
+describe('triage description surfaces oversized caps (walk #5/#6 fix)', () => {
+  it('appends "consider splitting" warning when cap spans 3+ sub-domains and >20 files', () => {
+    const cap = mkCap({
+      id: 'over-merged', name: 'Content Generation for Marketing', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: [
+        // 20+ files spanning 3 distinct sub-domains: openclaw, contentgen, marketing
+        ...Array.from({ length: 15 }, (_, i) => `backend/src/services/agents/openclaw/openclaw${i}.ts`),
+        'backend/src/models/ContentGenerationLog.ts',
+        'backend/src/services/contentGenerationService.ts',
+        ...Array.from({ length: 5 }, (_, i) => `backend/src/services/agents/departments/marketing/m${i}.ts`),
+      ],
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage Content Generation for Marketing'));
+    expect(t).toBeDefined();
+    expect(t!.description).toMatch(/spans \d+ sub-domains/);
+    expect(t!.description).toMatch(/Consider splitting/);
+  });
+
+  it('does NOT append warning for focused caps (single sub-domain)', () => {
+    const cap = mkCap({
+      id: 'focused', name: 'Marketing Dashboard', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: [
+        // All files under marketing — focused cap, no warning
+        'backend/src/routes/admin/marketingRoutes.ts',
+        'backend/src/services/agents/departments/marketing/m1.ts',
+        'backend/src/services/agents/departments/marketing/m2.ts',
+        'backend/src/services/marketingAnalyticsService.ts',
+        'backend/src/services/reporting/marketingFunnelGraphService.ts',
+        'backend/src/controllers/adminMarketingController.ts',
+      ],
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage Marketing Dashboard'));
+    expect(t).toBeDefined();
+    expect(t!.description).not.toMatch(/Consider splitting/);
+  });
+
+  it('does NOT append warning for small caps even if technically multi-sub-domain', () => {
+    const cap = mkCap({
+      id: 'small-multi', name: 'Tiny Multi', kind: 'service',
+      source: 'brownfield_discovered',
+      linked_backend_services: [
+        'backend/src/services/agents/openclaw/a.ts',
+        'backend/src/services/agents/marketing/b.ts',
+        'backend/src/services/contentGenerationService.ts',
+      ],
+      total_requirements: 0,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Triage Tiny Multi'));
+    expect(t).toBeDefined();
+    expect(t!.description).not.toMatch(/Consider splitting/);
+  });
+});
+
 describe('triage task generator (brownfield + 0 reqs fallback)', () => {
   it('fires for a brownfield service cap with linked code and 0 requirements', () => {
     const cap = mkCap({

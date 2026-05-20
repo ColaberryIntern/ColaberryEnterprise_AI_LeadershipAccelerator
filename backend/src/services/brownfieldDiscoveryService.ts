@@ -124,14 +124,49 @@ function detectStack(files: string[]): string[] {
   return [...new Set(stack)];
 }
 
-function classifyFile(path: string): 'backend' | 'frontend' | 'agent' | 'model' | 'other' {
+/**
+ * Bucket a repo file into one of the cap-layer slots.
+ *
+ * Order of checks matters — frontend prefix is checked FIRST so
+ * files under `frontend/src/services/` don't fall through to the
+ * `/service` backend rule (the original bug: 2026-05-20 walk #4
+ * surfaced `frontend/src/services/validationStore.ts` mis-bucketed
+ * as backend because `/frontend/` substring check missed paths that
+ * START with "frontend/" without a leading slash).
+ *
+ * All path checks now also match a leading prefix (no slash) so
+ * GitHub-tree paths that are root-relative without leading "/"
+ * still work.
+ */
+export function classifyFile(path: string): 'backend' | 'frontend' | 'agent' | 'model' | 'other' {
   const lower = path.toLowerCase();
   const name = (path.split('/').pop() || '').toLowerCase();
-  if (name.includes('agent') || lower.includes('/agents/') || lower.includes('/intelligence/')) return 'agent';
+
+  // 1. Frontend FIRST — any file under frontend/ is frontend regardless
+  //    of its name. Catches frontend/src/services/* which would otherwise
+  //    match the backend /services rule below.
+  if (lower.startsWith('frontend/') || lower.includes('/frontend/')) return 'frontend';
   if (name.endsWith('.tsx') || name.endsWith('.jsx')) return 'frontend';
-  if (lower.includes('/component') || lower.includes('/page') || lower.includes('/frontend/') || lower.includes('/views/')) return 'frontend';
-  if (lower.includes('/model') || lower.includes('/schema') || lower.includes('/entity') || lower.includes('/migration') || /\.prisma$/.test(lower)) return 'model';
-  if (lower.includes('/service') || lower.includes('/route') || lower.includes('/controller') || lower.includes('/handler') || lower.includes('/api/') || lower.includes('/backend/')) return 'backend';
+  if (lower.includes('/components/') || lower.includes('/pages/') || lower.includes('/views/')) return 'frontend';
+
+  // 2. Agent — files that explicitly live under agents/ or carry "agent"
+  //    in their name. intelligence/ also routed here since most files
+  //    there are LLM-bearing.
+  if (name.includes('agent') || lower.includes('/agents/') || lower.startsWith('agents/')) return 'agent';
+  if (lower.includes('/intelligence/') || lower.startsWith('intelligence/')) return 'agent';
+
+  // 3. Model
+  if (lower.includes('/models/') || lower.includes('/schemas/') || lower.includes('/entities/') || lower.includes('/migrations/') || /\.prisma$/.test(lower)) return 'model';
+
+  // 4. Backend — folder-anchored to avoid substring false positives
+  //    ("validationStore" doesn't have /services/ in its parent path
+  //    when the file lives at frontend/src/services/validationStore.ts —
+  //    but that case is now caught by the frontend-first rule above).
+  if (lower.includes('/services/') || lower.includes('/routes/') || lower.includes('/controllers/') || lower.includes('/handlers/') || lower.includes('/api/')) return 'backend';
+  if (lower.startsWith('backend/') || lower.includes('/backend/')) return 'backend';
+
+  // 5. Code-file fallback — any source file we couldn't bucket more
+  //    specifically gets backend by default.
   if (name.endsWith('.ts') || name.endsWith('.js') || name.endsWith('.py') || name.endsWith('.go') || name.endsWith('.rs')) return 'backend';
   return 'other';
 }
@@ -979,6 +1014,25 @@ export async function discoverBrownfieldCapabilities(
       // pick up backend services that landed later. Surfaced 2026-05-18 when
       // the queue surfaced "Build backend for Marketing Dashboard" even
       // though adminMarketingController etc. existed in the repo.
+      //
+      // Size guard (2026-05-20 walk #5+#6 finding): refuse merges that
+      // would push a cap above MAX_FILES_PER_CAP_LINKED. Over multiple
+      // runs the LLM consolidation pass kept assigning unrelated files
+      // (e.g., 35 openclaw/* files) to "Content Generation for
+      // Marketing" and merging accumulated them into 38-file lumps.
+      // The cap is now hard-capped at 25 files; once full, new files
+      // get a warning logged and the operator should split the cap
+      // (the queue's triage description surfaces oversized caps with
+      // a "consider splitting" note).
+      const MAX_FILES_PER_CAP_LINKED = 25;
+      const existingTotal = (existing.linked_backend_services || []).length
+        + (existing.linked_frontend_components || []).length
+        + (existing.linked_agents || []).length;
+      const incomingTotal = backend.length + models.length + frontend.length + agents.length;
+      if (existingTotal >= MAX_FILES_PER_CAP_LINKED && incomingTotal > 0) {
+        console.warn(`[Brownfield] Cap "${cap.name}" already at ${existingTotal} files (>= ${MAX_FILES_PER_CAP_LINKED} max). Refusing to merge ${incomingTotal} new files — split this cap to absorb them.`);
+        continue;
+      }
       const mergedBackend = Array.from(new Set([...(existing.linked_backend_services || []), ...backend, ...models]));
       const mergedFrontend = Array.from(new Set([...(existing.linked_frontend_components || []), ...frontend]));
       const mergedAgents = Array.from(new Set([...(existing.linked_agents || []), ...agents]));

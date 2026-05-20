@@ -831,7 +831,43 @@ function generateTriageTask(
     agCount > 0 ? `${agCount} agent${agCount === 1 ? '' : 's'}` : null,
   ].filter(Boolean).join(', ') || 'no linked files';
 
-  const description = `${cap.name} was discovered from code (${fileSummary}) but has no requirements specified. Decide: (a) spec 3-5 requirements to drive implementation and verification, (b) mark verified if it's complete as-is, or (c) archive if it's not real work.`;
+  // Oversized-cap detection (2026-05-20 walk #5+#6 finding): when a cap
+  // spans many distinct sub-domains (e.g., 'openclaw/', 'execution/',
+  // 'systemStateEngine/'), the LLM brownfield-consolidation pass
+  // over-merged unrelated subsystems under one name. Spec'ing 3-5
+  // requirements is the wrong ask in that case — the operator should
+  // SPLIT first, then spec. We detect this by counting distinct
+  // sub-domain prefixes in linked_backend_services + linked_agents
+  // and surface a "consider splitting" suffix when the spread is wide.
+  const allBackendLikePaths = [
+    ...(cap.linked_backend_services || []),
+    ...(cap.linked_agents || []),
+  ];
+  const subdomains = new Set<string>();
+  for (const p of allBackendLikePaths) {
+    // Take the segment after backend/src/ or intelligence/ etc.
+    // Examples:
+    //   backend/src/services/agents/openclaw/foo.ts → "openclaw"
+    //   backend/src/intelligence/systemStateEngine/x.ts → "systemStateEngine"
+    //   backend/src/services/leadIngestionService.ts → "_root"
+    const segs = p.split('/');
+    const beIdx = segs.indexOf('backend');
+    const start = beIdx >= 0 ? beIdx + 2 : 0; // skip backend/src
+    const rest = segs.slice(start).filter(s => !['services', 'intelligence', 'agents', 'controllers', 'routes', 'models'].includes(s));
+    if (rest.length > 1) {
+      // First non-generic segment is the sub-domain. If only filename
+      // is left, group as "_root".
+      subdomains.add(rest[0]);
+    } else {
+      subdomains.add('_root');
+    }
+  }
+  const oversized = totalFiles > 20 && subdomains.size >= 3;
+  const oversizedSuffix = oversized
+    ? ` ⚠ This cap spans ${subdomains.size} sub-domains (${[...subdomains].sort().slice(0, 4).join(', ')}${subdomains.size > 4 ? '…' : ''}) — likely over-merged by brownfield discovery. Consider splitting into focused caps BEFORE spec'ing requirements.`
+    : '';
+
+  const description = `${cap.name} was discovered from code (${fileSummary}) but has no requirements specified. Decide: (a) spec 3-5 requirements to drive implementation and verification, (b) mark verified if it's complete as-is, or (c) archive if it's not real work.${oversizedSuffix}`;
 
   // Maturity-aware scoring (2026-05-19, Tier-2 #5): within the triage
   // tier, caps with more accumulated code represent more unspec'd
