@@ -60,6 +60,8 @@ import VisualReviewSession from './VisualReviewSession';
 import VisualCritiqueItem from './VisualCritiqueItem';
 import VisualAISuggestion from './VisualAISuggestion';
 import VisualChangeDecision from './VisualChangeDecision';
+import WalkSession from './WalkSession';
+import WalkCapEntry from './WalkCapEntry';
 import BehavioralEvent from './BehavioralEvent';
 import DOMSnapshot from './DOMSnapshot';
 import CognitionEvent from './CognitionEvent';
@@ -996,6 +998,8 @@ export {
   VisualCritiqueItem,
   VisualAISuggestion,
   VisualChangeDecision,
+  WalkSession,
+  WalkCapEntry,
   BehavioralEvent,
   DOMSnapshot,
   CognitionEvent,

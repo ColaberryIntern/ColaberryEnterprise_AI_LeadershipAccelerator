@@ -12,6 +12,30 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Phase B + C — Walk Caps + Summary (2026-05-20)
+The third piece of the operator's CAP_WALK_AND_COMMENT plan: a guided pass through every cap one at a time, with verdict + note per cap, refresh-safe URL, and a summary view that compiles all notes into a Markdown prompt for the next Claude Code session.
+
+- [x] `backend/src/models/WalkSession.ts` (new) — parent table: ordered cap_queue (jsonb), current_index, filter (`all` / `pending_review` / `top_10` / `with_notes` / `custom`), notes_summary, started/closed timestamps.
+  - Date: 2026-05-20
+- [x] `backend/src/models/WalkCapEntry.ts` (new) — per-cap state: verdict (`pending` / `reviewed` / `follow_up` / `skip`), cap_level_note, visual_review_session_id (link to a critique session opened during the walk), visited_at, decided_at. Unique constraint on `(walk_session_id, cap_id)`.
+  - Date: 2026-05-20
+- [x] `backend/src/services/walkSessionService.ts` (new) — `buildCapQueue(projectId, filter)` returns ordered cap IDs (active caps with frontend_route, optionally filtered by usability state, name, or prior notes); `createWalk` / `getWalk` / `setIndex` / `setVerdict` / `linkVisualReviewSession` / `closeWalk` / `listProjectWalks`. Pre-seeds pending WalkCapEntry rows so the summary always renders the full picture.
+  - Date: 2026-05-20
+  - Verification: backend `npx tsc --noEmit` exit 0
+- [x] `backend/src/routes/projectRoutes.ts` — added 7 endpoints under `/api/portal/project/walk`: POST (create), GET (detail with caps), PATCH index, PATCH verdict, PATCH link-vrs, POST close, GET list. All project-scoped.
+  - Date: 2026-05-20
+- [x] Prod DB migration applied: `CREATE TABLE walk_sessions` + `CREATE TABLE walk_cap_entries` with the documented indexes + unique constraint. Both empty until first use.
+  - Date: 2026-05-20
+- [x] `frontend/src/pages/portal/WalkCapsPage.tsx` (new) — `/portal/walk-caps`. Picker mode when no `?session=` param (radio for filter + Start). Walk mode shows chrome row (cap N of M, name, route, verdict counts, prev/next/summary), live iframe preview, verdict buttons (reviewed / follow-up / skip), cap-level note textarea (saves on blur). Optimistic local update keeps verdict clicks instant; refresh-safe (current_index lives server-side).
+  - Date: 2026-05-20
+  - Verification: frontend `npx tsc --noEmit` exit 0
+- [x] `frontend/src/pages/portal/WalkSummaryPage.tsx` (new) — `/portal/walk-caps/summary?session=X`. Groups caps by verdict (follow-up first, then reviewed/skipped/pending). Each cap shows name, route, optional note, and a "Critique →" deep-link to the Visual Workspace for that cap. **Compile-prompt button** generates a Markdown summary (follow-up caps first with notes, then reviewed-with-notes, then a list of unvisited caps) and copies to clipboard. Preview the prompt inline via `<details>`.
+  - Date: 2026-05-20
+- [x] `frontend/src/routes/portalRoutes.tsx` — registered both new routes inside the protected portal layout.
+  - Date: 2026-05-20
+- [x] `frontend/src/components/project/BPDomainSurface.tsx` — added "Walk caps" outline-primary button to the operational architecture header on the System BPs tab. Single primary entry point; more entry points can land in Phase D.
+  - Date: 2026-05-20
+
 ### Phase A — Cap-level free-form notes in Visual Workspace (2026-05-20)
 Operator surfaced the gap: "comments locked to region pins, no way to say 'this whole cap is the wrong cardinality' without picking a pixel region." Per the CAP_WALK_AND_COMMENT_PLAN.md Phase A scope, added a cap-level note field that lives next to the per-region critiques.
 

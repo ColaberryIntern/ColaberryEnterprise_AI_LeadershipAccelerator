@@ -226,11 +226,23 @@ const BPDomainSurface: React.FC = () => {
     <div>
       {/* ─── Editorial overview headline ─── */}
       <header style={{ marginBottom: '1.5rem' }}>
-        <div style={{
-          fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em',
-          color: 'var(--color-text-light)', fontWeight: 600,
-        }}>
-          Operational architecture
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{
+            fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em',
+            color: 'var(--color-text-light)', fontWeight: 600,
+          }}>
+            Operational architecture
+          </div>
+          {/* Phase B (2026-05-20): launch a guided cap walk. Sits in the
+              header so the operator sees the option without scrolling. */}
+          <a
+            href="/portal/walk-caps"
+            className="btn btn-sm btn-outline-primary"
+            style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+            title="Step through your caps one at a time, leaving a verdict + note per cap"
+          >
+            <i className="bi bi-collection me-1"></i>Walk caps
+          </a>
         </div>
         <h3 style={{
           fontSize: 20, fontWeight: 600, color: 'var(--color-primary)',

@@ -22,6 +22,8 @@ import CoryFullscreen from '../pages/project/CoryFullscreen';
 import RequirementsBuilder from '../pages/project/RequirementsBuilder';
 import SystemBuildDemo from '../pages/project/SystemBuildDemo';
 import VisualWorkspacePage from '../features/visualWorkspace/VisualWorkspacePage';
+import WalkCapsPage from '../pages/portal/WalkCapsPage';
+import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
 import CoryHome from '../pages/portal/CoryHome';
 import ExecutionLane from '../pages/project/ExecutionLane';
 import SystemView from '../pages/project/SystemView';
@@ -65,6 +67,10 @@ const portalRoutes = (
         <Route path="/portal/project/requirements-builder" element={<RequirementsBuilder />} />
         <Route path="/portal/project/demo" element={<SystemBuildDemo />} />
         <Route path="/portal/visual-workspace" element={<VisualWorkspacePage />} />
+        {/* Phase B (2026-05-20): walk through caps one at a time. */}
+        <Route path="/portal/walk-caps" element={<WalkCapsPage />} />
+        {/* Phase C (2026-05-20): walk summary + compile-prompt. */}
+        <Route path="/portal/walk-caps/summary" element={<WalkSummaryPage />} />
       </Route>
     </Route>
   </Route>

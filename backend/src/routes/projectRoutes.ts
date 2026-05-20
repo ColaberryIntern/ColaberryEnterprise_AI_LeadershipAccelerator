@@ -2962,6 +2962,141 @@ router.post('/api/portal/project/visual-review/session/:id/critique', requirePar
   }
 });
 
+// Phase B (2026-05-20): walk-mode endpoints. A walk is a guided pass
+// through a queue of caps, leaving a verdict (reviewed / follow_up / skip)
+// per cap. The queue is server-built from a named filter so the URL stays
+// shareable + refresh-safe.
+router.post('/api/portal/project/walk', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const filter = (req.body?.filter || 'all') as any;
+    const allowed = ['all', 'pending_review', 'top_10', 'with_notes', 'custom'];
+    if (!allowed.includes(filter)) { res.status(400).json({ error: 'invalid filter' }); return; }
+    const capIds = Array.isArray(req.body?.cap_ids) ? req.body.cap_ids : undefined;
+    const { createWalk } = await import('../services/walkSessionService');
+    const result = await createWalk({
+      project_id: project.id,
+      created_by: req.participant!.sub,
+      filter,
+      capIds,
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    console.error('[walk/create]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/walk/:id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getWalk } = await import('../services/walkSessionService');
+    const walk = await getWalk(req.params.id as string);
+    if (!walk) { res.status(404).json({ error: 'Walk not found' }); return; }
+    if (walk.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+    res.json({ walk });
+  } catch (err: any) {
+    console.error('[walk/get]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/api/portal/project/walk/:id/index', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getWalk, setIndex } = await import('../services/walkSessionService');
+    const walk = await getWalk(req.params.id as string);
+    if (!walk) { res.status(404).json({ error: 'Walk not found' }); return; }
+    if (walk.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+    const idx = Number(req.body?.index);
+    if (!Number.isInteger(idx) || idx < 0) { res.status(400).json({ error: 'invalid index' }); return; }
+    await setIndex(req.params.id as string, idx);
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[walk/index]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/api/portal/project/walk/:id/cap/:capId/verdict', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getWalk, setVerdict } = await import('../services/walkSessionService');
+    const walk = await getWalk(req.params.id as string);
+    if (!walk) { res.status(404).json({ error: 'Walk not found' }); return; }
+    if (walk.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+    const verdict = String(req.body?.verdict || '');
+    if (!['pending', 'reviewed', 'follow_up', 'skip'].includes(verdict)) {
+      res.status(400).json({ error: 'invalid verdict' }); return;
+    }
+    await setVerdict({
+      walk_id: req.params.id as string,
+      cap_id: req.params.capId as string,
+      verdict: verdict as any,
+      cap_level_note: typeof req.body?.cap_level_note === 'string' ? req.body.cap_level_note : undefined,
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[walk/verdict]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/api/portal/project/walk/:id/cap/:capId/link-vrs', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getWalk, linkVisualReviewSession } = await import('../services/walkSessionService');
+    const walk = await getWalk(req.params.id as string);
+    if (!walk) { res.status(404).json({ error: 'Walk not found' }); return; }
+    if (walk.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+    const vrsId = String(req.body?.visual_review_session_id || '');
+    if (!vrsId) { res.status(400).json({ error: 'visual_review_session_id required' }); return; }
+    await linkVisualReviewSession({
+      walk_id: req.params.id as string,
+      cap_id: req.params.capId as string,
+      visual_review_session_id: vrsId,
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[walk/link-vrs]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/walk/:id/close', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getWalk, closeWalk } = await import('../services/walkSessionService');
+    const walk = await getWalk(req.params.id as string);
+    if (!walk) { res.status(404).json({ error: 'Walk not found' }); return; }
+    if (walk.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+    await closeWalk(req.params.id as string);
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[walk/close]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/walks', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { listProjectWalks } = await import('../services/walkSessionService');
+    const walks = await listProjectWalks(project.id, { limit: Number(req.query.limit) || 25 });
+    res.json({ walks, count: walks.length });
+  } catch (err: any) {
+    console.error('[walk/list]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Phase A (2026-05-20): persist a cap-level free-form note on the session.
 // Triggered by the sidebar textarea's onBlur. Empty string clears the note.
 router.patch('/api/portal/project/visual-review/session/:id/notes', requireParticipant, async (req: Request, res: Response) => {
