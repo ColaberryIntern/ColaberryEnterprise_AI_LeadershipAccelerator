@@ -138,6 +138,45 @@ Per Ram's request, audited the repo against [Anthropic's Claude Code best-practi
   - Date: 2026-05-18
   - Verification: all 4 sends `Accepted: [...]`, 0 rejected; message IDs `<4e0a7410-...>`, `<d5f30702-...>`, `<a5841ed1-...>`, `<d9c7de3f-...>`. BCC'd ali@colaberry.com on all four.
 
+### Tier-3 A+E: persist agent_roles at scan time + honest degradation (2026-05-20)
+Operator concern: *"the 'Description quality degraded' process sounds problematic across every users/accounts."* The previous design (Tier-3 #9 + 1h cache) relied on a runtime GitHub API call for every engine refresh. When that call failed silently (60/hr anonymous rate limit, expired token, network error, GitHub outage), descriptions degraded to generic without telling the operator. Fragility shape would affect every project/account.
+
+**A — Persist at scan time:**
+- New `agent_roles_cache` JSONB column on capabilities (ALTER TABLE in prod + Sequelize model updated)
+- New `classifyAgentRoles` helper shared by brownfield discovery + backfill
+- brownfieldDiscoveryService classifies + persists for both new and merged caps (re-classifies when agent set drifts)
+- Engine refresh reads from `cap.agent_roles_cache` — zero GitHub calls per refresh
+- Removed obsolete `getOrFetchAgentContents` + `AGENT_CONTENTS_CACHE` (the previous 1h cache became unnecessary)
+
+**E — Honest degradation (three confidence tiers):**
+
+| Tier | Condition | Behavior |
+|---|---|---|
+| **fullEvidence** | cache exists AND `files_inspected > 0` | trust monitor+alert suppression; clean description |
+| **filenameOnly** | cache exists AND `files_inspected === 0` | fire task; description includes `⚠ Roles inferred from filename only (file content unavailable; check GitHub connection auth)` |
+| **noEvidence** | no cache | count-based gate |
+
+Plus staleness messaging when `classified_at > 7 days` or `agent_paths` drifted vs current `linked_agents`:
+- `⚠ Classification is N days old — re-scan to refresh role detection.`
+- `⚠ Agent file set drifted since last classification — re-scan to refresh role detection.`
+
+**One-time backfill** (`backfillAgentRolesCache.js`): iterates all 138 active caps, classifies + persists. Idempotent — skips caps whose cache is fresh AND content was previously readable; retries when `files_inspected=0` (rate-limit / token miss) so the next run with fresh credentials picks them up.
+
+**Production verification:**
+
+Prod backfill ran cleanly: 28 caps classified, 110 with no agents (correctly skipped), 0 errors. Top-8 walk shows the three tiers in action:
+- Requirements Management (#1): full evidence — "Has 3 agents (roles detected: core). Missing roles: monitor, alert, follow_up. Add agents to cover these roles."
+- Campaign Management (#2): filename-only — same recommendation + "⚠ Roles inferred from filename only (file content unavailable; check GitHub connection auth)."
+- Analytics (#3): full evidence
+- Validation (#4): filename-only with warning
+
+**Zero engine log lines for agent-file fetch** — the runtime GitHub dependency is gone. Same pattern would apply to validateCapFrontendRoutes (still hits GitHub per refresh; queued as a Tier-3 follow-up).
+
+  - Date: 2026-05-20
+  - What changed: new `agent_roles_cache` column + Sequelize model. New `classifyAgentRoles` helper. brownfieldDiscoveryService classifies + persists at scan time. systemStateEngine reads from cap.agent_roles_cache (deleted runtime GitHub pre-fetch). authoritativeTaskQueue gate has three confidence tiers + staleness + filename-only messaging. backfillAgentRolesCache.js for one-time + retry. Commits b445f024 + 11bb69a8.
+  - Verification: 54/54 tests across scoring + gate suites including 4 new tests (staleness, drift, filename-only, no-cache fallback). tsc clean. Prod backfill: 28 caps classified. Walk confirms role-aware descriptions firing in prod with no GitHub calls per refresh AND honest degradation visible when content unavailable.
+  - Notes: This is the durable fix to silent degradation. The principle — "validate at write time, persist the result, treat runtime calls as confirmations not requirements" — should now be applied to validateCapFrontendRoutes (currently 5 GitHub calls per refresh) as a follow-up. Long-term, the project's GitHub connection needs an auth token (currently anonymous 60/hr limit) so even the brownfield-scan-time fetches succeed at 100% rate; the cache + three-tier design degrades gracefully in the meantime.
+
 ### Strict tier ordering + brownfield dedup + GitHub-fetch caching (2026-05-20)
 Operator request after walking the queue: *"(a) investigate Discovery / Requirements Management cap-naming overlap; (b) change ranking so agent_stack always beats triage regardless of size."*
 
@@ -2994,3 +3033,6 @@ The whole point of the operator's directive ("do real operational verifications"
 | `backend/src/scripts/seedBehavioralTriggerCampaigns.js` | New idempotent seed script creating 3 draft behavioral_trigger campaigns wired to existing sequences (2026-05-06) |
 | `frontend/src/config/demoScenarios.json` | Stripped co-op-specific language (cooperative, members, Member Service Bot, etc.) so the shared scenario library serves both IOU and co-op pages cleanly (2026-05-06) |
 | `backend/src/scripts/stripCoopFromDemoScenarios.js` | New idempotent script that performs the de-coopification replacements (2026-05-06) |
+| `backend/src/scripts/sendRamPrasadTrustbeforeS3Ask.js` | New Mandrill send: nudges Ram + Prasad for S3 bucket name + CloudFront distribution ID so Tejesh can complete the trustbeforeintelligence.ai visitor-tracker deploy (Tejesh CC'd, branded signature, pre-send checks for em-dash + signature presence) (2026-05-20) |
+| `backend/src/scripts/postTrainingMigrationDecisions.js` | New idempotent Basecamp comment poster: ships Ali's Q1-Q6 sign-off decisions for the [Phase 2] training.colaberry.com migration directly to the Basecamp task (HTML-comment signature for idempotent re-runs). Unblocks Tejesh after 4 days of waiting (2026-05-20) |
+| `backend/src/services/agents/weeklyReportAgent.ts` | Bug fix: top-pages query now filters `event_type = 'pageview'` (previously counted ALL event types including heartbeat/scroll/click/cta_click, inflating "top pages" numbers in the weekly report by 10-30x per visitor). Found during investigation of Tejesh's claim that backend was conflating heartbeats with pageviews; Tejesh's claim was incorrect for the live dashboard but accidentally true for this one report surface. `tsc --noEmit` passes (2026-05-20) |
