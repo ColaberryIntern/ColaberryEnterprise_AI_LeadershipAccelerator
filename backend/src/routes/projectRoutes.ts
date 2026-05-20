@@ -2055,11 +2055,49 @@ function overlayEngineScores(enriched: any, engineState: any): any {
   };
 }
 
+// 2026-05-20: per-cap maturity isn't denormalized into SystemStateSnapshot,
+// so overlayEngineScores can't find a row and falls back to legacy maturity —
+// which itself is unset, leaving every BP stuck at L1. Compute maturity inline
+// using the same scorer the engine uses, so the BP row gets the right L0-L4
+// without forcing a full engine rebuild on every refresh.
+function computeMaturityInline(cap: any): { level: number; label: string } | null {
+  try {
+    const { scoreMaturity } = require('../intelligence/systemStateEngine/scoring/maturityScorer');
+    const input = {
+      id: cap.id,
+      name: cap.name,
+      source: cap.source,
+      kind: cap.is_page_bp ? 'page' : 'service',
+      is_page_bp: !!cap.is_page_bp,
+      linked_backend_services: cap.linked_backend_services || [],
+      linked_frontend_components: cap.linked_frontend_components || [],
+      linked_agents: cap.linked_agents || [],
+      ui_element_map: cap.ui_element_map,
+      total_requirements: cap.total_requirements || 0,
+      matched_requirements: cap.matched_requirements || 0,
+      verified_requirements: cap.verified_requirements || 0,
+      operator_unmatched_requirements: 0,
+      user_status: cap.user_status,
+      last_execution: cap.last_execution,
+      frontend_route: cap.frontend_route,
+    };
+    const m = scoreMaturity(input);
+    return { level: m.level, label: m.label };
+  } catch { return null; }
+}
+
 // Composes enrichCapability + engine overlay. Use this anywhere a list/detail
 // endpoint needs both the rich UI shape AND authoritative scores. If no engine
 // state is available, falls back gracefully to legacy enrichCapability output.
 function enrichCapabilityWithEngine(cap: any, engineState: any | null): any {
   const base = enrichCapability(cap);
+  // Always compute maturity from cap fields. The engine snapshot's
+  // per_capability array is empty by design (not denormalized in the
+  // snapshot table), so without this every cap shows L1.
+  const inlineMaturity = computeMaturityInline(cap);
+  if (inlineMaturity) {
+    base.maturity = { ...(base.maturity || {}), ...inlineMaturity };
+  }
   return engineState ? overlayEngineScores(base, engineState) : base;
 }
 
@@ -2079,8 +2117,8 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     } catch {}
     // Inject last_execution from Capability models (hierarchy doesn't include JSONB fields)
     const { Capability: CapabilityModel } = await import('../models');
-    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at', 'ui_element_map'] });
-    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context, user_status: c.user_status, user_status_set_at: c.user_status_set_at, ui_element_map: c.ui_element_map }]));
+    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at', 'ui_element_map', 'linked_backend_services', 'linked_frontend_components', 'linked_agents'] });
+    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context, user_status: c.user_status, user_status_set_at: c.user_status_set_at, ui_element_map: c.ui_element_map, linked_backend_services: c.linked_backend_services, linked_frontend_components: c.linked_frontend_components, linked_agents: c.linked_agents }]));
     const projectMode = (project as any).target_mode || 'production';
     // Load campaign mode overrides for capabilities that have linked campaigns
     let campaignModeMap = new Map<string, string>();
@@ -2127,6 +2165,13 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         cap.user_status = (extra as any).user_status || 'in_progress';
         cap.user_status_set_at = (extra as any).user_status_set_at || null;
         cap.ui_element_map = (extra as any).ui_element_map || null;
+        // 2026-05-20: surface linked-file arrays so (1) the BP row can show
+        // BE/FE/AG badges and (2) the engine maturity scorer sees the layer
+        // signals. Without these, every cap looked layerless on the wire,
+        // capping maturity at L1 regardless of evidence_completion_pct.
+        cap.linked_backend_services = (extra as any).linked_backend_services || [];
+        cap.linked_frontend_components = (extra as any).linked_frontend_components || [];
+        cap.linked_agents = (extra as any).linked_agents || [];
       }
     });
 
