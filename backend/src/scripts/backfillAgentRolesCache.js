@@ -58,9 +58,13 @@ async function main() {
       continue;
     }
 
-    // Skip when cache is already fresh AND agent paths match
+    // Skip when cache is already fresh AND agent paths match AND
+    // we actually read content last time. files_inspected=0 means a
+    // previous run couldn't fetch any content (rate limit or token
+    // issue); always retry those so we don't get permanently stuck
+    // on filename-only classifications.
     const existing = cap.agent_roles_cache;
-    if (existing && existing.agent_paths) {
+    if (existing && existing.agent_paths && (existing.files_inspected || 0) > 0) {
       const cachedSet = new Set(existing.agent_paths);
       const currentSet = new Set(agents);
       const drifted = cachedSet.size !== currentSet.size

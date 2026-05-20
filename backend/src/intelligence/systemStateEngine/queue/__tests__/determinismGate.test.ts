@@ -667,8 +667,12 @@ describe('agent role-aware gate (Tier-2 #4)', () => {
     expect(t!.description).toMatch(/roles detected: core/);
   });
 
-  it('falls back to count gate when no role evidence is available (files_inspected=0)', () => {
-    // 3 agents, no role evidence → count gate skips (>= floor).
+  it('falls back to count gate when NO cache exists at all (code_evidence.agent_roles absent)', () => {
+    // 3 agents, no cache → count gate skips (>= floor). Refined
+    // 2026-05-20: previously this case used cache with empty detected,
+    // but the three-tier model distinguishes "no cache" (count gate)
+    // from "cache exists but empty" (filename-only path fires the
+    // task so operator sees the cap).
     const cap = mkCap({
       id: 'fallback', name: 'Lead Pipeline Manager', kind: 'service',
       linked_backend_services: [
@@ -683,8 +687,8 @@ describe('agent role-aware gate (Tier-2 #4)', () => {
         reliability_signal: 'high',
         automation_applicable: true,
         evidence_files_read: 5,
-        agent_roles: { detected: [], files_inspected: 0 },  // no evidence
-      },
+        // agent_roles intentionally absent — no cache means count gate
+      } as any,
     });
     const state = buildAuthoritativeStateFromInputs({
       project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
@@ -692,6 +696,40 @@ describe('agent role-aware gate (Tier-2 #4)', () => {
     });
     const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
     expect(t).toBeUndefined();  // count gate hit (3 >= floor)
+  });
+
+  it('fires agent_stack when cache exists but content was unreadable (filename-only path)', () => {
+    // files_inspected=0 with empty detected → cache exists but content
+    // couldn't be read. Three-tier model fires the task and surfaces
+    // honest degradation in the description.
+    const cap = mkCap({
+      id: 'filename-only', name: 'Lead Pipeline Manager', kind: 'service',
+      linked_backend_services: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'],
+      linked_frontend_components: ['x.tsx', 'y.tsx', 'z.tsx'],
+      linked_agents: ['leadCore.ts'],
+      frontend_route: '/admin/x',
+      total_requirements: 8, matched_requirements: 8,
+      user_status: 'verified',
+      code_evidence: {
+        reliability_signal: 'high',
+        automation_applicable: true,
+        evidence_files_read: 5,
+        agent_roles: {
+          detected: ['core'],
+          files_inspected: 0,
+          classified_at: new Date().toISOString(),
+          agent_paths: ['leadCore.ts'],
+        },
+      } as any,
+    });
+    const state = buildAuthoritativeStateFromInputs({
+      project: mkProject({ capabilities: [cap], repo_file_tree: ['Dockerfile', 'docker-compose.yml', '.github/workflows/deploy.yml'] }),
+      capabilities: [cap],
+    });
+    const t = state.queue.find(x => x.title.startsWith('Propose agent stack for'));
+    expect(t).toBeDefined();
+    expect(t!.description).toMatch(/Roles inferred from filename only/);
+    expect(t!.description).toMatch(/file content unavailable/);
   });
 
   it('surfaces staleness in description when classification > 7 days old (Tier-3 E)', () => {

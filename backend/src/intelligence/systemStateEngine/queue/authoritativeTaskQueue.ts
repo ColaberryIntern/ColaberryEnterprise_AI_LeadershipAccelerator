@@ -651,9 +651,21 @@ function generateAgentStackTask(
   const detectedRoles = new Set<string>(roleEvidence?.detected || []);
   const hasMonitor = detectedRoles.has('monitor');
   const hasAlert = detectedRoles.has('alert');
-  const haveRoleEvidence = !!roleEvidence && roleEvidence.files_inspected > 0;
-  if (haveRoleEvidence && hasMonitor && hasAlert) return null; // stack complete by roles
-  if (!haveRoleEvidence && linkedAgentCount >= AGENT_STACK_FLOOR) return null; // fallback floor
+  // Three confidence tiers (Tier-3 A+E refinement 2026-05-20):
+  //   - fullEvidence:     classification ran AND content was readable
+  //                       (files_inspected > 0) → trust monitor+alert
+  //                       suppression
+  //   - filenameOnly:     classification ran but content unavailable
+  //                       (files_inspected === 0). Filename tokens
+  //                       still produced roles, lower confidence.
+  //                       Don't suppress on these alone; surface in
+  //                       description as honest degradation.
+  //   - noEvidence:       no cache at all → count-based fallback
+  const hasCache = !!roleEvidence;
+  const fullEvidence = hasCache && (roleEvidence!.files_inspected || 0) > 0;
+  const filenameOnly = hasCache && !fullEvidence;
+  if (fullEvidence && hasMonitor && hasAlert) return null; // stack complete by roles
+  if (!hasCache && linkedAgentCount >= AGENT_STACK_FLOOR) return null; // pure-count fallback
   const matureForAgentStack =
     (kind === 'page' && score.coverage >= 100)
     || (kind === 'service' && score.readiness >= 80);
@@ -689,7 +701,7 @@ function generateAgentStackTask(
   let stackPrefix: string;
   let askSuffix: string;
   let stalenessSuffix = '';
-  if (haveRoleEvidence) {
+  if (hasCache) {
     const classifiedAt = roleEvidence?.classified_at;
     if (classifiedAt) {
       const ageMs = Date.now() - new Date(classifiedAt).getTime();
@@ -703,6 +715,10 @@ function generateAgentStackTask(
       } else if (ageDays > 7) {
         stalenessSuffix = ` ⚠ Classification is ${ageDays} days old — re-scan to refresh role detection.`;
       }
+    }
+    if (filenameOnly) {
+      // Cache exists but content wasn't readable. Note this honestly.
+      stalenessSuffix = ` ⚠ Roles inferred from filename only (file content unavailable; check GitHub connection auth).` + stalenessSuffix;
     }
     const presentList = [...detectedRoles].sort().join(', ') || 'none';
     const allRoles: Array<'monitor' | 'alert' | 'follow_up'> = ['monitor', 'alert', 'follow_up'];
@@ -756,8 +772,8 @@ function generateAgentStackTask(
       kind === 'page'
         ? `coverage=${score.coverage}% (page is shipped — next tier is the agent layer)`
         : `readiness=${score.readiness}% (service is built — next tier is the agent layer)`,
-      haveRoleEvidence
-        ? `agent roles detected: [${[...detectedRoles].join(', ') || 'none'}] (${roleEvidence?.files_inspected} file${roleEvidence?.files_inspected === 1 ? '' : 's'} inspected)`
+      hasCache
+        ? `agent roles detected: [${[...detectedRoles].join(', ') || 'none'}] (${roleEvidence?.files_inspected} file${roleEvidence?.files_inspected === 1 ? '' : 's'} inspected${filenameOnly ? ' — filename-only fallback' : ''})`
         : `linked_agents=${linkedAgentCount} (below stack floor of ${AGENT_STACK_FLOOR}; no role evidence available)`,
     ],
     cap, cap_score: score,
