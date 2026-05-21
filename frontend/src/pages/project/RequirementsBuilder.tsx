@@ -31,6 +31,18 @@ const STAGE_LABELS: Record<string, string> = {
   complete: 'Complete!',
 };
 
+// Scope the in-progress draft to the signed-in enrollment, so a draft from one
+// account never resumes on another (cross-account bleed was dropping users onto
+// a pre-filled idea screen and skipping the chooser).
+function draftKey(): string {
+  try {
+    const t = localStorage.getItem('participant_token') || '';
+    const payload = JSON.parse(atob(t.split('.')[1] || ''));
+    if (payload && payload.sub) return `requirements_builder_state:${payload.sub}`;
+  } catch { /* fall through */ }
+  return 'requirements_builder_state';
+}
+
 export default function RequirementsBuilder() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<'choose' | 'idea' | 'loading_questions' | 'questions' | 'generating' | 'review' | 'building' | 'complete' | 'repo'>('choose');
@@ -59,13 +71,13 @@ export default function RequirementsBuilder() {
   // Resume support
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('requirements_builder_state');
+      const saved = localStorage.getItem(draftKey());
       if (saved) {
         const state = JSON.parse(saved);
         // Only resume drafts created by the current 3-tier flow (they record a
         // buildType). Older/stale drafts have no buildType — discard them so the
         // user always starts at the chooser instead of a pre-filled idea screen.
-        if (!state.buildType) { localStorage.removeItem('requirements_builder_state'); return; }
+        if (!state.buildType) { localStorage.removeItem(draftKey()); return; }
         const hasIdea = state.originalIdea && state.originalIdea.trim().length > 0;
         const hasDoc = state.generatedDoc && state.generatedDoc.trim().length > 10;
         const validPhase = state.phase && !['loading_questions', 'generating'].includes(state.phase);
@@ -81,7 +93,7 @@ export default function RequirementsBuilder() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem('requirements_builder_state', JSON.stringify({ originalIdea, questions, currentQ, phase, generatedDoc, buildType })); } catch {}
+    try { localStorage.setItem(draftKey(), JSON.stringify({ originalIdea, questions, currentQ, phase, generatedDoc, buildType })); } catch {}
   }, [originalIdea, questions, currentQ, phase, generatedDoc, buildType]);
 
   // Submit idea → generate dynamic questions
@@ -146,7 +158,7 @@ export default function RequirementsBuilder() {
         mode: buildType === 'autonomous' ? 'autonomous' : 'professional',
       });
       // Clear the draft so resume doesn't compete with the build.
-      localStorage.removeItem('requirements_builder_state');
+      localStorage.removeItem(draftKey());
       window.location.href = '/portal/project/demo';
     } catch (err: any) {
       setError(err.response?.data?.error || 'Could not start the build. Check the repository URL (and access token for private repos) and try again.');
@@ -244,7 +256,7 @@ export default function RequirementsBuilder() {
     setError(null);
     try {
       await portalApi.post('/api/portal/project/setup/requirements', { content: generatedDoc });
-      localStorage.removeItem('requirements_builder_state');
+      localStorage.removeItem(draftKey());
       // Build out the workflow into capabilities (no repo needed) before handoff —
       // otherwise the user lands on an empty Blueprint with 0 capabilities.
       setPhase('building');
