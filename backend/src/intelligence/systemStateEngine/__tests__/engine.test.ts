@@ -140,10 +140,10 @@ describe('maturityScorer', () => {
     expect(scoreMaturity(mkCap()).level).toBe(0);
   });
 
-  it('reaches L3 with backend + frontend + 70% coverage', () => {
+  it('reaches L3 with backend + frontend_route + 70% coverage', () => {
     const cap = mkCap({
       linked_backend_services: ['a.ts'],
-      linked_frontend_components: ['b.tsx'],
+      frontend_route: '/foo',
       total_requirements: 10,
       matched_requirements: 7,
     });
@@ -153,12 +153,37 @@ describe('maturityScorer', () => {
   it('reaches L4 with all layers + 85% coverage', () => {
     const cap = mkCap({
       linked_backend_services: ['a.ts'],
-      linked_frontend_components: ['b.tsx'],
-      linked_agents: ['c.ts'],
+      frontend_route: '/foo',
+      _confirmed_agent_count: 1,
       total_requirements: 10,
       matched_requirements: 9,
     });
     expect(scoreMaturity(cap).level).toBe(4);
+  });
+
+  it('stops at L2 when only linked_frontend_components present (no route)', () => {
+    // 2026-05-21 regression: keyword-attributed components alone must
+    // not promote a cap to L3. Operator caught this on Prompt Generation
+    // (12 components, no route, was incorrectly L3).
+    const cap = mkCap({
+      linked_backend_services: ['a.ts'],
+      linked_frontend_components: ['shared1.tsx', 'shared2.tsx', 'shared3.tsx'],
+      total_requirements: 10,
+      matched_requirements: 8,
+    });
+    expect(scoreMaturity(cap).level).toBe(2);
+  });
+
+  it('stops at L3 when only linked_agents present (no confirmed map)', () => {
+    const cap = mkCap({
+      linked_backend_services: ['a.ts'],
+      frontend_route: '/foo',
+      linked_agents: ['keyword1.ts', 'keyword2.ts'],
+      _confirmed_agent_count: 0,
+      total_requirements: 10,
+      matched_requirements: 10,
+    });
+    expect(scoreMaturity(cap).level).toBe(3);
   });
 
   it('Page BP at 5/5 verified reaches L4', () => {
@@ -177,15 +202,15 @@ describe('maturityScorer', () => {
     expect(scoreMaturity(cap).level).toBe(4);
   });
 
-  it('brownfield cap with 3 layers + 70% evidence reaches L3', () => {
+  it('brownfield cap with 3 strict layers + 70% evidence reaches L3', () => {
     const cap = mkCap({
       linked_backend_services: ['a.ts'],
-      linked_frontend_components: ['b.tsx'],
-      linked_agents: ['c.ts'],
+      frontend_route: '/foo',
+      _confirmed_agent_count: 1,
       total_requirements: 0,
       last_execution: { evidence_completion_pct: 75 },
     });
-    // 3 layers + 75% evidence → should reach L3
+    // BE + FE (route) + agent confirmed + 75% evidence → should reach L3
     const result = scoreMaturity(cap);
     expect(result.level).toBeGreaterThanOrEqual(3);
   });

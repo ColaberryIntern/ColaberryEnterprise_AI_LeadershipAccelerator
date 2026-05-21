@@ -11,6 +11,16 @@
  *   L3 Production      — backend + frontend + (coverage >= 70% OR evidence >= 70%)
  *   L4 Autonomous      — backend + frontend + agents + (coverage >= 85% OR evidence >= 85%)
  *
+ * Layer presence is STRICT (2026-05-21):
+ *   - hasBackend: linked_backend_services has ≥1 file
+ *   - hasFrontend: cap owns its own page (frontend_route set, source='frontend_page',
+ *     or is_page_bp=true). linked_frontend_components alone is NOT enough — those
+ *     are often keyword-attributed shared utility components.
+ *   - hasAgents: ≥1 confirmed capability_agent_maps row, or cap.kind='agent', or
+ *     source='agent_explicit'. linked_agents alone is keyword-attribution noise.
+ * This matches the per-request usability rule in projectRoutes.ts enrichCapability()
+ * so the BP-row dots and the L badge always agree.
+ *
  * Page BPs follow a parallel ladder based on visual review category count:
  *   L0 0 verified
  *   L1 1 verified
@@ -42,8 +52,21 @@ export function scoreMaturity(cap: EngineCapabilityInput): MaturityBreakdown {
 
   const coverage = scoreCoverage(cap).value;
   const hasBackend = (cap.linked_backend_services || []).length > 0;
-  const hasFrontend = (cap.linked_frontend_components || []).length > 0 || !!cap.frontend_route;
-  const hasAgents = (cap.linked_agents || []).length > 0;
+  // Strict layer-presence rules — must match the per-request usability
+  // signal in projectRoutes.ts enrichCapability(). The previous lenient
+  // rule counted any linked_* file, which let keyword-attribution noise
+  // promote caps to L3/L4 they hadn't actually built. Operator caught
+  // this 2026-05-21: Prompt Generation was L3 with 12 keyword-attributed
+  // frontend components but no actual page route.
+  //   hasFrontend: cap must own a route OR be explicitly a page BP
+  //   hasAgents:   confirmed capability_agent_maps row OR explicit kind
+  // linked_frontend_components / linked_agents alone are insufficient.
+  const hasFrontend = !!cap.frontend_route
+    || cap.source === 'frontend_page'
+    || !!cap.is_page_bp;
+  const hasAgents = (cap._confirmed_agent_count || 0) > 0
+    || cap.kind === 'agent'
+    || cap.source === 'agent_explicit';
 
   let level: MaturityLevel = 0;
   let nextGap: string | undefined;
@@ -116,11 +139,11 @@ function describeNextLevelGap(
       if (coverage < 50) return `Coverage at ${coverage}% — reach 50% to advance to L2.`;
       return 'Coverage and backend present — should be at L2 already (check inputs).';
     case 2:
-      if (!hasFrontend) return 'Add frontend pages/components to reach L3.';
+      if (!hasFrontend) return 'Add a frontend route or page BP for this cap to reach L3 (linked components alone are not enough).';
       if (coverage < 70) return `Coverage at ${coverage}% — reach 70% to advance to L3.`;
       return 'Frontend and coverage thresholds met — should be at L3 already.';
     case 3:
-      if (!hasAgents) return 'Add intelligent agents/automation to reach L4 Autonomous.';
+      if (!hasAgents) return 'Confirm at least one agent via capability_agent_maps to reach L4 (keyword-linked agents alone are not enough).';
       if (coverage < 85) return `Coverage at ${coverage}% — reach 85% to advance to L4.`;
       return 'All thresholds met — should be at L4 already.';
     default:

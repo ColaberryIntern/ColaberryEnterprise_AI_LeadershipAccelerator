@@ -3457,3 +3457,14 @@ The whole point of the operator's directive ("do real operational verifications"
   - Date: 2026-05-21
   - What changed: A pre-3-tier `requirements_builder_state` draft (no `buildType`) made `RequirementsBuilder` resume straight to the idea screen, bypassing the chooser. Resume now discards drafts without a `buildType` (start at the chooser); only current-flow drafts resume. Header **Back** now returns to the chooser when on a later step (was always navigating to Blueprint).
   - Verification: frontend `tsc --noEmit` + production build pass; deployed.
+
+- [x] Fix: maturity L badge diverged from BP-row B/F/A dots (strict-rule alignment)
+  - Date: 2026-05-21
+  - What changed: Operator caught L3 badges on caps that had no actual page or confirmed agents (Prompt Generation, Prompt Generation Service, Validation Parser, Validation Results Emission). Root cause: `maturityScorer.hasFrontend` accepted ANY `linked_frontend_components.length > 0` (keyword-attribution noise — Lead Classification regression material) while the per-request `usability` rule in `projectRoutes.ts:enrichCapability()` correctly required `frontend_route || is_page_bp || source==='frontend_page'`. Same divergence for `hasAgents` (linked_agents keyword noise vs `_confirmed_agent_count > 0`). Tightened maturity scorer to use the same strict signals; dots stay unchanged (they were already correct). Investigation also confirmed `capabilities` has no `usability` column — usability is computed fresh per request, not stored, so the originally-proposed "engine refresh of stored usability" was moot.
+  - Verification: `npx jest src/intelligence/systemStateEngine/__tests__/engine.test.ts -t "maturityScorer"` 7/7 pass; full systemStateEngine suite 1751/1751 pass; full backend Jest 2395/2395 pass; `npx tsc --noEmit` exit 0. Added regression tests for the strict rule: "stops at L2 when only linked_frontend_components present (no route)" and "stops at L3 when only linked_agents present (no confirmed map)."
+  - Notes: This will drop several caps from L3→L2 (4 confirmed on the production data sample) — that's the honest reading. Caps appearing higher than they really were is what the operator was reacting to in the screenshot.
+
+| File | Change |
+|---|---|
+| `backend/src/intelligence/systemStateEngine/scoring/maturityScorer.ts` | Strict `hasFrontend` (route/page-BP only, not linked_frontend_components) + strict `hasAgents` (confirmed map row / kind=agent, not linked_agents); doc-block + gap-message text updated (2026-05-21) |
+| `backend/src/intelligence/systemStateEngine/__tests__/engine.test.ts` | Existing L3/L4 fixtures updated to use `frontend_route` + `_confirmed_agent_count` (matching strict rule); two new regression tests for keyword-attribution rejection (2026-05-21) |
