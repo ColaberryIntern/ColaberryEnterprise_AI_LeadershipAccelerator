@@ -33,7 +33,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 export default function RequirementsBuilder() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<'choose' | 'idea' | 'loading_questions' | 'questions' | 'generating' | 'review' | 'complete' | 'repo'>('choose');
+  const [phase, setPhase] = useState<'choose' | 'idea' | 'loading_questions' | 'questions' | 'generating' | 'review' | 'building' | 'complete' | 'repo'>('choose');
   // Build tier chosen on the first screen: workflow (fast regular LLM), full
   // (Architect, professional), or autonomous (Architect, deepest setting).
   const [buildType, setBuildType] = useState<'workflow' | 'full' | 'autonomous' | null>(null);
@@ -239,11 +239,29 @@ export default function RequirementsBuilder() {
     setError(null);
     try {
       await portalApi.post('/api/portal/project/setup/requirements', { content: generatedDoc });
+      localStorage.removeItem('requirements_builder_state');
+      // Build out the workflow into capabilities (no repo needed) before handoff —
+      // otherwise the user lands on an empty Blueprint with 0 capabilities.
+      setPhase('building');
+      setStage('saving');
+      setProgress(92);
+      setProgressMsg('Building your system...');
+      await portalApi.post('/api/portal/project/setup/activate', {});
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const p = (await portalApi.get('/api/portal/project/setup/activation-progress')).data;
+          if (typeof p.percent === 'number') setProgress(Math.max(92, Math.min(99, p.percent)));
+          if (p.message) setProgressMsg(p.message);
+          if (p.status === 'complete') break;
+          if (p.status === 'failed') { setError(p.message || 'Build-out did not complete; you can retry from the Blueprint.'); break; }
+        } catch { /* keep polling */ }
+      }
+      setProgress(100);
       setPhase('complete');
       setStage('complete');
-      setProgress(100);
-      localStorage.removeItem('requirements_builder_state');
-    } catch (err: any) { setError(err.response?.data?.error || 'Failed to save'); }
+    } catch (err: any) { setError(err.response?.data?.error || 'Failed to save'); setPhase('review'); }
     finally { setSaving(false); }
   };
 
@@ -489,15 +507,26 @@ export default function RequirementsBuilder() {
         </div>
       )}
 
+      {/* BUILDING (workflow build-out) */}
+      {phase === 'building' && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body p-5 text-center">
+            <div className="spinner-border text-primary mb-3" style={{ width: 44, height: 44 }}></div>
+            <h6 className="fw-bold mb-2" style={{ fontSize: 15 }}>Building your system</h6>
+            <p className="text-muted mb-0" style={{ fontSize: 13 }}>{progressMsg || 'Organizing your requirements into capabilities...'}</p>
+          </div>
+        </div>
+      )}
+
       {/* COMPLETE */}
       {phase === 'complete' && (
         <div className="card border-0 shadow-sm">
           <div className="card-body p-5 text-center">
             <i className="bi bi-check-circle-fill d-block mb-3" style={{ fontSize: 44, color: '#10b981' }}></i>
-            <h5 className="fw-bold mb-2" style={{ color: '#059669', fontSize: 16 }}>Requirements Saved!</h5>
-            <p className="text-muted mb-3" style={{ fontSize: 13 }}>Continue setup to connect your repository and activate.</p>
+            <h5 className="fw-bold mb-2" style={{ color: '#059669', fontSize: 16 }}>Your system is ready!</h5>
+            <p className="text-muted mb-3" style={{ fontSize: 13 }}>Your requirements are saved and organized into capabilities. Open your Blueprint to see what&rsquo;s next.</p>
             <button className="btn btn-primary" style={{ borderRadius: 8, fontWeight: 600, fontSize: 13 }} onClick={() => navigate('/portal/project/blueprint')}>
-              Continue Setup <i className="bi bi-arrow-right ms-1"></i>
+              View your system <i className="bi bi-arrow-right ms-1"></i>
             </button>
           </div>
         </div>

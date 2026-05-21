@@ -133,7 +133,10 @@ export async function activateProject(enrollmentId: string): Promise<{
   if (!status) throw new Error('Project has no setup status');
   if (!status.requirements_loaded) throw new Error('Requirements document not uploaded yet');
   // claude_md_loaded no longer required for activation (hidden from user flow)
-  if (!status.github_connected) throw new Error('GitHub repository not connected yet');
+  // No repo required: the Workflow tier (and any no-repo build) clusters the
+  // document into capabilities without a connected repo. The repo-dependent
+  // steps (file sync + matching) below are skipped when there's no connection.
+  const hasRepo = !!status.github_connected;
 
   let requirementsCount = 0;
   let matchedCount = 0;
@@ -181,20 +184,24 @@ export async function activateProject(enrollmentId: string): Promise<{
     if (attempt < 2) console.warn('[ProjectSetup] Clustering yielded 0 capabilities — retrying once');
   }
 
-  // Step 2: Sync GitHub file tree
-  try {
-    const syncResult = await fullSync(enrollmentId);
-    fileCount = syncResult.fileCount;
-  } catch (err) {
-    console.warn('[ProjectSetup] GitHub sync failed (non-critical):', (err as Error).message);
-  }
+  // Steps 2 & 3 only apply when a repo is connected (Full / Autonomous tiers).
+  // The Workflow tier has no repo, so we skip file sync + matching entirely.
+  if (hasRepo) {
+    // Step 2: Sync GitHub file tree
+    try {
+      const syncResult = await fullSync(enrollmentId);
+      fileCount = syncResult.fileCount;
+    } catch (err) {
+      console.warn('[ProjectSetup] GitHub sync failed (non-critical):', (err as Error).message);
+    }
 
-  // Step 3: Match requirements to repo files
-  try {
-    const matchResult = await matchRequirementsToRepo(project.id);
-    matchedCount = (matchResult as any)?.matched || 0;
-  } catch (err) {
-    console.warn('[ProjectSetup] Requirements matching failed (non-critical):', (err as Error).message);
+    // Step 3: Match requirements to repo files
+    try {
+      const matchResult = await matchRequirementsToRepo(project.id);
+      matchedCount = (matchResult as any)?.matched || 0;
+    } catch (err) {
+      console.warn('[ProjectSetup] Requirements matching failed (non-critical):', (err as Error).message);
+    }
   }
 
   // Step 4: Activate — but only if build-out actually produced capabilities.
