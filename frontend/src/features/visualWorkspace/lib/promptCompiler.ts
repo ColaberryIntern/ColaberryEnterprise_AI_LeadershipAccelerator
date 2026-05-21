@@ -20,6 +20,10 @@ interface CritiqueLite {
   target_selector?: string | null;
   region?: { x: number; y: number; width: number; height: number } | null;
   expected_outcome?: string | null;
+  // 2026-05-21 Visual Scan additions.
+  scope?: 'page' | 'global' | 'component';
+  title?: string | null;
+  rationale?: string | null;
 }
 
 interface SuggestionLite {
@@ -66,19 +70,55 @@ export function compilePromptLocally(input: CompileInput): string {
 
   const previewUrl = joinUrl(input.preview_origin, input.page_route);
 
+  // 2026-05-21 (Addition C): sort by severity desc so high-severity
+  // critiques appear first in the prompt. Within severity, preserve
+  // creation order for stability.
+  const SEVERITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+  const sortedCritiques = [...critiques].sort((a, b) => {
+    const sa = SEVERITY_RANK[(a.severity || 'medium').toLowerCase()] || 2;
+    const sb = SEVERITY_RANK[(b.severity || 'medium').toLowerCase()] || 2;
+    return sb - sa;
+  });
+
+  // 2026-05-21 (Phase 2): split into global vs page-scoped sections so
+  // the Claude Code consumer sees the theme-level fixes framed as
+  // cross-cutting work, separate from this page's specific changes.
+  const globalCritiques = sortedCritiques.filter((c: any) => c.scope === 'global' || c.scope === 'component');
+  const pageCritiques = sortedCritiques.filter((c: any) => !c.scope || c.scope === 'page');
+
   const lines: string[] = [];
   lines.push('# Visual workspace change request');
   lines.push('');
   lines.push(`**Target page:** \`${input.page_route}\``);
   lines.push(`**Preview URL:** ${previewUrl}`);
-  lines.push(`**Critique count:** ${critiques.length}`);
+  lines.push(`**Critique count:** ${critiques.length} (${globalCritiques.length} global / ${pageCritiques.length} page-specific)`);
   lines.push('');
   lines.push('## Objective');
   lines.push('Address the critiques pinned in the visual workspace. Each critique below is anchored to a region of the rendered page (region coordinates are normalized 0..1 across the iframe stage).');
+  if (globalCritiques.length > 0) {
+    lines.push('');
+    lines.push('**Scope note:** items in the "Global" section below are theme / design-system changes that should apply across all pages, not just this surface. Page-specific items live only on the target page.');
+  }
   lines.push('');
 
-  lines.push('## Critiques');
-  critiques.forEach((c, idx) => {
+  if (globalCritiques.length > 0) {
+    lines.push('## Global (theme / design system)');
+    lines.push('');
+    globalCritiques.forEach((c, idx) => {
+      lines.push(`### G${idx + 1}. ${kindBadge(c.kind)} · ${c.severity.toUpperCase()}`);
+      lines.push('');
+      if ((c as any).title) lines.push(`- **Title:** ${(c as any).title}`);
+      if ((c as any).rationale) lines.push(`- **Rationale:** ${(c as any).rationale}`);
+      if (c.target_selector) lines.push(`- **Selector:** \`${c.target_selector}\``);
+      lines.push(`- **Issue:** ${c.description}`);
+      if (c.expected_outcome) lines.push(`- **Expected outcome:** ${c.expected_outcome}`);
+      lines.push('- **Note:** this is a global change. Apply consistently across the design system (tokens, base components) so every page benefits.');
+      lines.push('');
+    });
+  }
+
+  lines.push('## Page-specific critiques');
+  pageCritiques.forEach((c, idx) => {
     lines.push(`### ${idx + 1}. ${kindBadge(c.kind)} · ${c.severity.toUpperCase()}`);
     lines.push('');
     if (c.target_selector) lines.push(`- **Selector:** \`${c.target_selector}\``);

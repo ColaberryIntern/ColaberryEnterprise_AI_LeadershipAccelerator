@@ -25,6 +25,9 @@ export interface UseVisualReviewSession {
   decide: (input: { suggestion_id?: string; critique_id?: string; verdict: 'accepted' | 'rejected' | 'deferred'; rationale?: string }) => Promise<void>;
   generatePrompt: () => Promise<any>;
   updateNotes: (notes: string) => Promise<void>;
+  // 2026-05-21 Visual Scan + lifecycle.
+  runScan: (input: { screenshot_data_url: string; preset: string; page_route: string; cap_name?: string; cap_description?: string }) => Promise<{ created_count: number; cache_hit: boolean; scan_summary?: string }>;
+  setLifecycle: (critiqueId: string, stage: 'suggested' | 'accepted' | 'built' | 'verified' | 'rejected') => Promise<void>;
 }
 
 export function useVisualReviewSession(sessionId: string | null): UseVisualReviewSession {
@@ -73,7 +76,24 @@ export function useVisualReviewSession(sessionId: string | null): UseVisualRevie
     await portalApi.patch(`/api/portal/project/visual-review/session/${encodeURIComponent(sessionId)}/notes`, { notes });
   }, [sessionId]);
 
+  // 2026-05-21 Visual Scan + lifecycle endpoints.
+  const runScan = useCallback(async (input: { screenshot_data_url: string; preset: string; page_route: string; cap_name?: string; cap_description?: string }) => {
+    if (!sessionId) throw new Error('no session');
+    const r = await portalApi.post(`/api/portal/project/visual-review/session/${encodeURIComponent(sessionId)}/scan`, input);
+    await refresh();
+    return r.data;
+  }, [sessionId, refresh]);
+
+  const setLifecycle = useCallback(async (critiqueId: string, stage: 'suggested' | 'accepted' | 'built' | 'verified' | 'rejected') => {
+    if (!sessionId) return;
+    await portalApi.patch(
+      `/api/portal/project/visual-review/session/${encodeURIComponent(sessionId)}/critique/${encodeURIComponent(critiqueId)}/lifecycle`,
+      { stage },
+    );
+    await refresh();
+  }, [sessionId, refresh]);
+
   useEffect(() => { void refresh(); }, [refresh]);
 
-  return { data, loading, error, refresh, addCritique, decide, generatePrompt, updateNotes };
+  return { data, loading, error, refresh, addCritique, decide, generatePrompt, updateNotes, runScan, setLifecycle };
 }

@@ -49,6 +49,10 @@ const KIND_TO_DIMENSION: Record<CritiqueKind, keyof Omit<UXDebtScore, 'total_deb
   interaction: 'action_density_debt',
   workflow: 'workflow_debt',
   copy: 'onboarding_debt',
+  // 2026-05-21 Visual Scan additions.
+  theme: 'consistency_debt',
+  data_density: 'action_density_debt',
+  mobile: 'responsiveness_debt',
 };
 
 export function scoreUXDebt(critiques: ReadonlyArray<CritiqueSnapshot>): UXDebtScore {

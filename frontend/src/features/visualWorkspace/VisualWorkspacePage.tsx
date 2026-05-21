@@ -20,6 +20,8 @@ import { useVisualReviewSession } from '../../hooks/useVisualReviewSession';
 
 import WorkspaceSidebar, { type SidebarIssue } from './components/WorkspaceSidebar';
 import CapNotesPanel from './components/CapNotesPanel';
+import ScanButton from './components/ScanButton';
+import { fireToast } from '../../components/workspace/MicroToast';
 import VisualStage, { type StagePin } from './components/VisualStage';
 import IssueDetailsPanel from './components/IssueDetailsPanel';
 import ActionBar from './components/ActionBar';
@@ -211,6 +213,12 @@ const VisualWorkspacePage: React.FC = () => {
         severity: c.severity as CritiqueSeverity,
         status,
         region_label,
+        // 2026-05-21 — surface scope + lifecycle so the new scope-grouped
+        // sidebar can render correctly without reading raw critique rows.
+        scope: (c.scope || 'page') as 'page' | 'global' | 'component',
+        lifecycle: (c.lifecycle_stage || 'suggested') as 'suggested' | 'accepted' | 'built' | 'verified' | 'rejected',
+        createdByScan: c.created_by === 'visual-scan',
+        rationale: c.rationale,
       };
     });
   }, [indexedCritiques, suggestions, acceptedSuggestionIds, resolvedCritiqueIds]);
@@ -415,13 +423,33 @@ const VisualWorkspacePage: React.FC = () => {
               onPersist={session.updateNotes}
             />
           }
+          onLifecycleChange={(id, stage) => { void session.setLifecycle(id, stage); }}
         />
 
         <div className="vw-canvas">
-          <div className="vw-canvas-toolbar">
-            <span className="vw-url-display">{previewSrc}</span>
-            {session.loading && <span className="badge bg-light text-dark">loading…</span>}
-            {session.error && <span className="badge bg-warning text-dark" title={session.error}>session error</span>}
+          <div className="vw-canvas-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="vw-url-display">{previewSrc}</span>
+              {session.loading && <span className="badge bg-light text-dark">loading…</span>}
+              {session.error && <span className="badge bg-warning text-dark" title={session.error}>session error</span>}
+            </div>
+            <ScanButton
+              pageRoute={pageRoute}
+              onScan={async ({ screenshot_data_url, preset }) => {
+                return session.runScan({
+                  screenshot_data_url,
+                  preset,
+                  page_route: pageRoute,
+                });
+              }}
+              onScanComplete={(r) => {
+                fireToast(
+                  r.created_count > 0
+                    ? `Visual scan: ${r.created_count} new suggestion${r.created_count === 1 ? '' : 's'} added${r.cache_hit ? ' (cached)' : ''}`
+                    : 'Visual scan: no new findings'
+                );
+              }}
+            />
           </div>
           <VisualStage
             src={previewSrc}

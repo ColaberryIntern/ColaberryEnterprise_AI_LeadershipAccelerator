@@ -3557,6 +3557,83 @@ router.get('/api/portal/project/walks', requireParticipant, async (req: Request,
   }
 });
 
+/**
+ * POST /api/portal/project/visual-review/session/:id/scan — 2026-05-21.
+ *
+ * Visual Scan: takes a screenshot of the iframe (data URL) + page route,
+ * sends to gpt-4o vision, returns 5–15 critique suggestions that land in
+ * the session as VisualCritiqueItem rows with created_by='visual-scan'.
+ * Supports presets + re-scan delta (known_findings filter out duplicates).
+ */
+router.post('/api/portal/project/visual-review/session/:id/scan', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const sessionId = req.params.id as string;
+    const { getSession, listCritiques } = await import('../intelligence/systemStateEngine/visual/visualReviewSessionService');
+    const session = await getSession(sessionId);
+    if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+    if (session.project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
+
+    const { screenshot_data_url, page_route, cap_name, cap_description, preset } = req.body || {};
+    if (!screenshot_data_url || typeof screenshot_data_url !== 'string' || !screenshot_data_url.startsWith('data:image')) {
+      res.status(400).json({ error: 'screenshot_data_url required (data URL with image/* mime)' }); return;
+    }
+    if (!page_route || typeof page_route !== 'string') {
+      res.status(400).json({ error: 'page_route required' }); return;
+    }
+
+    // Build the known-findings list from existing critiques on this session
+    // (Addition A: re-scan delta).
+    const existing = await listCritiques(sessionId);
+    const knownFindings = existing
+      .filter((c: any) => c.title)
+      .map((c: any) => ({ title: c.title, status: c.lifecycle_stage || 'suggested' }));
+
+    const { runVisualScan } = await import('../services/visualScanService');
+    const result = await runVisualScan({
+      session_id: sessionId,
+      project_id: project.id,
+      participant_sub: req.participant!.sub,
+      screenshot_data_url,
+      page_route,
+      cap_name,
+      cap_description,
+      preset,
+      known_findings: knownFindings,
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('[visual-review/scan]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/portal/project/visual-review/session/:sessionId/critique/:critiqueId/lifecycle
+ * — 2026-05-21. Move a critique item through the lifecycle:
+ *   suggested → accepted → built → verified
+ *   suggested → rejected (terminal)
+ */
+router.patch('/api/portal/project/visual-review/session/:sessionId/critique/:critiqueId/lifecycle', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: VisualCritiqueItem } = await import('../models/VisualCritiqueItem');
+    const c: any = await VisualCritiqueItem.findByPk(req.params.critiqueId as string);
+    if (!c || c.project_id !== project.id) { res.status(404).json({ error: 'Critique not found' }); return; }
+    const stage = String(req.body?.stage || '');
+    const allowed = ['suggested', 'accepted', 'built', 'verified', 'rejected'];
+    if (!allowed.includes(stage)) { res.status(400).json({ error: 'invalid stage' }); return; }
+    c.lifecycle_stage = stage;
+    await c.save();
+    res.json({ ok: true, id: c.id, stage });
+  } catch (err: any) {
+    console.error('[visual-review/lifecycle]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Phase A (2026-05-20): persist a cap-level free-form note on the session.
 // Triggered by the sidebar textarea's onBlur. Empty string clears the note.
 router.patch('/api/portal/project/visual-review/session/:id/notes', requireParticipant, async (req: Request, res: Response) => {

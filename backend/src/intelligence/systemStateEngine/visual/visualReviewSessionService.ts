@@ -80,6 +80,12 @@ export async function listCritiques(sessionId: string): Promise<any[]> {
     expected_outcome: r.expected_outcome,
     created_by: r.created_by,
     created_at: new Date(r.created_at).toISOString(),
+    // 2026-05-21 Visual Scan + lifecycle additions.
+    scope: r.scope || 'page',
+    lifecycle_stage: r.lifecycle_stage || 'suggested',
+    title: r.title,
+    rationale: r.rationale,
+    related_routes: r.related_routes || [],
   }));
 }
 
