@@ -9,7 +9,7 @@
  * Nothing activates until all 3 are provided and the user clicks "Activate."
  */
 import Project from '../models/Project';
-import { RequirementsMap } from '../models';
+import { RequirementsMap, Capability } from '../models';
 import { createProjectForEnrollment, getProjectByEnrollment } from './projectService';
 import { connectRepo, fullSync } from './githubService';
 import { parseRequirements, matchRequirementsToRepo } from './requirementsMatchingService';
@@ -160,15 +160,25 @@ export async function activateProject(enrollmentId: string): Promise<{
     }
   }
 
-  // Step 1b: Cluster requirements into Capability → Feature hierarchy
-  try {
-    const { parseRequirementsWithSections } = require('./requirementsParserService');
-    const { clusterRequirements, persistHierarchy } = require('./requirementClusteringService');
-    const parsedWithSections = parseRequirementsWithSections(project.requirements_document);
-    const hierarchy = await clusterRequirements(project.id, parsedWithSections, enrollmentId);
-    await persistHierarchy(project.id, hierarchy);
-  } catch (err) {
-    console.warn('[ProjectSetup] Clustering failed (non-critical):', (err as Error).message);
+  // Step 1b: Cluster requirements into Capability → Feature hierarchy.
+  // Clustering is an LLM call that can fail or return nothing on large docs —
+  // this previously produced silently "activated" projects with 0 capabilities
+  // (the worst outcome after a ~15-min build). Retry once if it yields no
+  // capabilities; a persistent 0 is treated as a hard failure below.
+  let capabilityCount = 0;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const { parseRequirementsWithSections } = require('./requirementsParserService');
+      const { clusterRequirements, persistHierarchy } = require('./requirementClusteringService');
+      const parsedWithSections = parseRequirementsWithSections(project.requirements_document);
+      const hierarchy = await clusterRequirements(project.id, parsedWithSections, enrollmentId);
+      await persistHierarchy(project.id, hierarchy);
+    } catch (err) {
+      console.warn(`[ProjectSetup] Clustering attempt ${attempt} failed:`, (err as Error).message);
+    }
+    capabilityCount = await Capability.count({ where: { project_id: project.id } });
+    if (capabilityCount > 0) break;
+    if (attempt < 2) console.warn('[ProjectSetup] Clustering yielded 0 capabilities — retrying once');
   }
 
   // Step 2: Sync GitHub file tree
@@ -187,7 +197,12 @@ export async function activateProject(enrollmentId: string): Promise<{
     console.warn('[ProjectSetup] Requirements matching failed (non-critical):', (err as Error).message);
   }
 
-  // Step 4: Activate
+  // Step 4: Activate — but only if build-out actually produced capabilities.
+  // A 0-capability "activated" project strands the user on an empty system, so
+  // leave it un-activated and surface a clear failure the caller can retry.
+  if (capabilityCount === 0) {
+    throw new Error('Activation produced 0 capabilities — clustering did not yield a hierarchy. Project left un-activated for retry.');
+  }
   project.setup_status = { ...status, activated: true };
   project.project_stage = 'implementation';
   await project.save();

@@ -3281,3 +3281,13 @@ The whole point of the operator's directive ("do real operational verifications"
 | File | Change |
 |---|---|
 | `scripts/compareDocGenerators.js` + `scripts/buildDocComparisonReport.js` + `docs/REQUIREMENTS_GENERATOR_COMPARISON.html` | New: controlled doc-generator comparison (fetches Architect doc + generates a regular-LLM doc for the same idea, job-only/not saved) + report generator + report (2026-05-21) |
+
+- [x] Fix: activateProject no longer marks a 0-capability build-out as activated
+  - Date: 2026-05-21
+  - What changed: `activateProject()` clustered requirements in a swallowed try/catch and then unconditionally set `activated=true` — so when clustering failed/returned nothing (observed on run3's ~100KB Architect doc) the user got a "ready" project with 0 capabilities after a ~15-min wait. Now: clustering retries once if it yields 0 capabilities, and if it's still 0 the function throws (project left un-activated) instead of marking it complete. Callers (`POST /setup/activate`, `architect-status`) record the failure and can retry.
+  - Verification: backend `tsc --noEmit` passes; deployed to prod; functional activate confirmed still produces capabilities + activates normally.
+  - Notes: The retry alone fixes the observed transient run3 case (a manual re-trigger had populated it); the throw is the safety net so an empty build-out is never presented as success.
+
+| File | Change |
+|---|---|
+| `backend/src/services/projectSetupService.ts` | `activateProject`: retry clustering once on 0 capabilities; throw (leave un-activated) instead of marking `activated=true` when build-out produced no capabilities (2026-05-21) |
