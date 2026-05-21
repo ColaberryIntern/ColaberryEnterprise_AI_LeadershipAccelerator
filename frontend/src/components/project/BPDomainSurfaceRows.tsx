@@ -24,7 +24,8 @@ import { forwardLookingNote } from '../../utils/operationalLeverage';
 import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
 import { metadataItems } from '../../utils/scanSpeedSignals';
 import { dedupByFrontendRoute } from '../../utils/bpRowDedup';
-import { bpPillars, type PillarSignal, type PillarStatus } from '../../utils/bpSignals';
+import { dedupByNameStem } from '../../utils/bpNameDedup';
+import { bpPillars, domainBuildBreakdown, type PillarSignal, type PillarStatus } from '../../utils/bpSignals';
 import { inheritedDomainContextSentence } from '../../utils/bpInheritedContext';
 import { pathwayStageLabel } from '../../utils/pathwayStage';
 
@@ -120,15 +121,26 @@ export const DomainRow: React.FC<{
     ? bucket.processes.filter(p => (!hidePhantoms || !(p as any).is_phantom) && filterPredicate(p)).length
     : null;
 
+  // Build-composition pill — always-on header signal ("3 built · 5 forming
+  // · 3 not built") so the operator can scan the domain stack and see at
+  // a glance which areas are wired vs scaffolded vs empty. Pulls the
+  // bpBuiltness label per BP via the shared util. (2026-05-21)
+  const composition = domainBuildBreakdown(bucket.processes as any);
+
   return (
     <section
       ref={registerRef}
       className={isPulsing ? 'ws-domain-pulse' : undefined}
       style={{
         background: accentBg,
-        border: '1px solid var(--color-border)',
+        // 2026-05-21: bolder card border so each domain reads as its own
+        // unit. Subtle drop shadow lifts cards off the page background;
+        // makes the stack feel like a deck of cards instead of one long
+        // statement (operator feedback).
+        border: '1.5px solid var(--color-border)',
         borderLeft: accentBorder,
         borderRadius: 8, overflow: 'hidden',
+        boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
       }}
     >
       {/* Header — toggles expand. Contains only non-interactive content. */}
@@ -159,6 +171,41 @@ export const DomainRow: React.FC<{
             <span style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontWeight: 500 }}>
               · {bucket.processes.length} BP{bucket.processes.length === 1 ? '' : 's'}
             </span>
+            {(composition.built > 0 || composition.wired > 0 || composition.partial > 0) && (
+              <span
+                title={`Build composition · ${composition.built} built · ${composition.wired} wired · ${composition.partial} partial · ${composition.foundation} foundation · ${composition.notBuilt} not yet`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 10.5, fontWeight: 600,
+                  padding: '2px 8px', borderRadius: 4,
+                  background: 'var(--color-bg-alt)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-light)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {composition.built > 0 && (
+                  <span style={{ color: '#15803d' }}>
+                    <span style={{ fontWeight: 700 }}>{composition.built}</span> built
+                  </span>
+                )}
+                {composition.wired > 0 && (
+                  <span style={{ color: '#1d4ed8' }}>
+                    <span style={{ fontWeight: 700 }}>{composition.wired}</span> wired
+                  </span>
+                )}
+                {composition.partial > 0 && (
+                  <span style={{ color: '#b45309' }}>
+                    <span style={{ fontWeight: 700 }}>{composition.partial}</span> partial
+                  </span>
+                )}
+                {composition.notBuilt > 0 && (
+                  <span style={{ color: 'var(--color-text-light)', opacity: 0.85 }}>
+                    <span style={{ fontWeight: 700 }}>{composition.notBuilt}</span> not yet
+                  </span>
+                )}
+              </span>
+            )}
             {matchedInDomainCount !== null && (
               <span
                 title={`${matchedInDomainCount} of ${bucket.processes.length} BPs match the current filter`}
@@ -326,16 +373,24 @@ export const DomainRow: React.FC<{
         </div>
       )}
 
-      {/* Expanded — operational role + downstream summary + BP list */}
+      {/* Expanded — operational role + downstream summary + BP list.
+          2026-05-21: stronger section dividers + left-bar section labels
+          so the three zones (header, operational role, processes) don't
+          read as one continuous block. */}
       {isExpanded && (
-        <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-alt)' }}>
+        <div style={{ borderTop: '2px solid var(--color-border)' }}>
+          {/* Operational role zone — bg-alt so it sets apart from the
+              white domain header above and the white BP list below. */}
           <div style={{
-            padding: '0.8rem 1.4rem 0.7rem 3.4rem',
-            borderBottom: '1px solid var(--color-border)',
+            padding: '0.85rem 1.4rem 0.85rem 3.4rem',
+            background: 'var(--color-bg-alt)',
+            borderBottom: '2px solid var(--color-border)',
           }}>
             <div style={{
-              fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em',
-              color: 'var(--color-text-light)', fontWeight: 600, marginBottom: 4,
+              fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+              color: 'var(--color-text-light)', fontWeight: 700, marginBottom: 6,
+              paddingLeft: 8, borderLeft: '3px solid var(--color-primary-light)',
+              lineHeight: 1.4,
             }}>
               Operational role
             </div>
@@ -347,12 +402,23 @@ export const DomainRow: React.FC<{
               {downstreamSummary}.
             </div>
           </div>
+          {/* Processes zone — white background so the BP rows pop;
+              top of zone gets a labeled accent so the operator's eye
+              lands here when scanning for what's inside the domain. */}
           <div style={{
-            padding: '0.55rem 1.4rem 0.4rem 3.4rem',
-            fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em',
-            color: 'var(--color-text-light)', fontWeight: 600,
+            padding: '0.7rem 1.4rem 0.5rem 3.4rem',
+            background: 'white',
+            fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+            color: 'var(--color-text-light)', fontWeight: 700,
+            lineHeight: 1.4,
           }}>
-            Processes in this domain
+            <span style={{
+              paddingLeft: 8,
+              borderLeft: '3px solid var(--color-primary-light)',
+              display: 'inline-block',
+            }}>
+              Processes in this domain
+            </span>
           </div>
           {inheritedDomainContextSentence(bucket.label, bucket.downstreamCount) && (
             <div style={{
@@ -364,7 +430,13 @@ export const DomainRow: React.FC<{
             </div>
           )}
           {(() => {
-            const deduped = dedupByFrontendRoute(bucket.processes);
+            // Two-pass dedup: by frontend_route first (catches caps pointing
+            // at the same page), then by normalized name stem (catches
+            // "Campaigns Management" vs "Campaign Management" — same cap,
+            // different brownfield extraction stems). Both feed the same
+            // +N pill / MergedCapsModal.
+            const dedupedByRoute = dedupByFrontendRoute(bucket.processes);
+            const deduped = dedupByNameStem(dedupedByRoute);
             const phantomFiltered = hidePhantoms ? deduped.filter(p => !p.is_phantom) : deduped;
             const visible = filterPredicate ? phantomFiltered.filter(filterPredicate) : phantomFiltered;
             // 2026-05-21: sort by priority desc within the domain.

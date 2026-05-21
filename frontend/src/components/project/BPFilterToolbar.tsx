@@ -90,15 +90,20 @@ const BPFilterToolbar: React.FC<Props> = ({
         top: 0,
         zIndex: 5,
         background: 'white',
-        borderBottom: '1px solid var(--color-border)',
-        marginBottom: '1rem',
-        paddingBottom: '0.5rem',
+        // 2026-05-21: full card container + subtle shadow so the toolbar
+        // reads as its own control surface (Bloomberg-style filter chrome)
+        // and doesn't flow visually into the domain stack below.
+        border: '1.5px solid var(--color-border)',
+        borderRadius: 8,
+        boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+        padding: '0.65rem 0.85rem 0.65rem',
+        marginBottom: '1.25rem',
       }}
     >
       {/* Row 1 — text input + layer chips + result count */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-        padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)',
+        paddingBottom: '0.55rem',
       }}>
         <label style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
