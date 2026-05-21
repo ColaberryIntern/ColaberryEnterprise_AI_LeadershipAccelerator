@@ -74,7 +74,11 @@ export const DomainRow: React.FC<{
     nameById: Map<string, string>;
     usedByMap: Map<string, string[]>; // cap_id -> list of cap_ids that call it
   };
-}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp, onShowMergedCaps, callGraph }) => {
+  /** When true, BP rows with is_phantom=true are hidden + a count line
+   *  rendered at the bottom of the domain. (2026-05-21) */
+  hidePhantoms?: boolean;
+  onOpenPhantomsTriage?: () => void;
+}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp, onShowMergedCaps, callGraph, hidePhantoms, onOpenPhantomsTriage }) => {
   const tone = LIFECYCLE_TONE[bucket.lifecycleState];
   const mom = momentum || { delta: null, direction: 'first-visit' as Direction, label: 'baseline', minutesSince: null };
   const momTone = MOMENTUM_TONE[mom.direction];
@@ -330,16 +334,48 @@ export const DomainRow: React.FC<{
               {inheritedDomainContextSentence(bucket.label, bucket.downstreamCount)}
             </div>
           )}
-          {dedupByFrontendRoute(bucket.processes).map(p => (
-            <BPLine
-              key={p.id}
-              bp={p}
-              inheritedAccent={isCoryPriority ? 'priority' : isDownstreamOfPriority ? 'downstream' : null}
-              onPick={() => onPickBp(p.id)}
-              onShowMergedCaps={onShowMergedCaps}
-              callGraph={callGraph}
-            />
-          ))}
+          {(() => {
+            const deduped = dedupByFrontendRoute(bucket.processes);
+            const visible = hidePhantoms ? deduped.filter(p => !p.is_phantom) : deduped;
+            const hiddenCount = deduped.length - visible.length;
+            return (
+              <>
+                {visible.map(p => (
+                  <BPLine
+                    key={p.id}
+                    bp={p}
+                    inheritedAccent={isCoryPriority ? 'priority' : isDownstreamOfPriority ? 'downstream' : null}
+                    onPick={() => onPickBp(p.id)}
+                    onShowMergedCaps={onShowMergedCaps}
+                    callGraph={callGraph}
+                  />
+                ))}
+                {hiddenCount > 0 && (
+                  <div style={{
+                    padding: '0.55rem 1.4rem 0.6rem 3.4rem',
+                    fontSize: 11, color: 'var(--color-text-light)',
+                    fontStyle: 'italic',
+                    borderTop: '1px dashed var(--color-border)',
+                  }}>
+                    <i className="bi bi-eye-slash me-1" style={{ fontSize: 10 }}></i>
+                    {hiddenCount} cap{hiddenCount === 1 ? '' : 's'} hidden — no implementation across any layer
+                    {onOpenPhantomsTriage && (
+                      <>
+                        {' · '}
+                        <button
+                          type="button"
+                          onClick={onOpenPhantomsTriage}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--color-primary)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11, padding: 0 }}
+                        >
+                          review
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </section>

@@ -24,6 +24,7 @@ import SystemBuildDemo from '../pages/project/SystemBuildDemo';
 import VisualWorkspacePage from '../features/visualWorkspace/VisualWorkspacePage';
 import WalkCapsPage from '../pages/portal/WalkCapsPage';
 import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
+import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
 import ExecutionLane from '../pages/project/ExecutionLane';
 import SystemView from '../pages/project/SystemView';
@@ -71,6 +72,8 @@ const portalRoutes = (
         <Route path="/portal/walk-caps" element={<WalkCapsPage />} />
         {/* Phase C (2026-05-20): walk summary + compile-prompt. */}
         <Route path="/portal/walk-caps/summary" element={<WalkSummaryPage />} />
+        {/* 2026-05-21: phantom-cap triage. */}
+        <Route path="/portal/project/phantoms" element={<PhantomCapsTriage />} />
       </Route>
     </Route>
   </Route>

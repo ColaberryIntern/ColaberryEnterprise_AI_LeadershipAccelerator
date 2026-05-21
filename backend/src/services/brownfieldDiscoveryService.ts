@@ -1004,6 +1004,19 @@ export async function discoverBrownfieldCapabilities(
       else if (layer === 'model') models.push(f);
     }
 
+    // 2026-05-21: phantom-creation gate. Agent attribution alone is the
+    // noisiest brownfield signal — caps like "Discovery" or "Validation"
+    // pick up 8+ agent files via keyword stems that don't actually serve
+    // them. If a candidate has only agent-layer evidence and zero backend
+    // / frontend / model files, refuse to create the cap. The LLM
+    // attribution classifier would just reject them all and you'd end up
+    // with phantom rows anyway. Operator can manually create the cap if
+    // needed.
+    if (backend.length === 0 && frontend.length === 0 && models.length === 0 && agents.length > 0) {
+      console.warn(`[Brownfield] Skipping cap "${cap.name}" — only agent-layer attribution (${agents.length} files), no backend/frontend/model files. Likely keyword over-attribution.`);
+      continue;
+    }
+
     const existing = await Capability.findOne({
       where: { project_id: projectId, name: cap.name },
     });

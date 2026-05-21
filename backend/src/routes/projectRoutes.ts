@@ -2022,6 +2022,44 @@ function enrichCapability(cap: any) {
       };
     })(),
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
+    // 2026-05-21: phantom detection — a cap is a "phantom" when it has
+    // no confirmed implementation across any layer and no requirements
+    // either. Brownfield discovery sometimes extracts a concept from a
+    // description / PROGRESS mention without finding code to back it,
+    // OR keyword over-attribution gets reclassified away by the LLM
+    // (Discovery had 8 keyword agents → 0 confirmed). These caps show
+    // all-gray pillars and clutter the BP surface. The frontend hides
+    // them by default and surfaces a count line + triage link.
+    //
+    // Phantom criteria (ALL must hold):
+    //   - 0 confirmed agent map rows
+    //   - 0 requirements
+    //   - frontend pillar = missing AND backend pillar = missing
+    //   - user_status !== 'verified' (operator hasn't ratified)
+    //   - source !== 'manual' (operator-created caps are never phantoms)
+    //   - is_page_bp === false (Page BPs have their own emptiness signal)
+    is_phantom: (() => {
+      const confirmedAgents = (cap as any)._confirmed_agent_count || 0;
+      if (confirmedAgents > 0) return false;
+      if (totalR > 0) return false;
+      if ((cap as any).user_status === 'verified') return false;
+      if ((cap as any).source === 'manual') return false;
+      if (isPageBP) return false;
+      const storedBackendCount = ((cap as any).linked_backend_services || []).length;
+      const storedFrontendCount = ((cap as any).linked_frontend_components || []).length;
+      const ctxHasBackend = (cap as any).backend_context?.api_routes?.length > 0;
+      const ctxHasAgents = (cap as any).backend_context?.agents?.length > 0;
+      const hasAnyBackendSignal = storedBackendCount > 0 || ctxHasBackend;
+      const hasAnyFrontendSignal = !!(cap as any).frontend_route
+        || (cap as any).source === 'frontend_page'
+        || storedFrontendCount > 0;
+      const hasAnyAgentSignal = ctxHasAgents;
+      // If literally no signal at any layer + no reqs + not operator-verified
+      // = phantom. linked_agents (keyword noise) intentionally NOT counted
+      // here; the LLM classifier already rejected those if they're missing
+      // from confirmedAgentCount.
+      return !hasAnyBackendSignal && !hasAnyFrontendSignal && !hasAnyAgentSignal;
+    })(),
     // Autonomous Enhancements — separate layer for system-generated requirements
     // Only populated when the BP has AUTO-* requirements (modes=['autonomous'])
     autonomous_enhancements: (() => {
@@ -2485,6 +2523,179 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
 // Query params:
 //   ?fresh=true    — force rebuild (skip snapshot cache, re-run engine)
 //   default        — read snapshot if recent, rebuild if stale (>5 min)
+/**
+ * GET /api/portal/project/capabilities/phantoms — 2026-05-21.
+ *
+ * Lists caps that have no implementation across any layer and no
+ * requirements — likely brownfield over-extraction or LLM
+ * hallucinations during cap discovery. Returns each cap with similarity
+ * hints (other caps with similar names that the operator might want to
+ * merge into).
+ */
+router.get('/api/portal/project/capabilities/phantoms', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: Capability } = await import('../models/Capability');
+    const { default: CapabilityAgentMap } = await import('../models/CapabilityAgentMap');
+    const { default: RequirementsMap } = await import('../models/RequirementsMap');
+    const { Op } = await import('sequelize');
+
+    const allActive: any[] = await Capability.findAll({
+      where: { project_id: project.id, applicability_status: 'active' },
+      attributes: ['id', 'name', 'description', 'source', 'user_status', 'frontend_route', 'kind', 'linked_backend_services', 'linked_frontend_components', 'linked_agents', 'backend_context'],
+    });
+
+    const reqCounts = await RequirementsMap.findAll({
+      attributes: ['capability_id', [require('sequelize').fn('COUNT', '*'), 'cnt']],
+      where: { project_id: project.id, capability_id: { [Op.ne]: null as any } },
+      group: ['capability_id'],
+      raw: true,
+    });
+    const reqByCap = new Map((reqCounts as any[]).map(r => [r.capability_id, Number(r.cnt)]));
+
+    const mapRows: any[] = await CapabilityAgentMap.findAll({
+      where: { status: 'active' },
+      attributes: ['capability_id'],
+    });
+    const confirmedAgByCap = new Map<string, number>();
+    for (const m of mapRows) {
+      const id = (m as any).capability_id;
+      confirmedAgByCap.set(id, (confirmedAgByCap.get(id) || 0) + 1);
+    }
+
+    const allNames = new Map(allActive.map(c => [c.id, c.name as string]));
+
+    const phantoms = allActive.filter(c => {
+      if ((c.user_status as string) === 'verified') return false;
+      if ((c.source as string) === 'manual') return false;
+      if ((c.kind as string) === 'page') return false;
+      if ((reqByCap.get(c.id) || 0) > 0) return false;
+      if ((confirmedAgByCap.get(c.id) || 0) > 0) return false;
+      const beCount = (c.linked_backend_services || []).length;
+      const feCount = (c.linked_frontend_components || []).length;
+      const ctxHasBackend = ((c.backend_context as any)?.api_routes || []).length > 0;
+      const ctxHasAgents = ((c.backend_context as any)?.agents || []).length > 0;
+      const hasBE = beCount > 0 || ctxHasBackend;
+      const hasFE = !!c.frontend_route || (c.source as string) === 'frontend_page' || feCount > 0;
+      const hasAG = ctxHasAgents;
+      return !hasBE && !hasFE && !hasAG;
+    });
+
+    // For each phantom, find similar-name caps that DO have implementation
+    // so the operator can merge into them.
+    const realCaps = allActive.filter(c => (reqByCap.get(c.id) || 0) > 0 || (confirmedAgByCap.get(c.id) || 0) > 0
+      || (c.linked_backend_services || []).length > 0 || (c.linked_frontend_components || []).length > 0
+      || !!c.frontend_route);
+
+    const phantomsWithHints = phantoms.map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      source: p.source,
+      keyword_attributed_files: {
+        backend: (p.linked_backend_services || []).length,
+        frontend: (p.linked_frontend_components || []).length,
+        agents: (p.linked_agents || []).length,
+      },
+      merge_suggestions: realCaps
+        .filter(r => similarName(p.name, r.name))
+        .slice(0, 5)
+        .map(r => ({ id: r.id, name: r.name })),
+    }));
+
+    res.json({
+      count: phantomsWithHints.length,
+      total_active_caps: allActive.length,
+      phantoms: phantomsWithHints,
+    });
+
+    // Silence unused-var
+    void allNames;
+  } catch (err: any) {
+    console.error('[capabilities/phantoms]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function similarName(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const na = norm(a);
+  const nb = norm(b);
+  if (na === nb) return false; // same name = same cap, won't show
+  // Cheap similarity: one is a substring of the other, OR one strips a
+  // common suffix to equal the other (Discovery / Discovery Engine).
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const SUFFIXES = ['engine', 'service', 'handler', 'manager', 'processor', 'agent', 'system'];
+  for (const suf of SUFFIXES) {
+    if (na === nb + suf || nb === na + suf) return true;
+  }
+  return false;
+}
+
+/**
+ * POST /api/portal/project/capabilities/:capId/triage — 2026-05-21.
+ *
+ * Operator action on a phantom cap. body: { action: 'merge_into' | 'delete'
+ * | 'mark_planned', target_cap_id?: string }
+ */
+router.post('/api/portal/project/capabilities/:capId/triage', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const action = String(req.body?.action || '');
+    if (!['merge_into', 'delete', 'mark_planned'].includes(action)) {
+      res.status(400).json({ error: 'invalid action' }); return;
+    }
+    const { default: Capability } = await import('../models/Capability');
+    const cap: any = await Capability.findByPk(req.params.capId as string);
+    if (!cap || cap.project_id !== project.id) { res.status(404).json({ error: 'Cap not found' }); return; }
+
+    if (action === 'mark_planned') {
+      cap.user_status = 'planned';
+      cap.user_status_set_at = new Date();
+      cap.user_status_set_by = req.participant!.sub;
+      await cap.save();
+      res.json({ ok: true, status: 'planned' });
+      return;
+    }
+    if (action === 'delete') {
+      cap.applicability_status = 'archived';
+      await cap.save();
+      res.json({ ok: true, status: 'archived' });
+      return;
+    }
+    if (action === 'merge_into') {
+      const targetId = String(req.body?.target_cap_id || '');
+      if (!targetId) { res.status(400).json({ error: 'target_cap_id required for merge_into' }); return; }
+      const target: any = await Capability.findByPk(targetId);
+      if (!target || target.project_id !== project.id) { res.status(404).json({ error: 'Target cap not found' }); return; }
+      // Move requirements
+      const { default: RequirementsMap } = await import('../models/RequirementsMap');
+      await RequirementsMap.update({ capability_id: targetId } as any, { where: { capability_id: cap.id } });
+      // Move agent maps
+      const { default: CapabilityAgentMap } = await import('../models/CapabilityAgentMap');
+      await CapabilityAgentMap.update({ capability_id: targetId } as any, { where: { capability_id: cap.id } });
+      // Merge linked_* arrays into the target (union, dedup)
+      const union = (a: string[], b: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
+      target.linked_backend_services = union(target.linked_backend_services, cap.linked_backend_services);
+      target.linked_frontend_components = union(target.linked_frontend_components, cap.linked_frontend_components);
+      target.linked_agents = union(target.linked_agents, cap.linked_agents);
+      await target.save();
+      // Archive the phantom
+      cap.applicability_status = 'merged';
+      await cap.save();
+      res.json({ ok: true, merged_into: targetId, archived: cap.id });
+      return;
+    }
+  } catch (err: any) {
+    console.error('[capabilities/triage]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /**
  * POST /api/portal/project/agents/reclassify — 2026-05-20.
  *

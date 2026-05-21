@@ -52,6 +52,19 @@ const BPDomainSurface: React.FC = () => {
   // 2026-05-20: state for the +N merged-caps overlay surfaced on BP rows
   // whose frontend_route is shared by multiple caps (dedup hint).
   const [mergedBp, setMergedBp] = useState<BPLike | null>(null);
+  // 2026-05-21: hide phantom caps (no implementation across any layer
+  // AND no requirements) by default. Persisted to localStorage so the
+  // operator's preference sticks across visits.
+  const [hidePhantoms, setHidePhantoms] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('bpDomain:hidePhantoms');
+      return v === null ? true : v === 'true';
+    } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('bpDomain:hidePhantoms', String(hidePhantoms)); } catch { /* ignore */ }
+  }, [hidePhantoms]);
+  const phantomCount = useMemo(() => processes.filter(p => (p as any).is_phantom).length, [processes]);
 
   // 2026-05-20: project-wide call graph (FE→BE) derived once from the
   // loaded processes. Powers the "uses N / used by N" chips on each row.
@@ -258,16 +271,45 @@ const BPDomainSurface: React.FC = () => {
           }}>
             Operational architecture
           </div>
-          {/* Phase B (2026-05-20): launch a guided cap walk. Sits in the
-              header so the operator sees the option without scrolling. */}
-          <a
-            href="/portal/walk-caps"
-            className="btn btn-sm btn-outline-primary"
-            style={{ fontSize: 12, whiteSpace: 'nowrap' }}
-            title="Step through your caps one at a time, leaving a verdict + note per cap"
-          >
-            <i className="bi bi-collection me-1"></i>Walk caps
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* 2026-05-21: hide-phantoms toggle. Default on; shows count + triage link */}
+            <label style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 11.5, color: 'var(--color-text-light)', cursor: 'pointer',
+              padding: '4px 8px',
+              border: '1px solid var(--color-border)',
+              borderRadius: 4,
+              background: hidePhantoms ? 'var(--color-bg-alt)' : 'white',
+            }}>
+              <input
+                type="checkbox"
+                checked={hidePhantoms}
+                onChange={(e) => setHidePhantoms(e.target.checked)}
+                style={{ margin: 0 }}
+              />
+              <i className="bi bi-eye-slash" style={{ fontSize: 11 }}></i>
+              <span>Hide phantoms{phantomCount > 0 ? ` (${phantomCount})` : ''}</span>
+            </label>
+            {phantomCount > 0 && (
+              <a
+                href="/portal/project/phantoms"
+                className="btn btn-sm btn-link"
+                style={{ fontSize: 11.5, padding: '2px 4px', whiteSpace: 'nowrap' }}
+                title="Open the phantom-cap triage page"
+              >
+                Review {phantomCount}
+              </a>
+            )}
+            {/* Phase B (2026-05-20): launch a guided cap walk. */}
+            <a
+              href="/portal/walk-caps"
+              className="btn btn-sm btn-outline-primary"
+              style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+              title="Step through your caps one at a time, leaving a verdict + note per cap"
+            >
+              <i className="bi bi-collection me-1"></i>Walk caps
+            </a>
+          </div>
         </div>
         <h3 style={{
           fontSize: 20, fontWeight: 600, color: 'var(--color-primary)',
@@ -405,6 +447,8 @@ const BPDomainSurface: React.FC = () => {
             onPickBp={setSelectedBp}
             onShowMergedCaps={(bp) => setMergedBp(bp)}
             callGraph={callGraph}
+            hidePhantoms={hidePhantoms}
+            onOpenPhantomsTriage={() => window.location.assign('/portal/project/phantoms')}
           />
         ))}
       </div>

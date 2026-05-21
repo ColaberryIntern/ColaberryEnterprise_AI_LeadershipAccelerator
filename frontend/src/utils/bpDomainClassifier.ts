@@ -91,6 +91,10 @@ export interface BPLike {
   // frontendCallGraphScanner; each ID is a cap whose backend handlers this
   // cap's frontend calls.
   frontend_calls_capability_ids?: string[];
+  // 2026-05-21: phantom flag — true when the cap has no implementation
+  // across any layer AND no requirements. Hidden from BP rows by default;
+  // see PHANTOM_CAPS_FIX_PLAN.md.
+  is_phantom?: boolean;
   // Dedup metadata — populated client-side when two caps share a
   // frontend_route within a domain. The primary cap inherits these.
   _dupe_count?: number;
