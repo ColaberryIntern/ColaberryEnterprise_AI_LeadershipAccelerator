@@ -412,7 +412,13 @@ const VisualWorkspacePage: React.FC = () => {
           onPageRouteChange={handlePageRouteChange}
           issues={sidebarIssues}
           selectedId={selectedCritiqueId}
-          onSelect={(id) => { setSelectedCritiqueId(id); setAnnotateMode(false); }}
+          onSelect={(id) => {
+            // 2026-05-21: click-to-toggle — clicking the currently active
+            // issue deselects it + collapses the right rail. Second way
+            // to dismiss in addition to the panel's × close button.
+            setSelectedCritiqueId(prev => (prev === id ? null : id));
+            setAnnotateMode(false);
+          }}
           onCloseSession={() => { setSessionId(null); setSelectedCritiqueId(null); }}
           counts={counts}
           capNotesSlot={
