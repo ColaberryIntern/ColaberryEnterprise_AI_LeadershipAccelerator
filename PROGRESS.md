@@ -3468,3 +3468,8 @@ The whole point of the operator's directive ("do real operational verifications"
 |---|---|
 | `backend/src/intelligence/systemStateEngine/scoring/maturityScorer.ts` | Strict `hasFrontend` (route/page-BP only, not linked_frontend_components) + strict `hasAgents` (confirmed map row / kind=agent, not linked_agents); doc-block + gap-message text updated (2026-05-21) |
 | `backend/src/intelligence/systemStateEngine/__tests__/engine.test.ts` | Existing L3/L4 fixtures updated to use `frontend_route` + `_confirmed_agent_count` (matching strict rule); two new regression tests for keyword-attribution rejection (2026-05-21) |
+
+- [x] Fix: requirements-builder draft scoped to enrollment (cross-account resume)
+  - Date: 2026-05-21
+  - What changed: A draft saved on one account resumed on another (it carried a `buildType`, so the no-buildType guard missed it), dropping the user on a pre-filled idea screen and skipping the chooser. The `requirements_builder_state` localStorage key is now scoped to the signed-in enrollment (JWT `sub`), so a fresh account never inherits another account's draft.
+  - Verification: frontend `tsc` + production build pass; deployed (bundle main.72e99ba2.js). Confirmed via headless test: with a stale global-key draft injected, a fresh account still lands on the chooser.
