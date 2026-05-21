@@ -62,6 +62,10 @@ export default function RequirementsBuilder() {
       const saved = localStorage.getItem('requirements_builder_state');
       if (saved) {
         const state = JSON.parse(saved);
+        // Only resume drafts created by the current 3-tier flow (they record a
+        // buildType). Older/stale drafts have no buildType — discard them so the
+        // user always starts at the chooser instead of a pre-filled idea screen.
+        if (!state.buildType) { localStorage.removeItem('requirements_builder_state'); return; }
         const hasIdea = state.originalIdea && state.originalIdea.trim().length > 0;
         const hasDoc = state.generatedDoc && state.generatedDoc.trim().length > 10;
         const validPhase = state.phase && !['loading_questions', 'generating'].includes(state.phase);
@@ -280,7 +284,7 @@ export default function RequirementsBuilder() {
           </div>
           <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Build Your Requirements</h5>
         </div>
-        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => navigate('/portal/project/blueprint')}>
+        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => { if (phase !== 'choose') { setError(null); setPhase('choose'); } else { navigate('/portal/project/blueprint'); } }}>
           <i className="bi bi-arrow-left me-1"></i>Back
         </button>
       </div>

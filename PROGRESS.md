@@ -3452,3 +3452,8 @@ The whole point of the operator's directive ("do real operational verifications"
 | File | Change |
 |---|---|
 | `scripts/documentBuildPaths.js` + `scripts/buildPathTimingReport.js` + `docs/BUILD_PATH_TIMING_REPORT.html` | New: timed E2E driver for all 3 tiers (per-step + Architect phase timing, screenshots) + comparison report (2026-05-21) |
+
+- [x] Fix: stale localStorage draft skipped the 3-tier chooser
+  - Date: 2026-05-21
+  - What changed: A pre-3-tier `requirements_builder_state` draft (no `buildType`) made `RequirementsBuilder` resume straight to the idea screen, bypassing the chooser. Resume now discards drafts without a `buildType` (start at the chooser); only current-flow drafts resume. Header **Back** now returns to the chooser when on a later step (was always navigating to Blueprint).
+  - Verification: frontend `tsc --noEmit` + production build pass; deployed.
