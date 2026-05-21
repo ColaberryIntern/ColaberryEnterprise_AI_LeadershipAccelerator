@@ -14,8 +14,12 @@
   display: grid;
   grid-template-rows: 1fr auto;
   background: var(--color-bg-alt);
-  /* sit below the portal navbar (~56px) */
-  top: 56px;
+  /* 2026-05-21: sit below BOTH the portal navbar (~59px) AND the
+     WorkspaceContextBar (~33px) underneath it. Previously top:56 only
+     cleared the navbar, so the canvas toolbar (Back + URL + Scan) sat
+     hidden behind the contextbar with only a 6px sliver visible.
+     Operator caught: "where did the scan button go". */
+  top: 92px;
 }
 
 .vw-main {
@@ -120,6 +124,16 @@
   gap: 0.5rem;
   margin-bottom: 0.65rem;
   font-size: 12px;
+  /* 2026-05-21: stick to the top of the canvas so Back + URL + Scan stay
+     accessible when the operator scrolls the iframe. Above this the toolbar
+     scrolled off and the operator lost the Scan + Back affordances. */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-bg-alt);
+  padding: 0.5rem 0.25rem;
+  margin: -0.5rem -0.25rem 0.4rem;
+  border-bottom: 1px solid var(--color-border);
 }
 .vw-url-display {
   background: white;
