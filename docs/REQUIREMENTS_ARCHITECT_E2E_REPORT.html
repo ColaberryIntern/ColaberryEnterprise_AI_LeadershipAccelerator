@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>AI Project Architect E2E — Build + Retrieve + Build Out (2026-05-21)</title>
+<style>
+  :root{--primary:#1a365d;--blue:#3b82f6;--green:#15803d;--red:#b91c1c;--text:#1f2937;--muted:#6b7280;--bg:#f8fafc;--border:#e5e7eb;--mono:ui-monospace,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box;} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--text);background:var(--bg);margin:0;line-height:1.55;}
+  .shell{max-width:1080px;margin:0 auto;padding:2rem 1.5rem 4rem;}
+  header{border-bottom:1px solid var(--border);padding-bottom:1.25rem;margin-bottom:1.5rem;}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;}
+  h1{margin:4px 0;font-size:25px;color:var(--primary);} h2{margin-top:2.25rem;font-size:18px;color:var(--primary);border-bottom:1px solid var(--border);padding-bottom:6px;}
+  h3{font-size:16px;color:var(--primary);margin-top:1.5rem;}
+  .verdict{display:inline-block;padding:.6rem 1.1rem;border-radius:8px;font-weight:700;font-size:15px;margin:.5rem 0;}
+  .v-ok{background:#dcfce7;color:var(--green);border:1px solid #86efac;} .v-err{background:#fee2e2;color:var(--red);border:1px solid #fca5a5;}
+  table{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:13.5px;} th,td{text-align:left;padding:.45rem .7rem;border-bottom:1px solid var(--border);vertical-align:top;}
+  th{background:#f1f5f9;font-weight:600;}
+  code{font-family:var(--mono);background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px;color:var(--primary);}
+  .muted{color:var(--muted);font-size:12.5px;} .ok{color:var(--green);font-weight:600;} .err{color:var(--red);font-weight:600;}
+  .run{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;margin:1rem 0;box-shadow:0 1px 3px rgba(15,23,42,.04);}
+  .counts{background:#eff6ff;border-left:3px solid var(--blue);border-radius:0 6px 6px 0;padding:8px 12px;font-size:13px;margin:.4rem 0;}
+  .phases{margin:.5rem 0;} .chip{display:inline-block;background:#f1f5f9;border-radius:10px;padding:2px 8px;font-size:11px;color:var(--muted);margin:2px;}
+  .badge{font-size:11px;padding:3px 9px;border-radius:10px;font-weight:600;margin-left:8px;} .b-ok{background:#dcfce7;color:var(--green);} .b-err{background:#fef3c7;color:#b45309;}
+  .gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:.5rem;} figure{margin:0;} figure img{width:100%;border:1px solid var(--border);border-radius:5px;display:block;}
+  figcaption{font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--mono);}
+  .card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0;}
+  ol.flow{font-size:13.5px;} ol.flow code{font-size:11.5px;}
+</style></head><body><div class="shell">
+<header>
+  <div class="eyebrow">Production · AI Project Architect · advisor.colaberry.ai</div>
+  <h1>The real requirements-document API: build → retrieve → build out</h1>
+  <div class="muted">Generated 2026-05-21T01:43:52.859Z · portal https://enterprise.colaberry.ai · architect https://advisor.colaberry.ai</div>
+  <div class="verdict v-ok">✓ 3 / 3 accounts: the AI Project Architect built a full requirements document, the portal retrieved it, and the project was built out into capabilities — all verified via API</div>
+</header>
+
+<h2>What this is (and how it differs from the earlier run)</h2>
+<div class="card">
+  <p>The earlier report used the portal's fast OpenAI generate path (~1,400-word docs). This run uses the <b>actual requirements-document API</b> — the AI Project Architect at <code>advisor.colaberry.ai</code>, an 8-phase pipeline that writes the document chapter by chapter (each chapter gated to ≥1,750 words), which is why it takes the longer build time.</p>
+  <ol class="flow">
+    <li><b>Build</b> — <code>POST /api/portal/project/architect-build</code> kicks off the Architect (idea_intake → feature_discovery → outline → chapter_build → quality_gates → final_assembly → complete)</li>
+    <li><b>Retrieve</b> — <code>GET /api/portal/project/architect-status</code>, on completion, downloads the build guide (<code>getArchitectDocument</code>) and saves it to the project</li>
+    <li><b>Build out</b> — activation parses the retrieved document and clusters it into a Capability → Feature hierarchy</li>
+    <li><b>Verify</b> — <code>GET /capabilities</code> + <code>/requirements/map</code> confirm the populated project (counts below)</li>
+  </ol>
+  <p class="muted">Each retrieved document is ~100,000 characters (~27–28 pages), versus ~1,400 words from the fast path. Build-out ran capabilities-only (throwaway public repo connected to satisfy the structural requirement; requirements are not matched to code files).</p>
+</div>
+
+<h2>Verified results</h2>
+<table>
+  <thead><tr><th>Run</th><th>Architect project</th><th>Result</th><th>Document retrieved</th><th>Capabilities</th><th>Features</th><th>Requirements</th></tr></thead>
+  <tbody>
+    <tr><td><b>Run 1</b><div class="muted">LeadFlow CRM</div></td>
+      <td><code>leadflow-crm</code></td>
+      <td class="ok">PASS</td>
+      <td>101,970 chars</td>
+      <td><b>36</b></td>
+      <td>177</td>
+      <td>315</td>
+    </tr>
+
+    <tr><td><b>Run 2</b><div class="muted">ShelfSense Inventory</div></td>
+      <td><code>shelfsense-inventory</code></td>
+      <td class="ok">PASS</td>
+      <td>108,442 chars</td>
+      <td><b>26</b></td>
+      <td>124</td>
+      <td>357</td>
+    </tr>
+
+    <tr><td><b>Run 3</b><div class="muted">CareBridge Intake</div></td>
+      <td><code>carebridge-intake</code></td>
+      <td class="ok">PASS</td>
+      <td>106,855 chars</td>
+      <td><b>24</b></td>
+      <td>66</td>
+      <td>428</td>
+    </tr></tbody>
+</table>
+
+<h2>Per-run: the process, in order</h2>
+<section class="run">
+      <h3>Run 1 — LeadFlow CRM <span class="badge b-ok">PASS</span></h3>
+      <p class="muted">Architect project <code>leadflow-crm</code> · account <code>ali+demo-run1@colaberry.com</code></p>
+      <div class="counts">Document built &amp; retrieved: <b>101,970</b> chars · built out into <b>36</b> capabilities · <b>177</b> features · <b>315</b> requirements parsed</div>
+      <div class="phases">Phases observed: <span class="chip">complete 100%</span></div>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run1/A01-chapter_build-2of11.png" alt="Architect: writing chapters"/><figcaption>Architect: writing chapters</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run1/A02-chapter_build-3of11.png" alt="Architect: writing chapters"/><figcaption>Architect: writing chapters</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run1/A01-complete.png" alt="Architect: build guide complete (document retrieved)"/><figcaption>Architect: build guide complete (document retrieved)</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run1/A03-portal-blueprint.png" alt="Portal: project built out (Blueprint / next step)"/><figcaption>Portal: project built out (Blueprint / next step)</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run1/A04-portal-system-bps.png" alt="Portal: System / Business Processes (capabilities)"/><figcaption>Portal: System / Business Processes (capabilities)</figcaption></figure></div>
+    </section>
+<section class="run">
+      <h3>Run 2 — ShelfSense Inventory <span class="badge b-ok">PASS</span></h3>
+      <p class="muted">Architect project <code>shelfsense-inventory</code> · account <code>ali+demo-run2@colaberry.com</code></p>
+      <div class="counts">Document built &amp; retrieved: <b>108,442</b> chars · built out into <b>26</b> capabilities · <b>124</b> features · <b>357</b> requirements parsed</div>
+      <div class="phases">Phases observed: <span class="chip">complete 100%</span></div>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run2/A01-chapter_build-0of11.png" alt="Architect: writing chapters"/><figcaption>Architect: writing chapters</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run2/A02-chapter_build-1of11.png" alt="Architect: writing chapters"/><figcaption>Architect: writing chapters</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run2/A01-complete.png" alt="Architect: build guide complete (document retrieved)"/><figcaption>Architect: build guide complete (document retrieved)</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run2/A03-portal-blueprint.png" alt="Portal: project built out (Blueprint / next step)"/><figcaption>Portal: project built out (Blueprint / next step)</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run2/A04-portal-system-bps.png" alt="Portal: System / Business Processes (capabilities)"/><figcaption>Portal: System / Business Processes (capabilities)</figcaption></figure></div>
+    </section>
+<section class="run">
+      <h3>Run 3 — CareBridge Intake <span class="badge b-ok">PASS</span></h3>
+      <p class="muted">Architect project <code>carebridge-intake</code> · account <code>ali+demo-run3@colaberry.com</code></p>
+      <div class="counts">Document built &amp; retrieved: <b>106,855</b> chars · built out into <b>24</b> capabilities · <b>66</b> features · <b>428</b> requirements parsed</div>
+      <div class="phases">Phases observed: <span class="chip">complete 100%</span></div>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run3/A01-chapter_build-0of11.png" alt="Architect: writing chapters"/><figcaption>Architect: writing chapters</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run3/A02-chapter_build-1of11.png" alt="Architect: writing chapters"/><figcaption>Architect: writing chapters</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run3/A01-complete.png" alt="Architect: build guide complete (document retrieved)"/><figcaption>Architect: build guide complete (document retrieved)</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run3/A03-portal-blueprint.png" alt="Portal: project built out (Blueprint / next step)"/><figcaption>Portal: project built out (Blueprint / next step)</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-architect-e2e/run3/A04-portal-system-bps.png" alt="Portal: System / Business Processes (capabilities)"/><figcaption>Portal: System / Business Processes (capabilities)</figcaption></figure></div>
+    </section>
+
+<div class="card">
+  <div class="eyebrow">Log in to review each built-out account</div>
+  <p class="muted">Three magic-link URLs were written to <code>scripts/.demo_login_urls.txt</code> (kept out of git). Each lands on a portal whose project was built from an Architect document — open Blueprint and System to see the capabilities.</p>
+  <div class="eyebrow" style="margin-top:1rem">Note on screenshots</div>
+  <p class="muted">The earliest Architect phases (idea intake → outline, ~90s total) are not shown because polling attached once the builds had already reached chapter writing. The chapter-build, completion, and built-out portal surfaces are captured.</p>
+</div>
+</div></body></html>

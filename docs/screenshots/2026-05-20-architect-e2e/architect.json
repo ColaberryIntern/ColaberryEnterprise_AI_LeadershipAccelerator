@@ -1,0 +1,131 @@
+{
+  "generated_at": "2026-05-21T01:43:52.859Z",
+  "base": "https://enterprise.colaberry.ai",
+  "architect_base": "https://advisor.colaberry.ai",
+  "runs": [
+    {
+      "run": 1,
+      "name": "LeadFlow CRM",
+      "email": "ali+demo-run1@colaberry.com",
+      "enrollment_id": "b57da7f7-0dd6-4dc8-bbb2-22095303ca9d",
+      "slug": "leadflow-crm",
+      "ok": true,
+      "build_min": 0.06,
+      "doc_chars": 101970,
+      "counts": {
+        "capabilities": 36,
+        "features": 177
+      },
+      "requirements": 315,
+      "phases": [
+        {
+          "phase": "complete",
+          "at": "2026-05-21T01:43:04.231Z",
+          "progress": 100,
+          "chapters": "0/11"
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "complete",
+          "file": "run1/A01-complete.png"
+        },
+        {
+          "label": "complete",
+          "file": "run1/A02-complete.png"
+        },
+        {
+          "label": "portal-blueprint",
+          "file": "run1/A03-portal-blueprint.png"
+        },
+        {
+          "label": "portal-system-bps",
+          "file": "run1/A04-portal-system-bps.png"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "name": "ShelfSense Inventory",
+      "email": "ali+demo-run2@colaberry.com",
+      "enrollment_id": "e2ad9c4b-0bd6-4eb9-a0d5-b0f1d8f78603",
+      "slug": "shelfsense-inventory",
+      "ok": true,
+      "build_min": 0.31,
+      "doc_chars": 108442,
+      "counts": {
+        "capabilities": 26,
+        "features": 124
+      },
+      "requirements": 357,
+      "phases": [
+        {
+          "phase": "complete",
+          "at": "2026-05-21T01:43:19.987Z",
+          "progress": 100,
+          "chapters": "0/11"
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "complete",
+          "file": "run2/A01-complete.png"
+        },
+        {
+          "label": "complete",
+          "file": "run2/A02-complete.png"
+        },
+        {
+          "label": "portal-blueprint",
+          "file": "run2/A03-portal-blueprint.png"
+        },
+        {
+          "label": "portal-system-bps",
+          "file": "run2/A04-portal-system-bps.png"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "name": "CareBridge Intake",
+      "email": "ali+demo-run3@colaberry.com",
+      "enrollment_id": "dadc3262-32fc-465e-9612-996e469cf5e7",
+      "slug": "carebridge-intake",
+      "ok": true,
+      "build_min": 0.57,
+      "doc_chars": 106855,
+      "counts": {
+        "capabilities": 24,
+        "features": 66
+      },
+      "requirements": 428,
+      "phases": [
+        {
+          "phase": "complete",
+          "at": "2026-05-21T01:43:35.678Z",
+          "progress": 100,
+          "chapters": "0/11"
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "complete",
+          "file": "run3/A01-complete.png"
+        },
+        {
+          "label": "complete",
+          "file": "run3/A02-complete.png"
+        },
+        {
+          "label": "portal-blueprint",
+          "file": "run3/A03-portal-blueprint.png"
+        },
+        {
+          "label": "portal-system-bps",
+          "file": "run3/A04-portal-system-bps.png"
+        }
+      ]
+    }
+  ],
+  "all_ok": true
+}
