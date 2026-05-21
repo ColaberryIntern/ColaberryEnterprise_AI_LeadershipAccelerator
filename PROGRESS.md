@@ -12,6 +12,50 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Top 5 priority runs — attribution fixes + agent_stack gate refinement (2026-05-21)
+Operator asked to walk the top 5 operational priorities one at a time, fixing along the way, watching scores climb. All 5 original priorities cleared the queue. One real engine bug caught during the run (Campaign Management's agent_stack task wouldn't clear despite 3 confirmed agents — filename-token heuristic was the only suppression path) and shipped as part of the same run.
+
+**Baseline → Final scores**
+- Readiness 54 → 53 (−1, expected — exposing more backend-attributed caps reduces the relative weight of pre-existing ones)
+- Coverage 89 → 89 (unchanged — coverage is requirement-driven, attribution doesn't move it)
+- Health 66 → **67 (+1)** — climbed as planned
+- Confidence 65 → 65 (unchanged)
+
+**Top-5 queue: 5 of 5 original priorities cleared, replaced with real next work**
+
+| # | Before | After |
+|---|---|---|
+| 1 | Build backend Validation Parser | Build backend Discovery (phantom) |
+| 2 | Build backend Cost Optimization | Build backend Impact Estimator (phantom) |
+| 3 | Build backend Telemetry Ingestion | Propose agents Requirements Mgmt |
+| 4 | Build backend Validation Results Emission | Propose agents Revenue Dashboard |
+| 5 | Propose agents Campaign Management | Triage Lead Ingestion (no reqs) |
+
+The two "phantom" caps at #1-2 (Discovery, Impact Estimator) were already flagged by the earlier phantom-detection work; they're real signal, not noise.
+
+**Per-run details:**
+
+- [x] **Run 1 — Validation Parser** (cap bc4bc683): attributed `backend/src/intelligence/execution/validationParser.ts` + `backend/src/services/validationReportParser.ts` (both exist, both fit the cap's "parses and validates data inputs/outputs" description). SQL UPDATE on `linked_backend_services`. be: 0 → 2. Dropped from queue.
+  - Date: 2026-05-21
+  - Verification: psql shows `be=2`; queue refresh removed cap from top 5
+
+- [x] **Run 2 — Cost Optimization** (cap aaed4404): attributed `backend/src/intelligence/agents/CostOptimizationAgent.ts` + `backend/src/services/agents/departments/finance/costOptimizationAgent.ts`. be: 0 → 2. Dropped from queue.
+  - Date: 2026-05-21
+
+- [x] **Run 3 — Telemetry Ingestion** (cap 7892fe0d): attributed 3 telemetry-named files (telemetryIngestionService, telemetryFreshnessMonitor, telemetryConflictResolver). be: 0 → 3. Dropped from queue.
+  - Date: 2026-05-21
+
+- [x] **Run 4 — Validation Results Emission** (cap 3352e7a2): attributed `autoManifestGenerator.ts` + `telemetryIngestionService.ts` (both handle validation_results inside manifests per the cap's description). be: 0 → 2. Dropped from queue.
+  - Date: 2026-05-21
+
+- [x] **Run 5 — Campaign Management agent stack** (cap dad13641): attributed 5 campaign-named agents (QA, Repair, SelfHealing, Performance, OpsSuper). Ran `backfillAgentAttribution.js` post-attachment to LLM-classify. Result: 3 LLM-confirmed maps written to `capability_agent_maps`.
+  - Date: 2026-05-21
+  - Verification: psql `SELECT COUNT(*) FROM capability_agent_maps WHERE capability_id='dad13641...' AND status='active'` = 3
+
+- [x] **Engine fix shipped mid-run (commit 67481e25): agent_stack gate also honours `capability_agent_maps` count.** Run 5 surfaced a bug — Campaign Management still showed in the queue even after 3 confirmed agents, because the existing gate only suppressed when filename-token role inference detected `{monitor, alert}` roles. The 5 attributed agents (campaignQAAgent etc.) don't have those keywords in their filenames, so the gate kept firing. Added a third suppression path: `confirmedAgentCount >= 3` from `capability_agent_maps` suppresses regardless of filename inference. systemStateEngine loads CapabilityAgentMap counts once per refresh and attaches `_confirmed_agent_count` to each EngineCapabilityInput; the type was extended.
+  - Files: `backend/src/intelligence/systemStateEngine/queue/authoritativeTaskQueue.ts` (gate), `backend/src/intelligence/systemStateEngine/systemStateEngine.ts` (load + attach), `backend/src/intelligence/systemStateEngine/types/systemState.types.ts` (type).
+  - Verification: forced engine refresh after deploy; Campaign Management no longer in top 5.
+
 ### Strategic Product Roadmap intake pipeline — orchestrator goes live (2026-05-21)
 Ali asked for a repeatable "idea → Deep Research → AI Project Architect → Basecamp build list" pipeline so each new intern build can be provisioned in one command. The pipeline reads the Top 5 P-cards on the Strategic Product Roadmap, aggregates DR + Bonfire + Strategic Cluster signals for the chosen product, sends a composed requirements package to advisor.colaberry.ai for a Markdown build guide, and provisions a new LIST inside the Strategic Product Roadmap project (NOT a new project per Ali's call) with the kickoff phase tasks + uploaded build guide + kickoff MB message + idempotent build-kicked-off marker on the P-card.
 
