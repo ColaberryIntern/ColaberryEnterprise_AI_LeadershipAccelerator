@@ -3390,3 +3390,14 @@ The whole point of the operator's directive ("do real operational verifications"
 |---|---|
 | `backend/src/services/projectSetupService.ts` | `activateProject` no longer requires `github_connected`; clusters without a repo and skips file sync/matching when no repo is connected (enables the no-repo Workflow build-out) (2026-05-21) |
 | `frontend/src/pages/project/RequirementsBuilder.tsx` | Workflow `handleSave` now triggers activation + shows a "Building your system…" phase before the Blueprint; completion copy updated (no repo step) (2026-05-21) |
+
+- [x] Fix: requirements generation could hang for ~30 min (unbounded OpenAI call)
+  - Date: 2026-05-21
+  - What changed: A Workflow generation job hung in `running` (doc length 0) for 15+ min during timing tests — the OpenAI SDK default is a 10-min timeout with 2 retries (~30 min worst case), and the 2-pass expand doubles the exposure. `getOpenAI()` now sets `timeout: 240000, maxRetries: 1`, so a stalled call fails the job cleanly (the UI surfaces a retry) instead of spinning. Frontend generation poll budget raised 10→15 min to accommodate the legitimate 2-pass duration; Workflow chooser estimate updated ~3→~5 min.
+  - Verification: backend + frontend `tsc --noEmit` pass; production build compiles; deployed; Workflow re-run completes (timing run).
+  - Notes: Failure-First compliance — the external LLM call is now bounded. Surfaced while documenting the 3 paths with a richer idea (more capabilities → larger prompt → exposed the unbounded-call hang).
+
+| File | Change |
+|---|---|
+| `backend/src/services/requirementsGenerationService.ts` | `getOpenAI()` sets `timeout: 240000, maxRetries: 1` so generation calls can't hang indefinitely (2026-05-21) |
+| `frontend/src/pages/project/RequirementsBuilder.tsx` | Generation poll budget 10→15 min; Workflow chooser estimate ~3→~5 min (2026-05-21) |

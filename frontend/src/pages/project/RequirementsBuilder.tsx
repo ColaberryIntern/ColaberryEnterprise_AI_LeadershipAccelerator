@@ -219,10 +219,11 @@ export default function RequirementsBuilder() {
         } catch (pollErr: any) {
           console.warn('[RequirementsBuilder] Poll error:', pollErr?.message);
         }
-        // Timeout after 10 minutes
-        if (pollCount > 200) {
+        // Timeout after 15 minutes (the 2-pass expand legitimately runs longer
+        // than a single call; the backend bounds each LLM call to ~4 min).
+        if (pollCount > 300) {
           clearInterval(pollRef.current);
-          setError('Generation timed out after 10 minutes. Please try again.');
+          setError('Generation timed out. Please try again.');
           setPhase('questions');
         }
       }, 3000);
@@ -307,7 +308,7 @@ export default function RequirementsBuilder() {
             <div className="d-flex flex-column gap-2">
               <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
                 onClick={() => { setBuildType('workflow'); setPhase('idea'); setError(null); }}>
-                <div className="d-flex align-items-center gap-2"><i className="bi bi-diagram-2" style={{ color: '#10b981', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A workflow</span><span className="badge ms-auto" style={{ background: '#dcfce7', color: '#15803d', fontSize: 10 }}>~3 min</span></div>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-diagram-2" style={{ color: '#10b981', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A workflow</span><span className="badge ms-auto" style={{ background: '#dcfce7', color: '#15803d', fontSize: 10 }}>~5 min</span></div>
                 <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>A focused automation. Cory drafts a tailored requirements doc fast — no repo needed.</div>
               </button>
               <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}

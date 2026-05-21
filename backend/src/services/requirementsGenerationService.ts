@@ -24,7 +24,12 @@ import OpenAI from 'openai';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // Bound every call: the SDK default is a 10-min timeout with 2 retries, which
+  // can leave a generation job hung in "running" for ~30 min if OpenAI stalls
+  // (observed). 4-min timeout + 1 retry caps a single call to ~8 min worst case;
+  // a real stall now fails the job cleanly so the UI surfaces a retry instead of
+  // spinning forever. (Failure-First: no unbounded external call.)
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 240000, maxRetries: 1 });
   return _openai;
 }
 
