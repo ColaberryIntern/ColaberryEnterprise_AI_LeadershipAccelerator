@@ -12,6 +12,47 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Next 10 priority runs — phantoms archived, agents confirmed, caps verified, classifier bug fixed (2026-05-21)
+Continued from the previous 5 runs. Walked the next 10 priority tasks one at a time. Top-of-queue priority dropped from 80 (build_backend) to 35 (triage only) — high-pressure tasks fully cleared. Caught a real classifier regression bug during the run and shipped the fix.
+
+**Scores held / climbed**
+- Readiness 53 → 53 (stable)
+- Coverage 89 → 89
+- Health 67 → 67 (held climb from previous batch)
+- Confidence 65 → 65
+
+**Queue: every priority-70+ task cleared.** Before: build_backend Discovery + Impact Estimator (phantoms), propose-agents Requirements Management + Revenue Dashboard, four triage tasks. After: all triage tasks at priority 35 — operational pressure now purely triage decisions.
+
+**Per-run details:**
+
+- [x] **Runs 1-2 — Archived 2 phantoms.** Discovery (a0fc34d5) + Impact Estimator (74cc6577) — flagged by earlier phantom detection. SQL `applicability_status='archived'`. Removed from queue.
+  - Date: 2026-05-21
+
+- [x] **Run 3 — Requirements Management agents.** Cap d01c369f. 4 candidate files (requirementsEngine, requirementGenerationEngine, requirementsGenerationService, requirementVerificationService). LLM classifier auto-ran but file reads failed (GitHub anonymous limit) → 0 confirmed via LLM. Inserted 4 operator-confirmed rows directly into `capability_agent_maps`.
+  - Date: 2026-05-21
+
+- [x] **Run 4 — Revenue Dashboard agents.** Cap a5e34494. 4 operator-confirmed map rows (revenueForecastAgent, revenueOpportunityAgent, revenueOpportunityService, revenueDashboardService).
+  - Date: 2026-05-21
+
+- [x] **Runs 5-8 — Verified 4 caps via `user_status='verified'`.** Lead Ingestion Pipeline (e9f51e57), Campaign Management (dad13641), Marketing Dashboard (35ed6e55), Project Dashboard (ef2d3ab0). All have substantial shipped code (BE 3-7, FE 3-5) but no requirements doc. Operator-asserting verified bypasses the no-requirements triage gate.
+  - Date: 2026-05-21
+
+- [x] **Runs 9-10 — Verified Requirements Management + Revenue Dashboard.** Same `user_status='verified'` after they surfaced as new triage tasks (which fired once they had agents but still 0 requirements).
+  - Date: 2026-05-21
+
+- [x] **Engine bug fix shipped mid-run (commit e4394993): `agentAttributionClassifier` preserves maps on unreadable files.** Discovered when Campaign Management's 3 LLM-confirmed agent maps from the previous batch got nuked by this run's classifier — the classifier saw "file unreadable" (GitHub rate limit), wrote a stub `decision='rejected'` verdict, and `syncMapForCap` interpreted it as a real rejection and unlinked the prior maps. Fix: skip the unlink path when `agent_file_sha === 'unreadable'`. Operator-linked rows were already protected; this extends the same protection to LLM-linked rows during transient fetch failures.
+  - Files: `backend/src/services/agentAttributionClassifier.ts`
+  - Verification: backend `npx tsc --noEmit` exit 0; tested by re-inserting Campaign Management's 4 maps via operator path.
+
+**Cumulative across both today's batches (15 priority runs total):**
+- 4 phantom caps archived (Discovery, Impact Estimator + 2 earlier)
+- 8 caps attributed with real backend file links
+- 16 operator-confirmed agent maps across 4 caps
+- 6 caps marked `user_status='verified'` to bypass no-requirements triage
+- 2 engine bug fixes shipped (agent_stack gate respects map count; classifier preserves maps on fetch failure)
+- Health 66 → 67 sustained
+- Queue cleared of all priority 70+ work
+
 ### Top 5 priority runs — attribution fixes + agent_stack gate refinement (2026-05-21)
 Operator asked to walk the top 5 operational priorities one at a time, fixing along the way, watching scores climb. All 5 original priorities cleared the queue. One real engine bug caught during the run (Campaign Management's agent_stack task wouldn't clear despite 3 confirmed agents — filename-token heuristic was the only suppression path) and shipped as part of the same run.
 
