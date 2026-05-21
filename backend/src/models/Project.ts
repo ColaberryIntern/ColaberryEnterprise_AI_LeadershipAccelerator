@@ -7,6 +7,7 @@ export interface ProjectAttributes {
   id?: string;
   enrollment_id: string;
   program_id: string;
+  name?: string; // project display name, derived from the idea
   organization_name?: string;
   industry?: string;
   primary_business_problem?: string;
@@ -46,6 +47,7 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare id: string;
   declare enrollment_id: string;
   declare program_id: string;
+  declare name: string;
   declare organization_name: string;
   declare industry: string;
   declare primary_business_problem: string;
@@ -92,6 +94,10 @@ Project.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'program_blueprints', key: 'id' },
+    },
+    name: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     organization_name: {
       type: DataTypes.STRING(255),

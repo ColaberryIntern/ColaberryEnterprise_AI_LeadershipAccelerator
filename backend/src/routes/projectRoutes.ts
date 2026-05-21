@@ -374,7 +374,7 @@ router.get('/api/portal/projects', requireParticipant, async (req: Request, res:
         : (ss.activated ? 'built_out' : (ss.architect_slug && !ss.requirements_loaded ? 'building' : 'has_requirements'));
       return {
         id: p.id,
-        name: p.organization_name || 'Untitled project',
+        name: p.name || p.organization_name || 'Untitled project',
         project_stage: p.project_stage,
         stage,
         capability_count: capCount,
@@ -556,7 +556,8 @@ router.post('/api/portal/project/architect-build', requireParticipant, async (re
     const name = projectName || (project as any).organization_name || 'AI System';
     const { slug } = await startArchitectBuild(name, idea, buildMode);
 
-    // 3. Save build state
+    // 3. Save build state (+ name the project from the idea)
+    if (name) (project as any).name = name;
     const currentStatus = (project as any).setup_status || {};
     (project as any).setup_status = {
       ...currentStatus,
@@ -781,13 +782,21 @@ Critical rules:
 router.post('/api/portal/project/requirements/generate', requireParticipant, async (req: Request, res: Response) => {
   try {
     const enrollmentId = req.participant!.sub;
-    const { mode, user_prompt } = req.body;
+    const { mode, user_prompt, project_name } = req.body;
     const { startRequirementsGeneration } = await import('../services/requirementsGenerationService');
     const result = await startRequirementsGeneration(
       enrollmentId,
       mode || 'professional',
       user_prompt,
     );
+    // Name the (just-ensured) active project from the idea for the switcher.
+    if (project_name) {
+      try {
+        const { getProjectByEnrollment } = await import('../services/projectService');
+        const project = await getProjectByEnrollment(enrollmentId);
+        if (project && !(project as any).name) { (project as any).name = String(project_name).slice(0, 80); await project.save(); }
+      } catch { /* naming is non-critical */ }
+    }
     res.json(result);
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /project/requirements/generate error:', err.message);

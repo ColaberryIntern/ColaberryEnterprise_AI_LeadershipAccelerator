@@ -140,7 +140,7 @@ const WorkspaceContextBar: React.FC = () => {
 
   if (skip || !state) return null;
 
-  const projectName = state.project.organization_name || 'Untitled project';
+  const projectName = (state.project as any).name || state.project.organization_name || 'Untitled project';
   const surfaceLabel = surfaceLabels[surface] || '';
 
   return (

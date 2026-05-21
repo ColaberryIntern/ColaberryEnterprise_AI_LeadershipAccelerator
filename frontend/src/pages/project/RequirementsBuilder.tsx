@@ -62,6 +62,13 @@ const STAGE_LABELS: Record<string, string> = {
   complete: 'Complete!',
 };
 
+// A concise project name from the idea (first line, quotes/punctuation trimmed)
+// so the project switcher is legible instead of every project being the org name.
+function deriveProjectName(idea: string): string {
+  const first = (idea || '').trim().split('\n')[0].replace(/^[\s"'“”]+|[\s"'“”:.]+$/g, '');
+  return first.slice(0, 60) || 'AI System';
+}
+
 // Scope the in-progress draft to the signed-in enrollment, so a draft from one
 // account never resumes on another (cross-account bleed was dropping users onto
 // a pre-filled idea screen and skipping the chooser).
@@ -184,7 +191,7 @@ export default function RequirementsBuilder() {
       const enrichedIdea = capabilities.length
         ? `${originalIdea.trim()}\n\nSelected Sophistication Levels (AI System Discovery Framework):\n${capabilities.join('\n')}`
         : originalIdea.trim();
-      const projectName = originalIdea.trim().split('\n')[0].slice(0, 60);
+      const projectName = deriveProjectName(originalIdea);
       await portalApi.post('/api/portal/project/architect-build', {
         idea: enrichedIdea,
         repoUrl: repoUrl.trim(),
@@ -235,6 +242,7 @@ export default function RequirementsBuilder() {
     try {
       const res = await portalApi.post('/api/portal/project/requirements/generate', {
         mode: 'professional',
+        project_name: deriveProjectName(originalIdea),
         user_prompt: `ORIGINAL IDEA:\n${originalIdea}\n\nSELECTED SOPHISTICATION LEVELS (AI System Discovery Framework):\n${capText}\n\nGenerate comprehensive requirements covering the original idea and the selected sophistication levels. The requirements document should be at least 6000 words and cover functional requirements, non-functional requirements, system architecture, data models, API specifications, and user interface requirements.`,
       });
       const jid = res.data.job_id;
