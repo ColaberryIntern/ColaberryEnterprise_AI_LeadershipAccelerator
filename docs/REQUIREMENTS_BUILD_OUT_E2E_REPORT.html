@@ -1,0 +1,322 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Full Pipeline E2E — Generate + Build Out (2026-05-21)</title>
+<style>
+  :root{--primary:#1a365d;--blue:#3b82f6;--green:#15803d;--red:#b91c1c;--text:#1f2937;--muted:#6b7280;--bg:#f8fafc;--border:#e5e7eb;--mono:ui-monospace,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box;} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--text);background:var(--bg);margin:0;line-height:1.55;}
+  .shell{max-width:1080px;margin:0 auto;padding:2rem 1.5rem 4rem;}
+  header{border-bottom:1px solid var(--border);padding-bottom:1.25rem;margin-bottom:1.5rem;}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;}
+  h1{margin:4px 0;font-size:25px;color:var(--primary);} h2{margin-top:2.25rem;font-size:18px;color:var(--primary);border-bottom:1px solid var(--border);padding-bottom:6px;}
+  h3{font-size:16px;color:var(--primary);margin-top:1.5rem;} h4{font-size:13.5px;color:var(--primary);margin:1.1rem 0 .3rem;}
+  .verdict{display:inline-block;padding:.6rem 1.1rem;border-radius:8px;font-weight:700;font-size:15px;margin:.5rem 0;}
+  .v-ok{background:#dcfce7;color:var(--green);border:1px solid #86efac;} .v-err{background:#fee2e2;color:var(--red);border:1px solid #fca5a5;}
+  table{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:13.5px;} th,td{text-align:left;padding:.45rem .7rem;border-bottom:1px solid var(--border);vertical-align:top;}
+  th{background:#f1f5f9;font-weight:600;} td.num{font-variant-numeric:tabular-nums;white-space:nowrap;width:80px;}
+  .bar-cell{width:38%;} .bar{display:inline-block;height:10px;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:5px;}
+  code{font-family:var(--mono);background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px;color:var(--primary);}
+  .muted{color:var(--muted);font-size:12.5px;} .ok{color:var(--green);font-weight:600;} .err{color:var(--red);font-weight:600;}
+  .run{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;margin:1rem 0;box-shadow:0 1px 3px rgba(15,23,42,.04);}
+  .counts{background:#eff6ff;border-left:3px solid var(--blue);border-radius:0 6px 6px 0;padding:8px 12px;font-size:13px;margin:.4rem 0;}
+  .badge{font-size:11px;padding:3px 9px;border-radius:10px;font-weight:600;margin-left:8px;} .b-ok{background:#dcfce7;color:var(--green);} .b-err{background:#fee2e2;color:var(--red);}
+  .gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:.5rem;} figure{margin:0;} figure img{width:100%;border:1px solid var(--border);border-radius:5px;display:block;}
+  figcaption{font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--mono);}
+  .card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0;}
+  ol.flow{font-size:13.5px;} ol.flow code{font-size:11.5px;}
+</style></head><body><div class="shell">
+<header>
+  <div class="eyebrow">Production · Headless E2E · enterprise.colaberry.ai</div>
+  <h1>Requirements → Built-Out Project: full pipeline on 3 accounts</h1>
+  <div class="muted">Generated 2026-05-21T00:01:03.292Z · base https://enterprise.colaberry.ai</div>
+  <div class="verdict v-ok">✓ 3 / 3 accounts: document generated, saved, AND built out into capabilities/features — verified via API</div>
+</header>
+
+<h2>What this proves</h2>
+<div class="card">
+  <p>For three different projects, on three fresh demo accounts, the entire pipeline ran end-to-end against <b>production</b>: the requirements document was generated and saved, then the real build-out API parsed it and clustered it into a Capability → Feature hierarchy. Each account now has a populated project you can log into and review.</p>
+  <ol class="flow">
+    <li>Generate document — <code>POST /api/portal/project/requirements/generate</code> → polled via <code>/requirements/job/:id</code></li>
+    <li>Retrieve &amp; save — the generated doc is read back and saved via <code>POST /api/portal/project/setup/requirements</code></li>
+    <li><b>Build out</b> — <code>POST /api/portal/project/setup/activate</code> parses the doc into a RequirementsMap and clusters it into capabilities/features (polled via <code>/setup/activation-progress</code>)</li>
+    <li>Verify — <code>GET /capabilities</code> and <code>/requirements/map</code> confirm the project was populated (counts below)</li>
+  </ol>
+  <p class="muted">Build-out ran in "capabilities only" mode: no GitHub repo was connected, so requirements are parsed and clustered but not matched to code files (the "0 matched" figure is expected). The clustering uses an LLM, so capability/feature counts vary per project.</p>
+</div>
+
+<h2>Final results</h2>
+<table>
+  <thead><tr><th>Run</th><th>Account</th><th>Result</th><th>Generate</th><th>Build out</th><th>Total</th><th>Built-out structure (verified via API)</th></tr></thead>
+  <tbody>
+    <tr><td><b>Run 1</b><div class="muted">LeadFlow CRM</div></td>
+      <td>ali+demo-run1@colaberry.com</td>
+      <td class="ok">PASS</td>
+      <td>2.05 min</td><td>1.14 min</td><td><b>3.19 min</b></td>
+      <td><b>8</b> caps · 28 feats · 70 reqs</td>
+    </tr>
+
+    <tr><td><b>Run 2</b><div class="muted">ShelfSense Inventory</div></td>
+      <td>ali+demo-run2@colaberry.com</td>
+      <td class="ok">PASS</td>
+      <td>3.09 min</td><td>1.03 min</td><td><b>4.12 min</b></td>
+      <td><b>15</b> caps · 39 feats · 74 reqs</td>
+    </tr>
+
+    <tr><td><b>Run 3</b><div class="muted">CareBridge Intake</div></td>
+      <td>ali+demo-run3@colaberry.com</td>
+      <td class="ok">PASS</td>
+      <td>2.23 min</td><td>0.72 min</td><td><b>2.95 min</b></td>
+      <td><b>12</b> caps · 17 feats · 72 reqs</td>
+    </tr></tbody>
+</table>
+
+<h2>Per-run: timings + every screenshot in sequence</h2>
+
+    <section class="run">
+      <h3>Run 1 — LeadFlow CRM <span class="badge b-ok">PASS</span></h3>
+      <p class="muted">Account <code>ali+demo-run1@colaberry.com</code> · enrollment <code>b57da7f7-0dd6-4dc8-bbb2-22095303ca9d</code></p>
+      <div class="counts">Built out: <b>8</b> capabilities · <b>28</b> features · <b>70</b> requirements parsed · 0/70 matched to code (no repo connected → 0 expected)</div>
+      <h4>Phase 1 — Generate &amp; save the requirements document (2.05 min)</h4>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead><tbody><tr><td>Authenticate (magic-link → JWT)</td><td class="num">0.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Pre-check: first-run state</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Load /portal/home (builder embedded)</td><td class="num">4.9s</td>
+      <td class="bar-cell"><span class="bar" style="width:7%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Type the idea</td><td class="num">0.0s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Generate questions (LLM)</td><td class="num">45.0s</td>
+      <td class="bar-cell"><span class="bar" style="width:68%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Answer all questions</td><td class="num">1.0s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Click &quot;Generate My Requirements&quot;</td><td class="num">0.1s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Generate document (LLM, polled)</td><td class="num">66.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Save requirements doc</td><td class="num">0.3s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Verify persistence (API)</td><td class="num">0.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Home flips to dashboard</td><td class="num">2.7s</td>
+      <td class="bar-cell"><span class="bar" style="width:4%"></span></td>
+      <td class="ok">✓</td></tr></tbody></table>
+      <h4>Phase 2 — Build out the project from the document (1.14 min)</h4>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead><tbody><tr><td>Authenticate</td><td class="num">0.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Pre-check: doc saved + gate satisfied</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Blueprint (before build-out)</td><td class="num">3.0s</td>
+      <td class="bar-cell"><span class="bar" style="width:5%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>POST /setup/activate (build-out API)</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Cluster requirements → capabilities (LLM, polled)</td><td class="num">53.9s</td>
+      <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Verify capabilities via API</td><td class="num">0.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Blueprint (built out)</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:6%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>System · Business Processes</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:6%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>System · overview</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:6%"></span></td>
+      <td class="ok">✓</td></tr></tbody></table>
+      <h4>Every stage, in order</h4>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/01-home-first-run.png" alt="home-first-run"/><figcaption>home-first-run</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/02-idea-filled.png" alt="idea-filled"/><figcaption>idea-filled</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/03-questions-first.png" alt="questions-first"/><figcaption>questions-first</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/04-questions-answered.png" alt="questions-answered"/><figcaption>questions-answered</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/05-generating.png" alt="generating"/><figcaption>generating</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/06-review.png" alt="review"/><figcaption>review</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/07-complete.png" alt="complete"/><figcaption>complete</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/08-home-dashboard.png" alt="home-dashboard"/><figcaption>home-dashboard</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/09-blueprint-before.png" alt="blueprint-before"/><figcaption>blueprint-before</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/10-blueprint-built.png" alt="blueprint-built"/><figcaption>blueprint-built</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/11-system-bps.png" alt="system-bps"/><figcaption>system-bps</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run1/12-system-overview.png" alt="system-overview"/><figcaption>system-overview</figcaption></figure></div>
+    </section>
+
+    <section class="run">
+      <h3>Run 2 — ShelfSense Inventory <span class="badge b-ok">PASS</span></h3>
+      <p class="muted">Account <code>ali+demo-run2@colaberry.com</code> · enrollment <code>e2ad9c4b-0bd6-4eb9-a0d5-b0f1d8f78603</code></p>
+      <div class="counts">Built out: <b>15</b> capabilities · <b>39</b> features · <b>74</b> requirements parsed · 0/74 matched to code (no repo connected → 0 expected)</div>
+      <h4>Phase 1 — Generate &amp; save the requirements document (3.09 min)</h4>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead><tbody><tr><td>Authenticate (magic-link → JWT)</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Pre-check: first-run state</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Load /portal/home (builder embedded)</td><td class="num">0.7s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Type the idea</td><td class="num">0.0s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Generate questions (LLM)</td><td class="num">79.1s</td>
+      <td class="bar-cell"><span class="bar" style="width:79%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Answer all questions</td><td class="num">1.1s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Click &quot;Generate My Requirements&quot;</td><td class="num">0.1s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Generate document (LLM, polled)</td><td class="num">99.6s</td>
+      <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Save requirements doc</td><td class="num">0.3s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Verify persistence (API)</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Home flips to dashboard</td><td class="num">2.8s</td>
+      <td class="bar-cell"><span class="bar" style="width:3%"></span></td>
+      <td class="ok">✓</td></tr></tbody></table>
+      <h4>Phase 2 — Build out the project from the document (1.03 min)</h4>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead><tbody><tr><td>Authenticate</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Pre-check: doc saved + gate satisfied</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Blueprint (before build-out)</td><td class="num">3.0s</td>
+      <td class="bar-cell"><span class="bar" style="width:8%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>POST /setup/activate (build-out API)</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Cluster requirements → capabilities (LLM, polled)</td><td class="num">38.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Verify capabilities via API</td><td class="num">9.6s</td>
+      <td class="bar-cell"><span class="bar" style="width:25%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Blueprint (built out)</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:8%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>System · Business Processes</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:8%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>System · overview</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:8%"></span></td>
+      <td class="ok">✓</td></tr></tbody></table>
+      <h4>Every stage, in order</h4>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/01-home-first-run.png" alt="home-first-run"/><figcaption>home-first-run</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/02-idea-filled.png" alt="idea-filled"/><figcaption>idea-filled</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/03-questions-first.png" alt="questions-first"/><figcaption>questions-first</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/04-questions-answered.png" alt="questions-answered"/><figcaption>questions-answered</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/05-generating.png" alt="generating"/><figcaption>generating</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/06-review.png" alt="review"/><figcaption>review</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/07-complete.png" alt="complete"/><figcaption>complete</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/08-home-dashboard.png" alt="home-dashboard"/><figcaption>home-dashboard</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/09-blueprint-before.png" alt="blueprint-before"/><figcaption>blueprint-before</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/10-blueprint-built.png" alt="blueprint-built"/><figcaption>blueprint-built</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/11-system-bps.png" alt="system-bps"/><figcaption>system-bps</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run2/12-system-overview.png" alt="system-overview"/><figcaption>system-overview</figcaption></figure></div>
+    </section>
+
+    <section class="run">
+      <h3>Run 3 — CareBridge Intake <span class="badge b-ok">PASS</span></h3>
+      <p class="muted">Account <code>ali+demo-run3@colaberry.com</code> · enrollment <code>dadc3262-32fc-465e-9612-996e469cf5e7</code></p>
+      <div class="counts">Built out: <b>12</b> capabilities · <b>17</b> features · <b>72</b> requirements parsed · 0/72 matched to code (no repo connected → 0 expected)</div>
+      <h4>Phase 1 — Generate &amp; save the requirements document (2.23 min)</h4>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead><tbody><tr><td>Authenticate (magic-link → JWT)</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Pre-check: first-run state</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Load /portal/home (builder embedded)</td><td class="num">0.9s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Type the idea</td><td class="num">0.1s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Generate questions (LLM)</td><td class="num">24.5s</td>
+      <td class="bar-cell"><span class="bar" style="width:24%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Answer all questions</td><td class="num">1.0s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Click &quot;Generate My Requirements&quot;</td><td class="num">0.1s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Generate document (LLM, polled)</td><td class="num">102.5s</td>
+      <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Save requirements doc</td><td class="num">0.3s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Verify persistence (API)</td><td class="num">0.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Home flips to dashboard</td><td class="num">2.8s</td>
+      <td class="bar-cell"><span class="bar" style="width:3%"></span></td>
+      <td class="ok">✓</td></tr></tbody></table>
+      <h4>Phase 2 — Build out the project from the document (0.72 min)</h4>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Relative</th><th>OK</th></tr></thead><tbody><tr><td>Authenticate</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Pre-check: doc saved + gate satisfied</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Blueprint (before build-out)</td><td class="num">3.1s</td>
+      <td class="bar-cell"><span class="bar" style="width:11%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>POST /setup/activate (build-out API)</td><td class="num">0.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Cluster requirements → capabilities (LLM, polled)</td><td class="num">28.8s</td>
+      <td class="bar-cell"><span class="bar" style="width:100%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Verify capabilities via API</td><td class="num">0.4s</td>
+      <td class="bar-cell"><span class="bar" style="width:1%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>Blueprint (built out)</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:11%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>System · Business Processes</td><td class="num">3.2s</td>
+      <td class="bar-cell"><span class="bar" style="width:11%"></span></td>
+      <td class="ok">✓</td></tr>
+<tr><td>System · overview</td><td class="num">3.3s</td>
+      <td class="bar-cell"><span class="bar" style="width:11%"></span></td>
+      <td class="ok">✓</td></tr></tbody></table>
+      <h4>Every stage, in order</h4>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/01-home-first-run.png" alt="home-first-run"/><figcaption>home-first-run</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/02-idea-filled.png" alt="idea-filled"/><figcaption>idea-filled</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/03-questions-first.png" alt="questions-first"/><figcaption>questions-first</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/04-questions-answered.png" alt="questions-answered"/><figcaption>questions-answered</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/05-generating.png" alt="generating"/><figcaption>generating</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/06-review.png" alt="review"/><figcaption>review</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/07-complete.png" alt="complete"/><figcaption>complete</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/08-home-dashboard.png" alt="home-dashboard"/><figcaption>home-dashboard</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/09-blueprint-before.png" alt="blueprint-before"/><figcaption>blueprint-before</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/10-blueprint-built.png" alt="blueprint-built"/><figcaption>blueprint-built</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/11-system-bps.png" alt="system-bps"/><figcaption>system-bps</figcaption></figure>
+<figure><img loading="lazy" src="screenshots/2026-05-20-buildout-e2e/run3/12-system-overview.png" alt="system-overview"/><figcaption>system-overview</figcaption></figure></div>
+    </section>
+
+<div class="card">
+  <div class="eyebrow">Log in to review each account</div>
+  <p class="muted">Three magic-link login URLs were written to <code>scripts/.demo_login_urls.txt</code> (kept out of git). Open any one in a fresh browser to land on that account's portal and view its built-out System / Blueprint.</p>
+  <div class="eyebrow" style="margin-top:1rem">Reproduce</div>
+  <p class="muted"><code>ssh ... -e RESET=1 ... node &lt; backend/src/scripts/provisionDemoOnboardingRuns.js</code> → <code>node scripts/driveRequirementsBuilder.js</code> → <code>ssh ... node &lt; backend/src/scripts/enableDemoBuildOut.js</code> → <code>node scripts/captureBuildOut.js</code> → <code>node scripts/buildFullPipelineReport.js</code></p>
+</div>
+</div></body></html>

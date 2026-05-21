@@ -34,3 +34,4 @@ scripts/.*_jwt.txt
 # Local portal magic-link tokens for E2E driver — never commit (contain live tokens)
 scripts/.demo_portal_token.txt
 scripts/.demo_onboarding_runs.json
+scripts/.demo_login_urls.txt

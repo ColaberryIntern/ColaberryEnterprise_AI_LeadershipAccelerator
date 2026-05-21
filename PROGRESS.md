@@ -3238,3 +3238,15 @@ The whole point of the operator's directive ("do real operational verifications"
   - What changed: After deploying the two fixes above to the production backend, ran `driveRequirementsBuilder.js` for all three demo enrollments from a fresh reset.
   - Verification: 3/3 PASS, 0 console errors each, all persisted to stage `has_requirements`. Totals: Run1 (LeadFlow CRM) 2.61 min, Run2 (ShelfSense Inventory) 1.68 min, Run3 (CareBridge Intake) 1.90 min — all far under the 30-min/document budget. Report: `docs/REQUIREMENTS_BUILDER_E2E_REPORT.html`; raw data: `docs/screenshots/2026-05-20-onboarding-e2e/timings.json`.
   - Notes: The two LLM calls dominate (question generation ~23–37s, document generation ~70–112s); all other steps are sub-3s. Observation (not a flow break): generation returns ~1,400–1,900-word docs although the prompt requests ≥6000 words — a prompt/model-quality item, logged for follow-up.
+
+- [x] Verified: full pipeline incl. build-out (generate → save → activate → capabilities) on 3 accounts
+  - Date: 2026-05-20
+  - What changed: Extended the E2E to run the real build-out API (`POST /api/portal/project/setup/activate`) which parses the saved requirements doc into a RequirementsMap and clusters it into a Capability → Feature hierarchy. Verified the result via `GET /capabilities` and `/requirements/map`.
+  - Verification: 3/3 PASS. Built-out structure (verified via API): Run1 (LeadFlow CRM) 8 caps / 28 features / 70 reqs; Run2 (ShelfSense Inventory) 15 / 39 / 74; Run3 (CareBridge Intake) 12 / 17 / 72. Report: `docs/REQUIREMENTS_BUILD_OUT_E2E_REPORT.html`; raw: `docs/screenshots/2026-05-20-buildout-e2e/{timings,buildout}.json`.
+  - Notes: Build-out ran in "capabilities only" mode (no GitHub repo connected → 0 file matches, expected). The `github_connected` activation gate was satisfied for the 3 demo projects only, via `enableDemoBuildOut.js` (jsonb merge on setup_status); `activateProject` itself is unchanged. Login URLs for the 3 accounts written to gitignored `scripts/.demo_login_urls.txt`.
+
+| File | Change |
+|---|---|
+| `backend/src/scripts/enableDemoBuildOut.js` | New container script: sets `setup_status.github_connected=true` (jsonb merge) on the 3 demo projects so activation can run without a connected repo. Demo-only affordance; touches only the 3 ali+demo-run* projects (2026-05-20) |
+| `scripts/captureBuildOut.js` | New Playwright phase-2 driver: triggers `POST /setup/activate`, polls `/setup/activation-progress` while clustering runs, verifies capabilities/features/requirements via API (asserts caps>0), screenshots Blueprint (before/after) + System/BPs + System overview (2026-05-20) |
+| `scripts/buildFullPipelineReport.js` + `docs/REQUIREMENTS_BUILD_OUT_E2E_REPORT.html` | New report generator + token-free HTML merging generation + build-out: per-run two-phase timings, verified capability counts, and all 12 screenshots/run in sequence. Writes login URLs to gitignored sidecar (2026-05-20) |

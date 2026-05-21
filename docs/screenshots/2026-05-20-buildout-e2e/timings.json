@@ -1,0 +1,429 @@
+{
+  "generated_at": "2026-05-20T23:57:49.360Z",
+  "base": "https://enterprise.colaberry.ai",
+  "doc_budget_min": 30,
+  "runs": [
+    {
+      "run": 1,
+      "name": "LeadFlow CRM",
+      "email": "ali+demo-run1@colaberry.com",
+      "enrollment_id": "b57da7f7-0dd6-4dc8-bbb2-22095303ca9d",
+      "persisted_state": {
+        "stage": "has_requirements",
+        "project_id": "77055ea9-6eb4-4074-b8a6-dab2a31e6579",
+        "has_project": true,
+        "has_requirements_doc": true,
+        "requirements_count": 0,
+        "capability_count": 0,
+        "capabilities_with_routes": 0,
+        "gates": {
+          "home": true,
+          "critique": false,
+          "blueprint": true,
+          "system": true,
+          "sessions": true
+        }
+      },
+      "ok": true,
+      "steps": [
+        {
+          "label": "auth_verify",
+          "startMs": 374,
+          "durationMs": 410,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "precheck_state",
+          "startMs": 791,
+          "durationMs": 169,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_home",
+          "startMs": 960,
+          "durationMs": 4904,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "fill_idea",
+          "startMs": 5983,
+          "durationMs": 49,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "expand_questions",
+          "startMs": 6139,
+          "durationMs": 44981,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "answer_questions",
+          "startMs": 51264,
+          "durationMs": 993,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "click_generate",
+          "startMs": 52451,
+          "durationMs": 94,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "generation",
+          "startMs": 52672,
+          "durationMs": 66426,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "save",
+          "startMs": 119263,
+          "durationMs": 298,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "verify_persist",
+          "startMs": 119647,
+          "durationMs": 360,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "home_flips_to_dashboard",
+          "startMs": 120007,
+          "durationMs": 2748,
+          "ok": true,
+          "error": null
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "home-first-run",
+          "file": "run1\\01-home-first-run.png"
+        },
+        {
+          "label": "idea-filled",
+          "file": "run1\\02-idea-filled.png"
+        },
+        {
+          "label": "questions-first",
+          "file": "run1\\03-questions-first.png"
+        },
+        {
+          "label": "questions-answered",
+          "file": "run1\\04-questions-answered.png"
+        },
+        {
+          "label": "generating",
+          "file": "run1\\05-generating.png"
+        },
+        {
+          "label": "review",
+          "file": "run1\\06-review.png"
+        },
+        {
+          "label": "complete",
+          "file": "run1\\07-complete.png"
+        },
+        {
+          "label": "home-dashboard",
+          "file": "run1\\08-home-dashboard.png"
+        }
+      ],
+      "consoleErrors": [],
+      "totalMs": 122897,
+      "totalMin": 2.05,
+      "within_budget": true
+    },
+    {
+      "run": 2,
+      "name": "ShelfSense Inventory",
+      "email": "ali+demo-run2@colaberry.com",
+      "enrollment_id": "e2ad9c4b-0bd6-4eb9-a0d5-b0f1d8f78603",
+      "persisted_state": {
+        "stage": "has_requirements",
+        "project_id": "78c8d484-439f-42cf-a8f5-d8028cfeefc5",
+        "has_project": true,
+        "has_requirements_doc": true,
+        "requirements_count": 0,
+        "capability_count": 0,
+        "capabilities_with_routes": 0,
+        "gates": {
+          "home": true,
+          "critique": false,
+          "blueprint": true,
+          "system": true,
+          "sessions": true
+        }
+      },
+      "ok": true,
+      "steps": [
+        {
+          "label": "auth_verify",
+          "startMs": 116,
+          "durationMs": 170,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "precheck_state",
+          "startMs": 291,
+          "durationMs": 167,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_home",
+          "startMs": 458,
+          "durationMs": 749,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "fill_idea",
+          "startMs": 1302,
+          "durationMs": 32,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "expand_questions",
+          "startMs": 1460,
+          "durationMs": 79087,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "answer_questions",
+          "startMs": 80674,
+          "durationMs": 1133,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "click_generate",
+          "startMs": 81989,
+          "durationMs": 85,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "generation",
+          "startMs": 82196,
+          "durationMs": 99643,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "save",
+          "startMs": 181984,
+          "durationMs": 274,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "verify_persist",
+          "startMs": 182326,
+          "durationMs": 186,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "home_flips_to_dashboard",
+          "startMs": 182512,
+          "durationMs": 2780,
+          "ok": true,
+          "error": null
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "home-first-run",
+          "file": "run2\\01-home-first-run.png"
+        },
+        {
+          "label": "idea-filled",
+          "file": "run2\\02-idea-filled.png"
+        },
+        {
+          "label": "questions-first",
+          "file": "run2\\03-questions-first.png"
+        },
+        {
+          "label": "questions-answered",
+          "file": "run2\\04-questions-answered.png"
+        },
+        {
+          "label": "generating",
+          "file": "run2\\05-generating.png"
+        },
+        {
+          "label": "review",
+          "file": "run2\\06-review.png"
+        },
+        {
+          "label": "complete",
+          "file": "run2\\07-complete.png"
+        },
+        {
+          "label": "home-dashboard",
+          "file": "run2\\08-home-dashboard.png"
+        }
+      ],
+      "consoleErrors": [],
+      "totalMs": 185457,
+      "totalMin": 3.09,
+      "within_budget": true
+    },
+    {
+      "run": 3,
+      "name": "CareBridge Intake",
+      "email": "ali+demo-run3@colaberry.com",
+      "enrollment_id": "dadc3262-32fc-465e-9612-996e469cf5e7",
+      "persisted_state": {
+        "stage": "has_requirements",
+        "project_id": "945b9041-2fb8-4f50-85d7-a44d6fd622b9",
+        "has_project": true,
+        "has_requirements_doc": true,
+        "requirements_count": 0,
+        "capability_count": 0,
+        "capabilities_with_routes": 0,
+        "gates": {
+          "home": true,
+          "critique": false,
+          "blueprint": true,
+          "system": true,
+          "sessions": true
+        }
+      },
+      "ok": true,
+      "steps": [
+        {
+          "label": "auth_verify",
+          "startMs": 70,
+          "durationMs": 161,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "precheck_state",
+          "startMs": 233,
+          "durationMs": 174,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_home",
+          "startMs": 407,
+          "durationMs": 867,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "fill_idea",
+          "startMs": 1366,
+          "durationMs": 54,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "expand_questions",
+          "startMs": 1544,
+          "durationMs": 24452,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "answer_questions",
+          "startMs": 26132,
+          "durationMs": 1015,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "click_generate",
+          "startMs": 27329,
+          "durationMs": 74,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "generation",
+          "startMs": 27497,
+          "durationMs": 102525,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "save",
+          "startMs": 130149,
+          "durationMs": 295,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "verify_persist",
+          "startMs": 130534,
+          "durationMs": 394,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "home_flips_to_dashboard",
+          "startMs": 130928,
+          "durationMs": 2757,
+          "ok": true,
+          "error": null
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "home-first-run",
+          "file": "run3\\01-home-first-run.png"
+        },
+        {
+          "label": "idea-filled",
+          "file": "run3\\02-idea-filled.png"
+        },
+        {
+          "label": "questions-first",
+          "file": "run3\\03-questions-first.png"
+        },
+        {
+          "label": "questions-answered",
+          "file": "run3\\04-questions-answered.png"
+        },
+        {
+          "label": "generating",
+          "file": "run3\\05-generating.png"
+        },
+        {
+          "label": "review",
+          "file": "run3\\06-review.png"
+        },
+        {
+          "label": "complete",
+          "file": "run3\\07-complete.png"
+        },
+        {
+          "label": "home-dashboard",
+          "file": "run3\\08-home-dashboard.png"
+        }
+      ],
+      "consoleErrors": [],
+      "totalMs": 133819,
+      "totalMin": 2.23,
+      "within_budget": true
+    }
+  ],
+  "all_ok": true,
+  "all_within_budget": true
+}

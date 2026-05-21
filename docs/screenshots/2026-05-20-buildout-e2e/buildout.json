@@ -1,0 +1,292 @@
+{
+  "generated_at": "2026-05-21T00:01:03.292Z",
+  "base": "https://enterprise.colaberry.ai",
+  "runs": [
+    {
+      "run": 1,
+      "name": "LeadFlow CRM",
+      "email": "ali+demo-run1@colaberry.com",
+      "enrollment_id": "b57da7f7-0dd6-4dc8-bbb2-22095303ca9d",
+      "activation_message": "Activation complete",
+      "counts": {
+        "capabilities": 8,
+        "features": 28,
+        "requirements": 70,
+        "map_summary": {
+          "total": 70,
+          "matched": 0,
+          "unmatched": 70
+        }
+      },
+      "ok": true,
+      "steps": [
+        {
+          "label": "auth_verify",
+          "durationMs": 431,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "precheck_gate",
+          "durationMs": 168,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_blueprint_before",
+          "durationMs": 2954,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "post_activate",
+          "durationMs": 155,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "activation",
+          "durationMs": 53885,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "verify_buildout",
+          "durationMs": 357,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_blueprint_after",
+          "durationMs": 3225,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_system_bps",
+          "durationMs": 3238,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_system_overview",
+          "durationMs": 3229,
+          "ok": true,
+          "error": null
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "blueprint-before",
+          "file": "run1/09-blueprint-before.png"
+        },
+        {
+          "label": "blueprint-built",
+          "file": "run1/10-blueprint-built.png"
+        },
+        {
+          "label": "system-bps",
+          "file": "run1/11-system-bps.png"
+        },
+        {
+          "label": "system-overview",
+          "file": "run1/12-system-overview.png"
+        }
+      ],
+      "consoleErrors": [],
+      "totalMs": 68399,
+      "totalMin": 1.14
+    },
+    {
+      "run": 2,
+      "name": "ShelfSense Inventory",
+      "email": "ali+demo-run2@colaberry.com",
+      "enrollment_id": "e2ad9c4b-0bd6-4eb9-a0d5-b0f1d8f78603",
+      "activation_message": "Activation complete",
+      "counts": {
+        "capabilities": 15,
+        "features": 39,
+        "requirements": 74,
+        "map_summary": {
+          "total": 74,
+          "matched": 0,
+          "unmatched": 74
+        }
+      },
+      "ok": true,
+      "steps": [
+        {
+          "label": "auth_verify",
+          "durationMs": 225,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "precheck_gate",
+          "durationMs": 172,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_blueprint_before",
+          "durationMs": 3043,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "post_activate",
+          "durationMs": 172,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "activation",
+          "durationMs": 38371,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "verify_buildout",
+          "durationMs": 9642,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_blueprint_after",
+          "durationMs": 3218,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_system_bps",
+          "durationMs": 3217,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_system_overview",
+          "durationMs": 3217,
+          "ok": true,
+          "error": null
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "blueprint-before",
+          "file": "run2/09-blueprint-before.png"
+        },
+        {
+          "label": "blueprint-built",
+          "file": "run2/10-blueprint-built.png"
+        },
+        {
+          "label": "system-bps",
+          "file": "run2/11-system-bps.png"
+        },
+        {
+          "label": "system-overview",
+          "file": "run2/12-system-overview.png"
+        }
+      ],
+      "consoleErrors": [],
+      "totalMs": 62004,
+      "totalMin": 1.03
+    },
+    {
+      "run": 3,
+      "name": "CareBridge Intake",
+      "email": "ali+demo-run3@colaberry.com",
+      "enrollment_id": "dadc3262-32fc-465e-9612-996e469cf5e7",
+      "activation_message": "Activation complete",
+      "counts": {
+        "capabilities": 12,
+        "features": 17,
+        "requirements": 72,
+        "map_summary": {
+          "total": 72,
+          "matched": 0,
+          "unmatched": 72
+        }
+      },
+      "ok": true,
+      "steps": [
+        {
+          "label": "auth_verify",
+          "durationMs": 220,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "precheck_gate",
+          "durationMs": 178,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_blueprint_before",
+          "durationMs": 3130,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "post_activate",
+          "durationMs": 178,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "activation",
+          "durationMs": 28826,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "verify_buildout",
+          "durationMs": 373,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_blueprint_after",
+          "durationMs": 3240,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_system_bps",
+          "durationMs": 3220,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "load_system_overview",
+          "durationMs": 3256,
+          "ok": true,
+          "error": null
+        }
+      ],
+      "screenshots": [
+        {
+          "label": "blueprint-before",
+          "file": "run3/09-blueprint-before.png"
+        },
+        {
+          "label": "blueprint-built",
+          "file": "run3/10-blueprint-built.png"
+        },
+        {
+          "label": "system-bps",
+          "file": "run3/11-system-bps.png"
+        },
+        {
+          "label": "system-overview",
+          "file": "run3/12-system-overview.png"
+        }
+      ],
+      "consoleErrors": [],
+      "totalMs": 43325,
+      "totalMin": 0.72
+    }
+  ],
+  "all_ok": true
+}
