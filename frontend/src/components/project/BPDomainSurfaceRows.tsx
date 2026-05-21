@@ -82,7 +82,11 @@ export const DomainRow: React.FC<{
    *  a NEXT chip + accent border + pinned to the top of its domain's
    *  sort. (2026-05-21) */
   nextBpId?: string | null;
-}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp, onShowMergedCaps, callGraph, hidePhantoms, onOpenPhantomsTriage, nextBpId }) => {
+  /** Optional predicate from the filter toolbar. When provided, the BP
+   *  list inside the domain is filtered through it before sort, and the
+   *  domain header shows a "M of N matching" pill. (2026-05-21) */
+  filterPredicate?: (bp: BPLike) => boolean;
+}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp, onShowMergedCaps, callGraph, hidePhantoms, onOpenPhantomsTriage, nextBpId, filterPredicate }) => {
   const tone = LIFECYCLE_TONE[bucket.lifecycleState];
   const mom = momentum || { delta: null, direction: 'first-visit' as Direction, label: 'baseline', minutesSince: null };
   const momTone = MOMENTUM_TONE[mom.direction];
@@ -108,6 +112,13 @@ export const DomainRow: React.FC<{
   const forwardNote = forwardLookingNote(bucket);
   const confidence = confidenceLine(bucket);
   const scanItems = metadataItems(bucket);
+
+  // Filter-matched BP count within this domain — shown in the header
+  // as a "M / N matching" pill when filters are active so the operator
+  // can scan the stack and see which domains carry their target.
+  const matchedInDomainCount = filterPredicate
+    ? bucket.processes.filter(p => (!hidePhantoms || !(p as any).is_phantom) && filterPredicate(p)).length
+    : null;
 
   return (
     <section
@@ -148,6 +159,20 @@ export const DomainRow: React.FC<{
             <span style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontWeight: 500 }}>
               · {bucket.processes.length} BP{bucket.processes.length === 1 ? '' : 's'}
             </span>
+            {matchedInDomainCount !== null && (
+              <span
+                title={`${matchedInDomainCount} of ${bucket.processes.length} BPs match the current filter`}
+                style={{
+                  fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em',
+                  color: matchedInDomainCount === 0 ? 'var(--color-text-light)' : 'var(--color-primary)',
+                  background: matchedInDomainCount === 0 ? 'transparent' : 'rgba(59,130,246,0.10)',
+                  padding: '2px 7px', borderRadius: 3, fontWeight: 700,
+                  border: matchedInDomainCount === 0 ? '1px dashed var(--color-border)' : '1px solid rgba(59,130,246,0.25)',
+                }}
+              >
+                {matchedInDomainCount}/{bucket.processes.length} matching
+              </span>
+            )}
             <span
               title={`Lifecycle state: ${bucket.lifecycleState}`}
               style={{
@@ -340,7 +365,8 @@ export const DomainRow: React.FC<{
           )}
           {(() => {
             const deduped = dedupByFrontendRoute(bucket.processes);
-            const visible = hidePhantoms ? deduped.filter(p => !p.is_phantom) : deduped;
+            const phantomFiltered = hidePhantoms ? deduped.filter(p => !p.is_phantom) : deduped;
+            const visible = filterPredicate ? phantomFiltered.filter(filterPredicate) : phantomFiltered;
             // 2026-05-21: sort by priority desc within the domain.
             // Current-priority cap pinned to top regardless of score so
             // the operator's eye lands on what Cory wants worked on next.
@@ -354,7 +380,10 @@ export const DomainRow: React.FC<{
               if (aScore !== bScore) return bScore - aScore;
               return a.name.localeCompare(b.name);
             });
-            const hiddenCount = deduped.length - visible.length;
+            // Phantom-hidden caps only — the message below specifically
+            // describes phantoms ("no implementation across any layer").
+            // Filter-hidden caps are accounted for in the toolbar count.
+            const hiddenCount = deduped.length - phantomFiltered.length;
             const hasPriorityScores = sorted.some(p => ((p as any).priority_score || 0) > 0);
             return (
               <>

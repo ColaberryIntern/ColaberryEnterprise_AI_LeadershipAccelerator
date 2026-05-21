@@ -40,6 +40,8 @@ import BPDetailV2 from './BPDetailV2';
 import PortalBusinessProcessesTab from './PortalBusinessProcessesTab';
 import { DomainRow } from './BPDomainSurfaceRows';
 import MergedCapsModal from './MergedCapsModal';
+import BPFilterToolbar from './BPFilterToolbar';
+import { useBPFilters } from '../../hooks/useBPFilters';
 
 const BPDomainSurface: React.FC = () => {
   const [processes, setProcesses] = useState<BPLike[]>([]);
@@ -229,6 +231,63 @@ const BPDomainSurface: React.FC = () => {
     const matched = buckets.reduce((s, b) => s + b.matchedRequirements, 0);
     return { total, matched, pct: total > 0 ? Math.round((matched / total) * 100) : 0 };
   }, [buckets]);
+
+  // ─── BP filter toolbar wiring ─────────────────────────────────────
+  // Text + layer + keyword filters compose AND-style. Predicate is
+  // pushed down to DomainRow which applies it to bucket.processes
+  // before sort; empty domains hide (with a footer count line).
+  const {
+    state: filterState,
+    setQuery, setLayer, toggleKeyword, clearAll,
+    hasAny: hasAnyFilter,
+    predicate: filterPredicate,
+  } = useBPFilters();
+
+  // Cap pool the keyword cloud is mined from: BPs that pass text + layer
+  // but NOT keyword filter. This way clicking a keyword narrows the rows
+  // without making the cloud collapse to just that keyword.
+  const cloudInputBps = useMemo(() => {
+    return processes.filter((bp) => {
+      // Apply phantom hiding to keep the cloud honest.
+      if (hidePhantoms && (bp as any).is_phantom) return false;
+      // Reuse the predicate but with kws stripped out.
+      const partialFilter = { ...filterState, kws: [] };
+      // We can call the predicate components inline; simplest path:
+      // strip kws by short-circuiting with a synthesized partial check.
+      const q = partialFilter.q.trim().toLowerCase();
+      if (q) {
+        // Reuse same matching rules as bpMatchesQuery — inline-light version.
+        const name = bp.name.toLowerCase();
+        const tokens = [
+          name,
+          ...(bp.linked_backend_services || []).map(p => (p.split('/').pop() || p).toLowerCase()),
+          ...(bp.linked_frontend_components || []).map(p => (p.split('/').pop() || p).toLowerCase()),
+          ...(bp.linked_agents || []).map(p => (p.split('/').pop() || p).toLowerCase()),
+          (bp.frontend_route || '').toLowerCase(),
+        ];
+        if (!tokens.some(t => t.includes(q))) return false;
+      }
+      const layer = partialFilter.layer;
+      if (layer !== 'all') {
+        if (layer === 'backend' && (bp.linked_backend_services || []).length === 0) return false;
+        if (layer === 'frontend' && !bp.frontend_route && bp.source !== 'frontend_page' && !bp.is_page_bp) return false;
+        if (layer === 'agent' && bp.usability?.agent !== 'ready' && bp.usability?.agent !== 'partial') return false;
+        if (layer === 'page' && !bp.is_page_bp && bp.source !== 'frontend_page' && !bp.frontend_route) return false;
+      }
+      return true;
+    });
+  }, [processes, hidePhantoms, filterState]);
+
+  // Total + visible counts for the toolbar's "N of M" chip. Total excludes
+  // phantoms (the operator's hide-phantoms toggle is upstream).
+  const totalForCounter = useMemo(
+    () => processes.filter(p => !(hidePhantoms && (p as any).is_phantom)).length,
+    [processes, hidePhantoms],
+  );
+  const visibleForCounter = useMemo(
+    () => processes.filter(p => !(hidePhantoms && (p as any).is_phantom) && filterPredicate(p)).length,
+    [processes, hidePhantoms, filterPredicate],
+  );
 
   if (loading) {
     return (
@@ -430,38 +489,81 @@ const BPDomainSurface: React.FC = () => {
         </div>
       )}
 
+      {/* ─── Filter toolbar (sticky) ─── */}
+      <BPFilterToolbar
+        state={filterState}
+        setQuery={setQuery}
+        setLayer={setLayer}
+        toggleKeyword={toggleKeyword}
+        clearAll={clearAll}
+        hasAny={hasAnyFilter}
+        totalCount={totalForCounter}
+        visibleCount={visibleForCounter}
+        cloudInputBps={cloudInputBps}
+      />
+
       {/* ─── Domain stack ─── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-        {buckets.map(b => (
-          <DomainRow
-            key={b.key}
-            bucket={b}
-            momentum={momentum[b.key]}
-            isExpanded={!!expanded[b.key]}
-            isPulsing={pulsedKey === b.key}
-            isCoryPriority={coryPriorityDomain === b.key}
-            isDownstreamOfPriority={priorityDownstream.has(b.key)}
-            registerRef={(el) => { rowRefs.current[b.key] = el; }}
-            onToggle={() => {
-              // Single-drill-down: clicking opens this domain (collapsing
-              // all others) or closes it if already open. Keeps the page
-              // calm and prevents stacked drawers.
-              if (!expanded[b.key]) {
-                rememberDomain(b.key);
-                setExpanded({ [b.key]: true });
-              } else {
-                setExpanded({});
-              }
-            }}
-            onNavigate={navigateToDomain}
-            onPickBp={setSelectedBp}
-            onShowMergedCaps={(bp) => setMergedBp(bp)}
-            callGraph={callGraph}
-            hidePhantoms={hidePhantoms}
-            onOpenPhantomsTriage={() => window.location.assign('/portal/project/phantoms')}
-            nextBpId={nextBpId}
-          />
-        ))}
+        {buckets.map(b => {
+          // Drop a domain entirely when filters wipe it out. Keeps the
+          // page from listing 6 collapsed (0/N) headers when the operator
+          // is hunting for one keyword.
+          const matchedInDomain = b.processes.filter(p =>
+            (!hidePhantoms || !(p as any).is_phantom) && filterPredicate(p)
+          ).length;
+          if (hasAnyFilter && matchedInDomain === 0) return null;
+          return (
+            <DomainRow
+              key={b.key}
+              bucket={b}
+              momentum={momentum[b.key]}
+              isExpanded={!!expanded[b.key]}
+              isPulsing={pulsedKey === b.key}
+              isCoryPriority={coryPriorityDomain === b.key}
+              isDownstreamOfPriority={priorityDownstream.has(b.key)}
+              registerRef={(el) => { rowRefs.current[b.key] = el; }}
+              onToggle={() => {
+                // Single-drill-down: clicking opens this domain (collapsing
+                // all others) or closes it if already open. Keeps the page
+                // calm and prevents stacked drawers.
+                if (!expanded[b.key]) {
+                  rememberDomain(b.key);
+                  setExpanded({ [b.key]: true });
+                } else {
+                  setExpanded({});
+                }
+              }}
+              onNavigate={navigateToDomain}
+              onPickBp={setSelectedBp}
+              onShowMergedCaps={(bp) => setMergedBp(bp)}
+              callGraph={callGraph}
+              hidePhantoms={hidePhantoms}
+              onOpenPhantomsTriage={() => window.location.assign('/portal/project/phantoms')}
+              nextBpId={nextBpId}
+              filterPredicate={hasAnyFilter ? filterPredicate : undefined}
+            />
+          );
+        })}
+        {hasAnyFilter && visibleForCounter === 0 && (
+          <div style={{
+            padding: '2rem 1rem', textAlign: 'center',
+            background: 'var(--color-bg-alt)', border: '1px dashed var(--color-border)',
+            borderRadius: 6, color: 'var(--color-text-light)', fontSize: 13,
+          }}>
+            <i className="bi bi-funnel d-block mb-2" style={{ fontSize: 22, opacity: 0.6 }} />
+            All {totalForCounter} BPs filtered out — clear filters or broaden your search.
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="btn btn-sm btn-outline-primary"
+                style={{ fontSize: 12 }}
+              >
+                Clear all filters
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2026-05-20: +N merged-caps overlay. Driven by the dedup pill on
