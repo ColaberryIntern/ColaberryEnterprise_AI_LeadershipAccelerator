@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>BPs Surface Nav — Verification 2026-05-21</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; color: #1f2937; background: #f8fafc; }
+  h1 { font-size: 22px; color: #1a365d; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 1.5rem; }
+  .stop { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.4rem; margin: 1rem 0; }
+  .stop h2 { font-size: 16px; color: #1a365d; margin: 0 0 8px; }
+  .meta { font-size: 12.5px; color: #6b7280; margin-bottom: 6px; }
+  .exp { font-size: 13px; color: #4b5563; padding: 6px 10px; background: #f1f5f9; border-left: 3px solid #3b82f6; border-radius: 4px; }
+  .ok { color: #15803d; font-weight: 600; padding: 6px 10px; background: #dcfce7; border-radius: 4px; }
+  .err { color: #b91c1c; font-weight: 600; padding: 6px 10px; background: #fee2e2; border-radius: 4px; }
+  img { max-width: 100%; border: 1px solid #e5e7eb; border-radius: 4px; margin-top: 8px; }
+  code { font-family: ui-monospace, Menlo, monospace; background: #f1f5f9; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+</style></head>
+<body>
+<h1>BPs Surface Nav — Verification</h1>
+<div class="sub">2026-05-21 · base https://enterprise.colaberry.ai · 0 console error(s)</div>
+
+    <section class="stop">
+      <h2>BPs surface — domain list</h2>
+      <div class="meta"><b>URL:</b> <code>https://enterprise.colaberry.ai/portal/project/system?tab=bps</code></div>
+      <p class="exp"><b>Expected:</b> Domain stack with CURRENT PRIORITY badge on AI &amp; Intelligence.</p>
+      
+      <img src="01-bps-landing.png" alt="BPs surface — domain list" />
+    </section>
+  
+
+    <section class="stop">
+      <h2>AI &amp; Intelligence expanded — NEXT chip + priority sort</h2>
+      <div class="meta"><b>URL:</b> <code>click on AI &amp; Intelligence</code></div>
+      <p class="exp"><b>Expected:</b> Validation Parser at top with NEXT chip + 4px primary-blue left border + blue tint. &quot;Sorted by priority&quot; italic hint above rows.</p>
+      
+      <img src="02-ai-intel-expanded.png" alt="AI &amp; Intelligence expanded — NEXT chip + priority sort" />
+    </section>
+  
+
+    <section class="stop">
+      <h2>Lead Management cap detail — Critique button visible</h2>
+      <div class="meta"><b>URL:</b> <code>click Lead Management</code></div>
+      <p class="exp"><b>Expected:</b> &quot;Critique this page&quot; button next to live preview at /admin/leads.</p>
+      
+      <img src="03-cap-detail-with-critique-button.png" alt="Lead Management cap detail — Critique button visible" />
+    </section>
+  
+
+    <section class="stop">
+      <h2>After clicking Critique this page</h2>
+      <div class="meta"><b>URL:</b> <code>https://enterprise.colaberry.ai/portal/project/system?tab=bps</code></div>
+      <p class="exp"><b>Expected:</b> URL contains ?bp=&lt;id&gt;&amp;route=/admin/leads — visual workspace pre-fills picker.</p>
+      <p class="err"><b>✗ Critique handoff:</b> URL missing bp/route — handoff broken</p>
+      <img src="04-after-critique-click.png" alt="After clicking Critique this page" />
+    </section>
+  
+</body></html>

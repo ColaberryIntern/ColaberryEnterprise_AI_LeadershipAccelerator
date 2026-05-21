@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>BPs Surface Nav v2 — 2026-05-21</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 2rem; color: #1f2937; background: #f8fafc; }
+  h1 { font-size: 22px; color: #1a365d; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 1.5rem; }
+  .stop { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.4rem; margin: 1rem 0; }
+  .stop h2 { font-size: 16px; color: #1a365d; margin: 0 0 8px; }
+  .meta { font-size: 12.5px; color: #6b7280; margin: 6px 0; }
+  .exp { font-size: 13px; color: #4b5563; padding: 6px 10px; background: #f1f5f9; border-left: 3px solid #3b82f6; border-radius: 4px; }
+  .ok { color: #15803d; font-weight: 600; padding: 6px 10px; background: #dcfce7; border-radius: 4px; }
+  .err { color: #b91c1c; font-weight: 600; padding: 6px 10px; background: #fee2e2; border-radius: 4px; }
+  img { max-width: 100%; border: 1px solid #e5e7eb; border-radius: 4px; margin-top: 8px; }
+  code { font-family: ui-monospace, Menlo, monospace; background: #f1f5f9; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+</style></head>
+<body>
+<h1>BPs Surface Nav v2 — Verification</h1>
+<div class="sub">2026-05-21 · base https://enterprise.colaberry.ai · 0 console error(s)</div>
+
+<div class="stop">
+  <h2>1. BPs landing</h2>
+  <div class="meta"><b>URL:</b> <code>/portal/project/system?tab=bps</code></div>
+  <p class="exp"><b>Expected:</b> Domain stack with CURRENT PRIORITY badge on AI &amp; Intelligence; hide-phantoms toggle visible in header.</p>
+  <img src="01-bps-landing.png" />
+</div>
+
+<div class="stop">
+  <h2>2. AI &amp; Intelligence expanded</h2>
+  <div class="meta"><b>URL:</b> click on AI &amp; Intelligence header</div>
+  <p class="exp"><b>Expected:</b> "Sorted by priority · current next-action pinned to top" hint above rows. Validation Parser at top with NEXT chip + 4px primary-blue left border + blue tint background.</p>
+  <img src="02-ai-intel-expanded.png" />
+</div>
+
+<div class="stop">
+  <h2>3. Critique URL handoff (the BPDetailV2 navigation target)</h2>
+  <div class="meta"><b>URL navigated to:</b> <code>https://enterprise.colaberry.ai/portal/visual-workspace?bp=5b3239a6-1d86-4c6e-9a24-37f2a758e3ff&amp;route=%2Fadmin%2Fleads</code></div>
+  <div class="meta"><b>Landed on:</b> <code>https://enterprise.colaberry.ai/portal/visual-workspace?bp=5b3239a6-1d86-4c6e-9a24-37f2a758e3ff&amp;route=%2Fadmin%2Fleads</code></div>
+  <div class="meta"><b>Picker pre-fill detected:</b> <code>(none — picker still on default)</code></div>
+  <p class="ok"><b>✓ URL retains bp + route params:</b> yes (handoff fixed)</p>
+  <p class="exp"><b>Expected:</b> Visual workspace renders with the picker pre-filled to <code>/admin/leads</code>. This is exactly the URL that BPDetailV2's "Critique this page" button now navigates to.</p>
+  <img src="03-critique-url-handoff.png" />
+</div>
+
+</body></html>
