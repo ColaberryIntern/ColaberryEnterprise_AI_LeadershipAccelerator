@@ -1,0 +1,107 @@
+{
+  "generated_at": "2026-05-21T13:08:40.254Z",
+  "idea_chars": 253,
+  "regular_prompt_chars": 1068,
+  "regular_config": {
+    "model": "gpt-4o-mini",
+    "max_tokens": 16000,
+    "temperature": 0.3,
+    "calls": 1
+  },
+  "architect_config": {
+    "service": "https://advisor.colaberry.ai",
+    "phases": 8,
+    "chapter_min_words": 1750,
+    "blueprint": "standard",
+    "calls": "many (per-phase + per-chapter + retries)"
+  },
+  "architect": {
+    "label": "AI Project Architect",
+    "chars": 108442,
+    "words": 13742,
+    "lines": 1465,
+    "headings": {
+      "h1": 13,
+      "h2": 45,
+      "h3": 111
+    },
+    "est_pages": 23,
+    "sections": [
+      "Purpose",
+      "Context",
+      "Scope",
+      "Stakeholders",
+      "Business Model",
+      "Competitive Landscape",
+      "User Personas",
+      "Roles",
+      "Access Control",
+      "User Journeys",
+      "Onboarding Flow",
+      "Edge Cases",
+      "Conclusion",
+      "Purpose",
+      "Features",
+      "Integration Points",
+      "API Design",
+      "Workflows",
+      "Acceptance Criteria",
+      "Error Handling",
+      "Conclusion",
+      "Non-Goals",
+      "Exclusions",
+      "Future Considerations",
+      "Scope Boundaries",
+      "Anti-Patterns",
+      "Decision Rationale",
+      "Architecture Overview",
+      "Technology Stack",
+      "Data Model",
+      "Infrastructure",
+      "CI/CD Pipeline",
+      "Security Architecture",
+      "MVP Scope",
+      "Phase Plan",
+      "Milestones",
+      "Resources",
+      "Risk Mitigation",
+      "Go-To-Market",
+      "Risks"
+    ]
+  },
+  "regular": {
+    "label": "Regular LLM (gpt-4o-mini)",
+    "chars": 10580,
+    "words": 1450,
+    "lines": 271,
+    "headings": {
+      "h1": 1,
+      "h2": 16,
+      "h3": 47
+    },
+    "est_pages": 2,
+    "sections": [
+      "1. Executive Summary",
+      "2. Business Requirements",
+      "3. Functional Requirements",
+      "4. Non-Functional Requirements",
+      "5. System Architecture",
+      "6. Data Architecture",
+      "7. API Specifications",
+      "8. Integration Requirements",
+      "9. AI/ML Model Requirements",
+      "10. Data Governance & Privacy",
+      "11. Security Requirements",
+      "12. Infrastructure & Deployment",
+      "13. Testing Strategy",
+      "14. Implementation Roadmap",
+      "15. Risk Register",
+      "16. Appendices"
+    ]
+  },
+  "explosion": {
+    "architect_x": 429,
+    "regular_x": 9.9,
+    "architect_vs_regular_size": 10.2
+  }
+}

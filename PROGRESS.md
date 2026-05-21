@@ -3271,3 +3271,13 @@ The whole point of the operator's directive ("do real operational verifications"
 | File | Change |
 |---|---|
 | `frontend/src/pages/project/RequirementsBuilder.tsx` | Added the additive "Build with AI" branch (idea + mandatory repo URL + optional token → `POST /architect-build` → redirect `/portal/project/demo`), reconnecting the orphaned system-preview demo to the first-run flow (2026-05-21) |
+
+- [x] Analysis: requirements-generator comparison (Architect vs regular LLM)
+  - Date: 2026-05-21
+  - What changed: Ran a controlled head-to-head on the same idea (ShelfSense). Architect: 253-char idea → 13,742 words / 108,442 chars (~23 pages, 7 chapters), 429× explosion. Regular (gpt-4o-mini, 1 call, max_tokens 16,000): 1,068-char prompt → 1,450 words / 10,580 chars (~2 pages), and only 24% of the requested 6,000 words. Architect is 10.2× the size. Key findings: single-call LLM self-limits well below its token cap; the Architect's chunked per-chapter generation (≥1,750 words/chapter, retried) is what reaches depth; the Architect ignores the questionnaire (built from idea only) while the regular path is the only one that uses it.
+  - Verification: report `docs/REQUIREMENTS_GENERATOR_COMPARISON.html`; raw `docs/doc-comparison/{metrics.json,architect.md,regular.md}`.
+  - Notes: Recommendations — basic workflow: regular path (tailored/fast/cheap) but add a 2-pass section-expand to fix the length shortfall; full system: Architect; and feed the questionnaire INTO the Architect so its 23 pages match what the user actually selected.
+
+| File | Change |
+|---|---|
+| `scripts/compareDocGenerators.js` + `scripts/buildDocComparisonReport.js` + `docs/REQUIREMENTS_GENERATOR_COMPARISON.html` | New: controlled doc-generator comparison (fetches Architect doc + generates a regular-LLM doc for the same idea, job-only/not saved) + report generator + report (2026-05-21) |
