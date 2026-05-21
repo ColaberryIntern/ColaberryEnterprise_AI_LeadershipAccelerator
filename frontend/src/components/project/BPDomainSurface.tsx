@@ -110,6 +110,12 @@ const BPDomainSurface: React.FC = () => {
     () => matchCoryPriorityDomain(unifiedState?.next_action, naturalBuckets),
     [unifiedState?.next_action, naturalBuckets],
   );
+  // 2026-05-21: which BP is Cory's current next-action target? Used to
+  // render a NEXT chip + accent border + pin to top of its domain sort.
+  const nextBpId = useMemo(() => {
+    const na = unifiedState?.next_action;
+    return na?.source_id || null;
+  }, [unifiedState?.next_action]);
   const focusDomainKey = (workspaceMemory.lastBpDomain as DomainKey | undefined) || null;
 
   // Priority-sorted stack — Cory's priority domain first, then operator
@@ -449,6 +455,7 @@ const BPDomainSurface: React.FC = () => {
             callGraph={callGraph}
             hidePhantoms={hidePhantoms}
             onOpenPhantomsTriage={() => window.location.assign('/portal/project/phantoms')}
+            nextBpId={nextBpId}
           />
         ))}
       </div>

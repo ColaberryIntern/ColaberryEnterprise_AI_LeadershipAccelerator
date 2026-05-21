@@ -87,6 +87,10 @@ export interface BPLike {
   linked_agents?: string[];
   frontend_route?: string | null;
   maturity?: { level?: number; label?: string };
+  // 2026-05-21: priority_score from the BP API (computed in
+  // projectRoutes.ts — page BPs by importance tier, code BPs by gap).
+  // Drives the in-domain row sort.
+  priority_score?: number;
   // 2026-05-20: FE→BE call graph. Populated server-side by
   // frontendCallGraphScanner; each ID is a cap whose backend handlers this
   // cap's frontend calls.

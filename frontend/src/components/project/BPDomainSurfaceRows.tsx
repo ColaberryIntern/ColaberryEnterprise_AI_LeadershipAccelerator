@@ -78,7 +78,11 @@ export const DomainRow: React.FC<{
    *  rendered at the bottom of the domain. (2026-05-21) */
   hidePhantoms?: boolean;
   onOpenPhantomsTriage?: () => void;
-}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp, onShowMergedCaps, callGraph, hidePhantoms, onOpenPhantomsTriage }) => {
+  /** Cap ID of Cory's current next-action target. The matching row gets
+   *  a NEXT chip + accent border + pinned to the top of its domain's
+   *  sort. (2026-05-21) */
+  nextBpId?: string | null;
+}> = ({ bucket, momentum, isExpanded, isPulsing, isCoryPriority, isDownstreamOfPriority, registerRef, onToggle, onNavigate, onPickBp, onShowMergedCaps, callGraph, hidePhantoms, onOpenPhantomsTriage, nextBpId }) => {
   const tone = LIFECYCLE_TONE[bucket.lifecycleState];
   const mom = momentum || { delta: null, direction: 'first-visit' as Direction, label: 'baseline', minutesSince: null };
   const momTone = MOMENTUM_TONE[mom.direction];
@@ -337,10 +341,34 @@ export const DomainRow: React.FC<{
           {(() => {
             const deduped = dedupByFrontendRoute(bucket.processes);
             const visible = hidePhantoms ? deduped.filter(p => !p.is_phantom) : deduped;
+            // 2026-05-21: sort by priority desc within the domain.
+            // Current-priority cap pinned to top regardless of score so
+            // the operator's eye lands on what Cory wants worked on next.
+            // Tiebreak by name for stable ordering.
+            const sorted = [...visible].sort((a, b) => {
+              const aIsNext = nextBpId && a.id === nextBpId ? 1 : 0;
+              const bIsNext = nextBpId && b.id === nextBpId ? 1 : 0;
+              if (aIsNext !== bIsNext) return bIsNext - aIsNext;
+              const aScore = (a as any).priority_score || 0;
+              const bScore = (b as any).priority_score || 0;
+              if (aScore !== bScore) return bScore - aScore;
+              return a.name.localeCompare(b.name);
+            });
             const hiddenCount = deduped.length - visible.length;
+            const hasPriorityScores = sorted.some(p => ((p as any).priority_score || 0) > 0);
             return (
               <>
-                {visible.map(p => (
+                {hasPriorityScores && sorted.length > 1 && (
+                  <div style={{
+                    padding: '0 1.4rem 0.4rem 3.4rem',
+                    fontSize: 10.5, color: 'var(--color-text-light)',
+                    fontStyle: 'italic', opacity: 0.7,
+                  }}>
+                    <i className="bi bi-sort-down me-1" style={{ fontSize: 10 }}></i>
+                    Sorted by priority{nextBpId ? ' · current next-action pinned to top' : ''}
+                  </div>
+                )}
+                {sorted.map(p => (
                   <BPLine
                     key={p.id}
                     bp={p}
@@ -348,6 +376,7 @@ export const DomainRow: React.FC<{
                     onPick={() => onPickBp(p.id)}
                     onShowMergedCaps={onShowMergedCaps}
                     callGraph={callGraph}
+                    isCurrentPriority={nextBpId === p.id}
                   />
                 ))}
                 {hiddenCount > 0 && (
@@ -400,7 +429,11 @@ export const BPLine: React.FC<{
     nameById: Map<string, string>;
     usedByMap: Map<string, string[]>;
   };
-}> = ({ bp, inheritedAccent, onPick, onShowMergedCaps, callGraph }) => {
+  /** True when this BP is Cory's current next-action target. Renders a
+   *  NEXT chip + accent border + subtle tint so the operator scans
+   *  straight to it. (2026-05-21) */
+  isCurrentPriority?: boolean;
+}> = ({ bp, inheritedAccent, onPick, onShowMergedCaps, callGraph, isCurrentPriority }) => {
   const matched = bp.matched_requirements || 0;
   const total = bp.total_requirements || 0;
   const pct = total > 0 ? Math.round((matched / total) * 100) : 0;
@@ -452,17 +485,24 @@ export const BPLine: React.FC<{
     wordColor = usable ? '#15803d' : pct >= 50 ? '#1d4ed8' : 'var(--color-text-light)';
     wordTooltip = `Coverage state: ${matched}/${total} requirements matched (${pct}%).`;
   }
-  const accentBorderLeft = inheritedAccent === 'priority'
-    ? '3px solid var(--color-primary)'
-    : inheritedAccent === 'downstream'
-      ? '3px solid var(--color-primary-light)'
-      : undefined;
+  // 2026-05-21: row's left accent. Current-priority row wins over the
+  // inherited domain-level accent (a thicker primary border + tint),
+  // so the operator's eye lands on it inside the expanded domain.
+  const accentBorderLeft = isCurrentPriority
+    ? '4px solid var(--color-primary)'
+    : inheritedAccent === 'priority'
+      ? '3px solid var(--color-primary)'
+      : inheritedAccent === 'downstream'
+        ? '3px solid var(--color-primary-light)'
+        : undefined;
+  const baseBackground = isCurrentPriority ? 'rgba(37, 99, 235, 0.05)' : 'transparent';
   return (
     <button
       type="button"
       onClick={onPick}
+      aria-label={isCurrentPriority ? `${bp.name} (current priority)` : bp.name}
       style={{
-        width: '100%', background: 'transparent', border: 'none',
+        width: '100%', background: baseBackground, border: 'none',
         borderBottom: '1px solid var(--color-border)',
         borderLeft: accentBorderLeft,
         padding: '0.6rem 1.4rem 0.6rem 3.4rem',
@@ -470,10 +510,23 @@ export const BPLine: React.FC<{
         display: 'flex', alignItems: 'center', gap: 12,
         fontSize: 13, color: 'var(--color-text)',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = 'white'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = isCurrentPriority ? 'rgba(37, 99, 235, 0.10)' : 'white'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = baseBackground; }}
     >
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {isCurrentPriority && (
+          <span
+            title="Cory's current next-action target"
+            style={{
+              marginRight: 8, padding: '1px 6px',
+              fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em',
+              color: 'white', background: 'var(--color-primary)',
+              borderRadius: 3, textTransform: 'uppercase',
+            }}
+          >
+            NEXT
+          </span>
+        )}
         {bp.name}
         {(bp as any)._dupe_count > 0 && (
           <span

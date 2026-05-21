@@ -138,13 +138,16 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
    * operator needing to navigate manually.
    */
   const handleCritique = (route: string) => {
-    try {
-      sessionStorage.setItem('critique:autoOpenRoute', route);
-      sessionStorage.setItem('critique:autoOpenBpId', processId);
-      sessionStorage.setItem('critique:autoOpenAt', new Date().toISOString());
-    } catch { /* localStorage unavailable */ }
+    // 2026-05-21: pre-fill the visual workspace's session picker via URL
+    // params, matching the dlBp/dlRoute deep-link contract that
+    // VisualWorkspacePage already reads. The old sessionStorage writes
+    // (critique:autoOpenRoute, critique:autoOpenBpId) were dead code —
+    // nothing on the workspace side consumed them, so clicking
+    // "Critique this page" landed the operator on a blank "/" picker
+    // with no cap context.
     onClose();
-    navigate('/portal/visual-workspace');
+    const qs = new URLSearchParams({ bp: processId, route }).toString();
+    navigate(`/portal/visual-workspace?${qs}`);
   };
 
   const handleGenerate = async (target: string) => {
