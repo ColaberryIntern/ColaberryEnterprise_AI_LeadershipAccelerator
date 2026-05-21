@@ -21,7 +21,11 @@ function PortalVerifyPage() {
     portalApi.get(`/api/portal/verify?token=${token}`)
       .then((res) => {
         login(res.data.jwt);
-        navigate('/portal/project', { replace: true });
+        // Land on Home — it routes first-run users to the build chooser (or the
+        // live demo if a build is in flight) and existing users to the dashboard.
+        // (Previously went to /portal/project → blueprint, which showed an empty
+        // "nothing to execute" page to brand-new users.)
+        navigate('/portal/home', { replace: true });
       })
       .catch((err) => {
         setError(err.response?.data?.error || 'Invalid or expired link. Please request a new one.');

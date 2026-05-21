@@ -30,6 +30,8 @@ export interface OnboardingState {
   requirements_count: number;
   capability_count: number;
   capabilities_with_routes: number;
+  build_in_progress?: boolean;
+  build_mode?: 'professional' | 'autonomous' | null;
   gates: OnboardingGates;
 }
 

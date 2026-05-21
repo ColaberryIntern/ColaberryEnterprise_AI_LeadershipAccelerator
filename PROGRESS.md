@@ -3306,3 +3306,16 @@ The whole point of the operator's directive ("do real operational verifications"
 | `backend/src/routes/projectRoutes.ts` | `POST /architect-build` accepts `mode` (professional/autonomous), passes it through, stores `build_mode` (2026-05-21) |
 | `backend/src/services/requirementsGenerationService.ts` | Added `executeExpansionPass` + 2-pass logic in `executeJob`: thin first-pass docs (<4000 words) are expanded to useful depth for the Workflow path (2026-05-21) |
 | `frontend/src/pages/project/RequirementsBuilder.tsx` | New 3-tier `choose` screen + `repo` step; `buildType` routes to Workflow (generate) or Full/Autonomous (architect-build with enriched idea + mode); questionnaire folded into all paths (2026-05-21) |
+
+- [x] Fix: magic-link login landed on an empty Blueprint; resume in-flight builds on Home
+  - Date: 2026-05-21
+  - What changed: (1) `PortalVerifyPage` redirected to `/portal/project` → `/portal/project/blueprint`, so a freshly-verified first-run user saw an empty "Nothing to execute" Blueprint. Now redirects to `/portal/home` (the chooser for first-run, dashboard otherwise). (2) `onboarding/state` now returns `build_in_progress` (architect_slug set + doc not retrieved) and `build_mode`; `CoryHome` redirects to `/portal/project/demo` when a build is in flight, so revisiting Home mid-build resumes the live preview instead of showing the chooser.
+  - Verification: backend + frontend `tsc --noEmit` pass; production build compiles; deployed; magic-link now lands on Home → chooser/demo (verified post-deploy).
+  - Notes: Addresses the reported "links land on a blank Blueprint" plus the earlier flagged "revisiting Home mid-build" gap, in one pass.
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/portal/PortalVerifyPage.tsx` | Post-verify redirect `/portal/project` → `/portal/home` (chooser/demo/dashboard instead of empty Blueprint) (2026-05-21) |
+| `backend/src/routes/projectRoutes.ts` | `onboarding/state` returns `build_in_progress` + `build_mode` (2026-05-21) |
+| `frontend/src/hooks/useOnboardingState.ts` | Added `build_in_progress` + `build_mode` to the state type (2026-05-21) |
+| `frontend/src/pages/portal/CoryHome.tsx` | Redirect to `/portal/project/demo` when a build is in flight (resume mid-build instead of the chooser) (2026-05-21) |

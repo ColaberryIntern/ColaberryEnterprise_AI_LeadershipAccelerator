@@ -2828,6 +2828,12 @@ router.get('/api/portal/onboarding/state', requireParticipant, async (req: Reque
     else if (capsWithRoutes === 0) stage = 'has_requirements';
     else stage = 'has_code';
 
+    // An Architect build is in flight when a slug is set but the document
+    // hasn't been retrieved yet. Lets the home page send the user back to the
+    // live preview demo instead of the empty first-run chooser.
+    const ss = (project as any).setup_status || {};
+    const buildInProgress = !!ss.architect_slug && !ss.requirements_loaded;
+
     res.json({
       stage,
       project_id: project.id,
@@ -2836,6 +2842,8 @@ router.get('/api/portal/onboarding/state', requireParticipant, async (req: Reque
       requirements_count: reqCount,
       capability_count: capCount,
       capabilities_with_routes: capsWithRoutes,
+      build_in_progress: buildInProgress,
+      build_mode: ss.build_mode || null,
       gates: {
         home: true,
         critique: stage === 'has_code',

@@ -73,6 +73,14 @@ const CoryHome: React.FC = () => {
   // never violate the Rules of Hooks across renders.
   const isFirstRun = onboarding.state?.stage === 'needs_requirements';
 
+  // If an Architect build is in flight, route Home to the live preview demo
+  // instead of the first-run chooser — so revisiting Home mid-build resumes it.
+  useEffect(() => {
+    if (onboarding.state?.build_in_progress) {
+      navigate('/portal/project/demo', { replace: true });
+    }
+  }, [onboarding.state?.build_in_progress, navigate]);
+
   // Framing card visibility is gated ONLY on seenIntros.home. Anyone
   // who hasn't dismissed sees it once; after dismiss it never shows
   // again. We don't try to detect "real" first visit — too racy with
@@ -255,6 +263,16 @@ const CoryHome: React.FC = () => {
   // transition of useOnboardingState (a prior version of this guard sat
   // before later hooks and crashed with React error #300).
   if (isFirstRun) {
+    // A build is running — show a brief spinner while the effect above
+    // redirects to the live demo (avoids flashing the chooser).
+    if (onboarding.state?.build_in_progress) {
+      return (
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading</span></div>
+          <p className="text-muted mt-2" style={{ fontSize: 13 }}>Resuming your build…</p>
+        </div>
+      );
+    }
     return (
       <div>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 1rem' }}>
