@@ -443,11 +443,14 @@ const VisualWorkspacePage: React.FC = () => {
                 });
               }}
               onScanComplete={(r) => {
-                fireToast(
-                  r.created_count > 0
+                fireToast({
+                  icon: r.created_count > 0 ? 'bi-stars' : 'bi-info-circle',
+                  message: r.created_count > 0
                     ? `Visual scan: ${r.created_count} new suggestion${r.created_count === 1 ? '' : 's'} added${r.cache_hit ? ' (cached)' : ''}`
-                    : 'Visual scan: no new findings'
-                );
+                    : 'Visual scan: no new findings',
+                  tone: r.created_count > 0 ? 'good' : 'info',
+                  signature: 'visual-scan',
+                });
               }}
             />
           </div>
