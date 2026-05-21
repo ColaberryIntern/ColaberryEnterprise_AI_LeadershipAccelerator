@@ -112,9 +112,13 @@ const BPDomainSurface: React.FC = () => {
   );
   // 2026-05-21: which BP is Cory's current next-action target? Used to
   // render a NEXT chip + accent border + pin to top of its domain sort.
+  // source_id from engine_task entries is composite "<capId>:<taskKey>"
+  // (e.g. "bc4bc683-...:build_backend"); we want only the cap UUID prefix.
   const nextBpId = useMemo(() => {
-    const na = unifiedState?.next_action;
-    return na?.source_id || null;
+    const raw = unifiedState?.next_action?.source_id || null;
+    if (!raw) return null;
+    const colonIdx = raw.indexOf(':');
+    return colonIdx > 0 ? raw.slice(0, colonIdx) : raw;
   }, [unifiedState?.next_action]);
   const focusDomainKey = (workspaceMemory.lastBpDomain as DomainKey | undefined) || null;
 
