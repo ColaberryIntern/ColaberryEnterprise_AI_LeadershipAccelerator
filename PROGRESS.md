@@ -3442,3 +3442,13 @@ The whole point of the operator's directive ("do real operational verifications"
 |---|---|
 | `backend/src/services/requirementsGenerationService.ts` | `getOpenAI()` sets `timeout: 240000, maxRetries: 1` so generation calls can't hang indefinitely (2026-05-21) |
 | `frontend/src/pages/project/RequirementsBuilder.tsx` | Generation poll budget 10→15 min; Workflow chooser estimate ~3→~5 min (2026-05-21) |
+
+- [x] Documented all 3 build paths end-to-end with timing (same idea)
+  - Date: 2026-05-21
+  - What changed: Drove each tier on production with the same idea, timing every step + screenshots. Results — **Workflow 3.07 min → 8 caps / 201 reqs** (gen 1m46s + build-out 35s); **Full Project 13.05 min → 8 caps / 42 reqs** (Architect ~11 min, mostly chapter_build; retrieve+cluster ~1.5 min); **Fully Autonomous 20.77 min → 18 caps / 331 reqs** (Architect ~18 min). The wait in both Architect paths is almost entirely chapter-writing; idea/questions/retrieval are seconds-to-~2-min.
+  - Verification: report `docs/BUILD_PATH_TIMING_REPORT.html`; raw `docs/screenshots/2026-05-21-path-timing/timings.json`. 3/3 paths PASS (all build out > 0 capabilities).
+  - Notes: Autonomous's depth setting clearly lands — ~8× the requirements (331 vs 42) and 2× the capabilities of Full for ~1.6× the time.
+
+| File | Change |
+|---|---|
+| `scripts/documentBuildPaths.js` + `scripts/buildPathTimingReport.js` + `docs/BUILD_PATH_TIMING_REPORT.html` | New: timed E2E driver for all 3 tiers (per-step + Architect phase timing, screenshots) + comparison report (2026-05-21) |

@@ -1,0 +1,220 @@
+{
+  "generated_at": "2026-05-21T18:13:56.403Z",
+  "idea": "AI handles all the annoying life stuff. Emails, texts, bills, appointments, subscriptions, reminders all flow into one AI workflow. The AI detects bills due, finds scheduling conflicts, reminds about renewals, summarizes important emails, creates calendar events, drafts replies, organizes receipts, and reminds about birthdays and events.",
+  "results": [
+    {
+      "path": "workflow",
+      "name": "Workflow",
+      "email": "ali+demo-run1@colaberry.com",
+      "doc_words": 2189,
+      "caps": 8,
+      "reqs": 201,
+      "stage": "has_requirements",
+      "ok": true,
+      "totalMs": 184461,
+      "totalMin": 3.07,
+      "steps": [
+        {
+          "label": "load_chooser",
+          "durationMs": 4864,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "choose_idea",
+          "durationMs": 107,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "generate_questions",
+          "durationMs": 34103,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "answer_questions",
+          "durationMs": 2664,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "document_generation",
+          "durationMs": 106334,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "save_and_build_out",
+          "durationMs": 35393,
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "path": "full",
+      "name": "Full Project",
+      "email": "ali+demo-run2@colaberry.com",
+      "phases": [
+        {
+          "phase": "feature_discovery",
+          "atMs": 296,
+          "progress": 20
+        },
+        {
+          "phase": "outline_generation",
+          "atMs": 19274,
+          "progress": 32
+        },
+        {
+          "phase": "outline_approval",
+          "atMs": 34502,
+          "progress": 38
+        },
+        {
+          "phase": "chapter_build",
+          "atMs": 49942,
+          "progress": 40
+        },
+        {
+          "phase": "complete",
+          "atMs": 647136,
+          "progress": 100
+        }
+      ],
+      "caps": 8,
+      "reqs": 42,
+      "stage": "has_requirements",
+      "ok": true,
+      "totalMs": 782839,
+      "totalMin": 13.05,
+      "steps": [
+        {
+          "label": "load_chooser",
+          "durationMs": 1517,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "choose_idea",
+          "durationMs": 129,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "generate_questions",
+          "durationMs": 27086,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "answer_questions",
+          "durationMs": 2604,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "connect_repo_start",
+          "durationMs": 877,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "architect_build",
+          "durationMs": 647136,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "retrieve_and_build_out",
+          "durationMs": 93345,
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "path": "autonomous",
+      "name": "Fully Autonomous",
+      "email": "ali+demo-run3@colaberry.com",
+      "phases": [
+        {
+          "phase": "feature_discovery",
+          "atMs": 464,
+          "progress": 100
+        },
+        {
+          "phase": "outline_generation",
+          "atMs": 23239,
+          "progress": 100
+        },
+        {
+          "phase": "outline_approval",
+          "atMs": 38509,
+          "progress": 100
+        },
+        {
+          "phase": "chapter_build",
+          "atMs": 53963,
+          "progress": 40
+        },
+        {
+          "phase": "complete",
+          "atMs": 1098001,
+          "progress": 100
+        }
+      ],
+      "caps": 18,
+      "reqs": 331,
+      "stage": "has_requirements",
+      "ok": true,
+      "totalMs": 1246437,
+      "totalMin": 20.77,
+      "steps": [
+        {
+          "label": "load_chooser",
+          "durationMs": 898,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "choose_idea",
+          "durationMs": 89,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "generate_questions",
+          "durationMs": 24622,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "answer_questions",
+          "durationMs": 2683,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "connect_repo_start",
+          "durationMs": 721,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "architect_build",
+          "durationMs": 1098002,
+          "ok": true,
+          "error": null
+        },
+        {
+          "label": "retrieve_and_build_out",
+          "durationMs": 109195,
+          "ok": true,
+          "error": null
+        }
+      ]
+    }
+  ]
+}

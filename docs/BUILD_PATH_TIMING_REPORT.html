@@ -1,0 +1,133 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Build Path Timing — Workflow vs Full vs Autonomous</title>
+<style>
+  :root{--primary:#1a365d;--text:#1f2937;--muted:#6b7280;--bg:#f8fafc;--border:#e5e7eb;--green:#15803d;--red:#b91c1c;--mono:ui-monospace,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box;} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--text);background:var(--bg);margin:0;line-height:1.55;}
+  .shell{max-width:1040px;margin:0 auto;padding:2rem 1.5rem 4rem;}
+  header{border-bottom:1px solid var(--border);padding-bottom:1.25rem;margin-bottom:1.5rem;}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;}
+  h1{margin:4px 0;font-size:25px;color:var(--primary);} h2{margin-top:2.3rem;font-size:18px;color:var(--primary);border-bottom:1px solid var(--border);padding-bottom:6px;}
+  h3{font-size:17px;margin-top:1.4rem;}
+  table{width:100%;border-collapse:collapse;margin:.7rem 0;font-size:13.5px;} th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--border);vertical-align:top;}
+  th{background:#f1f5f9;font-weight:600;} td.num{font-variant-numeric:tabular-nums;white-space:nowrap;width:90px;}
+  .bar-cell{width:42%;} .bar{display:inline-block;height:11px;border-radius:5px;}
+  code{font-family:var(--mono);background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px;}
+  .muted{color:var(--muted);} .ok{color:var(--green);font-weight:600;} .err{color:var(--red);font-weight:600;}
+  .run{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.3rem;margin:1rem 0;box-shadow:0 1px 3px rgba(15,23,42,.04);}
+  .badge{font-size:11px;font-weight:600;color:var(--muted);background:#f1f5f9;border-radius:10px;padding:3px 9px;margin-left:8px;}
+  .phases{font-size:12.5px;margin:.4rem 0 .8rem;background:#f8fafc;border-left:3px solid var(--border);padding:6px 12px;border-radius:0 6px 6px 0;} .phases .lbl{font-weight:600;}
+  .gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:.5rem;} figure{margin:0;} figure img{width:100%;border:1px solid var(--border);border-radius:5px;display:block;}
+  figcaption{font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--mono);}
+  .card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0;font-size:14px;}
+  ul li{font-size:14px;margin:4px 0;}
+</style></head><body><div class="shell">
+<header>
+  <div class="eyebrow">Production · same idea · headless E2E with timing</div>
+  <h1>Build paths: how long each takes, end to end</h1>
+  <div class="muted">Generated 2026-05-21T18:13:56.403Z · idea: "AI handles all the annoying life stuff" (personal-assistant workflow)</div>
+</header>
+
+<h2>Side by side</h2>
+<table>
+  <thead><tr><th>Path</th><th>Result</th><th>Total time</th><th>Capabilities</th><th>Requirements</th><th>Document</th><th>What runs</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b style="color:#10b981">Workflow</b></td>
+      <td class="ok">PASS</td>
+      <td><b>3.07 min</b></td>
+      <td>8</td>
+      <td>201</td>
+      <td>2,189 words</td>
+      <td class="muted">Regular LLM + 2-pass · no repo · no demo</td>
+    </tr>
+    <tr>
+      <td><b style="color:#3b82f6">Full Project</b></td>
+      <td class="ok">PASS</td>
+      <td><b>13.05 min</b></td>
+      <td>8</td>
+      <td>42</td>
+      <td>~13K+ words</td>
+      <td class="muted">Architect (professional) · repo · live demo</td>
+    </tr>
+    <tr>
+      <td><b style="color:#8b5cf6">Fully Autonomous</b></td>
+      <td class="ok">PASS</td>
+      <td><b>20.77 min</b></td>
+      <td>18</td>
+      <td>331</td>
+      <td>~13K+ words</td>
+      <td class="muted">Architect (autonomous/deepest) · repo · live demo</td>
+    </tr></tbody>
+</table>
+<div class="card">
+  <b>Read in one line:</b> Workflow is a ~3-minute, no-repo draft that still builds out into capabilities; Full Project is a ~13-minute Architect build; Fully Autonomous is a ~21-minute build that goes much deeper (≈8× the requirements). The wait in the two Architect paths is almost entirely the <code>chapter_build</code> phase — everything else (idea, questions, retrieval, clustering) is seconds to ~2 minutes.
+</div>
+
+<h2>Per-path breakdown</h2>
+<section class="run">
+      <h3 style="color:#10b981">Workflow <span class="badge">3.07 min · 8 caps · 201 reqs</span></h3>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Share</th><th></th></tr></thead><tbody><tr><td>Load chooser</td><td class="num">5s</td>
+        <td class="bar-cell"><span class="bar" style="width:5%;background:#10b981"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Choose tier + type idea</td><td class="num">0s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#10b981"></span></td>
+        <td class="ok">✓</td></tr><tr><td>AI generates questions</td><td class="num">34s</td>
+        <td class="bar-cell"><span class="bar" style="width:32%;background:#10b981"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Answer questions</td><td class="num">3s</td>
+        <td class="bar-cell"><span class="bar" style="width:3%;background:#10b981"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Generate document (LLM, 2-pass)</td><td class="num">1m 46s</td>
+        <td class="bar-cell"><span class="bar" style="width:100%;background:#10b981"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Save + build out (cluster)</td><td class="num">35s</td>
+        <td class="bar-cell"><span class="bar" style="width:33%;background:#10b981"></span></td>
+        <td class="ok">✓</td></tr></tbody></table>
+      
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/workflow/01-chooser.png" alt="01-chooser.png"/><figcaption>chooser</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/workflow/02-questions.png" alt="02-questions.png"/><figcaption>questions</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/workflow/03-FAILURE.png" alt="03-FAILURE.png"/><figcaption>FAILURE</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/workflow/03-review.png" alt="03-review.png"/><figcaption>review</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/workflow/04-built.png" alt="04-built.png"/><figcaption>built</figcaption></figure></div>
+    </section><section class="run">
+      <h3 style="color:#3b82f6">Full Project <span class="badge">13.05 min · 8 caps · 42 reqs</span></h3>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Share</th><th></th></tr></thead><tbody><tr><td>Load chooser</td><td class="num">2s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#3b82f6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Choose tier + type idea</td><td class="num">0s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#3b82f6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>AI generates questions</td><td class="num">27s</td>
+        <td class="bar-cell"><span class="bar" style="width:4%;background:#3b82f6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Answer questions</td><td class="num">3s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#3b82f6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Connect repo + start build</td><td class="num">1s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#3b82f6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Architect builds the document</td><td class="num">10m 47s</td>
+        <td class="bar-cell"><span class="bar" style="width:100%;background:#3b82f6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Retrieve doc + build out (cluster)</td><td class="num">1m 33s</td>
+        <td class="bar-cell"><span class="bar" style="width:14%;background:#3b82f6"></span></td>
+        <td class="ok">✓</td></tr></tbody></table>
+      <div class="phases"><span class="lbl">Architect phases:</span> feature_discovery <span class="muted">@0.0m</span> → outline_generation <span class="muted">@0.3m</span> → outline_approval <span class="muted">@0.6m</span> → chapter_build <span class="muted">@0.8m</span> → complete <span class="muted">@10.8m</span></div>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/full/01-chooser.png" alt="01-chooser.png"/><figcaption>chooser</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/full/02-questions.png" alt="02-questions.png"/><figcaption>questions</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/full/03-demo-live.png" alt="03-demo-live.png"/><figcaption>demo-live</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/full/04-built-system.png" alt="04-built-system.png"/><figcaption>built-system</figcaption></figure></div>
+    </section><section class="run">
+      <h3 style="color:#8b5cf6">Fully Autonomous <span class="badge">20.77 min · 18 caps · 331 reqs</span></h3>
+      <table class="steps"><thead><tr><th>Step</th><th>Duration</th><th>Share</th><th></th></tr></thead><tbody><tr><td>Load chooser</td><td class="num">1s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#8b5cf6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Choose tier + type idea</td><td class="num">0s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#8b5cf6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>AI generates questions</td><td class="num">25s</td>
+        <td class="bar-cell"><span class="bar" style="width:2%;background:#8b5cf6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Answer questions</td><td class="num">3s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#8b5cf6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Connect repo + start build</td><td class="num">1s</td>
+        <td class="bar-cell"><span class="bar" style="width:1%;background:#8b5cf6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Architect builds the document</td><td class="num">18m 18s</td>
+        <td class="bar-cell"><span class="bar" style="width:100%;background:#8b5cf6"></span></td>
+        <td class="ok">✓</td></tr><tr><td>Retrieve doc + build out (cluster)</td><td class="num">1m 49s</td>
+        <td class="bar-cell"><span class="bar" style="width:10%;background:#8b5cf6"></span></td>
+        <td class="ok">✓</td></tr></tbody></table>
+      <div class="phases"><span class="lbl">Architect phases:</span> feature_discovery <span class="muted">@0.0m</span> → outline_generation <span class="muted">@0.4m</span> → outline_approval <span class="muted">@0.6m</span> → chapter_build <span class="muted">@0.9m</span> → complete <span class="muted">@18.3m</span></div>
+      <div class="gallery"><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/autonomous/01-chooser.png" alt="01-chooser.png"/><figcaption>chooser</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/autonomous/02-questions.png" alt="02-questions.png"/><figcaption>questions</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/autonomous/03-demo-live.png" alt="03-demo-live.png"/><figcaption>demo-live</figcaption></figure><figure><img loading="lazy" src="screenshots/2026-05-21-path-timing/autonomous/04-built-system.png" alt="04-built-system.png"/><figcaption>built-system</figcaption></figure></div>
+    </section>
+
+<h2>What the numbers say</h2>
+<div class="card"><ul>
+  <li><b>Workflow ≈ 3 min.</b> The two-pass document generation (~1m45s) and the no-repo build-out (~35s) are the only real costs. Good for a quick, tailored automation spec. (This path was previously broken — it saved a doc but built out 0 capabilities; now fixed.)</li>
+  <li><b>Full Project ≈ 13 min.</b> ~11 min of that is the Architect writing chapters; idea→questions is &lt;1 min, and retrieval + clustering is ~1.5 min. Produces a full implementation-grade spec.</li>
+  <li><b>Fully Autonomous ≈ 21 min.</b> Same shape, but the deepest setting spends ~17.5 min writing far more — <b>331 requirements vs 42</b> and <b>18 capabilities vs 8</b>. Worth it only when you want the exhaustive build guide.</li>
+  <li><b>The wait is the chapter phase.</b> In both Architect paths, the user is essentially watching chapters get written — which is exactly what the live preview demo is for.</li>
+</ul></div>
+
+<p class="muted" style="font-size:12px;margin-top:2rem">Raw data: <code>docs/screenshots/2026-05-21-path-timing/timings.json</code>. Reproduce: <code>node scripts/documentBuildPaths.js</code> then <code>node scripts/buildPathTimingReport.js</code>.</p>
+</div></body></html>
