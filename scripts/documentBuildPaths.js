@@ -123,15 +123,24 @@ async function runPath(browser, key) {
         throw new Error('architect build timed out');
       });
       result.phases = phases;
-      // Build-out: poll caps until > 0 (demo poll + server poller drive it).
+      // Build-out: clustering persists capabilities in BATCHES, so the count
+      // climbs over time. Wait until it STABILIZES (unchanged for ~30s) rather
+      // than recording the first non-zero batch — otherwise we capture a
+      // mid-clustering snapshot that under-reports caps/reqs.
       await timed('retrieve_and_build_out', async () => {
-        const deadline = now() + 10 * 60 * 1000;
+        const deadline = now() + 12 * 60 * 1000;
+        let prevCaps = -1, stable = 0;
         while (now() < deadline) {
           await apiGet(jwt, '/api/portal/project/architect-status'); // nudge retrieval
           const st = await apiGet(jwt, '/api/portal/onboarding/state');
-          if (st.capability_count > 0) { result.caps = st.capability_count; result.reqs = st.requirements_count; return; }
+          const caps = st.capability_count || 0;
+          stable = (caps > 0 && caps === prevCaps) ? stable + 1 : 0;
+          prevCaps = caps;
+          result.caps = caps; result.reqs = st.requirements_count;
+          if (caps > 0 && stable >= 2) return; // count held steady across 2 checks
           await new Promise(r => setTimeout(r, 15000));
         }
+        if ((result.caps || 0) > 0) return; // non-zero but still settling at deadline
         throw new Error('build-out (clustering) did not complete');
       });
       // Final built-out surface

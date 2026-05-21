@@ -50,7 +50,8 @@
           "ok": true,
           "error": null
         }
-      ]
+      ],
+      "final_measured": true
     },
     {
       "path": "full",
@@ -83,8 +84,8 @@
           "progress": 100
         }
       ],
-      "caps": 8,
-      "reqs": 42,
+      "caps": 41,
+      "reqs": 395,
       "stage": "has_requirements",
       "ok": true,
       "totalMs": 782839,
@@ -132,7 +133,9 @@
           "ok": true,
           "error": null
         }
-      ]
+      ],
+      "doc_words": 14981,
+      "final_measured": true
     },
     {
       "path": "autonomous",
@@ -165,7 +168,7 @@
           "progress": 100
         }
       ],
-      "caps": 18,
+      "caps": 54,
       "reqs": 331,
       "stage": "has_requirements",
       "ok": true,
@@ -214,7 +217,9 @@
           "ok": true,
           "error": null
         }
-      ]
+      ],
+      "doc_words": 14896,
+      "final_measured": true
     }
   ]
 }

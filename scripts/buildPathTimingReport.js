@@ -39,7 +39,7 @@ function main() {
       <td><b>${r.totalMin} min</b></td>
       <td>${r.caps ?? '—'}</td>
       <td>${r.reqs ?? '—'}</td>
-      <td>${r.doc_words ? r.doc_words.toLocaleString() + ' words' : (r.path === 'workflow' ? '~2.5K words' : '~13K+ words')}</td>
+      <td>${r.doc_words ? r.doc_words.toLocaleString() + ' words' : '—'}</td>
       <td class="muted">${r.path === 'workflow' ? 'Regular LLM + 2-pass · no repo · no demo' : (r.path === 'autonomous' ? 'Architect (autonomous/deepest) · repo · live demo' : 'Architect (professional) · repo · live demo')}</td>
     </tr>`).join('');
 
@@ -99,7 +99,7 @@ function main() {
   <tbody>${summaryRows}</tbody>
 </table>
 <div class="card">
-  <b>Read in one line:</b> Workflow is a ~3-minute, no-repo draft that still builds out into capabilities; Full Project is a ~13-minute Architect build; Fully Autonomous is a ~21-minute build that goes much deeper (≈8× the requirements). The wait in the two Architect paths is almost entirely the <code>chapter_build</code> phase — everything else (idea, questions, retrieval, clustering) is seconds to ~2 minutes.
+  <b>Read in one line:</b> Workflow is a ~3-minute, no-repo draft (~2.2K-word doc → 8 capabilities); Full Project and Fully Autonomous both produce a ~15K-word Architect document (≈7× Workflow), but take ~13 and ~21 minutes. The wait in the two Architect paths is almost entirely the <code>chapter_build</code> phase — idea, questions, retrieval, and clustering are seconds to ~2 minutes.
 </div>
 
 <h2>Per-path breakdown</h2>
@@ -107,10 +107,11 @@ ${detail}
 
 <h2>What the numbers say</h2>
 <div class="card"><ul>
-  <li><b>Workflow ≈ 3 min.</b> The two-pass document generation (~1m45s) and the no-repo build-out (~35s) are the only real costs. Good for a quick, tailored automation spec. (This path was previously broken — it saved a doc but built out 0 capabilities; now fixed.)</li>
-  <li><b>Full Project ≈ 13 min.</b> ~11 min of that is the Architect writing chapters; idea→questions is &lt;1 min, and retrieval + clustering is ~1.5 min. Produces a full implementation-grade spec.</li>
-  <li><b>Fully Autonomous ≈ 21 min.</b> Same shape, but the deepest setting spends ~17.5 min writing far more — <b>331 requirements vs 42</b> and <b>18 capabilities vs 8</b>. Worth it only when you want the exhaustive build guide.</li>
-  <li><b>The wait is the chapter phase.</b> In both Architect paths, the user is essentially watching chapters get written — which is exactly what the live preview demo is for.</li>
+  <li><b>Workflow ≈ 3 min.</b> Two-pass generation (~1m45s) + no-repo build-out (~35s). A 2,189-word doc → 8 capabilities / 201 requirements. Good for a quick, tailored automation spec. (Previously broken — saved a doc but built out 0 capabilities; now fixed.)</li>
+  <li><b>Full Project ≈ 13 min.</b> ~11 min is the Architect writing chapters; idea→questions &lt;1 min; retrieval + clustering ~1.5 min. <b>14,981-word</b> doc → <b>41 capabilities / 395 requirements</b> — far more than Workflow, as expected.</li>
+  <li><b>Fully Autonomous ≈ 21 min.</b> ~18 min of chapter writing → a <b>14,896-word</b> doc → <b>54 capabilities / 331 requirements</b>.</li>
+  <li><b>The wait is the chapter phase.</b> In both Architect paths the user is essentially watching chapters get written — which is exactly what the live preview demo is for.</li>
+  <li><b>Honest caveat on "Autonomous":</b> right now it produces about the <i>same</i> document size as Full (~15K words) — it yields more capabilities (54 vs 41) but not a longer doc, because "autonomous" is currently just a depth <i>instruction</i> to the same Architect blueprint. A genuinely longer/deeper autonomous doc needs a distinct blueprint setting on the Architect (advisor) side.</li>
 </ul></div>
 
 <p class="muted" style="font-size:12px;margin-top:2rem">Raw data: <code>docs/screenshots/2026-05-21-path-timing/timings.json</code>. Reproduce: <code>node scripts/documentBuildPaths.js</code> then <code>node scripts/buildPathTimingReport.js</code>.</p>

@@ -3445,9 +3445,9 @@ The whole point of the operator's directive ("do real operational verifications"
 
 - [x] Documented all 3 build paths end-to-end with timing (same idea)
   - Date: 2026-05-21
-  - What changed: Drove each tier on production with the same idea, timing every step + screenshots. Results — **Workflow 3.07 min → 8 caps / 201 reqs** (gen 1m46s + build-out 35s); **Full Project 13.05 min → 8 caps / 42 reqs** (Architect ~11 min, mostly chapter_build; retrieve+cluster ~1.5 min); **Fully Autonomous 20.77 min → 18 caps / 331 reqs** (Architect ~18 min). The wait in both Architect paths is almost entirely chapter-writing; idea/questions/retrieval are seconds-to-~2-min.
-  - Verification: report `docs/BUILD_PATH_TIMING_REPORT.html`; raw `docs/screenshots/2026-05-21-path-timing/timings.json`. 3/3 paths PASS (all build out > 0 capabilities).
-  - Notes: Autonomous's depth setting clearly lands — ~8× the requirements (331 vs 42) and 2× the capabilities of Full for ~1.6× the time.
+  - What changed: Drove each tier on production with the same idea, timing every step + screenshots. **Final (DB-measured) results** — **Workflow 3.07 min → 2,189-word doc / 8 caps / 201 reqs**; **Full Project 13.05 min → 14,981-word doc / 41 caps / 395 reqs** (Architect ~11 min, mostly chapter_build); **Fully Autonomous 20.77 min → 14,896-word doc / 54 caps / 331 reqs** (Architect ~18 min). The wait in both Architect paths is almost entirely chapter-writing; idea/questions/retrieval are seconds-to-~2-min.
+  - Verification: report `docs/BUILD_PATH_TIMING_REPORT.html`; raw `docs/screenshots/2026-05-21-path-timing/timings.json`. 3/3 paths PASS.
+  - Notes: Two corrections after first publish — (1) the driver recorded caps/reqs at the FIRST clustering batch (caps>0), under-reporting them (Full showed 42 reqs; real is 395). Fixed to wait for the count to stabilize, and the report/data corrected to DB-measured finals. (2) The Workflow gallery had a stale `FAILURE.png` from the pre-fix timed-out run (showing the old "timed out after 10 minutes" error) — removed. Honest finding: "Autonomous" produces ~the same document size as Full (~15K words) — more capabilities (54 vs 41) but not a longer doc, because it's a depth *instruction* to the same Architect blueprint; a genuinely longer autonomous doc needs a distinct advisor-side blueprint.
 
 | File | Change |
 |---|---|
