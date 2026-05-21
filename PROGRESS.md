@@ -3468,6 +3468,7 @@ The whole point of the operator's directive ("do real operational verifications"
 |---|---|
 | `backend/src/intelligence/systemStateEngine/scoring/maturityScorer.ts` | Strict `hasFrontend` (route/page-BP only, not linked_frontend_components) + strict `hasAgents` (confirmed map row / kind=agent, not linked_agents); doc-block + gap-message text updated (2026-05-21) |
 | `backend/src/intelligence/systemStateEngine/__tests__/engine.test.ts` | Existing L3/L4 fixtures updated to use `frontend_route` + `_confirmed_agent_count` (matching strict rule); two new regression tests for keyword-attribution rejection (2026-05-21) |
+| `backend/src/routes/projectRoutes.ts` | Follow-up: `computeMaturityInline()` now passes `_confirmed_agent_count` + `kind` into `scoreMaturity` so the strict `hasAgents` rule sees real confirmed maps (without this Requirements Management drops L4→L3 in the UI). Verified on live data: 4 caps dropped L3→L2 as predicted, Requirements Management stays L4 (route + 4 confirmed maps). (2026-05-21) |
 
 - [x] Fix: requirements-builder draft scoped to enrollment (cross-account resume)
   - Date: 2026-05-21

@@ -2140,11 +2140,16 @@ function computeMaturityInline(cap: any): { level: number; label: string } | nul
       id: cap.id,
       name: cap.name,
       source: cap.source,
-      kind: cap.is_page_bp ? 'page' : 'service',
+      kind: cap.kind || (cap.is_page_bp ? 'page' : 'service'),
       is_page_bp: !!cap.is_page_bp,
       linked_backend_services: cap.linked_backend_services || [],
       linked_frontend_components: cap.linked_frontend_components || [],
       linked_agents: cap.linked_agents || [],
+      // Strict-rule signal — must pass through so hasAgents in the maturity
+      // scorer can distinguish confirmed agent maps from keyword noise.
+      // Without this Requirements Management (4 confirmed maps) would drop
+      // from L4 to L3 in the UI. (2026-05-21)
+      _confirmed_agent_count: cap._confirmed_agent_count || 0,
       ui_element_map: cap.ui_element_map,
       total_requirements: cap.total_requirements || 0,
       matched_requirements: cap.matched_requirements || 0,
