@@ -84,7 +84,8 @@ Project.init(
     enrollment_id: {
       type: DataTypes.UUID,
       allowNull: false,
-      unique: true,
+      // Multi-project: an enrollment can own several projects. The "current"
+      // one is enrollments.active_project_id. (Was unique: true.)
       references: { model: 'enrollments', key: 'id' },
     },
     program_id: {
@@ -206,7 +207,7 @@ Project.init(
     timestamps: true,
     underscored: true,
     indexes: [
-      { fields: ['enrollment_id'], unique: true },
+      { fields: ['enrollment_id'] }, // non-unique: multiple projects per enrollment
       { fields: ['project_stage'] },
     ],
   }

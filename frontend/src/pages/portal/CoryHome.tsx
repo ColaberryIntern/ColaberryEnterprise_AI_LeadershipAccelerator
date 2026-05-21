@@ -24,6 +24,7 @@ import {
 } from '../../hooks/useUnifiedProjectState';
 import { useOnboardingState } from '../../hooks/useOnboardingState';
 import RequirementsBuilder from '../project/RequirementsBuilder';
+import ProjectSwitcher from '../../components/project/ProjectSwitcher';
 import { useWorkspaceMemory, type DrawerId } from '../../hooks/useWorkspaceMemory';
 import { useOperationalMomentum } from '../../hooks/useOperationalMomentum';
 import { useActivePath } from '../../hooks/useActivePath';
@@ -276,6 +277,7 @@ const CoryHome: React.FC = () => {
     return (
       <div>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 1rem' }}>
+          <div className="d-flex justify-content-end mb-2"><ProjectSwitcher /></div>
           <div style={{
             fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
             color: 'var(--color-text-light)', fontWeight: 600,
@@ -333,6 +335,7 @@ const CoryHome: React.FC = () => {
     <div style={{ maxWidth: 1080, margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
       {/* Greeting */}
       <header style={{ marginBottom: '1.5rem' }}>
+        <div className="d-flex justify-content-end mb-2"><ProjectSwitcher /></div>
         <div style={{ fontSize: 22, fontWeight: 600, color: 'var(--color-primary)', letterSpacing: '-0.01em' }}>
           {greetingFor(new Date())}, <span style={{ color: 'var(--color-primary-light)' }}>{greetingName}</span>.
         </div>

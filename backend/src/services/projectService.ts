@@ -11,50 +11,95 @@ const ALLOWED_TRANSITIONS: Record<ProjectStage, ProjectStage | null> = {
   complete: null,
 };
 
-/**
- * Create a project for an enrollment. Uses findOrCreate to prevent duplicates.
- * Pulls organization_name and industry from UserCurriculumProfile if available.
- */
-export async function createProjectForEnrollment(enrollmentId: string): Promise<Project> {
+async function loadEnrollmentForProject(enrollmentId: string): Promise<Enrollment> {
   const enrollment = await Enrollment.findByPk(enrollmentId, {
     include: [
       { model: Cohort, as: 'cohort' },
       { model: UserCurriculumProfile, as: 'curriculumProfile' },
     ],
   });
+  if (!enrollment) throw new Error(`Enrollment not found: ${enrollmentId}`);
+  return enrollment;
+}
 
-  if (!enrollment) {
-    throw new Error(`Enrollment not found: ${enrollmentId}`);
-  }
-
+/** Create a fresh project row + mark it the enrollment's active project. */
+async function buildAndActivateProject(enrollment: Enrollment): Promise<Project> {
   const cohort = (enrollment as any).cohort as Cohort | null;
   if (!cohort?.program_id) {
-    throw new Error(`Enrollment ${enrollmentId} has no associated program via cohort`);
+    throw new Error(`Enrollment ${enrollment.id} has no associated program via cohort`);
   }
-
   const profile = (enrollment as any).curriculumProfile as UserCurriculumProfile | null;
-
-  const [project] = await Project.findOrCreate({
-    where: { enrollment_id: enrollmentId },
-    defaults: {
-      enrollment_id: enrollmentId,
-      program_id: cohort.program_id,
-      organization_name: profile?.company_name || enrollment.company || undefined,
-      industry: profile?.industry || undefined,
-      project_stage: 'discovery',
-      project_variables: {},
-      setup_status: { requirements_loaded: false, claude_md_loaded: false, github_connected: false, activated: false },
-    },
-  });
-
+  const project = await Project.create({
+    enrollment_id: enrollment.id,
+    program_id: cohort.program_id,
+    organization_name: profile?.company_name || enrollment.company || undefined,
+    industry: profile?.industry || undefined,
+    project_stage: 'discovery',
+    project_variables: {},
+    setup_status: { requirements_loaded: false, claude_md_loaded: false, github_connected: false, activated: false },
+  } as any);
+  (enrollment as any).active_project_id = project.id;
+  await enrollment.save();
   return project;
 }
 
 /**
- * Get the project for an enrollment, or null if none exists.
+ * Ensure the enrollment has a CURRENT (active) project to work on, creating one
+ * if none exists. Returns the active project. Used by the build flows
+ * (generate / architect-build / setup) so they all operate on the same project.
+ * Multi-project: to start a NEW project use createNewProjectForEnrollment.
  */
+export async function createProjectForEnrollment(enrollmentId: string): Promise<Project> {
+  const enrollment = await loadEnrollmentForProject(enrollmentId);
+  const activeId = (enrollment as any).active_project_id;
+  if (activeId) {
+    const active = await Project.findByPk(activeId);
+    if (active) return active;
+  }
+  // Legacy accounts created before active_project_id: adopt their existing project.
+  const existing = await Project.findOne({ where: { enrollment_id: enrollmentId }, order: [['created_at', 'DESC']] });
+  if (existing) {
+    (enrollment as any).active_project_id = existing.id;
+    await enrollment.save();
+    return existing;
+  }
+  return buildAndActivateProject(enrollment);
+}
+
+/** Always create a NEW project and make it active (the "+ New project" action). */
+export async function createNewProjectForEnrollment(enrollmentId: string): Promise<Project> {
+  const enrollment = await loadEnrollmentForProject(enrollmentId);
+  return buildAndActivateProject(enrollment);
+}
+
+/** The enrollment's CURRENT (active) project, or null. */
 export async function getProjectByEnrollment(enrollmentId: string): Promise<Project | null> {
-  return Project.findOne({ where: { enrollment_id: enrollmentId } });
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) return null;
+  const activeId = (enrollment as any).active_project_id;
+  if (activeId) {
+    const active = await Project.findByPk(activeId);
+    if (active) return active;
+  }
+  // Fallback for legacy accounts without an active pointer set yet.
+  return Project.findOne({ where: { enrollment_id: enrollmentId }, order: [['created_at', 'DESC']] });
+}
+
+/** List all projects owned by an enrollment, newest first. */
+export async function listProjectsForEnrollment(enrollmentId: string): Promise<Project[]> {
+  return Project.findAll({ where: { enrollment_id: enrollmentId }, order: [['created_at', 'DESC']] });
+}
+
+/** Switch the active project (must belong to the enrollment). Returns it or null. */
+export async function setActiveProject(enrollmentId: string, projectId: string): Promise<Project | null> {
+  const project = await Project.findOne({ where: { id: projectId, enrollment_id: enrollmentId } });
+  if (!project) return null;
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (enrollment) {
+    (enrollment as any).active_project_id = projectId;
+    await enrollment.save();
+  }
+  return project;
 }
 
 /**

@@ -29,6 +29,7 @@ export interface EnrollmentAttributes {
   portal_token?: string;
   portal_token_expires_at?: Date;
   portal_enabled?: boolean;
+  active_project_id?: string | null;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -58,6 +59,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare portal_token: string;
   declare portal_token_expires_at: Date;
   declare portal_enabled: boolean;
+  declare active_project_id: string | null;
   declare created_at: Date;
 }
 
@@ -174,6 +176,11 @@ Enrollment.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    active_project_id: {
+      // Multi-project: which of this enrollment's projects is currently active.
+      type: DataTypes.UUID,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,

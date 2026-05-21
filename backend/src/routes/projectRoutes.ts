@@ -350,6 +350,75 @@ router.get('/api/portal/project', requireParticipant, async (req: Request, res: 
   }
 });
 
+// ─── Multi-project: list / create / switch ─────────────────────────────────
+
+/** GET /api/portal/projects — all projects for the enrollment, with summary + which is active. */
+router.get('/api/portal/projects', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { listProjectsForEnrollment } = await import('../services/projectService');
+    const { Enrollment, Capability, RequirementsMap } = await import('../models');
+    const [projects, enrollment] = await Promise.all([
+      listProjectsForEnrollment(enrollmentId),
+      Enrollment.findByPk(enrollmentId),
+    ]);
+    const activeId = (enrollment as any)?.active_project_id || (projects[0] && projects[0].id);
+    const summaries = await Promise.all(projects.map(async (p: any) => {
+      const [capCount, reqCount] = await Promise.all([
+        Capability.count({ where: { project_id: p.id, applicability_status: 'active' } }),
+        RequirementsMap.count({ where: { project_id: p.id } }),
+      ]);
+      const ss = p.setup_status || {};
+      const stage = !(p.requirements_document && String(p.requirements_document).trim()) && reqCount === 0
+        ? 'needs_requirements'
+        : (ss.activated ? 'built_out' : (ss.architect_slug && !ss.requirements_loaded ? 'building' : 'has_requirements'));
+      return {
+        id: p.id,
+        name: p.organization_name || 'Untitled project',
+        project_stage: p.project_stage,
+        stage,
+        capability_count: capCount,
+        requirements_count: reqCount,
+        is_active: p.id === activeId,
+        created_at: p.created_at,
+      };
+    }));
+    res.json({ projects: summaries, active_project_id: activeId });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /projects error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /api/portal/projects — create a NEW project and make it active. */
+router.post('/api/portal/projects', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { createNewProjectForEnrollment } = await import('../services/projectService');
+    const project = await createNewProjectForEnrollment(enrollmentId);
+    res.json({ id: project.id, project_stage: (project as any).project_stage });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /projects error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** PUT /api/portal/projects/active — switch the active project. */
+router.put('/api/portal/projects/active', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { project_id } = req.body;
+    if (!project_id) { res.status(400).json({ error: 'project_id is required' }); return; }
+    const { setActiveProject } = await import('../services/projectService');
+    const project = await setActiveProject(enrollmentId, project_id);
+    if (!project) { res.status(404).json({ error: 'Project not found for this enrollment' }); return; }
+    res.json({ id: project.id, active: true });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] PUT /projects/active error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /**
  * GET /api/portal/project/artifacts
  * Get all artifacts linked to the participant's project, grouped by category.

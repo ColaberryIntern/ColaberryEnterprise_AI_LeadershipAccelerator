@@ -650,7 +650,10 @@ AssignmentSubmission.belongsTo(AssignmentSubmission, { foreignKey: 'parent_versi
 AssignmentSubmission.hasMany(AssignmentSubmission, { foreignKey: 'parent_version_id', as: 'nextVersions' });
 
 // --- Project associations ---
+// Multi-project: an enrollment owns many projects. 'project' (hasOne) is kept
+// for legacy callers; 'projects' (hasMany) is the multi-project accessor.
 Enrollment.hasOne(Project, { foreignKey: 'enrollment_id', as: 'project' });
+Enrollment.hasMany(Project, { foreignKey: 'enrollment_id', as: 'projects' });
 Project.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 ProgramBlueprint.hasMany(Project, { foreignKey: 'program_id', as: 'projects' });
