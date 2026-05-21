@@ -3506,6 +3506,16 @@ The whole point of the operator's directive ("do real operational verifications"
 | `frontend/src/components/project/BPDomainSurface.tsx` | Mounts the toolbar; computes `cloudInputBps` (BPs passing text+layer but not keyword filter so the cloud doesn't collapse on click); hides empty domains; renders the "all filtered out" footer with Clear-all CTA. (2026-05-21) |
 | `frontend/src/components/project/BPDomainSurfaceRows.tsx` | `DomainRow` accepts optional `filterPredicate`; applies it after phantom filter (kept separate so the "no implementation across any layer" message only counts phantom hides); domain header gets a "M/N matching" pill when filters active. (2026-05-21) |
 
+- [x] Filter expand-all: when filter active, all matching domains open at once
+  - Date: 2026-05-21
+  - What changed: Default single-drill-down (one domain expanded at a time) made the new filter toolbar feel half-useful — filtering by `Layer=Frontend` only revealed frontend BPs in whichever single domain happened to be open. Now: no filter → single drill-down (unchanged); filter active → every domain whose post-filter count > 0 auto-expands so matches surface across all groups at once. Operator can still collapse individual domains mid-filter (header click toggles per-domain in filter mode); clearing the filter snaps back to single drill-down with the operator's last explicit expand restored (or first populated domain if they've collapsed everything). State split: `userExpanded` captures only explicit clicks; `effectiveExpanded` is derived per render (filter-aware union). Auto-expand-first-populated effect skips while filter is active to avoid fighting the override.
+  - Verification: frontend `npx tsc --noEmit` exit 0; CRA production build clean; deployed.
+  - Notes: Cory's priority accent + NEXT chip still render across the expanded stack. workspaceMemory.lastBpDomain still only writes on explicit clicks (no memory pollution from auto-expansion).
+
+| File | Change |
+|---|---|
+| `frontend/src/components/project/BPDomainSurface.tsx` | `expanded` → `userExpanded` (explicit-click state only). New `effectiveExpanded` memo derives render state: single-drill-down when no filter, expand-all-matching when filter active, with explicit-collapse overlay so mid-filter header clicks stick. Hoisted `useBPFilters()` above the auto-expand effect; auto-expand gated on `!hasAnyFilter`. Toggle handler branches on filter state: per-domain toggle when filtered, single-drill-down otherwise. (2026-05-21) |
+
 - [x] Fix: requirements-builder draft scoped to enrollment (cross-account resume)
   - Date: 2026-05-21
   - What changed: A draft saved on one account resumed on another (it carried a `buildType`, so the no-buildType guard missed it), dropping the user on a pre-filled idea screen and skipping the chooser. The `requirements_builder_state` localStorage key is now scoped to the signed-in enrollment (JWT `sub`), so a fresh account never inherits another account's draft.

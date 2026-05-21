@@ -47,7 +47,12 @@ const BPDomainSurface: React.FC = () => {
   const [processes, setProcesses] = useState<BPLike[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBp, setSelectedBp] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // userExpanded captures the operator's *explicit* expand/collapse state.
+  // Driven only by header clicks. When no filter is active, this is also
+  // what renders (single-drill-down). When a filter is active, it overlays
+  // the auto-expanded matching-domain set (see effectiveExpanded below).
+  // (2026-05-21)
+  const [userExpanded, setUserExpanded] = useState<Record<string, boolean>>({});
   const [showFullInventory, setShowFullInventory] = useState(false);
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [pulsedKey, setPulsedKey] = useState<DomainKey | null>(null);
@@ -184,7 +189,7 @@ const BPDomainSurface: React.FC = () => {
   // detail at a time.
   const navigateToDomain = useCallback((key: DomainKey) => {
     rememberDomain(key);
-    setExpanded({ [key]: true });
+    setUserExpanded({ [key]: true });
     setPulsedKey(key);
     // Let the expand paint, then scroll.
     requestAnimationFrame(() => {
@@ -197,13 +202,28 @@ const BPDomainSurface: React.FC = () => {
     }, 1700);
   }, [rememberDomain]);
 
+  // ─── BP filter toolbar wiring ─────────────────────────────────────
+  // Hoisted above the auto-expand effect so its `hasAnyFilter` reference
+  // is satisfied. Predicate is pushed down to DomainRow which applies
+  // it to bucket.processes before sort; empty domains hide.
+  const {
+    state: filterState,
+    setQuery, setLayer, toggleKeyword, clearAll,
+    hasAny: hasAnyFilter,
+    predicate: filterPredicate,
+  } = useBPFilters();
+
   // Auto-expand the first populated domain on first paint.
+  // Skip while filter is active — the filter-driven expand-all (see
+  // effectiveExpanded) is doing the heavy lifting and this would just
+  // fight it.
   useEffect(() => {
     if (autoExpanded) return;
     if (buckets.length === 0) return;
-    setExpanded(prev => ({ ...prev, [buckets[0].key]: true }));
+    if (hasAnyFilter) return;
+    setUserExpanded(prev => ({ ...prev, [buckets[0].key]: true }));
     setAutoExpanded(true);
-  }, [buckets, autoExpanded]);
+  }, [buckets, autoExpanded, hasAnyFilter]);
 
   // Persist the current leverage summary to workspace memory on leave so
   // Cory Home can surface one ambient line on the operator's next visit
@@ -231,17 +251,6 @@ const BPDomainSurface: React.FC = () => {
     const matched = buckets.reduce((s, b) => s + b.matchedRequirements, 0);
     return { total, matched, pct: total > 0 ? Math.round((matched / total) * 100) : 0 };
   }, [buckets]);
-
-  // ─── BP filter toolbar wiring ─────────────────────────────────────
-  // Text + layer + keyword filters compose AND-style. Predicate is
-  // pushed down to DomainRow which applies it to bucket.processes
-  // before sort; empty domains hide (with a footer count line).
-  const {
-    state: filterState,
-    setQuery, setLayer, toggleKeyword, clearAll,
-    hasAny: hasAnyFilter,
-    predicate: filterPredicate,
-  } = useBPFilters();
 
   // Cap pool the keyword cloud is mined from: BPs that pass text + layer
   // but NOT keyword filter. This way clicking a keyword narrows the rows
@@ -288,6 +297,40 @@ const BPDomainSurface: React.FC = () => {
     () => processes.filter(p => !(hidePhantoms && (p as any).is_phantom) && filterPredicate(p)).length,
     [processes, hidePhantoms, filterPredicate],
   );
+
+  // effectiveExpanded — what the render actually uses.
+  //   No filter        → userExpanded directly (single-drill-down). If
+  //                       userExpanded has no true keys (post-filter
+  //                       collapse-everything edge), fall back to the
+  //                       first populated bucket so the page is never
+  //                       all-collapsed.
+  //   Filter active    → union of every matching domain (matchedInDomain > 0)
+  //                       overlaid with userExpanded — operator can
+  //                       explicitly collapse one mid-filter and that
+  //                       sticks; everything else stays open so they
+  //                       can see matches across domains.
+  // 2026-05-21 (filter expand-all sprint).
+  const effectiveExpanded = useMemo(() => {
+    if (!hasAnyFilter) {
+      const hasAny = Object.values(userExpanded).some(Boolean);
+      if (hasAny) return userExpanded;
+      return buckets[0] ? { [buckets[0].key]: true } : {};
+    }
+    // Filter active — start with all domains carrying matches, then
+    // overlay explicit operator toggles (true keeps open, false
+    // collapses).
+    const out: Record<string, boolean> = {};
+    for (const b of buckets) {
+      const matched = b.processes.some(p =>
+        (!hidePhantoms || !(p as any).is_phantom) && filterPredicate(p)
+      );
+      if (matched) out[b.key] = true;
+    }
+    for (const [k, v] of Object.entries(userExpanded)) {
+      if (k in out || v === true) out[k] = v;
+    }
+    return out;
+  }, [hasAnyFilter, userExpanded, buckets, hidePhantoms, filterPredicate]);
 
   if (loading) {
     return (
@@ -517,20 +560,32 @@ const BPDomainSurface: React.FC = () => {
               key={b.key}
               bucket={b}
               momentum={momentum[b.key]}
-              isExpanded={!!expanded[b.key]}
+              isExpanded={!!effectiveExpanded[b.key]}
               isPulsing={pulsedKey === b.key}
               isCoryPriority={coryPriorityDomain === b.key}
               isDownstreamOfPriority={priorityDownstream.has(b.key)}
               registerRef={(el) => { rowRefs.current[b.key] = el; }}
               onToggle={() => {
-                // Single-drill-down: clicking opens this domain (collapsing
-                // all others) or closes it if already open. Keeps the page
-                // calm and prevents stacked drawers.
-                if (!expanded[b.key]) {
-                  rememberDomain(b.key);
-                  setExpanded({ [b.key]: true });
+                const currentlyOpen = !!effectiveExpanded[b.key];
+                if (hasAnyFilter) {
+                  // Filter active: per-domain toggle. Operator can
+                  // collapse one of the auto-expanded matches without
+                  // closing the others.
+                  if (currentlyOpen) {
+                    setUserExpanded(prev => ({ ...prev, [b.key]: false }));
+                  } else {
+                    rememberDomain(b.key);
+                    setUserExpanded(prev => ({ ...prev, [b.key]: true }));
+                  }
                 } else {
-                  setExpanded({});
+                  // No filter: single-drill-down. Clicking opens this
+                  // domain (collapsing all others) or closes it if open.
+                  if (!currentlyOpen) {
+                    rememberDomain(b.key);
+                    setUserExpanded({ [b.key]: true });
+                  } else {
+                    setUserExpanded({});
+                  }
                 }
               }}
               onNavigate={navigateToDomain}
