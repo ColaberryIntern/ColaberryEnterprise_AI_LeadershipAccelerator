@@ -142,6 +142,39 @@ async function executeGeneration(prompt: string): Promise<string> {
   return response.choices[0]?.message?.content || '';
 }
 
+/**
+ * Second pass: expand a thin first-pass document. A single completion
+ * self-limits to ~1,500 words regardless of the requested length, so the
+ * Workflow path's docs come out shallow. This re-runs the model with the
+ * first draft as input and instructions to deepen every section while
+ * preserving structure — a lightweight version of the Architect's
+ * chapter-by-chapter approach. Never returns a shorter document.
+ */
+async function executeExpansionPass(document: string, originalPrompt: string): Promise<string> {
+  const openai = getOpenAI();
+  const response = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You deepen technical requirements documents. Preserve the existing headings and their order exactly, but flesh out every section with concrete, implementation-ready detail: specific functional requirements, data fields and types, API endpoints, validation rules, edge cases, non-functional targets, and acceptance criteria. Never remove content. Return the full expanded markdown document only.',
+      },
+      {
+        role: 'user',
+        content:
+          `The requirements document below is too thin. Expand every section to full detail (target 5,000+ words total) while keeping the same headings and order.\n\n` +
+          `ORIGINAL REQUEST CONTEXT:\n${originalPrompt.slice(0, 2000)}\n\n` +
+          `DOCUMENT TO EXPAND:\n${document}`,
+      },
+    ],
+    temperature: 0.3,
+    max_tokens: 16000,
+  });
+  const expanded = response.choices[0]?.message?.content || '';
+  return expanded.length > document.length ? expanded : document;
+}
+
 // ─── Job Orchestration ──────────────────────────────────────────────────────
 
 /**
@@ -207,11 +240,27 @@ async function executeJob(jobId: string, enrollmentId: string): Promise<void> {
     // Mark as running
     await job.update({ status: 'running' });
 
-    // Execute AI generation
-    const document = await executeGeneration(job.prompt);
+    // Execute AI generation (pass 1)
+    let document = await executeGeneration(job.prompt);
 
     if (!document || document.length < 100) {
       throw new Error('Generated document is too short or empty');
+    }
+
+    // Pass 2 (expand): a single completion self-limits to ~1,500 words, so a
+    // thin first pass is deepened section-by-section to reach a useful length
+    // (the Workflow path). Skipped when pass 1 is already substantial.
+    const passOneWords = (document.match(/\S+/g) || []).length;
+    if (passOneWords < 4000) {
+      try {
+        const expanded = await executeExpansionPass(document, job.prompt);
+        if (expanded.length > document.length) {
+          console.log(`[RequirementsGen] Expansion pass: ${passOneWords} -> ${(expanded.match(/\S+/g) || []).length} words`);
+          document = expanded;
+        }
+      } catch (e: any) {
+        console.warn('[RequirementsGen] Expansion pass failed (using pass 1):', e.message);
+      }
     }
 
     // Ensure artifact definition exists

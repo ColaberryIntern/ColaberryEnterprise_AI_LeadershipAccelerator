@@ -469,8 +469,9 @@ router.post('/api/portal/project/refresh', requireParticipant, async (req: Reque
 // ─── Architect Build: start full requirements generation via advisor.colaberry.ai ────
 router.post('/api/portal/project/architect-build', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { idea, projectName, repoUrl, accessToken } = req.body;
+    const { idea, projectName, repoUrl, accessToken, mode } = req.body;
     if (!idea || !repoUrl) { res.status(400).json({ error: 'idea and repoUrl required' }); return; }
+    const buildMode: 'professional' | 'autonomous' = mode === 'autonomous' ? 'autonomous' : 'professional';
     // The AI build flow runs before any project record exists for this
     // enrollment. Create-or-fetch so the rest of the handler has a
     // project to attach build state to.
@@ -484,7 +485,7 @@ router.post('/api/portal/project/architect-build', requireParticipant, async (re
     // 2. Start Architect build
     const { startArchitectBuild } = await import('../services/architectProxyService');
     const name = projectName || (project as any).organization_name || 'AI System';
-    const { slug } = await startArchitectBuild(name, idea);
+    const { slug } = await startArchitectBuild(name, idea, buildMode);
 
     // 3. Save build state
     const currentStatus = (project as any).setup_status || {};
@@ -494,6 +495,7 @@ router.post('/api/portal/project/architect-build', requireParticipant, async (re
       architect_slug: slug,
       build_started_at: new Date().toISOString(),
       build_idea: idea,
+      build_mode: buildMode,
     };
     (project as any).changed('setup_status', true);
     await project.save();

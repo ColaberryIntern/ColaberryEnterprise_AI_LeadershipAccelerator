@@ -33,7 +33,10 @@ const STAGE_LABELS: Record<string, string> = {
 
 export default function RequirementsBuilder() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<'idea' | 'loading_questions' | 'questions' | 'generating' | 'review' | 'complete'>('idea');
+  const [phase, setPhase] = useState<'choose' | 'idea' | 'loading_questions' | 'questions' | 'generating' | 'review' | 'complete' | 'repo'>('choose');
+  // Build tier chosen on the first screen: workflow (fast regular LLM), full
+  // (Architect, professional), or autonomous (Architect, deepest setting).
+  const [buildType, setBuildType] = useState<'workflow' | 'full' | 'autonomous' | null>(null);
   const [originalIdea, setOriginalIdea] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
@@ -48,8 +51,7 @@ export default function RequirementsBuilder() {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<any>(null);
 
-  // Full Architect build branch (idea → repo → architect-build → live demo preview)
-  const [showFullBuild, setShowFullBuild] = useState(false);
+  // Full / autonomous Architect build branch (questions → repo → architect-build → live demo preview)
   const [repoUrl, setRepoUrl] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [startingBuild, setStartingBuild] = useState(false);
@@ -67,6 +69,7 @@ export default function RequirementsBuilder() {
         if (hasIdea) setOriginalIdea(state.originalIdea);
         if (state.questions?.length > 0 && hasIdea) setQuestions(state.questions);
         if (state.currentQ && hasIdea) setCurrentQ(state.currentQ);
+        if (state.buildType) setBuildType(state.buildType);
         if (hasIdea && validPhase && !(phaseNeedsDoc && !hasDoc)) setPhase(state.phase);
         if (hasDoc) setGeneratedDoc(state.generatedDoc);
       }
@@ -74,8 +77,8 @@ export default function RequirementsBuilder() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem('requirements_builder_state', JSON.stringify({ originalIdea, questions, currentQ, phase, generatedDoc })); } catch {}
-  }, [originalIdea, questions, currentQ, phase, generatedDoc]);
+    try { localStorage.setItem('requirements_builder_state', JSON.stringify({ originalIdea, questions, currentQ, phase, generatedDoc, buildType })); } catch {}
+  }, [originalIdea, questions, currentQ, phase, generatedDoc, buildType]);
 
   // Submit idea → generate dynamic questions
   const handleIdeaSubmit = async () => {
@@ -122,18 +125,27 @@ export default function RequirementsBuilder() {
     setStartingBuild(true);
     setError(null);
     try {
+      // Fold the questionnaire answers into the idea so the Architect actually
+      // uses them (previously it built from the bare idea alone).
+      const capabilities = questions
+        .filter(q => q.answer === 'yes' || q.answer === 'modify')
+        .map(q => `- [${q.category}] ${q.answer === 'modify' ? (q.modification || q.text) : q.text}`);
+      const enrichedIdea = capabilities.length
+        ? `${originalIdea.trim()}\n\nDESIRED CAPABILITIES (from the user's answers):\n${capabilities.join('\n')}`
+        : originalIdea.trim();
       const projectName = originalIdea.trim().split('\n')[0].slice(0, 60);
       await portalApi.post('/api/portal/project/architect-build', {
-        idea: originalIdea.trim(),
+        idea: enrichedIdea,
         repoUrl: repoUrl.trim(),
         accessToken: accessToken.trim() || undefined,
         projectName,
+        mode: buildType === 'autonomous' ? 'autonomous' : 'professional',
       });
-      // Clear the fast-path draft so resume doesn't compete with the build.
+      // Clear the draft so resume doesn't compete with the build.
       localStorage.removeItem('requirements_builder_state');
       window.location.href = '/portal/project/demo';
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Could not start the full build. Check the repository URL (and access token for private repos) and try again.');
+      setError(err.response?.data?.error || 'Could not start the build. Check the repository URL (and access token for private repos) and try again.');
       setStartingBuild(false);
     }
   };
@@ -255,7 +267,7 @@ export default function RequirementsBuilder() {
       </div>
 
       {/* Progress */}
-      {phase !== 'idea' && (
+      {phase !== 'idea' && phase !== 'choose' && (
         <div className="mb-4">
           <div className="d-flex justify-content-between mb-1">
             <span style={{ fontSize: 11, color: 'var(--color-primary)', fontWeight: 500 }}>{STAGE_LABELS[stage] || ''}</span>
@@ -265,6 +277,33 @@ export default function RequirementsBuilder() {
             <div className="progress-bar" style={{ width: `${progress}%`, background: progress === 100 ? '#10b981' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)', borderRadius: 6, transition: 'width 0.5s ease' }}></div>
           </div>
           {progressMsg && phase === 'generating' && <div className="text-muted mt-1" style={{ fontSize: 11 }}>{progressMsg}</div>}
+        </div>
+      )}
+
+      {/* CHOOSE BUILD TYPE */}
+      {phase === 'choose' && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body p-4">
+            <h6 className="fw-bold mb-1" style={{ fontSize: 16 }}>How big is what you're building?</h6>
+            <p className="text-muted mb-3" style={{ fontSize: 13 }}>Pick the path that fits. You'll describe your idea and answer a few questions next either way.</p>
+            <div className="d-flex flex-column gap-2">
+              <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
+                onClick={() => { setBuildType('workflow'); setPhase('idea'); setError(null); }}>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-diagram-2" style={{ color: '#10b981', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A workflow</span><span className="badge ms-auto" style={{ background: '#dcfce7', color: '#15803d', fontSize: 10 }}>~3 min</span></div>
+                <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>A focused automation. Cory drafts a tailored requirements doc fast — no repo needed.</div>
+              </button>
+              <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
+                onClick={() => { setBuildType('full'); setPhase('idea'); setError(null); }}>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-buildings" style={{ color: '#3b82f6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A full project</span><span className="badge ms-auto" style={{ background: '#dbeafe', color: '#1d4ed8', fontSize: 10 }}>~15 min</span></div>
+                <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>The AI Project Architect designs the complete system. Explore a live preview of your AI agent org while it builds.</div>
+              </button>
+              <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
+                onClick={() => { setBuildType('autonomous'); setPhase('idea'); setError(null); }}>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>Fully autonomous</span><span className="badge ms-auto" style={{ background: '#f3e8ff', color: '#7c3aed', fontSize: 10 }}>deepest</span></div>
+                <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>Same as a full project, but the Architect runs its most thorough setting for the most in-depth specification.</div>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -293,53 +332,6 @@ export default function RequirementsBuilder() {
                 onClick={handleIdeaSubmit} disabled={originalIdea.trim().length < 30}>
                 Continue <i className="bi bi-arrow-right ms-1"></i>
               </button>
-            </div>
-
-            {/* Alternative path: full AI Project Architect build + live preview while it builds */}
-            <div className="mt-4 pt-3" style={{ borderTop: '1px solid #f1f5f9' }}>
-              <div className="d-flex align-items-start gap-2 mb-2">
-                <i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 16, marginTop: 1 }}></i>
-                <div>
-                  <div className="fw-semibold" style={{ fontSize: 13 }}>Or build the complete system with AI</div>
-                  <div className="text-muted" style={{ fontSize: 11 }}>Cory designs the full architecture (~15 min). Explore a live preview of your AI agent organization while it builds.</div>
-                </div>
-              </div>
-              {!showFullBuild ? (
-                <button
-                  className="btn btn-sm"
-                  style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 12, borderRadius: 8, border: 'none', opacity: originalIdea.trim().length < 30 ? 0.5 : 1 }}
-                  disabled={originalIdea.trim().length < 30}
-                  onClick={() => setShowFullBuild(true)}>
-                  <i className="bi bi-lightning-charge-fill me-1"></i>Build with AI
-                </button>
-              ) : (
-                <div className="mt-2" style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
-                  <label className="text-muted" style={{ fontSize: 11, fontWeight: 600 }}>GitHub repository <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    className="form-control form-control-sm mt-1"
-                    placeholder="https://github.com/your-org/your-repo"
-                    value={repoUrl}
-                    onChange={e => setRepoUrl(e.target.value)}
-                    style={{ fontSize: 12, borderRadius: 6 }} />
-                  <input
-                    className="form-control form-control-sm mt-2"
-                    placeholder="Access token (only for private repos)"
-                    value={accessToken}
-                    onChange={e => setAccessToken(e.target.value)}
-                    style={{ fontSize: 12, borderRadius: 6 }} />
-                  <div className="text-muted mt-1" style={{ fontSize: 10 }}>Cory connects this repo and builds your system into it.</div>
-                  <div className="d-flex gap-2 mt-2">
-                    <button
-                      className="btn btn-sm"
-                      style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 12, borderRadius: 6, border: 'none' }}
-                      disabled={originalIdea.trim().length < 30 || !repoUrl.trim() || startingBuild}
-                      onClick={handleFullBuild}>
-                      {startingBuild ? <><span className="spinner-border spinner-border-sm me-1"></span>Starting…</> : <>Start full build <i className="bi bi-arrow-right ms-1"></i></>}
-                    </button>
-                    <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 12, borderRadius: 6 }} onClick={() => setShowFullBuild(false)} disabled={startingBuild}>Cancel</button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -424,14 +416,42 @@ export default function RequirementsBuilder() {
             </div>
           )}
 
-          {/* Generate */}
+          {/* Generate (workflow) or continue to repo (full/autonomous) */}
           {answeredCount >= 5 && (
-            <button className="btn w-100 py-3" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }} onClick={handleGenerate}>
-              <i className="bi bi-lightning-charge-fill me-2"></i>Generate My Requirements ({selectedCount} capabilities)
+            <button className="btn w-100 py-3" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
+              onClick={buildType === 'workflow' ? handleGenerate : () => { setError(null); setPhase('repo'); }}>
+              {buildType === 'workflow'
+                ? <><i className="bi bi-lightning-charge-fill me-2"></i>Generate My Requirements ({selectedCount} capabilities)</>
+                : <><i className="bi bi-arrow-right-circle me-2"></i>Continue — connect your repo ({selectedCount} capabilities)</>}
             </button>
           )}
 
           {error && <div className="alert alert-danger small mt-3">{error}</div>}
+        </div>
+      )}
+
+      {/* CONNECT REPO (full / autonomous) */}
+      {phase === 'repo' && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body p-4">
+            <h6 className="fw-bold mb-1" style={{ fontSize: 16 }}>Connect your repository</h6>
+            <p className="text-muted mb-3" style={{ fontSize: 13 }}>
+              {buildType === 'autonomous' ? 'Cory will run its deepest build' : 'Cory will design your full system'} into this repo (~15 min). You'll watch a live preview of your AI agent organization while it builds.
+            </p>
+            <label className="text-muted" style={{ fontSize: 11, fontWeight: 600 }}>GitHub repository <span style={{ color: '#ef4444' }}>*</span></label>
+            <input className="form-control form-control-sm mt-1" placeholder="https://github.com/your-org/your-repo" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} style={{ fontSize: 13, borderRadius: 6 }} />
+            <input className="form-control form-control-sm mt-2" placeholder="Access token (only for private repos)" value={accessToken} onChange={e => setAccessToken(e.target.value)} style={{ fontSize: 13, borderRadius: 6 }} />
+            {error && <div className="alert alert-danger small py-2 mt-3 mb-0">{error}</div>}
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 12 }} onClick={() => { setError(null); setPhase('questions'); }} disabled={startingBuild}>
+                <i className="bi bi-arrow-left me-1"></i>Back
+              </button>
+              <button className="btn py-2 px-4" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
+                disabled={!repoUrl.trim() || startingBuild} onClick={handleFullBuild}>
+                {startingBuild ? <><span className="spinner-border spinner-border-sm me-2"></span>Starting…</> : <>{buildType === 'autonomous' ? 'Start autonomous build' : 'Start full build'} <i className="bi bi-arrow-right ms-1"></i></>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

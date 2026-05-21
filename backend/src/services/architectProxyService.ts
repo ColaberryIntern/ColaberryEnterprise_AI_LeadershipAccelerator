@@ -28,12 +28,24 @@ function slugify(name: string): string {
  * This runs asynchronously — returns the slug immediately,
  * then continues driving phases in the background.
  */
-export async function startArchitectBuild(projectName: string, idea: string): Promise<{ slug: string }> {
+export async function startArchitectBuild(
+  projectName: string,
+  idea: string,
+  mode: 'professional' | 'autonomous' = 'professional',
+): Promise<{ slug: string }> {
   // Prefer the explicit project/organization name for the doc title.
   // The Architect generates its own unique slug from this; collisions are deduped server-side.
   const cleanName = (projectName || '').replace(/[^\w\s-]/g, '').trim();
   const ideaName = idea.split('\n')[0].substring(0, 80).replace(/[^\w\s-]/g, '').trim();
   const fullName = (cleanName || ideaName || 'AI System').substring(0, 100);
+
+  // "Fully Autonomous" is a depth setting: instruct the Architect (whose phases
+  // are chat-driven from the idea text) to maximize comprehensiveness. This
+  // works regardless of the Architect's blueprint vocabulary; if advisor later
+  // exposes a dedicated autonomous blueprint, swap it in at the create step.
+  const buildIdea = mode === 'autonomous'
+    ? `${idea}\n\n[BUILD DEPTH: FULLY AUTONOMOUS] Produce the most comprehensive, in-depth specification possible — cover every subsystem, integration point, data flow, edge case, failure mode, security consideration, and scaling path in exhaustive detail. Favor more chapters and deeper sections over brevity.`
+    : idea;
 
   // 1. Create project
   const createRes = await fetch(`${ARCHITECT_BASE}/projects/new`, {
@@ -57,7 +69,7 @@ export async function startArchitectBuild(projectName: string, idea: string): Pr
   console.log(`[ArchitectProxy] Created project: ${slug}`);
 
   // 2. Drive through phases in background (don't await — return slug immediately)
-  drivePhases(slug, idea).catch(err => {
+  drivePhases(slug, buildIdea).catch(err => {
     console.error(`[ArchitectProxy] Phase driving failed for ${slug}:`, err.message);
   });
 

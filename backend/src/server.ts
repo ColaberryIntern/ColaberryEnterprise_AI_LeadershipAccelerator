@@ -299,6 +299,15 @@ async function start(): Promise<void> {
     );
   });
 
+  // Server-side Architect build retrieval: pull + build out completed Architect
+  // builds even if the user closed the tab (client polling can't be relied on
+  // for a ~15-min build). Runs every 2 minutes; idempotent.
+  cron.schedule('*/2 * * * *', () => {
+    import('./services/architectBuildPollerService')
+      .then(({ pollArchitectBuilds }) => pollArchitectBuilds())
+      .catch((err) => console.warn('[ArchitectPoller] scheduled run failed:', err?.message));
+  });
+
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {
     startScheduler();

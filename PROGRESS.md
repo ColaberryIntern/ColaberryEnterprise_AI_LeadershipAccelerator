@@ -3291,3 +3291,18 @@ The whole point of the operator's directive ("do real operational verifications"
 | File | Change |
 |---|---|
 | `backend/src/services/projectSetupService.ts` | `activateProject`: retry clustering once on 0 capabilities; throw (leave un-activated) instead of marking `activated=true` when build-out produced no capabilities (2026-05-21) |
+
+- [x] Build-type chooser (Workflow / Full Project / Fully Autonomous) + 3 gap fixes
+  - Date: 2026-05-21
+  - What changed: New first-run flow — a 3-tier decision screen (`choose`) → idea → 9 questions → build per tier. **Workflow** = regular LLM + 2-pass expand (fast, no demo, no repo). **Full Project** = Architect `mode=professional`. **Fully Autonomous** = Architect `mode=autonomous` (deepest). All three now fold the questionnaire answers into the prompt. Gaps closed: (1) questionnaire→Architect — `handleFullBuild` enriches the idea with answered capabilities before `POST /architect-build`, which now accepts `mode`; `startArchitectBuild` adds a depth directive for autonomous. (2) 2-pass expand — `requirementsGenerationService.executeJob` runs `executeExpansionPass` when pass 1 is <4000 words. (A) server-side retrieval — new `architectBuildPollerService` + a 2-min cron in `server.ts` retrieves + builds out completed Architect builds even if the user closed the tab.
+  - Verification: backend + frontend `tsc --noEmit` pass; production `react-scripts build` (CI=true) "Compiled successfully". Per-tier E2E + deploy: see below.
+  - Notes: "Fully Autonomous" is a depth setting on the requirements-doc API (not auto-execution), per design. Repo is mandatory for Full/Autonomous (collected on a `repo` step after the questions); Workflow needs no repo.
+
+| File | Change |
+|---|---|
+| `backend/src/services/architectBuildPollerService.ts` | New cron job: finds in-progress Architect builds, retrieves the doc + runs build-out for completed ones — independent of any client poll (closes the closed-tab gap) (2026-05-21) |
+| `backend/src/server.ts` | Registered the Architect build poller cron (every 2 min) (2026-05-21) |
+| `backend/src/services/architectProxyService.ts` | `startArchitectBuild` accepts `mode`; autonomous prepends a max-depth directive to the idea sent to the Architect (2026-05-21) |
+| `backend/src/routes/projectRoutes.ts` | `POST /architect-build` accepts `mode` (professional/autonomous), passes it through, stores `build_mode` (2026-05-21) |
+| `backend/src/services/requirementsGenerationService.ts` | Added `executeExpansionPass` + 2-pass logic in `executeJob`: thin first-pass docs (<4000 words) are expanded to useful depth for the Workflow path (2026-05-21) |
+| `frontend/src/pages/project/RequirementsBuilder.tsx` | New 3-tier `choose` screen + `repo` step; `buildType` routes to Workflow (generate) or Full/Autonomous (architect-build with enriched idea + mode); questionnaire folded into all paths (2026-05-21) |
