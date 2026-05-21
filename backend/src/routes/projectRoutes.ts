@@ -2929,7 +2929,7 @@ router.get('/api/portal/onboarding/state', requireParticipant, async (req: Reque
       build_mode: ss.build_mode || null,
       gates: {
         home: true,
-        critique: stage === 'has_code',
+        critique: stage !== 'needs_requirements', // unlock once requirements are loaded
         blueprint: stage !== 'needs_requirements',
         system: stage !== 'needs_requirements',
         sessions: true,

@@ -3537,3 +3537,15 @@ The whole point of the operator's directive ("do real operational verifications"
   - Date: 2026-05-21
   - What changed: All projects displayed as the account/org name ("Colaberry Demo"), making the switcher unreadable. Added a dedicated `projects.name` column (distinct from organization_name, which stays the org/greeting). The frontend derives a concise name from the idea (`deriveProjectName`) and passes it on build: architect-build sets `project.name`; the generate route accepts `project_name` and sets it on the active project. Display: `GET /projects` and the breadcrumb (`WorkspaceContextBar`) now show `name || organization_name`. The greeting still uses organization_name (the account), so org vs project stay separate.
   - Verification: backend + frontend `tsc` + production build pass; prod schema migrated (projects.name added); deployed; new builds named from the idea (verified below).
+
+- [x] Post-build experience: repo+sync for all tiers, Home landing, Critique unlock, foundation-first
+  - Date: 2026-05-21
+  - What changed: (a) Critique tab now unlocks at has_requirements (was has_code); Blueprint/System already did. (b) Post-build landing changed to /portal/home (the overview dashboard) for Workflow complete + Architect demo Enter (was Blueprint). (c) Repo now required for ALL tiers: every path goes through the repo step after the questions; Workflow connects the repo (POST /setup/github) then generates, and build-out (activateProject) syncs + matches requirements, so coverage/readiness compute (no longer stuck at zero) and the foundation "Kickoff" task surfaces first (the per-requirement "create artifact" tasks were a no-repo symptom).
+  - Verification: backend + frontend `tsc` + production build pass; deployed; E2E (Workflow with repo) verified below.
+  - Notes: Reverses the earlier "Workflow = no repo" per DRI. The 0% metrics were correct for no-repo; syncing a repo is what drives the checks.
+
+| File | Change |
+|---|---|
+| `backend/src/routes/projectRoutes.ts` | onboarding/state: Critique gate unlocks at has_requirements (2026-05-21) |
+| `frontend/src/pages/project/RequirementsBuilder.tsx` | All tiers go through the repo step; Workflow connects repo then generates (sync runs in build-out); post-build lands on /portal/home (2026-05-21) |
+| `frontend/src/pages/project/SystemBuildDemo.tsx` | "Enter" lands on /portal/home (was Blueprint) (2026-05-21) |

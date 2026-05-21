@@ -208,6 +208,26 @@ export default function RequirementsBuilder() {
     }
   };
 
+  // Workflow build: connect the repo (so the system can sync), then generate the
+  // requirements doc. Build-out (handleSave) then syncs the repo + computes the checks.
+  const handleWorkflowBuild = async () => {
+    if (originalIdea.trim().length < 30 || !repoUrl.trim()) return;
+    setStartingBuild(true);
+    setError(null);
+    try {
+      await portalApi.post('/api/portal/project/setup/github', {
+        repo_url: repoUrl.trim(),
+        access_token: accessToken.trim() || undefined,
+      });
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Could not connect the repository. Check the URL (and access token for private repos).');
+      setStartingBuild(false);
+      return;
+    }
+    setStartingBuild(false);
+    handleGenerate();
+  };
+
   // Select a suggested option (A/B/C) for the current question, then advance.
   const handleSelect = (letter: string) => {
     const updated = [...questions];
@@ -503,13 +523,11 @@ export default function RequirementsBuilder() {
             </div>
           )}
 
-          {/* Generate (workflow) or continue to repo (full/autonomous) */}
+          {/* All tiers continue to the repo step (the repo is synced after the build). */}
           {answeredCount >= 5 && (
             <button className="btn w-100 py-3" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
-              onClick={buildType === 'workflow' ? handleGenerate : () => { setError(null); setPhase('repo'); }}>
-              {buildType === 'workflow'
-                ? <><i className="bi bi-lightning-charge-fill me-2"></i>Generate My Requirements ({selectedCount} capabilities)</>
-                : <><i className="bi bi-arrow-right-circle me-2"></i>Continue — connect your repo ({selectedCount} capabilities)</>}
+              onClick={() => { setError(null); setPhase('repo'); }}>
+              <i className="bi bi-arrow-right-circle me-2"></i>Continue — connect your repo ({selectedCount} levels)
             </button>
           )}
 
@@ -517,13 +535,15 @@ export default function RequirementsBuilder() {
         </div>
       )}
 
-      {/* CONNECT REPO (full / autonomous) */}
+      {/* CONNECT REPO (all tiers) */}
       {phase === 'repo' && (
         <div className="card border-0 shadow-sm">
           <div className="card-body p-4">
             <h6 className="fw-bold mb-1" style={{ fontSize: 16 }}>Connect your repository</h6>
             <p className="text-muted mb-3" style={{ fontSize: 13 }}>
-              {buildType === 'autonomous' ? 'Cory will run its deepest build' : 'Cory will design your full system'} into this repo ({buildType === 'autonomous' ? '~21 min' : '~13 min'}). You'll watch a live preview of your AI agent organization while it builds.
+              {buildType === 'workflow'
+                ? 'Cory drafts your requirements (~5 min) and syncs them against this repo so progress, coverage, and gaps are tracked against your real code.'
+                : `${buildType === 'autonomous' ? 'Cory will run its deepest build' : 'Cory will design your full system'} into this repo (${buildType === 'autonomous' ? '~21 min' : '~13 min'}). You'll watch a live preview of your AI agent organization while it builds.`}
             </p>
             <label className="text-muted" style={{ fontSize: 11, fontWeight: 600 }}>GitHub repository <span style={{ color: '#ef4444' }}>*</span></label>
             <input className="form-control form-control-sm mt-1" placeholder="https://github.com/your-org/your-repo" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} style={{ fontSize: 13, borderRadius: 6 }} />
@@ -534,8 +554,8 @@ export default function RequirementsBuilder() {
                 <i className="bi bi-arrow-left me-1"></i>Back
               </button>
               <button className="btn py-2 px-4" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
-                disabled={!repoUrl.trim() || startingBuild} onClick={handleFullBuild}>
-                {startingBuild ? <><span className="spinner-border spinner-border-sm me-2"></span>Starting…</> : <>{buildType === 'autonomous' ? 'Start autonomous build' : 'Start full build'} <i className="bi bi-arrow-right ms-1"></i></>}
+                disabled={!repoUrl.trim() || startingBuild} onClick={buildType === 'workflow' ? handleWorkflowBuild : handleFullBuild}>
+                {startingBuild ? <><span className="spinner-border spinner-border-sm me-2"></span>Starting…</> : <>{buildType === 'workflow' ? 'Generate my requirements' : buildType === 'autonomous' ? 'Start autonomous build' : 'Start full build'} <i className="bi bi-arrow-right ms-1"></i></>}
               </button>
             </div>
           </div>
@@ -594,7 +614,7 @@ export default function RequirementsBuilder() {
             <i className="bi bi-check-circle-fill d-block mb-3" style={{ fontSize: 44, color: '#10b981' }}></i>
             <h5 className="fw-bold mb-2" style={{ color: '#059669', fontSize: 16 }}>Your system is ready!</h5>
             <p className="text-muted mb-3" style={{ fontSize: 13 }}>Your requirements are saved and organized into capabilities. Open your Blueprint to see what&rsquo;s next.</p>
-            <button className="btn btn-primary" style={{ borderRadius: 8, fontWeight: 600, fontSize: 13 }} onClick={() => navigate('/portal/project/blueprint')}>
+            <button className="btn btn-primary" style={{ borderRadius: 8, fontWeight: 600, fontSize: 13 }} onClick={() => navigate('/portal/home')}>
               View your system <i className="bi bi-arrow-right ms-1"></i>
             </button>
           </div>

@@ -186,7 +186,7 @@ export default function SystemBuildDemo() {
         </div>
         {showFinalReveal && buildComplete && (
           <button className="btn btn-sm" style={{ background: '#10b981', color: '#fff', fontWeight: 600, borderRadius: 8, fontSize: 12 }}
-            onClick={() => { window.location.href = '/portal/project/blueprint'; }}>
+            onClick={() => { window.location.href = '/portal/home'; }}>
             Your System is Ready → Enter <i className="bi bi-arrow-right ms-1"></i>
           </button>
         )}
@@ -263,7 +263,7 @@ export default function SystemBuildDemo() {
                 <h5 className="fw-bold mb-1" style={{ color: '#059669' }}>Your System Is Ready!</h5>
                 <p className="text-muted mb-3" style={{ fontSize: 12 }}>{totalAgents || 20}+ AI agents ready to power your system.</p>
                 <button className="btn" style={{ background: '#10b981', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, padding: '10px 28px', border: 'none' }}
-                  onClick={() => { window.location.href = '/portal/project/blueprint'; }}>
+                  onClick={() => { window.location.href = '/portal/home'; }}>
                   Your System is Ready → Enter
                 </button>
               </div>
