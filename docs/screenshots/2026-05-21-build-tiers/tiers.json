@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-05-21T14:02:30.435Z",
+  "results": [
+    {
+      "tier": "full",
+      "email": "ali+demo-run2@colaberry.com",
+      "ok": true,
+      "errs": [],
+      "mode": "professional",
+      "architect_phase": "feature_discovery",
+      "detail": "mode=professional (expected professional), architect phase=feature_discovery"
+    }
+  ]
+}
