@@ -3261,3 +3261,13 @@ The whole point of the operator's directive ("do real operational verifications"
 |---|---|
 | `scripts/driveArchitectBuild.js` | New driver: polls `GET /architect-status` for the 3 builds in parallel to completion, screenshots the Architect dashboard per phase, then on completion verifies doc retrieval (char count) + build-out (`GET /capabilities`) and screenshots portal Blueprint/System. Hardened so loop-level network errors don't abort the long poll (2026-05-20) |
 | `scripts/buildArchitectReport.js` + `docs/REQUIREMENTS_ARCHITECT_E2E_REPORT.html` | New report generator + token-free HTML: verified per-run table (doc size, caps, features, reqs) + curated screenshot gallery (chapter-build → complete → portal built-out). Refreshes gitignored login sidecar (2026-05-20) |
+
+- [x] Revived the "system preview while you wait" demo and reconnected it to the first-run flow
+  - Date: 2026-05-21
+  - What changed: The `SystemBuildDemo` page (`/portal/project/demo`) — a live preview of the potential multi-agent AI organization (departments, ~20-25 agents, ROI, HITL, agent network graph, animated simulation, from `POST /build-preview`) — was fully built but orphaned since 2026-05-20 (commit 4af835ea moved first-run to CoryHome/RequirementsBuilder, which never triggered `architect-build` or the demo). Added an additive "Build with AI" branch to `RequirementsBuilder`'s idea screen: collects a mandatory GitHub repo URL (+ optional access token), calls `POST /architect-build`, and redirects to `/portal/project/demo`. The demo then shows the preview (driven by the idea, independent of repo/doc) while the ~15-min Architect build runs, polls `architect-status`, and on completion the doc is retrieved + the project built out.
+  - Verification: frontend `tsc --noEmit` passes; production `react-scripts build` (CI=true) passes; live check confirmed `/portal/project/demo` renders with 0 page errors (final reveal "Your System Is Ready! 20+ AI agents…" + AI-org preview). E2E of the revived entry → demo pending deploy.
+  - Notes: The fast OpenAI path (Continue) is untouched — the branch is purely additive. Pre-existing bug to fix separately: `activateProject` marks `activated=true` even when clustering yields 0 capabilities (a 15-min build that ends in an empty project is the worst case).
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/project/RequirementsBuilder.tsx` | Added the additive "Build with AI" branch (idea + mandatory repo URL + optional token → `POST /architect-build` → redirect `/portal/project/demo`), reconnecting the orphaned system-preview demo to the first-run flow (2026-05-21) |

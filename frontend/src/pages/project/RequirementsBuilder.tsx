@@ -48,6 +48,12 @@ export default function RequirementsBuilder() {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<any>(null);
 
+  // Full Architect build branch (idea → repo → architect-build → live demo preview)
+  const [showFullBuild, setShowFullBuild] = useState(false);
+  const [repoUrl, setRepoUrl] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [startingBuild, setStartingBuild] = useState(false);
+
   // Resume support
   useEffect(() => {
     try {
@@ -104,6 +110,31 @@ export default function RequirementsBuilder() {
       setPhase('idea');
       setStage('idea');
       setProgress(5);
+    }
+  };
+
+  // Full build: kick off the AI Project Architect (the thorough ~15-min build)
+  // and hand the user to the live system-preview demo while it runs. The demo
+  // generates the AI-organization preview from the same idea, so it's useful
+  // immediately and does not depend on the requirements document or repo.
+  const handleFullBuild = async () => {
+    if (originalIdea.trim().length < 30 || !repoUrl.trim()) return;
+    setStartingBuild(true);
+    setError(null);
+    try {
+      const projectName = originalIdea.trim().split('\n')[0].slice(0, 60);
+      await portalApi.post('/api/portal/project/architect-build', {
+        idea: originalIdea.trim(),
+        repoUrl: repoUrl.trim(),
+        accessToken: accessToken.trim() || undefined,
+        projectName,
+      });
+      // Clear the fast-path draft so resume doesn't compete with the build.
+      localStorage.removeItem('requirements_builder_state');
+      window.location.href = '/portal/project/demo';
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Could not start the full build. Check the repository URL (and access token for private repos) and try again.');
+      setStartingBuild(false);
     }
   };
 
@@ -262,6 +293,53 @@ export default function RequirementsBuilder() {
                 onClick={handleIdeaSubmit} disabled={originalIdea.trim().length < 30}>
                 Continue <i className="bi bi-arrow-right ms-1"></i>
               </button>
+            </div>
+
+            {/* Alternative path: full AI Project Architect build + live preview while it builds */}
+            <div className="mt-4 pt-3" style={{ borderTop: '1px solid #f1f5f9' }}>
+              <div className="d-flex align-items-start gap-2 mb-2">
+                <i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 16, marginTop: 1 }}></i>
+                <div>
+                  <div className="fw-semibold" style={{ fontSize: 13 }}>Or build the complete system with AI</div>
+                  <div className="text-muted" style={{ fontSize: 11 }}>Cory designs the full architecture (~15 min). Explore a live preview of your AI agent organization while it builds.</div>
+                </div>
+              </div>
+              {!showFullBuild ? (
+                <button
+                  className="btn btn-sm"
+                  style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 12, borderRadius: 8, border: 'none', opacity: originalIdea.trim().length < 30 ? 0.5 : 1 }}
+                  disabled={originalIdea.trim().length < 30}
+                  onClick={() => setShowFullBuild(true)}>
+                  <i className="bi bi-lightning-charge-fill me-1"></i>Build with AI
+                </button>
+              ) : (
+                <div className="mt-2" style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                  <label className="text-muted" style={{ fontSize: 11, fontWeight: 600 }}>GitHub repository <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input
+                    className="form-control form-control-sm mt-1"
+                    placeholder="https://github.com/your-org/your-repo"
+                    value={repoUrl}
+                    onChange={e => setRepoUrl(e.target.value)}
+                    style={{ fontSize: 12, borderRadius: 6 }} />
+                  <input
+                    className="form-control form-control-sm mt-2"
+                    placeholder="Access token (only for private repos)"
+                    value={accessToken}
+                    onChange={e => setAccessToken(e.target.value)}
+                    style={{ fontSize: 12, borderRadius: 6 }} />
+                  <div className="text-muted mt-1" style={{ fontSize: 10 }}>Cory connects this repo and builds your system into it.</div>
+                  <div className="d-flex gap-2 mt-2">
+                    <button
+                      className="btn btn-sm"
+                      style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 12, borderRadius: 6, border: 'none' }}
+                      disabled={originalIdea.trim().length < 30 || !repoUrl.trim() || startingBuild}
+                      onClick={handleFullBuild}>
+                      {startingBuild ? <><span className="spinner-border spinner-border-sm me-1"></span>Starting…</> : <>Start full build <i className="bi bi-arrow-right ms-1"></i></>}
+                    </button>
+                    <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 12, borderRadius: 6 }} onClick={() => setShowFullBuild(false)} disabled={startingBuild}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
