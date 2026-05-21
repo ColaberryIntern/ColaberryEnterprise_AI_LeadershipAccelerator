@@ -20,10 +20,16 @@
 
 .vw-main {
   display: grid;
-  grid-template-columns: 320px 1fr 400px;
+  /* 2026-05-21: default to no right rail. When an issue is selected the
+     page adds `.vw-main--has-details`, which expands the right column. */
+  grid-template-columns: 320px 1fr 0;
   min-height: 0;
   overflow: hidden;
   gap: 0;
+  transition: grid-template-columns 240ms ease;
+}
+.vw-main--has-details {
+  grid-template-columns: 320px 1fr 400px;
 }
 
 /* ---------- left sidebar ---------- */

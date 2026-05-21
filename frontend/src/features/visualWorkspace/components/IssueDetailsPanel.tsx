@@ -44,6 +44,8 @@ interface Props {
   /** Hands the compiled prompt off to Blueprint (the execution surface). */
   onSendToBuildCenter: () => void;
   onGenerateForThisOne: () => void;
+  /** 2026-05-21: close the panel + free the stage. */
+  onClose?: () => void;
 }
 
 const SEVERITY_COLORS: Record<CritiqueSeverity, { bg: string; fg: string }> = {
@@ -56,23 +58,14 @@ const IssueDetailsPanel: React.FC<Props> = ({
   critique, suggestions, decisions,
   onAcceptSuggestion, onRejectSuggestion, onDeferSuggestion,
   onMarkResolved, onSendToBuildCenter, onGenerateForThisOne,
+  onClose,
 }) => {
-  if (!critique) {
-    return (
-      <aside className="vw-details-panel">
-        <div className="vw-details-empty">
-          <i className="bi bi-cursor" style={{ fontSize: 32, color: 'var(--color-text-light)' }}></i>
-          <div style={{ marginTop: 10, fontWeight: 600, color: 'var(--color-text)' }}>
-            No issue selected
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginTop: 4, lineHeight: 1.5 }}>
-            Click <strong>Annotate</strong> on the action bar, then click anywhere on the page to drop a pin.
-            Or pick an existing issue from the left rail. Compile a prompt → hand off to Blueprint → run → verify here.
-          </div>
-        </div>
-      </aside>
-    );
-  }
+  // 2026-05-21: when no issue selected, render nothing. The parent grid
+  // collapses the right column to 0 width so the stage gets the freed
+  // space. The "click Annotate to start" instructions previously here
+  // duplicated what's on the action bar and ate ~400px of stage room
+  // for no value.
+  if (!critique) return null;
 
   const decisionsBySuggestion = new Map<string, string>();
   decisions.forEach(d => { if (d.suggestion_id) decisionsBySuggestion.set(d.suggestion_id, d.verdict); });
@@ -113,6 +106,22 @@ const IssueDetailsPanel: React.FC<Props> = ({
             fontWeight: 600,
             marginLeft: 'auto',
           }}>{critique.severity}</span>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close — frees up the stage"
+              aria-label="Close issue details"
+              style={{
+                marginLeft: 6, padding: '2px 6px',
+                background: 'transparent', border: 'none',
+                color: 'var(--color-text-light)', cursor: 'pointer',
+                fontSize: 16, lineHeight: 1,
+              }}
+            >
+              <i className="bi bi-x-lg"></i>
+            </button>
+          )}
         </div>
         <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-primary)', lineHeight: 1.35 }}>
           {critique.title || critique.description.split('.')[0].slice(0, 80)}

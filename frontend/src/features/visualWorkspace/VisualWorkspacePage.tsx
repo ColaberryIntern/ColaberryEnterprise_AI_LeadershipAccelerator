@@ -404,7 +404,7 @@ const VisualWorkspacePage: React.FC = () => {
 
   return (
     <div className="vw-shell">
-      <div className="vw-main">
+      <div className={`vw-main${selectedCritiqueId ? ' vw-main--has-details' : ''}`}>
         <WorkspaceSidebar
           pageRoute={pageRoute}
           previewOrigin={previewOrigin}
@@ -429,6 +429,25 @@ const VisualWorkspacePage: React.FC = () => {
         <div className="vw-canvas">
           <div className="vw-canvas-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* 2026-05-21: Back button — goes to the prior surface in
+                  browser history (System tab / cap detail / Home), or
+                  falls back to System tab if there's no history. */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.history.length > 1) window.history.back();
+                  else navigate('/portal/project/system?tab=bps');
+                }}
+                title="Back to where you came from"
+                style={{
+                  fontSize: 12, padding: '4px 9px',
+                  background: 'white', color: 'var(--color-text)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 3, cursor: 'pointer',
+                }}
+              >
+                <i className="bi bi-arrow-left me-1"></i>Back
+              </button>
               <span className="vw-url-display">{previewSrc}</span>
               {session.loading && <span className="badge bg-light text-dark">loading…</span>}
               {session.error && <span className="badge bg-warning text-dark" title={session.error}>session error</span>}
@@ -474,6 +493,7 @@ const VisualWorkspacePage: React.FC = () => {
           onMarkResolved={markCurrentResolved}
           onSendToBuildCenter={sendToBuildCenter}
           onGenerateForThisOne={() => selectedCritiqueId && compilePrompt([selectedCritiqueId])}
+          onClose={() => setSelectedCritiqueId(null)}
         />
       </div>
 

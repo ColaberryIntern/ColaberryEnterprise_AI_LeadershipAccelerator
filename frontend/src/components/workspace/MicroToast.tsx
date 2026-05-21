@@ -202,22 +202,25 @@ const ToastHost: React.FC = () => {
       role="status"
       aria-live="polite"
       style={{
+        // 2026-05-21: moved from bottom-left to top-right so it doesn't
+        // overlap the workspace action bar's "Mark ready / Compile prompt
+        // / Open Blueprint" buttons. Operator caught the collision.
         position: 'fixed',
-        bottom: '1.25rem',
-        left: '1.25rem',
+        top: '5rem',
+        right: '1.25rem',
         background: bg,
         color: 'white',
         borderRadius: 6,
-        padding: '0.6rem 0.95rem',
-        fontSize: 13,
+        padding: '0.5rem 0.85rem',
+        fontSize: 12.5,
         fontWeight: 500,
         boxShadow: '0 8px 24px rgba(15, 23, 42, 0.25)',
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'flex', alignItems: 'center', gap: 9,
         opacity: head.visible ? 1 : 0,
-        transform: head.visible ? 'translateY(0)' : 'translateY(8px)',
+        transform: head.visible ? 'translateY(0)' : 'translateY(-8px)',
         transition: 'opacity 280ms ease, transform 280ms ease',
         zIndex: 1100,
-        maxWidth: '420px',
+        maxWidth: '360px',
       }}
     >
       <i className={`bi ${head.icon}`} style={{ fontSize: 16, opacity: 0.92 }}></i>
