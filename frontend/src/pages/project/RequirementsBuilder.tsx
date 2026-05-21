@@ -11,11 +11,42 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 
+interface QuestionOption { letter: string; label: string; description: string; }
 interface Question {
-  text: string;
+  phase?: string;
   category: string;
-  answer: 'yes' | 'no' | 'modify' | null;
-  modification?: string;
+  text: string;
+  options: QuestionOption[];
+  selected: string | null; // 'A' | 'B' | 'C'
+  note?: string;
+}
+
+// Parse the expand-questions response into A/B/C "AI System Discovery Framework"
+// questions (baseline / intermediate / advanced suggested option choices).
+function normalizeQuestions(raw: any[]): Question[] {
+  return (raw || [])
+    .filter((q: any) => q && q.text && Array.isArray(q.options) && q.options.length >= 3)
+    .map((q: any) => ({
+      phase: String(q.phase || ''),
+      category: String(q.category || ''),
+      text: String(q.text || ''),
+      options: q.options.slice(0, 3).map((o: any, i: number) => ({
+        letter: String(o.letter || ['A', 'B', 'C'][i]),
+        label: String(o.label || ''),
+        description: String(o.description || ''),
+      })),
+      selected: null as string | null,
+    }));
+}
+
+// Selected sophistication levels → capability lines for the generation prompt
+// and the enriched Architect idea.
+function buildCapabilityLines(questions: Question[]): string[] {
+  return questions.filter(q => q.selected).map(q => {
+    const opt = q.options.find(o => o.letter === q.selected);
+    const note = q.note ? ` (note: ${q.note})` : '';
+    return `- [${q.category}] ${opt?.letter}. ${opt?.label} — ${opt?.description}${note}`;
+  });
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -78,6 +109,12 @@ export default function RequirementsBuilder() {
         // buildType). Older/stale drafts have no buildType — discard them so the
         // user always starts at the chooser instead of a pre-filled idea screen.
         if (!state.buildType) { localStorage.removeItem(draftKey()); return; }
+        // Discard drafts whose questions predate the A/B/C framework (no
+        // `options`) — restoring them would crash the new option renderer.
+        if (Array.isArray(state.questions) && state.questions.length > 0 && !state.questions[0]?.options) {
+          localStorage.removeItem(draftKey());
+          return;
+        }
         const hasIdea = state.originalIdea && state.originalIdea.trim().length > 0;
         const hasDoc = state.generatedDoc && state.generatedDoc.trim().length > 10;
         const validPhase = state.phase && !['loading_questions', 'generating'].includes(state.phase);
@@ -106,9 +143,9 @@ export default function RequirementsBuilder() {
 
     try {
       const res = await portalApi.post('/api/portal/project/requirements/expand-questions', { idea: originalIdea.trim() });
-      const aiQuestions = (res.data.questions || []).filter((q: any) => q.text && q.category && q.text.length > 10);
+      const aiQuestions = normalizeQuestions(res.data.questions || []);
       if (aiQuestions.length < 5) throw new Error('Not enough questions generated');
-      setQuestions(aiQuestions.slice(0, 12).map((q: any) => ({ text: q.text, category: q.category, answer: null })));
+      setQuestions(aiQuestions.slice(0, 12));
       setPhase('questions');
       setStage('questions');
       setProgress(15);
@@ -116,9 +153,9 @@ export default function RequirementsBuilder() {
       // Retry once instead of falling back to generic
       try {
         const res2 = await portalApi.post('/api/portal/project/requirements/expand-questions', { idea: originalIdea.trim() });
-        const q2 = (res2.data.questions || []).filter((q: any) => q.text && q.category);
+        const q2 = normalizeQuestions(res2.data.questions || []);
         if (q2.length >= 3) {
-          setQuestions(q2.slice(0, 12).map((q: any) => ({ text: q.text, category: q.category, answer: null })));
+          setQuestions(q2.slice(0, 12));
           setPhase('questions');
           setStage('questions');
           setProgress(15);
@@ -141,13 +178,11 @@ export default function RequirementsBuilder() {
     setStartingBuild(true);
     setError(null);
     try {
-      // Fold the questionnaire answers into the idea so the Architect actually
-      // uses them (previously it built from the bare idea alone).
-      const capabilities = questions
-        .filter(q => q.answer === 'yes' || q.answer === 'modify')
-        .map(q => `- [${q.category}] ${q.answer === 'modify' ? (q.modification || q.text) : q.text}`);
+      // Fold the selected sophistication levels into the idea so the Architect
+      // actually uses them (previously it built from the bare idea alone).
+      const capabilities = buildCapabilityLines(questions);
       const enrichedIdea = capabilities.length
-        ? `${originalIdea.trim()}\n\nDESIRED CAPABILITIES (from the user's answers):\n${capabilities.join('\n')}`
+        ? `${originalIdea.trim()}\n\nSelected Sophistication Levels (AI System Discovery Framework):\n${capabilities.join('\n')}`
         : originalIdea.trim();
       const projectName = originalIdea.trim().split('\n')[0].slice(0, 60);
       await portalApi.post('/api/portal/project/architect-build', {
@@ -166,26 +201,26 @@ export default function RequirementsBuilder() {
     }
   };
 
-  const handleAnswer = (answer: 'yes' | 'no' | 'modify') => {
-    if (answer === 'modify') { setShowModify(true); return; }
+  // Select a suggested option (A/B/C) for the current question, then advance.
+  const handleSelect = (letter: string) => {
     const updated = [...questions];
-    updated[currentQ] = { ...updated[currentQ], answer };
+    updated[currentQ] = { ...updated[currentQ], selected: letter };
     setQuestions(updated);
     setShowModify(false);
-    setModifyText('');
+    setModifyText(updated[currentQ].note || '');
     if (currentQ < questions.length - 1) {
       setCurrentQ(currentQ + 1);
       setProgress(15 + Math.round(((currentQ + 1) / questions.length) * 25));
     }
   };
 
-  const handleModifySubmit = () => {
+  // Attach an optional clarifying note to the current question's choice.
+  const handleNoteSubmit = () => {
     const updated = [...questions];
-    updated[currentQ] = { ...updated[currentQ], answer: 'modify', modification: modifyText };
+    updated[currentQ] = { ...updated[currentQ], note: modifyText.trim() || undefined };
     setQuestions(updated);
     setShowModify(false);
     setModifyText('');
-    if (currentQ < questions.length - 1) setCurrentQ(currentQ + 1);
   };
 
   const handleGenerate = async () => {
@@ -195,15 +230,12 @@ export default function RequirementsBuilder() {
     setProgressMsg('Building your requirements specification...');
     setError(null);
 
-    const capabilities = questions
-      .filter(q => q.answer === 'yes' || q.answer === 'modify')
-      .map(q => ({ category: q.category, description: q.answer === 'modify' ? q.modification : q.text }));
-    const capText = capabilities.map(c => `- [${c.category}] ${c.description}`).join('\n');
+    const capText = buildCapabilityLines(questions).join('\n');
 
     try {
       const res = await portalApi.post('/api/portal/project/requirements/generate', {
         mode: 'professional',
-        user_prompt: `ORIGINAL IDEA:\n${originalIdea}\n\nDESIRED CAPABILITIES:\n${capText}\n\nGenerate comprehensive requirements covering the original idea and all selected capabilities. The requirements document should be at least 6000 words and cover functional requirements, non-functional requirements, system architecture, data models, API specifications, and user interface requirements.`,
+        user_prompt: `ORIGINAL IDEA:\n${originalIdea}\n\nSELECTED SOPHISTICATION LEVELS (AI System Discovery Framework):\n${capText}\n\nGenerate comprehensive requirements covering the original idea and the selected sophistication levels. The requirements document should be at least 6000 words and cover functional requirements, non-functional requirements, system architecture, data models, API specifications, and user interface requirements.`,
       });
       const jid = res.data.job_id;
       if (!jid) { setError('No job ID returned — generation may not have started'); setPhase('questions'); return; }
@@ -282,8 +314,8 @@ export default function RequirementsBuilder() {
     finally { setSaving(false); }
   };
 
-  const answeredCount = questions.filter(q => q.answer !== null).length;
-  const selectedCount = questions.filter(q => q.answer === 'yes' || q.answer === 'modify').length;
+  const answeredCount = questions.filter(q => q.selected !== null).length;
+  const selectedCount = answeredCount;
 
   // Consistent font: 13px body, 11px muted, 16px headings
   return (
@@ -329,12 +361,12 @@ export default function RequirementsBuilder() {
               </button>
               <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
                 onClick={() => { setBuildType('full'); setPhase('idea'); setError(null); }}>
-                <div className="d-flex align-items-center gap-2"><i className="bi bi-buildings" style={{ color: '#3b82f6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A full project</span><span className="badge ms-auto" style={{ background: '#dbeafe', color: '#1d4ed8', fontSize: 10 }}>~15 min</span></div>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-buildings" style={{ color: '#3b82f6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A full project</span><span className="badge ms-auto" style={{ background: '#dbeafe', color: '#1d4ed8', fontSize: 10 }}>~13 min</span></div>
                 <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>The AI Project Architect designs the complete system. Explore a live preview of your AI agent org while it builds.</div>
               </button>
               <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
                 onClick={() => { setBuildType('autonomous'); setPhase('idea'); setError(null); }}>
-                <div className="d-flex align-items-center gap-2"><i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>Fully autonomous</span><span className="badge ms-auto" style={{ background: '#f3e8ff', color: '#7c3aed', fontSize: 10 }}>deepest</span></div>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>Fully autonomous</span><span className="badge ms-auto" style={{ background: '#f3e8ff', color: '#7c3aed', fontSize: 10 }}>~21 min · deepest</span></div>
                 <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>Same as a full project, but the Architect runs its most thorough setting for the most in-depth specification.</div>
               </button>
             </div>
@@ -398,55 +430,67 @@ export default function RequirementsBuilder() {
                 Question {currentQ + 1} of {questions.length} · {answeredCount} answered
               </div>
 
-              {/* Question */}
+              {/* Question + A/B/C suggested option choices */}
               <p className="mb-1" style={{ fontSize: 12, color: '#3b82f6', fontWeight: 500 }}>
-                Based on your idea, would you like your system to be able to...
+                Based on your idea — pick the level that fits best
               </p>
               <h6 className="fw-bold mb-1" style={{ fontSize: 16 }}>{questions[currentQ].text}</h6>
               <span className="badge mb-3" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10 }}>{questions[currentQ].category}</span>
 
-              {/* Answer buttons */}
+              <div className="d-flex flex-column gap-2 mb-2">
+                {questions[currentQ].options.map(opt => {
+                  const active = questions[currentQ].selected === opt.letter;
+                  return (
+                    <button
+                      key={opt.letter}
+                      className="btn text-start p-3"
+                      style={{ background: active ? '#10b98120' : '#f8fafc', border: active ? '2px solid #10b981' : '2px solid #e2e8f0', borderRadius: 10, fontSize: 13, lineHeight: 1.5 }}
+                      onClick={() => handleSelect(opt.letter)}>
+                      <div className="d-flex align-items-start gap-2">
+                        <span className="badge d-flex align-items-center justify-content-center flex-shrink-0"
+                          style={{ background: active ? '#10b981' : '#94a3b8', color: '#fff', width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, marginTop: 1 }}>{opt.letter}</span>
+                        <div>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 13, color: '#0f172a' }}>{opt.label}</div>
+                          <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{opt.description}</div>
+                        </div>
+                        {active && <i className="bi bi-check-circle-fill ms-auto" style={{ color: '#10b981', fontSize: 16 }}></i>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Optional clarifying note for the chosen level */}
               {!showModify ? (
-                <div className="d-flex gap-3 mb-2">
-                  <button className="btn flex-grow-1 py-3" style={{ background: '#10b981', color: '#fff', fontWeight: 700, fontSize: 15, borderRadius: 10, border: 'none' }} onClick={() => handleAnswer('yes')}>
-                    <i className="bi bi-check-lg me-2"></i>Yes
-                  </button>
-                  <button className="btn flex-grow-1 py-3" style={{ background: '#ef4444', color: '#fff', fontWeight: 700, fontSize: 15, borderRadius: 10, border: 'none' }} onClick={() => handleAnswer('no')}>
-                    <i className="bi bi-x-lg me-2"></i>No
-                  </button>
-                </div>
+                <button className="btn btn-link text-muted p-0" style={{ fontSize: 11 }} onClick={() => { setModifyText(questions[currentQ].note || ''); setShowModify(true); }}>
+                  <i className="bi bi-pencil me-1"></i>{questions[currentQ].note ? 'Edit note' : 'Add a note'}
+                </button>
               ) : (
                 <div className="mb-2">
-                  <textarea className="form-control mb-2" rows={2} placeholder="How would you modify this?" value={modifyText} onChange={e => setModifyText(e.target.value)} style={{ fontSize: 13, borderRadius: 8 }} />
+                  <textarea className="form-control mb-2" rows={2} placeholder="Add a clarifying note for this choice (optional)" value={modifyText} onChange={e => setModifyText(e.target.value)} style={{ fontSize: 13, borderRadius: 8 }} />
                   <div className="d-flex gap-2">
-                    <button className="btn btn-primary btn-sm" style={{ borderRadius: 6, fontSize: 12 }} onClick={handleModifySubmit} disabled={!modifyText.trim()}>Save</button>
+                    <button className="btn btn-primary btn-sm" style={{ borderRadius: 6, fontSize: 12 }} onClick={handleNoteSubmit}>Save note</button>
                     <button className="btn btn-outline-secondary btn-sm" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setShowModify(false)}>Cancel</button>
                   </div>
                 </div>
-              )}
-
-              {!showModify && (
-                <button className="btn btn-link text-muted p-0" style={{ fontSize: 11 }} onClick={() => handleAnswer('modify')}>
-                  <i className="bi bi-pencil me-1"></i>Yes, but modified...
-                </button>
               )}
 
               <div className="d-flex justify-content-between mt-3 pt-2" style={{ borderTop: '1px solid #f1f5f9' }}>
                 <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }} disabled={currentQ === 0} onClick={() => setCurrentQ(currentQ - 1)}>
                   <i className="bi bi-arrow-left me-1"></i>Previous
                 </button>
-                <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }} onClick={() => handleAnswer('no')}>
+                <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }} disabled={currentQ >= questions.length - 1} onClick={() => setCurrentQ(currentQ + 1)}>
                   Skip <i className="bi bi-arrow-right ms-1"></i>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Selected badges */}
+          {/* Selected levels */}
           {selectedCount > 0 && (
             <div className="d-flex flex-wrap gap-1 mb-3">
-              {questions.filter(q => q.answer === 'yes' || q.answer === 'modify').map((q, i) => (
-                <span key={i} className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 10 }}><i className="bi bi-check me-1"></i>{q.category}</span>
+              {questions.filter(q => q.selected).map((q, i) => (
+                <span key={i} className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 10 }}><i className="bi bi-check me-1"></i>{q.category}: {q.selected}</span>
               ))}
             </div>
           )}
@@ -471,7 +515,7 @@ export default function RequirementsBuilder() {
           <div className="card-body p-4">
             <h6 className="fw-bold mb-1" style={{ fontSize: 16 }}>Connect your repository</h6>
             <p className="text-muted mb-3" style={{ fontSize: 13 }}>
-              {buildType === 'autonomous' ? 'Cory will run its deepest build' : 'Cory will design your full system'} into this repo (~15 min). You'll watch a live preview of your AI agent organization while it builds.
+              {buildType === 'autonomous' ? 'Cory will run its deepest build' : 'Cory will design your full system'} into this repo ({buildType === 'autonomous' ? '~21 min' : '~13 min'}). You'll watch a live preview of your AI agent organization while it builds.
             </p>
             <label className="text-muted" style={{ fontSize: 11, fontWeight: 600 }}>GitHub repository <span style={{ color: '#ef4444' }}>*</span></label>
             <input className="form-control form-control-sm mt-1" placeholder="https://github.com/your-org/your-repo" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} style={{ fontSize: 13, borderRadius: 6 }} />

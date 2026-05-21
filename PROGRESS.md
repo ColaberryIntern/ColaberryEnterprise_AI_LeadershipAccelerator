@@ -3474,3 +3474,9 @@ The whole point of the operator's directive ("do real operational verifications"
   - Date: 2026-05-21
   - What changed: A draft saved on one account resumed on another (it carried a `buildType`, so the no-buildType guard missed it), dropping the user on a pre-filled idea screen and skipping the chooser. The `requirements_builder_state` localStorage key is now scoped to the signed-in enrollment (JWT `sub`), so a fresh account never inherits another account's draft.
   - Verification: frontend `tsc` + production build pass; deployed (bundle main.72e99ba2.js). Confirmed via headless test: with a stale global-key draft injected, a fresh account still lands on the chooser.
+
+- [x] Restored A/B/C "suggested option choices" questions in the first-run flow; corrected chooser time badges
+  - Date: 2026-05-21
+  - What changed: `RequirementsBuilder` was rendering plain Yes/No/Modify and dropping the `options` from `expand-questions`. Ported the 9-phase "AI System Discovery Framework" A/B/C option UI from `ProjectSetupWizard` (normalizeQuestions, handleSelect, option cards with selected state, optional note, buildCapabilityLines). All three build paths now fold the selected sophistication levels into the prompt/idea. Chooser time badges updated to measured values: Workflow ~5 min, Full ~13 min, Fully Autonomous ~21 min (was ~15/deepest). Resume guards added: discards drafts with old-shape (no-options) questions.
+  - Verification: frontend `tsc` + production build pass; deployed.
+  - Notes: Backend `expand-questions` already returned A/B/C options (commit 8e06e2f7); only the first-run UI needed to consume them. Multi-project support is planned separately (schema change — see below).
