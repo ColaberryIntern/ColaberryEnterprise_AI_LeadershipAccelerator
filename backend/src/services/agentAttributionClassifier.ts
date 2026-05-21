@@ -306,9 +306,17 @@ async function syncMapForCap(capabilityId: string, verdicts: ClassificationVerdi
       }
       existingByAgent.delete(agentName); // mark as still-wanted
     } else {
-      // Not confirmed: if a prior LLM-linked row exists, unlink it.
+      // Not confirmed: if a prior LLM-linked row exists, unlink it —
+      // but ONLY when the new verdict is a REAL rejection (LLM saw the
+      // file and decided no). A verdict generated from an unreadable
+      // file (agent_file_sha === 'unreadable') is a fetch failure, not
+      // a classification — preserve the prior map row so transient
+      // GitHub-rate-limit blips don't tear down good attribution.
+      // (2026-05-21: caught when Campaign Management's 3 confirmed maps
+      // got nuked by a re-run that couldn't fetch any agent file.)
       const cur = existingByAgent.get(agentName);
-      if (cur && cur.linked_by === 'llm') {
+      const isUnreadable = v.agent_file_sha === 'unreadable';
+      if (cur && cur.linked_by === 'llm' && !isUnreadable) {
         await unlinkAgent(capabilityId, agentName);
       }
     }
