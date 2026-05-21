@@ -896,6 +896,11 @@ export interface EngineCapabilityInput {
   readonly linked_frontend_components?: ReadonlyArray<string> | null;
   readonly linked_agents?: ReadonlyArray<string> | null;
 
+  // 2026-05-21: authoritative count of confirmed agent attribution rows
+  // from capability_agent_maps. Used by the agent_stack queue gate to
+  // suppress when the operator-or-LLM has confirmed 3+ agents.
+  readonly _confirmed_agent_count?: number;
+
   readonly ui_element_map?: {
     category_scores?: Readonly<Record<string, { verified?: boolean }>>;
     steps?: Readonly<Record<string, { run_at?: string; issues_found?: number }>>;

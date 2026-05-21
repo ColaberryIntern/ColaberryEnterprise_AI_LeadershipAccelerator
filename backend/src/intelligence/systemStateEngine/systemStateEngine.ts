@@ -1183,6 +1183,17 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
   // Load capabilities
   const caps = await Capability.findAll({ where: { project_id: projectId } });
 
+  // 2026-05-21: load confirmed agent-attribution map counts so the queue
+  // gates can reference the authoritative signal (capability_agent_maps),
+  // not just the noisy linked_agents keyword attribution.
+  const { default: CapabilityAgentMap } = await import('../../models/CapabilityAgentMap');
+  const mapRows = await CapabilityAgentMap.findAll({ where: { status: 'active' }, attributes: ['capability_id'] });
+  const confirmedAgentCountByCap = new Map<string, number>();
+  for (const m of mapRows) {
+    const id = (m as any).capability_id;
+    confirmedAgentCountByCap.set(id, (confirmedAgentCountByCap.get(id) || 0) + 1);
+  }
+
   // For each cap, count requirements. We track autonomy-engine-generated
   // rows separately because they have their own tracking surface — the
   // queue's "Implement N unmatched reqs" task should not count them, or
@@ -1301,6 +1312,10 @@ async function loadEngineInputs(projectId: string): Promise<PureBuildInput> {
       linked_backend_services: c.linked_backend_services || [],
       linked_frontend_components: c.linked_frontend_components || [],
       linked_agents: c.linked_agents || [],
+      // 2026-05-21: confirmed agent count from capability_agent_maps —
+      // the authoritative signal that the agent_stack gate uses to
+      // suppress when 3+ LLM-confirmed agents exist for the cap.
+      _confirmed_agent_count: confirmedAgentCountByCap.get((c as any).id) || 0,
       ui_element_map: c.ui_element_map,
       total_requirements: counts.total,
       matched_requirements: counts.matched,

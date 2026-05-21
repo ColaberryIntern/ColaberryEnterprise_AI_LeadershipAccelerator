@@ -679,6 +679,15 @@ function generateAgentStackTask(
   const filenameOnly = hasCache && !fullEvidence;
   if (fullEvidence && hasMonitor && hasAlert) return null; // stack complete by roles
   if (!hasCache && linkedAgentCount >= AGENT_STACK_FLOOR) return null; // pure-count fallback
+  // 2026-05-21: authoritative-map fallback. When the operator has run
+  // the LLM agent attribution classifier and 3+ agents are confirmed in
+  // capability_agent_maps, treat that as a complete stack regardless of
+  // the runtime monitor+alert filename heuristic. The maps are the
+  // ground truth; the filename-token heuristic was a 2024-vintage
+  // signal that misses many real production agents (campaignQAAgent
+  // etc. don't contain "monitor" or "alert" in the filename).
+  const confirmedAgentCount = (cap as any)._confirmed_agent_count || 0;
+  if (confirmedAgentCount >= AGENT_STACK_FLOOR) return null;
   const matureForAgentStack =
     (kind === 'page' && score.coverage >= 100)
     || (kind === 'service' && score.readiness >= 80);
