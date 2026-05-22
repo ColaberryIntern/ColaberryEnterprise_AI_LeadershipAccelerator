@@ -3746,3 +3746,32 @@ The whole point of the operator's directive ("do real operational verifications"
 | `backend/src/intelligence/agents/agentMetadata.ts` | NEW — TS type contract + doc-block defining the `SERVES_CAPABILITY` / `SERVES_CAPABILITIES` / `AGENT_ROLE` convention. Imported only for type reference; the runtime side reads the exports via regex from the ingester. (2026-05-22) |
 | `backend/src/scripts/ingestDeclaredAgents.js` | NEW — repo walker + metadata extractor + upserter. Env: TARGET_PROJECT_ID required, DRY_RUN=1 supported, SCAN_ROOT and LINKED_BY_TAG overridable. Reports `RESULT_JSON:{...}` line for tooling. (2026-05-22) |
 | 15 agent files (see commit) | Added `SERVES_CAPABILITY` + `AGENT_ROLE` exports between imports and the existing module body. Files spanned `intelligence/agents/` and `services/agents/` (departments/marketing, departments/intelligence, departments/infrastructure, security). (2026-05-22) |
+
+- [ ] D3 — Import-graph agent attribution (PLANNED, not yet built)
+  - Date planned: 2026-05-22
+  - Session that planned it: CC-20260522-9k7m  (build in a fresh session — this one shipped D1+D2; D3 is ~3-4 focused hours)
+  - Goal: attribute the ~150 un-tagged agent .ts files to capabilities by walking their TypeScript import graph. If `RevenueOptimizationAgent.ts` imports `revenueDashboardService.ts`, and that file lives in some capability's `linked_backend_services` array, that's strong evidence the agent serves that capability — write the link to `capability_agent_maps` deterministically without an LLM round-trip. Runs alongside D2 (declared metadata) and the existing LLM attribution pipeline.
+  - Recon already done (this session, Explore subagent). Key findings (full report in this session's transcript):
+    1. `backend/src/intelligence/graph/graphBuilder.ts` already builds a 3-layer graph (structure / relations / behavior). Edge type `imports` is **defined in `graphTypes.ts:7` but never populated** — D3 should plug into this slot rather than invent a parallel graph.
+    2. `typescript@^5.7.3` is in `backend/package.json` dev deps. A real AST walker is possible, but the rest of the codebase uses regex extraction (see `frontendCallGraphScanner.ts:26-27`, `ingestDeclaredAgents.js:58-69`). Start with regex; only escalate to TS AST if regex misses important cases.
+    3. Capability → files lookup: `capabilities.linked_backend_services` (JSONB string[]) is the canonical store. No `capability_files` junction table. `frontendCallGraphScanner.ts:121-125` shows the load-once + in-memory `Map<filePath, capId>` pattern to reuse.
+    4. Compiled vs source: prod container has `/app/dist/*.js` (CJS `require('./foo')`); local has `backend/src/*.ts` (ESM `import X from './foo'`). D2's ingester pattern (`fs.existsSync('dist') ? 'dist' : 'backend/src'`) handles this — copy it.
+    5. Out of scope for v1: import aliases (tsconfig `paths`), dynamic `await import(...)`, re-exports (`export * from './foo'`), barrel files. Document as known limitations; iterate if coverage is insufficient.
+  - Module design:
+    - NEW `backend/src/intelligence/graph/agentImportAttributor.ts`:
+      * `extractImports(filePath: string): string[]` — regex matching both `import X from './foo'` (TS source) and `const X = require('./foo')` (compiled CJS). Skip third-party (must start with `.` or `/`). Skip type-only.
+      * `resolveImport(fromFile: string, importSpec: string): string` — normalize relative path, add `.ts`/`.js` if missing, normalize against `linked_backend_services` path format.
+      * `attributeAgent(agentFile: string, capFileMap: Map<string, string[]>): Array<{capId: string, score: number, evidence: string[]}>` — walk extracted imports, look up each in the cap file map, aggregate matches per cap, score by match count + name-stem boost (agent name overlapping with target service file name).
+      * Threshold rule (v1 default): require ≥2 matching imports OR 1 match where the imported file's name stem matches the agent file's name stem (so `RevenueOptimizationAgent` → `revenueOptimizationService` is 1 strong match). Env-overridable via `MIN_SCORE`.
+    - NEW `backend/src/scripts/ingestImportAttributedAgents.js` — mirrors D2's `ingestDeclaredAgents.js` shape (env: `TARGET_PROJECT_ID`, `DRY_RUN`, `SCAN_ROOT`, `LINKED_BY_TAG`). Skips agents that already have `SERVES_CAPABILITY` metadata (D2 already covered them) AND skips agents that already have an active confirmed map row from the LLM pipeline (don't fight existing confirmed maps).
+    - Wires into `capability_agent_maps` with `linked_by='import-graph-2026-05-22'`. Upsert semantics same as D2.
+  - Task breakdown for next session:
+    * T1 (~30 min) — `extractImports()` + unit tests against a known agent file
+    * T2 (~30 min) — `resolveImport()` path normalization + tests on edge cases (trailing slash, missing ext, sibling vs nested)
+    * T3 (~15 min) — capability file map loader (one query, one round-trip)
+    * T4 (~30 min) — `attributeAgent()` scorer + threshold logic
+    * T5 (~30 min) — wrap into `ingestImportAttributedAgents.js`, dry-run on prod Accelerator project
+    * T6 (~30 min) — audit dry-run output, tune thresholds, iterate
+    * T7 (~30 min) — real run, verify coverage gain (target: 60+ caps with active agents, up from 19 post-D2), commit + deploy
+  - Expected coverage gain: hard to predict without running it. If agent → service import edges are clean enough, this could lift caps-with-agents from 19 → 60+ on the Accelerator project. If the agent files mostly import shared utilities rather than capability-specific services, the gain will be smaller and we'd need D2 retrofits to fill the rest. Either way, D3 produces an evidence trail (`evidence: string[]` per attribution) the operator can audit.
+  - Where this entry lives in the repo: PROGRESS.md (an unchecked entry — deliberate choice for forward-looking work that has to survive across sessions). When D3 ships, change `- [ ]` to `- [x]` and fill in actual verification numbers.
