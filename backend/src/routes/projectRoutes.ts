@@ -6647,31 +6647,78 @@ router.get('/api/portal/project/governance/adaptive/recovery-chain', requirePart
 // sprint plan, then a single execution wave that builds out as much
 // as possible. Pasted validation report flips last_execution and the
 // regular per-BP tasks take over from there.
+// ─── Foundation files: download the requirements doc + a starter CLAUDE.md ───
+// End-user repos don't ship with a spec or operating contract. The user drops
+// these two at their repo root before running the kickoff in Claude Code.
+router.get('/api/portal/project/requirements/download', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const doc = (project as any).requirements_document;
+    if (!doc || !String(doc).trim()) { res.status(404).json({ error: 'No requirements document has been generated for this project yet' }); return; }
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="REQUIREMENTS.md"');
+    res.send(String(doc));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/claude-md/download', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: Capability } = await import('../models/Capability');
+    const caps = await Capability.findAll({
+      where: { project_id: project.id },
+      attributes: ['name', 'description', 'total_requirements', 'matched_requirements'],
+    });
+    const { generateStarterClaudeMd } = await import('../services/foundationFilesService');
+    const md = generateStarterClaudeMd(project as any, caps as any);
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="CLAUDE.md"');
+    res.send(md);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/api/portal/project/kickoff-prompt', requireParticipant, async (req: Request, res: Response) => {
   try {
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const projectName = (project as any).organization_name || (project as any).name || 'this project';
+    // Embed a project summary + capability list so Claude Code is oriented even
+    // before it opens any files. The spec source is REQUIREMENTS.md (the doc the
+    // portal generated), NOT a separate Build Guide — end-user repos don't have
+    // one. Both REQUIREMENTS.md and a starter CLAUDE.md are downloadable from the
+    // portal (Blueprint → Foundation files) and dropped at the repo root.
+    const { default: KickoffCapability } = await import('../models/Capability');
+    const kickoffCaps = await KickoffCapability.findAll({
+      where: { project_id: project.id },
+      attributes: ['name', 'description', 'total_requirements', 'matched_requirements'],
+    });
+    const { buildProjectSummary } = await import('../services/foundationFilesService');
+    const projectSummary = buildProjectSummary(project as any, kickoffCaps as any);
     const prompt = `# Project Kickoff — Plan & Build the Foundation
 
 You are kicking off ${projectName}. The repo is connected. Your job is to take this project from empty repo to **a complete, working foundation in a single session** — every load-bearing layer scaffolded with real code, real tests, and the directives wired in — then deliver one consolidated report at the very end. The user will paste that report back into the portal once — not after each phase.
+
+## What you're building
+
+${projectSummary}
 
 ## Step 1 — Verify the foundation files (PLAN MODE)
 
 Enter **plan mode** and DO NOT make any edits in this step.
 
-1. Confirm \`CLAUDE.md\` exists at the repo root. If it doesn't, stop and tell the user — do not proceed without it. CLAUDE.md is the operating contract for this codebase.
-2. Confirm a build-guide doc exists at the repo root with \`Build_Guide\` in its filename (e.g. \`*_Build_Guide_v*.md\`). If it doesn't, stop and tell the user. The build guide is the source of truth for what needs to be built.
-3. Read both files end to end. Treat the build guide as the spec; treat CLAUDE.md as the rules of engagement (autonomy boundaries, escalation policy, scope lock, definition of done).
+1. Confirm \`REQUIREMENTS.md\` and \`CLAUDE.md\` exist at the repo root. **If either is missing**, tell the user to download them from the portal (open your project → Blueprint → "Foundation files" → Download) and place both at the repo root, then re-run this kickoff. Do not invent a spec or look for a "Build Guide" elsewhere — \`REQUIREMENTS.md\` is the only spec.
+2. Read both files end to end. Treat \`REQUIREMENTS.md\` as the spec (what to build); treat \`CLAUDE.md\` as the rules of engagement (autonomy boundaries, escalation policy, definition of done).
 
 ## Step 2 — Plan ALL foundation phases (STILL PLAN MODE)
 
-Using the build guide as the spec, propose a complete sprint plan that lays down the **full foundation** of the project:
+Using \`REQUIREMENTS.md\` as the spec, propose a complete sprint plan that lays down the **full foundation** of the project:
 
 - Break the work into 3–6 phases ordered by dependency: **data + schema → core backend services → primary UI surfaces → integrations → polish/observability**.
 - For each phase, list the exact files/modules to create or modify, the directives that govern them (per CLAUDE.md), and the tests that prove the phase is done.
 - Flag every governance boundary you hit per CLAUDE.md (schema redesigns, external paid dependencies, compliance, NFR thresholds). Default to the lowest-blast-radius path and proceed; only escalate the strategic ones.
-- Identify what genuinely needs the user (third-party credentials, ambiguous business rules outside the build guide). Everything else you proceed on.
+- Identify what genuinely needs the user (third-party credentials, ambiguous business rules the requirements document doesn't specify). Everything else you proceed on.
 
 Show the user the plan. Confirm before executing.
 
@@ -6690,7 +6737,7 @@ For anything else: assume the lowest-blast-radius path, log the assumption, and 
 Within each phase:
 
 - Build the real thing — schemas, models, services, route handlers, UI shells, tests. Not stubs.
-- Wire CLAUDE.md and the build guide's \`/directives\` references into the code.
+- Wire CLAUDE.md and any \`/directives\` the requirements document references into the code.
 - Run the tests for the phase before moving on. Fix what breaks.
 - If a phase has work that genuinely cannot be completed in this session, mark it explicitly and keep going — do not block the rest of the phases on it.
 
@@ -6721,7 +6768,7 @@ Commit: <full SHA you just committed>
 - Phase 3: ...
 (one line per phase)
 
-## Capabilities advanced (cross-reference to your build guide's components)
+## Capabilities advanced (cross-reference to the requirements document's components)
 - <capability or domain name> — <what now exists for it> — files: <key path>
 - <capability or domain name> — <what now exists for it> — files: <key path>
 (one line per business capability the build touches — auth, role-management, etc. The portal uses these to map work to the right BPs.)
@@ -6771,7 +6818,7 @@ git push origin main
 
 The user pastes this report back into the portal once. The system parses your \`Commit:\` SHA, refreshes its view of the repo at that SHA, fans the file evidence out across every capability your work touched, and stamps progress. The kickoff disappears, and the per-component task flow takes over for any remaining depth/polish.
 
-Do not hand-wave. Do not stop at phase 1. Do not stub out features the build guide says should exist. Do not skip the commit. If you cannot build something cleanly, mark it deferred and keep moving — do not leave a half-finished mess.`;
+Do not hand-wave. Do not stop at phase 1. Do not stub out features the requirements document says should exist. Do not skip the commit. If you cannot build something cleanly, mark it deferred and keep moving — do not leave a half-finished mess.`;
     res.json({ prompt_text: prompt });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

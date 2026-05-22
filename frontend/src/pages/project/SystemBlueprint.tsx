@@ -793,6 +793,27 @@ export default function SystemBlueprint() {
     showToast('Prompt copied to clipboard');
   };
 
+  // Download a foundation file (REQUIREMENTS.md / CLAUDE.md) the user drops at
+  // their repo root before running the kickoff. Fetched as a blob through the
+  // authed portal client (a plain <a href> can't carry the JWT header).
+  const downloadFoundationFile = async (url: string, filename: string) => {
+    if (demoActive) return;
+    try {
+      const res = await portalApi.get(url, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+      showToast(`${filename} downloaded — place it at your repo root`);
+    } catch {
+      showToast(`Could not download ${filename}`, '#ef4444');
+    }
+  };
+
   const handleReportChange = (value: string) => {
     if (demoActive) return;
     const jump = value.length - prevReportLen.current;
@@ -1610,6 +1631,31 @@ export default function SystemBlueprint() {
                   <i className="bi bi-info-circle" style={{ fontSize: 10 }}></i>
                   {TARGET_DESCRIPTIONS[recommended.promptTarget || ''] || 'This will implement the next component of your system.'}
                 </div>
+
+                {/* Foundation files — only on the kickoff. Claude Code reads
+                    REQUIREMENTS.md (the spec) + CLAUDE.md (the rules) from the
+                    repo root, so the user downloads both and drops them in
+                    before running the prompt. */}
+                {recommended.promptTarget === 'project_kickoff' && (
+                  <div className="mb-3 p-3" style={{ background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                    <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-text)' }}>
+                      <i className="bi bi-folder2-open me-1" style={{ color: '#3b82f6' }}></i>Foundation files — place these at your repo root first
+                    </div>
+                    <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 8 }}>
+                      Claude Code reads these to plan and build your system. Download both, drop them in your repo root, then run the prompt above. <strong>REQUIREMENTS.md</strong> is your spec; <strong>CLAUDE.md</strong> is the rules of engagement.
+                    </div>
+                    <div className="d-flex gap-2 flex-wrap">
+                      <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
+                        onClick={() => downloadFoundationFile('/api/portal/project/requirements/download', 'REQUIREMENTS.md')}>
+                        <i className="bi bi-download me-1"></i>REQUIREMENTS.md
+                      </button>
+                      <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
+                        onClick={() => downloadFoundationFile('/api/portal/project/claude-md/download', 'CLAUDE.md')}>
+                        <i className="bi bi-download me-1"></i>CLAUDE.md
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
                   <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => setShowPrompt(!showPrompt)}>
