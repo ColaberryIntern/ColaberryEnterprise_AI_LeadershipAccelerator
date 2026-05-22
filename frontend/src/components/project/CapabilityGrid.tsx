@@ -10,6 +10,7 @@ import {
   domainBuildSummary,
   type BPLikeSignal,
 } from '../../utils/bpSignals';
+import { BuiltnessIcon, deriveBuiltnessProps } from './BPBuiltnessIcon';
 
 interface RequirementNode { id: string; key: string; text: string; status: string; is_active: boolean; github_file_paths: string[]; confidence_score: number; }
 interface FeatureNode { id: string; name: string; description: string; success_criteria: string; status: string; priority: string; completion_pct: number; total_active: number; completed_active: number; requirements: RequirementNode[]; }
@@ -172,7 +173,12 @@ export default function CapabilityGrid() {
                   </div>
 
                   {/* Build pillars — B / F / A status. Honest reading of
-                      what the discovery engine actually sees in the repo. */}
+                      what the discovery engine actually sees in the repo.
+                      2026-05-22: the trailing builtness TEXT badge was
+                      replaced with the shared BuiltnessIcon so this
+                      surface matches the BPs tab visually. The card's
+                      left-border buildColor (above) still uses bpBuiltness
+                      for tonal accent. */}
                   {pillars && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }} title="Backend · Frontend · Agent build status">
                       {pillars.map(p => (
@@ -187,10 +193,10 @@ export default function CapabilityGrid() {
                           {p.label[0].toUpperCase()}
                         </span>
                       ))}
-                      {builtness && (
-                        <span style={{
-                          fontSize: 10.5, color: buildColor, fontWeight: 600, marginLeft: 6,
-                        }}>{builtness}</span>
+                      {bp && (
+                        <span style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center' }}>
+                          <BuiltnessIcon {...deriveBuiltnessProps(bp)} />
+                        </span>
                       )}
                     </div>
                   )}

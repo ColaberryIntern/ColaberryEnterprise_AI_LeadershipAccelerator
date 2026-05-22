@@ -25,7 +25,8 @@ import { trustLabel, confidenceLine } from '../../utils/structuralConfidence';
 import { metadataItems } from '../../utils/scanSpeedSignals';
 import { dedupByFrontendRoute } from '../../utils/bpRowDedup';
 import { dedupByNameStem } from '../../utils/bpNameDedup';
-import { bpPillars, domainBuildBreakdown, type PillarSignal, type PillarStatus } from '../../utils/bpSignals';
+import { bpPillars, domainBuildBreakdown, PILLAR_TONES, type PillarSignal, type PillarStatus } from '../../utils/bpSignals';
+import { BuiltnessIcon } from './BPBuiltnessIcon';
 import { inheritedDomainContextSentence } from '../../utils/bpInheritedContext';
 import { pathwayStageLabel } from '../../utils/pathwayStage';
 
@@ -698,9 +699,10 @@ const BPRowPillars: React.FC<{ bp: any }> = ({ bp }) => {
   );
   let pillars: PillarSignal[];
   if (usabilityPresent) {
-    // Swap to the row-local palette (gray for missing) so the BP row
-    // doesn't show red for legitimately-absent layers.
-    pillars = bpPillars(bp).map(p => ({ ...p, tone: PILLAR_TONES[p.status] }));
+    // 2026-05-22: bpPillars() now uses the unified palette (gray for
+    // missing) so no row-local override is needed. Components tab + BPs
+    // tab share the same colors.
+    pillars = bpPillars(bp);
   } else {
     pillars = [
       synthPillar('backend', (bp.linked_backend_services || []).length),
@@ -734,17 +736,11 @@ const BPRowPillars: React.FC<{ bp: any }> = ({ bp }) => {
   );
 };
 
-// 2026-05-20: collapse missing → gray on the BP row. The Components tab
-// keeps the four-state palette (red for missing) because it's deciding
-// "is this BP wired?" — different question. Here the operator just wants
-// to scan "what's present" without red implying broken-ness for a layer
-// the BP may legitimately not need.
-const PILLAR_TONES: Record<PillarStatus, { fg: string; bg: string }> = {
-  ready:   { fg: '#15803d', bg: '#dcfce7' },
-  partial: { fg: '#b45309', bg: '#fef3c7' },
-  missing: { fg: '#9ca3af', bg: 'transparent' },
-  na:      { fg: '#9ca3af', bg: 'transparent' },
-};
+// 2026-05-22: local PILLAR_TONES shadow removed. The global palette in
+// bpSignals.ts now uses gray-for-missing too, so both surfaces (Components
+// tab + BPs tab) share one source of truth. The "BPs tab needed a
+// different palette" reasoning the original local copy carried no longer
+// applies — operators read both surfaces with the same vocabulary.
 
 function synthPillar(label: PillarSignal['label'], count: number): PillarSignal {
   const status: PillarStatus = count > 0 ? 'ready' : 'na';
@@ -758,49 +754,10 @@ function synthPillar(label: PillarSignal['label'], count: number): PillarSignal 
 
 function cap1(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-/**
- * BuiltnessIcon — replaces the long "Page built · UI review pending" text
- * chip with a compact icon + tooltip. Operator scans icons left-to-right;
- * full meaning on hover.
- *   - check-circle (green) → page built + UI Advisor verified
- *   - eye (blue)           → page built, UI Advisor pending
- *   - circle (muted)       → no signal yet (Not built yet)
- *   - dot-circle (blue)    → partial/forming (non-page BPs with some coverage)
- */
-const BuiltnessIcon: React.FC<{
-  isPage: boolean;
-  pageHasFrontend: boolean;
-  usable: boolean;
-  pct: number;
-  tooltip: string;
-}> = ({ isPage, pageHasFrontend, usable, pct, tooltip }) => {
-  let icon: string;
-  let color: string;
-  let label: string;
-  if (pageHasFrontend) {
-    if (usable) { icon = 'bi-check-circle-fill'; color = '#15803d'; label = 'Page built · UI Advisor verified'; }
-    else        { icon = 'bi-eye'; color = '#1d4ed8'; label = 'Page built · UI review pending'; }
-  } else if (usable) {
-    icon = 'bi-check-circle-fill'; color = '#15803d'; label = 'Usable';
-  } else if (pct >= 50) {
-    icon = 'bi-dot'; color = '#1d4ed8'; label = 'Forming';
-  } else if (pct > 0) {
-    icon = 'bi-circle-half'; color = '#1d4ed8'; label = 'Early';
-  } else {
-    icon = 'bi-circle'; color = 'var(--color-text-light)'; label = 'Not built yet';
-  }
-  return (
-    <i
-      className={`bi ${icon}`}
-      title={`${label}\n${tooltip}`}
-      aria-label={label}
-      style={{
-        fontSize: 14, color, flexShrink: 0,
-        opacity: icon === 'bi-circle' ? 0.55 : 1,
-      }}
-    />
-  );
-};
+// 2026-05-22: BuiltnessIcon extracted to `./BPBuiltnessIcon` so both the
+// BPs tab (this file) and the Components tab (CapabilityGrid) can share
+// it. The derivation helper `deriveBuiltnessProps(bp)` lives there too.
+// Imported at the top of this file.
 
 const MATURITY_TONES: Record<number, { fg: string; bg: string; border: string }> = {
   0: { fg: 'var(--color-text-light)', bg: 'transparent', border: 'var(--color-border)' },

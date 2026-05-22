@@ -52,11 +52,19 @@ export interface PillarSignal {
   description: string;
 }
 
-const PILLAR_TONES: Record<PillarStatus, { fg: string; bg: string }> = {
+// 2026-05-22: missing collapses to gray (was red). Decision: operators
+// scan B/F/A as "what's present?" not "is the BP wired correctly?" —
+// red implied broken-ness for layers a BP may legitimately not need yet.
+// The Components tab + BPs tab now share this palette so the operator
+// learns one vocabulary across both surfaces. Caps that genuinely
+// "don't need" a layer can still be marked 'n/a' for the same gray dim;
+// the difference is now semantic (missing = absent, n/a = irrelevant)
+// rather than visual.
+export const PILLAR_TONES: Record<PillarStatus, { fg: string; bg: string }> = {
   ready:   { fg: '#15803d', bg: '#dcfce7' },              // green
   partial: { fg: '#b45309', bg: '#fef3c7' },              // amber
-  missing: { fg: '#b91c1c', bg: '#fee2e2' },              // red
-  na:      { fg: '#9ca3af', bg: 'transparent' },          // dim — "not applicable"
+  missing: { fg: '#9ca3af', bg: 'transparent' },          // gray — absent
+  na:      { fg: '#9ca3af', bg: 'transparent' },          // dim — not applicable
 };
 
 function normalizePillar(raw: string | undefined): PillarStatus {
