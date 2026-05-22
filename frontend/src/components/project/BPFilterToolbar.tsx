@@ -40,10 +40,20 @@ interface Props {
 const LAYER_OPTIONS: Array<{ value: LayerFilter; label: string; title: string }> = [
   { value: 'all',      label: 'All',      title: 'Show every BP regardless of layer presence' },
   { value: 'backend',  label: 'Backend',  title: 'BPs with attributed backend service files' },
-  { value: 'frontend', label: 'Frontend', title: 'BPs that own a page route or are a page BP' },
-  { value: 'agent',    label: 'Agent',    title: 'BPs with confirmed agent attribution' },
+  { value: 'frontend', label: 'Frontend', title: 'BPs that own a page route or are a page BP (linked components alone don’t qualify)' },
+  { value: 'agent',    label: 'Agent',    title: 'BPs with a confirmed capability_agent_maps row attached. Agent files in the repo that aren’t yet mapped to a BP won’t appear here.' },
   { value: 'page',     label: 'Page',     title: 'Page BPs only (subset of Frontend)' },
 ];
+
+// Persistent (non-tooltip) hint shown below the chip row whenever a layer
+// is selected. Keeps the strict-rule semantics in front of the operator
+// so the visible count never looks like a bug. (2026-05-22)
+const LAYER_HINTS: Partial<Record<LayerFilter, string>> = {
+  backend:  'Counts BPs with at least one attributed backend service file.',
+  frontend: 'Counts BPs that own a page route or are themselves a page BP. Linked components alone don’t qualify.',
+  agent:    'Counts BPs with a confirmed agent attached (capability_agent_maps row). Agent files in the repo that haven’t been mapped to a BP yet won’t appear here — surface coverage is tracked separately.',
+  page:     'Page BPs only — a subset of Frontend.',
+};
 
 const BPFilterToolbar: React.FC<Props> = ({
   state, setQuery, setLayer, toggleKeyword, clearAll, hasAny,
@@ -199,6 +209,29 @@ const BPFilterToolbar: React.FC<Props> = ({
           )}
         </div>
       </div>
+
+      {/* Layer hint — explains the strict-rule semantics so the count
+          never reads as a bug (e.g., why "Agent" shows ~20 BPs even
+          when the repo has 100+ agent files). */}
+      {state.layer !== 'all' && LAYER_HINTS[state.layer] && (
+        <div
+          role="note"
+          style={{
+            fontSize: 11.5,
+            color: 'var(--color-text-light)',
+            fontStyle: 'italic',
+            padding: '0.4rem 0.55rem',
+            background: 'var(--color-bg-alt)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 5,
+            marginBottom: '0.4rem',
+            lineHeight: 1.45,
+          }}
+        >
+          <i className="bi bi-info-circle me-2" aria-hidden="true" style={{ color: 'var(--color-primary)' }} />
+          {LAYER_HINTS[state.layer]}
+        </div>
+      )}
 
       {/* Row 2 — keyword refine cloud */}
       {cloud.length > 0 && (

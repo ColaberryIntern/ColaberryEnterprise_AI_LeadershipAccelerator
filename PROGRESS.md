@@ -3709,3 +3709,14 @@ The whole point of the operator's directive ("do real operational verifications"
 | `CLAUDE.md` | Session start protocol mints a Session ID; new "Concurrent-instance safety" + "Per-session change report (HTML)" sections; entry format gains a `Session:` line; end-of-session audit scoped to own ID. (2026-05-22) |
 | `scripts/generateSessionChangelog.js` | NEW — renders + auto-opens a per-session HTML changelog from PROGRESS.md entries tagged with a Session ID. (2026-05-22) |
 | `docs/sessions/SESSION_CC-20260522-2b04.html` | NEW — generated change report for this session. (2026-05-22) |
+
+- [x] BP filter toolbar: layer-hint banner explains the strict-rule semantics
+  - Date: 2026-05-22
+  - Session: CC-20260522-9k7m
+  - What changed: Operator on the System → BPs surface with `layer=agent` saw ~20 BPs and thought the filter was broken — the project has 169 agent `.ts` files in the repo and 61 distinct agent names in `capability_agent_maps`, but only 32 caps have a confirmed agent row attached and the strict rule (2026-05-21) requires `capability_agent_maps.status='active'` to pass. The filter is correct; the mental model isn't. Added a persistent italic info banner that appears below the layer chip row whenever a layer is selected (not just hover-only on the chip's `title`), with hint text per layer. The Agent hint explicitly calls out that agent files which haven't been mapped to a BP yet won't appear — and points at "surface coverage is tracked separately" so the operator knows there's a real gap behind the count (Option D follow-up). Also tightened the Agent and Frontend chip `title` attributes for the operator who does hover.
+  - Verification: frontend `npx tsc --noEmit` exit 0; CRA production build (`CI=true npm run build`) exit 0; deploy pending after-hours.
+  - Notes: Zero data change — pure UI hint to stop the strict-rule count from reading as a bug while the agent-discovery rebuild is scoped. Companion to a separate Explore-subagent recon of the ingestion pipeline (capabilityAgentMapService, agentAttributionClassifier, brownfieldDiscoveryService classifyFile/extractStem) that scopes the full Option D rebuild.
+
+| File | Change |
+|---|---|
+| `frontend/src/components/project/BPFilterToolbar.tsx` | Added `LAYER_HINTS` map and a persistent info banner below the chip row (rendered when `state.layer !== 'all'`); strengthened the Agent + Frontend chip `title` attributes. (2026-05-22) |
