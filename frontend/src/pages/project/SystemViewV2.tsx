@@ -9,6 +9,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import * as bpApi from '../../services/portalBusinessProcessApi';
+import { useCoryAsk } from '../../hooks/useCoryAsk';
 import { buildPreviewUrl, willBeMixedContentBlocked } from '../../utils/projectPreviewUrl';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
@@ -719,6 +720,7 @@ class V2ErrorBoundary extends React.Component<{ children: React.ReactNode }, { e
 function SystemViewV2Inner() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const askCory = useCoryAsk();
   const urlComponentId = searchParams.get('componentId');
 
   // Global mode — force 'build' if URL has a build-mode tab param
@@ -1451,9 +1453,16 @@ function SystemViewV2Inner() {
     handleGeneratePrompt({ ...comp, promptTarget: next.prompt_target });
   };
 
-  // Learn about a component — opens Cory fullscreen in Learn Mode
+  // Learn about a component — opens Cory chat with a prefill.
+  // 2026-05-22: was a navigate to the standalone /portal/project/cory page
+  // (broke the operator's context — modal closed, scroll lost). Now opens
+  // the floating widget overlay-style with a prefilled question so the
+  // operator can ask follow-ups without leaving this page.
   const handleLearnAbout = (comp: SystemComponent) => {
-    navigate(`/portal/project/cory?mode=learn&componentId=${comp.id}&stepName=${encodeURIComponent(comp.name)}`);
+    askCory(
+      `Walk me through ${comp.name} — what it does in plain English, where it sits in the system, and what the next concrete move on it would be.`,
+      `system-view-v2:learn:${comp.id}`,
+    );
   };
 
   // UI feedback handlers. Now passes step_key so the backend stamps which

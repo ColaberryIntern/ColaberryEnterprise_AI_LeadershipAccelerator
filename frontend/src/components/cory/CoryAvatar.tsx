@@ -1,14 +1,19 @@
 /**
- * CoryAvatar — Floating AI Architect button
+ * CoryAvatar — Floating AI Architect button.
  *
- * Fixed bottom-right corner on all portal pages.
- * Click → navigates to Cory fullscreen in Build Mode.
+ * Fixed bottom-right corner on portal pages where it's mounted.
+ *
+ * 2026-05-22: click now opens the GlobalCoryWidget chat in place
+ * (was: navigated to `/portal/project/cory` fullscreen, which broke
+ * the operator's context — modals closed, scroll lost, "go back to
+ * where I was" required a manual navigate). The route still exists
+ * for bookmark / search compatibility; nothing links to it anymore.
  */
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCoryOpen } from '../../hooks/useCoryAsk';
 
 export default function CoryAvatar() {
-  const navigate = useNavigate();
+  const openCory = useCoryOpen();
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -55,7 +60,7 @@ export default function CoryAvatar() {
         className="btn"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        onClick={() => navigate('/portal/project/cory')}
+        onClick={() => openCory('cory-avatar')}
         style={{
           width: 52,
           height: 52,

@@ -97,13 +97,18 @@ export default function GlobalCoryWidget() {
     const handler = (ev: Event) => {
       const detail = (ev as CustomEvent<CoryAskEventDetail>).detail;
       const query = (detail?.query || '').trim();
-      if (!query) return;
+      // 2026-05-22: open the chat on EVERY dispatch (including empty
+      // query — that's the "just open" signal from useCoryOpen()). Only
+      // set externalQuery when there's actually something to send; empty
+      // query opens the widget for the operator to type their own message.
       setPanelOpen(false);
       setChatOpen(true);
-      setExternalQuery(query);
-      // Reset so a subsequent dispatch with the same string still triggers
-      // CoryPanel's externalQuery effect (which fires on identity change).
-      window.setTimeout(() => setExternalQuery(null), 250);
+      if (query) {
+        setExternalQuery(query);
+        // Reset so a subsequent dispatch with the same string still triggers
+        // CoryPanel's externalQuery effect (which fires on identity change).
+        window.setTimeout(() => setExternalQuery(null), 250);
+      }
     };
     window.addEventListener(CORY_ASK_EVENT, handler as EventListener);
     return () => window.removeEventListener(CORY_ASK_EVENT, handler as EventListener);

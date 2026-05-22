@@ -8,6 +8,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import * as bpApi from '../../services/portalBusinessProcessApi';
+import { useCoryAsk } from '../../hooks/useCoryAsk';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
@@ -534,6 +535,7 @@ const INITIAL_BUILD: BuildState = { phase: 'idle', prompt: null, reportText: '',
 export default function SystemBlueprint() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const askCory = useCoryAsk();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [components, setComponents] = useState<SystemComponent[]>([]);
   const [progress, setProgress] = useState<ProgressData | null>(null);
@@ -822,9 +824,16 @@ export default function SystemBlueprint() {
     setBuild(prev => ({ ...prev, reportText: value, pasteDetected: isPaste || prev.pasteDetected }));
   };
 
-  // Learn about a component — opens Cory fullscreen in Learn Mode
+  // Learn about a component — opens Cory chat with a prefill.
+  // 2026-05-22: was a navigate to the standalone /portal/project/cory page
+  // (broke the operator's context — modal closed, scroll lost). Now opens
+  // the floating widget overlay-style with a prefilled question so the
+  // operator can ask follow-ups without leaving this page.
   const handleLearnAbout = (comp: SystemComponent) => {
-    navigate(`/portal/project/cory?mode=learn&componentId=${comp.id}&stepName=${encodeURIComponent(comp.name)}`);
+    askCory(
+      `Walk me through ${comp.name} — what it does in plain English, where it sits in the system, and what the next concrete move on it would be.`,
+      `system-blueprint:learn:${comp.id}`,
+    );
   };
 
   const handleValidate = async (comp: SystemComponent) => {
@@ -1592,7 +1601,13 @@ export default function SystemBlueprint() {
                     // which would have Cory explain that unrelated thing.
                     // Route to the kickoff explanation directly instead.
                     if (primaryTarget === 'project_kickoff') {
-                      navigate('/portal/project/cory?mode=learn&componentId=__project_kickoff__&stepName=Project%20Kickoff');
+                      // 2026-05-22: was a navigate to /portal/project/cory;
+                      // now opens the floating widget with a kickoff-scoped
+                      // prefill so the operator can ask follow-ups in place.
+                      askCory(
+                        `Walk me through the Project Kickoff step — what it covers, what I need to do, and what counts as "done."`,
+                        'system-blueprint:learn:project_kickoff',
+                      );
                       return;
                     }
                     handleLearnAbout(buttonComp);

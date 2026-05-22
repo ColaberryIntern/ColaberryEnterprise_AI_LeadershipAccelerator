@@ -29,9 +29,28 @@ export interface CoryAskEventDetail {
 
 export function useCoryAsk(): (query: string, source?: string) => void {
   return useCallback((query: string, source?: string) => {
+    // 2026-05-22: an empty/whitespace query is a deliberate "just open the
+    // chat" signal — the widget opens but auto-send is skipped. This lets
+    // top-nav and other generic "open Cory" entry points reuse the same
+    // event channel instead of growing a parallel one. The listener in
+    // GlobalCoryWidget mirrors this behavior: opens always, sends only
+    // when query is non-empty.
     const trimmed = (query || '').trim();
-    if (!trimmed) return;
     const detail: CoryAskEventDetail = { query: trimmed, source };
     window.dispatchEvent(new CustomEvent(CORY_ASK_EVENT, { detail }));
   }, []);
+}
+
+/**
+ * useCoryOpen — convenience for "just open Cory chat with no prefill."
+ * Returns a function `openCory(source?)` that fires a `cory:ask` event
+ * with an empty query. The widget opens; no message is auto-sent. Use
+ * for top-nav / avatar buttons where the operator wants to start a
+ * fresh conversation without a context-specific prefill.
+ */
+export function useCoryOpen(): (source?: string) => void {
+  const askCory = useCoryAsk();
+  return useCallback((source?: string) => {
+    askCory('', source || 'open');
+  }, [askCory]);
 }
