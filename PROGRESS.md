@@ -3677,3 +3677,17 @@ The whole point of the operator's directive ("do real operational verifications"
 | `backend/src/services/foundationFilesService.ts` | NEW — `buildProjectSummary()` + `generateStarterClaudeMd()` (pure string builders). (2026-05-22) |
 | `backend/src/routes/projectRoutes.ts` | NEW `GET /requirements/download` + `GET /claude-md/download`; kickoff prompt rewritten to use REQUIREMENTS.md as the spec, embed the project summary, and point missing-file users to the portal downloads. (2026-05-22) |
 | `frontend/src/pages/project/SystemBlueprint.tsx` | `downloadFoundationFile()` helper + a "Foundation files" download row (REQUIREMENTS.md / CLAUDE.md) shown on the kickoff prompt panel. (2026-05-22) |
+
+- [x] Plan A Phase 2: stop linking to standalone Cory page; widget overlay everywhere (`0807c828`)
+  - Date: 2026-05-22
+  - What changed: Per Cory unified-surface decision A4 ("Keep at the route, stop linking to it"), every `navigate('/portal/project/cory')` in the SPA is replaced with an `askCory()` / `openCory()` call that opens the floating `GlobalCoryWidget` in place. Operator's context (modals, scroll position, current page) is preserved instead of being torn down by a full-page navigation. Extensions to the deeplink mechanism: `useCoryAsk` now accepts an empty query as a deliberate "just open the chat" signal (was: silently returned with no action). New `useCoryOpen()` convenience hook wraps that pattern for top-nav / avatar buttons. `GlobalCoryWidget` listener opens the widget on every dispatch; only sets `externalQuery` when there's a non-empty query to auto-send. Five link sites converted: CoryAvatar (avatar click → openCory), SystemViewV2 `handleLearnAbout` (Learn-about-component → askCory with prefill), SystemBlueprint `handleLearnAbout` (same), SystemBlueprint kickoff-button (project_kickoff-scoped prefill). The `/portal/project/cory` route definition is intentionally preserved — bookmarks and direct URL navigation still work; the SPA just no longer links to it.
+  - Verification: frontend `npx tsc --noEmit` exit 0; CRA production build (`CI=true npm run build`) exit 0; deployed (nginx rebuilt); production landing `HTTP 200` in 382 ms; `Last-Modified` header confirms new bundle live.
+  - Notes: Plan A Phase 2 of the unified-surface plan. No backend change in this commit — pure SPA link-routing change. Next phases require operator authorization: Phase 3 (conversation persistence) is a database schema add — governance boundary per CLAUDE.md, so pausing here for explicit nod before that one.
+
+| File | Change |
+|---|---|
+| `frontend/src/hooks/useCoryAsk.ts` | `useCoryAsk` no longer early-returns on empty query (allows "just open" semantics); added `useCoryOpen()` convenience hook for empty-prefill calls. (2026-05-22) |
+| `frontend/src/components/GlobalCoryWidget.tsx` | Listener opens the chat on every `cory:ask` dispatch; only sets `externalQuery` when query is non-empty. (2026-05-22) |
+| `frontend/src/components/cory/CoryAvatar.tsx` | Replaced `navigate('/portal/project/cory')` with `openCory('cory-avatar')`; dropped `useNavigate` import. (2026-05-22) |
+| `frontend/src/pages/project/SystemViewV2.tsx` | Imports `useCoryAsk`; `handleLearnAbout` opens the widget with a component-scoped prefill instead of navigating to the standalone Cory page. (2026-05-22) |
+| `frontend/src/pages/project/SystemBlueprint.tsx` | Imports `useCoryAsk`; `handleLearnAbout` opens the widget with a prefill; kickoff button gets a kickoff-scoped prefill. (2026-05-22) |
