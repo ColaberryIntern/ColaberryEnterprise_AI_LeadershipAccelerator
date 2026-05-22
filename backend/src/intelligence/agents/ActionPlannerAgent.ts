@@ -7,6 +7,10 @@ import { registerAgent } from './agentRegistry';
 import type { RootCauseResult } from './RootCauseAgent';
 import type { SafeAction } from '../../models/IntelligenceDecision';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────────────
+export const SERVES_CAPABILITY = 'Action Planner';
+export const AGENT_ROLE = 'executor';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface ActionRecommendation {

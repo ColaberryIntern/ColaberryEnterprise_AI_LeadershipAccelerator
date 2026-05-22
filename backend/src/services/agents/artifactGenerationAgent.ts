@@ -6,6 +6,10 @@ import { chatCompletion } from '../../intelligence/assistant/openaiHelper';
 import { CurriculumLesson, ArtifactDefinition } from '../../models';
 import type { AgentExecutionResult, AgentAction } from './types';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Artifact Generation";
+export const AGENT_ROLE = "executor";
+
 const AGENT_NAME = 'ArtifactGenerationAgent';
 
 const ARTIFACT_TYPES = ['slides', 'lab_exercise', 'assessment', 'project_brief', 'reference_guide'] as const;

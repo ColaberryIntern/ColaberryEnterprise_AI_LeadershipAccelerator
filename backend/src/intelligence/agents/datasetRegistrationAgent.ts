@@ -2,6 +2,10 @@ import { runFullDiscovery, DiscoveryResult } from '../discovery/dictionaryBuilde
 import SystemProcess from '../../models/SystemProcess';
 import DatasetRegistry from '../../models/DatasetRegistry';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Dataset Registration";
+export const AGENT_ROLE = "executor";
+
 let isRunning = false;
 
 export async function runDiscoveryAgent(): Promise<DiscoveryResult | null> {

@@ -9,6 +9,10 @@ import type { RootCauseResult } from './RootCauseAgent';
 import type { RiskTier } from '../../models/IntelligenceDecision';
 import { resolveGlobalConfig, HARDCODED_DEFAULTS } from '../../services/governanceResolutionService';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Risk Evaluator Agent";
+export const AGENT_ROLE = "classifier";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface RiskEvaluation {

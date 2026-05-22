@@ -10,6 +10,10 @@ import { registerAgent } from './agentRegistry';
 import type { SafeAction } from '../../models/IntelligenceDecision';
 import crypto from 'crypto';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Execution Planning";
+export const AGENT_ROLE = "orchestrator";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface ExecutionResult {

@@ -7,6 +7,10 @@ import { getVectorMemory } from '../memory/vectorMemory';
 import { registerAgent } from './agentRegistry';
 import { Op } from 'sequelize';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Growth Experiment Agent";
+export const AGENT_ROLE = "executor";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface ExperimentProposal {

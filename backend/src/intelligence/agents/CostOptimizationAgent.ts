@@ -5,6 +5,10 @@
 import AiAgent from '../../models/AiAgent';
 import { registerAgent } from './agentRegistry';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Cost Optimization";
+export const AGENT_ROLE = "executor";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface CostInsight {

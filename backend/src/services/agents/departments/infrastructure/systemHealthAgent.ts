@@ -3,6 +3,10 @@ import { AiAgent } from '../../../../models';
 import { logAgentActivity } from '../../../aiEventService';
 import type { AgentExecutionResult, AgentAction } from '../../types';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "System Health Monitoring";
+export const AGENT_ROLE = "monitor";
+
 const AGENT_NAME = 'DeptSystemHealthAgent';
 
 export async function runDeptSystemHealthAgent(

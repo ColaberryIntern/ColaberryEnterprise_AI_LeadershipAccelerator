@@ -7,6 +7,10 @@ import { registerAgent } from './agentRegistry';
 import { Op } from 'sequelize';
 import { resolveGlobalConfig, HARDCODED_DEFAULTS } from '../../services/governanceResolutionService';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Governance Management";
+export const AGENT_ROLE = "orchestrator";
+
 // ─── Guardrails (hardcoded fallback — DB values preferred via resolveGlobalConfig) ─
 
 const GUARDRAILS_FALLBACK = {

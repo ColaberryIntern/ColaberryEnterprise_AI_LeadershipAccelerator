@@ -8,6 +8,10 @@ import type { ActionRecommendation } from './ActionPlannerAgent';
 import type { DetectedProblem } from './ProblemDiscoveryAgent';
 import { Op } from 'sequelize';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Impact Estimator";
+export const AGENT_ROLE = "classifier";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface ImpactEstimate {

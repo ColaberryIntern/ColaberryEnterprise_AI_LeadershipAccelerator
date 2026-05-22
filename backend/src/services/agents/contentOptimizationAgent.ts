@@ -5,6 +5,10 @@ import { logAgentActivity, logAiEvent } from '../aiEventService';
 import { createProposal } from '../agentPermissionService';
 import type { AgentExecutionResult, AgentAction } from './types';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Content Optimization";
+export const AGENT_ROLE = "executor";
+
 const AGENT_NAME = 'ContentOptimizationAgent';
 const MIN_SAMPLE_SIZE = 10;
 const OPEN_RATE_THRESHOLD = 0.10; // 10%

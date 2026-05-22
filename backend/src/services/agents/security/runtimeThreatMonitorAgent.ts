@@ -3,6 +3,10 @@ import { Department, DepartmentEvent, PageEvent, AiAgentActivityLog } from '../.
 import { createTicket } from '../../ticketService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Runtime Threat Monitoring";
+export const AGENT_ROLE = "monitor";
+
 const AGENT_NAME = 'RuntimeThreatMonitorAgent';
 const WINDOW_MINUTES = 5;
 const EVENT_THRESHOLD = 30; // flag visitors with >30 events in window

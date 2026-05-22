@@ -3,6 +3,10 @@ import { ChatConversation, ChatMessage } from '../../../../models';
 import { logAgentActivity } from '../../../aiEventService';
 import type { AgentExecutionResult, AgentAction } from '../../types';
 
+// ─── Capability attribution (D2, 2026-05-22) ─────────────────────────
+export const SERVES_CAPABILITY = "Content Generation for Marketing";
+export const AGENT_ROLE = "executor";
+
 const AGENT_NAME = 'DeptContentGenerationAgent';
 
 export async function runDeptContentGenerationAgent(
