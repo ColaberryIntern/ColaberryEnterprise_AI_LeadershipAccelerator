@@ -18,7 +18,7 @@ import RequirementsGenerationJob from '../models/RequirementsGenerationJob';
 import { ArtifactDefinition, AssignmentSubmission } from '../models';
 import { buildProjectRequirementsContext } from './projectRequirementsContextService';
 import { createNewVersion } from './artifactVersionService';
-import { attachArtifactToProject, createProjectForEnrollment } from './projectService';
+import { attachArtifactToProject, createProjectForEnrollment, getProjectByEnrollment } from './projectService';
 import { refreshProjectOutputs } from './portfolioEnhancementService';
 import OpenAI from 'openai';
 
@@ -197,7 +197,9 @@ export async function startRequirementsGeneration(
   // (findOrCreate on enrollment_id) so the generation job has a project to
   // attach to. The later Save (POST /setup/requirements) calls the same helper
   // and finds this exact row — no duplicate is created.
-  let project = await Project.findOne({ where: { enrollment_id: enrollmentId } });
+  // Multi-project: target the ACTIVE project, not an arbitrary first match —
+  // a user building their 2nd project must attach the job to that project.
+  let project = await getProjectByEnrollment(enrollmentId);
   if (!project) {
     project = await createProjectForEnrollment(enrollmentId);
   }

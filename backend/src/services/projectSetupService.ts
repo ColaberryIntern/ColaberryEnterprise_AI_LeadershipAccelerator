@@ -117,6 +117,37 @@ export async function connectGitHub(
 }
 
 // ---------------------------------------------------------------------------
+// 4b. Finalize a generated requirements document (shared by the Workflow
+//     build poller, the architect-status poll, and any server-side completion).
+//     Saves the doc, flips requirements_loaded, then runs build-out. Idempotent:
+//     skips the save if already loaded, skips activation if already activated.
+//     activateProject throws on a 0-capability result, so a transient clustering
+//     failure leaves the project un-activated and the caller can retry.
+// ---------------------------------------------------------------------------
+
+export async function finalizeRequirementsDocument(
+  enrollmentId: string,
+  project: Project,
+  document: string,
+): Promise<void> {
+  const ss = (project as any).setup_status || {};
+  if (!ss.requirements_loaded) {
+    if (!document || document.trim().length < 100) {
+      throw new Error('Requirements document too short to finalize');
+    }
+    (project as any).requirements_document = document;
+    (project as any).setup_status = { ...ss, requirements_loaded: true };
+    (project as any).changed('setup_status', true);
+    (project as any).changed('requirements_document', true);
+    await project.save();
+  }
+  const refreshed = (project as any).setup_status || {};
+  if (refreshed.requirements_loaded && !refreshed.activated) {
+    await activateProject(enrollmentId);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 5. Activate Project
 // ---------------------------------------------------------------------------
 

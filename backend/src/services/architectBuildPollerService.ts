@@ -28,10 +28,13 @@ interface CandidateRow {
 export async function pollArchitectBuilds(): Promise<{ checked: number; retrieved: number; activated: number }> {
   const sequelize = (Project as any).sequelize;
   // JSONB filter via ->> so we avoid the `?` operator (clashes with binds).
+  // Covers BOTH build tiers: Architect (architect_slug) and Workflow
+  // (workflow_job_id). Both finalize the same way once their source completes.
   const rows = (await sequelize.query(
     `SELECT id, enrollment_id, setup_status
        FROM projects
-      WHERE setup_status->>'architect_slug' IS NOT NULL
+      WHERE (setup_status->>'architect_slug' IS NOT NULL
+             OR setup_status->>'workflow_job_id' IS NOT NULL)
         AND COALESCE(setup_status->>'activated', 'false') <> 'true'`,
     { type: sequelize.QueryTypes.SELECT }
   )) as CandidateRow[];
@@ -42,6 +45,30 @@ export async function pollArchitectBuilds(): Promise<{ checked: number; retrieve
 
   for (const row of rows) {
     const slug = row.setup_status?.architect_slug;
+    const workflowJobId = row.setup_status?.workflow_job_id;
+
+    // ── Workflow tier: finalize a completed generation job ──
+    if (!slug && workflowJobId) {
+      if (row.setup_status?.requirements_loaded && row.setup_status?.activated) continue;
+      checked += 1;
+      try {
+        const { getJobStatus } = await import('./requirementsGenerationService');
+        const job = await getJobStatus(workflowJobId);
+        if (!job || job.status !== 'completed' || !job.output_document) continue;
+        const project = await Project.findByPk(row.id);
+        if (!project) continue;
+        const before = !!(project as any).setup_status?.requirements_loaded;
+        const { finalizeRequirementsDocument } = await import('./projectSetupService');
+        await finalizeRequirementsDocument(row.enrollment_id, project, job.output_document);
+        if (!before && (project as any).setup_status?.requirements_loaded) retrieved += 1;
+        if ((project as any).setup_status?.activated) activated += 1;
+        console.log(`[BuildPoller] finalized workflow job ${workflowJobId}`);
+      } catch (e: any) {
+        console.warn(`[BuildPoller] workflow finalize for ${workflowJobId} not complete (will retry): ${e.message}`);
+      }
+      continue;
+    }
+
     if (!slug) continue;
     checked += 1;
     try {

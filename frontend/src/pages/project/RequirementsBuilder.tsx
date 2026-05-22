@@ -247,62 +247,28 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
     setModifyText('');
   };
 
+  // Workflow tier: kick off requirements generation, then hand the user to the
+  // live system-preview demo while it generates + builds out server-side. This
+  // mirrors the Full/Autonomous handoff (handleFullBuild) so all three tiers
+  // wait in the same place. The backend persists workflow_job_id + build_idea,
+  // and the architect-status poll / build poller finalize the doc and build-out
+  // even if the tab closes — so we don't poll inline here.
   const handleGenerate = async () => {
-    setPhase('generating');
-    setStage('generating');
-    setProgress(42);
-    setProgressMsg('Building your requirements specification...');
+    setStartingBuild(true);
     setError(null);
-
     const capText = buildCapabilityLines(questions).join('\n');
-
     try {
-      const res = await portalApi.post('/api/portal/project/requirements/generate', {
+      await portalApi.post('/api/portal/project/requirements/generate', {
         mode: 'professional',
         project_name: deriveProjectName(originalIdea),
+        idea: originalIdea,
         user_prompt: `ORIGINAL IDEA:\n${originalIdea}\n\nSELECTED SOPHISTICATION LEVELS (AI System Discovery Framework):\n${capText}\n\nGenerate comprehensive requirements covering the original idea and the selected sophistication levels. The requirements document should be at least 6000 words and cover functional requirements, non-functional requirements, system architecture, data models, API specifications, and user interface requirements.`,
       });
-      const jid = res.data.job_id;
-      if (!jid) { setError('No job ID returned — generation may not have started'); setPhase('questions'); return; }
-      setJobId(jid);
-      setProgressMsg('Job started — generating your requirements document...');
-
-      let pollCount = 0;
-      pollRef.current = setInterval(async () => {
-        pollCount++;
-        try {
-          const s = (await portalApi.get(`/api/portal/project/requirements/job/${jid}`)).data;
-          if (s.status === 'completed') {
-            clearInterval(pollRef.current);
-            const doc = s.result?.content || s.result?.document || s.result || '';
-            setGeneratedDoc(typeof doc === 'string' ? doc : JSON.stringify(doc, null, 2));
-            setPhase('review');
-            setStage('review');
-            setProgress(92);
-          } else if (s.status === 'failed') {
-            clearInterval(pollRef.current);
-            setError(s.error || 'Generation failed');
-            setPhase('questions');
-          } else {
-            const pct = s.progress || Math.min(42 + pollCount * 3, 89);
-            setProgress(pct);
-            setProgressMsg(s.message || `Generating requirements... (${Math.round(pct)}%)`);
-            setStage(pct < 55 ? 'outline' : pct < 75 ? 'sections' : 'refinement');
-          }
-        } catch (pollErr: any) {
-          console.warn('[RequirementsBuilder] Poll error:', pollErr?.message);
-        }
-        // Timeout after 15 minutes (the 2-pass expand legitimately runs longer
-        // than a single call; the backend bounds each LLM call to ~4 min).
-        if (pollCount > 300) {
-          clearInterval(pollRef.current);
-          setError('Generation timed out. Please try again.');
-          setPhase('questions');
-        }
-      }, 3000);
+      localStorage.removeItem(draftKey());
+      window.location.href = '/portal/project/demo';
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to start generation');
-      setPhase('questions');
+      setStartingBuild(false);
     }
   };
 

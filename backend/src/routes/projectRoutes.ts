@@ -582,8 +582,52 @@ router.get('/api/portal/project/architect-status', requireParticipant, async (re
   try {
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
-    const slug = (project as any).setup_status?.architect_slug;
-    if (!slug) { res.json({ phase: 'not_started', progress: 0, complete: false, message: 'No build in progress' }); return; }
+    const ssEarly = (project as any).setup_status || {};
+    const slug = ssEarly.architect_slug;
+    if (!slug) {
+      // Workflow tier: no Architect slug, but a generation job is in flight.
+      // Report its status in the same {complete,progress,message} shape the
+      // demo polls, and finalize (save doc + build out) on completion so the
+      // demo can route the user onward — even if they came back to a fresh tab.
+      const workflowJobId = ssEarly.workflow_job_id;
+      if (workflowJobId && !ssEarly.requirements_loaded) {
+        const { getJobStatus } = await import('../services/requirementsGenerationService');
+        const job = await getJobStatus(workflowJobId);
+        if (job && job.status === 'completed' && job.output_document && job.output_document.length > 100) {
+          // Save the doc + flip requirements_loaded (await), then build out
+          // (fire-and-forget) — same shape as the Architect branch below, so
+          // "complete" means the doc is ready and activation continues async.
+          try {
+            (project as any).requirements_document = job.output_document;
+            (project as any).setup_status = { ...ssEarly, requirements_loaded: true };
+            (project as any).changed('setup_status', true);
+            (project as any).changed('requirements_document', true);
+            await project.save();
+            const { activateProject } = await import('../services/projectSetupService');
+            activateProject(req.participant!.sub).catch(e => console.warn('[ArchitectStatus] workflow activation:', e.message));
+          } catch (e: any) {
+            console.warn('[ArchitectStatus] workflow save error (will retry):', e.message);
+          }
+          const loaded = !!(project as any).setup_status?.requirements_loaded;
+          res.json({ phase: loaded ? 'complete' : 'building', progress: loaded ? 100 : 92, complete: loaded, message: loaded ? 'Your requirements are ready' : 'Building your system…', requirementsLoaded: loaded });
+          return;
+        }
+        if (job && job.status === 'failed') {
+          res.json({ phase: 'failed', progress: 0, complete: false, message: job.error_message || 'Requirements generation failed' });
+          return;
+        }
+        // queued / running
+        res.json({ phase: 'building', progress: job?.status === 'running' ? 55 : 20, complete: false, message: 'Generating your requirements document…' });
+        return;
+      }
+      // requirements already loaded (e.g. finalized on a prior poll) → complete
+      if (workflowJobId && ssEarly.requirements_loaded) {
+        res.json({ phase: 'complete', progress: 100, complete: true, message: 'Your requirements are ready', requirementsLoaded: true });
+        return;
+      }
+      res.json({ phase: 'not_started', progress: 0, complete: false, message: 'No build in progress' });
+      return;
+    }
 
     const { getArchitectStatus, getArchitectDocument } = await import('../services/architectProxyService');
     const status = await getArchitectStatus(slug);
@@ -782,21 +826,35 @@ Critical rules:
 router.post('/api/portal/project/requirements/generate', requireParticipant, async (req: Request, res: Response) => {
   try {
     const enrollmentId = req.participant!.sub;
-    const { mode, user_prompt, project_name } = req.body;
+    const { mode, user_prompt, project_name, idea } = req.body;
     const { startRequirementsGeneration } = await import('../services/requirementsGenerationService');
     const result = await startRequirementsGeneration(
       enrollmentId,
       mode || 'professional',
       user_prompt,
     );
-    // Name the (just-ensured) active project from the idea for the switcher.
-    if (project_name) {
-      try {
-        const { getProjectByEnrollment } = await import('../services/projectService');
-        const project = await getProjectByEnrollment(enrollmentId);
-        if (project && !(project as any).name) { (project as any).name = String(project_name).slice(0, 80); await project.save(); }
-      } catch { /* naming is non-critical */ }
-    }
+    // Persist Workflow build state on the active project so the live
+    // system-preview demo (and the server-side finalizers — architect-status
+    // poll + the build poller) can drive this to completion even if the tab
+    // closes. Mirrors the Architect build-state shape (architect_slug). The
+    // `build_idea` feeds the demo's preview; `workflow_job_id` flags the build
+    // as in-flight for onboarding/state.build_in_progress.
+    try {
+      const { getProjectByEnrollment } = await import('../services/projectService');
+      const project = await getProjectByEnrollment(enrollmentId);
+      if (project) {
+        if (project_name && !(project as any).name) (project as any).name = String(project_name).slice(0, 80);
+        const ss = (project as any).setup_status || {};
+        (project as any).setup_status = {
+          ...ss,
+          workflow_job_id: result.job_id,
+          build_idea: idea || ss.build_idea,
+          build_started_at: new Date().toISOString(),
+        };
+        (project as any).changed('setup_status', true);
+        await project.save();
+      }
+    } catch { /* naming + build-state persistence are non-critical */ }
     res.json(result);
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /project/requirements/generate error:', err.message);
@@ -2911,11 +2969,12 @@ router.get('/api/portal/onboarding/state', requireParticipant, async (req: Reque
     else if (capsWithRoutes === 0) stage = 'has_requirements';
     else stage = 'has_code';
 
-    // An Architect build is in flight when a slug is set but the document
-    // hasn't been retrieved yet. Lets the home page send the user back to the
-    // live preview demo instead of the empty first-run chooser.
+    // A build is in flight when an Architect slug OR a Workflow generation job
+    // is set but the document hasn't been retrieved yet. Lets the home page
+    // send the user back to the live preview demo instead of the empty
+    // first-run chooser — for all three build tiers.
     const ss = (project as any).setup_status || {};
-    const buildInProgress = !!ss.architect_slug && !ss.requirements_loaded;
+    const buildInProgress = (!!ss.architect_slug || !!ss.workflow_job_id) && !ss.requirements_loaded;
 
     res.json({
       stage,
