@@ -34,7 +34,11 @@ const { Sequelize, QueryTypes } = require('sequelize');
 
 const TARGET_PROJECT_ID = process.env.TARGET_PROJECT_ID;
 const DRY_RUN = process.env.DRY_RUN === '1' || process.argv.includes('--dry-run');
-const SCAN_ROOT = process.env.SCAN_ROOT || 'backend/src';
+// Default SCAN_ROOT depends on context: inside the prod container the source
+// is compiled to /app/dist; running locally against the repo the source is
+// at backend/src. Caller can override either way via env.
+const SCAN_ROOT = process.env.SCAN_ROOT
+  || (require('fs').existsSync('dist') ? 'dist' : 'backend/src');
 const LINKED_BY_TAG = process.env.LINKED_BY_TAG || 'declared-2026-05-22';
 
 if (!TARGET_PROJECT_ID) {
@@ -43,16 +47,26 @@ if (!TARGET_PROJECT_ID) {
 }
 
 // Regex extracts the value of an exported string constant. Handles:
-//   export const SERVES_CAPABILITY = 'Lead Scoring';
-//   export const SERVES_CAPABILITY: AgentCapabilityRef = "Lead Scoring";
+//   export const SERVES_CAPABILITY = 'Lead Scoring';                 (TS source)
+//   export const SERVES_CAPABILITY: AgentCapabilityRef = "Lead Scoring"; (TS w/ annotation)
+//   exports.SERVES_CAPABILITY = 'Lead Scoring';                       (compiled CJS)
+//
+// Anchored to start-of-line (with /m) + optional whitespace, so JSDoc
+// example lines like ` *   export const SERVES_CAPABILITY = ...` inside
+// comments do NOT match — the `*` prefix on a comment line is not
+// whitespace and breaks the anchor.
 const STRING_CONST_RE = (name) =>
-  new RegExp(`export\\s+const\\s+${name}\\s*(?::[^=]+)?\\s*=\\s*['"\`]([^'"\`]+)['"\`]`, 'm');
+  new RegExp(
+    `^[ \\t]*(?:export\\s+const\\s+|exports\\.)${name}\\s*(?::[^=]+)?\\s*=\\s*['"\`]([^'"\`]+)['"\`]`,
+    'm',
+  );
 
-// Extracts an exported array of string literals. Handles:
-//   export const SERVES_CAPABILITIES = ['Lead Scoring', 'Lead Classification'];
-//   export const SERVES_CAPABILITIES: AgentCapabilityRef[] = [...];
+// Extracts an exported array of string literals. Handles all three forms above.
 const ARRAY_CONST_RE = (name) =>
-  new RegExp(`export\\s+const\\s+${name}\\s*(?::[^=]+)?\\s*=\\s*\\[([^\\]]+)\\]`, 'm');
+  new RegExp(
+    `^[ \\t]*(?:export\\s+const\\s+|exports\\.)${name}\\s*(?::[^=]+)?\\s*=\\s*\\[([^\\]]+)\\]`,
+    'm',
+  );
 
 function extractStrings(arrayBody) {
   const out = [];
@@ -71,7 +85,7 @@ function walkDir(root, out = []) {
     if (e.isDirectory()) {
       if (e.name === 'node_modules' || e.name === '__tests__' || e.name === '__mocks__' || e.name === '__snapshots__') continue;
       walkDir(p, out);
-    } else if (/\.(ts|tsx|js|jsx)$/i.test(e.name) && !/\.(test|spec)\.(t|j)sx?$/i.test(e.name)) {
+    } else if (/\.(ts|tsx|js|jsx)$/i.test(e.name) && !/\.(test|spec)\.(t|j)sx?$/i.test(e.name) && !/\.d\.ts$/i.test(e.name)) {
       out.push(p);
     }
   }
