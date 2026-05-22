@@ -3588,3 +3588,13 @@ The whole point of the operator's directive ("do real operational verifications"
 | `frontend/src/pages/project/RequirementsBuilder.tsx` | Added `RequirementsBuilderProps.onComplete`; "View your system" button calls `onComplete()` (clears draft) instead of navigating to the same URL; navigate fallback retained for standalone use. (2026-05-22) |
 | `frontend/src/pages/portal/CoryHome.tsx` | Passes `onComplete` to inline RequirementsBuilder → re-fetches onboarding + project state so the dashboard renders in place. (2026-05-22) |
 | `frontend/src/components/project/BPDetailV2.tsx` | New `askCoryAndClose()` helper closes the BP modal (z-index 99990) before Cory (z-index 10001) opens, so the deeplink is visible. Wired into chip strip + per-step Ask-Cory links. (2026-05-22) |
+
+- [x] GlobalCoryWidget: replace inlined Cory-authorization predicate with `useCoryAvailable()` hook (DRY cleanup)
+  - Date: 2026-05-22
+  - What changed: Operator returned to a recovered Claude session after the prior session died mid-handoff. During that recovery, audit revealed `GlobalCoryWidget.tsx` still carried the original inlined predicate (`adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin'`) on line 33, even though commits `75fd9ac7` and `ac8366cc` had already shipped (a) `useCoryAvailable()` as a standalone hook and (b) consumption of it in `BPDetailV2.tsx` to gate the education chip strip + per-step "Ask Cory" buttons. The widget itself was still duplicating the predicate. This change makes the widget consume the same hook every other Cory deeplink surface uses — single source of truth — so any future tweak to "who can reach Cory?" lives in exactly one file. No behavior change: the predicate's truth value is identical; line 117's render guard is unchanged.
+  - Verification: frontend `npx tsc --noEmit` exit 0 (clean pass, EXIT=0). Production deploy below.
+  - Notes: Honest accounting of this session's sequence: my edits to BPDetailV2 + the new hook file overlapped with prior-session commits I hadn't yet seen in context (the prior session crashed before fully reporting). When git status revealed BPDetailV2.tsx already matched HEAD and the hook was already tracked, the only genuinely-new delta left was the widget refactor. Logging it cleanly so the journal reflects what THIS commit actually changes, not what I initially thought I was shipping. No BuildManifest emitted — pure UI render-path cleanup, no contract surface affected.
+
+| File | Change |
+|---|---|
+| `frontend/src/components/GlobalCoryWidget.tsx` | Replaced inlined `isCoryAuthorized` predicate (line 33) with `useCoryAvailable()`; dropped now-unused `useAdminUser` import. Render guard at line 117 unchanged in behavior. (2026-05-22) |

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 
 import { useLocation } from 'react-router-dom';
 import ExecutiveAwarenessPanel from './ExecutiveAwarenessPanel';
 import api from '../utils/api';
-import { useAdminUser } from '../hooks/useAdminUser';
+import { useCoryAvailable } from '../hooks/useCoryAvailable';
 import { CORY_ASK_EVENT, type CoryAskEventDetail } from '../hooks/useCoryAsk';
 
 const CoryPanel = lazy(() => import('./admin/intelligence/CoryPanel'));
@@ -14,7 +14,7 @@ const noop = () => {};
 
 export default function GlobalCoryWidget() {
   const location = useLocation();
-  const adminUser = useAdminUser();
+  const isCoryAuthorized = useCoryAvailable();
   const [isHovered, setIsHovered] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -30,7 +30,6 @@ export default function GlobalCoryWidget() {
   const [externalQuery, setExternalQuery] = useState<string | null>(null);
 
   const isAdmin = location.pathname.startsWith('/admin');
-  const isCoryAuthorized = adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin';
 
   const fetchBadge = useCallback(async () => {
     try {
