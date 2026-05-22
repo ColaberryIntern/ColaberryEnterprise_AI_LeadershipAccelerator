@@ -81,7 +81,15 @@ function draftKey(): string {
   return 'requirements_builder_state';
 }
 
-export default function RequirementsBuilder() {
+interface RequirementsBuilderProps {
+  // Called when the build completes and the user clicks "View your system".
+  // Lets the host (CoryHome) re-fetch onboarding state so it swaps the inline
+  // builder for the dashboard — navigating to /portal/home alone is a no-op
+  // when the builder is ALREADY rendered at /portal/home.
+  onComplete?: () => void;
+}
+
+export default function RequirementsBuilder({ onComplete }: RequirementsBuilderProps = {}) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<'choose' | 'idea' | 'loading_questions' | 'questions' | 'generating' | 'review' | 'building' | 'complete' | 'repo'>('choose');
   // Build tier chosen on the first screen: workflow (fast regular LLM), full
@@ -614,7 +622,18 @@ export default function RequirementsBuilder() {
             <i className="bi bi-check-circle-fill d-block mb-3" style={{ fontSize: 44, color: '#10b981' }}></i>
             <h5 className="fw-bold mb-2" style={{ color: '#059669', fontSize: 16 }}>Your system is ready!</h5>
             <p className="text-muted mb-3" style={{ fontSize: 13 }}>Your requirements are saved and organized into capabilities. Open your Blueprint to see what&rsquo;s next.</p>
-            <button className="btn btn-primary" style={{ borderRadius: 8, fontWeight: 600, fontSize: 13 }} onClick={() => navigate('/portal/home')}>
+            <button className="btn btn-primary" style={{ borderRadius: 8, fontWeight: 600, fontSize: 13 }} onClick={() => {
+              // Clear the draft so a refresh doesn't re-resume the finished flow.
+              try { localStorage.removeItem(draftKey()); } catch { /* ignore */ }
+              if (onComplete) {
+                // Host (CoryHome) re-fetches onboarding state → swaps this inline
+                // builder for the dashboard. Navigating to /portal/home alone is a
+                // no-op here because the builder IS rendered at /portal/home.
+                onComplete();
+              } else {
+                navigate('/portal/home');
+              }
+            }}>
               View your system <i className="bi bi-arrow-right ms-1"></i>
             </button>
           </div>

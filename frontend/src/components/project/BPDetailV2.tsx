@@ -33,6 +33,7 @@ import { lifecycleStateFor, type LifecycleState, type BPLike } from '../../utils
 import { educationalQuestionsFor, type EducationalQuestion } from '../../utils/bpEducationalQuestions';
 import { walkthroughStepsFor, type WalkthroughStep } from '../../utils/bpStepWalkthrough';
 import { useCoryAsk } from '../../hooks/useCoryAsk';
+import { useCoryAvailable } from '../../hooks/useCoryAvailable';
 
 interface Props {
   processId: string;
@@ -72,6 +73,20 @@ function toast(msg: string) {
 const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
   const navigate = useNavigate();
   const askCory = useCoryAsk();
+  // Cory deeplink surfaces (chip strip + per-step "Ask Cory" link) only
+  // render for operators who can actually reach the widget. Without this
+  // gate, non-authorized operators see chips/links that silently no-op
+  // because GlobalCoryWidget early-returns null for them.
+  const coryAvailable = useCoryAvailable();
+  // Asking Cory must also close THIS modal. The BP modal renders at
+  // z-index 99990 (SystemViewV2) while the Cory chat panel opens at 10001 —
+  // so without closing the modal, Cory expands silently *behind* it and the
+  // click looks dead. Dispatch the deeplink first (synchronous window event,
+  // received before this component unmounts), then close.
+  const askCoryAndClose = (query: string, source: string) => {
+    askCory(query, source);
+    onClose();
+  };
   const [p, setP] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showAllReqs, setShowAllReqs] = useState(false);
@@ -380,8 +395,11 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
         onReload={onUpdate}
       />
 
-      {/* ─── Learn about this BP — Cory deeplink chips ─── */}
-      {educationalQuestions.length > 0 && (
+      {/* ─── Learn about this BP — Cory deeplink chips ───
+            Gated on coryAvailable: chips fire `cory:ask` events, but the
+            widget is hidden for non-authorized operators, so rendering
+            them there would create silent dead UI. ─── */}
+      {coryAvailable && educationalQuestions.length > 0 && (
         <section style={{ marginBottom: '1.5rem' }}>
           <div style={{
             fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
@@ -409,7 +427,7 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
                 <button
                   key={q.id}
                   type="button"
-                  onClick={() => askCory(q.text, `bp-detail:${q.source}`)}
+                  onClick={() => askCoryAndClose(q.text, `bp-detail:${q.source}`)}
                   title={`Ask Cory: ${q.text}`}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -571,21 +589,23 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
                   ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 11, height: 11 }} /> Drafting…</>
                   : step.ctaLabel}
               </button>
-              <button
-                type="button"
-                onClick={() => askCory(step.askPrefill, `bp-detail:step:${step.key}`)}
-                style={{
-                  background: 'transparent', border: 'none',
-                  color: 'var(--color-primary-light)', cursor: 'pointer',
-                  fontSize: 11.5, fontWeight: 500, padding: '2px 0',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
-                title="Open Cory with a question about this step prefilled"
-              >
-                💬 Ask Cory about this step →
-              </button>
+              {coryAvailable && (
+                <button
+                  type="button"
+                  onClick={() => askCoryAndClose(step.askPrefill, `bp-detail:step:${step.key}`)}
+                  style={{
+                    background: 'transparent', border: 'none',
+                    color: 'var(--color-primary-light)', cursor: 'pointer',
+                    fontSize: 11.5, fontWeight: 500, padding: '2px 0',
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+                  title="Open Cory with a question about this step prefilled"
+                >
+                  💬 Ask Cory about this step →
+                </button>
+              )}
             </div>
           </div>
         ))}

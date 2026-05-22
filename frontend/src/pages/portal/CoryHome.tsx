@@ -296,7 +296,13 @@ const CoryHome: React.FC = () => {
             it into a structured requirements set with a short Q&amp;A.
           </p>
         </div>
-        <RequirementsBuilder />
+        <RequirementsBuilder onComplete={() => {
+          // Re-fetch onboarding (stage flips needs_requirements → has_requirements)
+          // and project state so this same /portal/home render swaps the inline
+          // builder for the live dashboard without a hard reload.
+          void onboarding.refresh();
+          void refresh();
+        }} />
       </div>
     );
   }
