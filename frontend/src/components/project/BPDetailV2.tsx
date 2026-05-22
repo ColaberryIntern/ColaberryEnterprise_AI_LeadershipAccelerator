@@ -29,7 +29,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as bpApi from '../../services/portalBusinessProcessApi';
-import { lifecycleStateFor, type LifecycleState } from '../../utils/bpDomainClassifier';
+import { lifecycleStateFor, type LifecycleState, type BPLike } from '../../utils/bpDomainClassifier';
+import { educationalQuestionsFor, type EducationalQuestion } from '../../utils/bpEducationalQuestions';
+import { walkthroughStepsFor, type WalkthroughStep } from '../../utils/bpStepWalkthrough';
+import { useCoryAsk } from '../../hooks/useCoryAsk';
 
 interface Props {
   processId: string;
@@ -55,23 +58,9 @@ const MATURITY_LABELS: Record<number, { label: string; blurb: string }> = {
   5: { label: 'Mature',    blurb: 'Steady state; ongoing work is refinement.' },
 };
 
-interface ImprovementTarget {
-  key: string;
-  label: string;
-  help: string;
-  /** Optional page-specific override (used when frontend_route is set). */
-  pageLabel?: string;
-  pageHelp?: string;
-}
-const IMPROVEMENT_TARGETS: ImprovementTarget[] = [
-  { key: 'backend_improvement', label: 'Generate a backend prompt',  help: 'Drafts a Claude Code prompt to extend the backend layer of this BP.' },
-  {
-    key: 'frontend_exposure',   label: 'Generate a UI prompt',       help: 'Drafts a prompt to add or improve the frontend surface for this BP.',
-    pageLabel: 'Generate upgrade prompt',
-    pageHelp: 'Drafts a Claude Code prompt to redesign / upgrade this page.',
-  },
-  { key: 'agent_enhancement',   label: 'Generate an agent prompt',   help: 'Drafts a prompt to evolve the agent or autonomous layer.' },
-];
+// Improvement-target definitions live in `frontend/src/utils/bpStepWalkthrough.ts`
+// now. The walkthrough util produces the prose + step keys; `handleGenerate`
+// below dispatches on the same `key` values the legacy array used.
 
 function toast(msg: string) {
   const el = document.createElement('div');
@@ -82,6 +71,7 @@ function toast(msg: string) {
 
 const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
   const navigate = useNavigate();
+  const askCory = useCoryAsk();
   const [p, setP] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showAllReqs, setShowAllReqs] = useState(false);
@@ -188,6 +178,13 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
   const tone = LIFECYCLE_TONE[lifecycleState];
   const matLevel = Math.min(5, Math.max(0, Number(p.maturity?.level || 0)));
   const matSpec = MATURITY_LABELS[matLevel || 1];
+
+  // 2026-05-21: Education + walkthrough — both pure derivations from cap
+  // shape. Recomputed only when `p` changes, never on every render. The
+  // educational chip strip renders between Agents and Maturity; the
+  // walkthrough cards replace the legacy 3-button Next-steps row.
+  const educationalQuestions: EducationalQuestion[] = educationalQuestionsFor(p as BPLike);
+  const walkthroughSteps: WalkthroughStep[] = walkthroughStepsFor(p as BPLike);
   const features = Array.isArray(p.features) ? p.features : [];
   const allRequirements: { key?: string; text: string }[] = features
     .flatMap((f: any) => Array.isArray(f.requirements) ? f.requirements : []);
@@ -383,6 +380,60 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
         onReload={onUpdate}
       />
 
+      {/* ─── Learn about this BP — Cory deeplink chips ─── */}
+      {educationalQuestions.length > 0 && (
+        <section style={{ marginBottom: '1.5rem' }}>
+          <div style={{
+            fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
+            color: 'var(--color-text-light)', fontWeight: 700, marginBottom: '0.5rem',
+            paddingLeft: 8, borderLeft: '3px solid var(--color-primary-light)',
+            lineHeight: 1.4,
+          }}>
+            Learn about this BP
+          </div>
+          <div style={{
+            background: 'rgba(59,130,246,0.06)',
+            border: '1px solid rgba(59,130,246,0.18)',
+            borderRadius: 6,
+            padding: '0.65rem 0.85rem',
+          }}>
+            <div style={{
+              fontSize: 11, color: 'var(--color-text-light)',
+              fontStyle: 'italic', marginBottom: '0.5rem',
+            }}>
+              Click any question to ask Cory — opens the assistant with the
+              question prefilled and sent.
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {educationalQuestions.map(q => (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => askCory(q.text, `bp-detail:${q.source}`)}
+                  title={`Ask Cory: ${q.text}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '5px 11px',
+                    background: 'white',
+                    border: '1px solid rgba(59,130,246,0.30)',
+                    borderRadius: 999,
+                    color: 'var(--color-primary)',
+                    fontSize: 12, fontWeight: 500,
+                    cursor: 'pointer', lineHeight: 1.35,
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(59,130,246,0.10)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
+                >
+                  <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.8 }}>{q.glyph}</span>
+                  <span>{q.text}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ─── Maturity progression strip ─── */}
       <section style={{ marginBottom: '1.5rem' }}>
         <div style={{
@@ -451,49 +502,93 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
         </section>
       )}
 
-      {/* ─── Next steps ─── */}
+      {/* ─── Next-step walkthrough ─── */}
       <section style={{
         marginBottom: '0.5rem', paddingTop: '1.25rem',
-        borderTop: '1px solid var(--color-border)',
+        borderTop: '2px solid var(--color-border)',
       }}>
         <div style={{
           fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em',
-          color: 'var(--color-text-light)', fontWeight: 600, marginBottom: '0.65rem',
+          color: 'var(--color-text-light)', fontWeight: 700, marginBottom: '0.4rem',
+          paddingLeft: 8, borderLeft: '3px solid var(--color-primary-light)',
+          lineHeight: 1.4,
         }}>
-          Next steps
+          Next-step walkthrough
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          {IMPROVEMENT_TARGETS.map(t => {
-            const isPage = !!p.frontend_route;
-            const label = isPage && t.pageLabel ? t.pageLabel : t.label;
-            const help = isPage && t.pageHelp ? t.pageHelp : t.help;
-            return (
+        <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontStyle: 'italic', marginBottom: '0.85rem' }}>
+          {walkthroughSteps.length} concrete next move{walkthroughSteps.length === 1 ? '' : 's'} for this BP.
+          Each step drafts a Claude Code prompt and copies it to the clipboard.
+          Nothing executes from here.
+        </div>
+        {walkthroughSteps.map((step, idx) => (
+          <div
+            key={step.key}
+            style={{
+              background: '#fafafa', border: '1px solid var(--color-border)',
+              borderLeft: '3px solid var(--color-primary-light)',
+              borderRadius: 6, padding: '0.85rem 1rem',
+              marginBottom: '0.65rem',
+            }}
+          >
+            <div style={{
+              fontSize: 13.5, fontWeight: 700, color: 'var(--color-primary)',
+              marginBottom: '0.4rem',
+            }}>
+              {idx + 1} · {step.title}
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--color-text)', lineHeight: 1.55, marginBottom: '0.35rem' }}>
+              <span style={{
+                fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
+                fontWeight: 700, color: 'var(--color-text-light)', marginRight: 5,
+              }}>
+                What this does:
+              </span>
+              {step.whatItDoes}
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--color-text)', lineHeight: 1.55, marginBottom: '0.6rem' }}>
+              <span style={{
+                fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
+                fontWeight: 700, color: 'var(--color-text-light)', marginRight: 5,
+              }}>
+                Why it matters for this BP:
+              </span>
+              {step.whyItMatters}
+            </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
-                key={t.key}
                 type="button"
-                title={help}
                 disabled={!!generating}
-                onClick={() => handleGenerate(t.key)}
+                onClick={() => handleGenerate(step.key)}
                 style={{
-                  background: 'white', color: 'var(--color-primary)',
-                  border: '1px solid var(--color-border)',
-                  padding: '0.45rem 0.85rem', borderRadius: 4,
-                  fontSize: 12.5, fontWeight: 500, cursor: generating ? 'wait' : 'pointer',
-                  opacity: generating && generating !== t.key ? 0.5 : 1,
+                  background: 'var(--color-primary)', color: 'white',
+                  border: 'none', padding: '0.4rem 0.85rem', borderRadius: 4,
+                  fontSize: 12, fontWeight: 600, cursor: generating ? 'wait' : 'pointer',
+                  opacity: generating && generating !== step.key ? 0.5 : 1,
+                  minHeight: 30,
                 }}
-                onMouseEnter={(e) => { if (!generating) e.currentTarget.style.borderColor = 'var(--color-primary-light)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
               >
-                {generating === t.key
+                {generating === step.key
                   ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 11, height: 11 }} /> Drafting…</>
-                  : label}
+                  : step.ctaLabel}
               </button>
-            );
-          })}
-        </div>
-        <div style={{ fontSize: 11.5, color: 'var(--color-text-light)', fontStyle: 'italic' }}>
-          Each button drafts a Claude Code prompt and copies it to the clipboard. Run the prompt externally; nothing executes from here.
-        </div>
+              <button
+                type="button"
+                onClick={() => askCory(step.askPrefill, `bp-detail:step:${step.key}`)}
+                style={{
+                  background: 'transparent', border: 'none',
+                  color: 'var(--color-primary-light)', cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: 500, padding: '2px 0',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+                title="Open Cory with a question about this step prefilled"
+              >
+                💬 Ask Cory about this step →
+              </button>
+            </div>
+          </div>
+        ))}
       </section>
     </div>
   );

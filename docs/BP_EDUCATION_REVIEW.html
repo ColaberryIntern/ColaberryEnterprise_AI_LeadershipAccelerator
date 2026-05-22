@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BP Detail — Education + Cory Deeplinks — Proposal Review</title>
+<style>
+  :root {
+    --bg: #fafafa; --text: #1f2937; --muted: #6b7280;
+    --primary: #1a365d; --primary-light: #3b82f6;
+    --accent: #38a169; --warn: #d97706; --danger: #e53e3e;
+    --border: #e5e7eb; --card: #ffffff; --frame: #0f172a;
+  }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; padding-bottom: 60px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { font-size: 28px; color: var(--primary); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+  h2 { font-size: 20px; color: var(--primary); margin-top: 2.5rem; }
+  h3 { font-size: 15.5px; color: var(--primary); margin-top: 1.5rem; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 800px; }
+  .stop { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.75rem; margin: 2rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stop-num { display: inline-block; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 13px; margin-right: 8px; vertical-align: middle; }
+  .stop-title { display: inline-block; vertical-align: middle; font-size: 18px; font-weight: 700; color: var(--primary); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  .what-shipped { background: #f0fdf4; border-left: 3px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .what-shipped strong { color: #166534; }
+  .what-shipped ul { margin: 6px 0 0 0; padding-left: 22px; }
+  .what-shipped li { font-size: 14px; color: #374151; margin: 3px 0; }
+  .possible { background: #fffbeb; border-left: 3px solid var(--warn); padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  .possible strong { color: #92400e; }
+  .possible ul { margin: 6px 0 0 0; padding-left: 22px; list-style: none; }
+  .possible li { font-size: 14px; color: #374151; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-good { background: #dcfce7; color: #166534; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .philosophy { background: #f8fafc; border-left: 4px solid var(--primary); padding: 1rem 1.25rem; border-radius: 4px; margin: 1.5rem 0; font-style: italic; color: var(--text); }
+
+  /* Mockup containers */
+  .mockup { background: white; border: 1.5px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 0.75rem 0; box-shadow: 0 1px 3px rgba(15,23,42,0.04); }
+  .mockup-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin-bottom: 0.5rem; }
+  .mockup-name { font-size: 17px; font-weight: 700; color: var(--primary); margin-bottom: 0.25rem; }
+  .mockup-sub { font-size: 12.5px; color: var(--muted); margin-bottom: 0.85rem; }
+  .mockup-section { border-top: 2px solid var(--border); padding-top: 0.85rem; margin-top: 0.85rem; }
+  .mockup-section-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--muted); padding-left: 8px; border-left: 3px solid var(--primary-light); margin-bottom: 0.5rem; line-height: 1.4; }
+  .education-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+  .q-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 999px; color: var(--primary); font-size: 12px; font-weight: 500; cursor: pointer; line-height: 1.3; }
+  .q-chip:hover { background: rgba(59,130,246,0.12); }
+  .q-chip-icon { font-size: 10px; opacity: 0.7; }
+  .step-card { background: #fafafa; border: 1px solid var(--border); border-left: 3px solid var(--primary-light); border-radius: 6px; padding: 0.85rem 1rem; margin: 0.65rem 0; }
+  .step-title { font-size: 13.5px; font-weight: 700; color: var(--primary); margin-bottom: 0.4rem; }
+  .step-block { font-size: 12.5px; color: var(--text); margin: 0.4rem 0; line-height: 1.55; }
+  .step-block-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--muted); margin-right: 5px; }
+  .step-actions { display: flex; gap: 8px; margin-top: 0.65rem; align-items: center; }
+  .step-btn { padding: 4px 10px; background: var(--primary); color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .step-link { font-size: 11.5px; color: var(--primary-light); text-decoration: none; cursor: pointer; }
+  .step-link:hover { text-decoration: underline; }
+
+  /* Before/after pill */
+  .ab-label { display: inline-block; padding: 1px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 3px; margin-bottom: 0.4rem; }
+  .ab-label.before { background: #fee2e2; color: #991b1b; }
+  .ab-label.after { background: #dcfce7; color: #166534; }
+
+  /* Floating Cory mock */
+  .cory-mock { position: relative; background: white; border: 1.5px solid var(--border); border-radius: 8px; padding: 1rem; margin: 0.75rem 0; font-size: 13px; }
+  .cory-mock .head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem; font-weight: 600; color: var(--primary); }
+  .cory-mock .user-msg { background: var(--primary); color: white; padding: 7px 11px; border-radius: 12px 12px 2px 12px; margin: 0.5rem 0 0.5rem auto; max-width: 80%; font-size: 12.5px; }
+  .cory-mock .cory-msg { background: var(--bg); padding: 7px 11px; border-radius: 12px 12px 12px 2px; margin: 0.5rem auto 0.5rem 0; max-width: 85%; font-size: 12.5px; color: var(--text); }
+
+  pre.codeblock { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; font-size: 12px; overflow-x: auto; line-height: 1.5; }
+  .file-table td:first-child { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>BP Detail — Education + Cory Deeplinks</h1>
+  <p class="lede">
+    Proposal review · target: <strong>BPDetailV2</strong> (the modal that opens when an operator clicks a BP row on
+    System &gt; BPs). Operator feedback: the detail panel is "light" — three terse buttons under Next steps, no
+    contextual explanation, and no path back to the Cory assistant for follow-up. This proposal adds an
+    education chip strip (4–6 context-aware questions per cap) and converts the three buttons into a
+    walk-through panel where each step explains what it does, why it matters for this specific BP, and offers
+    a one-click "Ask Cory about this step" deeplink.
+  </p>
+
+  <div class="philosophy">
+    Operator wanted "more information on the steps" — not a textbook page glued onto the detail. The shape
+    here keeps the calm one-column layout intact: a quiet chip strip plus richer step cards. Cory remains
+    the deep-dive surface; the detail panel just makes it easy to land there with the right question already
+    typed.
+  </div>
+
+  <h2>What's being proposed (at a glance)</h2>
+  <table>
+    <thead>
+      <tr><th style="width:18%">Change</th><th style="width:42%">What it does</th><th>Where it lives</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Education chip strip</strong></td>
+        <td>4–6 questions generated from the cap's shape (layer gaps, maturity, dependencies). Each is a
+        clickable chip that opens Cory with the question prefilled and auto-sent.</td>
+        <td>BPDetailV2, new section between "Where it stands" and "Maturity"</td>
+      </tr>
+      <tr>
+        <td><strong>Walk-through cards</strong></td>
+        <td>Replaces the three terse "Generate prompt" buttons. Each step gets a title, "what it does", "why
+        it matters for this BP", an action button, and an "Ask Cory about this step" link.</td>
+        <td>BPDetailV2, replacing the existing Next-steps row</td>
+      </tr>
+      <tr>
+        <td><strong>Cory deeplink API</strong></td>
+        <td>A single <code>window.dispatchEvent(new CustomEvent('cory:ask', {detail:{query}}))</code>.
+        Cory listens and opens itself with the query prefilled. Any surface can deeplink with one line.</td>
+        <td>GlobalCoryWidget listens; new <code>useCoryAsk()</code> hook fires</td>
+      </tr>
+      <tr>
+        <td><strong>No backend changes</strong></td>
+        <td>All question + step text generated client-side from the cap data already loaded. Only Cory calls
+        the LLM, and only when the operator clicks a chip.</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+
+  <!-- ─────────────────────────────────────── STOP 1 -->
+  <div class="stop">
+    <div><span class="stop-num">1</span><span class="stop-title">Education chip strip</span></div>
+    <p>
+      A new compact section titled <strong>Learn about this BP</strong> appears between "Where it stands" and "Maturity".
+      It renders 4–6 context-aware questions as light-blue chips. The chip set is computed from the cap data —
+      every cap sees a different set tuned to its gaps. Click a chip → Cory opens (or jumps to focus if
+      already open), the question is dropped into the input and auto-sent.
+    </p>
+
+    <h3>Mockup — current Lead Classification (B missing, A 0 confirmed, L1)</h3>
+    <div class="mockup">
+      <div class="mockup-label">EXISTING SECTION ABOVE — UNCHANGED</div>
+      <div class="mockup-name">Lead Classification</div>
+      <div class="mockup-sub">Coordination · L1 Prototype · current priority</div>
+      <div style="font-size:12.5px;color:var(--muted);font-style:italic;">
+        ...Where it stands: backend missing · frontend present · agent layer empty...
+      </div>
+
+      <div class="mockup-section">
+        <div class="mockup-section-label">▌ LEARN ABOUT THIS BP</div>
+        <div class="education-strip">
+          <span class="q-chip"><span class="q-chip-icon">💬</span>What does Lead Classification actually do, in plain English?</span>
+          <span class="q-chip"><span class="q-chip-icon">⚠️</span>Why is the backend layer missing, and what would it take to add it?</span>
+          <span class="q-chip"><span class="q-chip-icon">🤖</span>Which agent files would logically belong to Lead Classification?</span>
+          <span class="q-chip"><span class="q-chip-icon">📈</span>What would it take to reach L2?</span>
+          <span class="q-chip"><span class="q-chip-icon">🔗</span>Which other capabilities depend on this one?</span>
+          <span class="q-chip"><span class="q-chip-icon">⏩</span>What's the smallest next change to move this forward?</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>Question generation rules</h3>
+    <table>
+      <thead><tr><th style="width:30%">Trigger</th><th>Example question (BP = Lead Classification)</th></tr></thead>
+      <tbody>
+        <tr><td>Always</td><td>"What does <strong>Lead Classification</strong> actually do, in plain English?"</td></tr>
+        <tr><td><code>usability.backend === 'missing'</code></td><td>"Why is the backend layer missing for Lead Classification, and what would it take to add it?"</td></tr>
+        <tr><td><code>usability.backend === 'partial'</code></td><td>"What's incomplete about the backend for Lead Classification?"</td></tr>
+        <tr><td><code>usability.frontend === 'missing'</code> + kind=service</td><td>"Should this service have its own UI page, or is it a pure backend cap?"</td></tr>
+        <tr><td><code>_confirmed_agent_count === 0</code></td><td>"Which agent files would logically belong to Lead Classification?"</td></tr>
+        <tr><td><code>maturity.level &lt; 4</code></td><td>"What would it take for Lead Classification to reach L<em>{n+1}</em>?"</td></tr>
+        <tr><td>Has dependencies</td><td>"Which other capabilities depend on Lead Classification, and how?"</td></tr>
+        <tr><td>Always (last chip)</td><td>"What's the smallest next change that would move this BP forward?"</td></tr>
+      </tbody>
+    </table>
+    <div class="possible">
+      <strong>⚙️ Curation rule:</strong>
+      <ul>
+        <li>Max 6 chips. Priority order: gap-diagnosis → maturity → dependencies → generic.</li>
+        <li>Every question name-drops the BP so Cory has full context. No "this BP" pronoun questions.</li>
+        <li>If a cap has zero gaps (rare — fully-built L4 cap), strip drops to 2 generic chips so it doesn't feel forced.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────── STOP 2 -->
+  <div class="stop">
+    <div><span class="stop-num">2</span><span class="stop-title">Walk-through cards (replaces the 3-button row)</span></div>
+    <p>
+      Today: three terse buttons —
+      <code>Generate a backend prompt</code> / <code>Generate a UI prompt</code> / <code>Generate an agent prompt</code> —
+      with a one-line tooltip each. Operator has to guess which one applies to <em>their</em> BP and what each
+      actually produces. Proposal: each step becomes a card with prose context.
+    </p>
+
+    <h3>Before</h3>
+    <div class="mockup">
+      <span class="ab-label before">BEFORE — today</span>
+      <div class="mockup-section-label">▌ NEXT STEPS</div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <button class="step-btn" disabled>Generate a backend prompt</button>
+        <button class="step-btn" disabled>Generate a UI prompt</button>
+        <button class="step-btn" disabled>Generate an agent prompt</button>
+      </div>
+    </div>
+
+    <h3>After</h3>
+    <div class="mockup">
+      <span class="ab-label after">AFTER — proposed</span>
+      <div class="mockup-section-label">▌ NEXT-STEP WALKTHROUGH</div>
+      <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-bottom:0.5rem;">
+        Three concrete next moves for Lead Classification. Each is scoped to what this BP is missing today.
+      </div>
+
+      <div class="step-card">
+        <div class="step-title">1 · Generate the backend prompt</div>
+        <div class="step-block">
+          <span class="step-block-label">What this does:</span>
+          Drafts a Claude Code prompt that builds the backend service for Lead Classification, scoped to the
+          3 of 7 unmatched requirements.
+        </div>
+        <div class="step-block">
+          <span class="step-block-label">Why it matters for this BP:</span>
+          The backend layer is marked <strong>missing</strong> — it's the foundation the frontend and agent
+          layers will hook into. Doing this step first unblocks the other two.
+        </div>
+        <div class="step-actions">
+          <button class="step-btn">Generate backend prompt</button>
+          <a class="step-link">💬 Ask Cory about this step →</a>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-title">2 · Generate the UI prompt</div>
+        <div class="step-block">
+          <span class="step-block-label">What this does:</span>
+          Drafts a Claude Code prompt that creates a React page at <code>/leads/classification</code> wiring
+          to the backend service.
+        </div>
+        <div class="step-block">
+          <span class="step-block-label">Why it matters for this BP:</span>
+          Frontend is marked <strong>present</strong> (1 component attributed) but has no own page route —
+          this step makes the cap into a navigable feature.
+        </div>
+        <div class="step-actions">
+          <button class="step-btn">Generate UI prompt</button>
+          <a class="step-link">💬 Ask Cory about this step →</a>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-title">3 · Generate the agent prompt</div>
+        <div class="step-block">
+          <span class="step-block-label">What this does:</span>
+          Drafts a Claude Code prompt that adds an agent layer (decisioning logic) to Lead Classification.
+        </div>
+        <div class="step-block">
+          <span class="step-block-label">Why it matters for this BP:</span>
+          <strong>0 confirmed agents</strong> attributed. Adding one moves this cap from L1 → L2 once the
+          backend lands.
+        </div>
+        <div class="step-actions">
+          <button class="step-btn">Generate agent prompt</button>
+          <a class="step-link">💬 Ask Cory about this step →</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="possible">
+      <strong>⚙️ Step selection rule:</strong>
+      <ul>
+        <li>Page-kind caps skip the agent step.</li>
+        <li>Caps with full backend attribution + high maturity hide steps for already-complete layers.</li>
+        <li>"Why it matters" copy is generated from cap state — gap counts, maturity level, missing layers —
+        never hardcoded.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────── STOP 3 -->
+  <div class="stop">
+    <div><span class="stop-num">3</span><span class="stop-title">Cory deeplink — window event</span></div>
+    <p>
+      <code>GlobalCoryWidget</code> already exposes an <code>externalQuery</code> prop that auto-sends a
+      prefilled message. The only piece missing is a way for any surface to set it. Proposal: one global
+      window event.
+    </p>
+
+    <h3>The API</h3>
+    <pre class="codeblock">// Any component, anywhere in the SPA:
+import { useCoryAsk } from '../hooks/useCoryAsk';
+
+function MyChip() {
+  const askCory = useCoryAsk();
+  return (
+    &lt;button onClick={() =&gt; askCory("What does Lead Classification do?")}&gt;
+      💬 Ask
+    &lt;/button&gt;
+  );
+}
+
+// Under the hood it fires:
+window.dispatchEvent(new CustomEvent('cory:ask', {
+  detail: { query: 'What does Lead Classification do?', source: 'bp-detail' }
+}));
+
+// GlobalCoryWidget listens, opens itself if collapsed, sets externalQuery.
+// CoryPanel's existing externalQuery effect auto-sends.</pre>
+
+    <h3>What it looks like to the operator</h3>
+    <div class="pair">
+      <div>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:6px;"><strong>1.</strong> Operator clicks a chip on BP detail.</p>
+        <div class="education-strip" style="margin-bottom:1rem;">
+          <span class="q-chip" style="background:rgba(59,130,246,0.18);"><span class="q-chip-icon">⚠️</span>Why is the backend layer missing?</span>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:6px;"><strong>2.</strong> Cory expands (if collapsed), question is auto-sent.</p>
+        <div class="cory-mock">
+          <div class="head"><span>Cory</span><span style="font-size:11px;color:var(--muted);font-weight:400;">via bp-detail</span></div>
+          <div class="user-msg">Why is the backend layer missing for Lead Classification, and what would it take to add it?</div>
+          <div class="cory-msg">Lead Classification has 0 backend service files attributed. The cap was extracted from frontend
+            references but no <code>leadClassificationService.ts</code> exists. To add it…</div>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin-top:0;">Why a window event (not context)</h3>
+        <ul style="font-size:13px;color:var(--text);">
+          <li>Zero plumbing through layouts — chip emits, widget listens.</li>
+          <li>Works from anywhere in the SPA: detail, system tab, critique, blueprint.</li>
+          <li>Widget can ignore, debounce, or rate-limit centrally.</li>
+          <li>One line per future caller. <code>useCoryAsk()</code> is the only public surface.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────── STOP 4 -->
+  <div class="stop">
+    <div><span class="stop-num">4</span><span class="stop-title">Files + estimate</span></div>
+
+    <h3>New (3)</h3>
+    <table class="file-table">
+      <tbody>
+        <tr><td>frontend/src/utils/bpEducationalQuestions.ts</td><td>Pure function <code>educationalQuestionsFor(bp): Question[]</code>. Curated to 4–6 most-relevant per cap. ~120 lines.</td></tr>
+        <tr><td>frontend/src/utils/bpStepWalkthrough.ts</td><td>Pure function <code>walkthroughStepsFor(bp): WalkthroughStep[]</code>. Each step = <code>{ key, title, whatItDoes, whyItMatters, ctaLabel, prefillForCory }</code>. ~80 lines.</td></tr>
+        <tr><td>frontend/src/hooks/useCoryAsk.ts</td><td>Returns <code>(query: string) =&gt; void</code> that dispatches the <code>cory:ask</code> event. ~25 lines.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Modified (2)</h3>
+    <table class="file-table">
+      <tbody>
+        <tr><td>frontend/src/components/GlobalCoryWidget.tsx</td><td><code>useEffect</code> that listens for <code>cory:ask</code> events; on receipt sets the local
+        <code>externalQuery</code> state + auto-expands the widget. ~15 lines added.</td></tr>
+        <tr><td>frontend/src/components/project/BPDetailV2.tsx</td><td>Render the new Education chip strip (new section) + replace the existing 3-button row with the
+        walkthrough card layout. ~80 lines net.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Doc</h3>
+    <table class="file-table">
+      <tbody>
+        <tr><td>docs/BP_EDUCATION_REVIEW.html</td><td>This file. Walks through the proposal with mockups + decision matrix.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="what-shipped">
+      <strong>✓ Deploy plan</strong>
+      <ul>
+        <li>Frontend-only change. No backend rebuild. Nginx rebuild ≈ 2–3 min.</li>
+        <li>No new dependencies, no new BP fields, no new endpoints.</li>
+        <li>No LLM cost on the BP detail page-load. LLM only fires when the operator clicks a chip (and that already costs whatever Cory normally costs per chat turn).</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────── STOP 5 -->
+  <div class="stop">
+    <div><span class="stop-num">5</span><span class="stop-title">What this proposal will NOT do</span></div>
+    <ul>
+      <li><strong>No re-architecture of CoryPanel.</strong> It already auto-sends an <code>externalQuery</code> on change. We just wire up a way for any surface to set it.</li>
+      <li><strong>No persistence of which questions the operator has asked.</strong> That's chat history Cory already keeps in the panel.</li>
+      <li><strong>No server-side AI-generated questions on the initial load.</strong> All chips are derived deterministically from the cap shape. We can add an LLM-curated set later if these feel rote.</li>
+      <li><strong>No new BP fields.</strong> If we later want operator-authored educational copy per cap, we'd add a <code>cap.education_notes</code> JSONB column — out of scope for this sprint.</li>
+      <li><strong>No restyling of the Cory widget itself.</strong> It opens exactly as it does today.</li>
+    </ul>
+  </div>
+
+  <!-- ─────────────────────────────────────── STOP 6 -->
+  <div class="stop">
+    <div><span class="stop-num">6</span><span class="stop-title">Open questions to lock</span></div>
+    <table>
+      <thead><tr><th>Question</th><th>Recommended default</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Chip count cap per cap</td>
+          <td>6 chips max. More feels like noise on a detail panel.</td>
+        </tr>
+        <tr>
+          <td>Where the chip strip sits</td>
+          <td>Between "Where it stands" and "Maturity" — early in the panel so it's visible without scrolling.</td>
+        </tr>
+        <tr>
+          <td>Cory open behaviour on chip click</td>
+          <td>If closed → expand + send. If open → replace input + send. No new conversation thread per click; questions accumulate in the existing chat (matches Cory's pattern).</td>
+        </tr>
+        <tr>
+          <td>Step card "Why it matters" copy source</td>
+          <td>Computed from cap state (gap counts, missing layers, maturity level). No hardcoded sentences.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

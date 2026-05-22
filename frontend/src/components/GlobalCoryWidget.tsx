@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import ExecutiveAwarenessPanel from './ExecutiveAwarenessPanel';
 import api from '../utils/api';
 import { useAdminUser } from '../hooks/useAdminUser';
+import { CORY_ASK_EVENT, type CoryAskEventDetail } from '../hooks/useCoryAsk';
 
 const CoryPanel = lazy(() => import('./admin/intelligence/CoryPanel'));
 
@@ -22,6 +23,11 @@ export default function GlobalCoryWidget() {
   const [stabilityScore, setStabilityScore] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatPanelRef = useRef<HTMLDivElement>(null);
+  // 2026-05-21: deeplink mechanism. Any surface can call `useCoryAsk()`
+  // to fire a `cory:ask` event with a prefilled query. We listen here,
+  // open the chat if collapsed, and pass the query into CoryPanel via
+  // its externalQuery prop (CoryPanel auto-sends on change).
+  const [externalQuery, setExternalQuery] = useState<string | null>(null);
 
   const isAdmin = location.pathname.startsWith('/admin');
   const isCoryAuthorized = adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin';
@@ -83,6 +89,26 @@ export default function GlobalCoryWidget() {
   useEffect(() => {
     if (!chatOpen) setIsFullscreen(false);
   }, [chatOpen]);
+
+  // Listen for cory:ask deeplinks from any surface. Open the chat (if
+  // collapsed), close the executive-awareness panel if it was open,
+  // and pass the query into CoryPanel. Clear externalQuery on the next
+  // tick so a repeat call with the SAME query still re-fires.
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<CoryAskEventDetail>).detail;
+      const query = (detail?.query || '').trim();
+      if (!query) return;
+      setPanelOpen(false);
+      setChatOpen(true);
+      setExternalQuery(query);
+      // Reset so a subsequent dispatch with the same string still triggers
+      // CoryPanel's externalQuery effect (which fires on identity change).
+      window.setTimeout(() => setExternalQuery(null), 250);
+    };
+    window.addEventListener(CORY_ASK_EVENT, handler as EventListener);
+    return () => window.removeEventListener(CORY_ASK_EVENT, handler as EventListener);
+  }, []);
 
   // Don't render on the Intelligence OS page itself (it has its own CoryPanel)
   if (location.pathname === '/admin/intelligence') return null;
@@ -360,7 +386,7 @@ export default function GlobalCoryWidget() {
                   onVisualizationsUpdate={noop}
                   onSummaryUpdate={noop}
                   onInsightsUpdate={noop}
-                  externalQuery={null}
+                  externalQuery={externalQuery}
                 />
               </Suspense>
             )}
