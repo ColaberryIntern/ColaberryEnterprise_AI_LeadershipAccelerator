@@ -8,6 +8,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import portalApi from '../../utils/portalApi';
+import { clearRequirementsDraft } from '../../utils/requirementsDraft';
 
 interface ProjectSummary {
   id: string;
@@ -35,6 +36,10 @@ export default function ProjectSwitcher() {
     setBusy(true);
     try {
       await portalApi.put('/api/portal/projects/active', { project_id: id });
+      // The draft is enrollment-scoped; clear it so the switched-to project's
+      // first-run flow starts at the chooser instead of resuming the prior
+      // project's draft.
+      clearRequirementsDraft();
       window.location.href = '/portal/home';
     } catch { setBusy(false); }
   };
@@ -44,6 +49,9 @@ export default function ProjectSwitcher() {
     setBusy(true);
     try {
       await portalApi.post('/api/portal/projects', {});
+      // A brand-new project must start fresh at the 3-tier chooser → idea →
+      // questions, not resume the previous project's saved draft.
+      clearRequirementsDraft();
       window.location.href = '/portal/home';
     } catch { setBusy(false); }
   };

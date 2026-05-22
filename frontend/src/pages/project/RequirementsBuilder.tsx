@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import { requirementsDraftKey as draftKey } from '../../utils/requirementsDraft';
 
 interface QuestionOption { letter: string; label: string; description: string; }
 interface Question {
@@ -67,18 +68,6 @@ const STAGE_LABELS: Record<string, string> = {
 function deriveProjectName(idea: string): string {
   const first = (idea || '').trim().split('\n')[0].replace(/^[\s"'“”]+|[\s"'“”:.]+$/g, '');
   return first.slice(0, 60) || 'AI System';
-}
-
-// Scope the in-progress draft to the signed-in enrollment, so a draft from one
-// account never resumes on another (cross-account bleed was dropping users onto
-// a pre-filled idea screen and skipping the chooser).
-function draftKey(): string {
-  try {
-    const t = localStorage.getItem('participant_token') || '';
-    const payload = JSON.parse(atob(t.split('.')[1] || ''));
-    if (payload && payload.sub) return `requirements_builder_state:${payload.sub}`;
-  } catch { /* fall through */ }
-  return 'requirements_builder_state';
 }
 
 interface RequirementsBuilderProps {

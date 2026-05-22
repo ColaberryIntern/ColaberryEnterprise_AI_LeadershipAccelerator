@@ -72,6 +72,14 @@ async function resetEnrollmentProjectData(s, enrollmentId) {
   await s.query(`DELETE FROM projects WHERE enrollment_id = :eid`, {
     replacements: { eid: enrollmentId },
   });
+  // Multi-project: enrollments.active_project_id points at the (now-deleted)
+  // active project. Null it so getProjectByEnrollment falls back to "no project"
+  // → onboarding stage 'needs_requirements' (true first-run) instead of a
+  // dangling pointer.
+  await s.query(
+    `UPDATE enrollments SET active_project_id = NULL WHERE id = :eid`,
+    { replacements: { eid: enrollmentId } }
+  );
 }
 
 async function upsertEnrollment(s, spec) {

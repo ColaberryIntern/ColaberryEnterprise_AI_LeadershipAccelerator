@@ -3589,6 +3589,19 @@ The whole point of the operator's directive ("do real operational verifications"
 | `frontend/src/pages/portal/CoryHome.tsx` | Passes `onComplete` to inline RequirementsBuilder → re-fetches onboarding + project state so the dashboard renders in place. (2026-05-22) |
 | `frontend/src/components/project/BPDetailV2.tsx` | New `askCoryAndClose()` helper closes the BP modal (z-index 99990) before Cory (z-index 10001) opens, so the deeplink is visible. Wired into chip strip + per-step Ask-Cory links. (2026-05-22) |
 
+- [x] Multi-project: new project (and project switch) starts the builder fresh at the chooser
+  - Date: 2026-05-22
+  - What changed: Operator created a new project but the inline RequirementsBuilder showed a stale/mixed state (a finished "Your system is ready!" card under a 5% "Capturing Your Vision" header) instead of the 3-tier chooser. Root cause: the builder's resume draft is keyed on the ENROLLMENT (JWT sub), not the project, so a new/switched project resumed the PREVIOUS project's finished flow. Fix: extracted the draft key into `frontend/src/utils/requirementsDraft.ts` (`requirementsDraftKey` + `clearRequirementsDraft`); ProjectSwitcher now clears the draft on both "New project" and switch, so the target project's first-run starts at the chooser. Also hardened the reset script for the multi-project schema: `resetEnrollmentProjectData` now nulls `enrollments.active_project_id` after deleting projects, so a reset enrollment returns a clean 'needs_requirements' state instead of a dangling active-project pointer.
+  - Verification: frontend `npx tsc --noEmit` exit 0; reset script run against the 3 demo enrollments (reset+token, active_project_id cleared); deployed.
+  - Notes: Draft remains enrollment-scoped (not project-scoped) — clearing on switch/new is sufficient because only one project is active at a time and the draft represents "the build I'm currently working on."
+
+| File | Change |
+|---|---|
+| `frontend/src/utils/requirementsDraft.ts` | NEW — single source of truth for the builder draft key + `clearRequirementsDraft()`. (2026-05-22) |
+| `frontend/src/pages/project/RequirementsBuilder.tsx` | Import `requirementsDraftKey as draftKey` from the shared util; removed the local `draftKey` duplicate. (2026-05-22) |
+| `frontend/src/components/project/ProjectSwitcher.tsx` | Clear the builder draft on "New project" and on switch so the target project starts at the chooser. (2026-05-22) |
+| `backend/src/scripts/provisionDemoOnboardingRuns.js` | Reset now nulls `enrollments.active_project_id` after deleting projects (multi-project schema correctness). (2026-05-22) |
+
 - [x] GlobalCoryWidget: replace inlined Cory-authorization predicate with `useCoryAvailable()` hook (DRY cleanup)
   - Date: 2026-05-22
   - What changed: Operator returned to a recovered Claude session after the prior session died mid-handoff. During that recovery, audit revealed `GlobalCoryWidget.tsx` still carried the original inlined predicate (`adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin'`) on line 33, even though commits `75fd9ac7` and `ac8366cc` had already shipped (a) `useCoryAvailable()` as a standalone hook and (b) consumption of it in `BPDetailV2.tsx` to gate the education chip strip + per-step "Ask Cory" buttons. The widget itself was still duplicating the predicate. This change makes the widget consume the same hook every other Cory deeplink surface uses — single source of truth — so any future tweak to "who can reach Cory?" lives in exactly one file. No behavior change: the predicate's truth value is identical; line 117's render guard is unchanged.
