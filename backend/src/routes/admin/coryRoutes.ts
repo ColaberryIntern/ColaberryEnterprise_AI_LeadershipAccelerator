@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import { Op } from 'sequelize';
+import { requireCoryAuthorized } from '../../middlewares/authMiddleware';
 import { executeCoryCommand, getCoryStatus, getCoryNarrative } from '../../intelligence/strategy/coryEngine';
 import { getReasoningTimeline } from '../../intelligence/strategy/reasoningTimeline';
 import { createAgent, retireAgent, getDepartmentSummary, editAgent } from '../../intelligence/agents/agentFactory';
@@ -32,6 +33,13 @@ function slugToDept(slug?: string): Department | undefined {
 }
 
 const router = Router();
+
+// 2026-05-22: gate every route in this file on the Cory-specific auth
+// predicate (admin_token OR participant_token from email===ali@colaberry.com
+// OR role===super_admin). Before this line, the entire surface was callable
+// without authentication — see requireCoryAuthorized's doc-block for the
+// security context.
+router.use(requireCoryAuthorized);
 
 // POST /api/admin/intelligence/cory/command — Execute a command through Cory
 router.post('/api/admin/intelligence/cory/command', async (req: Request, res: Response) => {

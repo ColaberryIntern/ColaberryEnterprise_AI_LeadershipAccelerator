@@ -9,7 +9,13 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('admin_token');
+  // 2026-05-22: prefer admin_token (richer admin context when present),
+  // fall back to participant_token. The backend's requireCoryAuthorized
+  // middleware accepts either token as long as the JWT identity is
+  // ali@colaberry.com or has role super_admin. This unblocks Cory on the
+  // portal (which authenticates via participant_token only). The fallback
+  // doesn't loosen anything — the gate predicate is identical on both sides.
+  const token = localStorage.getItem('admin_token') || localStorage.getItem('participant_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
