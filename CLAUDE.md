@@ -474,6 +474,7 @@ After every completed implementation change, before marking the change "done" in
 ```markdown
 - [x] <task name>
   - Date: YYYY-MM-DD
+  - Session: CC-<YYYYMMDD>-<id>
   - What changed: <one line>
   - Verification: <test name | deploy URL | "user confirmed" | "TypeScript passes">
   - Notes: <only if blocker, deviation, or non-obvious decision>
@@ -485,9 +486,10 @@ After every completed implementation change, before marking the change "done" in
 3. **Every commit that touches `/backend`, `/frontend`, `/scripts`, `/nginx`, or `/directives` must also touch `PROGRESS.md`.** If it doesn't, the change is incomplete.
 4. **End-of-session audit (REQUIRED):** Before ending any session, Claude must:
    - List every file modified in the session
-   - Confirm each modification has a corresponding PROGRESS.md entry
+   - Confirm each modification has a corresponding PROGRESS.md entry **tagged with this session's ID**
+   - Audit only entries carrying your own Session ID; never touch another instance's entries
    - If any entry is missing, write it before ending
-   - State explicitly in the session-end summary: "PROGRESS.md audit: N changes, N entries, audit clean."
+   - State explicitly in the session-end summary: "Session CC-<id>: PROGRESS.md audit: N changes, N entries, audit clean."
 
 If PROGRESS.md does not exist, create it before doing any work.
 
@@ -498,10 +500,28 @@ If a session has done implementation work without updating PROGRESS.md along the
 ## Session start protocol
 
 At the start of every session:
-1. Read `CLAUDE.md` (this file) fully
-2. Read `PROGRESS.md` fully
-3. Summarize current state and the first unchecked task
-4. **Make no code changes during this step**
+1. **Mint a unique Session ID before any PROGRESS.md work.** Format: `CC-<YYYYMMDD>-<4 random alphanumerics>` (e.g. `CC-20260522-7f3a`). Generate the random suffix fresh each session — never reuse one already present in `PROGRESS.md`. State the ID in your opening summary, stamp it on every PROGRESS.md entry you write (see the `Session:` line in the entry format), and reference it in commit bodies. **Why:** multiple Claude instances run against this repo at the same time; without a per-session tag they collide on `PROGRESS.md` and mis-attribute each other's entries during the end-of-session audit.
+2. Read `CLAUDE.md` (this file) fully
+3. Read `PROGRESS.md` fully
+4. Summarize current state and the first unchecked task (lead with your Session ID)
+5. **Make no code changes during this step**
+
+## Concurrent-instance safety
+
+Because other instances may be writing `PROGRESS.md` while you work:
+- **Re-read the tail of `PROGRESS.md` immediately before appending.** It may have changed under you since you last read it. Append after the current last line; never anchor an edit on stale content.
+- **Only ever edit or audit entries carrying your own Session ID.** Never rewrite, "clean up," or re-check another instance's entries.
+- **Commit only the files you changed** (`git add <explicit paths>`, not `git add -A`). Another instance's uncommitted work may be sitting in the same working tree.
+
+## Per-session change report (HTML)
+
+After every completed change (same cadence as the PROGRESS.md gate), regenerate a detailed, styled HTML changelog for your session and open it in the user's browser:
+
+```
+node scripts/generateSessionChangelog.js <SessionID>
+```
+
+The script reads `PROGRESS.md`, selects the entries tagged with your Session ID, renders `docs/sessions/SESSION_<SessionID>.html` (one card per change: title, date, what changed, verification, files touched, notes), and auto-opens it. **One HTML per session, keyed on the Session ID**, so concurrent instances never overwrite each other's report. Pass `--no-open` to regenerate without launching the browser. This means: every PROGRESS.md entry you write must carry your `Session:` tag (see the entry format) so the report can find it.
 
 ## Verification rule
 

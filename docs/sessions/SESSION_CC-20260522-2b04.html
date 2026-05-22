@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260522-2b04 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, May 22, 2026 at 8:51 AM</div>
+    <div><span class="sid">CC-20260522-2b04</span><span class="count">6 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>First-run: &quot;View your system&quot; button worked + BP &quot;Learn about this BP&quot; chips actually open Cory</h2>
+          <span class="badge">2026-05-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two operator-reported dead-click bugs. (a) **&quot;View your system&quot; no-op** — after a Workflow build completes, RequirementsBuilder&#39;s final button called `navigate(&#39;/portal/home&#39;)`, but the builder renders INLINE at `/portal/home` (CoryHome short-circuits to it when `stage === &#39;needs_requirements&#39;`). Navigating to the same URL is a no-op, so the button looked dead. Fix: added optional `onComplete` prop to RequirementsBuilder; CoryHome passes a callback that re-fetches onboarding state (`stage` flips `needs_requirements → has_requirements`, so `isFirstRun` goes false) and refreshes unified project state — swapping the inline builder for the live dashboard in place, no reload. Button also clears the enrollment-scoped draft so a refresh doesn&#39;t re-resume the finished flow. Standalone callers (no `onComplete`) keep the navigate fallback. (b) **BP &quot;Learn about this BP&quot; chips silently no-op&#39;d** — chips fire a `cory:ask` window event; GlobalCoryWidget opens the Cory chat at `z-index 10001`, but the BP detail modal renders at `z-index 99990` (SystemViewV2), so Cory expanded BEHIND the modal and the click looked dead. Fix: new `askCoryAndClose()` in BPDetailV2 dispatches the deeplink (synchronous window event, received before unmount) then calls `onClose()` so the modal closes and Cory becomes visible. Applied to both the education chip strip and the per-step &quot;Ask Cory about this step&quot; links.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `npx tsc --noEmit` exit 0 (twice); deployed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The chips only render when `useCoryAvailable()` is true (ali@colaberry.com / super_admin), which is why they showed for Ali but the click was buried behind the modal rather than absent.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`frontend/src/pages/project/RequirementsBuilder.tsx`</td><td>Added `RequirementsBuilderProps.onComplete`; &quot;View your system&quot; button calls `onComplete()` (clears draft) instead of navigating to the same URL; navigate fallback retained for standalone use. (2026-05-22)</td></tr>
+          <tr><td class="path">`frontend/src/pages/portal/CoryHome.tsx`</td><td>Passes `onComplete` to inline RequirementsBuilder → re-fetches onboarding + project state so the dashboard renders in place. (2026-05-22)</td></tr>
+          <tr><td class="path">`frontend/src/components/project/BPDetailV2.tsx`</td><td>New `askCoryAndClose()` helper closes the BP modal (z-index 99990) before Cory (z-index 10001) opens, so the deeplink is visible. Wired into chip strip + per-step Ask-Cory links. (2026-05-22)</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Multi-project: new project (and project switch) starts the builder fresh at the chooser</h2>
+          <span class="badge">2026-05-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Operator created a new project but the inline RequirementsBuilder showed a stale/mixed state (a finished &quot;Your system is ready!&quot; card under a 5% &quot;Capturing Your Vision&quot; header) instead of the 3-tier chooser. Root cause: the builder&#39;s resume draft is keyed on the ENROLLMENT (JWT sub), not the project, so a new/switched project resumed the PREVIOUS project&#39;s finished flow. Fix: extracted the draft key into `frontend/src/utils/requirementsDraft.ts` (`requirementsDraftKey` + `clearRequirementsDraft`); ProjectSwitcher now clears the draft on both &quot;New project&quot; and switch, so the target project&#39;s first-run starts at the chooser. Also hardened the reset script for the multi-project schema: `resetEnrollmentProjectData` now nulls `enrollments.active_project_id` after deleting projects, so a reset enrollment returns a clean &#39;needs_requirements&#39; state instead of a dangling active-project pointer.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `npx tsc --noEmit` exit 0; reset script run against the 3 demo enrollments (reset+token, active_project_id cleared); deployed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Draft remains enrollment-scoped (not project-scoped) — clearing on switch/new is sufficient because only one project is active at a time and the draft represents &quot;the build I&#39;m currently working on.&quot;</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`frontend/src/utils/requirementsDraft.ts`</td><td>NEW — single source of truth for the builder draft key + `clearRequirementsDraft()`. (2026-05-22)</td></tr>
+          <tr><td class="path">`frontend/src/pages/project/RequirementsBuilder.tsx`</td><td>Import `requirementsDraftKey as draftKey` from the shared util; removed the local `draftKey` duplicate. (2026-05-22)</td></tr>
+          <tr><td class="path">`frontend/src/components/project/ProjectSwitcher.tsx`</td><td>Clear the builder draft on &quot;New project&quot; and on switch so the target project starts at the chooser. (2026-05-22)</td></tr>
+          <tr><td class="path">`backend/src/scripts/provisionDemoOnboardingRuns.js`</td><td>Reset now nulls `enrollments.active_project_id` after deleting projects (multi-project schema correctness). (2026-05-22)</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Live system-preview demo now covers all 3 build tiers (Workflow joins Full/Autonomous)</h2>
+          <span class="badge">2026-05-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Previously only Full/Autonomous (Architect builds) handed the user to the live system-preview demo (`/portal/project/demo`) while building; the Workflow tier sat on an inline progress bar. Now all three tiers wait in the same place. **Frontend:** `handleGenerate` (Workflow) kicks off generation and redirects to the demo (mirrors `handleFullBuild`) instead of polling inline; passes `idea` so the demo&#39;s preview has context. **Backend:** (a) `requirements/generate` persists Workflow build state on the ACTIVE project — `workflow_job_id`, `build_idea`, `build_started_at`; (b) `onboarding/state.build_in_progress` is now true for `architect_slug` OR `workflow_job_id` while `!requirements_loaded`, so Home redirects all tiers to the demo mid-build; (c) `architect-status` (which the demo polls) reports the Workflow job&#39;s status in the same `{complete,progress,message}` shape and, on job completion, saves the doc + flips `requirements_loaded` + fire-and-forget activation (same pattern as the Architect branch); (d) the build poller (`architectBuildPollerService`) now also finalizes completed Workflow jobs (closed-tab safety net) via the new shared `finalizeRequirementsDocument` helper in `projectSetupService`; (e) `startRequirementsGeneration` now targets the active project (`getProjectByEnrollment`) instead of an arbitrary first match — multi-project correctness.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `npx tsc --noEmit` exit 0; frontend `npx tsc --noEmit` exit 0; deployed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">&quot;Complete&quot; means the requirements doc is ready (activation/clustering continues in the background), matching the existing Architect behavior — the demo&#39;s &quot;Enter&quot; lands on Home, which shows the dashboard as capabilities cluster in. The Workflow inline phases (generating/review/building/complete) remain in RequirementsBuilder as unreachable fallback; they were not removed to keep the diff focused.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`frontend/src/pages/project/RequirementsBuilder.tsx`</td><td>Workflow `handleGenerate` now kicks off generation + redirects to `/portal/project/demo` (no inline poll); sends `idea`. (2026-05-22)</td></tr>
+          <tr><td class="path">`backend/src/routes/projectRoutes.ts`</td><td>`requirements/generate` persists `workflow_job_id`/`build_idea` on the active project; `build_in_progress` covers workflow jobs; `architect-status` reports + finalizes the workflow job. (2026-05-22)</td></tr>
+          <tr><td class="path">`backend/src/services/projectSetupService.ts`</td><td>NEW `finalizeRequirementsDocument(enrollmentId, project, document)` — save doc + flip requirements_loaded + build out (idempotent). (2026-05-22)</td></tr>
+          <tr><td class="path">`backend/src/services/architectBuildPollerService.ts`</td><td>Poller now also finalizes completed Workflow generation jobs (covers `architect_slug` OR `workflow_job_id`). (2026-05-22)</td></tr>
+          <tr><td class="path">`backend/src/services/requirementsGenerationService.ts`</td><td>`startRequirementsGeneration` targets the active project via `getProjectByEnrollment` (multi-project correctness). (2026-05-22)</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Builder never resumes a stale terminal/in-flight draft phase</h2>
+          <span class="badge">2026-05-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Operator kept landing on a stuck &quot;Your system is ready!&quot; card under a 5% &quot;Capturing Your Vision&quot; header on a fresh project. Root cause: the enrollment-scoped localStorage draft survived the DB reset (reset reuses the same enrollment IDs, so the JWT sub + draft key are unchanged), and the resume logic restored `phase: &#39;complete&#39;` because a `generatedDoc` was present. Since CoryHome ONLY mounts the builder when the project genuinely needs requirements, any draft on a terminal/in-flight phase (loading_questions / generating / review / building / complete) is stale by definition. Fix: resume now whitelists INPUT phases only (`choose` / `idea` / `questions` / `repo`) and discards the draft otherwise, so the stuck state self-heals to the chooser on next load. Removed the now-moot generatedDoc/phaseNeedsDoc resume branch.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `npx tsc --noEmit` exit 0; deployed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Complements the earlier draft-clear-on-switch fix — that handles in-session project changes; this handles a stale draft surviving across logins/resets.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`frontend/src/pages/project/RequirementsBuilder.tsx`</td><td>Resume whitelists input phases (choose/idea/questions/repo); discards drafts parked on terminal/in-flight phases. (2026-05-22)</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Kickoff foundation build: spec = the requirements document (not a Build Guide), delivered as downloadable foundation files</h2>
+          <span class="badge">2026-05-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The kickoff prompt (`/kickoff-prompt`) was written for Colaberry&#39;s OWN repos — Step 1 hard-required `CLAUDE.md` + a `*_Build_Guide_*.md` at the repo root and told Claude Code to STOP if missing. End-user repos (e.g. a new &quot;Mealprep&quot; project) have neither, so Claude Code scanned Downloads, found Colaberry&#39;s 34+ internal guides, and asked the user which one. Fix (DRI decision): the **requirements document the portal generated IS the spec**, and **planning stays in Claude Code, directed by the portal prompt** (chosen to avoid shallow scope — the in-context planner sees the full requirements doc + real repo). (a) New `foundationFilesService.ts` builds a project summary + capability list and generates a right-sized starter `CLAUDE.md` (project-agnostic operating contract pointing at REQUIREMENTS.md). (b) Two new download endpoints — `GET /requirements/download` (the requirements_document as `REQUIREMENTS.md`) and `GET /claude-md/download` (generated `CLAUDE.md`), both `Content-Disposition: attachment`. (c) Rewrote the kickoff prompt: Step 1 verifies `REQUIREMENTS.md` + `CLAUDE.md` and, if missing, tells the user to download them from the portal and re-run (no dead STOP, no Build Guide hunt); embeds the project summary + capability list inline; treats REQUIREMENTS.md as the spec throughout. (d) Frontend: a &quot;Foundation files&quot; download row (REQUIREMENTS.md + CLAUDE.md buttons) on the kickoff prompt panel, fetched as authed blobs.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `npx tsc --noEmit` exit 0; frontend `npx tsc --noEmit` exit 0; deployed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Delivery is download-buttons (DRI choice) rather than auto-commit to the repo. The kickoff Report format (Commit:/Files Created:/etc.) is unchanged, so the kickoff-sync parser still reads it. Concurrent session committed Cory auth work (53cb6707) on top of this turn&#39;s earlier commits — history is linear and intact.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`backend/src/services/foundationFilesService.ts`</td><td>NEW — `buildProjectSummary()` + `generateStarterClaudeMd()` (pure string builders). (2026-05-22)</td></tr>
+          <tr><td class="path">`backend/src/routes/projectRoutes.ts`</td><td>NEW `GET /requirements/download` + `GET /claude-md/download`; kickoff prompt rewritten to use REQUIREMENTS.md as the spec, embed the project summary, and point missing-file users to the portal downloads. (2026-05-22)</td></tr>
+          <tr><td class="path">`frontend/src/pages/project/SystemBlueprint.tsx`</td><td>`downloadFoundationFile()` helper + a &quot;Foundation files&quot; download row (REQUIREMENTS.md / CLAUDE.md) shown on the kickoff prompt panel. (2026-05-22)</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Session-ID tagging + per-session HTML change report (CLAUDE.md governance + generator)</h2>
+          <span class="badge">2026-05-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two operator-requested governance additions to CLAUDE.md, prompted by concurrent Claude instances colliding on PROGRESS.md. (1) **Session ID** — every session mints a unique `CC-YYYYMMDD-xxxx` ID before any PROGRESS.md work, stamps it on each entry (`Session:` line) and commit body; a new &quot;Concurrent-instance safety&quot; section codifies re-reading PROGRESS.md before appending, only editing entries with your own Session ID, and committing explicit paths (never `git add -A`). The end-of-session audit is now scoped to your own Session ID. (2) **Per-session HTML change report** — new `scripts/generateSessionChangelog.js &lt;SessionID&gt;` reads PROGRESS.md, selects entries tagged with that ID, renders a styled `docs/sessions/SESSION_&lt;id&gt;.html` (one card per change), and auto-opens it in the browser; CLAUDE.md now requires regenerating it after every change. Backfilled this session&#39;s 5 prior entries with the Session tag so the first report is complete (6 entries).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node scripts/generateSessionChangelog.js CC-20260522-2b04` produced `docs/sessions/SESSION_CC-20260522-2b04.html` (6 entries) and opened it in the browser.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">One HTML per session keyed on the ID so concurrent instances never overwrite each other&#39;s report. This entry is itself the reference example of the new `Session:` format.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`CLAUDE.md`</td><td>Session start protocol mints a Session ID; new &quot;Concurrent-instance safety&quot; + &quot;Per-session change report (HTML)&quot; sections; entry format gains a `Session:` line; end-of-session audit scoped to own ID. (2026-05-22)</td></tr>
+          <tr><td class="path">`scripts/generateSessionChangelog.js`</td><td>NEW — renders + auto-opens a per-session HTML changelog from PROGRESS.md entries tagged with a Session ID. (2026-05-22)</td></tr>
+          <tr><td class="path">`docs/sessions/SESSION_CC-20260522-2b04.html`</td><td>NEW — generated change report for this session. (2026-05-22)</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260522-2b04</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
