@@ -119,16 +119,21 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
           localStorage.removeItem(draftKey());
           return;
         }
+        // CoryHome only mounts this builder when the project genuinely NEEDS
+        // requirements. So a draft parked on a terminal or in-flight phase
+        // (loading_questions / generating / review / building / complete — the
+        // build wait now happens on the live demo, not inline) is stale: discard
+        // it and start at the chooser. Only INPUT phases are resumable.
+        const RESUMABLE = ['choose', 'idea', 'questions', 'repo'];
+        if (!RESUMABLE.includes(state.phase)) { localStorage.removeItem(draftKey()); return; }
         const hasIdea = state.originalIdea && state.originalIdea.trim().length > 0;
-        const hasDoc = state.generatedDoc && state.generatedDoc.trim().length > 10;
-        const validPhase = state.phase && !['loading_questions', 'generating'].includes(state.phase);
-        const phaseNeedsDoc = state.phase === 'review' || state.phase === 'complete';
         if (hasIdea) setOriginalIdea(state.originalIdea);
         if (state.questions?.length > 0 && hasIdea) setQuestions(state.questions);
         if (state.currentQ && hasIdea) setCurrentQ(state.currentQ);
         if (state.buildType) setBuildType(state.buildType);
-        if (hasIdea && validPhase && !(phaseNeedsDoc && !hasDoc)) setPhase(state.phase);
-        if (hasDoc) setGeneratedDoc(state.generatedDoc);
+        // Resume the saved input phase only when its prerequisite (the idea) is
+        // present; otherwise fall through to the default chooser.
+        if (state.phase === 'choose' || hasIdea) setPhase(state.phase);
       }
     } catch {}
   }, []);

@@ -3616,6 +3616,16 @@ The whole point of the operator's directive ("do real operational verifications"
 | `backend/src/services/architectBuildPollerService.ts` | Poller now also finalizes completed Workflow generation jobs (covers `architect_slug` OR `workflow_job_id`). (2026-05-22) |
 | `backend/src/services/requirementsGenerationService.ts` | `startRequirementsGeneration` targets the active project via `getProjectByEnrollment` (multi-project correctness). (2026-05-22) |
 
+- [x] Builder never resumes a stale terminal/in-flight draft phase
+  - Date: 2026-05-22
+  - What changed: Operator kept landing on a stuck "Your system is ready!" card under a 5% "Capturing Your Vision" header on a fresh project. Root cause: the enrollment-scoped localStorage draft survived the DB reset (reset reuses the same enrollment IDs, so the JWT sub + draft key are unchanged), and the resume logic restored `phase: 'complete'` because a `generatedDoc` was present. Since CoryHome ONLY mounts the builder when the project genuinely needs requirements, any draft on a terminal/in-flight phase (loading_questions / generating / review / building / complete) is stale by definition. Fix: resume now whitelists INPUT phases only (`choose` / `idea` / `questions` / `repo`) and discards the draft otherwise, so the stuck state self-heals to the chooser on next load. Removed the now-moot generatedDoc/phaseNeedsDoc resume branch.
+  - Verification: frontend `npx tsc --noEmit` exit 0; deployed.
+  - Notes: Complements the earlier draft-clear-on-switch fix — that handles in-session project changes; this handles a stale draft surviving across logins/resets.
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/project/RequirementsBuilder.tsx` | Resume whitelists input phases (choose/idea/questions/repo); discards drafts parked on terminal/in-flight phases. (2026-05-22) |
+
 - [x] GlobalCoryWidget: replace inlined Cory-authorization predicate with `useCoryAvailable()` hook (DRY cleanup)
   - Date: 2026-05-22
   - What changed: Operator returned to a recovered Claude session after the prior session died mid-handoff. During that recovery, audit revealed `GlobalCoryWidget.tsx` still carried the original inlined predicate (`adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin'`) on line 33, even though commits `75fd9ac7` and `ac8366cc` had already shipped (a) `useCoryAvailable()` as a standalone hook and (b) consumption of it in `BPDetailV2.tsx` to gate the education chip strip + per-step "Ask Cory" buttons. The widget itself was still duplicating the predicate. This change makes the widget consume the same hook every other Cory deeplink surface uses — single source of truth — so any future tweak to "who can reach Cory?" lives in exactly one file. No behavior change: the predicate's truth value is identical; line 117's render guard is unchanged.
