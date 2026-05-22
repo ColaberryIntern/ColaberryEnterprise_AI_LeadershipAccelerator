@@ -151,9 +151,18 @@ export function classifyFile(path: string): 'backend' | 'frontend' | 'agent' | '
 
   // 2. Agent — files that explicitly live under agents/ or carry "agent"
   //    in their name. intelligence/ also routed here since most files
-  //    there are LLM-bearing.
-  if (name.includes('agent') || lower.includes('/agents/') || lower.startsWith('agents/')) return 'agent';
-  if (lower.includes('/intelligence/') || lower.startsWith('intelligence/')) return 'agent';
+  //    there are LLM-bearing. 2026-05-22 (D1c): require code-file
+  //    extension and reject test files so .md specs, .py scripts, and
+  //    test files don't get confirmed as agents. Three prod junk rows
+  //    (discovery_routes.py, discovery.test, impact-estimator-agent.md)
+  //    came in through this path; the LLM attribution classifier wasn't
+  //    catching them because they look plausibly agent-named.
+  const isAgentCandidate = name.includes('agent')
+    || lower.includes('/agents/') || lower.startsWith('agents/')
+    || lower.includes('/intelligence/') || lower.startsWith('intelligence/');
+  const isCodeFile = /\.(tsx?|jsx?)$/i.test(name);
+  const isTestFile = /\.(test|spec)\.(t|j)sx?$/i.test(name);
+  if (isAgentCandidate && isCodeFile && !isTestFile) return 'agent';
 
   // 3. Model
   if (lower.includes('/models/') || lower.includes('/schemas/') || lower.includes('/entities/') || lower.includes('/migrations/') || /\.prisma$/.test(lower)) return 'model';

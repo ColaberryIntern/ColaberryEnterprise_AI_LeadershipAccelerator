@@ -140,7 +140,12 @@ function scoreCapabilityMatch(
 function classifyFile(f: string): 'backend' | 'frontend' | 'agent' | 'model' | 'other' {
   const lower = f.toLowerCase();
   const name = (f.split('/').pop() || '').toLowerCase();
-  if (name.includes('agent') || lower.includes('/agents/') || lower.includes('/intelligence/')) return 'agent';
+  // 2026-05-22 (D1c): agent layer requires a code-file extension and rejects
+  // test files; mirrors the tightening in brownfieldDiscoveryService.ts.
+  const isAgentCandidate = name.includes('agent') || lower.includes('/agents/') || lower.includes('/intelligence/');
+  const isCodeFile = /\.(tsx?|jsx?)$/i.test(name);
+  const isTestFile = /\.(test|spec)\.(t|j)sx?$/i.test(name);
+  if (isAgentCandidate && isCodeFile && !isTestFile) return 'agent';
   if (name.endsWith('.tsx') || name.endsWith('.jsx') || lower.includes('/component') || lower.includes('/page') || lower.includes('/frontend/')) return 'frontend';
   if (lower.includes('/model') || lower.includes('/schema') || lower.includes('/entity') || lower.includes('/migration') || lower.includes('prisma')) return 'model';
   if (lower.includes('/service') || lower.includes('/route') || lower.includes('/controller') || lower.includes('/handler') || lower.includes('/api/') || lower.includes('/backend/')) return 'backend';
