@@ -42,6 +42,7 @@ const adminNavSections: NavSection[] = [
     { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
     { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
     { path: '/admin/governance-policy', label: 'Governance Policies', icon: 'shield-check' },
+    { path: '/admin/agent-orphans', label: 'Agent Orphans', icon: 'person-plus' },
   ]},
   { label: null, links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'envelope-open' },
