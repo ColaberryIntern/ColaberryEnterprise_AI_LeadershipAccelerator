@@ -169,6 +169,62 @@ export async function listOrphanAgents(projectId: string, scanRoot = SCAN_ROOT_D
   };
 }
 
+// ─── Per-cap suggestion lookup (used by the BP detail UI for Plan C) ──────
+
+// Lightweight in-memory cache keyed on projectId. Walking the agent universe
+// + running D3 per file is ~500ms-1s; without the cache, every BP-detail open
+// would pay that. 5 min TTL is long enough to feel fast, short enough that
+// new agent files show up promptly during active development.
+const ORPHAN_CACHE = new Map<string, { stamp: number; result: OrphanListResult }>();
+const ORPHAN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function invalidateOrphanCache(projectId: string): void {
+  ORPHAN_CACHE.delete(projectId);
+}
+
+async function getCachedOrphans(projectId: string): Promise<OrphanListResult> {
+  const entry = ORPHAN_CACHE.get(projectId);
+  if (entry && (Date.now() - entry.stamp) < ORPHAN_CACHE_TTL_MS) return entry.result;
+  const fresh = await listOrphanAgents(projectId);
+  ORPHAN_CACHE.set(projectId, { stamp: Date.now(), result: fresh });
+  return fresh;
+}
+
+export interface CapSuggestion {
+  readonly agentName: string;
+  readonly sourcePath: string;
+  readonly score: number;
+  readonly evidence: ReadonlyArray<string>;
+  readonly nameStemBoost: boolean;
+}
+
+/**
+ * Suggestions for ONE capability — agents that look like they belong here
+ * by import-graph evidence. Returns unmapped agents whose D3 suggestions
+ * include this cap, ranked by score. Used by the BP detail UI to show
+ * "agents we think might belong to this BP" inline.
+ */
+export async function listAgentSuggestionsForCap(
+  projectId: string,
+  capId: string,
+): Promise<CapSuggestion[]> {
+  const all = await getCachedOrphans(projectId);
+  const out: CapSuggestion[] = [];
+  for (const o of all.orphans) {
+    const match = o.suggestions.find(s => s.capId === capId);
+    if (!match) continue;
+    out.push({
+      agentName: o.agentName,
+      sourcePath: o.sourcePath,
+      score: match.score,
+      evidence: match.evidence,
+      nameStemBoost: match.nameStemBoost,
+    });
+  }
+  out.sort((a, b) => (b.score - a.score) || a.agentName.localeCompare(b.agentName));
+  return out;
+}
+
 export interface AdoptOrphanInput {
   readonly projectId: string;
   readonly agentName: string;

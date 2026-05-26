@@ -2916,6 +2916,65 @@ function agentNameMatches(agentPath: string, agentName: string): boolean {
 }
 
 /**
+ * GET /api/portal/project/capabilities/:capId/agent-suggestions — 2026-05-26.
+ *
+ * Plan C: inline agent suggestions in the BP detail. Returns D3 import-graph
+ * suggestions for ONE cap — agents that look like they belong here but
+ * aren't attached yet. Cached per-project for 5 minutes.
+ */
+router.get('/api/portal/project/capabilities/:capId/agent-suggestions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const capId = req.params.capId as string;
+    const { default: Capability } = await import('../models/Capability');
+    const cap: any = await Capability.findByPk(capId);
+    if (!cap || cap.project_id !== project.id) { res.status(404).json({ error: 'Cap not found' }); return; }
+    const { listAgentSuggestionsForCap } = await import('../services/agentOrphanService');
+    const suggestions = await listAgentSuggestionsForCap(project.id, capId);
+    res.json({ capId, suggestions });
+  } catch (err: any) {
+    console.error('[capabilities/agent-suggestions]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/project/capabilities/:capId/agents/:agentName/attach — 2026-05-26.
+ *
+ * Plan C: manually attach an agent to a cap from the BP detail UI.
+ * Used when the operator picks one of the suggested agents (or types one).
+ * Idempotent — re-attaching the same pair flips status back to active.
+ */
+router.post('/api/portal/project/capabilities/:capId/agents/:agentName/attach', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const capId = req.params.capId as string;
+    const agentName = decodeURIComponent(req.params.agentName as string);
+    const { default: Capability } = await import('../models/Capability');
+    const cap: any = await Capability.findByPk(capId);
+    if (!cap || cap.project_id !== project.id) { res.status(404).json({ error: 'Cap not found' }); return; }
+    const { adoptOrphan, invalidateOrphanCache } = await import('../services/agentOrphanService');
+    const result = await adoptOrphan({
+      projectId: project.id,
+      agentName,
+      capabilityId: capId,
+      adoptedBy: `operator:${req.participant!.email}`,
+    });
+    // Invalidate the suggestion cache so the freshly-attached agent stops
+    // appearing in the suggestion list for other caps in the same project.
+    invalidateOrphanCache(project.id);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[capabilities/agents/attach]', err?.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/portal/onboarding/state — 2026-05-20.
  *
  * Returns the onboarding stage for the signed-in enrollment + a `gates`

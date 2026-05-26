@@ -34,6 +34,7 @@ import { educationalQuestionsFor, type EducationalQuestion } from '../../utils/b
 import { walkthroughStepsFor, type WalkthroughStep } from '../../utils/bpStepWalkthrough';
 import { useCoryAsk } from '../../hooks/useCoryAsk';
 import { useCoryAvailable } from '../../hooks/useCoryAvailable';
+import SuggestedAgents from './SuggestedAgents';
 
 interface Props {
   processId: string;
@@ -394,6 +395,13 @@ const BPDetailV2: React.FC<Props> = ({ processId, onClose, onUpdate }) => {
         rolesCache={(p as any).agent_roles_cache || null}
         onReload={onUpdate}
       />
+
+      {/* ─── Suggested Agents (Plan C, 2026-05-26) — inline import-graph
+            suggestions for this BP. Renders nothing when there are no
+            suggestions. One-click Attach writes to capability_agent_maps
+            and triggers onUpdate so the agent shows in the Confirmed list
+            above. ─── */}
+      <SuggestedAgents capId={p.id} onUpdate={onUpdate} />
 
       {/* ─── Learn about this BP — Cory deeplink chips ───
             Gated on coryAvailable: chips fire `cory:ask` events, but the
