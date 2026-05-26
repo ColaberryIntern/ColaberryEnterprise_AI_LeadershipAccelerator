@@ -39,7 +39,15 @@ const router = Router();
 // OR role===super_admin). Before this line, the entire surface was callable
 // without authentication — see requireCoryAuthorized's doc-block for the
 // security context.
-router.use(requireCoryAuthorized);
+//
+// 2026-05-26 [CC-20260526-5021]: PATH-SCOPED the gate. Mounting it as
+// `router.use(middleware)` without a path caused it to run for EVERY request
+// that reached this sub-router — including non-Cory requests passing through
+// adminRoutes on their way to participantRoutes / projectRoutes. Result:
+// portal participants got 403 "Cory access denied" on /api/portal/project/
+// unified-state (and similar), bricking the Home page. Scoping to the actual
+// Cory prefix preserves the security intent without blocking siblings.
+router.use('/api/admin/intelligence/cory', requireCoryAuthorized);
 
 // POST /api/admin/intelligence/cory/command — Execute a command through Cory
 router.post('/api/admin/intelligence/cory/command', async (req: Request, res: Response) => {
