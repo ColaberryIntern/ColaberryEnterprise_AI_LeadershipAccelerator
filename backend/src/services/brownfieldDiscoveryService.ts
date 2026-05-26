@@ -1154,7 +1154,23 @@ export async function discoverBrownfieldCapabilities(
     console.warn('[Brownfield] Page BP scan failed:', err?.message);
   }
 
-  // Step 5 (2026-05-20): LLM agent-attribution classification. The
+  // Step 5a (2026-05-26): import-graph auto-attribution. Walks the agent
+  // universe and matches each file's relative imports against caps'
+  // linked_backend_services. Writes high-confidence (score >= 3) pairs
+  // to capability_agent_maps as 'auto-import-graph-2026-05-26'. Runs
+  // BEFORE the LLM classifier so deterministic evidence lands first.
+  // No-ops cleanly when the local filesystem has no overlap with the
+  // project's caps (typical for customer projects whose agents live in
+  // a connected GitHub repo, not on this filesystem). Non-fatal.
+  try {
+    const { runImportGraphAttribution } = await import('./importGraphAttributionService');
+    const ig = await runImportGraphAttribution(projectId);
+    console.log(`[Brownfield] Import-graph attribution: ${ig.scanned} scanned, ${ig.suggestionsConsidered} suggestions, ${ig.autoAttached} new + ${ig.reactivated} reactivated + ${ig.alreadyActive} already-active (below threshold: ${ig.belowThreshold})`);
+  } catch (err: any) {
+    console.warn('[Brownfield] Import-graph attribution failed (non-fatal):', err?.message);
+  }
+
+  // Step 5b (2026-05-20): LLM agent-attribution classification. The
   // brownfield scan attributes agent files to caps by keyword name
   // match (linked_agents), which over-fires across caps with
   // overlapping name stems. The classifier asks gpt-4o-mini to confirm

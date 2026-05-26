@@ -42,7 +42,9 @@ const adminNavSections: NavSection[] = [
     { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
     { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
     { path: '/admin/governance-policy', label: 'Governance Policies', icon: 'shield-check' },
-    { path: '/admin/agent-orphans', label: 'Agent Orphans', icon: 'person-plus' },
+    // Agent Orphans page hidden from nav (2026-05-26) — operator decided
+    // per-project admin triage doesn't scale; auto-attribute on brownfield
+    // scan + inline portal corrections instead. Route + backend kept live.
   ]},
   { label: null, links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'envelope-open' },
