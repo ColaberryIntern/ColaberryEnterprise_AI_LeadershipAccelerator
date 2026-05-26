@@ -1,9 +1,10 @@
 /**
  * ingestImportAttributedAgents — D3 of the agent-discovery rebuild.
  *
- * Walks the agent universe (.ts/.js files under **/agents/** or
- * **/intelligence/**, excluding tests/.d.ts/node_modules/__mocks__),
- * resolves each file's relative imports, matches them against
+ * Walks the agent universe (.ts/.js files whose path contains an
+ * `agents` or `intelligence` directory segment, excluding tests,
+ * .d.ts files, node_modules, and __mocks__), resolves each file's
+ * relative imports, matches them against
  * `capabilities.linked_backend_services`, scores the resulting
  * attributions, and upserts `capability_agent_maps` rows for any cap
  * exceeding MIN_SCORE.
@@ -63,9 +64,16 @@ if (!TARGET_PROJECT_ID) {
 
 // ─── helpers ──────────────────────────────────────────────────────────────
 
-// Walk file tree. Return list of .ts/.tsx/.js/.jsx files under the agent
-// universe (paths containing /agents/ or /intelligence/), excluding tests
-// and declaration files. Same shape as the D1c tightened classifier.
+// Walk file tree. Return code files that look like actual agents — narrower
+// than D1c's classifier. Two ways to qualify:
+//   1. Path contains an `/agents/` directory segment, OR
+//   2. Basename contains "agent" (case-insensitive)
+// This excludes barrel files (`index.ts`), generic infrastructure under
+// `/intelligence/` that doesn't carry an agent name, and other non-agent
+// code D1c admits as the broader "agent layer". The first dry-run showed
+// `index` and `systemStateEngine` getting attributed because they live
+// under /intelligence/ but aren't agents in the BP sense — narrowing here
+// stops that at the source.
 function walkAgentFiles(root, out = []) {
   let entries;
   try { entries = fs.readdirSync(root, { withFileTypes: true }); }
@@ -77,12 +85,12 @@ function walkAgentFiles(root, out = []) {
       walkAgentFiles(p, out);
     } else if (/\.(ts|tsx|js|jsx)$/i.test(e.name)
         && !/\.(test|spec)\.(t|j)sx?$/i.test(e.name)
-        && !/\.d\.ts$/i.test(e.name)) {
+        && !/\.d\.ts$/i.test(e.name)
+        && !/^index\.(t|j)sx?$/i.test(e.name)) {
       const lower = p.replace(/\\/g, '/').toLowerCase();
-      if (lower.includes('/agents/') || lower.includes('/intelligence/')) {
-        // Path-pattern AND filename agent gate (matches D1c classifier rules)
-        out.push(p);
-      }
+      const inAgentsDir = lower.includes('/agents/');
+      const nameHasAgent = e.name.toLowerCase().includes('agent');
+      if (inAgentsDir || nameHasAgent) out.push(p);
     }
   }
   return out;
