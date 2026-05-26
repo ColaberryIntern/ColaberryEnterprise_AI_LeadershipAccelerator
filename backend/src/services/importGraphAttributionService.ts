@@ -40,13 +40,17 @@ export interface ImportGraphAttributionStats {
 }
 
 export interface RunOptions {
-  /** Minimum score for auto-attachment. Default 3 (≥2 import matches OR 1 match + name-stem boost + buffer). */
+  /** Minimum score for auto-attachment. Default 2 — matches the D3 ingester
+   *  audit (score=2 was the clean threshold: ≥2 import matches OR 1 match
+   *  + name-stem boost). Bumped to 3 briefly during initial rollout but
+   *  the resulting run attached 0 on the Accelerator project because every
+   *  D3-legitimate attribution sits at exactly score=2; reverted to 2. */
   readonly minScore?: number;
   /** Tag base for `linked_by` (caller can append context). */
   readonly linkedByTag?: string;
 }
 
-const DEFAULT_MIN_SCORE = 3;
+const DEFAULT_MIN_SCORE = 2;
 const DEFAULT_TAG = 'auto-import-graph-2026-05-26';
 
 /**
