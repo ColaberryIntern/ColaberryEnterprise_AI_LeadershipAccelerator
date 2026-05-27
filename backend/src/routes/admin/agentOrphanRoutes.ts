@@ -20,7 +20,16 @@ import { sequelize } from '../../config/database';
 import { QueryTypes } from 'sequelize';
 
 const router = Router();
-router.use(requireAdmin);
+// 2026-05-27: path-scope the gate to the actual /api/admin/agent-orphans
+// prefix. The earlier `router.use(requireAdmin)` (router-wide) replicated
+// the 2026-05-26 Cory regression (commit c209d49e): because this sub-router
+// is mounted in adminRoutes without a path prefix, every request that
+// reached it — including /api/portal/* requests passing through — was
+// being gated by requireAdmin, returning 401 to unauthed callers.
+// Identified during a Plan C smoke test when the magic-link verify call
+// (an unauthenticated endpoint) started returning 401 and the portal
+// became unreachable. Same fix as Cory: scope the gate to the actual prefix.
+router.use('/api/admin/agent-orphans', requireAdmin);
 
 const ProjectIdQuery = z.object({ projectId: z.string().uuid() });
 
