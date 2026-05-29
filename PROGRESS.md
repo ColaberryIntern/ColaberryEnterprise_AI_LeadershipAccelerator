@@ -3857,3 +3857,59 @@ The whole point of the operator's directive ("do real operational verifications"
 | File | Change |
 |---|---|
 | `backend/src/routes/admin/agentOrphanRoutes.ts` | `router.use(requireAdmin)` → `router.use('/api/admin/agent-orphans', requireAdmin)`. Inline comment documents the regression pattern + connects it to the prior c209d49e Cory fix for future readers. (2026-05-27) |
+
+### Cory daily brief timezone fix + ops-engine notification stack scaffolding + therapy visual writeup (2026-05-29)
+End-of-session catch-up entry per the doctrine's catch-up rule. Single session covered multiple deliverables: a real-shipping backend bug fix, three new ops-engine cron-target scripts, and a polished therapy visual artifact emailed + PDF'd.
+
+- [x] **FIX: Cory daily brief fires 6:45am CT instead of 2am CT, plus timezone-aware all crons.**
+  - Date: 2026-05-29
+  - Session: CC-20260529-7tz1
+  - What changed: `backend/src/services/aiOpsScheduler.ts` — DailyExecutiveBriefing schedule `0 7 * * *` → `45 6 * * *`, same for WeeklyStrategicBriefing and ExecutiveAwarenessMorningDigest. All three `cron.schedule(...)` calls now pass `{ timezone: 'America/Chicago' }` so every existing cron expression is interpreted in CT (and handles DST).
+  - Verification: `npx tsc --noEmit` exit 0; deployed to prod VPS via `git pull origin main && docker compose -f docker-compose.production.yml up -d --build backend`; manually triggered `generateDailyBriefing()` inside the running container — Mandrill message-ids `3e9cc46f-632f-b2f3-7a2f-2002736ff6c6` (Ali) + `3d0c5fc5-66d0-94b1-e6c1-0beaabf75931` (Ram) delivered; user confirmed receipt of brief.
+  - Notes: Root cause was the prod container running with `TZ=unset`, so node-cron with no explicit timezone option fell back to UTC. The labels in the codebase had been claiming CT times for months but the actual fire time was 5-6 hours off. While here, found an uncommitted local edit on prod (`server.ts` adding `shipcsFeedbackRoutes` wiring; route file existed at `backend/src/routes/shipcsFeedbackRoutes.ts` dated May 26 but the wiring was never committed). Stashed it on prod as `stash@{0}` with message `pre-cron-deploy 2026-05-29` for the owner to handle properly via PR.
+
+- [x] **NEW: scripts/ops-engine/cardtable-sync.js — Basecamp Card Table mirror.**
+  - Date: 2026-05-29
+  - Session: CC-20260529-7tz1
+  - What changed: New script that reads `tmp/ops-engine/cache.json`, mirrors per-todo status into Basecamp Card Table columns on any monitored project with the Card Table dock enabled. One-way (todo → card). Idempotent via `[todo:<id>]` title tags. Status map: Intake/Planned → "Not started", In Progress/Waiting on Ali → "In progress", Waiting on External/Monitoring/Blocked → "On hold", Ready to Close/Completed → "Done". `--dry` flag for logging without mutating.
+  - Verification: `node --check` passes; not yet cron-scheduled (waiting on Ali's decision on the engine stack decision todo `9940809868`).
+
+- [x] **NEW: scripts/ops-engine/worker.js — 15-minute CB-System autonomous tick.**
+  - Date: 2026-05-29
+  - Session: CC-20260529-7tz1
+  - What changed: New script implementing Pattern G — every 15 min, scans Basecamp for CB-System-assigned open todos, classifies by `#auto-<recipe>` hashtags (grep, sql, comment, research, draft), executes one per tick with a 5-min hard timeout, posts result as a Basecamp comment, never auto-closes. Lock file + 24h per-todo retry guard. Posts a digest comment to a meta tracking todo every 16 ticks (~4hr).
+  - Verification: `node --check` passes; dry-run started but timed out walking all accessible projects — needs v1.1 switch to `/people/<id>/assignments.json` endpoint for the discovery query (logged in code TODO). Not yet cron-scheduled.
+
+- [x] **NEW: scripts/ops-engine/inbound-dispatcher.js — Pattern H-1 inbound CB System request dispatcher.**
+  - Date: 2026-05-29
+  - Session: CC-20260529-7tz1
+  - What changed: New script that polls Basecamp `events.json` for new comments where Ali @mentions CB System, classifies via keyword recipes (grep / ccpp / gmail / help), and replies with results tagged to Ali on the same recording. v1 = keyword-based; v2 will plug in a Claude API key for free-form classification. Read-only on every external system. 3-min hard timeout. Lock + state file.
+  - Verification: `node --check` passes; not yet cron-scheduled.
+
+- [x] **NEW: scripts/ops-engine/backlog-enforcer.js — Pattern H-2 backlog enforcer.**
+  - Date: 2026-05-29
+  - Session: CC-20260529-7tz1
+  - What changed: New script that scans Ali Personal every 4 hours for open Ali-assigned todos, classifies by urgency (overdue / due-today / due-this-week / stale-no-due), posts a snapshot comment on a meta "[Tracking] Ali backlog status" todo. Tags Ali only when overdue ≥ 3, OR any single overdue > 7 days, OR at 9am-CT daily tick. Silent otherwise.
+  - Verification: `node --check` passes; not yet cron-scheduled.
+
+- [x] **NEW: docs/alcohol-brain-visual-summary.html + .pdf — therapy visual synthesis.**
+  - Date: 2026-05-29
+  - Session: CC-20260529-7tz1
+  - What changed: Built two versions of a styled 8-section HTML synthesis of `tmp/therapy-research/alcohol-brain-research.md` — v1 emoji + SVG, v2 added themed photo banners (bar / brain / stress / medical / sunrise), section emoji, and emoji-tagged pills + analogy cards. Generated PDF (12.6 MB, US Letter, full background colors) via Playwright headless chromium (`tmp/html-to-pdf.js`). Emailed PDF + HTML to all 3 of Ali's inboxes (ali@colaberry.com, alimuwwakkil@gmail.com, ali_muwwakkil@hotmail.com) and uploaded the PDF to the therapy Basecamp todo as backup.
+  - Verification: User confirmed receipt via the email + Basecamp attachment.
+  - Notes: First attempt only sent to ali@colaberry.com; user didn't see it because he reads at Hotmail. Resent to all 3. Going forward, personal/therapy artifacts go to all 3 inboxes by default.
+
+| File | Change |
+|---|---|
+| `backend/src/services/aiOpsScheduler.ts` | Schedule + timezone fix for Cory daily brief, weekly briefing, morning digest. All cron.schedule calls now pass `{ timezone: 'America/Chicago' }`. (commit `8b9e441d`) |
+| `scripts/ops-engine/cardtable-sync.js` | NEW. Todo → Card Table column mirror. |
+| `scripts/ops-engine/worker.js` | NEW. 15-min CB System worker (Pattern G). |
+| `scripts/ops-engine/inbound-dispatcher.js` | NEW. Pattern H-1 @-mention dispatcher. |
+| `scripts/ops-engine/backlog-enforcer.js` | NEW. Pattern H-2 backlog watcher. |
+| `docs/alcohol-brain-visual-summary.html` | NEW. v1 visual synthesis. |
+| `docs/alcohol-brain-visual-summary-v2.html` | NEW. v2 with imagery + emoji density. |
+| `docs/alcohol-brain-visual-summary.pdf` | NEW. PDF print of v2 via Playwright (12.6 MB). |
+| `backend/src/scripts/sendAngieLayoffNotification.js` | NEW. Mandrill send to HR re Mika + Shveta layoff (sensitive 1:1 outbound). |
+| `backend/src/scripts/sendAliAlcoholVisualSummary.js` | NEW. Email v1 HTML to Ali. |
+| `backend/src/scripts/sendAliAlcoholPdfV2.js` | NEW. Email v2 PDF to Ali (single inbox). |
+| `backend/src/scripts/sendAliAlcoholPdfAllInboxes.js` | NEW. Email PDF to all 3 of Ali's inboxes (resend). |

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260529-7tz1 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, May 29, 2026 at 1:42 PM</div>
+    <div><span class="sid">CC-20260529-7tz1</span><span class="count">6 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**FIX: Cory daily brief fires 6:45am CT instead of 2am CT, plus timezone-aware all crons.**</h2>
+          <span class="badge">2026-05-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/aiOpsScheduler.ts` — DailyExecutiveBriefing schedule `0 7 * * *` → `45 6 * * *`, same for WeeklyStrategicBriefing and ExecutiveAwarenessMorningDigest. All three `cron.schedule(...)` calls now pass `{ timezone: &#39;America/Chicago&#39; }` so every existing cron expression is interpreted in CT (and handles DST).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npx tsc --noEmit` exit 0; deployed to prod VPS via `git pull origin main &amp;&amp; docker compose -f docker-compose.production.yml up -d --build backend`; manually triggered `generateDailyBriefing()` inside the running container — Mandrill message-ids `3e9cc46f-632f-b2f3-7a2f-2002736ff6c6` (Ali) + `3d0c5fc5-66d0-94b1-e6c1-0beaabf75931` (Ram) delivered; user confirmed receipt of brief.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Root cause was the prod container running with `TZ=unset`, so node-cron with no explicit timezone option fell back to UTC. The labels in the codebase had been claiming CT times for months but the actual fire time was 5-6 hours off. While here, found an uncommitted local edit on prod (`server.ts` adding `shipcsFeedbackRoutes` wiring; route file existed at `backend/src/routes/shipcsFeedbackRoutes.ts` dated May 26 but the wiring was never committed). Stashed it on prod as `stash@{0}` with message `pre-cron-deploy 2026-05-29` for the owner to handle properly via PR.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**NEW: scripts/ops-engine/cardtable-sync.js — Basecamp Card Table mirror.**</h2>
+          <span class="badge">2026-05-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New script that reads `tmp/ops-engine/cache.json`, mirrors per-todo status into Basecamp Card Table columns on any monitored project with the Card Table dock enabled. One-way (todo → card). Idempotent via `[todo:&lt;id&gt;]` title tags. Status map: Intake/Planned → &quot;Not started&quot;, In Progress/Waiting on Ali → &quot;In progress&quot;, Waiting on External/Monitoring/Blocked → &quot;On hold&quot;, Ready to Close/Completed → &quot;Done&quot;. `--dry` flag for logging without mutating.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node --check` passes; not yet cron-scheduled (waiting on Ali&#39;s decision on the engine stack decision todo `9940809868`).</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**NEW: scripts/ops-engine/worker.js — 15-minute CB-System autonomous tick.**</h2>
+          <span class="badge">2026-05-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New script implementing Pattern G — every 15 min, scans Basecamp for CB-System-assigned open todos, classifies by `#auto-&lt;recipe&gt;` hashtags (grep, sql, comment, research, draft), executes one per tick with a 5-min hard timeout, posts result as a Basecamp comment, never auto-closes. Lock file + 24h per-todo retry guard. Posts a digest comment to a meta tracking todo every 16 ticks (~4hr).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node --check` passes; dry-run started but timed out walking all accessible projects — needs v1.1 switch to `/people/&lt;id&gt;/assignments.json` endpoint for the discovery query (logged in code TODO). Not yet cron-scheduled.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**NEW: scripts/ops-engine/inbound-dispatcher.js — Pattern H-1 inbound CB System request dispatcher.**</h2>
+          <span class="badge">2026-05-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New script that polls Basecamp `events.json` for new comments where Ali @mentions CB System, classifies via keyword recipes (grep / ccpp / gmail / help), and replies with results tagged to Ali on the same recording. v1 = keyword-based; v2 will plug in a Claude API key for free-form classification. Read-only on every external system. 3-min hard timeout. Lock + state file.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node --check` passes; not yet cron-scheduled.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**NEW: scripts/ops-engine/backlog-enforcer.js — Pattern H-2 backlog enforcer.**</h2>
+          <span class="badge">2026-05-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New script that scans Ali Personal every 4 hours for open Ali-assigned todos, classifies by urgency (overdue / due-today / due-this-week / stale-no-due), posts a snapshot comment on a meta &quot;[Tracking] Ali backlog status&quot; todo. Tags Ali only when overdue ≥ 3, OR any single overdue &gt; 7 days, OR at 9am-CT daily tick. Silent otherwise.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node --check` passes; not yet cron-scheduled.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**NEW: docs/alcohol-brain-visual-summary.html + .pdf — therapy visual synthesis.**</h2>
+          <span class="badge">2026-05-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Built two versions of a styled 8-section HTML synthesis of `tmp/therapy-research/alcohol-brain-research.md` — v1 emoji + SVG, v2 added themed photo banners (bar / brain / stress / medical / sunrise), section emoji, and emoji-tagged pills + analogy cards. Generated PDF (12.6 MB, US Letter, full background colors) via Playwright headless chromium (`tmp/html-to-pdf.js`). Emailed PDF + HTML to all 3 of Ali&#39;s inboxes (ali@colaberry.com, alimuwwakkil@gmail.com, ali_muwwakkil@hotmail.com) and uploaded the PDF to the therapy Basecamp todo as backup.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">User confirmed receipt via the email + Basecamp attachment.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">First attempt only sent to ali@colaberry.com; user didn&#39;t see it because he reads at Hotmail. Resent to all 3. Going forward, personal/therapy artifacts go to all 3 inboxes by default.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`backend/src/services/aiOpsScheduler.ts`</td><td>Schedule + timezone fix for Cory daily brief, weekly briefing, morning digest. All cron.schedule calls now pass `{ timezone: &#39;America/Chicago&#39; }`. (commit `8b9e441d`)</td></tr>
+          <tr><td class="path">`scripts/ops-engine/cardtable-sync.js`</td><td>NEW. Todo → Card Table column mirror.</td></tr>
+          <tr><td class="path">`scripts/ops-engine/worker.js`</td><td>NEW. 15-min CB System worker (Pattern G).</td></tr>
+          <tr><td class="path">`scripts/ops-engine/inbound-dispatcher.js`</td><td>NEW. Pattern H-1 @-mention dispatcher.</td></tr>
+          <tr><td class="path">`scripts/ops-engine/backlog-enforcer.js`</td><td>NEW. Pattern H-2 backlog watcher.</td></tr>
+          <tr><td class="path">`docs/alcohol-brain-visual-summary.html`</td><td>NEW. v1 visual synthesis.</td></tr>
+          <tr><td class="path">`docs/alcohol-brain-visual-summary-v2.html`</td><td>NEW. v2 with imagery + emoji density.</td></tr>
+          <tr><td class="path">`docs/alcohol-brain-visual-summary.pdf`</td><td>NEW. PDF print of v2 via Playwright (12.6 MB).</td></tr>
+          <tr><td class="path">`backend/src/scripts/sendAngieLayoffNotification.js`</td><td>NEW. Mandrill send to HR re Mika + Shveta layoff (sensitive 1:1 outbound).</td></tr>
+          <tr><td class="path">`backend/src/scripts/sendAliAlcoholVisualSummary.js`</td><td>NEW. Email v1 HTML to Ali.</td></tr>
+          <tr><td class="path">`backend/src/scripts/sendAliAlcoholPdfV2.js`</td><td>NEW. Email v2 PDF to Ali (single inbox).</td></tr>
+          <tr><td class="path">`backend/src/scripts/sendAliAlcoholPdfAllInboxes.js`</td><td>NEW. Email PDF to all 3 of Ali&#39;s inboxes (resend).</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260529-7tz1</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

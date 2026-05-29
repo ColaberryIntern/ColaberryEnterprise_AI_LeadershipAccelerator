@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alcohol and the Brain: A Visual Synthesis</title>
+<style>
+  :root{
+    --navy:#1a365d; --blue:#2b6cb0; --warn:#f59e0b; --danger:#e53e3e;
+    --good:#16a34a; --ink:#1a202c; --muted:#718096; --bg:#f7fafc; --line:#e2e8f0;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);margin:0;padding:0;line-height:1.55}
+  .wrap{max-width:880px;margin:0 auto;padding:0 24px 80px}
+  .hero{background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:#fff;padding:48px 24px;text-align:center}
+  .hero h1{font-size:36px;margin:0 0 8px;font-weight:800;letter-spacing:-0.5px}
+  .hero .kicker{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#90cdf4;font-weight:700}
+  .hero p{font-size:17px;color:#e2e8f0;max-width:680px;margin:18px auto 0;line-height:1.6}
+  h2{font-size:24px;margin:48px 0 8px;color:var(--navy);font-weight:800;letter-spacing:-0.3px}
+  h2 .num{display:inline-block;background:var(--navy);color:#fff;width:32px;height:32px;line-height:32px;text-align:center;border-radius:50%;font-size:15px;font-weight:800;margin-right:10px;vertical-align:middle}
+  h3{font-size:18px;margin:18px 0 6px;color:var(--navy);font-weight:700}
+  .lead{color:var(--muted);font-size:15px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px 24px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card.warn{border-left:4px solid var(--warn)}
+  .card.danger{border-left:4px solid var(--danger);background:#fef5f5}
+  .card.good{border-left:4px solid var(--good);background:#f0fdf4}
+  .card.info{border-left:4px solid var(--blue);background:#ebf4ff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:16px 0}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;text-align:center}
+  .stat .num{font-size:32px;font-weight:800;color:var(--navy);line-height:1}
+  .stat .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:8px}
+  .pill{display:inline-block;background:#edf2f7;color:var(--navy);padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
+  .pill.warn{background:#fef3c7;color:#92400e}
+  .pill.danger{background:#fee2e2;color:#991b1b}
+  .pill.good{background:#dcfce7;color:#166534}
+  .pill.info{background:#dbeafe;color:#1e40af}
+  .vs{display:grid;grid-template-columns:1fr 60px 1fr;gap:0;align-items:stretch;margin:18px 0}
+  .vs .side{background:#fff;border:2px solid var(--line);padding:16px;border-radius:8px}
+  .vs .side.left{border-color:var(--blue)}
+  .vs .side.right{border-color:var(--danger)}
+  .vs .center{display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;color:var(--muted)}
+  .vs h4{margin:0 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:1px}
+  .vs .side.left h4{color:var(--blue)}
+  .vs .side.right h4{color:var(--danger)}
+  .timeline{position:relative;margin:24px 0 0;padding-left:28px;border-left:3px solid var(--line)}
+  .tl{position:relative;margin-bottom:18px}
+  .tl::before{content:"";position:absolute;left:-37px;top:6px;width:14px;height:14px;border-radius:50%;background:var(--blue);border:3px solid #fff;box-shadow:0 0 0 2px var(--blue)}
+  .tl.danger::before{background:var(--danger);box-shadow:0 0 0 2px var(--danger)}
+  .tl.good::before{background:var(--good);box-shadow:0 0 0 2px var(--good)}
+  .tl .when{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+  .tl .what{font-size:15px;margin-top:2px}
+  .diagram{width:100%;max-width:780px;display:block;margin:18px auto}
+  .quote{border-left:4px solid var(--navy);background:#fff;padding:14px 18px;margin:14px 0;font-style:italic;color:#2d3748}
+  .quote::before{content:"\201C";font-size:48px;line-height:0;color:var(--navy);margin-right:6px;vertical-align:-12px}
+  .analogy{background:#fffaf0;border:2px dashed #f6ad55;padding:16px 20px;border-radius:10px;margin:14px 0}
+  .analogy .label{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#c05621;font-weight:800;margin-bottom:6px}
+  .checklist{list-style:none;padding-left:0;margin:14px 0}
+  .checklist li{padding:10px 14px 10px 36px;background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;position:relative}
+  .checklist li::before{content:"\2713";position:absolute;left:12px;top:10px;color:var(--good);font-weight:800;font-size:18px}
+  .footer{text-align:center;color:var(--muted);font-size:12px;padding:32px 0;margin-top:48px;border-top:1px solid var(--line)}
+  .badge{display:inline-block;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:800;padding:3px 8px;border-radius:4px;vertical-align:middle;margin-left:6px}
+  .badge.req{background:var(--navy);color:#fff}
+  .toc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:18px 0}
+  .toc ol{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
+  .toc a{color:var(--navy);text-decoration:none;font-weight:600}
+  .toc a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="kicker">Therapy homework &middot; visual synthesis</div>
+  <h1>Alcohol and the Brain</h1>
+  <p>What it does, how it rewires, why stopping is hard, and the path back. Distilled from NIAAA, NIDA, Volkow, Koob, Lembke, Lewis, and the DSM-5 source research.</p>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>What's inside</strong>
+  <ol>
+    <li><a href="#tldr">TL;DR &mdash; the 5 things to focus on</a></li>
+    <li><a href="#model">The simplest mental model (brake + accelerator)</a></li>
+    <li><a href="#stages">The 3 stages of what's happening</a></li>
+    <li><a href="#wantvslike">Wanting vs liking &mdash; the central insight</a></li>
+    <li><a href="#why">Why stopping is hard (the 4-part trap)</a></li>
+    <li><a href="#explain">How to explain it to someone in 60 seconds</a></li>
+    <li><a href="#stop">The best way to stop (evidence-based)</a></li>
+    <li><a href="#timeline">Recovery timeline &mdash; what heals when</a></li>
+  </ol>
+</div>
+
+<!-- ====== 1. TLDR ====== -->
+<h2 id="tldr"><span class="num">1</span>TL;DR &mdash; the 5 things to focus on</h2>
+<div class="lead">If you only remember 5 things from the whole 30-page research, make them these.</div>
+
+<div class="grid">
+  <div class="stat"><div class="num">1</div><div class="lbl">Alcohol hits<br>every system at once</div></div>
+  <div class="stat"><div class="num">2</div><div class="lbl">Tolerance is the brain<br>fighting back</div></div>
+  <div class="stat"><div class="num">3</div><div class="lbl">Wanting and liking<br>are different systems</div></div>
+  <div class="stat"><div class="num">4</div><div class="lbl">Severe withdrawal<br>can kill</div></div>
+  <div class="stat"><div class="num">5</div><div class="lbl">Recovery takes<br>months to years</div></div>
+</div>
+
+<div class="card info">
+  <strong>The headline:</strong> Addiction is not a character defect. The brain has been physically rewired by repeated exposure. Recovery is rewiring it back. That rewiring is slow but real, and it follows known biological timelines.
+</div>
+
+<!-- ====== 2. MENTAL MODEL ====== -->
+<h2 id="model"><span class="num">2</span>The simplest mental model: brake + accelerator</h2>
+<div class="lead">If you take one image away, take this one.</div>
+
+<svg class="diagram" viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="brake" x1="0" x2="1"><stop offset="0" stop-color="#2b6cb0"/><stop offset="1" stop-color="#1a365d"/></linearGradient>
+    <linearGradient id="gas" x1="0" x2="1"><stop offset="0" stop-color="#e53e3e"/><stop offset="1" stop-color="#9b2c2c"/></linearGradient>
+  </defs>
+  <rect x="20" y="40" width="340" height="160" rx="14" fill="url(#brake)"/>
+  <text x="190" y="80" text-anchor="middle" fill="#fff" font-weight="800" font-size="20">GABA (brake)</text>
+  <text x="190" y="110" text-anchor="middle" fill="#cbd5e0" font-size="13">Inhibitory. Slows neurons down.</text>
+  <text x="190" y="148" text-anchor="middle" fill="#fff" font-size="14">Alcohol <tspan font-weight="800">amplifies</tspan> the brake.</text>
+  <text x="190" y="172" text-anchor="middle" fill="#fff" font-size="14">You feel relaxed, anxiolytic, sleepy.</text>
+
+  <rect x="400" y="40" width="340" height="160" rx="14" fill="url(#gas)"/>
+  <text x="570" y="80" text-anchor="middle" fill="#fff" font-weight="800" font-size="20">Glutamate / NMDA (gas)</text>
+  <text x="570" y="110" text-anchor="middle" fill="#fed7d7" font-size="13">Excitatory. Speeds neurons up. Memory.</text>
+  <text x="570" y="148" text-anchor="middle" fill="#fff" font-size="14">Alcohol <tspan font-weight="800">suppresses</tspan> the gas.</text>
+  <text x="570" y="172" text-anchor="middle" fill="#fff" font-size="14">Slurred speech, memory gaps, blackouts.</text>
+
+  <text x="380" y="222" text-anchor="middle" fill="#4a5568" font-size="13" font-style="italic">Acute intoxication = brake on + gas off. Everything slows.</text>
+</svg>
+
+<div class="card">
+  <strong>The twist:</strong> over months of drinking, the brain pushes back. It <em>weakens</em> the brake (fewer GABA receptors) and <em>strengthens</em> the gas (more NMDA receptors). Now, without alcohol on board, the brain runs hot. With alcohol on board, it feels normal. That's physical dependence in one sentence.
+</div>
+
+<!-- ====== 3. STAGES ====== -->
+<h2 id="stages"><span class="num">3</span>The 3 stages of what's happening</h2>
+
+<div class="card info">
+  <h3 style="margin-top:0">Stage 1 &mdash; The first drink (acute)</h3>
+  <p>Alcohol hits within minutes. It is not a clean drug. It nudges <strong>5+ different brain systems at once:</strong></p>
+  <span class="pill info">GABA-A &uarr; (anxiolysis)</span>
+  <span class="pill info">NMDA &darr; (memory)</span>
+  <span class="pill info">Dopamine &uarr; (reward)</span>
+  <span class="pill info">Endogenous opioids &uarr; (warm glow)</span>
+  <span class="pill info">Serotonin &uarr; (mood)</span>
+  <span class="pill info">PFC &darr; (disinhibition)</span>
+  <p style="margin-top:14px"><strong>Why this matters:</strong> because alcohol hits everything at once, no single antidote exists. It's why people say it "just makes me feel right" &mdash; it's pulling multiple levers simultaneously.</p>
+</div>
+
+<div class="card warn">
+  <h3 style="margin-top:0">Stage 2 &mdash; The brain adapts (chronic)</h3>
+  <p>With repeated exposure, the brain remodels itself to fight the chronic depressant. Three changes drive everything that follows:</p>
+  <ul>
+    <li><strong>GABA-A receptors decrease</strong> &mdash; the brake gets weaker</li>
+    <li><strong>NMDA receptors increase</strong> &mdash; the accelerator gets stronger</li>
+    <li><strong>Extended amygdala stress system sensitizes</strong> &mdash; baseline mood drifts downward</li>
+  </ul>
+  <p style="margin-top:14px"><strong>The result:</strong> drinking is no longer about chasing pleasure (positive reinforcement). It is about escaping the increasingly painful baseline that drinking itself created (negative reinforcement). This is the most important sentence in addiction neuroscience.</p>
+</div>
+
+<div class="card danger">
+  <h3 style="margin-top:0">Stage 3 &mdash; Physical dependence (the body really does need it)</h3>
+  <p>In severe dependence, removing alcohol is a medical emergency, not a discomfort. The brain's brake is weakened, the accelerator runs unchecked, the stress system is hot. The result is hyperexcitability that can produce <strong>seizures and delirium tremens</strong>.</p>
+  <p><strong>Why this is the literal truth in "the body needs it like water":</strong> at the severe end, the brain has been physically rewired such that alcohol is required just to maintain function. The water analogy overstates a bit (water is a true requirement; alcohol is an acquired requirement of a remodeled brain), but the felt experience is reporting on a real neural state.</p>
+</div>
+
+<!-- ====== 4. WANTING VS LIKING ====== -->
+<h2 id="wantvslike"><span class="num">4</span>Wanting vs liking &mdash; the central insight</h2>
+<div class="lead">Kent Berridge (University of Michigan) showed these are two different systems with different brain substrates. Addiction decouples them.</div>
+
+<div class="vs">
+  <div class="side left">
+    <h4>Liking</h4>
+    <div style="font-size:13px;color:#2d3748">The pleasure itself. The hedonic punch. The "this feels good."</div>
+    <div style="margin-top:10px"><span class="pill">Mediated by mu-opioid + endocannabinoid in small hedonic hotspots</span></div>
+    <div style="margin-top:10px;font-weight:700;color:var(--blue)">In addiction: <span style="color:var(--ink);font-weight:600">gets blunted. You enjoy it less.</span></div>
+  </div>
+  <div class="center">&ne;</div>
+  <div class="side right">
+    <h4>Wanting</h4>
+    <div style="font-size:13px;color:#2d3748">The pull. The craving. The "I need this now."</div>
+    <div style="margin-top:10px"><span class="pill">Mediated by dopamine in the mesolimbic system</span></div>
+    <div style="margin-top:10px;font-weight:700;color:var(--danger)">In addiction: <span style="color:var(--ink);font-weight:600">gets sensitized. You want it more.</span></div>
+  </div>
+</div>
+
+<div class="card good">
+  <strong>The clinical phenomenon this explains:</strong> people in advanced addiction commonly report that they <em>crave alcohol intensely while no longer enjoying it</em>. That's not denial. That's not weakness. It's the predictable readout of sensitized wanting + blunted liking. Once you see this, "I don't even enjoy it anymore but I can't stop" stops being a contradiction.
+</div>
+
+<!-- ====== 5. WHY HARD ====== -->
+<h2 id="why"><span class="num">5</span>Why stopping is hard &mdash; the 4-part trap</h2>
+<div class="lead">Four mechanisms operate at the same time. They compound. This is why willpower alone usually loses.</div>
+
+<svg class="diagram" viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg">
+  <rect x="20" y="20" width="350" height="155" rx="10" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="20" y="20" width="6" height="155" rx="3" fill="#e53e3e"/>
+  <text x="40" y="50" font-size="15" font-weight="800" fill="#1a365d">1. Sensitized wanting</text>
+  <text x="40" y="74" font-size="13" fill="#4a5568">Cues (time of day, places, people, emotions)</text>
+  <text x="40" y="92" font-size="13" fill="#4a5568">fire intense craving. Dopamine learned this.</text>
+  <text x="40" y="118" font-size="13" fill="#4a5568">The wanting can hit even when you have</text>
+  <text x="40" y="136" font-size="13" fill="#4a5568">no conscious intent to drink.</text>
+
+  <rect x="390" y="20" width="350" height="155" rx="10" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="390" y="20" width="6" height="155" rx="3" fill="#f59e0b"/>
+  <text x="410" y="50" font-size="15" font-weight="800" fill="#1a365d">2. Habit hijacked the basal ganglia</text>
+  <text x="410" y="74" font-size="13" fill="#4a5568">Control of drinking migrated from</text>
+  <text x="410" y="92" font-size="13" fill="#4a5568">goal-directed cortex to procedural memory.</text>
+  <text x="410" y="118" font-size="13" fill="#4a5568">You pour the drink before you decide to.</text>
+  <text x="410" y="136" font-size="13" fill="#4a5568">It's the same circuit as muscle memory.</text>
+
+  <rect x="20" y="195" width="350" height="155" rx="10" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="20" y="195" width="6" height="155" rx="3" fill="#2b6cb0"/>
+  <text x="40" y="225" font-size="15" font-weight="800" fill="#1a365d">3. Reward set point shifted down</text>
+  <text x="40" y="249" font-size="13" fill="#4a5568">Dopamine D2 receptors are reduced.</text>
+  <text x="40" y="267" font-size="13" fill="#4a5568">Natural rewards (food, social, sex, work)</text>
+  <text x="40" y="293" font-size="13" fill="#4a5568">feel muted for months after quitting.</text>
+  <text x="40" y="311" font-size="13" fill="#4a5568">Quitting feels worse before it feels better.</text>
+
+  <rect x="390" y="195" width="350" height="155" rx="10" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="390" y="195" width="6" height="155" rx="3" fill="#9b2c2c"/>
+  <text x="410" y="225" font-size="15" font-weight="800" fill="#1a365d">4. PFC is weakened</text>
+  <text x="410" y="249" font-size="13" fill="#4a5568">The brain region that does impulse control</text>
+  <text x="410" y="267" font-size="13" fill="#4a5568">has lost gray matter and is hypoactive.</text>
+  <text x="410" y="293" font-size="13" fill="#4a5568">It's being asked to inhibit a strong habit</text>
+  <text x="410" y="311" font-size="13" fill="#4a5568">with a control system that is compromised.</text>
+</svg>
+
+<div class="card">
+  <strong>Stress makes all four worse simultaneously.</strong> Stress shuts down PFC, fires up amygdala, hits the HPA axis, and is the single most reliable predictor of relapse even years into recovery. Environmental restructuring isn't avoidance &mdash; it's direct intervention on the neural substrate of craving.
+</div>
+
+<!-- ====== 6. EXPLAIN ====== -->
+<h2 id="explain"><span class="num">6</span>How to explain it to someone in 60 seconds</h2>
+
+<div class="analogy">
+  <div class="label">Analogy 1 &mdash; brake + accelerator</div>
+  Your brain has a brake (GABA) and an accelerator (glutamate). Alcohol pushes the brake. To compensate, the brain weakens the brake and strengthens the accelerator over time. Now without alcohol your brain runs hot. With alcohol it feels normal. That's physical dependence.
+</div>
+
+<div class="analogy">
+  <div class="label">Analogy 2 &mdash; wanting vs liking</div>
+  Wanting and liking are two different things in the brain. With repeated drinking, the wanting system gets louder and the liking system gets quieter. That's why people end up craving something they no longer enjoy.
+</div>
+
+<div class="analogy">
+  <div class="label">Analogy 3 &mdash; the habit lives in your motor cortex</div>
+  After enough repetitions, drinking moves out of "I decided to do this" memory and into the same place where typing and driving live. That's why you can pour a drink before you consciously decided to.
+</div>
+
+<div class="analogy">
+  <div class="label">Analogy 4 &mdash; the math is brutal</div>
+  Quitting promises relief in 6 months. Drinking promises relief in 6 minutes. The brain is comparing those two on a felt-experience level. That's the trap. Recovery is building enough non-drinking minutes for the math to flip.
+</div>
+
+<div class="card info">
+  <strong>The one-sentence framing:</strong> alcohol use disorder is a chronic, relapsing brain condition characterized by physical rewiring of reward, habit, stress, and control circuits &mdash; not a character defect &mdash; and recovery is the slow, partial, achievable rewiring back.
+</div>
+
+<!-- ====== 7. HOW TO STOP ====== -->
+<h2 id="stop"><span class="num">7</span>The best way to stop &mdash; evidence-based</h2>
+<div class="lead">There is no single magic move. The evidence supports a stack of mutually reinforcing tools. The order matters.</div>
+
+<div class="card danger">
+  <strong>If physical dependence is severe: do NOT quit cold turkey.</strong> Withdrawal from alcohol can produce seizures and delirium tremens. Mortality without treatment is 15-20%. Medical supervision is not a nice-to-have. Benzodiazepines (chlordiazepoxide / lorazepam taper) are the first-line treatment. Talk to a doctor before stopping.
+</div>
+
+<ol class="checklist">
+  <li><strong>Medical assessment first.</strong> Establish severity. If kindled (multiple prior detoxes), if seizures or DTs in history, if heavy daily use &mdash; medical detox is the right call.</li>
+  <li><strong>Acute detox under supervision.</strong> Days 1-7. Benzodiazepine taper for severe cases. Hydration, B vitamins (thiamine first, before glucose, to prevent Wernicke's).</li>
+  <li><strong>Anti-craving medication.</strong> Three FDA-approved options:
+    <ul style="margin-top:8px">
+      <li><span class="pill good">Naltrexone</span> blocks the opioid reward of drinking. Reduces craving and heavy days. Can be taken orally daily or as a monthly injection.</li>
+      <li><span class="pill good">Acamprosate</span> dampens glutamate hyperactivity of protracted withdrawal. Best for maintenance after detox.</li>
+      <li><span class="pill good">Disulfiram</span> deterrent: makes drinking physically punishing. Works best with high motivation and supervision.</li>
+    </ul>
+  </li>
+  <li><strong>Therapy.</strong> CBT, motivational enhancement, or 12-step. The point of therapy is deliberate engagement of the prefrontal cortex to take back control from the basal ganglia and amygdala. Pick one. Show up.</li>
+  <li><strong>Environmental restructuring.</strong> Cues are not avoidance &mdash; they are direct intervention. Remove alcohol from the house. Change the routes that pass bars. Tell people. Change the time-of-day cues.</li>
+  <li><strong>Stress + sleep architecture.</strong> Stress preferentially relapses. Sleep is the slowest system to recover. Treat both. Exercise, meditation, sleep hygiene aren't soft &mdash; they directly support the PFC.</li>
+  <li><strong>Rebuild natural rewards.</strong> The dopamine system is undercalibrated for months. Volume up the alternatives: exercise, social connection, novelty, accomplishments. The reward system needs new inputs to recalibrate.</li>
+  <li><strong>Plan for relapse without planning to relapse.</strong> Relapse is the statistical norm during PAWS (months 1-18). It doesn't mean failure. It means the underlying biology is not done healing. Get back on the plan fast.</li>
+</ol>
+
+<div class="card good">
+  <strong>What the research converges on:</strong> the brain that learned to be addicted can learn its way out, through the same neuroplastic mechanisms that built the addiction. <em>Time + abstinence + therapy + environment + medication (when appropriate) = the working stack.</em> No single piece works alone. All five together work.
+</div>
+
+<!-- ====== 8. TIMELINE ====== -->
+<h2 id="timeline"><span class="num">8</span>Recovery timeline &mdash; what heals when</h2>
+<div class="lead">Different systems recover on different schedules. Knowing this is half the battle &mdash; the early weeks feel worse than they "should," and the brain is doing real biological work that you can't feel.</div>
+
+<div class="timeline">
+  <div class="tl danger"><div class="when">6-12 hours</div><div class="what">Anxiety, tremor, sweating, insomnia. Autonomic system loses its GABA damping.</div></div>
+  <div class="tl danger"><div class="when">12-48 hours &mdash; peak danger window</div><div class="what">Withdrawal seizures most likely here. Severe autonomic instability. <strong>This is when medical supervision matters most.</strong></div></div>
+  <div class="tl danger"><div class="when">48-96 hours</div><div class="what">Peak risk for delirium tremens in severe cases. Hallucinations, profound confusion, cardiovascular collapse risk.</div></div>
+  <div class="tl"><div class="when">Days 5-14</div><div class="what">Acute physical symptoms gradually resolve. Sleep stays disrupted. Anxiety lingers.</div></div>
+  <div class="tl"><div class="when">Weeks 2-8 &mdash; PAWS begins</div><div class="what">Post-acute withdrawal: anhedonia, mood, cognitive fog, episodic intense craving. <strong>This is when most relapses happen.</strong></div></div>
+  <div class="tl good"><div class="when">Months 1-3</div><div class="what">GABA / glutamate balance largely restored. Acute hyperexcitability gone.</div></div>
+  <div class="tl good"><div class="when">Months 3-6</div><div class="what">Prefrontal cortex gray matter visibly recovering on MRI. Executive function returns.</div></div>
+  <div class="tl good"><div class="when">Months 6-12</div><div class="what">Dopamine D2 receptors partially restored. Natural rewards start to land again. Cognitive performance keeps improving.</div></div>
+  <div class="tl good"><div class="when">Months 12-18</div><div class="what">PAWS resolves for most. Sleep architecture restores. Reward set point recalibrates.</div></div>
+  <div class="tl good"><div class="when">Year 2+</div><div class="what">Cue-reactivity persists but its power to drive behavior keeps declining with non-reinforcement. The habit lives in the basal ganglia forever &mdash; but competing habits get stronger and the PFC gets better at inhibiting it.</div></div>
+</div>
+
+<!-- ====== END ====== -->
+<div class="card info" style="margin-top:36px">
+  <strong>One last reframe</strong><br>
+  The DSM-5, NIAAA, NIDA, Volkow, Koob, Lembke, Lewis, and the addiction medicine field all converge on the same picture: alcohol use disorder is a brain condition characterized by measurable physical rewiring. It is not a character defect, and treating it as one is both factually wrong and clinically counterproductive. Recovery is neurological as much as behavioral. The brain that was rewired by alcohol can be rewired again by the absence of alcohol, the presence of new learning, and the patience to let the underlying biology heal on its own schedule.
+</div>
+
+<div class="footer">
+  Source synthesis: <code>tmp/therapy-research/alcohol-brain-research.md</code><br>
+  Citations: DSM-5, NIAAA, NIDA, Berridge, Koob, Volkow, Lembke, Lewis, Mat&eacute; &middot; full reference list in the source document.<br>
+  Prepared 2026-05-29 &middot; for therapeutic discussion only, not medical advice.
+</div>
+
+</div>
+</body>
+</html>
