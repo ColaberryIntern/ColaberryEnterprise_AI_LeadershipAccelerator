@@ -240,7 +240,7 @@ interface DynamicScheduleEntry {
 const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
   {
     agentName: 'DailyExecutiveBriefing',
-    hardcodedSchedule: '0 7 * * *',
+    hardcodedSchedule: '45 6 * * *',
     dynamicImport: () => {
       import('./executiveBriefingService').then(({ generateDailyBriefing }) => {
         generateDailyBriefing().catch((err) => {
@@ -252,7 +252,7 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
   },
   {
     agentName: 'WeeklyStrategicBriefing',
-    hardcodedSchedule: '0 7 * * 1',
+    hardcodedSchedule: '45 6 * * 1',
     dynamicImport: () => {
       import('./executiveBriefingService').then(({ generateWeeklyStrategicBriefing }) => {
         generateWeeklyStrategicBriefing().catch((err) => {
@@ -264,7 +264,7 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
   },
   {
     agentName: 'ExecutiveAwarenessMorningDigest',
-    hardcodedSchedule: '0 7 * * *',
+    hardcodedSchedule: '45 6 * * *',
     dynamicImport: () => {
       import('./executiveBriefingService').then(({ generateExecutiveDigest }) => {
         generateExecutiveDigest('morning').catch((err) => {
@@ -428,7 +428,7 @@ export async function startAIOpsScheduler(): Promise<void> {
       entry.runner().catch((err) => {
         console.error(`[AI Ops] ${entry.label} cron error:`, err);
       });
-    });
+    }, { timezone: 'America/Chicago' });
 
     console.log(`[AI Ops]   ${entry.label}: ${schedule} [${source}]`);
     scheduledCount++;
@@ -447,7 +447,7 @@ export async function startAIOpsScheduler(): Promise<void> {
       continue;
     }
 
-    cron.schedule(schedule, entry.dynamicImport);
+    cron.schedule(schedule, entry.dynamicImport, { timezone: 'America/Chicago' });
 
     console.log(`[AI Ops]   ${entry.label}: ${schedule} [${source}]`);
     scheduledCount++;
@@ -461,7 +461,7 @@ export async function startAIOpsScheduler(): Promise<void> {
     } catch (err: any) {
       console.error('[AI Ops] Auto-response error:', err.message);
     }
-  });
+  }, { timezone: 'America/Chicago' });
   console.log('[AI Ops]   System Auto-Response: * * * * * [hardcoded]');
   scheduledCount++;
 
