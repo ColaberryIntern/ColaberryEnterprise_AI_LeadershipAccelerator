@@ -125,8 +125,9 @@ async function postBcComment(row, html) {
   return results;
 }
 
-async function sendEmail({ to, subject, html, text, replyTo }) {
-  if (DRY || NO_EMAIL) return { messageId: 'dry-or-no-email' };
+async function sendEmail({ to, subject, html, text, replyTo, bypassNoEmail = false }) {
+  if (DRY) return { messageId: 'dry' };
+  if (NO_EMAIL && !bypassNoEmail) return { messageId: 'no-email-flag' };
   validateBeforeSend(html, text);
   const transport = nodemailer.createTransport({
     host: 'smtp.mandrillapp.com', port: 587,
@@ -140,25 +141,43 @@ async function sendEmail({ to, subject, html, text, replyTo }) {
   });
 }
 
-async function sendAliDigest(blackRows, redRows, rendered) {
+async function sendAliDigest(allSent) {
+  // Send Ali a digest of what fired today, regardless of NO_EMAIL/NO_COMMENT
+  // flags (those gate INTERN-facing comms; Ali still needs visibility).
   if (NO_ALI_DIGEST || DRY) return;
-  if (blackRows.length === 0 && redRows.length === 0) return; // no urgent state
-  const items = blackRows.map((r) => `<li><strong>${r.name}</strong> (${r.daysSinceLast} days dark, ${r.email || 'no email'}) - <code>node backend/src/scripts/confirmInternExit.js --intern-id &lt;CCPP ID&gt; --reason nochow --confirmed-by ali</code></li>`).join('');
-  const redItems = redRows.map((r) => `<li>${r.name} (${r.daysSinceLast} days, ${r.email || 'no email'}) - final warning sent</li>`).join('');
-  const html = `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55">
-<div>Today's intern nudge cycle:</div>
-<div><br></div>
-<div><strong>${blackRows.length} BLACK (day 10+) need to be processed out:</strong></div>
-${blackRows.length ? `<ol>${items}</ol>` : '<div>(none)</div>'}
-<div><br></div>
-<div><strong>${redRows.length} RED (day 7-9) on final warning:</strong></div>
-${redRows.length ? `<ol>${redItems}</ol>` : '<div>(none)</div>'}
-<div><br></div>
-<div style="color:#64748b;font-size:12px">CB System emailed and Basecamp-commented every YELLOW+ intern. Tag <code>@CB exit intern &lt;name&gt; reason=nochow</code> for the exit preview with the CCPP InternID baked in.</div>
+  const total = Object.values(allSent).reduce((s, arr) => s + arr.length, 0);
+  if (total === 0) return; // nothing to report
+
+  const previewMode = NO_EMAIL || NO_COMMENT;
+  const modeBadge = previewMode
+    ? '<div style="background:#fef3c7;border-left:4px solid #d97706;padding:10px 14px;margin-bottom:14px;color:#92400e;font-size:13px"><strong>PREVIEW MODE:</strong> No intern-facing emails or Basecamp comments were sent. This digest shows what WOULD have gone out under live mode. To enable live nudges, edit the crontab and remove the <code>--no-comment --no-email --force</code> flags from the dailyInternNudges line.</div>'
+    : '<div style="background:#dcfce7;border-left:4px solid #16a34a;padding:10px 14px;margin-bottom:14px;color:#166534;font-size:13px"><strong>LIVE MODE:</strong> CB System emailed and commented in Basecamp on every YELLOW+ intern below.</div>';
+
+  const renderSection = (label, list, accent) => list.length === 0 ? '' : `
+<h3 style="font-size:14px;color:${accent};border-bottom:1px solid ${accent};padding-bottom:6px;margin:18px 0 8px">${label} (${list.length})</h3>
+<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px">
+${list.map((r) => `<tr style="border-bottom:1px solid #e2e8f0"><td style="vertical-align:top;width:240px"><strong>${r.name}</strong><br><span style="color:#94a3b8">${r.email || 'no email'}</span></td><td style="vertical-align:top">${r.daysSinceLast} days dark<br>${r.projects.length} project${r.projects.length === 1 ? '' : 's'}: ${r.projects.map((p) => p.title).join(', ').slice(0, 100)}</td></tr>`).join('')}
+</table>`;
+
+  const html = `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55;max-width:720px">
+${modeBadge}
+<div style="font-size:16px;font-weight:700;color:#1a365d">Intern Nudge Cycle - ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+<div style="color:#64748b">${total} interns ${previewMode ? 'would have been' : 'were'} nudged today.</div>
+${renderSection('BLACK - day 10+ exit cliff', allSent.BLACK, '#0c0a09')}
+${renderSection('RED - 7-9 days dark, final warning', allSent.RED, '#991b1b')}
+${renderSection('ORANGE - 4-6 days dark, warning', allSent.ORANGE, '#9a3412')}
+${renderSection('YELLOW - 1-3 days dark, gentle reminder', allSent.YELLOW, '#854d0e')}
+${allSent.BLACK.length > 0 ? `<div style="margin-top:24px;padding:14px;background:#1c1917;color:white;border-radius:6px"><div style="font-weight:700;margin-bottom:8px">PROCESS THESE OUT TODAY (${allSent.BLACK.length}):</div><ol style="margin:0;padding-left:18px;font-family:monospace;font-size:12px;line-height:1.8">${allSent.BLACK.map((r) => `<li>${r.name}: tag <code style="background:#374151;padding:2px 4px">@CB exit intern ${r.name} reason=nochow</code> in any Basecamp thread for the InternID + CLI</li>`).join('')}</ol></div>` : ''}
 </div>`;
-  const text = `Today's intern nudge cycle:\n\n${blackRows.length} BLACK (day 10+):\n${blackRows.map((r) => `  - ${r.name} (${r.daysSinceLast} days, ${r.email || 'no email'})`).join('\n')}\n\n${redRows.length} RED (day 7-9):\n${redRows.map((r) => `  - ${r.name} (${r.daysSinceLast} days, ${r.email || 'no email'})`).join('\n')}\n`;
+
+  const text = `Intern Nudge Cycle - ${new Date().toLocaleDateString()}\n${previewMode ? '[PREVIEW MODE - no intern-facing comms sent]' : '[LIVE MODE]'}\nTotal: ${total} interns ${previewMode ? 'would have been' : 'were'} nudged.\n\nBLACK (${allSent.BLACK.length}):\n${allSent.BLACK.map((r) => `  ${r.name} - ${r.daysSinceLast} days dark - ${r.email || 'no email'}`).join('\n')}\n\nRED (${allSent.RED.length}):\n${allSent.RED.map((r) => `  ${r.name} - ${r.daysSinceLast} days - ${r.email || 'no email'}`).join('\n')}\n\nORANGE (${allSent.ORANGE.length}):\n${allSent.ORANGE.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\nYELLOW (${allSent.YELLOW.length}):\n${allSent.YELLOW.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n`;
   try {
-    await sendEmail({ to: 'ali@colaberry.com', subject: `[Intern Nudges] ${blackRows.length} BLACK, ${redRows.length} RED today`, html, text });
+    await sendEmail({
+      to: 'ali@colaberry.com',
+      subject: `[Intern Nudges]${previewMode ? ' [PREVIEW]' : ''} ${allSent.BLACK.length} BLACK, ${allSent.RED.length} RED, ${allSent.ORANGE.length} ORANGE, ${allSent.YELLOW.length} YELLOW`,
+      html, text,
+      bypassNoEmail: true,
+    });
     console.log('[intern-nudges] Ali digest sent');
   } catch (e) {
     console.error('[intern-nudges] Ali digest failed:', e.message);
@@ -217,8 +236,8 @@ ${redRows.length ? `<ol>${redItems}</ol>` : '<div>(none)</div>'}
 
   saveState(state);
 
-  // Ali digest if there are RED/BLACK
-  await sendAliDigest(sent.BLACK, sent.RED);
+  // Ali digest of all nudges fired today (or would have fired in preview mode)
+  await sendAliDigest(sent);
 
   console.log(`[intern-nudges] done. sent=Y${sent.YELLOW.length}/O${sent.ORANGE.length}/R${sent.RED.length}/B${sent.BLACK.length}, skipped=${skipped.length}`);
   if (skipped.length) for (const s of skipped) console.log(`  skip: ${s.name} - ${s.reason}`);
