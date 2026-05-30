@@ -71,7 +71,7 @@ async function summarizeWithLLM(rows) {
             { role: 'user', content: `Intern: ${r.name}\nLast activity: ${r.lastActivityAt || 'never'}\nDays since last: ${r.daysSinceLast ?? 'never'}\nDaily comment counts last 14 days: ${series}\nWrite one sentence describing the trend (slowing, steady, recovering, gone dark, etc.).` },
           ],
         });
-        r.trend = (resp.choices?.[0]?.message?.content || '').trim();
+        r.trend = stripEmDashes((resp.choices?.[0]?.message?.content || '').trim());
       } catch (_e) { r.trend = ''; }
     }
   }
@@ -260,9 +260,11 @@ ${renderInline('GREEN', green)}
   const endStr = shortDate(new Date(NOW));
   const dateRangeStr = `${startStr} - ${endStr}`;
 
-  const html = buildHtml(rows, dateRangeStr, totals);
-  const text = buildText(rows, dateRangeStr, totals);
-  const mbHtml = buildMessageBoardHtml(rows, dateRangeStr, totals);
+  // Final sanitize pass: project/todo titles upstream may include em/en-dashes
+  // (Basecamp users sometimes paste from Word). Strip globally before preflight.
+  const html = stripEmDashes(buildHtml(rows, dateRangeStr, totals));
+  const text = stripEmDashes(buildText(rows, dateRangeStr, totals));
+  const mbHtml = stripEmDashes(buildMessageBoardHtml(rows, dateRangeStr, totals));
 
   validateBeforeSend(html, text);
 
