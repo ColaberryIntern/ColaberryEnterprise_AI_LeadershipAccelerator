@@ -61,6 +61,7 @@ import routingRuleRoutes from './admin/routingRuleRoutes';
 import ingestLogRoutes from './admin/ingestLogRoutes';
 import generatorRoutes from './admin/generatorRoutes';
 import autonomousIngestRoutes from './admin/autonomousRoutes';
+import automatedReportsRoutes from './admin/automatedReportsRoutes';
 
 const router = Router();
 
@@ -126,5 +127,6 @@ router.use(routingRuleRoutes);
 router.use(ingestLogRoutes);
 router.use(generatorRoutes);
 router.use(autonomousIngestRoutes);
+router.use(automatedReportsRoutes);
 
 export default router;

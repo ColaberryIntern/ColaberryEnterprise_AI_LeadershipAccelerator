@@ -52,6 +52,7 @@ const adminNavSections: NavSection[] = [
   ]},
   { label: 'System', links: [
     { path: '/admin/tickets', label: 'Tickets', icon: 'clipboard-check' },
+    { path: '/admin/reports', label: 'Automated Reports', icon: 'envelope-open' },
     { path: '/admin/settings', label: 'Settings', icon: 'gear' },
   ]},
 ];
