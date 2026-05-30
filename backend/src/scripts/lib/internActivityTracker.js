@@ -95,7 +95,31 @@ async function collectInternProjects(includeCompleted = false) {
   return out;
 }
 
-async function buildInternActivity({ lookbackDays = 14, includeCompleted = false } = {}) {
+// Staff filter. Anyone whose email is @colaberry.com is internal staff, not an
+// intern. They get tracked at the project level but excluded from the nudge
+// target. Also hardcode known staff BC IDs as a belt-and-suspenders safety
+// (in case someone uses a non-colaberry email).
+const STAFF_EMAIL_DOMAINS = ['colaberry.com'];
+const STAFF_BC_IDS = new Set([
+  17454835, // Ali Muwwakkil
+  37184021, // Jackie Chalk (work account)
+  37179680, // Jackie Chalk (personal account - she's still staff)
+  37708014, // CB System
+]);
+// Additional name-based filter for known staff who don't have @colaberry.com
+// emails on file (Milad is a contractor). Keep this conservative.
+const STAFF_NAMES_LOWER = new Set(['milad', 'milad rezvani', 'milad r']);
+
+function isStaff(internEntry) {
+  if (STAFF_BC_IDS.has(internEntry.internId)) return true;
+  const email = (internEntry.email || '').toLowerCase();
+  if (email && STAFF_EMAIL_DOMAINS.some((d) => email.endsWith('@' + d))) return true;
+  const name = (internEntry.name || '').toLowerCase().trim();
+  if (STAFF_NAMES_LOWER.has(name)) return true;
+  return false;
+}
+
+async function buildInternActivity({ lookbackDays = 14, includeCompleted = false, includeStaff = false } = {}) {
   const projects = await collectInternProjects(includeCompleted);
   // Map: internId -> { name, email, projects: [{todoId,title,url}], comments: [{todoId, createdAt}] }
   const map = new Map();
@@ -159,6 +183,13 @@ async function buildInternActivity({ lookbackDays = 14, includeCompleted = false
   // Sort: BLACK first, then RED, ORANGE, YELLOW, GREEN
   const order = { BLACK: 0, RED: 1, ORANGE: 2, YELLOW: 3, GREEN: 4 };
   rows.sort((a, b) => order[a.level] - order[b.level] || (b.daysSinceLast || 0) - (a.daysSinceLast || 0));
+  // Drop staff unless explicitly requested
+  if (!includeStaff) {
+    const before = rows.length;
+    const filtered = rows.filter((r) => !isStaff(r));
+    if (before !== filtered.length) console.log(`[activity-tracker] filtered ${before - filtered.length} staff entries`);
+    return filtered;
+  }
   return rows;
 }
 
