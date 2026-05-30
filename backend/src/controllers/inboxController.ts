@@ -401,13 +401,16 @@ export async function handleGetAuditLogs(req: Request, res: Response) {
 
     const emailIds = rows.map((r: any) => r.email_id).filter(Boolean);
     const emails = emailIds.length > 0
-      ? await InboxEmail.findAll({ where: { id: emailIds }, attributes: ['id', 'subject'] })
+      ? await InboxEmail.findAll({ where: { id: emailIds }, attributes: ['id', 'subject', 'from_address', 'provider'] })
       : [];
-    const subjectMap = new Map(emails.map((e: any) => [e.id, e.subject]));
+    const emailMap = new Map(emails.map((e: any) => [e.id, e]));
 
     const results = rows.map((r: any) => {
       const json = r.toJSON();
-      json.email_subject = subjectMap.get(json.email_id) || null;
+      const e: any = emailMap.get(json.email_id);
+      json.email_subject = e?.subject || null;
+      json.from_address = e?.from_address || null;
+      json.provider = e?.provider || null;
       return json;
     });
 

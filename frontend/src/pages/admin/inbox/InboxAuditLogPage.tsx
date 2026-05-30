@@ -8,12 +8,34 @@ interface AuditEntry {
   action: string;
   email_id?: string;
   email_subject?: string;
+  from_address?: string | null;
+  provider?: string | null;
   old_state: string;
   new_state: string;
   confidence: number | null;
   actor: string;
   reasoning: string;
   metadata?: Record<string, any>;
+}
+
+// Match the convention from InboxDecisionsPage so audit log color-coding
+// is consistent with everywhere else in the Inbox COS UI.
+const PROVIDER_COLORS: Record<string, { bg: string; label: string }> = {
+  gmail_colaberry: { bg: '#ea4335', label: 'Colaberry' },
+  gmail_personal: { bg: '#34a853', label: 'Personal' },
+  hotmail: { bg: '#0078d4', label: 'Hotmail' },
+};
+
+function ProviderBadge({ provider, fromAddress }: { provider?: string | null; fromAddress?: string | null }) {
+  // Special case: a colaberry-Gmail email that's actually a forward of a hotmail thread
+  const isForwarded = provider === 'gmail_colaberry' && fromAddress && (
+    fromAddress.includes('hotmail.com') || fromAddress.includes('outlook.com')
+  );
+  if (isForwarded) {
+    return <span className="badge" style={{ backgroundColor: '#0078d4', color: 'white' }}>hotmail (fwd)</span>;
+  }
+  const p = (provider && PROVIDER_COLORS[provider]) || { bg: '#6c757d', label: provider || 'unknown' };
+  return <span className="badge" style={{ backgroundColor: p.bg, color: 'white' }}>{p.label}</span>;
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -161,6 +183,7 @@ export default function InboxAuditLogPage() {
                   <tr>
                     <th>Timestamp</th>
                     <th>Action</th>
+                    <th>From</th>
                     <th>Email Subject</th>
                     <th>State Change</th>
                     <th>Confidence</th>
@@ -183,6 +206,20 @@ export default function InboxAuditLogPage() {
                           <span className={`badge bg-${ACTION_COLORS[entry.action] || 'secondary'}`}>
                             {entry.action.replace('_', ' ')}
                           </span>
+                        </td>
+                        <td className="small text-nowrap" style={{ maxWidth: 240 }}>
+                          {entry.from_address || entry.provider ? (
+                            <div className="d-flex align-items-center gap-2">
+                              <ProviderBadge provider={entry.provider} fromAddress={entry.from_address} />
+                              {entry.from_address && (
+                                <span className="text-truncate" style={{ maxWidth: 160 }} title={entry.from_address}>
+                                  {entry.from_address}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted">--</span>
+                          )}
                         </td>
                         <td className="small fw-medium text-truncate" style={{ maxWidth: 200 }}>
                           {entry.email_subject || (entry.email_id ? `(email ${entry.email_id.slice(0,8)}...)` : '--')}
@@ -210,7 +247,7 @@ export default function InboxAuditLogPage() {
                       </tr>
                       {expandedId === entry.id && entry.metadata && (
                         <tr>
-                          <td colSpan={7} className="p-3 bg-light">
+                          <td colSpan={8} className="p-3 bg-light">
                             <div className="small">
                               <strong>Full Metadata</strong>
                               <pre className="mb-0 mt-1" style={{ maxHeight: 300, overflowY: 'auto', fontSize: '0.8rem' }}>
