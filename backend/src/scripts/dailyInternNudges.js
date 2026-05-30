@@ -175,7 +175,8 @@ ${allSent.BLACK.length > 0 ? `<div style="margin-top:24px;padding:14px;backgroun
     await sendEmail({
       to: 'ali@colaberry.com',
       subject: `[Intern Nudges]${previewMode ? ' [PREVIEW]' : ''} ${allSent.BLACK.length} BLACK, ${allSent.RED.length} RED, ${allSent.ORANGE.length} ORANGE, ${allSent.YELLOW.length} YELLOW`,
-      html, text,
+      html: stripEmDashes(html),
+      text: stripEmDashes(text),
       bypassNoEmail: true,
     });
     console.log('[intern-nudges] Ali digest sent');
