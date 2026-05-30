@@ -31,6 +31,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { handleOpenEnded } = require('./cb-system-handler');
 
 const ACCOUNT = '3945211';
 const BASE = `https://3.basecampapi.com/${ACCOUNT}`;
@@ -152,17 +153,19 @@ function recipeUnknown(raw) {
 <div style="font-size:11px;color:#64748b">If this is urgent and you want me to do a quick keyword recipe instead, the supported v1 list is: <code>@CB grep:&lt;pattern&gt;</code>, <code>@CB ccpp:&lt;sql&gt;</code>, <code>@CB gmail:&lt;query&gt;</code>, <code>@CB help</code>.</div>`;
 }
 
-function classifyAndDispatch(text) {
+// Returns HTML if a fixed keyword recipe matched, otherwise null (caller falls
+// through to the LLM handler).
+function classifyKeyword(text) {
   const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   const m = stripped.match(/(grep|ccpp|gmail|help)\s*:\s*(.+?)(?:$|\.|;)/i);
-  if (!m) return /\bhelp\b/i.test(stripped) ? recipeHelp() : recipeUnknown(stripped);
+  if (!m) return /\bhelp\b/i.test(stripped) ? recipeHelp() : null;
   const kind = m[1].toLowerCase();
   const arg = (m[2] || '').trim();
   if (kind === 'help') return recipeHelp();
   if (kind === 'grep') return recipeGrep(arg);
   if (kind === 'ccpp') return `<div>${mention()} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
   if (kind === 'gmail') return `<div>${mention()} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
-  return recipeUnknown(stripped);
+  return null;
 }
 
 // --- Event polling ---------------------------------------------------------
@@ -219,14 +222,34 @@ async function findNewMentions(state) {
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from Ali`);
     for (const m of mentions) {
-      const html = classifyAndDispatch(m.comment.content);
-      try {
-        await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: html });
-        state.processed[m.key] = { at: new Date().toISOString(), outcome: 'replied' };
-        console.log(`  replied to comment ${m.comment.id} on recording ${m.recId}`);
-      } catch (e) {
-        console.error(`  reply failed for ${m.comment.id}: ${e.message}`);
-        state.processed[m.key] = { at: new Date().toISOString(), outcome: 'fail', error: e.message };
+      const html = classifyKeyword(m.comment.content);
+      if (html) {
+        // Fixed keyword recipe matched -> single-shot reply.
+        try {
+          await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: html });
+          state.processed[m.key] = { at: new Date().toISOString(), outcome: 'replied:keyword' };
+          console.log(`  keyword reply to comment ${m.comment.id} on recording ${m.recId}`);
+        } catch (e) {
+          console.error(`  keyword reply failed for ${m.comment.id}: ${e.message}`);
+          state.processed[m.key] = { at: new Date().toISOString(), outcome: 'fail', error: e.message };
+        }
+      } else {
+        // Open-ended -> hand off to LLM handler. It posts its own replies.
+        try {
+          const result = await handleOpenEnded({
+            bcGet, bcPost, mention,
+            bucketId: m.bucketId, recId: m.recId, comment: m.comment, aliId: ALI_ID,
+          });
+          state.processed[m.key] = { at: new Date().toISOString(), outcome: result.ok ? 'replied:llm' : 'llm_error', summary: result.summary, error: result.error };
+          console.log(`  llm handler for ${m.comment.id}: ${result.summary}`);
+        } catch (e) {
+          console.error(`  llm handler failed for ${m.comment.id}: ${e.message}`);
+          state.processed[m.key] = { at: new Date().toISOString(), outcome: 'fail', error: e.message };
+          // Fallback: friendly ack so Ali knows we saw it
+          try {
+            await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content) });
+          } catch (_e2) {}
+        }
       }
     }
     state.last_tick = new Date().toISOString();
