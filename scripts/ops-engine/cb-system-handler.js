@@ -28,9 +28,10 @@ const path = require('path');
 const REPO = path.resolve(__dirname, '../..');
 const LOG_PATH = path.resolve(REPO, 'tmp/ops-engine/cb-handler-log.jsonl');
 
-// Load deps from the backend container's node_modules (mounted by cron-env-wrapper)
-const OpenAI = require(path.resolve(REPO, 'backend/node_modules/openai')).default;
-const nodemailer = require(path.resolve(REPO, 'backend/node_modules/nodemailer'));
+// Load deps from the host's repo-root node_modules (the dispatcher runs on
+// the VPS host directly, not inside the backend container).
+const OpenAI = require(path.resolve(REPO, 'node_modules/openai')).default;
+const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
 let validateBeforeSend;
 try {
   ({ validateBeforeSend } = require(path.resolve(REPO, 'backend/src/scripts/lib/mandrillPreflight')));
