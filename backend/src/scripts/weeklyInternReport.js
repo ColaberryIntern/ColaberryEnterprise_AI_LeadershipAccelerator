@@ -196,7 +196,7 @@ function renderMismatchSection(extras) {
   const ccppOnlyHtml = ccppActiveNotInBasecamp.length === 0 ? '' : `
     <div style="margin-bottom:8px"><strong>${ccppActiveNotInBasecamp.length} CCPP-active intern${ccppActiveNotInBasecamp.length === 1 ? '' : 's'} with no Basecamp project:</strong></div>
     <ul style="margin:0 0 16px 18px;padding:0;font-size:13px;color:#334155">
-      ${ccppActiveNotInBasecamp.map((r) => `<li>${stripEmDashes(r.name || '').replace(/</g, '&lt;')} <span style="color:#94a3b8">(InternID ${r.InternID}${r.manager ? `, manager: ${r.manager}` : ''})</span></li>`).join('')}
+      ${ccppActiveNotInBasecamp.map((r) => `<li>${stripEmDashes(r.name || '').replace(/</g, '&lt;')} <span style="color:#94a3b8">(InternID ${r.InternID}${r.techGroup ? `, ${r.techGroup}` : ''}${r.startDate ? `, started ${shortDate(r.startDate)}` : ''})</span></li>`).join('')}
     </ul>`;
   return `
 <h2 style="font-size:16px;color:#9a3412;border-bottom:2px solid #fed7aa;padding-bottom:8px;margin:28px 0 14px">Roster mismatches</h2>
@@ -322,7 +322,7 @@ function buildText(rows, dateRangeStr, totals, extras = {}) {
     }
     if (ccppActiveNotInBasecamp.length) {
       out += `\nCCPP-active interns with NO Basecamp project (${ccppActiveNotInBasecamp.length}):\n`;
-      for (const r of ccppActiveNotInBasecamp) out += `  - ${r.name || ''}  (InternID ${r.InternID}${r.manager ? `, manager: ${r.manager}` : ''})\n`;
+      for (const r of ccppActiveNotInBasecamp) out += `  - ${r.name || ''}  (InternID ${r.InternID}${r.techGroup ? `, ${r.techGroup}` : ''}${r.startDate ? `, started ${shortDate(r.startDate)}` : ''})\n`;
     }
   }
   out += `\nSource: Basecamp 24865175 + CCPP ADF_InternshipProgram. Window: last 7 days. To exit an intern: tag @CB System with "exit intern <name> reason=<quit|placed|fired|nochow|never>".\n`;
@@ -394,8 +394,11 @@ ${mismatchBlock}
       unmatchedRows.push(r);
     }
   }
+  // Only flag unmatched BC assignees if they actually posted activity this week.
+  // Old completed-cohort assignees shouldn't generate noise.
+  const activeUnmatched = unmatchedRows.filter((r) => r.weekUpdateCount > 0);
   const ccppActiveNotInBasecamp = roster.filter((rr) => !seenInternIds.has(rr.InternID));
-  console.log(`[intern-report] matched=${matchedRows.length} unmatched=${unmatchedRows.length} ccpp_only=${ccppActiveNotInBasecamp.length}`);
+  console.log(`[intern-report] matched=${matchedRows.length} unmatched_total=${unmatchedRows.length} unmatched_active=${activeUnmatched.length} ccpp_only=${ccppActiveNotInBasecamp.length}`);
 
   await summarizeWithLLM(matchedRows);
   console.log(`[intern-report] LLM summaries done`);
@@ -404,14 +407,14 @@ ${mismatchBlock}
   const totals = {
     total: matchedRows.length,
     totalUpdates,
-    bcOnly: unmatchedRows.length,
+    bcOnly: activeUnmatched.length,
     ccppOnly: ccppActiveNotInBasecamp.length,
   };
   const startStr = shortDate(WEEK_START);
   const endStr = shortDate(new Date(NOW));
   const dateRangeStr = `${startStr} - ${endStr}`;
 
-  const mismatchExtras = { unmatchedRows, ccppActiveNotInBasecamp };
+  const mismatchExtras = { unmatchedRows: activeUnmatched, ccppActiveNotInBasecamp };
   const html = buildHtml(matchedRows, dateRangeStr, totals, mismatchExtras);
   const text = buildText(matchedRows, dateRangeStr, totals, mismatchExtras);
   const mbHtml = buildMessageBoardHtml(matchedRows, dateRangeStr, totals, mismatchExtras);
