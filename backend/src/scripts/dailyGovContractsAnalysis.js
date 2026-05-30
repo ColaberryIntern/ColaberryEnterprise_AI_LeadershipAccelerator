@@ -20,6 +20,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 
 const PROJECT_ID = 47346103;
 const RECIPIENT = process.env.GOV_REPORT_RECIPIENT || 'ali@colaberry.com';
+// Phone-accessible secondary recipient — independent of Inbox COS / work email filtering.
+const RECIPIENT_PHONE = process.env.GOV_REPORT_RECIPIENT_PHONE || 'alimuwwakkil@gmail.com';
 const BASECAMP_TOKEN = process.env.BASECAMP_ACCESS_TOKEN || 'BAhbB0kiAbB7ImNsaWVudF9pZCI6IjNkMzNmMzFiNDQ3YjRmODg1YTA1NTQwNzBjZjNmMWQ1ODdlMjM5MzAiLCJleHBpcmVzX2F0IjoiMjAyNi0wNi0wOVQyMDoxNTowMloiLCJ1c2VyX2lkcyI6WzQ1MzIxNzUxXSwidmVyc2lvbiI6MSwiYXBpX2RlYWRib2x0IjoiNmQ5NDQ4OThkN2U4ZDdhMmU4YmExMjg4M2ViOWYyYWQifQY6BkVUSXU6CVRpbWUNNJUfwKrnIjwJOg1uYW5vX251bWk4Og1uYW5vX2RlbmkGOg1zdWJtaWNybyIHBRA6CXpvbmVJIghVVEMGOwBG--cb82294fd86132b92b6c954402af0b6bd46630da';
 const BASE = 'https://3.basecampapi.com/3945211';
 const H = { Authorization: 'Bearer ' + BASECAMP_TOKEN, 'User-Agent': 'Colaberry Gov Report', Accept: 'application/json' };
@@ -277,7 +279,8 @@ Open the email for the per-bid breakdown and the human-task assignment suggestio
     }).sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: RECIPIENT,
-      subject: `Gov Contracts daily - ${new Date().toLocaleDateString()} - ${data.bidData.reduce((s, b) => s + b.open, 0)} open todos`,
+      cc: RECIPIENT_PHONE,
+      subject: `[Daily Report] Gov Contracts - ${new Date().toLocaleDateString()} - ${data.bidData.reduce((s, b) => s + b.open, 0)} open todos`,
       text: textBody,
       html,
       headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },

@@ -157,7 +157,7 @@ Pattern I sweep at ${new Date().toISOString()} &middot; v6 plan: <a href="https:
       const r = await transport.sendMail({
         from: '"Ali Muwwakkil" <ali@colaberry.com>',
         to,
-        subject: `📌 ${decisions.length} decisions owed - ${dateStr}`,
+        subject: `[Decisions Report] 📌 ${decisions.length} decisions owed - ${dateStr}`,
         text: textBody,
         html,
         headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
