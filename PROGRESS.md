@@ -12,6 +12,29 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Intern Report v3 + Daily Nudge Engine — replaces Jackie's manual reminders (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-nudge
+- What changed:
+  - **CCPP filter removed from the report per Ali's policy revision.** Source of truth is now activity-based (Basecamp comments authored by the intern).
+  - New `backend/src/scripts/lib/internActivityTracker.js`: per-intern snapshot from Basecamp project 24865175. Computes lastActivityAt, daysSinceLast, 14-day daily series, today's count vs target (3/day). Escalation level: **GREEN** (active today) / **YELLOW** (1-3d dark) / **ORANGE** (4-6d) / **RED** (7-9d) / **BLACK** (10+d, exit cliff). Filters out staff (colaberry.com emails + known BC IDs for Ali/Jackie/CB System + Milad name-match).
+  - `backend/src/scripts/weeklyInternReport.js` rewritten v3: leads with BLACK + inline `confirmInternExit.js` CLI for each. Per-intern 14-day color-coded sparkline. gpt-4o-mini one-sentence trend description. Final em/en-dash sanitize pass (project titles often carry Word-pasted dashes).
+  - New `backend/src/scripts/dailyInternNudges.js`: daily Mon-Fri 5pm CT (22:00 UTC). For each YELLOW+ intern: posts a per-level Basecamp comment on their project todo (public accountability trail, mirroring Jackie's pattern) AND emails them from ali@colaberry.com signed CB System. Day-end Ali digest covers all levels + tagged-action commands for BLACK. State file `tmp/ops-engine/intern-nudge-state.json` prevents double-nudging same day (overridable with `--force`).
+  - Nudge content mirrors Jackie's tone (first-name greeting, terse, no fluff) but escalates per level:
+    - YELLOW: "the standard is 3 updates per day and your last activity was N days ago"
+    - ORANGE: "you are at N days, your seat is at risk"
+    - RED: "formal warning, day 10 in X days, silence treated as voluntary exit"
+    - BLACK: "your seat is being processed out today, reason No Call No Show, reply within 24 hours to contest"
+  - Registered in `automated_reports`: name "Daily Intern Nudges (Preview Mode)", cron `0 22 * * 1-5`.
+  - Crontab added: `0 22 * * 1-5 ... dailyInternNudges.js --no-comment --no-email --force` — runs in PREVIEW MODE initially. The Ali digest still fires (bypasses NO_EMAIL) but intern-facing posts/emails are suppressed until Ali removes those flags. Live-fire is one crontab edit away.
+- Verification:
+  - Weekly report run (real email to Ali): tracked 22 interns after staff filter, 6 BLACK (Osarumwense Aghimien, Kesetebirhan Delele Yirdaw, Arebe Gobena, Tyra Forbes, Aisha Hobbs, Yama Touray), 1 RED (Mamoud Kamara), 3 ORANGE, 9 YELLOW. Email landed (Mandrill id `79c42593-...@colaberry.com`).
+  - Preview-mode nudge run: Ali digest landed showing all 19 would-be nudges grouped by level. Zero intern-facing posts or emails fired (confirmed by `--no-comment --no-email`).
+- Notes:
+  - Ali raised the standard from Jackie's "3 per week" to "3 per day". The nudge templates use 3/day.
+  - To enable live fire: `crontab -e` on the VPS and remove `--no-comment --no-email --force` from the dailyInternNudges line. Next 5pm CT run will then actually post to Basecamp and email interns.
+  - The 6 BLACK names should be reviewed by Ali before enabling live fire — these will receive exit notices on day 1 of live mode.
+
 ### Intern Report v2 — CCPP active-roster filter + @CB exit_intern_preview tool (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-intern2
