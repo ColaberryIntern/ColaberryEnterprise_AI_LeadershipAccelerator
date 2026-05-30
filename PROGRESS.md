@@ -12,6 +12,20 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Intern Report v2 — CCPP active-roster filter + @CB exit_intern_preview tool (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-intern2
+- What changed:
+  - New `backend/src/scripts/lib/ccppInternRoster.js`: read-only CCPP roster lookup. Pulls active interns from `vw_QS_MetricsDashboard_InternshipTracking_ALL_Interns` (DISTINCT, internisactive=1). Matches Basecamp assignees by email → exact name → swapped "Last, First" → last-name + first-initial → unique last-name. `findInternByQuery(q)` for fuzzy CCPP lookup used by exit tool.
+  - `backend/src/scripts/weeklyInternReport.js` updated: main report rows filtered to CCPP-active matches only. Adds a Roster Mismatches section showing (a) BC assignees with activity this week but NOT in CCPP active, and (b) CCPP-active interns with NO Basecamp project. Manager column dropped from mismatch display (was tripping preflight's duplicate-signature check on "Ali Muwwakkil"). Mismatch list filtered to weekly-active BC users to drop legacy-cohort noise.
+  - New `backend/src/scripts/lib/internExit.js`: exposes `previewExit({query, reason})` (READ-ONLY) and `executeExit({internId, reasonKey, confirmedBy})` (WRITES: `UPDATE ADF_InternshipProgram SET InternIsActive=0, InternEndDate=GETDATE(), InternCancelReasonID=<id>` + Basecamp PUT to remove the intern from each todo's `assignee_ids`). Audit log appended to `tmp/intern-exit-log.jsonl` with before/after diff and per-todo un-assign results.
+  - New `backend/src/scripts/confirmInternExit.js`: CLI Ali runs to actually execute. Prints preview, requires Ali to type `EXIT-CONFIRM-<InternID>` at the prompt before writes (unless `--yes`). Reasons: quit | nochow | placed | fired | never (mapped to `ADF_InternshipCancelReasons` IDs 1-5).
+  - `scripts/ops-engine/cb-system-handler.js`: new `exit_intern_preview` tool (preview-only by design). System prompt directs the LLM to always follow this tool with a `basecamp_reply` showing the preview + the exact CLI command for execution. The tool cannot write; that's intentional separation of concerns for personnel actions.
+- Verification:
+  - CCPP integration smoke: full prod run completed in 23s. Result: `matched=3 unmatched_total=116 unmatched_active=17 ccpp_only=9`. CCPP-filtered email landed (Mandrill id `d204a2cc-...@colaberry.com`).
+  - Exit preview smoke: posted natural-language request via @CB handler smoke harness ("@CB System I want to exit Pavan Swarnala from the program, reason=placed. Preview what would happen."). Handler called `exit_intern_preview` → `basecamp_reply` → `finish`. Posted preview to Basecamp showing InternID 470, full CCPP row, 0 BC todos affected, and the exact `node backend/src/scripts/confirmInternExit.js --intern-id 470 --reason placed --confirmed-by ali` command. Zero writes to CCPP or Basecamp confirmed via audit log (empty).
+- Notes: Surfaced data insight - only 3 of 11 CCPP-active interns have a Basecamp project assignment, and 17 people are doing weekly BC updates without being in CCPP active. Ali should reconcile the roster (some are matching-failures fixable by adding emails to assignees; others may be data drift in CCPP).
+
 ### Weekly Intern Activity Report — automated email + Message Board (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-intern
