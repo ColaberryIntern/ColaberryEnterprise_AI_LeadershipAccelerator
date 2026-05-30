@@ -46,14 +46,8 @@ const fakeComment = {
 
 (async () => {
   console.log(`Smoke: bucket=${BUCKET} recording=${RECORDING}`);
-  // Verify recording exists
-  try {
-    const rec = await bcGet(`/buckets/${BUCKET}/recordings/${RECORDING}.json`);
-    console.log(`Recording exists: ${rec.title || rec.subject || rec.type}`);
-  } catch (e) {
-    console.error(`Recording check failed: ${e.message}`);
-    process.exit(1);
-  }
+  // Skip the recording pre-check: /recordings/<id>.json returns 204 for many
+  // types (messages, etc.) and the handler's fetchThreadContext catches errors.
   const result = await handleOpenEnded({
     bcGet, bcPost, mention,
     bucketId: BUCKET, recId: RECORDING, comment: fakeComment, aliId: ALI_ID,
