@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Intern Report v3.1 — personal Ali header, file-driven nudge mode, @CB toggle (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-nudge2
+- What changed:
+  - New `backend/src/scripts/lib/internNudgeMode.js`: tiny file-based config at `tmp/ops-engine/intern-nudge-mode.txt`. Helpers `readMode()`/`writeMode()` with audit log. Default 'preview'. Lets both the nudge script and the @CB tool flip mode without DB or SSH.
+  - `dailyInternNudges.js`: reads mode file at start. PREVIEW forces NO_COMMENT/NO_EMAIL regardless of CLI flags. CLI flags now only ADD suppression; the mode file can only SUPPRESS (mode=preview always wins) -- a safe default that the @CB-driven flip controls.
+  - Personal "Ali," opener added to BOTH the weekly report and the daily nudge digest. Lead with `Ali, here is your intern dashboard for the week of ${range}. X people hit the day-10 exit cliff and should be processed out this week.` Spam filters and skim-reading both get a clear "this is for Ali" signal.
+  - "What you can do from here" interaction block now appears in BOTH reports, with the exact @CB syntax: `@CB System set intern nudge mode live|preview`, `@CB System exit intern <name> reason=nochow`, and `@CB System <anything>`. Plain-text bodies got the same block.
+  - New `set_intern_nudge_mode(mode)` tool on the @CB handler. System prompt updated to trigger on "go live with nudges", "pause nudges", "set nudge mode X", etc. Writes the mode file + posts a confirmation reply naming the from/to state.
+  - Crontab simplified: removed `--no-comment --no-email --force` from the dailyInternNudges line. Cron is now just `0 22 * * 1-5 ... dailyInternNudges.js` and behavior is fully driven by the mode file.
+- Verification:
+  - Re-sent the new-shape weekly report (Mandrill id `0b009361-...@colaberry.com`) with the "Ali," opener.
+  - Re-sent the nudge digest in preview mode with the new opener + interaction block.
+  - @CB smoke 1: posted "go live with the intern nudges starting tomorrow" -> CB called `set_intern_nudge_mode("live")` + replied "Intern nudge mode has been set from preview to live." File flipped to "live".
+  - @CB smoke 2: posted "actually pause the nudges, set the mode back to preview" -> CB flipped back to "preview". System is currently in preview mode (default safe state) - next 5pm CT cron run will be digest-only until Ali explicitly tells @CB to go live.
+
 ### Intern Report v3 + Daily Nudge Engine — replaces Jackie's manual reminders (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-nudge
