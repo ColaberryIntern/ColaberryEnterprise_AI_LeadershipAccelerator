@@ -152,19 +152,28 @@ Pattern I sweep at ${new Date().toISOString()} &middot; v6 plan: <a href="https:
 
   const textBody = `Decisions you owe me - ${dateStr}\n\n${decisions.length} decisions open across ${Object.keys(groups).length} topic groups. Open the HTML email for the chunked view.\n\nReply with answers in any format - I parse and execute.`;
 
-  for (const to of ['ali@colaberry.com', 'alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com']) {
-    try {
-      const r = await transport.sendMail({
-        from: '"Ali Muwwakkil" <ali@colaberry.com>',
-        to,
-        subject: `[Decisions Report] 📌 ${decisions.length} decisions owed - ${dateStr}`,
-        text: textBody,
-        html,
-        headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
-      });
-      console.log(`Sent decisions digest to ${to}: ${r.messageId}`);
-    } catch (e) {
-      console.error(`FAIL ${to}: ${e.message}`);
-    }
+  // Single email with To+CC instead of N separate sends. Stops duplicate-inbox-copies issue.
+  // Hotmail dropped from this report per inbox-routing doctrine (work emails to colaberry,
+  // phone-accessible copy via gmail CC). Mailing the same payload three separate times also
+  // tripled the spam-score signal on Gmail's side and contributed to Promotions filtering.
+  try {
+    const r = await transport.sendMail({
+      from: '"Ali Muwwakkil" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      cc: 'alimuwwakkil@gmail.com',
+      subject: `[Decisions Report] 📌 ${decisions.length} decisions owed - ${dateStr}`,
+      text: textBody,
+      html,
+      headers: {
+        'X-MC-Track': 'none',
+        'X-MC-AutoText': 'false',
+        // Importance:high + X-Priority:1 nudge Gmail to keep this out of Promotions and into Primary.
+        'Importance': 'high',
+        'X-Priority': '1',
+      },
+    });
+    console.log(`Sent decisions digest (to ali@colaberry.com, cc alimuwwakkil@gmail.com): ${r.messageId}`);
+  } catch (e) {
+    console.error(`FAIL: ${e.message}`);
   }
 })().catch(e => { console.error('FAIL:', e.message); process.exit(1); });
