@@ -25,6 +25,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 const { buildInternActivity } = require(path.resolve(__dirname, './lib/internActivityTracker'));
+const { readMode } = require(path.resolve(__dirname, './lib/internNudgeMode'));
 
 const BUCKET = parseInt(process.env.INTERN_REPORT_BUCKET || '24865175', 10);
 const BC_TOKEN = process.env.BASECAMP_ACCESS_TOKEN || '';
@@ -35,8 +36,13 @@ const STATE_PATH = path.resolve(__dirname, '../../../tmp/ops-engine/intern-nudge
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 const DRY = process.argv.includes('--dry');
-const NO_COMMENT = process.argv.includes('--no-comment');
-const NO_EMAIL = process.argv.includes('--no-email');
+// Mode file is the source of truth. CLI flags can ALSO suppress, but the file
+// can only suppress (mode=preview always wins). This lets Ali flip live/preview
+// via @CB without editing the crontab.
+const NUDGE_MODE = readMode();
+const PREVIEW_MODE = NUDGE_MODE === 'preview';
+const NO_COMMENT = PREVIEW_MODE || process.argv.includes('--no-comment');
+const NO_EMAIL = PREVIEW_MODE || process.argv.includes('--no-email');
 const NO_ALI_DIGEST = process.argv.includes('--no-ali-digest');
 const FORCE = process.argv.includes('--force');
 
@@ -148,10 +154,41 @@ async function sendAliDigest(allSent) {
   const total = Object.values(allSent).reduce((s, arr) => s + arr.length, 0);
   if (total === 0) return; // nothing to report
 
-  const previewMode = NO_EMAIL || NO_COMMENT;
+  const previewMode = PREVIEW_MODE;
+  const black = allSent.BLACK.length;
+  const red = allSent.RED.length;
+  const orange = allSent.ORANGE.length;
+  const yellow = allSent.YELLOW.length;
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  // Personal opener — every report leads with "Ali," and a 1-2 sentence exec
+  // summary so it doesn't read as boilerplate (spam filters + skim-reading both
+  // get a clear signal that this is FOR Ali).
+  const previewHeadline = previewMode
+    ? `today's nudge cycle is in <strong>PREVIEW</strong> mode, so nothing went out to interns. If it had been live, ${total} people would have been emailed and commented on in Basecamp.`
+    : `today's nudge cycle ran in <strong>LIVE</strong> mode. ${total} interns were emailed and commented on in Basecamp.`;
+  const blackCallout = black > 0
+    ? `<strong>${black} ${black === 1 ? 'person hit' : 'people hit'} the day-10 exit cliff.</strong> ${previewMode ? 'They would have received an exit notice.' : 'They received the exit notice.'} You should process them out today.`
+    : `No-one hit the day-10 exit cliff today.`;
+  const personalOpener = `<div style="background:#1a365d;color:white;padding:18px 22px;border-radius:6px;margin-bottom:18px">
+<div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#bfdbfe;font-weight:700">${today} - For Ali</div>
+<div style="font-size:16px;margin-top:8px;line-height:1.55">Ali, ${previewHeadline} ${blackCallout}</div>
+</div>`;
+
+  // Interaction syntax block — exactly what Ali can type, from where.
+  const interactionBlock = `<div style="background:#f8fafc;border:1px solid #cbd5e0;border-radius:6px;padding:16px;margin-top:18px">
+<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#1a365d;font-weight:700;margin-bottom:10px">What you can do from here</div>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:13px;line-height:1.55">
+<tr><td style="padding:6px 0;vertical-align:top;width:200px;color:#475569"><strong>${previewMode ? 'Enable live nudges' : 'Pause nudges'}</strong></td><td style="padding:6px 0;vertical-align:top">Tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System set intern nudge mode ${previewMode ? 'live' : 'preview'}</code> in any Basecamp thread. Next 5pm CT run will ${previewMode ? 'fire for real' : 'go back to preview'}.</td></tr>
+<tr><td style="padding:6px 0;vertical-align:top;color:#475569"><strong>Preview an exit</strong></td><td style="padding:6px 0;vertical-align:top">Tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System exit intern &lt;name&gt; reason=nochow</code>. CB will reply with the CCPP InternID + the exact CLI command.</td></tr>
+<tr><td style="padding:6px 0;vertical-align:top;color:#475569"><strong>Process exits (BLACK)</strong></td><td style="padding:6px 0;vertical-align:top">For each BLACK person: tag @CB above to get the InternID, then run <code style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:3px;font-size:11px">node backend/src/scripts/confirmInternExit.js --intern-id N --reason nochow --confirmed-by ali</code> on the VPS.</td></tr>
+<tr><td style="padding:6px 0;vertical-align:top;color:#475569"><strong>Ask CB anything</strong></td><td style="padding:6px 0;vertical-align:top">Tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System &lt;anything&gt;</code> in a Basecamp thread. CB will read the thread context and act.</td></tr>
+</table>
+</div>`;
+
   const modeBadge = previewMode
-    ? '<div style="background:#fef3c7;border-left:4px solid #d97706;padding:10px 14px;margin-bottom:14px;color:#92400e;font-size:13px"><strong>PREVIEW MODE:</strong> No intern-facing emails or Basecamp comments were sent. This digest shows what WOULD have gone out under live mode. To enable live nudges, edit the crontab and remove the <code>--no-comment --no-email --force</code> flags from the dailyInternNudges line.</div>'
-    : '<div style="background:#dcfce7;border-left:4px solid #16a34a;padding:10px 14px;margin-bottom:14px;color:#166534;font-size:13px"><strong>LIVE MODE:</strong> CB System emailed and commented in Basecamp on every YELLOW+ intern below.</div>';
+    ? `<div style="background:#fef3c7;border-left:4px solid #d97706;padding:10px 14px;margin-bottom:14px;color:#92400e;font-size:13px"><strong>PREVIEW MODE - no intern-facing comms went out.</strong> The mode is read from <code>tmp/ops-engine/intern-nudge-mode.txt</code>. To flip to live, see the "What you can do" box below.</div>`
+    : `<div style="background:#dcfce7;border-left:4px solid #16a34a;padding:10px 14px;margin-bottom:14px;color:#166534;font-size:13px"><strong>LIVE MODE - intern emails and BC comments fired for everyone below.</strong></div>`;
 
   const renderSection = (label, list, accent) => list.length === 0 ? '' : `
 <h3 style="font-size:14px;color:${accent};border-bottom:1px solid ${accent};padding-bottom:6px;margin:18px 0 8px">${label} (${list.length})</h3>
@@ -160,17 +197,19 @@ ${list.map((r) => `<tr style="border-bottom:1px solid #e2e8f0"><td style="vertic
 </table>`;
 
   const html = `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55;max-width:720px">
+${personalOpener}
 ${modeBadge}
-<div style="font-size:16px;font-weight:700;color:#1a365d">Intern Nudge Cycle - ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
-<div style="color:#64748b">${total} interns ${previewMode ? 'would have been' : 'were'} nudged today.</div>
 ${renderSection('BLACK - day 10+ exit cliff', allSent.BLACK, '#0c0a09')}
 ${renderSection('RED - 7-9 days dark, final warning', allSent.RED, '#991b1b')}
 ${renderSection('ORANGE - 4-6 days dark, warning', allSent.ORANGE, '#9a3412')}
 ${renderSection('YELLOW - 1-3 days dark, gentle reminder', allSent.YELLOW, '#854d0e')}
-${allSent.BLACK.length > 0 ? `<div style="margin-top:24px;padding:14px;background:#1c1917;color:white;border-radius:6px"><div style="font-weight:700;margin-bottom:8px">PROCESS THESE OUT TODAY (${allSent.BLACK.length}):</div><ol style="margin:0;padding-left:18px;font-family:monospace;font-size:12px;line-height:1.8">${allSent.BLACK.map((r) => `<li>${r.name}: tag <code style="background:#374151;padding:2px 4px">@CB exit intern ${r.name} reason=nochow</code> in any Basecamp thread for the InternID + CLI</li>`).join('')}</ol></div>` : ''}
+${interactionBlock}
 </div>`;
 
-  const text = `Intern Nudge Cycle - ${new Date().toLocaleDateString()}\n${previewMode ? '[PREVIEW MODE - no intern-facing comms sent]' : '[LIVE MODE]'}\nTotal: ${total} interns ${previewMode ? 'would have been' : 'were'} nudged.\n\nBLACK (${allSent.BLACK.length}):\n${allSent.BLACK.map((r) => `  ${r.name} - ${r.daysSinceLast} days dark - ${r.email || 'no email'}`).join('\n')}\n\nRED (${allSent.RED.length}):\n${allSent.RED.map((r) => `  ${r.name} - ${r.daysSinceLast} days - ${r.email || 'no email'}`).join('\n')}\n\nORANGE (${allSent.ORANGE.length}):\n${allSent.ORANGE.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\nYELLOW (${allSent.YELLOW.length}):\n${allSent.YELLOW.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n`;
+  const blackTextLine = black > 0
+    ? `${black} ${black === 1 ? 'person' : 'people'} hit the day-10 exit cliff today. ${previewMode ? 'They would have received exit notices.' : 'They received exit notices.'} Process them out today.`
+    : 'No-one hit the day-10 exit cliff today.';
+  const text = `Ali, ${previewMode ? `today's nudge cycle is in PREVIEW mode (nothing went out). ${total} interns would have been emailed and BC-commented.` : `today's nudge cycle ran LIVE. ${total} interns were emailed and BC-commented.`} ${blackTextLine}\n\n${previewMode ? '[PREVIEW MODE - no intern-facing comms sent]\n' : '[LIVE MODE]\n'}\nBLACK (${allSent.BLACK.length}):\n${allSent.BLACK.map((r) => `  ${r.name} - ${r.daysSinceLast} days dark - ${r.email || 'no email'}`).join('\n')}\n\nRED (${allSent.RED.length}):\n${allSent.RED.map((r) => `  ${r.name} - ${r.daysSinceLast} days - ${r.email || 'no email'}`).join('\n')}\n\nORANGE (${allSent.ORANGE.length}):\n${allSent.ORANGE.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\nYELLOW (${allSent.YELLOW.length}):\n${allSent.YELLOW.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\n--- What you can do from here ---\n${previewMode ? 'Enable live nudges:' : 'Pause nudges:'}       tag @CB System set intern nudge mode ${previewMode ? 'live' : 'preview'}\nPreview an exit:           tag @CB System exit intern <name> reason=nochow\nProcess a BLACK exit:      run on VPS: node backend/src/scripts/confirmInternExit.js --intern-id N --reason nochow --confirmed-by ali\nAsk CB anything:           tag @CB System <anything>\n`;
   try {
     await sendEmail({
       to: 'ali@colaberry.com',
@@ -186,7 +225,7 @@ ${allSent.BLACK.length > 0 ? `<div style="margin-top:24px;padding:14px;backgroun
 }
 
 (async () => {
-  console.log(`[intern-nudges] start ${new Date().toISOString()}, dry=${DRY}, force=${FORCE}`);
+  console.log(`[intern-nudges] start ${new Date().toISOString()}, dry=${DRY}, mode=${NUDGE_MODE}, force=${FORCE}`);
   const state = loadState();
   const today = todayKey();
 

@@ -66,6 +66,7 @@ TOOL PICKING GUIDE
 - email_ali: when Ali asked you to email him something (a summary, research notes, a draft). Recipient is locked to ali@colaberry.com.
 - queue_followup: when the request needs work you cannot do in this turn (live research, cross-system lookups, external comms drafting, calendar booking). Creates a Basecamp todo in the same project, assigned to Ali, with your notes so Claude Code can finish it in his next session.
 - exit_intern_preview: when Ali asks you to remove, exit, terminate, kick out, or place-out an intern. PREVIEW ONLY - it does NOT execute the exit. Returns the CCPP candidate and the Basecamp todos that would be affected. You MUST follow exit_intern_preview with a basecamp_reply that shows Ali the preview AND the exact CLI command he can run to confirm. The execution is intentionally outside your reach - personnel actions need a human in the loop.
+- set_intern_nudge_mode: when Ali says "go live with nudges", "pause nudges", "enable intern nudges", "set nudge mode preview/live", or anything that flips the daily intern nudge cycle between digest-only (preview) and intern-facing (live). Updates a file on the VPS that the next scheduled run reads. ALWAYS follow this with a basecamp_reply confirming the change (what mode it was, what mode it is now, when it takes effect).
 - finish: terminates the loop. Call after your final basecamp_reply.
 
 ALWAYS END WITH: basecamp_reply, then finish.`;
@@ -113,6 +114,20 @@ const TOOLS = [
           notes: { type: 'string', description: 'What needs to happen, with enough context that a future Claude Code session can run it without re-asking.' },
         },
         required: ['title', 'notes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_intern_nudge_mode',
+      description: 'Switch the daily intern nudge engine between PREVIEW and LIVE mode. PREVIEW (the default) suppresses all intern-facing emails and Basecamp comments, sending only the Ali digest. LIVE actually emails interns and posts BC comments. Reads/writes the file tmp/ops-engine/intern-nudge-mode.txt on the VPS host, so changes take effect on the next scheduled run (Mon-Fri 5pm CT). Use when Ali says "go live with nudges", "pause nudges", "set nudge mode to X", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          mode: { type: 'string', enum: ['preview', 'live'], description: 'preview = digest-only (default), live = fire intern emails + BC comments' },
+        },
+        required: ['mode'],
       },
     },
   },
@@ -206,6 +221,18 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     return { ok: true };
   }
 
+  async function set_intern_nudge_mode({ mode }) {
+    try {
+      const { writeMode, readMode } = require(path.resolve(REPO, 'backend/src/scripts/lib/internNudgeMode'));
+      const before = readMode();
+      const result = writeMode(mode, { changedBy: `cb-system-invocation-${invocationId}`, reason: 'changed via @CB tool' });
+      sideEffects.nudgeModeChange = { from: before, to: result.current };
+      return { ok: true, ...result };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   async function exit_intern_preview({ intern_query, reason }) {
     try {
       const { previewExit } = require(path.resolve(REPO, 'backend/src/scripts/lib/internExit'));
@@ -224,7 +251,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }

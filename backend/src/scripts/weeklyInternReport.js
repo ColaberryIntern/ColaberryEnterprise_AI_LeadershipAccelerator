@@ -139,6 +139,30 @@ function buildHtml(rows, dateRangeStr, totals) {
   const orange = rows.filter((r) => r.level === 'ORANGE');
   const yellow = rows.filter((r) => r.level === 'YELLOW');
   const green = rows.filter((r) => r.level === 'GREEN');
+
+  // Personal Ali opener - same pattern as the nudge digest. Headline finding
+  // up top so spam filters AND skim-reading both see this is FOR Ali.
+  const blackSentence = totals.black > 0
+    ? `<strong>${totals.black} ${totals.black === 1 ? 'person hit' : 'people hit'} the day-10 exit cliff</strong> and should be processed out this week.`
+    : `No-one is at the day-10 exit cliff this week.`;
+  const trendSentence = totals.red + totals.orange > 0
+    ? ` ${totals.red + totals.orange} more are sliding (${totals.red} RED, ${totals.orange} ORANGE) and could be at the cliff within days.`
+    : '';
+  const personalOpener = `<div style="background:#1c1917;color:white;padding:22px 28px;border-radius:0 0 6px 6px">
+<div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#fbbf24;font-weight:700">For Ali</div>
+<div style="font-size:16px;margin-top:8px;line-height:1.55">Ali, here is your intern dashboard for the week of ${dateRangeStr}. ${blackSentence}${trendSentence} Standard is 3 updates per day.</div>
+</div>`;
+
+  const interactionBlock = `<div style="background:#f8fafc;border:1px solid #cbd5e0;border-radius:6px;padding:16px;margin-top:24px">
+<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#1a365d;font-weight:700;margin-bottom:10px">What you can do from here</div>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:13px;line-height:1.55">
+<tr><td style="padding:6px 0;vertical-align:top;width:200px;color:#475569"><strong>Process a BLACK exit</strong></td><td style="padding:6px 0;vertical-align:top">Tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System exit intern &lt;name&gt; reason=nochow</code> in any Basecamp thread. CB will reply with the InternID + exact CLI command. Then run the CLI on the VPS.</td></tr>
+<tr><td style="padding:6px 0;vertical-align:top;color:#475569"><strong>Enable daily nudges</strong></td><td style="padding:6px 0;vertical-align:top">Tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System set intern nudge mode live</code>. Next 5pm CT run will start emailing + BC-commenting interns directly.</td></tr>
+<tr><td style="padding:6px 0;vertical-align:top;color:#475569"><strong>Pause daily nudges</strong></td><td style="padding:6px 0;vertical-align:top">Tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System set intern nudge mode preview</code>. Reverts to digest-only.</td></tr>
+<tr><td style="padding:6px 0;vertical-align:top;color:#475569"><strong>Ask CB anything</strong></td><td style="padding:6px 0;vertical-align:top">Tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System &lt;anything&gt;</code> in a Basecamp thread. CB reads the thread context and acts.</td></tr>
+</table>
+</div>`;
+
   return `<!doctype html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9">
@@ -149,6 +173,8 @@ function buildHtml(rows, dateRangeStr, totals) {
   <div style="font-size:24px;font-weight:800;margin-top:6px;line-height:1.25">Week of ${dateRangeStr}</div>
   <div style="font-size:14px;color:#cbd5e0;margin-top:6px">${totals.total} intern projects tracked. ${totals.black} at exit cliff. Standard: <strong>3 updates per day</strong>.</div>
 </div>
+
+${personalOpener}
 
 <div style="padding:24px 32px">
 
@@ -183,8 +209,10 @@ ${sectionTable('ORANGE', orange)}
 ${sectionTable('YELLOW', yellow)}
 ${sectionTable('GREEN', green)}
 
-<div style="margin-top:32px;padding:14px;background:#f8fafc;border-left:4px solid #1a365d;font-size:12px;color:#475569">
-  Source: Basecamp project ${BUCKET}. Activity = comments authored by the intern on any todo they're assigned. Standard: 3 updates/day. 10 consecutive dark days triggers BLACK (exit-ready). Daily nudges from CB System escalate per level. To exit: tag <code>@CB exit intern &lt;name&gt; reason=&lt;nochow|quit|fired&gt;</code> for preview, then run the CLI confirm command.
+${interactionBlock}
+
+<div style="margin-top:24px;padding:14px;background:#f8fafc;border-left:4px solid #1a365d;font-size:12px;color:#475569">
+  Source: Basecamp project ${BUCKET}. Activity = comments authored by the intern on any todo they're assigned. Standard: 3 updates/day. 10 consecutive dark days triggers BLACK (exit-ready). Daily nudges from CB System escalate per level.
 </div>
 
 </div>
@@ -198,7 +226,11 @@ function buildText(rows, dateRangeStr, totals) {
   const orange = rows.filter((r) => r.level === 'ORANGE');
   const yellow = rows.filter((r) => r.level === 'YELLOW');
   const green = rows.filter((r) => r.level === 'GREEN');
-  let out = `INTERN ACTIVITY REPORT - Week of ${dateRangeStr}\n${totals.total} interns tracked. Standard: 3 updates per day.\n\nBLACK ${black.length}  |  RED ${red.length}  |  ORANGE ${orange.length}  |  YELLOW ${yellow.length}  |  GREEN ${green.length}\n\n`;
+  const blackSentence = totals.black > 0
+    ? `${totals.black} ${totals.black === 1 ? 'person' : 'people'} hit the day-10 exit cliff and should be processed out this week.`
+    : 'No-one is at the day-10 exit cliff this week.';
+  let out = `Ali, here is your intern dashboard for the week of ${dateRangeStr}. ${blackSentence} Standard is 3 updates per day.\n\n`;
+  out += `INTERN ACTIVITY REPORT - Week of ${dateRangeStr}\n${totals.total} interns tracked.\n\nBLACK ${black.length}  |  RED ${red.length}  |  ORANGE ${orange.length}  |  YELLOW ${yellow.length}  |  GREEN ${green.length}\n\n`;
   const renderSection = (label, list) => {
     if (list.length === 0) return '';
     let s = `${label} (${list.length})\n${'-'.repeat(label.length + 4)}\n`;
@@ -215,7 +247,11 @@ function buildText(rows, dateRangeStr, totals) {
   out += renderSection('ORANGE - 4-6 days inactive', orange);
   out += renderSection('YELLOW - 1-3 days inactive', yellow);
   out += renderSection('GREEN - active today', green);
-  out += `\nDaily nudges fire from CB System at 5pm CT to interns at YELLOW+. Tag @CB exit intern <name> for exit preview.\n`;
+  out += `\n--- What you can do from here ---\n`;
+  out += `Process a BLACK exit:    tag @CB System exit intern <name> reason=nochow in any Basecamp thread\n`;
+  out += `Enable live nudges:      tag @CB System set intern nudge mode live\n`;
+  out += `Pause live nudges:       tag @CB System set intern nudge mode preview\n`;
+  out += `Ask CB anything:         tag @CB System <anything> in any Basecamp thread\n`;
   return stripEmDashes(out);
 }
 
