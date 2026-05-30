@@ -18,8 +18,8 @@ async function getAll(url) {
 }
 
 (async () => {
-  console.log(`Fetching events for bucket ${BUCKET} since ${SINCE}...`);
-  const events = await getAll(`https://3.basecampapi.com/3945211/buckets/${BUCKET}/events.json?since=${encodeURIComponent(SINCE)}`);
+  console.log(`Fetching events for bucket ${BUCKET} (no since filter)...`);
+  const events = await getAll(`https://3.basecampapi.com/3945211/buckets/${BUCKET}/events.json`);
   console.log(`Total events: ${events.length}`);
   const jackieEvents = events.filter(e => e.creator?.id === JACKIE_ID);
   console.log(`Jackie events: ${jackieEvents.length}`);
