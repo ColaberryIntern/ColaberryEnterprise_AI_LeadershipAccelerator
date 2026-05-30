@@ -12,6 +12,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Training program v1 package — AI Systems Architect Accelerator critique-ready deliverables (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-training
+- What changed:
+  - 2 parallel research agents fired: agent 1 fetched + structured the full ChatGPT conversation at the user's share URL (~5,000-word summary covering identity, curriculum, pricing, marketing, ops, tech, team, timeline, 15 open decisions). Agent 2 surveyed all 49 active Basecamp projects in the account to find or recommend a target ticket for the initiative — confirmed no existing tracker, recommended Ali Personal > AI Products list.
+  - New `docs/training-program-2026-q3/TRAINING_INTEGRATION_PLAN.md` (28KB): integration plan mapping every component (Project Builder + Project DNA wizard, Anthropic Companion Course wrapper, Anthropic Intelligence Layer L1-L3, 4 of 6 AI agents, Architect Portfolio Dashboard, GitHub integration, Build Log auto-formatter, Community MVP, Project Marketplace v1, Stripe enrollment, CCPP schema, TWC compliance docs) to specific file paths / owner team / ETA against the 41-day clock. Critical path: Anthropic Partner status by Jun 12.
+  - `docs/training-program-2026-q3/TRAINING_PROGRAM_CRITIQUE.html` (30KB): critique-ready strategic doc with side-by-side option blocks, yellow open-question callouts, red risk callouts, black "hard gate" boxes. Sections: program identity / user base / curriculum (12-week Lego model, TWC seminar split) / pricing (5 SKUs) / marketing (viral video engine) / operations (6 agents) / tech / team / timeline / 15 open decisions / risk register / cost + revenue.
+  - `docs/training-program-2026-q3/generate-ppt.js` + `TRAINING_OVERVIEW.pptx` (299KB, 10 slides): team-presentation deck via pptxgenjs 4.0.1 (newly installed). Slides: cover / why now / who the student is / what they build (12-week table) / 4 teams / 6-week timeline / tech inventory / marketing + pricing / risks / next 7 days.
+  - `docs/training-program-2026-q3/send-training-package.js`: ships the package - posts BC comment + sends Mandrill email with all 3 attachments.
+  - Created Basecamp tracking todo 9945833396 in Ali Personal (bucket 7463955) > AI Products list (9939449052), assigned to Ali, titled "[Tracking] New Training Program Launch - AI Systems Architect Accelerator (target 2026-07-10)".
+- Verification:
+  - BC comment posted (id 9945834233) on the new todo with summary + 4 decisions needed by Jun 6.
+  - Email sent (Mandrill id `dd715f4e-...@colaberry.com`) with all 3 attachments: TRAINING_INTEGRATION_PLAN.md (28KB), TRAINING_PROGRAM_CRITIQUE.html (30KB), TRAINING_OVERVIEW.pptx (299KB). CC alimuwwakkil@gmail.com. Importance:high.
+  - Subject prefix `[Training Program]` per the established inbox routing convention.
+- Notes:
+  - Plan flags 4 decisions needed by Jun 6 (Wk 0): brand name / launch wedge persona / pricing model reconciliation ($79+$149 BYO vs. $99 bundled) / team leads named.
+  - Hard gates flagged: Jun 12 (Anthropic Partner status), Jun 13 (TWC counsel-reviewed compliance docs), Jul 4 (Stripe live).
+  - Recommended deferrals: 2 of 6 agents (Curriculum + Community), Anthropic Intelligence Layer L4-L7, Architect Expo platform, Project Marketplace governance, refund policy. All shipped post-launch in v1.1 / v1.2.
+
 ### Intern Report v3.1 — personal Ali header, file-driven nudge mode, @CB toggle (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-nudge2
