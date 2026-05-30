@@ -283,7 +283,13 @@ Open the email for the per-bid breakdown and the human-task assignment suggestio
       subject: `[Daily Report] Gov Contracts - ${new Date().toLocaleDateString()} - ${data.bidData.reduce((s, b) => s + b.open, 0)} open todos`,
       text: textBody,
       html,
-      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+      headers: {
+        'X-MC-Track': 'none',
+        'X-MC-AutoText': 'false',
+        // Nudge Gmail to keep this out of Promotions tab and into Primary.
+        'Importance': 'high',
+        'X-Priority': '1',
+      },
     });
     console.log('Sent:', r.messageId);
   } catch (e) {
