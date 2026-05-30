@@ -69,23 +69,27 @@ export async function fetchInboxMessages(top: number = 100): Promise<GraphMessag
   return messages.slice(0, top);
 }
 
+// Destination folder for AUTOMATION-classified mail. Ali's preference: "_Automation"
+// (leading underscore keeps it at the top of the folder list alphabetically).
+// Older deployments used "Archive". The folder name is configurable via env so it
+// can be migrated without code change in the future.
+const AUTOMATION_FOLDER = process.env.INBOX_COS_ARCHIVE_FOLDER || '_Automation';
+
 export async function archiveMessage(messageId: string): Promise<void> {
   const token = await getAccessToken();
 
-  // Move to Archive folder (or create it if needed)
+  // Move to the configured AUTOMATION folder (create it if it doesn't exist).
   try {
-    // Try to find Archive folder
     const foldersRes = await axios.get(
-      'https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq \'Archive\'',
+      `https://graph.microsoft.com/v1.0/me/mailFolders?$filter=displayName eq '${AUTOMATION_FOLDER}'`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     let archiveFolderId = foldersRes.data.value?.[0]?.id;
 
     if (!archiveFolderId) {
-      // Create Archive folder
       const createRes = await axios.post(
         'https://graph.microsoft.com/v1.0/me/mailFolders',
-        { displayName: 'Archive' },
+        { displayName: AUTOMATION_FOLDER },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       archiveFolderId = createRes.data.id;

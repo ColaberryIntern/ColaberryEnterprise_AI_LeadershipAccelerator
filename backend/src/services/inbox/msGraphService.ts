@@ -185,16 +185,22 @@ export async function fetchNewMessages(deltaLink?: string): Promise<{
   }
 }
 
+// Destination folder for AUTOMATION-classified mail. Ali's preference: "_Automation".
+// Config-driven so it can be migrated without code change later.
+const AUTOMATION_FOLDER = process.env.INBOX_COS_ARCHIVE_FOLDER || '_Automation';
+
 /**
- * Moves a message to the Archive folder.
+ * Moves a message to the configured automation folder (default "_Automation").
  */
 export async function archiveMessage(messageId: string): Promise<void> {
   const client = getGraphClient();
 
   try {
-    // First, find the Archive folder ID
+    // Find the folder by display name (NOT the well-known /archive shortcut, which
+    // would route to whatever the user has renamed their Archive to - including the
+    // legacy "Colaberry" name).
     const folders = await client.api('/me/mailFolders')
-      .filter("displayName eq 'Archive'")
+      .filter(`displayName eq '${AUTOMATION_FOLDER}'`)
       .get();
 
     let archiveFolderId: string | null = null;
@@ -202,28 +208,22 @@ export async function archiveMessage(messageId: string): Promise<void> {
     if (folders.value && folders.value.length > 0) {
       archiveFolderId = folders.value[0].id;
     } else {
-      // Try the well-known archive folder name
-      try {
-        const archiveFolder = await client.api('/me/mailFolders/archive').get();
-        archiveFolderId = archiveFolder.id;
-      } catch {
-        console.warn(`${LOG_PREFIX} Archive folder not found, creating one`);
-        const created = await client.api('/me/mailFolders').post({
-          displayName: 'Archive',
-        });
-        archiveFolderId = created.id;
-      }
+      console.warn(`${LOG_PREFIX} ${AUTOMATION_FOLDER} folder not found, creating one`);
+      const created = await client.api('/me/mailFolders').post({
+        displayName: AUTOMATION_FOLDER,
+      });
+      archiveFolderId = created.id;
     }
 
     if (!archiveFolderId) {
-      throw new Error('Could not resolve Archive folder ID');
+      throw new Error(`Could not resolve ${AUTOMATION_FOLDER} folder ID`);
     }
 
     await client.api(`/me/messages/${messageId}/move`).post({
       destinationId: archiveFolderId,
     });
 
-    console.log(`${LOG_PREFIX} Archived message ${messageId}`);
+    console.log(`${LOG_PREFIX} Moved message ${messageId} to ${AUTOMATION_FOLDER}`);
   } catch (error: any) {
     console.error(`${LOG_PREFIX} archiveMessage failed for ${messageId}: ${error.message}`);
     throw error;
