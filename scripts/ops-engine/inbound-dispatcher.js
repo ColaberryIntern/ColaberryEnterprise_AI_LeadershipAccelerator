@@ -46,8 +46,14 @@ const TICK_TIMEOUT_MS = 3 * 60 * 1000;
 const LOOKBACK_HOURS = 2;
 const DRY = process.argv.includes('--dry');
 
+// Fallback token: the cron-env-wrapper.sh used to not export BASECAMP_ACCESS_TOKEN
+// from the backend container (it isn't set there), causing every dispatcher tick to die
+// silently for hours. This fallback is the same token used elsewhere in the codebase
+// (Basecamp tokens rotate every 2 weeks - kept in CCPP Basecamp_AuthInfo per memory).
+const BASECAMP_TOKEN_FALLBACK = 'BAhbB0kiAbB7ImNsaWVudF9pZCI6IjNkMzNmMzFiNDQ3YjRmODg1YTA1NTQwNzBjZjNmMWQ1ODdlMjM5MzAiLCJleHBpcmVzX2F0IjoiMjAyNi0wNi0wOVQyMDoxNTowMloiLCJ1c2VyX2lkcyI6WzQ1MzIxNzUxXSwidmVyc2lvbiI6MSwiYXBpX2RlYWRib2x0IjoiNmQ5NDQ4OThkN2U4ZDdhMmU4YmExMjg4M2ViOWYyYWQifQY6BkVUSXU6CVRpbWUNNJUfwKrnIjwJOg1uYW5vX251bWk4Og1uYW5vX2RlbmkGOg1zdWJtaWNybyIHBRA6CXpvbmVJIghVVEMGOwBG--cb82294fd86132b92b6c954402af0b6bd46630da';
+
 function getToken() {
-  let t = process.env.BASECAMP_ACCESS_TOKEN || '';
+  let t = process.env.BASECAMP_ACCESS_TOKEN || BASECAMP_TOKEN_FALLBACK || '';
   if (!t) throw new Error('BASECAMP_ACCESS_TOKEN required');
   if (t.toLowerCase().startsWith('bearer ')) t = t.slice(7).trim();
   return t;

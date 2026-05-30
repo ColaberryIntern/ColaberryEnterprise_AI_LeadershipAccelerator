@@ -99,7 +99,7 @@ export async function runWeeklyReport(): Promise<{ sent: boolean }> {
     skoolByCat.forEach((c: any) => { skoolCatSection += `  ${c.category}: ${c.c}\n`; });
 
     // ─── LANDING PAGES ───
-    const topPages = await sequelize.query(`SELECT page_path, COUNT(*) as c FROM page_events WHERE created_at >= '${weekStart}' GROUP BY page_path ORDER BY c DESC LIMIT 10`, { type: QueryTypes.SELECT }) as any[];
+    const topPages = await sequelize.query(`SELECT page_path, COUNT(*) as c FROM page_events WHERE event_type = 'pageview' AND created_at >= '${weekStart}' GROUP BY page_path ORDER BY c DESC LIMIT 10`, { type: QueryTypes.SELECT }) as any[];
     let pagesSection = '';
     topPages.forEach((p: any) => { pagesSection += `  ${p.page_path}: ${p.c}\n`; });
 
@@ -165,11 +165,26 @@ Skool agent runs: ${skoolAgentRuns.c}
       return { sent: false };
     }
 
+    // Convert the plain-text report to HTML so it renders properly in Outlook/Gmail
+    // (was sending only text/plain - landed in mail clients as un-styled monospace blob).
+    const htmlBody = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9">
+<div style="max-width:680px;margin:0 auto;background:white;padding:0;font-family:arial,sans-serif;color:#1a202c;line-height:1.55">
+<div style="background:#1a365d;color:white;padding:24px 28px">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#bfdbfe;font-weight:700">📊 Weekly Report</div>
+<div style="font-size:22px;font-weight:800;margin-top:6px;color:white">${weekLabel}</div>
+<div style="font-size:13px;color:#cbd5e0;margin-top:4px">Colaberry Enterprise AI Division - Cory, AI COO</div>
+</div>
+<div style="padding:24px 28px;font-family:'Consolas','Monaco',monospace;font-size:13px;white-space:pre-wrap;background:#f8fafc;border-left:3px solid #1a365d;margin:0;color:#1a202c">${report.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+</div>
+</body></html>`;
+
     await transporter.sendMail({
       from: '"Cory - AI COO" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
-      subject: `Weekly Report: ${weekLabel}`,
+      cc: 'alimuwwakkil@gmail.com',
+      subject: `[Weekly Report] ${weekLabel}`,
       text: report,
+      html: htmlBody,
       headers: {
         'X-MC-Track': 'false',
         'X-MC-AutoText': 'false',
