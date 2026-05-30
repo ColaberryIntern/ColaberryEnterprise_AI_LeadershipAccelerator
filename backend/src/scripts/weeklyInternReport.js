@@ -27,6 +27,7 @@ const BASE = `https://3.basecampapi.com/3945211/buckets/${BUCKET}`;
 const H = { Authorization: 'Bearer ' + BC_TOKEN, 'User-Agent': 'Colaberry', Accept: 'application/json', 'Content-Type': 'application/json' };
 const DRY = process.argv.includes('--dry');
 const NO_MB = process.argv.includes('--no-message-board');
+const NO_EMAIL = process.argv.includes('--no-email');
 const SEND_TEST = process.argv.includes('--send-test');
 const WEEK_MS = 7 * 86400 * 1000;
 const NOW = Date.now();
@@ -346,7 +347,7 @@ ${section('INACTIVE (0 updates)', inactive)}
   validateBeforeSend(html, text);
 
   // Email Ali (plus alimuwwakkil@gmail.com per the established reports convention).
-  if (!DRY) {
+  if (!DRY && !NO_EMAIL) {
     const transport = nodemailer.createTransport({
       host: 'smtp.mandrillapp.com', port: 587,
       auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
@@ -368,7 +369,7 @@ ${section('INACTIVE (0 updates)', inactive)}
   // Post to Message Board.
   if (!NO_MB && !DRY) {
     try {
-      const mbResp = await bcPost(`/buckets/${BUCKET}/message_boards/${MESSAGE_BOARD_ID}/messages.json`, {
+      const mbResp = await bcPost(`/message_boards/${MESSAGE_BOARD_ID}/messages.json`, {
         subject: `Intern Activity - Week of ${dateRangeStr}`,
         content: mbHtml,
         status: 'active',
