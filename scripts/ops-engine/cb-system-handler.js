@@ -65,6 +65,7 @@ TOOL PICKING GUIDE
 - basecamp_reply: ALWAYS call this at least once per invocation, as the visible response in the thread. Brief acknowledgement + what you did or queued. Use Basecamp HTML (<div>, <strong>, <em>, <br>, <ul><li>). Sign off as "CB System" only if the thread is with someone other than Ali, otherwise no signoff.
 - email_ali: when Ali asked you to email him something (a summary, research notes, a draft). Recipient is locked to ali@colaberry.com.
 - queue_followup: when the request needs work you cannot do in this turn (live research, cross-system lookups, external comms drafting, calendar booking). Creates a Basecamp todo in the same project, assigned to Ali, with your notes so Claude Code can finish it in his next session.
+- exit_intern_preview: when Ali asks you to remove, exit, terminate, kick out, or place-out an intern. PREVIEW ONLY - it does NOT execute the exit. Returns the CCPP candidate and the Basecamp todos that would be affected. You MUST follow exit_intern_preview with a basecamp_reply that shows Ali the preview AND the exact CLI command he can run to confirm. The execution is intentionally outside your reach - personnel actions need a human in the loop.
 - finish: terminates the loop. Call after your final basecamp_reply.
 
 ALWAYS END WITH: basecamp_reply, then finish.`;
@@ -112,6 +113,21 @@ const TOOLS = [
           notes: { type: 'string', description: 'What needs to happen, with enough context that a future Claude Code session can run it without re-asking.' },
         },
         required: ['title', 'notes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'exit_intern_preview',
+      description: 'Preview an intern exit (CCPP UPDATE + Basecamp un-assign). READ-ONLY: does NOT modify CCPP or Basecamp. Use when Ali asks you to remove, exit, terminate, kick out, or graduate-as-placed an intern. Returns CCPP candidate(s) + Basecamp todos that would be affected. Ali must then run the standalone confirmInternExit.js CLI to actually execute - this tool is preview-only by design (personnel actions need human-in-the-loop confirmation, not autonomous LLM execution).',
+      parameters: {
+        type: 'object',
+        properties: {
+          intern_query: { type: 'string', description: 'Name, email, or InternID of the intern to exit. Substring search supported.' },
+          reason: { type: 'string', description: 'One of: quit | nochow | placed | fired | never. Used to populate the preview only.', enum: ['quit', 'nochow', 'placed', 'fired', 'never'] },
+        },
+        required: ['intern_query', 'reason'],
       },
     },
   },
@@ -190,8 +206,25 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     return { ok: true };
   }
 
+  async function exit_intern_preview({ intern_query, reason }) {
+    try {
+      const { previewExit } = require(path.resolve(REPO, 'backend/src/scripts/lib/internExit'));
+      const result = await previewExit({ query: intern_query, reason });
+      sideEffects.exitPreview = {
+        query: intern_query,
+        reason,
+        topCandidate: result.primary ? { internId: result.primary.InternID, name: result.primary.name, email: result.primary.email, isActive: result.primary.isActive } : null,
+        bcTodos: result.basecampTodos.length,
+        confirmHint: result.confirmHint,
+      };
+      return { ok: true, ...result };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }

@@ -18,6 +18,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const OpenAI = require(path.resolve(__dirname, '../../../node_modules/openai')).default;
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
+const { getActiveInterns, matchAssignee, closePool } = require(path.resolve(__dirname, './lib/ccppInternRoster'));
 
 const BC_TOKEN = process.env.BASECAMP_ACCESS_TOKEN || 'BAhbB0kiAbB7ImNsaWVudF9pZCI6IjNkMzNmMzFiNDQ3YjRmODg1YTA1NTQwNzBjZjNmMWQ1ODdlMjM5MzAiLCJleHBpcmVzX2F0IjoiMjAyNi0wNi0wOVQyMDoxNTowMloiLCJ1c2VyX2lkcyI6WzQ1MzIxNzUxXSwidmVyc2lvbiI6MSwiYXBpX2RlYWRib2x0IjoiNmQ5NDQ4OThkN2U4ZDdhMmU4YmExMjg4M2ViOWYyYWQifQY6BkVUSXU6CVRpbWUNNJUfwKrnIjwJOg1uYW5vX251bWk4Og1uYW5vX2RlbmkGOg1zdWJtaWNybyIHBRA6CXpvbmVJIghVVEMGOwBG--cb82294fd86132b92b6c954402af0b6bd46630da';
 const BUCKET = parseInt(process.env.INTERN_REPORT_BUCKET || '24865175', 10);
@@ -184,7 +185,28 @@ function statusOf(row) {
   return { label: 'LIGHT', color: '#9a3412', bg: '#fed7aa' };
 }
 
-function buildHtml(rows, dateRangeStr, totals) {
+function renderMismatchSection(extras) {
+  const { unmatchedRows = [], ccppActiveNotInBasecamp = [] } = extras;
+  if (unmatchedRows.length === 0 && ccppActiveNotInBasecamp.length === 0) return '';
+  const unmatchedHtml = unmatchedRows.length === 0 ? '' : `
+    <div style="margin-bottom:8px"><strong>${unmatchedRows.length} Basecamp assignee${unmatchedRows.length === 1 ? '' : 's'} not in CCPP active roster:</strong></div>
+    <ul style="margin:0 0 16px 18px;padding:0;font-size:13px;color:#334155">
+      ${unmatchedRows.map((r) => `<li>${stripEmDashes(r.intern).replace(/</g, '&lt;')} <span style="color:#94a3b8">(${stripEmDashes(r.project).slice(0, 60).replace(/</g, '&lt;')})</span></li>`).join('')}
+    </ul>`;
+  const ccppOnlyHtml = ccppActiveNotInBasecamp.length === 0 ? '' : `
+    <div style="margin-bottom:8px"><strong>${ccppActiveNotInBasecamp.length} CCPP-active intern${ccppActiveNotInBasecamp.length === 1 ? '' : 's'} with no Basecamp project:</strong></div>
+    <ul style="margin:0 0 16px 18px;padding:0;font-size:13px;color:#334155">
+      ${ccppActiveNotInBasecamp.map((r) => `<li>${stripEmDashes(r.name || '').replace(/</g, '&lt;')} <span style="color:#94a3b8">(InternID ${r.InternID}${r.manager ? `, manager: ${r.manager}` : ''})</span></li>`).join('')}
+    </ul>`;
+  return `
+<h2 style="font-size:16px;color:#9a3412;border-bottom:2px solid #fed7aa;padding-bottom:8px;margin:28px 0 14px">Roster mismatches</h2>
+<div style="padding:14px;background:#fff7ed;border-radius:6px;border-left:4px solid #ea580c">
+  ${unmatchedHtml}
+  ${ccppOnlyHtml}
+</div>`;
+}
+
+function buildHtml(rows, dateRangeStr, totals, extras = {}) {
   const sorted = [...rows].sort((a, b) => b.weekUpdateCount - a.weekUpdateCount);
   const strong = sorted.filter(r => r.weekUpdateCount >= 3);
   const light = sorted.filter(r => r.weekUpdateCount > 0 && r.weekUpdateCount < 3);
@@ -233,7 +255,7 @@ function buildHtml(rows, dateRangeStr, totals) {
 <div style="background:linear-gradient(135deg,#1a365d 0%,#2b6cb0 100%);color:white;padding:32px 32px 26px">
   <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#bfdbfe;font-weight:700">Intern Activity Report</div>
   <div style="font-size:24px;font-weight:800;margin-top:6px;line-height:1.25">Week of ${dateRangeStr}</div>
-  <div style="font-size:14px;color:#cbd5e0;margin-top:6px">${totals.total} intern projects, ${totals.totalUpdates} updates posted this week</div>
+  <div style="font-size:14px;color:#cbd5e0;margin-top:6px">${totals.total} CCPP-active intern projects, ${totals.totalUpdates} updates this week${totals.bcOnly ? ` &middot; ${totals.bcOnly} BC-only mismatches` : ''}${totals.ccppOnly ? ` &middot; ${totals.ccppOnly} CCPP-only (no BC project)` : ''}</div>
 </div>
 
 <div style="padding:24px 32px">
@@ -261,8 +283,10 @@ ${sectionTable('STRONG - delivering this week', strong, '#166534')}
 ${sectionTable('LIGHT - low activity', light, '#9a3412')}
 ${sectionTable('INACTIVE - no updates posted', inactive, '#991b1b')}
 
+${renderMismatchSection(extras)}
+
 <div style="margin-top:32px;padding:14px;background:#f8fafc;border-left:4px solid #1a365d;font-size:12px;color:#475569">
-  Source: Basecamp Project 24865175 (Internship/Apprenticeship Projects). Activity window: last 7 days. Update count = comments posted by the intern in that window. Bullets summarized by gpt-4o-mini from the intern's own comment text. Generated automatically; flag any errors to Ali.
+  Source: Basecamp Project 24865175 (Internship/Apprenticeship Projects) crossed against CCPP <code>ADF_InternshipProgram</code> active roster. Activity window: last 7 days. Update count = comments posted by the intern. Bullets summarized by gpt-4o-mini. Mismatches surfaced so the roster can be reconciled. To exit an intern, tag @CB System with "exit intern &lt;name&gt; reason=&lt;quit|placed|fired|nochow|never&gt;".
 </div>
 
 </div>
@@ -270,7 +294,7 @@ ${sectionTable('INACTIVE - no updates posted', inactive, '#991b1b')}
 </body></html>`;
 }
 
-function buildText(rows, dateRangeStr, totals) {
+function buildText(rows, dateRangeStr, totals, extras = {}) {
   const sorted = [...rows].sort((a, b) => b.weekUpdateCount - a.weekUpdateCount);
   const strong = sorted.filter(r => r.weekUpdateCount >= 3);
   const light = sorted.filter(r => r.weekUpdateCount > 0 && r.weekUpdateCount < 3);
@@ -289,11 +313,23 @@ function buildText(rows, dateRangeStr, totals) {
   out += section('STRONG - delivering this week', strong);
   out += section('LIGHT - low activity', light);
   out += section('INACTIVE - no updates', inactive);
-  out += `\nSource: Basecamp 24865175. Window: last 7 days. Generated automatically.\n`;
+  const { unmatchedRows = [], ccppActiveNotInBasecamp = [] } = extras;
+  if (unmatchedRows.length || ccppActiveNotInBasecamp.length) {
+    out += `\nROSTER MISMATCHES\n-----------------\n`;
+    if (unmatchedRows.length) {
+      out += `\nBasecamp assignees NOT in CCPP active roster (${unmatchedRows.length}):\n`;
+      for (const r of unmatchedRows) out += `  - ${r.intern}  (${r.project.slice(0, 60)})\n`;
+    }
+    if (ccppActiveNotInBasecamp.length) {
+      out += `\nCCPP-active interns with NO Basecamp project (${ccppActiveNotInBasecamp.length}):\n`;
+      for (const r of ccppActiveNotInBasecamp) out += `  - ${r.name || ''}  (InternID ${r.InternID}${r.manager ? `, manager: ${r.manager}` : ''})\n`;
+    }
+  }
+  out += `\nSource: Basecamp 24865175 + CCPP ADF_InternshipProgram. Window: last 7 days. To exit an intern: tag @CB System with "exit intern <name> reason=<quit|placed|fired|nochow|never>".\n`;
   return stripEmDashes(out);
 }
 
-function buildMessageBoardHtml(rows, dateRangeStr, totals) {
+function buildMessageBoardHtml(rows, dateRangeStr, totals, extras = {}) {
   // Basecamp Message Board content accepts HTML. Reuse the same HTML but
   // strip the outer wrapper so it renders well inside Basecamp.
   const sorted = [...rows].sort((a, b) => b.weekUpdateCount - a.weekUpdateCount);
@@ -308,16 +344,22 @@ function buildMessageBoardHtml(rows, dateRangeStr, totals) {
   };
   const section = (title, list) => list.length === 0 ? '' : `<div><strong>${title} (${list.length})</strong></div><div><br></div>` + list.map(renderRow).join('<div><br></div>');
 
+  const { unmatchedRows = [], ccppActiveNotInBasecamp = [] } = extras;
+  const mismatchBlock = (unmatchedRows.length === 0 && ccppActiveNotInBasecamp.length === 0) ? '' :
+    `<div><br></div><div><strong>Roster mismatches</strong></div>` +
+    (unmatchedRows.length ? `<div>BC assignees not in CCPP active: ${unmatchedRows.map((r) => stripEmDashes(r.intern)).join(', ')}</div>` : '') +
+    (ccppActiveNotInBasecamp.length ? `<div>CCPP-active with no BC project: ${ccppActiveNotInBasecamp.map((r) => stripEmDashes(r.name || '')).join(', ')}</div>` : '');
   return `<div><strong>Intern Activity - Week of ${dateRangeStr}</strong></div>
-<div>${totals.total} intern projects, ${totals.totalUpdates} updates this week. Strong: ${strong.length} | Light: ${light.length} | Inactive: ${inactive.length}</div>
+<div>${totals.total} CCPP-active intern projects, ${totals.totalUpdates} updates this week. Strong: ${strong.length} | Light: ${light.length} | Inactive: ${inactive.length}</div>
 <div><br></div>
 ${section('STRONG (3+ updates)', strong)}
 <div><br></div>
 ${section('LIGHT (1-2 updates)', light)}
 <div><br></div>
 ${section('INACTIVE (0 updates)', inactive)}
+${mismatchBlock}
 <div><br></div>
-<div style="font-size:11px;color:#64748b"><em>Generated automatically every Monday. Last 7 days of comments per intern todo. Questions: tag @CB System or reply to Ali.</em></div>`;
+<div style="font-size:11px;color:#64748b"><em>Generated automatically every Monday. Last 7 days of comments per intern todo. Roster checked against CCPP. Questions: tag @CB System or reply to Ali.</em></div>`;
 }
 
 (async () => {
@@ -331,18 +373,48 @@ ${section('INACTIVE (0 updates)', inactive)}
   const rows = await buildPerInternRows(projects);
   console.log(`[intern-report] built ${rows.length} rows`);
 
-  await summarizeWithLLM(rows);
+  // CCPP cross-reference: only keep rows whose assignee is in the active roster.
+  // Other rows go into a "not-in-CCPP" bucket for the mismatch section.
+  let roster = [];
+  try { roster = await getActiveInterns(); console.log(`[intern-report] CCPP active interns: ${roster.length}`); }
+  catch (e) { console.warn(`[intern-report] CCPP roster fetch failed: ${e.message} - proceeding without filter`); }
+
+  const matchedRows = [];
+  const unmatchedRows = [];
+  const seenInternIds = new Set();
+  for (const r of rows) {
+    if (roster.length === 0) { matchedRows.push(r); continue; }
+    const match = matchAssignee(roster, { name: r.intern, id: r.internId });
+    if (match) {
+      r.ccpp = { internId: match.row.InternID, email: match.row.email, startDate: match.row.startDate, manager: match.row.manager, matchType: match.matchType };
+      seenInternIds.add(match.row.InternID);
+      matchedRows.push(r);
+    } else {
+      r.ccpp = null;
+      unmatchedRows.push(r);
+    }
+  }
+  const ccppActiveNotInBasecamp = roster.filter((rr) => !seenInternIds.has(rr.InternID));
+  console.log(`[intern-report] matched=${matchedRows.length} unmatched=${unmatchedRows.length} ccpp_only=${ccppActiveNotInBasecamp.length}`);
+
+  await summarizeWithLLM(matchedRows);
   console.log(`[intern-report] LLM summaries done`);
 
-  const totalUpdates = rows.reduce((s, r) => s + r.weekUpdateCount, 0);
-  const totals = { total: rows.length, totalUpdates };
+  const totalUpdates = matchedRows.reduce((s, r) => s + r.weekUpdateCount, 0);
+  const totals = {
+    total: matchedRows.length,
+    totalUpdates,
+    bcOnly: unmatchedRows.length,
+    ccppOnly: ccppActiveNotInBasecamp.length,
+  };
   const startStr = shortDate(WEEK_START);
   const endStr = shortDate(new Date(NOW));
   const dateRangeStr = `${startStr} - ${endStr}`;
 
-  const html = buildHtml(rows, dateRangeStr, totals);
-  const text = buildText(rows, dateRangeStr, totals);
-  const mbHtml = buildMessageBoardHtml(rows, dateRangeStr, totals);
+  const mismatchExtras = { unmatchedRows, ccppActiveNotInBasecamp };
+  const html = buildHtml(matchedRows, dateRangeStr, totals, mismatchExtras);
+  const text = buildText(matchedRows, dateRangeStr, totals, mismatchExtras);
+  const mbHtml = buildMessageBoardHtml(matchedRows, dateRangeStr, totals, mismatchExtras);
 
   validateBeforeSend(html, text);
 
@@ -380,5 +452,6 @@ ${section('INACTIVE (0 updates)', inactive)}
     }
   }
 
+  try { await closePool(); } catch (_e) {}
   console.log('[intern-report] done');
 })().catch(e => { console.error('[intern-report] FATAL:', e.stack || e.message); process.exit(1); });
