@@ -42,6 +42,16 @@ const CB_SYSTEM_ID = 37708014;
 const ALI_ID = 17454835;
 const ALI_SGID = 'BAh7BkkiC19yYWlscwY6BkVUewdJIglkYXRhBjsAVEkiKWdpZDovL2JjMy9QZXJzb24vMTc0NTQ4MzU_ZXhwaXJlc19pbgY7AFRJIghwdXIGOwBUSSIPYXR0YWNoYWJsZQY7AFQ=--119f405284666f646ff92128b896da907f10c3ab';
 const CB_SGID_MARKER = '/Person/37708014';   // appears inside any sgid for CB System
+// Plain-text variants Ali uses: "CB System", "CB", "Cb", "cb" with word boundary.
+// Doesn't match CB inside larger words (CBC, FCB, etc).
+const CB_PLAINTEXT_RE = /\b(CB System|CB Sys|CB)\b/i;
+function isCBMention(content) {
+  if (!content) return false;
+  if (content.includes(CB_SGID_MARKER)) return true;
+  // Strip HTML tags for plain-text match
+  const stripped = content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
+  return CB_PLAINTEXT_RE.test(stripped);
+}
 const TICK_TIMEOUT_MS = 3 * 60 * 1000;
 const LOOKBACK_HOURS = 2;
 const DRY = process.argv.includes('--dry');
@@ -131,7 +141,15 @@ function recipeGrep(pattern) {
 }
 
 function recipeUnknown(raw) {
-  return `<div>${mention()} I saw your @mention but the request did not match a v1 keyword recipe. Send <code>@CBSystem help</code> for the supported list. Raw text I saw: <em>"${raw.slice(0, 200).replace(/</g, '&lt;')}"</em></div>`;
+  // Friendlier "queued for next Ali session" acknowledgment instead of error-tone.
+  // Per @CB System scope expansion doctrine 2026-05-30: for open-ended requests
+  // (anything beyond v1 keyword recipes), CB System acknowledges within 3 min and
+  // the actual execution happens in Ali's next Claude Code chat session.
+  return `<div>${mention()} I see your request: <em>"${raw.slice(0, 300).replace(/</g, '&lt;')}"</em></div>
+<div><br></div>
+<div>This needs a real tool run (research, email draft, calendar booking, CCPP lookup, etc.) which the cron-driven dispatcher can not do solo yet. <strong>Queued for the next live session</strong> - Ali will see this when he is next in Claude Code and the response will land here as a follow-up comment.</div>
+<div><br></div>
+<div style="font-size:11px;color:#64748b">If this is urgent and you want me to do a quick keyword recipe instead, the supported v1 list is: <code>@CB grep:&lt;pattern&gt;</code>, <code>@CB ccpp:&lt;sql&gt;</code>, <code>@CB gmail:&lt;query&gt;</code>, <code>@CB help</code>.</div>`;
 }
 
 function classifyAndDispatch(text) {
@@ -152,33 +170,42 @@ function classifyAndDispatch(text) {
 // find new comments where CB System is @mentioned by Ali.
 
 async function findNewMentions(state) {
+  // Basecamp 3 has no account-wide events feed (404). Use per-bucket events.
+  // We hit every project Ali is in, look at recent events, then drill into
+  // any comment-events for CB-System @mentions by Ali.
   const cutoff = new Date(Date.now() - LOOKBACK_HOURS * 3600 * 1000).toISOString();
-  let events;
-  try { events = await bcGetAll('/events.json?since=' + encodeURIComponent(cutoff)); }
-  catch (e) { console.error('events fetch failed:', e.message); return []; }
+  let projects;
+  try { projects = await bcGetAll('/projects.json'); }
+  catch (e) { console.error('projects fetch failed:', e.message); return []; }
   const newMentions = [];
-  for (const ev of events) {
-    if (ev.action !== 'commented' && ev.action !== 'reposted' && ev.action !== 'created') continue;
-    if (!ev.recording || !ev.creator) continue;
-    if (ev.creator.id !== ALI_ID) continue;
-    // Pull the comment body to check for CB System mention
-    const bucketId = ev.bucket?.id;
-    const recId = ev.recording?.id;
-    if (!bucketId || !recId) continue;
-    // event id makes a stable key
-    const key = String(ev.id);
-    if (state.processed[key]) continue;
-    // Comments live at /buckets/<b>/recordings/<r>/comments.json with full text
-    try {
-      // The event itself often has the comment id in summary; we pull recording comments
-      const comments = await bcGet(`/buckets/${bucketId}/recordings/${recId}/comments.json?since=` + encodeURIComponent(cutoff));
-      const recent = comments.filter(c => c.creator?.id === ALI_ID && c.content?.includes(CB_SGID_MARKER));
-      for (const c of recent) {
-        const ckey = `${bucketId}-${c.id}`;
-        if (state.processed[ckey]) continue;
-        newMentions.push({ bucketId, recId, comment: c, key: ckey });
-      }
-    } catch (e) { /* skip */ }
+  for (const project of projects) {
+    const bucketId = project.id;
+    let events;
+    try { events = await bcGet(`/buckets/${bucketId}/events.json?since=` + encodeURIComponent(cutoff)); }
+    catch (e) { continue; }
+    if (!Array.isArray(events) || events.length === 0) continue;
+    for (const ev of events) {
+      if (ev.creator?.id !== ALI_ID) continue;
+      if (!ev.recording) continue;
+      const key = String(ev.id);
+      if (state.processed[key]) continue;
+      const recId = ev.recording.id;
+      // Pull comments on that recording to find the actual message text
+      try {
+        const comments = await bcGet(`/buckets/${bucketId}/recordings/${recId}/comments.json`);
+        const recent = (Array.isArray(comments) ? comments : []).filter(c => {
+          if (c.creator?.id !== ALI_ID) return false;
+          const created = new Date(c.created_at).getTime();
+          if (created < new Date(cutoff).getTime()) return false;
+          return isCBMention(c.content);
+        });
+        for (const c of recent) {
+          const ckey = `${bucketId}-${c.id}`;
+          if (state.processed[ckey]) continue;
+          newMentions.push({ bucketId, recId, comment: c, key: ckey });
+        }
+      } catch (e) { /* skip */ }
+    }
   }
   return newMentions;
 }
