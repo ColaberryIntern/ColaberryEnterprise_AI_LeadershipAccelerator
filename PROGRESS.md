@@ -12,6 +12,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### @CB System open-ended handler v1 — OpenAI tool-calling in inbound dispatcher (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-cb1
+- What changed:
+  - New `scripts/ops-engine/cb-system-handler.js`: GPT-4o tool-calling loop, 4 tools (basecamp_reply, email_ali via Mandrill+preflight, queue_followup, finish). Voice + outside-facing guardrails baked into system prompt.
+  - `scripts/ops-engine/inbound-dispatcher.js`: split `classifyAndDispatch` into `classifyKeyword` (returns null on miss) so the open-ended path hands off to `handleOpenEnded` instead of posting the static `recipeUnknown` fallback.
+  - `/opt/colaberry-accelerator/scripts/cron-env-wrapper.sh` (VPS edit): added `OPENAI_API_KEY` to the env-vars allowlist so the dispatcher cron job sees it.
+  - Audit log: `tmp/ops-engine/cb-handler-log.jsonl`, one JSONL line per invocation (tools called, side-effect message ids, status).
+- Verification: Smoke-tested against the Anthropic Partner Network kickoff message (bucket 47477101, recording 9940691196). Handler returned `tools=basecamp_reply,finish email=- ok=true`. Confirmed via API: CB System posted `<div>OpenAI tool-calling loop is operational.</div>` as the latest comment.
+- Notes: External-facing actions (non-Ali emails, public posts, external calendar) are intentionally NOT in v1 — model is instructed to use `queue_followup` for those instead of attempting them. Adds them in v2 once we have a propose-then-approve UI.
+
 ### Automated reports stack — dispatcher robustness + Cory schedule + Postgres tuning + admin UI (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-fix3
