@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Weekly Intern Activity Report — automated email + Message Board (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-intern
+- What changed:
+  - New `backend/src/scripts/weeklyInternReport.js`: walks Basecamp project 24865175 (todosets Project 1/2/3), discovers ~119 intern-assigned todos, fetches comments per todo from the last 7 days, scores activity (STRONG 3+, LIGHT 1-2, INACTIVE 0), summarizes each intern's week of comments into 1-3 bullets via gpt-4o-mini (parallel 5x), renders HTML (gradient hero + 3 status tiles + per-section tables) and plain text.
+  - Outputs: emails ali@colaberry.com + CC alimuwwakkil@gmail.com via Mandrill (preflight), AND posts to message board 4450326153 (Sprint Pres / New Project) so the cohort sees it.
+  - Registered in DB: `automated_reports` row name="Weekly Intern Activity Report", cron `0 13 * * 1`, prompt + recipients stored for admin UI.
+  - Crontab on prod VPS: `0 13 * * 1 cron-env-wrapper.sh ... weeklyInternReport.js` → Monday 13:00 UTC = 8:00 CT during DST (drifts to 7:00 CT in standard time, accepted).
+  - Untracked file `backend/src/scripts/lib/mandrillPreflight.js` committed (was blocking the script from loading on prod).
+  - `scripts/cron-env-wrapper.sh` (VPS-side edit): forward `"$@"` so report scripts can take `--no-email`, `--no-message-board`, etc. flags from crontab.
+- Verification:
+  - Full prod run completed (`[intern-report] discovered 119 intern project todos / built 119 rows / LLM summaries done / email sent / message board posted: 9945791807`).
+  - Email landed (Mandrill id `7b841e31-...@colaberry.com`).
+  - Message Board post landed (Basecamp recording 9945791807).
+- Notes: Message Board target defaults to 4450326153 ("Sprint Pres / New Project") since the project has 7+ boards and no canonical "general status" board. Override via env `INTERN_REPORT_MESSAGE_BOARD`. Ali to confirm or redirect.
+
 ### @CB System open-ended handler v1 — OpenAI tool-calling in inbound dispatcher (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-cb1
