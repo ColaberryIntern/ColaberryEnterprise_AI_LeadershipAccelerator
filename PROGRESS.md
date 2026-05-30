@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Automated reports stack — dispatcher robustness + Cory schedule + Postgres tuning + admin UI (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-fix3
+- What changed:
+  - `scripts/ops-engine/inbound-dispatcher.js`: switched from broken account-level `/events.json` (404s) to per-bucket events polling across all Basecamp 3 projects. Added plain-text `CB` mention matching (regex on stripped HTML) alongside the existing SGID detection. Friendlier "queued for next live session" fallback replaces the prior error-tone "unknown recipe" reply.
+  - `docker-compose.production.yml`: bumped Postgres `shared_buffers=512MB`, `max_locks_per_transaction=256`, `work_mem=16MB`. Cures the "out of shared memory" error that was crashing Cory daily briefing + OrchestrationHealthAgent + AdmissionsConversationContinuityAgent + AdmissionsCallbackManagementAgent.
+  - `cron_schedule_configs` (DB direct UPDATE on prod): `DailyExecutiveBriefing` and `WeeklyStrategicBriefing` moved from `0 7 * * *` / `0 7 * * 1` (2am CT) to `45 11 * * *` / `45 11 * * 1` (6:45am CT).
+  - New backend route module `backend/src/routes/admin/automatedReportsRoutes.ts` — `GET /api/admin/automated-reports`, `GET /api/admin/automated-reports/:id` (with last 25 runs), `PATCH` for enabled/prompt/notes/cron/recipients, `GET /:id/runs` history. Registered in `adminRoutes.ts`.
+  - New admin page `frontend/src/pages/admin/AdminReportsPage.tsx` at `/admin/reports` — summary tiles (total/enabled/failing), table with cron + last run + status + on/off toggle, side panel with recipients, editable prompt, and recent run history. Added to System nav in `AdminLayout.tsx`.
+- Verification:
+  - Dispatcher: ran once on prod via cron-env-wrapper → `tick … 0 new @CB mentions from Ali` with zero errors.
+  - Postgres tuning: `SHOW shared_buffers` → `512MB`, `SHOW max_locks_per_transaction` → `256` after recreate. Zero "out of shared memory" entries in backend logs in the 5 min after restart.
+  - Cory schedule: scheduler log line `[AI Ops]   Executive daily briefing: 45 11 * * * [DB]` and `Executive weekly briefing: 45 11 * * 1 [DB]` after backend restart.
+  - Admin UI: `curl https://enterprise.colaberry.ai/api/admin/automated-reports` → `HTTP 401` (requireAdmin gate present and live, route registered).
+- Notes: The unified DB-driven `reports-runner.js` remains blocked by Docker network isolation (postgres hostname only resolves in-container); follow-up to invoke via `docker exec accelerator-backend node …`. LLM-driven open-ended dispatcher handler and bulk-email-reply parser remain pending.
+
 ### Next 10 priority runs — phantoms archived, agents confirmed, caps verified, classifier bug fixed (2026-05-21)
 Continued from the previous 5 runs. Walked the next 10 priority tasks one at a time. Top-of-queue priority dropped from 80 (build_backend) to 35 (triage only) — high-pressure tasks fully cleared. Caught a real classifier regression bug during the run and shipped the fix.
 
