@@ -12,6 +12,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### 3-track build + test plan (SMS+Voice / Gov pipeline / AI auto-runner) (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-3track-plan
+- What changed:
+  - New `docs/3-track-build-plan/BUILD_PLAN.md`: unified 3-track plan with per-track build steps (each with concrete deliverable + test row), risk register, recommended sequencing, and 12 open questions across the three tracks. Total scope: 7 weeks if sequenced, Track A Phase 1 ships end of week 1.
+  - Recommended sequence: A1 → B → C1+C2 (dry-run) → A2 → B4+C3 → A3.
+  - Decision paths: "go with recommended defaults" for fast kick-off, or answer 12 questions for detailed tuning.
+  - Email + attachment shipped to Ali.
+- Verification: plan email landed (Mandrill `a669b6be-...`).
+- Notes: Ali asked for plan to build + test all 3. Per his earlier "no priority" framing on SMS+Voice, none start until he greenlights. Plan covers per-step test strategy (unit + smoke + E2E) for every phase.
+
 ### Gov bid two-step flow — fixed URLs from historical scripts (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-gov-flow-fix
