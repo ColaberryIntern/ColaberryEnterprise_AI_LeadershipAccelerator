@@ -12,6 +12,18 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### SMS + Voice alerting plan (planned, not built) (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-sms-voice-plan
+- What changed:
+  - New `docs/sms-voice-alerting/PLAN.md`: 3-phase build plan. Phase 1 = VIP SMS routing (~1 week, ~$2.65/mo via Twilio). Phase 2 = Voice Q&A with Synthflow + retrieval (~2 weeks). Phase 3 = polish + admin UI.
+  - Per-channel architecture: `vip_contacts` Postgres table, Mandrill inbound webhook → gpt-4o-mini summarizer → Twilio SMS + gmail forward, Synthflow voice agent with CCPP+BC+email retrieval.
+  - Daily caps: 7 SMS, 3 voice. Overflow logged to `notifications_deferred` and surfaced in 6am digest.
+  - 6 open questions for Ali to lock before build (VIP seed list, current T-Mobile source, critical-alert sources, voice Q&A priority, cap-overflow behavior, daily digest placement).
+  - Email + PLAN.md attachment shipped to Ali for review.
+- Verification: plan email landed (Mandrill `9eb76900-...`).
+- Notes: Per Ali's "no priority - run when you think is best" framing, this is planned + scoped + queued. Build kicks off after Ali answers the 6 questions in the email.
+
 ### Gov Contracts reset — dispatcher fix + scrap/add + your-turn notifier + @CB tools (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-bid-ops + CC-20260531-cb-fix + CC-20260531-turn + CC-20260531-cb-tools
