@@ -185,8 +185,8 @@ async function fetchCohorts() {
     const atRiskCount = c.students.filter((s) => s.tier === 'AT_RISK').length;
     const onTrackCount = c.students.filter((s) => s.tier === 'ON_TRACK').length;
     const highCount = c.students.filter((s) => s.tier === 'HIGH').length;
-    // Use earliest enrollment date as the cohort start proxy
-    const enrollmentDateMin = c.students.map((s) => s.enrollmentDate).filter(Boolean).sort()[0];
+    // Use earliest enrollment date as the cohort start proxy (cast to ISO string)
+    const enrollmentDateMin = c.students.map((s) => s.enrollmentDate ? new Date(s.enrollmentDate).toISOString() : null).filter(Boolean).sort()[0] || null;
     cohorts.push({
       classId: c.classId,
       className: c.className,
@@ -202,7 +202,7 @@ async function fetchCohorts() {
     });
   }
   // Sort by enrollmentDateMin desc (most recent cohort first)
-  cohorts.sort((a, b) => (b.enrollmentDateMin || '').localeCompare(a.enrollmentDateMin || ''));
+  cohorts.sort((a, b) => String(b.enrollmentDateMin || '').localeCompare(String(a.enrollmentDateMin || '')));
   return cohorts;
 }
 
