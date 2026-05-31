@@ -134,6 +134,37 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'scrap_gov_bid',
+      description: 'Trash a Gov Contracts bid (move its todolist to Basecamp trash). Use when Ali says "scrap bid X" / "kill the X bid" / "drop X" referring to a government contract bid in the Gov Contracts project. Recoverable from BC trash for 30 days.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name_or_keyword: { type: 'string', description: 'Substring of the bid name (e.g., "Harris County" or "Detroit"). Must match exactly one bid; otherwise the tool errors.' },
+        },
+        required: ['name_or_keyword'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_gov_bid',
+      description: 'Add a new Gov Contracts bid to Basecamp with the standard 14-task template. Use when Ali says "add bid X" / "create a new bid for X" / "open a slot for X". Tasks are pre-populated with HUMAN/AI tier classification and due dates distributed backward from the deadline.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Display title for the bid (e.g., "Harris County - Agenda & Meeting Management System (RFP 26_0075)"). Becomes the BC todolist name.' },
+          deadline: { type: 'string', description: 'Submission deadline as YYYY-MM-DD. Due dates for the 14 tasks distribute backward from (deadline - 1 day).' },
+          agency_name: { type: 'string', description: 'Optional. Agency / buyer name for context.' },
+          fit_thesis: { type: 'string', description: 'Optional. Short rationale for why this bid is a fit. Goes in the list description.' },
+        },
+        required: ['title', 'deadline'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'exit_intern_preview',
       description: 'Preview an intern exit (CCPP UPDATE + Basecamp un-assign). READ-ONLY: does NOT modify CCPP or Basecamp. Use when Ali asks you to remove, exit, terminate, kick out, or graduate-as-placed an intern. Returns CCPP candidate(s) + Basecamp todos that would be affected. Ali must then run the standalone confirmInternExit.js CLI to actually execute - this tool is preview-only by design (personnel actions need human-in-the-loop confirmation, not autonomous LLM execution).',
       parameters: {
@@ -233,6 +264,24 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     }
   }
 
+  async function scrap_gov_bid({ name_or_keyword }) {
+    try {
+      const { scrapBid } = require(path.resolve(REPO, 'backend/src/scripts/lib/govBidOps'));
+      const result = await scrapBid(name_or_keyword);
+      sideEffects.scrapGovBid = { listId: result.trashed, name: result.name };
+      return { ok: true, ...result };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
+  async function add_gov_bid({ title, deadline, agency_name, fit_thesis }) {
+    try {
+      const { addBid } = require(path.resolve(REPO, 'backend/src/scripts/lib/govBidOps'));
+      const result = await addBid({ displayTitle: title, deadline, agencyName: agency_name, fitThesis: fit_thesis });
+      sideEffects.addGovBid = { listId: result.listId, name: result.listName, taskCount: result.tasksCreated };
+      return { ok: true, ...result };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   async function exit_intern_preview({ intern_query, reason }) {
     try {
       const { previewExit } = require(path.resolve(REPO, 'backend/src/scripts/lib/internExit'));
@@ -251,7 +300,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }
