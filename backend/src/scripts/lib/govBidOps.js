@@ -194,15 +194,24 @@ ${criteriaSummary ? `Pick ${count} ${criteriaSummary}.` : `Pick the ${count} opp
 <li><strong>Opportunity UUID</strong> (from the Opportunity Pulse URL)</li>
 <li><strong>Bonfire URL</strong> (the per-agency one you opened in step 3)</li>
 <li><em>Optional:</em> short fit thesis (1-2 sentences on why we're bidding)</li>
+<li><strong>Zip URL (optional but recommended):</strong> drop the RFP zip into the Gov Contracts Docs &amp; Files area, then paste the upload's Basecamp URL (looks like <code>https://3.basecamp.com/3945211/buckets/47346103/uploads/&lt;id&gt;</code>). If you include it as <code>zip &lt;url&gt;</code>, I will download the zip, upload each file to a per-bid sub-folder, and build a richer todolist that links every task to its source document. If you skip it, I will use the lighter 14-task generic template.</li>
 </ul>
 </li>
 </ol>
 <div><br></div>
-<div><strong>Format example for your reply:</strong></div>
+<div><strong>Format example for your reply (with zip - rich mode):</strong></div>
 <div style="background:#f1f5f9;border-left:3px solid #1a365d;padding:10px 14px;font-family:monospace;font-size:12px">
 &#64;CB System ready - here are the ${count} bid${count === 1 ? '' : 's'}:<br>
-1. Harris County - Agenda &amp; Meeting Management (RFP 26_0075), deadline 2026-06-22, agency Harris County TX, uuid 7011f5af-..., bonfire harriscountytx.bonfirehub.com/opportunities/228389<br>
-2. SLCC - Enterprise Analytics Platform (SLCC2026-M6006), deadline 2026-07-15, agency SLCC, uuid ..., bonfire ...<br>
+1. Harris County - Agenda &amp; Meeting Management (RFP 26_0075), deadline 2026-06-22, agency Harris County TX, uuid 7011f5af-..., bonfire harriscountytx.bonfirehub.com/opportunities/228389, zip https://3.basecamp.com/3945211/buckets/47346103/uploads/9912345678<br>
+2. SLCC - Enterprise Analytics Platform (SLCC2026-M6006), deadline 2026-07-15, agency SLCC, uuid ..., bonfire ..., zip https://3.basecamp.com/3945211/buckets/47346103/uploads/...<br>
+3. ...
+</div>
+<div><br></div>
+<div><strong>Or without zip (light mode, generic template):</strong></div>
+<div style="background:#f8fafc;border-left:3px solid #94a3b8;padding:10px 14px;font-family:monospace;font-size:12px">
+&#64;CB System ready - here are the ${count} bid${count === 1 ? '' : 's'}:<br>
+1. Harris County - Agenda &amp; Meeting Management, deadline 2026-06-22, agency Harris County TX<br>
+2. SLCC - Enterprise Analytics Platform, deadline 2026-07-15, agency SLCC<br>
 3. ...
 </div>
 <div><br></div>
@@ -231,29 +240,71 @@ ${criteriaSummary ? `Pick ${count} ${criteriaSummary}.` : `Pick the ${count} opp
 // =============================================================================
 const { parseReply } = require('./govBidReplyParser');
 
-async function finalizeBidsFromReply({ replyBody, addBidFn }) {
+// Dispatch:
+//   - If bid has zipRef (Basecamp Vault upload URL): run full processGovBid
+//     pipeline (zip-aware: extract, upload files to Vault, rich todolist,
+//     kickoff message). Requires basecampToken + basecampIds at the caller.
+//   - Otherwise (no zip): light template path via addBid (Phase 1 behavior).
+//
+// addBidFn / processZipBidFn are dependency-injection slots for smoke tests.
+async function finalizeBidsFromReply({ replyBody, addBidFn, processZipBidFn, basecampToken, basecampIds }) {
   const { bids, warnings: parseWarnings } = parseReply(replyBody);
-  // Dependency injection: smoke tests pass addBidFn to avoid real Basecamp
-  // calls. Production callers omit it and we use the module-internal addBid.
   const create = addBidFn || addBid;
   const results = [];
   for (const b of bids) {
     try {
-      // Skip bids without a deadline - addBid will create one anyway but the
-      // task-due-date logic falls back to "today" for everything, which is
-      // worse than refusing and surfacing the problem.
       if (!b.deadline) {
         results.push({ title: b.title, ok: false, error: 'no deadline parsed - reply needs "deadline YYYY-MM-DD"' });
         continue;
       }
+
+      // Zip-aware path
+      if (b.zipRef) {
+        if (!processZipBidFn && !basecampToken) {
+          // No way to download + run pipeline. Fall through to light path
+          // and surface a warning in the result.
+          const r = await create({
+            displayTitle: b.title, deadline: b.deadline,
+            opportunityUuid: b.uuid, fitThesis: b.fitThesis, agencyName: b.agency,
+          });
+          results.push({ title: b.title, ok: true, mode: 'light-fallback',
+            listUrl: r.appUrl, tasksCreated: r.tasksCreated, listId: r.listId,
+            note: 'zip detected but no basecamp creds - fell back to light template' });
+          continue;
+        }
+        const runZip = processZipBidFn || (async (args) => {
+          const { downloadVaultZip, processBid } = require('./govBidPipeline');
+          const dl = await downloadVaultZip({
+            vaultUploadUrl: args.zipRef, basecampIds: args.basecampIds, basecampToken: args.basecampToken,
+          });
+          return processBid({
+            bidConfig: {
+              display_title: args.title, deadline: args.deadline, agency_name: args.agency,
+              opportunity_uuid: args.uuid, fit_thesis: args.fitThesis, zip_path: dl.localZipPath,
+            },
+            basecampIds: args.basecampIds,
+            basecampToken: args.basecampToken,
+          });
+        });
+        const r = await runZip({
+          zipRef: b.zipRef, title: b.title, deadline: b.deadline, agency: b.agency,
+          uuid: b.uuid, fitThesis: b.fitThesis, basecampIds, basecampToken,
+        });
+        results.push({
+          title: b.title, ok: true, mode: 'zip-aware',
+          listUrl: r.list?.app_url, folderUrl: r.folder?.app_url, messageUrl: r.kickoff?.app_url,
+          filesUploaded: r.uploaded?.length, tasksCreated: r.tasks?.length, listId: r.list?.id,
+        });
+        continue;
+      }
+
+      // Light path (no zip)
       const r = await create({
-        displayTitle: b.title,
-        deadline: b.deadline,
-        opportunityUuid: b.uuid,
-        fitThesis: b.fitThesis,
-        agencyName: b.agency,
+        displayTitle: b.title, deadline: b.deadline,
+        opportunityUuid: b.uuid, fitThesis: b.fitThesis, agencyName: b.agency,
       });
-      results.push({ title: b.title, ok: true, listUrl: r.appUrl, tasksCreated: r.tasksCreated, listId: r.listId });
+      results.push({ title: b.title, ok: true, mode: 'light',
+        listUrl: r.appUrl, tasksCreated: r.tasksCreated, listId: r.listId });
     } catch (e) {
       results.push({ title: b.title, ok: false, error: e.message });
     }

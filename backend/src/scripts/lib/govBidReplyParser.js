@@ -79,8 +79,21 @@ function parseRow(rowText) {
   const fitMatch = clean.match(/\bfit[:\s]+(.+?)$/i);
   if (fitMatch) fields.fitThesis = fitMatch[1].trim();
 
+  // Zip ref: "zip <url-or-path>". Recognizes:
+  //   - Basecamp Vault upload URLs (.../buckets/<bucket>/uploads/<id>)
+  //   - Local file paths (for local CLI use)
+  // If "zip" keyword absent but the row contains a BC uploads URL, treat
+  // that as the zipRef anyway (Ali might just paste the link).
+  const zipKwMatch = clean.match(/\bzip[:\s]+(\S+)/i);
+  if (zipKwMatch) {
+    fields.zipRef = zipKwMatch[1].replace(/[,;.]+$/, '');
+  } else {
+    const bcUploadMatch = clean.match(/https?:\/\/\S*buckets\/\d+\/uploads\/\d+\S*/i);
+    if (bcUploadMatch) fields.zipRef = bcUploadMatch[0].replace(/[,;.]+$/, '');
+  }
+
   // Title = everything before the FIRST structured marker.
-  const markerIndices = ['deadline', 'agency', 'uuid', 'bonfire', 'fit', 'due']
+  const markerIndices = ['deadline', 'agency', 'uuid', 'bonfire', 'fit', 'due', 'zip']
     .map((kw) => {
       const m = clean.match(new RegExp(`\\b${kw}\\b`, 'i'));
       return m ? clean.toLowerCase().indexOf(m[0].toLowerCase()) : -1;

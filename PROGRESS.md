@@ -12,6 +12,33 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track B Phase 2 — Gov bid zip-aware finalize live (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- What changed:
+  - `backend/src/scripts/lib/govBidPipeline.js` (new, 383 lines) — extracted the full processGovBid pipeline into a callable module. Exports `processBid(config, ids, token, opts)` + `downloadVaultZip(...)` + `makeBcClient(...)` + `extractZip(...)`. Same 7-phase logic (extract zip → fetch OP → Vault folder + uploads → todolist with description → tasks → kickoff message → summary JSON) but parameterized instead of using module-globals.
+  - `backend/src/scripts/processGovBid.js` shrunk from 621 lines → 106 lines (CLI shim now). Below the 500-line hard ceiling per CLAUDE.md. Same behavior, same BID_CONFIG editing flow.
+  - `backend/src/scripts/lib/govBidReplyParser.js` — added `zipRef` field. Detects "zip <url>" explicitly OR a raw Basecamp Vault upload URL (`buckets/<n>/uploads/<n>`) on a bid row. Bonfire URLs deliberately not auto-promoted to zipRef.
+  - `backend/src/scripts/lib/govBidOps.js` — `finalizeBidsFromReply` now dispatches: zip-aware mode (downloads zip from Vault, runs full processBid pipeline, creates per-bid sub-folder + uploads each file + rich todolist + kickoff message) when a bid has zipRef; light mode (current addBid 14-task template) otherwise. Both `addBidFn` and `processZipBidFn` are DI slots for smoke tests. Each result row tagged `mode: zip-aware | light`.
+  - `backend/src/scripts/lib/govBidReplyParser.test.js` — 3 new test scenarios (explicit `zip <url>`, raw BC URL auto-detect, bonfire URL is NOT zipRef). 30/30 pass.
+  - `backend/src/scripts/lib/govBidOps.smoke.js` — added zip-path smoke (7 new assertions). Verifies parser → dispatch decision → zip path gets processZipBidFn, no-zip gets addBidFn, mode field set correctly. All pass with no real Basecamp calls.
+  - `lib/govBidOps.js#postGovBidDownloadInstructions` — MB message template updated to teach Ali the optional zip-URL syntax. Includes both example formats (rich + light) so the parser sees what it expects.
+  - `scripts/ops-engine/cb-system-handler.js` — `finalize_gov_bids_from_reply` tool impl now passes `basecampToken` + `basecampIds` so the zip path can execute end-to-end. SYSTEM_PROMPT updated: explicit zip-aware vs light mode behavior, reply summary should call out which mode each bid used.
+- Verification:
+  - 30/30 parser tests pass (`node backend/src/scripts/lib/govBidReplyParser.test.js`)
+  - 19/19 smoke assertions pass: 12 light-path + 7 zip-path (`node backend/src/scripts/lib/govBidOps.smoke.js`)
+  - `processGovBid.js` loads + reaches the `BASECAMP_ACCESS_TOKEN required` safety check (no real BC writes attempted)
+  - File sizes: `processGovBid.js` 106 lines (was 621), `govBidPipeline.js` 383 lines, both within CLAUDE.md ceilings
+- What this unlocks (the new workflow):
+  1. Ali: `@CB add 3 new gov bids` → CB posts MB instructions (now with zip-URL example)
+  2. Ali: drops 3 RFP zips into Gov Contracts Docs & Files (just drag-and-drop in BC web UI)
+  3. Ali: replies on the MB post with `@CB ready: 1. Harris..., deadline ..., agency ..., zip https://3.basecamp.com/3945211/buckets/47346103/uploads/<id>` per bid
+  4. CB calls `finalize_gov_bids_from_reply`. Per bid: downloads the zip from Vault, extracts, creates per-bid sub-folder, uploads each file, builds rich todolist with file links, posts kickoff message.
+  5. Single summary reply lands on the MB post: 3 bids landed (zip-aware × 3), each with folder URL + list URL + file count.
+- Still left on Track B roadmap (Phase 3):
+  - PDF/Word content extraction → AI-derived custom task list (currently the zip path uses the generic 14-task fallback in `buildTaskList` because `bidConfig.tasks` is empty when called from finalize). Phase 3: read the RFP doc text via pdf-parse or unzip+grep, run gpt-4o to derive a tailored task list per bid.
+  - Opportunity Pulse auto-lookup from `uuid` (the pipeline already supports it; we just need to thread `opportunityPulseCreds` through `finalize_gov_bids_from_reply`).
+
 ### Track B Phase 1 — Gov bid reply parser + finalize tool live (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m

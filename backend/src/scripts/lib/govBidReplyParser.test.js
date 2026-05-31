@@ -91,5 +91,33 @@ console.log('Test 7: date in title ignored when explicit deadline present');
   assert('deadline = 2026-12-01 (not in-title date)', bids[0]?.deadline === '2026-12-01', bids[0]?.deadline);
 }
 
+// === 8. Zip URL via explicit keyword ===
+console.log('Test 8: zip URL via "zip" keyword');
+{
+  const reply = `1. Harris County RFP 26_0075, deadline 2026-06-22, agency Harris County TX, zip https://3.basecamp.com/3945211/buckets/47346103/uploads/9912345678`;
+  const { bids } = parseReply(reply);
+  assert('1 bid parsed', bids.length === 1);
+  assert('zipRef extracted', bids[0]?.zipRef === 'https://3.basecamp.com/3945211/buckets/47346103/uploads/9912345678', bids[0]?.zipRef);
+  assert('title clean (no zip in it)', bids[0]?.title === 'Harris County RFP 26_0075', bids[0]?.title);
+  assert('deadline still parsed', bids[0]?.deadline === '2026-06-22', bids[0]?.deadline);
+}
+
+// === 9. Zip URL detected without "zip" keyword (raw BC upload URL) ===
+console.log('Test 9: raw BC upload URL detected as zipRef');
+{
+  const reply = `1. Plano Modernization, deadline 2026-09-01, agency Plano, https://3.basecampapi.com/3945211/buckets/47346103/uploads/12345.json`;
+  const { bids } = parseReply(reply);
+  assert('zipRef auto-detected from BC URL', /uploads\/12345/.test(bids[0]?.zipRef || ''), bids[0]?.zipRef);
+}
+
+// === 10. Non-BC URL (bonfire) does NOT become zipRef ===
+console.log('Test 10: bonfire URL is bonfireUrl, not zipRef');
+{
+  const reply = `1. Austin Records, deadline 2026-10-15, agency Austin, bonfire https://austin.bonfirehub.com/opportunities/99`;
+  const { bids } = parseReply(reply);
+  assert('no zipRef', !bids[0]?.zipRef, bids[0]?.zipRef);
+  assert('bonfireUrl set', /austin.bonfirehub/.test(bids[0]?.bonfireUrl || ''), bids[0]?.bonfireUrl);
+}
+
 console.log(`\nResult: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
