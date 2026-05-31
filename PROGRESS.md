@@ -12,6 +12,30 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track B Phase 3 — AI-derived task list per bid live (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- What changed:
+  - `backend/src/scripts/lib/govBidContentExtractor.js` (new) — extracts text from RFP files: PDF via pdf-parse v2.x (`new PDFParse({data}).getText()`), DOCX via AdmZip + XML-tag strip on `word/document.xml`, XLSX via AdmZip on `xl/sharedStrings.xml` + first 3 sheets. Hard cap: 8K chars per file, 80K total.
+  - `backend/src/scripts/lib/govBidTaskGenerator.js` (new) — gpt-4o call with `response_format: json_schema` (strict). 10-15 RFP-tailored tasks (`{content, note}` shape). Hard rules in system prompt: no em-dashes, content <100 chars, note <350, always include bid/no-bid + internal review + Bonfire submit-LAST tasks.
+  - `lib/govBidPipeline.js#processBid` — new `opts.generateTasksFromContent: true` flag triggers Phase 1b between zip extract and Vault upload. Fail-soft: if extractor or gpt-4o errors, falls back to generic 5-task template and surfaces `aiTaskMeta.error` in result. DI slots `taskGeneratorFn` + `contentExtractorFn` for smoke tests.
+  - `lib/govBidOps.js#finalizeBidsFromReply` — zip-aware path now passes `generateTasksFromContent: true` to processBid. Light path unchanged (still uses addBid's standard 14-task template).
+  - `lib/govBidTaskGenerator.smoke.js` (new) — end-to-end smoke against real RFP corpus from `tmp/extract-smoke/`.
+- Verification:
+  - Local extractor smoke against Harris County zip: 18 files (16 PDF + 1 XLSX + 1 unsupported), 80K chars total (hit total cap as designed).
+  - PDF-parse v2.x API fix verified: earlier `require('pdf-parse')(buf)` form returned "pdf is not a function"; corrected to `new PDFParse({data}).getText()`.
+  - VPS task-gen smoke: 15 tasks generated in 3.7s from synthesized RFP content (Specifications + USRA + Security Controls). Token cost ~1K total (~$0.005/bid). All gate checks pass: no em-dashes, has Bonfire submit task, has internal review task, task count in 8-18 band.
+  - Sample output (real gpt-4o response): tasks reference specific source docs ("Address Section 2.1 in Specifications.pdf"), include real artifacts ("Q-09FY xlsx from HCUS_USRA.pdf"), order logically (read → bid/no-bid → pre-prop conf → Q&A → functional → technical → compliance forms → review → submit Bonfire).
+- What this unlocks (the new workflow):
+  1. Ali: `@CB add 3 gov bids` → MB instructions
+  2. Ali: drops 3 zips into Vault
+  3. Ali: replies with `@CB ready: 1. <title>, deadline ..., agency ..., zip <BC URL>` per bid
+  4. Per bid (zip-aware mode): download zip → extract → upload to Vault sub-folder → **extract text from PDFs/DOCX/XLSX** → **gpt-4o generates 10-15 tailored tasks** → create todolist with those tasks → kickoff message
+  5. Summary reply lists per-bid mode + AI-task metadata
+- Phase 4 ideas (not started):
+  - Section-aware deadline extraction: parse "pre-proposal conference 2026-06-03", "Q&A deadline 2026-06-10" out of the RFP and set due_on per task accordingly (currently due dates distribute evenly backward from submission deadline).
+  - File-to-task mapping: when a task references a specific RFP doc, attach that doc's vault URL to the task description (current logic only matches if task.content includes the exact filename).
+
 ### Track B Phase 2 — Gov bid zip-aware finalize live (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
