@@ -12,6 +12,26 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track A Phase 1 — VIP SMS foundation shipped in log_only mode (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-track-a1
+- What changed:
+  - **A1.1 vip_contacts Postgres table** created with indexes on `LOWER(email)` and `active`. UNIQUE constraints on email + domain. CHECK constraint requires one of email/domain.
+  - **A1.5 `backend/src/scripts/lib/vipSmsRouter.js`** — given inbound email payload, looks up sender against vip_contacts, summarizes with gpt-4o-mini (one sentence under 110 chars: "FirstName: ask/topic"), sends SMS via Twilio REST API directly (no npm dep until Ali approves), logs to `communication_logs` with channel='sms' for cap tracking. Mode file at `tmp/ops-engine/vip-sms-mode.txt` initialized to `log_only`.
+  - **A1.7 Cap enforcement** — 7 SMS / 24h, 3 voice / 24h, computed from `communication_logs`. Over-cap notifications log with status='deferred-cap' for next-day digest.
+  - **A1.8 Four @CB tools wired** in `scripts/ops-engine/cb-system-handler.js`:
+    - `vip_add(email?, domain?, display_name, topic_tags?, priority?)` - upserts to vip_contacts
+    - `vip_remove(email? | domain?)` - sets active=false
+    - `vip_list()` - returns all VIPs
+    - `set_vip_sms_mode(mode)` - flips log_only/live mode file
+  - Action email shipped to Ali listing 3 things he needs to action: (1) find + disable T-Mobile carrier forwarder, (2) provision Twilio + credentials (~$2.65/mo at cap), (3) review the suggested VIP seed list of 13 candidates.
+- Verification:
+  - Smoke-test "@CB add Mike Reynolds (mike@shipces.com) to my VIP list, priority 2, tag him client and shipces" → handler called `vip_add`, row landed in table verified by direct psql.
+  - Email landed (Mandrill `27c54de8-...`).
+- Remaining in Phase 1 (after Ali actions):
+  - A1.6 - Microsoft Graph inbound poller that calls `routeInboundEmail()` every 1-2 min. Half-day build, blocked on Twilio creds.
+  - A1.2 - Gmail forwarder setup so the SMS deep-link to alimuwwakkil@gmail.com resolves correctly.
+
 ### 3-track build + test plan (SMS+Voice / Gov pipeline / AI auto-runner) (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-3track-plan
