@@ -199,7 +199,7 @@ Auto-fires daily until 40/40 reached, then shuts off. Weekly recap posts Mondays
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
+    cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
     subject: `[Daily Report] 🚀 Anthropic Partner Network: ${pctComplete}% (${totalCompleted}/40) · ${daysLeft} days left`,
     text,
     html,

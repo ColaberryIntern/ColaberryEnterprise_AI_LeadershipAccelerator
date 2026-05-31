@@ -18,7 +18,7 @@ const BASE = 'https://3.basecampapi.com/3945211';
 const H = { Authorization: 'Bearer ' + BASECAMP_TOKEN, 'User-Agent': 'Colaberry Client Projects', Accept: 'application/json' };
 
 const RECIPIENT = 'ali@colaberry.com';
-const CC = 'alimuwwakkil@gmail.com';
+const CC = ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
 const TEST = process.argv.includes('--test');
 const DRY = process.argv.includes('--dry');
 const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length);

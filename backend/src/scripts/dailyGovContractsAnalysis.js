@@ -642,7 +642,7 @@ Open the email for the per-bid breakdown and the human-task assignment suggestio
     }).sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: RECIPIENT,
-      cc: RECIPIENT_PHONE,
+      cc: [RECIPIENT_PHONE, 'ram@colaberry.com'],
       subject: `[Daily Report] Gov Contracts - ${new Date().toLocaleDateString()} - ${data.bidData.reduce((s, b) => s + b.open, 0)} open todos`,
       text: textBody,
       html,

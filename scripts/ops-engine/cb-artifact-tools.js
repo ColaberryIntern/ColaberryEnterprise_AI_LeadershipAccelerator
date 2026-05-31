@@ -164,6 +164,7 @@ async function uploadAndAttach({ bcGet, bcPost, bucketId, recId, localFilePath, 
 
 async function uploadAndAttachWithAuth({ bcPost, bucketId, recId, buf, filename, caption, auth }) {
   const ACCOUNT = '3945211';
+  // Step 1: register the file as an Attachment to get an attachable_sgid
   const url = `https://3.basecampapi.com/${ACCOUNT}/attachments.json?name=${encodeURIComponent(filename)}`;
   const r = await fetch(url, {
     method: 'POST',
@@ -172,12 +173,51 @@ async function uploadAndAttachWithAuth({ bcPost, bucketId, recId, buf, filename,
   });
   if (!r.ok) throw new Error(`UPLOAD ${url} -> ${r.status} ${await r.text()}`);
   const attach = await r.json();
-  // Step 2: post a comment with the attachable_sgid embedded as a bc-attachment
   const sgid = attach.attachable_sgid;
+
+  // Step 2: ALSO upload to the project Vault so the file lives in Docs & Files
+  // (not just buried in a comment). Per Ali's directive: artifacts go in Vault,
+  // comments link to them.
+  let vaultUploadUrl = null;
+  try {
+    // Find the project's main vault from the dock
+    const projResp = await fetch(`https://3.basecampapi.com/${ACCOUNT}/projects/${bucketId}.json`, { headers: { Authorization: auth, Accept: 'application/json', 'User-Agent': 'CB System' } });
+    const proj = await projResp.json();
+    const vault = (proj.dock || []).find((d) => d.name === 'vault');
+    if (vault) {
+      // Find or create "CB Artifacts" sub-folder
+      const subsResp = await fetch(`https://3.basecampapi.com/${ACCOUNT}/buckets/${bucketId}/vaults/${vault.id}/vaults.json`, { headers: { Authorization: auth, Accept: 'application/json', 'User-Agent': 'CB System' } });
+      const subs = await subsResp.json();
+      let folder = Array.isArray(subs) ? subs.find((v) => v.title === 'CB Artifacts') : null;
+      if (!folder) {
+        const createResp = await fetch(`https://3.basecampapi.com/${ACCOUNT}/buckets/${bucketId}/vaults/${vault.id}/vaults.json`, {
+          method: 'POST',
+          headers: { Authorization: auth, 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'CB System' },
+          body: JSON.stringify({ title: 'CB Artifacts' }),
+        });
+        folder = await createResp.json();
+      }
+      // Upload to the CB Artifacts sub-folder
+      const uploadResp = await fetch(`https://3.basecampapi.com/${ACCOUNT}/buckets/${bucketId}/vaults/${folder.id}/uploads.json`, {
+        method: 'POST',
+        headers: { Authorization: auth, 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'CB System' },
+        body: JSON.stringify({ attachable_sgid: sgid, base_name: filename, description: caption || '' }),
+      });
+      const upload = await uploadResp.json();
+      vaultUploadUrl = upload.app_url;
+    }
+  } catch (e) {
+    console.warn(`vault-upload soft-fail: ${e.message}`);
+  }
+
+  // Step 3: post a comment with the bc-attachment AND a Vault link if available
   const captionHtml = caption ? `<div>${caption}</div>` : '';
-  const content = `${captionHtml}<bc-attachment sgid="${sgid}" caption="${(filename || '').replace(/"/g, '&quot;')}"></bc-attachment>`;
+  const vaultLinkHtml = vaultUploadUrl
+    ? `<div style="margin-top:8px;font-size:12px;color:#475569"><strong>Stored in Docs &amp; Files:</strong> <a href="${vaultUploadUrl}">${filename}</a></div>`
+    : '';
+  const content = `${captionHtml}<bc-attachment sgid="${sgid}" caption="${(filename || '').replace(/"/g, '&quot;')}"></bc-attachment>${vaultLinkHtml}`;
   const posted = await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content });
-  return { sgid, filename, commentId: posted.id, commentUrl: posted.app_url };
+  return { sgid, filename, commentId: posted.id, commentUrl: posted.app_url, vaultUrl: vaultUploadUrl };
 }
 
 module.exports = { buildPdf, buildXlsx, buildImage, uploadAndAttach };

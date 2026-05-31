@@ -83,6 +83,16 @@ function computeAreaFeasibility(area, daysToLaunch) {
   return { score, tier, reason, requiredDays: +requiredDays.toFixed(1), daysToLaunch, humansRemaining: human, aiRemaining: ai };
 }
 
+// Load the AI runner state so we can mark already-drafted tasks as
+// "awaiting human review" rather than presenting them as the next AI step.
+// Path: tmp/launch-pmo-ai-runner-state.json -> { tasks: { [taskId]: { at, briefs, chars } } }
+function loadCbDraftedIds() {
+  try {
+    const runner = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../../tmp/launch-pmo-ai-runner-state.json'), 'utf8'));
+    return new Set(Object.keys(runner.tasks || {}).map(String));
+  } catch { return new Set(); }
+}
+
 // ---------------------------------------------------------------------------
 // State pull (v2 - tier-classified, with feasibility per area)
 // ---------------------------------------------------------------------------
@@ -91,6 +101,7 @@ async function pullProjectState() {
   const lists = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todosets/${dock.todoset.id}/todolists.json`);
   const today = dateYMD();
   const daysToLaunch = daysBetween(LAUNCH.targetLaunchDate, today);
+  const cbDraftedIds = loadCbDraftedIds();
   const areas = [];
   for (const list of lists) {
     const todos = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${list.id}/todos.json`);
@@ -106,6 +117,7 @@ async function pullProjectState() {
       url: t.app_url,
       assignees: (t.assignees || []).map((a) => a.name),
       tier: tierOf(t),
+      cbDrafted: cbDraftedIds.has(String(t.id)),
     }));
     // Sort by due_on (nulls last)
     openTodos.sort((a, b) => {
@@ -126,10 +138,15 @@ async function pullProjectState() {
       total, done, pct, openCount: openTodos.length,
       openTodos, overdue, upcoming,
     };
-    // Compute per-area "next" steps. blocked-task filter happens later in caller.
-    area.nextStep = openTodos[0] || null;
-    area.nextHumanStep = openTodos.find((t) => t.tier === 'HUMAN') || null;
-    area.nextAiStep = openTodos.find((t) => t.tier === 'AI') || null;
+    // Compute per-area "next" steps. blocked-task + cb-drafted filters apply.
+    // Key rule (per Ali's audit): if a task is AI-tier and CB has already
+    // drafted it, exclude it from "next" picks - it's awaiting human review,
+    // not a CB-action gap. CB doesn't re-execute already-drafted tasks.
+    const nextEligible = (t) => !t.cbDrafted;
+    area.nextStep = openTodos.find(nextEligible) || null;
+    area.nextHumanStep = openTodos.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && nextEligible(t)) || null;
+    area.nextAiStep = openTodos.find((t) => t.tier === 'AI' && nextEligible(t)) || null;
+    area.draftedAwaitingReview = openTodos.filter((t) => t.cbDrafted);
     area.humanCount = openTodos.filter((t) => t.tier === 'HUMAN').length;
     area.aiCount = openTodos.filter((t) => t.tier === 'AI').length;
     area.eitherCount = openTodos.filter((t) => t.tier === 'EITHER').length;
@@ -181,6 +198,7 @@ function buildHumanActionQueue(state) {
     for (const t of a.openTodos) {
       if (t.tier !== 'HUMAN' && t.tier !== 'EITHER') continue;
       if (!t.due_on) continue;
+      if (t.cbDrafted) continue; // exclude already-drafted awaiting-review tasks
       queue.push({ area: a.listName, ...t });
     }
   }
@@ -194,11 +212,26 @@ function buildAiQueue(state) {
     for (const t of a.openTodos) {
       if (t.tier !== 'AI') continue;
       if (!t.due_on) continue;
+      if (t.cbDrafted) continue; // CB doesn't re-execute already-drafted tasks
       ai.push({ area: a.listName, ...t });
     }
   }
   ai.sort((a, b) => a.due_on.localeCompare(b.due_on));
   return ai;
+}
+
+// Tasks CB has drafted, sorted by due date (these are visible in the
+// "Awaiting human review" section of the email so Ali can see what CB has
+// queued up for human approval).
+function buildAwaitingReviewQueue(state) {
+  const q = [];
+  for (const a of state.areas) {
+    for (const t of (a.draftedAwaitingReview || [])) {
+      q.push({ area: a.listName, ...t });
+    }
+  }
+  q.sort((a, b) => (a.due_on || '9999').localeCompare(b.due_on || '9999'));
+  return q;
 }
 
 // ---------------------------------------------------------------------------
@@ -330,18 +363,25 @@ function scoreBadge(feas) {
   return `<span style="display:inline-block;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:700;background:${color.bg};color:${color.fg};letter-spacing:0.5px">${label} &middot; ${feas.score}</span>`;
 }
 function renderAreaCard(area, today, blockerMap) {
-  const nextH = area.openTodos.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !blockerMap.get(t.id)?.blocked);
-  const nextA = area.openTodos.find((t) => t.tier === 'AI' && !blockerMap.get(t.id)?.blocked);
+  // The "next" picks now skip CB-drafted tasks (those are awaiting human review).
+  const nextH = area.openTodos.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !blockerMap.get(t.id)?.blocked && !t.cbDrafted);
+  const nextA = area.openTodos.find((t) => t.tier === 'AI' && !blockerMap.get(t.id)?.blocked && !t.cbDrafted);
   const blockedHere = area.openTodos.filter((t) => blockerMap.get(t.id)?.blocked);
+  const draftedHere = area.openTodos.filter((t) => t.cbDrafted);
   const fs = area.feasibility;
   const fsColor = fs.tier === 'LIKELY_SCRAP' ? '#fef2f2' : fs.tier === 'AT_RISK' ? '#fffbeb' : '#f0fdf4';
   const taskRows = area.openTodos.slice(0, 15).map((t, idx) => {
     const isNext = t.id === (nextH?.id || area.nextStep?.id);
     const isBlocked = blockerMap.get(t.id)?.blocked;
+    const isDrafted = t.cbDrafted;
     const owner = (t.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || (t.tier === 'AI' ? 'CB System' : 'unassigned');
-    return `<tr style="background:${isBlocked ? '#fef2f2' : isNext ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white')}">
+    const rowBg = isBlocked ? '#fef2f2' : isDrafted ? '#eff6ff' : isNext ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white');
+    const stateLabel = isDrafted ? '<div style="font-size:10px;color:#1e40af;margin-top:2px;font-weight:700">DRAFTED BY CB - awaiting human review</div>'
+      : isBlocked ? '<div style="font-size:10px;color:#991b1b;margin-top:2px;font-style:italic">BLOCKED on upstream</div>'
+      : '';
+    return `<tr style="background:${rowBg}">
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${idx + 1}</td>
-<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a>${isBlocked ? '<div style="font-size:10px;color:#991b1b;margin-top:2px;font-style:italic">BLOCKED on upstream</div>' : ''}</td>
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a>${stateLabel}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on, today)}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${htmlEsc(owner)}</td>
@@ -404,6 +444,16 @@ async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePost
     .filter(Boolean).join('');
 
   const areaCards = state.areas.map((a) => renderAreaCard(a, today, blockerMap)).join('');
+
+  // Awaiting-review queue (CB-drafted but human hasn't approved yet)
+  const awaitingReview = buildAwaitingReviewQueue(state);
+  const awaitingRows = awaitingReview.slice(0, 12).map((t) => {
+    const owner = (t.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned';
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 100)}</a></td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(t.area)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${duePill(t.due_on, today)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(owner)}</td></tr>`;
+  }).join('');
 
   // Pick the single Ali-targeted "next human action" (his next decision-point).
   // If none assigned directly to Ali, fall back to the topmost human task by due date.
@@ -484,6 +534,12 @@ ${perAreaNextHumanRows ? `<table cellpadding="0" cellspacing="0" border="0" styl
 <h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Areas in detail</h2>
 ${areaCards}
 
+${awaitingRows ? `<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">AI drafts awaiting human review (${awaitingReview.length})</h2>
+<p style="font-size:12px;color:#475569;margin:0 0 8px">CB has produced first-pass deliverables on these. The human owner needs to review + refine + mark complete. They are EXCLUDED from "next AI step" picks because CB doesn't re-execute them.</p>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px">
+<thead><tr style="background:#1e40af;color:white"><th align="left" style="padding:8px 10px;font-size:10px">TASK</th><th align="left" style="padding:8px 10px;font-size:10px">AREA</th><th align="left" style="padding:8px 10px;font-size:10px">DUE</th><th align="left" style="padding:8px 10px;font-size:10px">REVIEWER</th></tr></thead>
+<tbody>${awaitingRows}</tbody></table>` : ''}
+
 <h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">AI work CB has drafted (last 12)</h2>
 <table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:14px">
 <thead><tr style="background:#1e3a8a;color:white"><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">WHEN</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">TASK</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">AREA</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">BRIEFS USED</th><th align="right" style="padding:8px 10px;font-size:10px;letter-spacing:1px">CHARS</th></tr></thead>
@@ -549,7 +605,7 @@ Launch PMO for AI Systems Architect Accelerator`);
   const r = await transport.sendMail({
     from: '"CB System" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
+    cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
     subject: `[Launch PMO] ${state.today} - ${state.overall}% ready, ${state.daysToLaunch}d to launch`,
     text: textClean,
     html: htmlClean,
