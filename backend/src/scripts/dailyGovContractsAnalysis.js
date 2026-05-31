@@ -40,18 +40,68 @@ async function bcPut(p, body) {
   return r.json();
 }
 
+// Parse a date out of free-form task content. Handles formats like:
+//   "Submit via X Bonfire portal by 2026-06-22"
+//   "Submit ... by 06/22/2026"
+//   "due 2026-06-22"
+function parseDateFromContent(s) {
+  if (!s) return null;
+  // ISO format YYYY-MM-DD
+  let m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  // US format MM/DD/YYYY or M/D/YYYY
+  m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  // US format MM-DD-YYYY
+  m = s.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  return null;
+}
+
 // Compute backfilled due dates for tasks WITHOUT due_on. Distributes them
-// evenly working backward from (bonfireTask.due_on - 1 day). Tasks already
-// dated are left alone. Tasks with no Bonfire deadline (no submission task or
-// it has no due_on) are flagged but not backfilled (we don't know the anchor).
+// evenly working backward from (bonfire deadline - 1 day). Tasks already
+// dated are left alone. Bonfire task itself: if its title contains a date,
+// we use that as the anchor AND backfill its own due_on to that date.
 function computeBackfilledDates(bid, today) {
-  const result = { changed: [], skippedNoAnchor: false };
-  if (!bid.bonfireTask || !bid.bonfireTask.due_on) {
+  const result = { changed: [], skippedNoAnchor: false, anchorSource: null };
+
+  // Identify the deadline. Prefer the Bonfire task's due_on if set; otherwise
+  // parse from its content; otherwise scan all tasks for the latest date
+  // mentioned (typically the submission deadline is the latest date in the list).
+  let bonfireDeadline = null;
+  if (bid.bonfireTask) {
+    if (bid.bonfireTask.due_on) {
+      bonfireDeadline = bid.bonfireTask.due_on;
+      result.anchorSource = 'bonfire-due_on';
+    } else {
+      const parsed = parseDateFromContent(bid.bonfireTask.content);
+      if (parsed) {
+        bonfireDeadline = parsed;
+        result.anchorSource = 'bonfire-content';
+        // Also queue the Bonfire task itself for backfill (its own due_on)
+        result.changed.push({ todoId: bid.bonfireTask.id, content: bid.bonfireTask.content, due_on: parsed });
+      }
+    }
+  }
+  if (!bonfireDeadline) {
+    // Scan all open tasks for any date mention - use the latest as the deadline
+    const allDates = bid.open_todos.map((t) => parseDateFromContent(t.content)).filter(Boolean);
+    if (allDates.length > 0) {
+      bonfireDeadline = allDates.sort().pop();
+      result.anchorSource = 'task-content-scan';
+    }
+  }
+  if (!bonfireDeadline) {
     result.skippedNoAnchor = true;
     return result;
   }
-  const submissionTarget = addDays(bid.bonfireTask.due_on, -1); // 1 day buffer
-  const tasksNeedingDates = bid.open_todos.filter((t) => !t.due_on);
+  bid.parsedBonfireDeadline = bonfireDeadline;
+
+  const submissionTarget = addDays(bonfireDeadline, -1); // 1 day buffer
+  // Bonfire task already queued above if we parsed from its content.
+  // Don't backfill it again here.
+  const alreadyQueued = new Set(result.changed.map((c) => c.todoId));
+  const tasksNeedingDates = bid.open_todos.filter((t) => !t.due_on && !alreadyQueued.has(t.id));
   if (tasksNeedingDates.length === 0) return result;
 
   // Re-determine sequence: tasks WITHOUT a due date sit at the end of the
@@ -84,10 +134,12 @@ const HUMAN_DAYS_PER_TASK = 1.5;  // human throughput assumption
 const AI_DAYS_PER_TASK = 0.15;    // AI throughput (CB executes ~6-7 per day)
 
 function computeFeasibility(bid, today) {
-  if (!bid.bonfireTask || !bid.bonfireTask.due_on) {
-    return { score: null, tier: 'NO_DEADLINE', reason: 'No Bonfire submission task or no due date on it. Cannot compute.' };
+  // Deadline source priority: bonfire.due_on > parsed Bonfire content > parsedBonfireDeadline from scan
+  const deadline = bid.bonfireTask?.due_on || bid.parsedBonfireDeadline;
+  if (!deadline) {
+    return { score: null, tier: 'NO_DEADLINE', reason: 'No Bonfire submission task or no parseable date. Cannot compute.' };
   }
-  const daysToDeadline = Math.max(0, daysBetween(today, bid.bonfireTask.due_on) - 1); // -1 for our 1-day buffer
+  const daysToDeadline = Math.max(0, daysBetween(today, deadline) - 1); // -1 for our 1-day buffer
   const humansRemaining = bid.open_todos.filter((t) => t.tier === 'HUMAN').length;
   const aiRemaining = bid.open_todos.filter((t) => t.tier === 'AI').length;
   const eitherRemaining = bid.open_todos.filter((t) => t.tier === 'EITHER').length;
@@ -356,7 +408,7 @@ function renderHtml({ proj, bidData, msgs }) {
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
     <div>
       <div style="font-size:16px;font-weight:800;color:#1a365d">${escape(b.name)}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:2px">${b.open} open &middot; ${b.completed} done &middot; <a href="${b.app_url}" style="color:#2b6cb0">Open in Basecamp &rarr;</a>${b.bonfireTask && b.bonfireTask.due_on ? ` &middot; Bonfire deadline: ${b.bonfireTask.due_on}` : ''}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">${b.open} open &middot; ${b.completed} done &middot; <a href="${b.app_url}" style="color:#2b6cb0">Open in Basecamp &rarr;</a>${(b.bonfireTask?.due_on || b.parsedBonfireDeadline) ? ` &middot; Bonfire deadline: ${b.bonfireTask?.due_on || b.parsedBonfireDeadline}` : ''}</div>
     </div>
     <div>${scoreBadge(b.feasibility)}</div>
   </div>
@@ -460,7 +512,7 @@ ${[...bidData].sort((a, b) => (a.feasibility?.score ?? -1) - (b.feasibility?.sco
 <tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}">
 <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d">${escape(b.name)}</td>
 <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${scoreBadge(b.feasibility)}</td>
-<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${b.bonfireTask?.due_on || '<em>none</em>'}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${b.bonfireTask?.due_on || b.parsedBonfireDeadline || '<em>none</em>'}</td>
 <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${b.feasibility?.daysToDeadline ?? '-'}d</td>
 <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${b.feasibility?.requiredDays ?? '-'}d (H${b.feasibility?.humansRemaining ?? '-'} / AI${b.feasibility?.aiRemaining ?? '-'})</td>
 <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${escape(b.feasibility?.reason || '-')}</td>
