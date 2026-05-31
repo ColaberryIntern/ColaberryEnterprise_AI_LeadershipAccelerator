@@ -12,6 +12,24 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Weekly Cohort Performance Report — replaces Taiwo's manual Wednesday report (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-cohort
+- What changed:
+  - New Postgres table `cohort_report_snapshots` (snapshot_date / class_id / class_name / totals / median / tier counts / data_json) with unique constraint on (snapshot_date, class_id). Stores weekly state for week-over-week and trend comparison.
+  - New `backend/src/scripts/weeklyCohortReport.js`: queries CCPP `vw_ClassSignUps_EventProgress`, groups by ClassId, tiers students within each cohort by percentile (at-risk = bottom 25%, on-track = mid 50%, high = top 25%), snapshots to Postgres via docker-exec psql, renders self-contained interactive HTML.
+  - HTML report features: hero header, 6 overall KPI tiles (cohorts / students / high / on-track / at-risk / avg median %), three tabs (Cohorts / At-Risk Students / Trends), per-cohort cards with completion-distribution bar chart + tier-doughnut chart + drillable student table (sortable, color-tiered rows), at-risk tab with filterable flat list across all cohorts (clickable mailto links), trends tab with multi-line chart per cohort showing last 6 snapshots of at-risk/on-track/high. Dark mode toggle. Mobile responsive. Chart.js loaded from CDN (works when opened in a browser).
+  - Email body: Ali-personalized opener, top 3 at-risk cohorts table, cohorts-that-got-worse / cohorts-that-improved lists (when prior snapshot exists), interaction block with @CB syntax for next steps.
+  - Registered "Weekly Cohort Performance Report" in `automated_reports` with cron `0 13 * * 3` (Wed 8am CT DST). Added to crontab on prod VPS.
+  - Run recording: integrated `reportRunRecorder` so `/admin/reports` shows last_run_at / status.
+- Verification:
+  - Test run completed (`--test` flag). Result: `16 cohorts, 638 students`. HTML rendered to 164KB. Email landed (Mandrill id `6e18f157-...@colaberry.com`) with subject `[TEST] [Cohort Report] Week of May 31, 2026 - 16 cohorts, X at-risk`.
+  - First snapshot written for all 16 cohorts to `cohort_report_snapshots`. Week-over-week trends will populate starting next Wednesday.
+- Notes:
+  - "Interactive HTML" needs to be opened in a browser (Chrome / Edge / Safari) to load Chart.js from CDN. Most email clients won't render the JS inline. Drag the attachment to a browser window, or save and open.
+  - Tier thresholds (bottom/top 25%) are per-cohort relative. Ali can override by replying with preferred bands.
+  - Cohort lookback = 18 months from current date. Minimum cohort size = 5 students (filters out test classes).
+
 ### Execute-through-issues pass — assumptions locked + foundational drafts shipped (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-execute
