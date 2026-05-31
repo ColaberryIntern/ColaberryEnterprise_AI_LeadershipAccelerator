@@ -115,10 +115,19 @@ ${folderLink}
     const todos = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${list.id}/todos.json`);
     if (!todos || todos.length === 0) continue;
 
-    // Find tasks with dates + without
-    const withDate = todos.filter((t) => t.due_on);
-    const withoutDate = todos.filter((t) => !t.due_on);
-    if (withoutDate.length === 0) continue;
+    // Find tasks needing repair: drafted by CB (state file) AND have an
+    // obviously-wrong field (description shorter than 100 chars OR due_on is
+    // exactly the launch date — both signs of an earlier failed repair).
+    const needsRepair = todos.filter((t) =>
+      DRAFTED.has(String(t.id)) && (
+        (t.description || '').length < 200 ||
+        t.due_on === LAUNCH.targetLaunchDate
+      )
+    );
+    if (needsRepair.length === 0) continue;
+    // Treat repair candidates as "withoutDate" for distribution purposes
+    const withDate = todos.filter((t) => !needsRepair.includes(t) && t.due_on);
+    const withoutDate = needsRepair;
 
     const reviewerHandle = REVIEWER_BY_AREA[list.name] || 'ali';
     const reviewer = getByHandle(reviewerHandle);
