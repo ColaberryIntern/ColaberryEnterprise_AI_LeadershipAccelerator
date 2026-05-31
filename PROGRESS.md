@@ -12,6 +12,24 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts report v2 — sequence sort + next-step highlight + contrast fix (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-gov
+- What changed:
+  - Tasks sorted by `due_on` ASC (nulls last), then `created_at`. Bonfire-submission tickets (latest due date) naturally fall to the end of each bid's sequence.
+  - Each open task now carries: a due-date pill (red `OVERDUE <date>` / gold `DUE <date>` for ≤7 days / gray `due <date>` / black `NO DUE DATE`), a tier pill (HUMAN/AI/EITHER), a suggested owner.
+  - New per-bid "NEXT STEP WAITING ON YOU" callout - dark navy card with gold accent, big click-through button to the BC ticket. If the very-next task is AI-doable, a sub-callout notes CB System will pick it up before next report (auto-runner is v1.1).
+  - New "Each bid's next human step" cross-bid table sorted by due date so Ali can plough through bids in priority order in one pass.
+  - New "Overdue" section if any tasks are past due.
+  - Per-bid full task sequence shown with row numbers (1, 2, 3...), so visual scan immediately reveals what's first vs last.
+  - "For Ali - Big picture" navy block at the top: count of bids waiting on a human, overdue count, due-this-week count, missing-due-date count, plus the explanation that Bonfire submission is the terminal step.
+  - Fixed contrast (per Ali's screenshot): all table headers are navy `#1a365d` with white text (was light yellow `#fef3c7` background with light text). KPI tiles use higher-contrast color pairs. Due-date pills are colored by urgency.
+  - Removed emoji headers per house style.
+- Verification: ran on prod against live Gov Contracts data; email landed (Mandrill id `91549b37-...`).
+- Notes:
+  - AI auto-execution of next-AI-step is flagged but not yet implemented. v1.1 will add an auto-runner that picks up AI-doable tasks before the next daily report fires.
+  - Missing due dates surfaced as a fix-it call: `${count} tasks have no due date - assign one in Basecamp`.
+
 ### Cohort report v2 — active-class filter + Completed→IPBC tab (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-cohort2 / cohort3
