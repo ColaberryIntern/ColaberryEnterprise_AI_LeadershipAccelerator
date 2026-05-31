@@ -19,6 +19,112 @@ const nodemailer = require('nodemailer');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const recorder = require(path.resolve(__dirname, './lib/reportRunRecorder'));
 
+const APPLY_BACKFILL = process.argv.includes('--apply-backfill');
+const NO_EMAIL = process.argv.includes('--no-email');
+
+// ============================================================================
+// Backfill + scoring helpers
+// ============================================================================
+
+function dateToIso(d) { return d.toISOString().slice(0, 10); }
+function addDays(isoDate, n) { const d = new Date(isoDate); d.setUTCDate(d.getUTCDate() + n); return dateToIso(d); }
+function daysBetween(a, b) { return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000); }
+
+async function bcPut(p, body) {
+  const r = await fetch(p.startsWith('http') ? p : BASE + p, {
+    method: 'PUT',
+    headers: { ...H, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`PUT ${p} -> ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+// Compute backfilled due dates for tasks WITHOUT due_on. Distributes them
+// evenly working backward from (bonfireTask.due_on - 1 day). Tasks already
+// dated are left alone. Tasks with no Bonfire deadline (no submission task or
+// it has no due_on) are flagged but not backfilled (we don't know the anchor).
+function computeBackfilledDates(bid, today) {
+  const result = { changed: [], skippedNoAnchor: false };
+  if (!bid.bonfireTask || !bid.bonfireTask.due_on) {
+    result.skippedNoAnchor = true;
+    return result;
+  }
+  const submissionTarget = addDays(bid.bonfireTask.due_on, -1); // 1 day buffer
+  const tasksNeedingDates = bid.open_todos.filter((t) => !t.due_on);
+  if (tasksNeedingDates.length === 0) return result;
+
+  // Re-determine sequence: tasks WITHOUT a due date sit at the end of the
+  // current sequence. Distribute them BACKWARD from submissionTarget so the
+  // last task lands on submissionTarget, the second-to-last on
+  // (submissionTarget - 1 step), etc.
+  // Skip the bonfire task itself if it's in the list (it has a date already
+  // by definition, so it wouldn't be here).
+  const daysAvailable = Math.max(1, daysBetween(today, submissionTarget));
+  const step = Math.max(1, Math.floor(daysAvailable / tasksNeedingDates.length));
+
+  // We distribute by reverse-walking: the LAST task in tasksNeedingDates
+  // (closest to bonfire submission) gets submissionTarget. The earliest gets
+  // earliest available date (no earlier than today).
+  for (let i = 0; i < tasksNeedingDates.length; i++) {
+    const reverseIndex = tasksNeedingDates.length - 1 - i; // 0 = last task
+    const targetDate = addDays(submissionTarget, -reverseIndex * step);
+    // Don't backdate to before today
+    const today_str = today;
+    const finalDate = targetDate < today_str ? today_str : targetDate;
+    result.changed.push({ todoId: tasksNeedingDates[i].id, content: tasksNeedingDates[i].content, due_on: finalDate });
+  }
+  return result;
+}
+
+// Score each bid for "feasibility of submitting on time" 0-100.
+// Inputs: days remaining, human work remaining, AI work remaining, overdue count.
+// Tiers: 80+ ON_TRACK, 50-79 AT_RISK, <50 LIKELY_SCRAP.
+const HUMAN_DAYS_PER_TASK = 1.5;  // human throughput assumption
+const AI_DAYS_PER_TASK = 0.15;    // AI throughput (CB executes ~6-7 per day)
+
+function computeFeasibility(bid, today) {
+  if (!bid.bonfireTask || !bid.bonfireTask.due_on) {
+    return { score: null, tier: 'NO_DEADLINE', reason: 'No Bonfire submission task or no due date on it. Cannot compute.' };
+  }
+  const daysToDeadline = Math.max(0, daysBetween(today, bid.bonfireTask.due_on) - 1); // -1 for our 1-day buffer
+  const humansRemaining = bid.open_todos.filter((t) => t.tier === 'HUMAN').length;
+  const aiRemaining = bid.open_todos.filter((t) => t.tier === 'AI').length;
+  const eitherRemaining = bid.open_todos.filter((t) => t.tier === 'EITHER').length;
+
+  // Assume EITHER tasks take human time (conservative)
+  const humanWorkDays = (humansRemaining + eitherRemaining) * HUMAN_DAYS_PER_TASK;
+  const aiWorkDays = aiRemaining * AI_DAYS_PER_TASK;
+  // AI runs in parallel with human; effective required time = max
+  const requiredDays = Math.max(humanWorkDays, aiWorkDays);
+
+  let score;
+  let reason;
+  if (daysToDeadline === 0) {
+    score = bid.open === 0 ? 100 : 20;
+    reason = bid.open === 0 ? 'Deadline today, no work left. Submit.' : 'Deadline today with work remaining. Probably miss.';
+  } else if (requiredDays === 0) {
+    score = 100;
+    reason = 'No work remaining. Bid ready to submit.';
+  } else {
+    const ratio = requiredDays / daysToDeadline;
+    if (ratio <= 0.4) { score = 95; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToDeadline} days available. Tons of slack.`; }
+    else if (ratio <= 0.6) { score = 85; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToDeadline} days. Comfortable.`; }
+    else if (ratio <= 0.85) { score = 70; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToDeadline} days. Tight but doable.`; }
+    else if (ratio <= 1.15) { score = 55; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToDeadline} days. Marginal, no buffer.`; }
+    else if (ratio <= 1.5) { score = 35; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToDeadline} days. Likely to miss.`; }
+    else { score = 15; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToDeadline} days. Very unlikely. Consider scrap.`; }
+  }
+
+  // Overdue penalty: -5 per overdue task
+  const overdueCount = bid.open_todos.filter((t) => t.due_on && t.due_on < today).length;
+  score = Math.max(0, score - overdueCount * 5);
+  if (overdueCount > 0) reason += ` ${overdueCount} task${overdueCount === 1 ? '' : 's'} already overdue (-${overdueCount * 5} pts).`;
+
+  const tier = score >= 80 ? 'ON_TRACK' : score >= 50 ? 'AT_RISK' : 'LIKELY_SCRAP';
+  return { score, tier, reason, daysToDeadline, humansRemaining, aiRemaining, requiredDays: +requiredDays.toFixed(1) };
+}
+
 const PROJECT_ID = 47346103;
 const RECIPIENT = process.env.GOV_REPORT_RECIPIENT || 'ali@colaberry.com';
 // Phone-accessible secondary recipient — independent of Inbox COS / work email filtering.
@@ -139,6 +245,57 @@ async function build() {
     });
   }
 
+  // ------- BACKFILL DUE DATES -------
+  const today = new Date().toISOString().slice(0, 10);
+  const backfillSummary = [];
+  for (const bid of bidData) {
+    const plan = computeBackfilledDates(bid, today);
+    bid.backfillPlan = plan;
+    if (plan.changed.length === 0) continue;
+
+    // Annotate the in-report tasks with the computed due_on so the email shows
+    // the backfilled dates even before Basecamp is written.
+    const planById = new Map(plan.changed.map((c) => [c.todoId, c.due_on]));
+    for (const t of bid.open_todos) {
+      if (planById.has(t.id)) {
+        t.due_on = planById.get(t.id);
+        t.backfilled = true;
+      }
+    }
+
+    // Write to Basecamp if --apply-backfill is set
+    if (APPLY_BACKFILL) {
+      let applied = 0; let failed = 0;
+      for (const c of plan.changed) {
+        try {
+          await bcPut(`/buckets/${PROJECT_ID}/todos/${c.todoId}.json`, { due_on: c.due_on });
+          applied++;
+        } catch (e) { failed++; console.warn(`  backfill fail for ${c.todoId}: ${e.message}`); }
+      }
+      backfillSummary.push({ bid: bid.name, applied, failed });
+      console.log(`  backfilled ${applied}/${plan.changed.length} dates on ${bid.name} (${failed} failed)`);
+    } else {
+      backfillSummary.push({ bid: bid.name, computedButNotApplied: plan.changed.length });
+    }
+
+    // Re-sort after backfill (now most tasks have dates)
+    bid.open_todos.sort((a, b) => {
+      if (a.due_on && b.due_on) return a.due_on.localeCompare(b.due_on);
+      if (a.due_on && !b.due_on) return -1;
+      if (!a.due_on && b.due_on) return 1;
+      return (a.created_at || '').localeCompare(b.created_at || '');
+    });
+    bid.nextStep = bid.open_todos[0] || null;
+    bid.nextHumanStep = bid.open_todos.find((t) => t.tier === 'HUMAN') || null;
+  }
+
+  // ------- FEASIBILITY SCORING -------
+  for (const bid of bidData) {
+    bid.feasibility = computeFeasibility(bid, today);
+  }
+  console.log('Feasibility:', bidData.map((b) => `${b.name}: ${b.feasibility.tier} (${b.feasibility.score})`).join(' | '));
+  console.log('Backfill:', JSON.stringify(backfillSummary));
+
   // Recent message board for context
   const mb = proj.dock.find(d => d.name === 'message_board');
   const msgs = mb ? (await bcGetAll(`/buckets/${PROJECT_ID}/message_boards/${mb.id}/messages.json`)).slice(0, 8) : [];
@@ -182,6 +339,14 @@ function renderHtml({ proj, bidData, msgs }) {
     return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#f1f5f9;color:#334155;letter-spacing:0.5px">EITHER</span>';
   };
 
+  // Feasibility badge HTML
+  const scoreBadge = (feas) => {
+    if (!feas || feas.tier === 'NO_DEADLINE') return `<span style="display:inline-block;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:700;background:#1c1917;color:#fbbf24;letter-spacing:0.5px">NO DEADLINE</span>`;
+    const color = feas.tier === 'ON_TRACK' ? { bg: '#dcfce7', fg: '#14532d' } : feas.tier === 'AT_RISK' ? { bg: '#fef3c7', fg: '#78350f' } : { bg: '#fee2e2', fg: '#7f1d1d' };
+    const label = feas.tier.replace('_', ' ');
+    return `<span style="display:inline-block;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:700;background:${color.bg};color:${color.fg};letter-spacing:0.5px">${label} &middot; ${feas.score}</span>`;
+  };
+
   const bidCards = bidData.map(b => {
     const nextHuman = b.nextHumanStep;
     const nextStep = b.nextStep;
@@ -191,9 +356,11 @@ function renderHtml({ proj, bidData, msgs }) {
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
     <div>
       <div style="font-size:16px;font-weight:800;color:#1a365d">${escape(b.name)}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:2px">${b.open} open &middot; ${b.completed} done &middot; <a href="${b.app_url}" style="color:#2b6cb0">Open in Basecamp &rarr;</a>${b.bonfireTask ? ` &middot; Bonfire deadline: ${b.bonfireTask.due_on || 'TBD'}` : ''}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">${b.open} open &middot; ${b.completed} done &middot; <a href="${b.app_url}" style="color:#2b6cb0">Open in Basecamp &rarr;</a>${b.bonfireTask && b.bonfireTask.due_on ? ` &middot; Bonfire deadline: ${b.bonfireTask.due_on}` : ''}</div>
     </div>
+    <div>${scoreBadge(b.feasibility)}</div>
   </div>
+  ${b.feasibility && b.feasibility.score != null ? `<div style="margin-top:8px;padding:8px 12px;background:${b.feasibility.tier === 'LIKELY_SCRAP' ? '#fef2f2' : b.feasibility.tier === 'AT_RISK' ? '#fffbeb' : '#f0fdf4'};border-radius:6px;font-size:11px;color:#475569"><strong>Feasibility:</strong> ${escape(b.feasibility.reason)}</div>` : ''}
 
   ${b.open === 0 ? '<div style="margin-top:10px;color:#16a34a;font-size:13px;font-weight:600">No open todos. Clean.</div>' : nextHuman ? `
   <div style="margin-top:14px;background:#1c1917;color:white;padding:14px 16px;border-radius:8px;border-left:4px solid #fbbf24">
@@ -224,7 +391,7 @@ function renderHtml({ proj, bidData, msgs }) {
       <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">
         <a href="${t.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600">${escape(t.content)}</a>
       </td>
-      <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}</td>
+      <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}${t.backfilled ? '<div style="font-size:9px;color:#94a3b8;margin-top:2px;font-style:italic">backfilled</div>' : ''}</td>
       <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td>
       <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${escape(t.humanSuggestion || (t.tier === 'AI' ? 'CB System' : t.assignees))}</td>
     </tr>`;
@@ -273,9 +440,33 @@ function renderHtml({ proj, bidData, msgs }) {
 Ali, ${bidsWaitingOnHuman.length === 0 ? 'no bids are currently waiting on a human action. All next steps are AI-doable - CB System will execute before the next report.' : `<strong>${bidsWaitingOnHuman.length} of ${bidData.length} active bids ${bidsWaitingOnHuman.length === 1 ? 'is' : 'are'} waiting on you</strong>.`}
 ${overdueTasks.length > 0 ? ` <strong style="color:#fca5a5">${overdueTasks.length} task${overdueTasks.length === 1 ? '' : 's'} ${overdueTasks.length === 1 ? 'is' : 'are'} overdue.</strong>` : ''}
 ${dueThisWeek.length > 0 ? ` <strong style="color:#fde68a">${dueThisWeek.length} due this week.</strong>` : ''}
-${totalNoDueDate > 0 ? ` <span style="color:#cbd5e0">${totalNoDueDate} tasks have no due date - assign one in Basecamp.</span>` : ''}
-Each bid's next-human-step is highlighted below with a click-through. Tasks are sorted in execution order (Bonfire submission, the terminal action, falls naturally to the end).
+Each bid now has a <strong>feasibility score (0-100)</strong> showing likelihood of submitting on time given days remaining vs work remaining. Use it to decide scrap-or-keep.
 </div>
+</td></tr>
+
+<tr><td style="padding:20px 32px 0">
+<h2 style="color:#1a365d;font-size:18px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Feasibility scorecard</h2>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0">
+<thead><tr style="background:#1a365d;color:white">
+<th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">BID</th>
+<th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">SCORE</th>
+<th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">DEADLINE</th>
+<th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">DAYS</th>
+<th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">WORK LEFT</th>
+<th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">REASON</th>
+</tr></thead>
+<tbody>
+${[...bidData].sort((a, b) => (a.feasibility?.score ?? -1) - (b.feasibility?.score ?? -1)).map((b, i) => `
+<tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}">
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d">${escape(b.name)}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${scoreBadge(b.feasibility)}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${b.bonfireTask?.due_on || '<em>none</em>'}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${b.feasibility?.daysToDeadline ?? '-'}d</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${b.feasibility?.requiredDays ?? '-'}d (H${b.feasibility?.humansRemaining ?? '-'} / AI${b.feasibility?.aiRemaining ?? '-'})</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${escape(b.feasibility?.reason || '-')}</td>
+</tr>`).join('')}
+</tbody></table>
+<div style="margin-top:8px;font-size:11px;color:#64748b">Score: <strong>80+ ON TRACK</strong>, 50-79 AT RISK, &lt;50 LIKELY SCRAP. Assumes ~1.5 days per human task, ~0.15 days per AI task. -5 per overdue.</div>
 </td></tr>
 
 <tr><td style="padding:24px 32px;color:#2d3748;font-size:14px;line-height:1.65">
