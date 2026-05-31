@@ -55,7 +55,11 @@ async function bcPost(p, body) {
 async function bcPut(p, body) {
   const r = await fetch(p.startsWith('http') ? p : `${BASE}${p}`, { method: 'PUT', headers: H(), body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`PUT ${p} -> ${r.status} ${await r.text()}`);
-  return r.json();
+  // 204 No Content (Basecamp's response for status-changes like trash) has no body.
+  if (r.status === 204) return { status: 204 };
+  const text = await r.text();
+  if (!text) return { status: r.status };
+  try { return JSON.parse(text); } catch { return { status: r.status, raw: text }; }
 }
 
 // =============================================================================
