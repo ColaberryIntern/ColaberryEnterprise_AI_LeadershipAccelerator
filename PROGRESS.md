@@ -12,6 +12,40 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Launch PMO email/MB v2: Gov Contracts robustness + AI completion log + per-area Next Human (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- Context: Ali asked the Launch PMO email to be as robust as Gov Contracts: per-area next-human-step, AI vs HUMAN visibility on every task, per-area feasibility scoring, plus a list of automated tasks CB has been completing.
+- What changed (in `backend/src/scripts/lib/launchPmoDailyUpdate.js`):
+  - **Tier classification per task** via `tierOf(todo)` reading the "AI TASK" / "HUMAN TASK" badge embedded in the task description by the v2 generator. Fallback to assignee=CB System → AI.
+  - **Per-area feasibility scoring** (`computeAreaFeasibility`) mirroring Gov Contracts pattern. Work-days estimate = humans*1.5d + AI*0.15d + either*0.8d. Compared to days-to-launch. Score 0-100 with ON_TRACK / AT_RISK / LIKELY_SCRAP tier. Reason string surfaces in the email.
+  - **State pull enrichment**: every area gets `openTodos` (full list, due-sorted), `nextStep`, `nextHumanStep`, `nextAiStep`, `humanCount`, `aiCount`, `eitherCount`, `feasibility`. State rollup includes `totalHuman`, `totalAi`, `totalEither`, `totalOverdue`.
+  - **AI completion log** via `buildAiCompletionLog`. Two sources:
+    1. `tmp/launch-pmo-ai-runner-state.json` — every task CB has drafted (with timestamp, briefs used, char count)
+    2. BC `completed_todos` filtered to last 7 days + tier=AI (or CB-assigned) — tasks actually marked complete
+  - **Rich render helpers** (Gov Contracts vocabulary): `tierPill` (yellow HUMAN / blue AI / grey EITHER), `duePill` (red OVERDUE / gold DUE / grey future), `scoreBadge` (green ON TRACK / yellow AT RISK / red LIKELY SCRAP), `renderAreaCard` (full per-area card: feasibility, Next Human callout with Open Ticket button, Next AI hint, blocked-here count, full open task sequence table with all pills).
+  - **Email body completely restructured** (~350 lines new HTML):
+    - Header banner: days-to-launch + 4 KPI counts + nurture posts
+    - "For Ali big picture" dark block: gpt-4o exec summary + critical path
+    - YOUR TURN banner (single next decision)
+    - 4-up KPI cards: Human-needed / AI-doable / Overdue / Blocked
+    - Feasibility scorecard table (per-area score sorted lowest first)
+    - "Next human step blocking each area" table (the key new section per Ali's ask)
+    - Per-area detail cards (10 cards, full task sequence each)
+    - "AI work CB has drafted" table (last 12 from runner state)
+    - "AI tasks marked complete (last 7d)" table (BC truth)
+    - Blocked / Nurture / Escalations / Risks retained
+  - **MB post rebadged** "Launch Readiness Dashboard - YYYY-MM-DD" (was "Human Action Queue"). Condensed version of the email pattern.
+- Verification:
+  - Heartbeat fired with new render: 113 open tasks, 41 days to launch, 19 blocked (more rigorous classification now catches more blockers including Review/Approve→Draft chains).
+  - Email landed (`<0b763719-...`), MB post created (id 9946597160) at https://3.basecamp.com/3945211/buckets/47502609/messages/9946597160.
+  - Heuristic confirms: the AI runner state file logged 12 first-pass deliverables from earlier tonight, all show up in the "AI work CB has drafted" table.
+  - blocked_count: 19 vs nurture_posted: 0 — proper inverse signal (blocked tasks don't get nurtured; they wait on upstream).
+- What's now true for daily ops:
+  - The daily 8am CDT email is the project's complete state of the world: every area's next human step, every area's score + reason, every task's tier, every CB draft from the prior day, every recent AI completion, every escalation, every blocker.
+  - The MB post mirrors the same dashboard at the project level.
+  - Both are auto-generated; both update tomorrow morning at 13:00 UTC.
+
 ### Project kickoff: blocker detection + AI auto-runner + missing upstreams + nightly cron (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
