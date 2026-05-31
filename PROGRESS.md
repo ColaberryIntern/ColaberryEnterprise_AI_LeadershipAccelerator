@@ -12,6 +12,39 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Launch PMO live: project 47502609 fully populated + daily heartbeat (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- Context: Ali sent the "CB SYSTEM PROGRAM LAUNCH ORCHESTRATOR" system prompt (comment 9946342528 on todo 9945833396), created an empty Basecamp project (47502609 "AI Systems Architect Accelerator"), and authorized "if you don't have the capability of something, then build it." Per his direction "Make sure you are using the requirements document and all notes and documents in the original task when building out the project plan", this build pulls from the full `docs/training-program-2026-q3/` set: TRAINING_INTEGRATION_PLAN.md (master backlog, 410 lines), ASSUMPTIONS_LOG.md (17 locked decisions), TWC_INTENSIVE_OUTCOMES.md, TEAM_LEAD_JOB_DESCRIPTIONS.md.
+- What changed (in build order):
+  - `backend/src/scripts/lib/launchPmoTeam.js` (new) - team identity map. 10 entries with handle/displayName/basecampPersonId/email/role/hats. 10 resolved (Dheeraj Garg=Dhee confirmed by Ali); 1 BLOCKED (Roselen - Ali to provision on BC).
+  - `backend/src/scripts/lib/launchPmoOps.js` (new) - BC write primitives. `createTodolist`, `createTodo`, `postMessage`, `addPeopleToProject`, `createScheduleEntry`, `getDock`, paginated `bcGetAll`. All idempotent (existing-by-name returns existing, updates description on conflict).
+  - `backend/src/scripts/setupLaunchProject.js` (new) - one-shot setup. Granted 8 new members (Ali + CB were already on), created 10 area todolists with DoD-driven descriptions (Curriculum, Website-training, Website-enterprise, Marketing, AI Systems, Open Houses & Events, Sales & Admissions, TWC Compliance, Approval Queues, Launch Readiness Dashboard), posted kickoff Message Board update (id 9946469043).
+  - `backend/src/scripts/lib/launchPmoDailyUpdate.js` (new) - daily heartbeat. Reads project state (paginated todos per list, completed + open, due dates), computes area readiness % + escalations per Ali's 1/3/5/7-day rules, builds HUMAN ACTION QUEUE + AI queue, calls gpt-4o for executive summary + risks + critical-path, emails Ali via Mandrill, posts daily MB Update.
+  - `backend/src/scripts/runLaunchPmoDailyUpdate.js` (new) - cron entry. `--force` to bypass weekday check for testing.
+  - `backend/src/scripts/lib/launchPmoTaskGenerator.js` (new) - per-area task generator. gpt-4o with strict JSON schema. Output: 6-12 tasks per area with content/note/owner_handle/due_on/tier. Hard rules: no em-dashes, Mon-Fri only, DoD-formatted notes, real owners from roster, working backward from 2026-07-11.
+  - `backend/src/scripts/generateLaunchTasks.js` (new) - runner. Loads integration plan + assumptions + Ali's latest directives, slices the integration plan per area (Section 3.x mapping), calls generator, writes via createTodo (idempotent: skip same content).
+- Verification:
+  - Setup live run: 10/10 todolists created in project 47502609. Kickoff message posted (https://app.basecamp.com/3945211/buckets/47502609/messages/9946469043). 8 team members granted access.
+  - Task generation live run: 88 todos created across all 10 areas. Distribution: Curriculum 10, training.colaberry.com 8, enterprise.colaberry.ai 12, Marketing 10, AI Systems 9, Open Houses 8, Sales/Admissions 8 (2 unassigned for Roselen), TWC Compliance 9, Approval Queues 8, Launch Readiness Dashboard 6.
+  - Sample mappings: AI Systems area pulls tasks for Anthropic L1-L3 (Section 3.3) + 4 agents (Section 3.4) + GitHub integration (Section 3.6), each with due dates back-distributed from launch. Curriculum area has Week 1/2/3 module drafts (CB) -> Swati reviews -> Ali approves cadence. Marketing has strategy-by-2026-06-06 + Mailchimp campaign by 2026-06-12 + viral video scripts by 2026-06-12 per Ali's directives.
+  - Daily heartbeat smoke (--force): email sent (mid `<25a8df59-...`), MB post landed (id 9946474466). State: 0% readiness, 88 open, 0 escalations, 41 days to launch.
+  - Cron installed: `0 13 * * 1-5` (Mon-Fri 8am CDT / 13:00 UTC; adjust to 14:00 UTC when CDT->CST in Nov).
+- Mistakes + fixes:
+  - Mandrill preflight tripped on "Ali Muwwakkil" appearing 3 times in HTML (assignee columns). Fixed: `normalizeAliName()` collapses "Ali Muwwakkil" -> "Ali" before validateBeforeSend, same pattern as the earlier dailyClientProjectsReport fix.
+- What now runs autonomously:
+  - Every Mon-Fri 8am CDT: CB pulls project 47502609 state, computes area readiness, generates executive update via gpt-4o, emails Ali + alimuwwakkil@gmail.com, posts "Human Action Queue - YYYY-MM-DD" on the project MB.
+  - The inbound dispatcher already handles Ali's @CB mentions on any task in the project (pagination fix from earlier today means todos past position 15 are scanned correctly).
+- What still needs Ali action:
+  - **Provision Roselen on Basecamp** (account 3945211). Until then, sales/admissions tasks involving direct customer conversation stay assigned to "unassigned" or Taiwo (admissions ops).
+  - **Override any of the 17 locked assumptions in ASSUMPTIONS_LOG.md** if any are wrong. Override format: reply on todo 9945833396 with "A3: actually use X because Y" OR `@CB System override assumption A3 to X`.
+  - **Anthropic Partner Network status** - deadline 2026-06-12. Already has its own countdown report running per prior work.
+- What's next (deferred to subsequent sessions):
+  - Auto-task-regeneration loop: when an integration plan section updates, regenerate the area's tasks. Currently the generator runs on demand only.
+  - Per-area review pass: spot-check the generated tasks for any that fold-into-each-other or are missing dependencies.
+  - Schedule entries on the project calendar for Open House recurring events + 41-day-plan milestones.
+  - Cohort-specific Basecamp project per cohort (per the integration plan note about every cohort getting its own BC project).
+
 ### Inbound Dispatcher: backscan audit + skip-stale handling (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
