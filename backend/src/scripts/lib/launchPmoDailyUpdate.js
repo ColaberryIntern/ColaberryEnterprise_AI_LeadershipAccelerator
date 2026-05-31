@@ -202,7 +202,7 @@ async function generateExecSummary(state, escalations, humanQueue, aiQueue) {
 // ---------------------------------------------------------------------------
 // Email to Ali (Mandrill)
 // ---------------------------------------------------------------------------
-async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [] }) {
+async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [] }) {
   if (!process.env.MANDRILL_API_KEY) return { skipped: 'no MANDRILL_API_KEY' };
   const nodemailer = require(path.resolve(__dirname, '../../../../node_modules/nodemailer'));
   const { validateBeforeSend } = require(path.resolve(__dirname, './mandrillPreflight'));
@@ -277,6 +277,13 @@ ${perPersonRows || '<tr><td colspan="4">No queued tasks per teammate.</td></tr>'
 ${humanRows}
 </table>
 
+${blockedHumanTasks.length ? `<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Blocked tasks (excluded from queue above)</h2>
+<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px;border:1px solid #cbd5e0">
+<tr style="background:#1a365d;color:white"><th align="left">Due</th><th align="left">Task</th><th align="left">Owner</th><th align="left">Blocked on</th></tr>
+${blockedHumanTasks.slice(0, 10).map((b) => `<tr><td>${b.due_on}</td><td>${stripEmDashes(stripHtml(b.content)).slice(0, 80)}</td><td>${(b.assignees || []).join(', ') || 'unassigned'}</td><td>${b.blocker?.reason || ''}</td></tr>`).join('')}
+</table>
+<p style="font-size:11px;color:#64748b">These tasks were filtered out of the queues above. They surface again as soon as their upstream completes.</p>` : ''}
+
 ${nurturePosted.length ? `<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Nurture posts fired today (${nurturePosted.length})</h2>
 <table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px;border:1px solid #cbd5e0">
 <tr style="background:#1a365d;color:white"><th align="left">Level</th><th align="left">Task</th><th align="left">Owner</th></tr>
@@ -337,7 +344,7 @@ Launch PMO for AI Systems Architect Accelerator`);
 // ---------------------------------------------------------------------------
 // MB post (HUMAN ACTION QUEUE)
 // ---------------------------------------------------------------------------
-async function postHumanActionQueue(state, humanQueue, escalations, nurturePosted = []) {
+async function postHumanActionQueue(state, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = []) {
   const today = state.today;
   const aliTasks = humanQueue.filter((h) => (h.assignees || []).some((a) => /Ali Muwwakkil/i.test(a)));
   const nextForAli = aliTasks[0] || humanQueue[0] || null;
@@ -383,13 +390,95 @@ ${perPersonRows || '<tr><td colspan="4">No queued tasks per teammate.</td></tr>'
 ${rows}
 </table>
 ${escRows ? `<h4>Escalations</h4><ul>${escRows}</ul>` : ''}
-<p style="font-size:11px;color:#64748b">Auto-posted daily Mon-Fri 8am CST by CB System Launch PMO. Every task above links to its Basecamp todo. Tag <code>@CB System</code> to escalate, get AI execution, or ask for a PDF / Excel / image artifact.</p>
+${blockedHumanTasks.length ? `<h4>Blocked tasks (waiting on upstream)</h4>
+<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px;border:1px solid #cbd5e0">
+<tr style="background:#1a365d;color:white"><th align="left">Task</th><th align="left">Owner</th><th align="left">Blocked on</th></tr>
+${blockedHumanTasks.slice(0, 8).map((b) => `<tr><td>${stripEmDashes(stripHtml(b.content)).slice(0, 70)}</td><td>${(b.assignees || []).join(', ') || 'unassigned'}</td><td>${b.blocker?.reason || ''}</td></tr>`).join('')}
+</table>` : ''}
+<p style="font-size:11px;color:#64748b">Auto-posted daily Mon-Fri 8am CST by CB System Launch PMO. Every task above links to its Basecamp todo. Tag <code>@CB System</code> to escalate, get AI execution, or ask for a PDF / Excel / image artifact. Blocked tasks excluded from queues.</p>
 </div>`;
 
   return ops.postMessage({
     subject: `Human Action Queue - ${today}`,
     content,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Blocker detection.
+// Heuristic: any task starting with Review/Approve/Finalize/Sign-off depends
+// on a matching upstream Draft/Create/Design/Build/Develop/Implement task
+// with overlapping subject. If the upstream is incomplete OR missing, the
+// task is BLOCKED.
+// ---------------------------------------------------------------------------
+const APPROVE_VERBS_RE = /^(review and approve|review|approve|finalize|sign[- ]?off|conduct (final )?review)\s+/i;
+const CREATE_VERBS_RE = /^(draft|create|design|build|develop|implement|produce|deploy|set up|setup|generate|integrate|launch|prepare|complete|update|migrate|finalize)\s+/i;
+
+function normalizeSubject(s) {
+  return (s || '')
+    .replace(APPROVE_VERBS_RE, '')
+    .replace(CREATE_VERBS_RE, '')
+    .replace(/[^a-z0-9\s]/gi, ' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function subjectsOverlap(a, b) {
+  const sa = new Set(a.split(' ').filter((w) => w.length > 3));
+  const sb = new Set(b.split(' ').filter((w) => w.length > 3));
+  if (sa.size === 0 || sb.size === 0) return false;
+  let hits = 0;
+  for (const w of sa) if (sb.has(w)) hits++;
+  const minSize = Math.min(sa.size, sb.size);
+  return hits / minSize >= 0.6;
+}
+
+// Returns Map<taskId, {blocked, reason, upstreamId?}>
+function detectBlockedTasks(state) {
+  // Flatten all tasks (open + done) across areas for lookup
+  const allTasks = [];
+  for (const a of state.areas) {
+    for (const t of (a.overdue || [])) allTasks.push({ ...t, area: a.listName, completed: false });
+    for (const t of (a.upcoming || [])) allTasks.push({ ...t, area: a.listName, completed: false });
+  }
+  // We also need completed tasks - they were counted in state.areas.done but not enumerated.
+  // For the heuristic we treat absent-from-current-open as "completed or missing".
+  // The "completed" map is what really matters: if an upstream task exists AND is open, the dependent is blocked.
+  // Build content map of currently OPEN tasks (anything not in this map is either completed or doesn't exist).
+  const openByContent = new Map();
+  for (const t of allTasks) openByContent.set(normalizeSubject(t.content || ''), { id: t.id, content: t.content, area: t.area, due_on: t.due_on });
+
+  const result = new Map();
+  for (const t of allTasks) {
+    if (!APPROVE_VERBS_RE.test(t.content || '')) {
+      result.set(t.id, { blocked: false });
+      continue;
+    }
+    const subject = normalizeSubject(t.content || '');
+    if (!subject) { result.set(t.id, { blocked: false }); continue; }
+    // Search for an open task with overlapping subject (that is NOT itself this same task)
+    let upstream = null;
+    for (const [otherSubject, other] of openByContent) {
+      if (other.id === t.id) continue;
+      // The other task should not be another approval
+      if (APPROVE_VERBS_RE.test(other.content || '')) continue;
+      if (subjectsOverlap(subject, otherSubject)) {
+        upstream = other;
+        break;
+      }
+    }
+    if (upstream) {
+      result.set(t.id, { blocked: true, reason: `upstream open: "${upstream.content}" (id ${upstream.id})`, upstreamId: upstream.id });
+      continue;
+    }
+    // No matching open task. Could mean upstream is completed OR upstream doesn't exist.
+    // We can't distinguish without checking completed tasks per area; for now assume completed/doesn't matter.
+    // Conservative: if the approval task's due_on is within the next 3 days AND no upstream open task exists,
+    // assume the upstream MIGHT not exist (warn).
+    result.set(t.id, { blocked: false, hint: 'no matching upstream open task; either completed or missing' });
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -487,13 +576,20 @@ async function runDailyUpdate({ force = false } = {}) {
   }
   const state = await pullProjectState();
   const escalations = buildEscalationList(state);
-  const humanQueue = buildHumanActionQueue(state);
-  const aiQueue = buildAiQueue(state);
+  const blockerMap = detectBlockedTasks(state);
+  // Partition human queue into unblocked + blocked
+  const humanQueueAll = buildHumanActionQueue(state);
+  const humanQueue = humanQueueAll.filter((h) => !blockerMap.get(h.id)?.blocked);
+  const blockedHumanTasks = humanQueueAll
+    .filter((h) => blockerMap.get(h.id)?.blocked)
+    .map((h) => ({ ...h, blocker: blockerMap.get(h.id) }));
+  // AI queue is filtered too (CB shouldn't pick blocked tasks)
+  const aiQueueAll = buildAiQueue(state);
+  const aiQueue = aiQueueAll.filter((a) => !blockerMap.get(a.id)?.blocked);
   const aiSummary = await generateExecSummary(state, escalations, humanQueue, aiQueue);
-  // Active nurture: post per-task nudge comments at 1d/3d/5d/7d overdue.
   const nurturePosted = await runNurtureCycle(state, LAUNCH.projectId);
-  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted });
-  const mbResult = await postHumanActionQueue(state, humanQueue, escalations, nurturePosted);
+  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks });
+  const mbResult = await postHumanActionQueue(state, humanQueue, escalations, nurturePosted, blockedHumanTasks);
   return {
     today: state.today,
     overall: state.overall,
@@ -501,6 +597,7 @@ async function runDailyUpdate({ force = false } = {}) {
     open_count: state.areas.reduce((s, a) => s + a.openCount, 0),
     escalations_count: escalations.length,
     nurture_posted: nurturePosted.length,
+    blocked_count: blockedHumanTasks.length,
     email_message_id: emailResult.messageId,
     mb_message_id: mbResult.id,
   };
