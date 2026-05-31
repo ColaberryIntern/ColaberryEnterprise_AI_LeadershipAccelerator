@@ -12,6 +12,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Outstanding-issues cleanup pass — run history + BLACK pre-review + roster reconciliation + decision queue (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-cleanup
+- What changed:
+  - New `backend/src/scripts/lib/reportRunRecorder.js`: tiny helper that shells out to `docker exec accelerator-db psql` to record run start/end/status/messageIds/recipients to `automated_report_runs` table. Soft-fails if recording fails (never breaks the underlying report).
+  - Wrapped 3 most-active report scripts (`weeklyInternReport.js`, `dailyInternNudges.js`, `dailyGovContractsAnalysis.js`) with the recorder. /admin/reports now shows real run history.
+  - Registered "Daily Gov Contracts Analysis" in `automated_reports` (was missing). Now 8 reports tracked in DB.
+  - New `backend/src/scripts/sendBlackPreReview.js`: enriches each BLACK-level intern with last 3 of their own comments (when, on what todo, what they said) + CCPP candidate match (InternID, active status, other near-matches) + inlined `confirmInternExit.js` CLI pre-filled with the InternID. Single email gives Ali everything to approve/skip each BLACK in one pass.
+  - New `backend/src/scripts/sendRosterMismatch.js`: hand-off-ready CCPP reconciliation. List A = BC-active with weekly activity but not in CCPP active roster (16 people). List B = CCPP-active with no BC project (10 people). Each row includes likely CCPP match (fuzzy lookup), suggested action, and the CCPP SQL pattern to backfill `InternBaseCampAlis`.
+  - New `backend/src/scripts/sendDecisionQueue.js`: consolidated Decision Queue email. 13 outstanding decisions across the session, grouped by deadline (Immediate / Jun 6 / Jun 13 / Jul 4 / Operational / Strategic). Per decision: title, deadline, why-it-matters, my recommendation, exact action to take.
+- Verification:
+  - Recorder smoke: ran weekly intern report; `automated_reports.last_run_at` and `last_status` populated for the first time.
+  - BLACK pre-review email landed (Mandrill id `862b5983-...`). 7 BLACK people enriched.
+  - Roster reconciliation email landed (Mandrill id `e4272693-...`). 16 BC-only + 10 CCPP-only surfaced.
+  - Decision queue email landed (Mandrill id `51f371ba-...`). 13 decisions across 6 buckets.
+- Notes:
+  - Bulk-email-reply parser (one of Ali's earlier follow-up items) intentionally NOT built in this pass. Medium-complexity feature; better designed standalone. Documented as remaining follow-up.
+  - Unified DB-driven runner remains blocked by docker network isolation; deferred. The recorder pattern (docker-exec out to psql) is a viable workaround if we want to revive it later.
+
 ### Training program v1 package — AI Systems Architect Accelerator critique-ready deliverables (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-training
