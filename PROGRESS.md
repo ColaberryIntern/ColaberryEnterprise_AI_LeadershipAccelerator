@@ -12,6 +12,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts v3 — feasibility scoring + due-date backfill (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-gov-score
+- What changed:
+  - Per-bid feasibility score 0-100 with tier badge (ON TRACK / AT RISK / LIKELY SCRAP). Inputs: days to Bonfire deadline (with 1-day buffer), human tasks remaining (~1.5 days throughput each), AI tasks remaining (~0.15 days each, parallel with human), overdue count (-5 each). Tiers: 80+ ON TRACK, 50-79 AT RISK, <50 LIKELY SCRAP.
+  - Backfilled 70 due dates to Basecamp (14 per bid × 5 bids) via PUT `/buckets/<b>/todos/<id>.json`. Dates distributed evenly working backward from (Bonfire deadline - 1 day). Idempotent: only writes if `due_on` is currently null.
+  - Bonfire deadline detection: try `bonfireTask.due_on` → parse from Bonfire task title (`/(\d{4})-(\d{2})-(\d{2})/` plus US `MM/DD/YYYY` fallback) → scan all task content for any date and use the latest. Almost all Gov Contracts tasks had the date in the title not in due_on.
+  - New "Feasibility scorecard" section at top of email - sortable by score, lowest-first so worst-bid is visible immediately. Each row: bid, score badge, deadline, days-to-go, work-left breakdown (H/AI counts), reason text.
+  - Each bid card now shows its score badge + a reason line explaining feasibility (e.g., "21 work-days vs 22 days available. Marginal, no buffer.").
+  - Tasks the script backfilled annotated with a small "backfilled" label under their due-date pill so Ali knows which dates we set vs. dates that were already there.
+- Verification:
+  - Backfill: `backfilled 14/14 dates on [bid]` for all 5 bids (0 failed).
+  - Scores computed: all 5 bids LIKELY SCRAP. Harris County 35, SLCC 20, TDCJ 20, Southlake 20, Detroit 15. The aggressive backfill-from-deadline-1day puts most early tasks at today, and 70 tasks of mostly-human work in 22 days exceeds throughput.
+  - Email sent (Mandrill `f5e8e46c-...@colaberry.com`).
+- Deferred to follow-up sprint:
+  - **@CB add gov bid command** - integrate with existing Opportunity Pulse scraper to find next-best opportunity and auto-create Basecamp todolist with standard task template.
+  - **@CB kill gov bid command** - archive a Basecamp todolist via @CB.
+  - **AI auto-runner** - cron that picks up next AI-doable task per bid, executes (research/draft/compile), posts result as comment, marks complete. Per Ali: "everything should be stuck on next human task". Requires real LLM tool integration per task type.
+
 ### Daily Client Projects Report — AI Pathway / ShipCES / LandJet (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-clients
