@@ -156,6 +156,60 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'vip_add',
+      description: 'Add a VIP contact so their inbound emails trigger SMS routing. Use when Ali says "add <name> to VIP list" / "mark <person> as VIP" / "VIP <email>". Email and/or domain can be specified; at least one is required. Priority 1-10 (1=highest, default 5).',
+      parameters: {
+        type: 'object',
+        properties: {
+          email: { type: 'string', description: 'Specific email address (case-insensitive).' },
+          domain: { type: 'string', description: 'Email domain (e.g., colaberry.com). Matches any sender at that domain.' },
+          display_name: { type: 'string', description: 'How the VIP appears in SMS body (e.g., "Mike Reynolds" or "ShipCES team").' },
+          topic_tags: { type: 'array', items: { type: 'string' }, description: 'Optional topic tags (e.g., ["client", "gov-bid"]).' },
+          priority: { type: 'integer', description: 'Routing priority 1-10. 1 = highest. Default 5.' },
+        },
+        required: ['display_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vip_remove',
+      description: 'Deactivate a VIP contact (does not delete, just sets active=false). Use when Ali says "remove <person> from VIP" / "stop SMS for <email>".',
+      parameters: {
+        type: 'object',
+        properties: {
+          email: { type: 'string' },
+          domain: { type: 'string' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vip_list',
+      description: 'List all VIP contacts (active + inactive). Use when Ali asks "who is on the VIP list" / "show VIPs" / "list my important contacts".',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_vip_sms_mode',
+      description: 'Toggle the VIP SMS router between log_only and live. log_only = compute and store everything but do NOT send actual SMS via Twilio. live = real SMS via Twilio. Use when Ali says "go live with SMS" / "pause SMS routing" / "set SMS mode live". Default is log_only until Twilio is provisioned.',
+      parameters: {
+        type: 'object',
+        properties: {
+          mode: { type: 'string', enum: ['live', 'log_only'] },
+        },
+        required: ['mode'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'post_gov_bid_download_instructions',
       description: 'Post a Message Board UPDATE on Gov Contracts telling Ali to go to Opportunity Pulse + Bonfire and download RFP packages. Use this when Ali says "add N bids" / "find me new gov bids" / "I want to add more bids" WITHOUT specifying titles + deadlines. The MB message gives him step-by-step instructions and asks him to reply with (title, deadline, agency) for each bid once he has the downloads. He then tags CB again with that list and you call add_gov_bid per item. This two-step flow is necessary because CB cannot pull RFP packages on its own (they require a logged-in browser session).',
       parameters: {
@@ -287,6 +341,36 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     }
   }
 
+  async function vip_add({ email, domain, display_name, topic_tags, priority }) {
+    try {
+      const { addVip } = require(path.resolve(REPO, 'backend/src/scripts/lib/vipSmsRouter'));
+      const result = addVip({ email, domain, displayName: display_name, topicTags: topic_tags, priority });
+      sideEffects.vipAdded = { id: result.id, displayName: result.displayName };
+      return result;
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  async function vip_remove({ email, domain }) {
+    try {
+      const { removeVip } = require(path.resolve(REPO, 'backend/src/scripts/lib/vipSmsRouter'));
+      return removeVip({ email, domain });
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  async function vip_list() {
+    try {
+      const { listVips } = require(path.resolve(REPO, 'backend/src/scripts/lib/vipSmsRouter'));
+      const vips = listVips();
+      return { ok: true, count: vips.length, vips };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  async function set_vip_sms_mode({ mode }) {
+    try {
+      const { writeMode } = require(path.resolve(REPO, 'backend/src/scripts/lib/vipSmsRouter'));
+      const result = writeMode(mode);
+      sideEffects.vipSmsModeChange = { from: result.previous, to: result.current };
+      return { ok: true, ...result };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   async function post_gov_bid_download_instructions({ count, criteria_summary }) {
     try {
       const { postGovBidDownloadInstructions } = require(path.resolve(REPO, 'backend/src/scripts/lib/govBidOps'));
@@ -332,7 +416,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, vip_add, vip_remove, vip_list, set_vip_sms_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }
