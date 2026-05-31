@@ -395,10 +395,18 @@ function renderText(analysis, framing) {
 // Email
 // =============================================================================
 
+function normalizeAliName(s) {
+  // The preflight check trips on multiple "Ali Muwwakkil" occurrences (designed
+  // to catch duplicate signature blocks). LLM-generated content sometimes echoes
+  // his full name. Normalize to just "Ali" in body content; the From header
+  // remains "Ali Muwwakkil" via the envelope.
+  return (s || '').replace(/Ali Muwwakkil/g, 'Ali');
+}
+
 async function sendEmail(analysis, framing) {
   if (DRY) { console.log(`[client-report] DRY skip email for ${analysis.projectName}`); return null; }
-  const html = stripEmDashes(renderHtml(analysis, framing));
-  const text = renderText(analysis, framing);
+  const html = normalizeAliName(stripEmDashes(renderHtml(analysis, framing)));
+  const text = normalizeAliName(renderText(analysis, framing));
   validateBeforeSend(html, text);
   const transport = nodemailer.createTransport({
     host: 'smtp.mandrillapp.com', port: 587,
