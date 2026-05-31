@@ -72,7 +72,8 @@ GOV BIDS - two-step add flow (IMPORTANT):
 When Ali asks to add Gov Contracts bids, FIRST determine whether he has already downloaded the RFP packages from Opportunity Pulse + Bonfire.
 - If Ali specified a SPECIFIC bid title + deadline (e.g., "add bid Harris County RFP 26_0075 deadline 2026-06-22") → he has the documents, call add_gov_bid directly with that info.
 - If Ali says generically "add N bids" / "find me N new gov bids" / "I want to add more" with NO titles + deadlines → he does NOT yet have the documents. Call post_gov_bid_download_instructions(count). This posts a Message Board UPDATE on Gov Contracts with download instructions. Then tell Ali in your basecamp_reply: "Posted instructions to the Message Board (link in the result). Once you have the zips downloaded, reply on that MB post with the title + deadline + agency for each bid and tag me again - I will build out the projects."
-- When Ali later replies with the list of bids (title + deadline + agency per bid), parse his text and call add_gov_bid once per bid.
+- When Ali later replies with the list of bids (title + deadline + agency per bid), do NOT call add_gov_bid yourself N times - instead call finalize_gov_bids_from_reply(reply_body=<Ali's reply text>) ONCE. The deterministic parser inside that tool is more reliable than LLM extraction for multi-bid lists. After it returns, post a basecamp_reply listing each bid that landed (with its BC list URL) and any that failed (with the reason). If failures happened, give Ali the exact correction (e.g., "Mystery RFP - add deadline YYYY-MM-DD") so he can fix and re-tag you.
+- If Ali replies with ONLY ONE bid and a clean title+deadline (e.g., "@CB add bid Plano IT, deadline 2026-09-01"), you may call add_gov_bid directly OR finalize_gov_bids_from_reply (both work; finalize is fine for the single-bid case too).
 
 Never call add_gov_bid when you do not have a real title + a real deadline. Placeholders defeat the purpose.
 - finish: terminates the loop. Call after your final basecamp_reply.
@@ -204,6 +205,20 @@ const TOOLS = [
           fit_thesis: { type: 'string', description: 'Optional. Short rationale for why this bid is a fit. Goes in the list description.' },
         },
         required: ['title', 'deadline'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'finalize_gov_bids_from_reply',
+      description: 'Parse Ali\'s reply on the Gov Contracts Message Board "download instructions" post and create all bids in one call. Use this when Ali has replied to the MB instructions post with a numbered list of bids (title + deadline + agency + uuid + bonfire url per row) and tagged @CB. The parser is deterministic - it will only create bids it can find a title + deadline for, and will return a per-bid status. ALWAYS call this once on Ali\'s reply rather than calling add_gov_bid multiple times yourself - the parser is more reliable than LLM extraction. After this returns, follow with basecamp_reply that summarizes which bids landed + any that failed so Ali can fix the format and re-tag you.',
+      parameters: {
+        type: 'object',
+        properties: {
+          reply_body: { type: 'string', description: 'The raw comment body (HTML or text) from Ali\'s reply that contains the numbered bid list. Pass it verbatim; the parser handles HTML stripping and structured field extraction itself.' },
+        },
+        required: ['reply_body'],
       },
     },
   },
@@ -352,6 +367,22 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     } catch (e) { return { ok: false, error: e.message }; }
   }
 
+  async function finalize_gov_bids_from_reply({ reply_body }) {
+    try {
+      const { finalizeBidsFromReply } = require(path.resolve(REPO, 'backend/src/scripts/lib/govBidOps'));
+      const result = await finalizeBidsFromReply({ replyBody: reply_body });
+      const successes = result.results.filter((r) => r.ok);
+      const failures = result.results.filter((r) => !r.ok);
+      sideEffects.finalizeGovBids = {
+        parsedCount: result.parsedCount,
+        successCount: successes.length,
+        failureCount: failures.length,
+        parseWarnings: result.parseWarnings.slice(0, 5),
+      };
+      return { ok: true, ...result, successCount: successes.length, failureCount: failures.length };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   async function exit_intern_preview({ intern_query, reason }) {
     try {
       const { previewExit } = require(path.resolve(REPO, 'backend/src/scripts/lib/internExit'));
@@ -370,7 +401,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, vip_list, set_vip_sms_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }

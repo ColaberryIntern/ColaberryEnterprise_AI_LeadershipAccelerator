@@ -220,4 +220,45 @@ ${criteriaSummary ? `Pick ${count} ${criteriaSummary}.` : `Pick the ${count} opp
   };
 }
 
-module.exports = { scrapBid, addBid, postGovBidDownloadInstructions, STANDARD_TEMPLATE };
+// =============================================================================
+// Finalize bids from Ali's reply on the MB instructions post.
+// Pipeline:
+//   1. Parse the reply HTML/text via govBidReplyParser
+//   2. For each parsed bid: call addBid() to create the todolist + tasks
+//   3. Return per-bid result (success/failure + new list URL) so the caller
+//      can post a single summary comment in the same thread.
+// Returns { results: [{title, ok, listUrl?, error?}], parseWarnings: [...] }.
+// =============================================================================
+const { parseReply } = require('./govBidReplyParser');
+
+async function finalizeBidsFromReply({ replyBody, addBidFn }) {
+  const { bids, warnings: parseWarnings } = parseReply(replyBody);
+  // Dependency injection: smoke tests pass addBidFn to avoid real Basecamp
+  // calls. Production callers omit it and we use the module-internal addBid.
+  const create = addBidFn || addBid;
+  const results = [];
+  for (const b of bids) {
+    try {
+      // Skip bids without a deadline - addBid will create one anyway but the
+      // task-due-date logic falls back to "today" for everything, which is
+      // worse than refusing and surfacing the problem.
+      if (!b.deadline) {
+        results.push({ title: b.title, ok: false, error: 'no deadline parsed - reply needs "deadline YYYY-MM-DD"' });
+        continue;
+      }
+      const r = await create({
+        displayTitle: b.title,
+        deadline: b.deadline,
+        opportunityUuid: b.uuid,
+        fitThesis: b.fitThesis,
+        agencyName: b.agency,
+      });
+      results.push({ title: b.title, ok: true, listUrl: r.appUrl, tasksCreated: r.tasksCreated, listId: r.listId });
+    } catch (e) {
+      results.push({ title: b.title, ok: false, error: e.message });
+    }
+  }
+  return { results, parseWarnings, parsedCount: bids.length };
+}
+
+module.exports = { scrapBid, addBid, postGovBidDownloadInstructions, finalizeBidsFromReply, STANDARD_TEMPLATE };

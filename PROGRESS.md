@@ -12,6 +12,28 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track B Phase 1 — Gov bid reply parser + finalize tool live (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- What changed:
+  - `backend/src/scripts/lib/govBidReplyParser.js` — deterministic parser. Input: HTML or text body of Ali's `@CB ready` reply on the MB instructions post. Output: `{bids: [{title, deadline, agency, uuid, bonfireUrl, fitThesis}], warnings: [...]}`. Handles inline numbering, `<ol><li>` HTML lists, multi-line per bid (Basecamp's `<li>` wrap), and missing-field cases with surfaced warnings.
+  - `backend/src/scripts/lib/govBidReplyParser.test.js` — 23 assertions across 7 scenarios (happy path, HTML wrap, single-bid minimal, missing deadline, no numbered rows, multi-line wrap, date-in-title-vs-deadline). All passing.
+  - `lib/govBidOps.js` — added `finalizeBidsFromReply({replyBody, addBidFn?})` orchestrator. Parses reply, calls `addBid` per bid (or `addBidFn` if injected for tests). Returns per-bid `{ok, listUrl, error}` so the LLM can post one summary comment.
+  - `lib/govBidOps.smoke.js` — 12-assertion smoke against the orchestrator with an injected fake `addBidFn`. Confirms parse + iterate + skip-no-deadline + per-bid result shape.
+  - `scripts/ops-engine/cb-system-handler.js` — new tool `finalize_gov_bids_from_reply(reply_body)`. Updated SYSTEM_PROMPT: when Ali replies on the MB instructions post with a numbered bid list, LLM calls this ONCE with the verbatim reply body. Replaces the previous "call add_gov_bid N times" instruction. Single-bid case still works either way.
+- Verification:
+  - Parser tests: 23/23 pass (`node backend/src/scripts/lib/govBidReplyParser.test.js`).
+  - Orchestrator smoke: 12/12 pass with injected fake addBid (`node backend/src/scripts/lib/govBidOps.smoke.js`). Confirms no Basecamp calls during test.
+  - **Mistake worth noting:** the FIRST version of the smoke test patched `module.exports.addBid` thinking it would intercept the call. It didn't — the orchestrator captured the symbol at module load. Two phantom bids landed in Basecamp ("Harris County" dup + "SLCC2026-M6006" placeholder). Both trashed via direct PUT to `/recordings/<id>/status/trashed.json` (204 OK x2) from the VPS once the local token had rotated to 401 on Windows fetch. Fix: `finalizeBidsFromReply` now accepts an `addBidFn` dependency-injection parameter. **Lesson logged:** smoke tests for any orchestrator that calls external systems MUST use dependency injection, never module export patching.
+- What this unlocks (the actual workflow that's now live):
+  1. Ali: `@CB add 3 new gov bids` → CB posts the MB Update with download instructions
+  2. Ali: downloads 3 RFP zips from Bonfire (his local Downloads)
+  3. Ali: replies on the MB Update with `@CB ready - here are the 3 bids: 1. <title>, deadline <date>, agency <name>, uuid <uuid>, bonfire <url> ...`
+  4. CB dispatcher picks up the reply, LLM calls `finalize_gov_bids_from_reply(reply_body)`, parser deterministically extracts 3 bids, each gets the 14-task template with backward-distributed due dates, summary comment posted back with all 3 BC list URLs.
+- What's still on the Track B roadmap (Phase 2, next session):
+  - Zip-aware finalize: detect zip files attached to the reply (or in a Vault sub-folder), extract via `AdmZip`, drive `processGovBid.js` pipeline so the 14-task template is replaced with RFP-derived custom tasks + file uploads + Vault folder per bid.
+  - Refactor `processGovBid.js` (currently 621 lines, over CLAUDE.md hard ceiling) into `lib/govBidPipeline.js` callable from the CB handler.
+
 ### Track A1.6 — VIP inbox watcher live; system is fully autonomous (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
