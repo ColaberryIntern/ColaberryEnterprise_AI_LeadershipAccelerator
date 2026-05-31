@@ -147,8 +147,21 @@ async function addBid({ displayTitle, deadline, opportunityUuid, fitThesis, agen
 //   4. CB calls addBid() per item to create the real todolist
 // =============================================================================
 
-const OPPORTUNITY_PULSE_URL = process.env.OPPORTUNITY_PULSE_URL || 'https://opportunitypulse.colaberry.ai/';
-const BONFIRE_LOGIN_URL = process.env.BONFIRE_LOGIN_URL || 'https://bidopps.colaberry.com/login';
+// Opportunity Pulse is the internal admin tool at http://95.216.199.47/admin/bonfire/.
+// Login is via session cookie (Ali's browser already has it). The "strategic"
+// feed is the ranked opportunities view. Per-opportunity submission-readiness
+// pages live at /admin/bonfire/<uuid>/submission-readiness.
+//
+// Bonfire (the public vendor portal) is where actual RFP zips live. Two accounts:
+//   - Colaberry's vendor account (https://vendor.bonfirehub.com - Euna Supplier
+//     Network invitation route, Colaberry-only proposals)
+//   - Que's account (Detroit-style joint route)
+// Per-agency portals at {agency}.bonfirehub.com/opportunities/{numeric_id}.
+const OPPORTUNITY_PULSE_BASE = process.env.OPPORTUNITY_PULSE_BASE || 'http://95.216.199.47';
+const OPPORTUNITY_PULSE_STRATEGIC = `${OPPORTUNITY_PULSE_BASE}/admin/bonfire/strategic`;
+const OPPORTUNITY_PULSE_ALL = `${OPPORTUNITY_PULSE_BASE}/admin/bonfire`;
+const BONFIRE_ACCOUNT_LOGIN = 'https://account.bonfirehub.com/login';
+const BONFIRE_VENDOR_HUB = 'https://vendor.bonfirehub.com/opportunities';
 
 async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
   // Fetch the message board id from the project dock
@@ -159,29 +172,37 @@ async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
   const subject = `Action: Download ${count} RFP package${count === 1 ? '' : 's'} from Opportunity Pulse`;
 
   const content = `<div><strong>What CB needs from you next:</strong></div>
-<div>I cannot pull RFP packages on my own (Opportunity Pulse + Bonfire require a logged-in browser session). Once you have the documents, I will build out the full project with the 14-task template, due dates back-distributed from the submission deadline, and feasibility scoring.</div>
+<div>I cannot pull RFP packages on my own (Opportunity Pulse + Bonfire require a logged-in browser session). Walk the historical flow below; once you have the documents downloaded, reply on this post and I will build out the projects with the 14-task template, due dates back-distributed from the submission deadline, and feasibility scoring.</div>
 <div><br></div>
-<div><strong>Step-by-step:</strong></div>
+<div><strong>Step-by-step (matches our historical process):</strong></div>
 <ol>
-<li>Open <a href="${OPPORTUNITY_PULSE_URL}">Opportunity Pulse</a>${criteriaSummary ? ` and pick ${count} ${criteriaSummary}` : ` and pick the ${count} opportunit${count === 1 ? 'y' : 'ies'} you want to pursue`}.</li>
-<li>For each opportunity, login to <a href="${BONFIRE_LOGIN_URL}">Bonfire</a> (use the routing rule per opportunity: Colaberry-only vs joint with Que).</li>
-<li>Download the full RFP zip from Bonfire for each opportunity.</li>
-<li>Once you have all ${count} zip${count === 1 ? '' : 's'} downloaded, reply on this message board post with the following for each bid:
+<li><strong>Open the Opportunity Pulse strategic feed:</strong> <a href="${OPPORTUNITY_PULSE_STRATEGIC}">${OPPORTUNITY_PULSE_STRATEGIC}</a><br>
+${criteriaSummary ? `Pick ${count} ${criteriaSummary}.` : `Pick the ${count} opportunit${count === 1 ? 'y' : 'ies'} you want to pursue.`} The strategic page shows them already ranked.</li>
+<li><strong>For each opportunity, open its readiness page</strong> at <code>${OPPORTUNITY_PULSE_BASE}/admin/bonfire/&lt;uuid&gt;/submission-readiness</code>. Confirm: routing (Colaberry-only via vendor.bonfirehub.com vs joint with Que), submission deadline, and any pre-tailored analysis.</li>
+<li><strong>Click through to the agency Bonfire portal</strong> from the readiness page. Per-agency portals live at <code>{agency}.bonfirehub.com/opportunities/{numeric_id}</code> (e.g., <code>harriscountytx.bonfirehub.com/opportunities/228389</code>, <code>tdcj.bonfirehub.com/opportunities/234405</code>).</li>
+<li><strong>Login to Bonfire with the right account</strong> for the routing:
+<ul>
+<li>For Colaberry-only: <a href="${BONFIRE_ACCOUNT_LOGIN}">${BONFIRE_ACCOUNT_LOGIN}</a> (your colaberry account, vendor hub at <a href="${BONFIRE_VENDOR_HUB}">${BONFIRE_VENDOR_HUB}</a>)</li>
+<li>For joint with Que: Que's credentials (per the gov-bid-account-routing rule)</li>
+</ul></li>
+<li><strong>Download the full RFP zip</strong> from the agency portal for each opportunity.</li>
+<li><strong>Reply on this Message Board post</strong> with the following for each bid, and tag <strong>@CB System</strong> in your reply:
 <ul>
 <li><strong>Title</strong> (e.g., "Harris County - Agenda &amp; Meeting Management System (RFP 26_0075)")</li>
 <li><strong>Submission deadline</strong> (YYYY-MM-DD)</li>
 <li><strong>Agency</strong></li>
+<li><strong>Opportunity UUID</strong> (from the Opportunity Pulse URL)</li>
+<li><strong>Bonfire URL</strong> (the per-agency one you opened in step 3)</li>
 <li><em>Optional:</em> short fit thesis (1-2 sentences on why we're bidding)</li>
 </ul>
 </li>
-<li>Tag <strong>@CB System</strong> in your reply so I see it. I will create the ${count} full project${count === 1 ? '' : 's'} with the 14-task template + due dates immediately.</li>
 </ol>
 <div><br></div>
 <div><strong>Format example for your reply:</strong></div>
 <div style="background:#f1f5f9;border-left:3px solid #1a365d;padding:10px 14px;font-family:monospace;font-size:12px">
 &#64;CB System ready - here are the ${count} bid${count === 1 ? '' : 's'}:<br>
-1. Harris County - Agenda &amp; Meeting Management (RFP 26_0075), deadline 2026-06-22, agency Harris County TX<br>
-2. SLCC - Enterprise Analytics Platform (SLCC2026-M6006), deadline 2026-07-15, agency SLCC<br>
+1. Harris County - Agenda &amp; Meeting Management (RFP 26_0075), deadline 2026-06-22, agency Harris County TX, uuid 7011f5af-..., bonfire harriscountytx.bonfirehub.com/opportunities/228389<br>
+2. SLCC - Enterprise Analytics Platform (SLCC2026-M6006), deadline 2026-07-15, agency SLCC, uuid ..., bonfire ...<br>
 3. ...
 </div>
 <div><br></div>
