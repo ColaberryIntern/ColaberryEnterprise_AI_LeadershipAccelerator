@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Inbound Dispatcher: pagination + classifier hot-fixes (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- Symptom: Ali tagged @CB on `buckets/7463955/todos/9945833396` at 2026-05-31 17:10:13 with a large open-ended request (PMO system-prompt spec for "AI Systems Architect Accelerator"). 6+ subsequent dispatcher ticks logged "0 new @CB mentions" — comment was completely missed.
+- Two bugs found and fixed:
+  1. **Pagination silently dropped @CB mentions.** `findNewMentions` in `scripts/ops-engine/inbound-dispatcher.js` used `bcGet` (single page, 15 items) for both the bucket's todolist list AND the todos-per-todolist. Basecamp paginates at 15 with a `Link: rel="next"` header. The missed comment was on todo `9945833396` inside todolist `9939449052` ("AI Products" in bucket 7463955), and that todo was on page 2+ of the todolist's todos. Same vulnerability for todolists past position 15 in any of the 8 watched buckets. **Fix:** switched both walks to `bcGetAll` (already defined in the file). Added cost-control filter: skip todolists whose `updated_at` is outside the 2-hour lookback window.
+  2. **Keyword classifier was too eager.** `classifyKeyword` had a fallback `/\bhelp\b/i.test(stripped)` that treated any comment with "help" as a word as a help-recipe request. After the pagination fix landed and the dispatcher saw the comment, this triggered: the recipe-list reply got posted instead of routing to the LLM handler. The inline regex also matched `(grep|ccpp|gmail|help)\s*:\s*...` anywhere in the body, not just at the start. **Fix:** classifier now strips the @CB mention attachment + "CB" prefix, then requires the message to START with `<kw>:` for grep/ccpp/gmail, OR be the literal "help" by itself. Anything else falls through to the LLM handler.
+- Verification:
+  - Dispatcher run at 17:31:52 (post-pagination-fix): `1 new @CB mentions from Ali` + `keyword reply to comment 9946342528 on recording 9945833396` (matched the bug — keyword path fired)
+  - State entry for `7463955-9946342528` deleted manually so the comment was re-eligible
+  - Dispatcher run at 17:33:36 (post-classifier-fix): `llm handler for 9946342528: invocation=cb-1780248822968-ryrwoz tools=queue_followup,basecamp_reply,finish`
+  - Ali's latest comment from CB (id 9946360578, 17:33:47): proper acknowledgement of the request, queue_followup todo created, summary of key points + target launch date (July 11, 2026)
+- Risk this surfaces:
+  - Any of Ali's earlier @CB mentions on todos past position 15 in their parent todolist may have been silently missed pre-fix. Worth a one-time backscan of the 8 watched buckets to catch any old @CB mentions Ali sent that we never processed. (Followup task — not in scope for this commit.)
+  - Cost: paginated walks add API calls per tick. The `updated_at < cutoff` filter on todolists keeps it bounded; for very active buckets we may want to add a `comments_count` heuristic at the todolist level too.
+
 ### Track B Phase 3 — AI-derived task list per bid live (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
