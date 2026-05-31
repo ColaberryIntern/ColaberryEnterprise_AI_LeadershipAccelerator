@@ -12,6 +12,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track A1 corrected — router re-pointed at existing inbox_vips (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-track-a1-fix
+- What changed:
+  - **Root cause:** Ali pointed me at the existing VIP page at `/admin/inbox` which I'd missed. Existing table `inbox_vips` (Sequelize model `InboxVip` at `backend/src/models/InboxVip.ts`) is managed via `InboxVipManagerPage.tsx` with full CRUD UI + API at `/api/admin/inbox/vips`. I'd built a parallel `vip_contacts` table — pure duplication.
+  - **`vipSmsRouter.js` repointed:** `findVip()` + `listVips()` now read from `inbox_vips` (schema: `email_address`, `name`, `relationship`, `priority` where LOWER number = MORE important).
+  - **`vip_contacts` table dropped** on prod.
+  - **@CB tools pruned:** removed `vip_add` + `vip_remove` (the admin UI is source of truth — single-source rule). Kept `vip_list` (read-only quick check from Basecamp) and `set_vip_sms_mode` (mode file toggle).
+- Verification:
+  - Smoke against router on prod: `mode=log_only`, `smsCount24h=0`, Adalene's email resolves to `priority 1, spouse`, random email returns `null`, total count 10.
+  - Corrected status email landed (Mandrill `2e99c55c-...`).
+- Existing 10 VIPs (already configured by Ali):
+  - Priority 1: Adalene (spouse)
+  - Priority 5: Lakeesha CPA × 2 (service_provider)
+  - Priority 10: Lahameen (family)
+  - Priority 30: Karun, Luda, Vivek (business)
+  - Priority 40: Jackie, Sai Tejesh (business)
+  - Priority 50: Ram (business)
+
 ### Track A Phase 1 — VIP SMS foundation shipped in log_only mode (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-track-a1
