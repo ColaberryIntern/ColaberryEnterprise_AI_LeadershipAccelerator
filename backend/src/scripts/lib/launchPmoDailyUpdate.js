@@ -42,49 +42,108 @@ function stripEmDashes(s) { return (s || '').replace(/—/g, '-').replace(/–/g
 // before preflight, then put the full name back only in the signature.
 function normalizeAliName(s) { return (s || '').replace(/Ali Muwwakkil/g, 'Ali'); }
 
+// Tier inference: read the "AI TASK" / "HUMAN TASK" badge embedded in the
+// description by the task generator. Fallback: assignee == CB System -> AI.
+function tierOf(todo) {
+  const desc = todo.description || '';
+  if (/HUMAN TASK/i.test(desc)) return 'HUMAN';
+  if (/AI TASK/i.test(desc)) return 'AI';
+  const assignees = (todo.assignees || []).map((a) => a.name || '');
+  if (assignees.length === 1 && /CB System/i.test(assignees[0])) return 'AI';
+  if (assignees.some((n) => !/CB System/i.test(n))) return 'HUMAN';
+  return 'EITHER';
+}
+
+// Per-area feasibility scoring. Mirrors govContracts pattern (days available
+// vs work remaining). Returns { score 0-100, tier, reason, requiredDays,
+// daysToLaunch, humansRemaining, aiRemaining }.
+function computeAreaFeasibility(area, daysToLaunch) {
+  const human = area.openTodos.filter((t) => t.tier === 'HUMAN').length;
+  const ai = area.openTodos.filter((t) => t.tier === 'AI').length;
+  const either = area.openTodos.filter((t) => t.tier === 'EITHER').length;
+  const overdueCount = area.overdue.length;
+  const HUMAN_DAYS = 1.5, AI_DAYS = 0.15, EITHER_DAYS = 0.8;
+  const requiredDays = human * HUMAN_DAYS + ai * AI_DAYS + either * EITHER_DAYS;
+  if (area.openCount === 0) {
+    return { score: 100, tier: 'ON_TRACK', reason: 'No open work. Clean.', requiredDays: 0, daysToLaunch, humansRemaining: 0, aiRemaining: 0 };
+  }
+  if (daysToLaunch <= 0) {
+    return { score: 10, tier: 'LIKELY_SCRAP', reason: 'Past launch date with open work.', requiredDays, daysToLaunch, humansRemaining: human, aiRemaining: ai };
+  }
+  const ratio = requiredDays / daysToLaunch;
+  let score, reason;
+  if (ratio <= 0.4) { score = 95; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToLaunch} days available. Tons of slack.`; }
+  else if (ratio <= 0.6) { score = 85; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToLaunch} days. Comfortable.`; }
+  else if (ratio <= 0.85) { score = 70; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToLaunch} days. Tight but doable.`; }
+  else if (ratio <= 1.15) { score = 55; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToLaunch} days. Marginal, no buffer.`; }
+  else if (ratio <= 1.5) { score = 35; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToLaunch} days. Likely to miss.`; }
+  else { score = 15; reason = `${requiredDays.toFixed(1)} work-days vs ${daysToLaunch} days. Very unlikely.`; }
+  score = Math.max(0, score - overdueCount * 5);
+  const tier = score >= 80 ? 'ON_TRACK' : score >= 50 ? 'AT_RISK' : 'LIKELY_SCRAP';
+  return { score, tier, reason, requiredDays: +requiredDays.toFixed(1), daysToLaunch, humansRemaining: human, aiRemaining: ai };
+}
+
 // ---------------------------------------------------------------------------
-// State pull
+// State pull (v2 - tier-classified, with feasibility per area)
 // ---------------------------------------------------------------------------
 async function pullProjectState() {
   const dock = await ops.getDock();
   const lists = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todosets/${dock.todoset.id}/todolists.json`);
   const today = dateYMD();
+  const daysToLaunch = daysBetween(LAUNCH.targetLaunchDate, today);
   const areas = [];
   for (const list of lists) {
     const todos = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${list.id}/todos.json`);
     const completedTodos = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${list.id}/todos.json?completed=true`);
     const all = [...todos, ...completedTodos];
-    const open = todos.filter((t) => !t.completed);
-    const overdue = open
+    const openRaw = todos.filter((t) => !t.completed);
+    // Classify tier + decorate
+    const openTodos = openRaw.map((t) => ({
+      id: t.id,
+      content: t.content,
+      description: t.description,
+      due_on: t.due_on,
+      url: t.app_url,
+      assignees: (t.assignees || []).map((a) => a.name),
+      tier: tierOf(t),
+    }));
+    // Sort by due_on (nulls last)
+    openTodos.sort((a, b) => {
+      if (a.due_on && b.due_on) return a.due_on.localeCompare(b.due_on);
+      if (a.due_on && !b.due_on) return -1;
+      if (!a.due_on && b.due_on) return 1;
+      return 0;
+    });
+    const overdue = openTodos
       .filter((t) => t.due_on && t.due_on < today)
-      .map((t) => ({
-        id: t.id,
-        content: t.content,
-        due_on: t.due_on,
-        days_overdue: daysBetween(today, t.due_on),
-        assignees: (t.assignees || []).map((a) => a.name),
-        url: t.app_url,
-      }));
-    const upcoming = open
-      .filter((t) => t.due_on && t.due_on >= today)
-      .sort((a, b) => a.due_on.localeCompare(b.due_on))
-      .slice(0, 5)
-      .map((t) => ({ id: t.id, content: t.content, due_on: t.due_on, assignees: (t.assignees || []).map((a) => a.name), url: t.app_url }));
+      .map((t) => ({ ...t, days_overdue: daysBetween(today, t.due_on) }));
+    const upcoming = openTodos.filter((t) => t.due_on && t.due_on >= today);
     const total = all.length;
     const done = completedTodos.length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    areas.push({
+    const area = {
       listId: list.id, listName: list.name, listUrl: list.app_url,
-      total, done, pct, openCount: open.length,
-      overdue, upcoming,
-    });
+      total, done, pct, openCount: openTodos.length,
+      openTodos, overdue, upcoming,
+    };
+    // Compute per-area "next" steps. blocked-task filter happens later in caller.
+    area.nextStep = openTodos[0] || null;
+    area.nextHumanStep = openTodos.find((t) => t.tier === 'HUMAN') || null;
+    area.nextAiStep = openTodos.find((t) => t.tier === 'AI') || null;
+    area.humanCount = openTodos.filter((t) => t.tier === 'HUMAN').length;
+    area.aiCount = openTodos.filter((t) => t.tier === 'AI').length;
+    area.eitherCount = openTodos.filter((t) => t.tier === 'EITHER').length;
+    area.feasibility = computeAreaFeasibility(area, daysToLaunch);
+    areas.push(area);
   }
-  // Compute readiness
   const totalAll = areas.reduce((s, a) => s + a.total, 0);
   const doneAll = areas.reduce((s, a) => s + a.done, 0);
   const overall = totalAll > 0 ? Math.round((doneAll / totalAll) * 100) : 0;
-  const daysToLaunch = daysBetween(LAUNCH.targetLaunchDate, today);
-  return { areas, totalAll, doneAll, overall, daysToLaunch, today };
+  const totalHuman = areas.reduce((s, a) => s + a.humanCount, 0);
+  const totalAi = areas.reduce((s, a) => s + a.aiCount, 0);
+  const totalEither = areas.reduce((s, a) => s + a.eitherCount, 0);
+  const totalOverdue = areas.reduce((s, a) => s + a.overdue.length, 0);
+  return { areas, totalAll, doneAll, overall, totalHuman, totalAi, totalEither, totalOverdue, daysToLaunch, today };
 }
 
 // ---------------------------------------------------------------------------
@@ -114,38 +173,86 @@ function buildEscalationList(state) {
 }
 
 // ---------------------------------------------------------------------------
-// HUMAN ACTION QUEUE (next human tasks sorted by urgency)
+// Queue builders - tier-based, leveraging the rich state.areas[].openTodos.
 // ---------------------------------------------------------------------------
 function buildHumanActionQueue(state) {
   const queue = [];
   for (const a of state.areas) {
-    for (const t of a.upcoming) {
-      // Heuristic: task assigned to a non-CB person, or unassigned (which means
-      // it falls to lead by area), is human work. CB User tasks excluded.
-      const assignees = t.assignees || [];
-      const cbOnly = assignees.length === 1 && /CB System/i.test(assignees[0]);
-      if (cbOnly) continue;
+    for (const t of a.openTodos) {
+      if (t.tier !== 'HUMAN' && t.tier !== 'EITHER') continue;
+      if (!t.due_on) continue;
       queue.push({ area: a.listName, ...t });
     }
   }
   queue.sort((a, b) => a.due_on.localeCompare(b.due_on));
-  return queue.slice(0, 12);
+  return queue;
 }
 
-// ---------------------------------------------------------------------------
-// AI execution queue (CB User's plate)
-// ---------------------------------------------------------------------------
 function buildAiQueue(state) {
   const ai = [];
   for (const a of state.areas) {
-    for (const t of a.upcoming) {
-      const assignees = t.assignees || [];
-      const cbOnly = assignees.length === 1 && /CB System/i.test(assignees[0]);
-      if (cbOnly) ai.push({ area: a.listName, ...t });
+    for (const t of a.openTodos) {
+      if (t.tier !== 'AI') continue;
+      if (!t.due_on) continue;
+      ai.push({ area: a.listName, ...t });
     }
   }
   ai.sort((a, b) => a.due_on.localeCompare(b.due_on));
-  return ai.slice(0, 10);
+  return ai;
+}
+
+// ---------------------------------------------------------------------------
+// AI completion log: tasks CB auto-runner has drafted + recently completed.
+// Sources:
+//   1. tmp/launch-pmo-ai-runner-state.json (every task CB has drafted)
+//   2. BC completed_todos in each list (assignee=CB System AND completed_at in last 7 days)
+// ---------------------------------------------------------------------------
+const AI_RUNNER_STATE_PATH = path.resolve(__dirname, '../../../../tmp/launch-pmo-ai-runner-state.json');
+function loadAiRunnerLog() {
+  try { return JSON.parse(fs.readFileSync(AI_RUNNER_STATE_PATH, 'utf8')); }
+  catch { return { tasks: {} }; }
+}
+
+async function buildAiCompletionLog(state) {
+  const runnerLog = loadAiRunnerLog();
+  // Build BC task content lookup by id (across areas)
+  const taskById = new Map();
+  for (const a of state.areas) {
+    for (const t of a.openTodos) taskById.set(String(t.id), { content: t.content, area: a.listName, url: t.url });
+  }
+  // Recent CB-drafted tasks (from state file)
+  const recentDrafted = Object.entries(runnerLog.tasks || {})
+    .map(([id, info]) => ({
+      id, when: info.at, briefs: info.briefs || [], chars: info.chars || 0,
+      ...(taskById.get(id) || { content: '(task not currently visible)', area: 'unknown', url: null }),
+    }))
+    .sort((a, b) => (b.when || '').localeCompare(a.when || ''))
+    .slice(0, 12);
+
+  // Recently-completed AI tasks: pull completed=true per list and filter for
+  // CB-assigned with completion_at < 7 days ago.
+  const cutoffMs = Date.now() - 7 * 86400000;
+  const recentCompleted = [];
+  for (const a of state.areas) {
+    let done;
+    try { done = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${a.listId}/todos.json?completed=true`); }
+    catch { continue; }
+    for (const t of (done || [])) {
+      const ca = t.completion?.created_at;
+      if (!ca || new Date(ca).getTime() < cutoffMs) continue;
+      const tier = tierOf(t);
+      const assignees = (t.assignees || []).map((x) => x.name || '');
+      const isCb = tier === 'AI' || assignees.some((n) => /CB System/i.test(n));
+      if (!isCb) continue;
+      recentCompleted.push({
+        id: t.id, content: t.content, area: a.listName,
+        completed_at: ca, url: t.app_url,
+        completedBy: t.completion?.creator?.name || 'CB System',
+      });
+    }
+  }
+  recentCompleted.sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
+  return { recentDrafted, recentCompleted: recentCompleted.slice(0, 12) };
 }
 
 // ---------------------------------------------------------------------------
@@ -200,24 +307,103 @@ async function generateExecSummary(state, escalations, humanQueue, aiQueue) {
 }
 
 // ---------------------------------------------------------------------------
+// Rendering helpers (Gov Contracts pattern)
+// ---------------------------------------------------------------------------
+function htmlEsc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function tierPill(tier) {
+  if (tier === 'HUMAN') return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#fef3c7;color:#7c2d12;letter-spacing:0.5px">HUMAN</span>';
+  if (tier === 'AI') return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#dbeafe;color:#1e3a8a;letter-spacing:0.5px">AI</span>';
+  return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#f1f5f9;color:#334155;letter-spacing:0.5px">EITHER</span>';
+}
+function duePill(due_on, today) {
+  if (!due_on) return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#1c1917;color:#fbbf24;letter-spacing:0.5px">NO DUE</span>';
+  if (due_on < today) return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#dc2626;color:white">OVERDUE ${due_on}</span>`;
+  const daysOut = Math.round((new Date(due_on).getTime() - new Date(today).getTime()) / 86400000);
+  if (daysOut <= 7) return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#ca8a04;color:white">DUE ${due_on}</span>`;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#e2e8f0;color:#475569">due ${due_on}</span>`;
+}
+function scoreBadge(feas) {
+  const color = feas.tier === 'ON_TRACK' ? { bg: '#dcfce7', fg: '#14532d' }
+    : feas.tier === 'AT_RISK' ? { bg: '#fef3c7', fg: '#78350f' }
+    : { bg: '#fee2e2', fg: '#7f1d1d' };
+  const label = feas.tier.replace('_', ' ');
+  return `<span style="display:inline-block;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:700;background:${color.bg};color:${color.fg};letter-spacing:0.5px">${label} &middot; ${feas.score}</span>`;
+}
+function renderAreaCard(area, today, blockerMap) {
+  const nextH = area.openTodos.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !blockerMap.get(t.id)?.blocked);
+  const nextA = area.openTodos.find((t) => t.tier === 'AI' && !blockerMap.get(t.id)?.blocked);
+  const blockedHere = area.openTodos.filter((t) => blockerMap.get(t.id)?.blocked);
+  const fs = area.feasibility;
+  const fsColor = fs.tier === 'LIKELY_SCRAP' ? '#fef2f2' : fs.tier === 'AT_RISK' ? '#fffbeb' : '#f0fdf4';
+  const taskRows = area.openTodos.slice(0, 15).map((t, idx) => {
+    const isNext = t.id === (nextH?.id || area.nextStep?.id);
+    const isBlocked = blockerMap.get(t.id)?.blocked;
+    const owner = (t.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || (t.tier === 'AI' ? 'CB System' : 'unassigned');
+    return `<tr style="background:${isBlocked ? '#fef2f2' : isNext ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white')}">
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${idx + 1}</td>
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a>${isBlocked ? '<div style="font-size:10px;color:#991b1b;margin-top:2px;font-style:italic">BLOCKED on upstream</div>' : ''}</td>
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on, today)}</td>
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td>
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${htmlEsc(owner)}</td>
+</tr>`;
+  }).join('');
+  return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:14px">
+<div style="display:table;width:100%"><div style="display:table-cell"><div style="font-size:16px;font-weight:800;color:#1a365d">${htmlEsc(area.listName)}</div>
+<div style="font-size:11px;color:#64748b;margin-top:2px">${area.openCount} open &middot; ${area.done} done &middot; ${area.humanCount} human &middot; ${area.aiCount} AI &middot; <a href="${area.listUrl}" style="color:#2b6cb0">Open in Basecamp &rarr;</a></div></div>
+<div style="display:table-cell;text-align:right">${scoreBadge(fs)}</div></div>
+<div style="margin-top:8px;padding:8px 12px;background:${fsColor};border-radius:6px;font-size:11px;color:#475569"><strong>Feasibility:</strong> ${htmlEsc(fs.reason)}</div>
+${nextH ? `<div style="margin-top:14px;background:#1c1917;color:white;padding:14px 16px;border-radius:8px;border-left:4px solid #fbbf24">
+<div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">Next human step blocking this area</div>
+<a href="${nextH.url}" style="display:block;font-size:14px;color:white;text-decoration:none;font-weight:700;margin-top:4px;line-height:1.3">${htmlEsc(stripEmDashes(stripHtml(nextH.content)))}</a>
+<div style="margin-top:6px;font-size:11px;color:#cbd5e0">${duePill(nextH.due_on, today)} &middot; <strong style="color:white">${htmlEsc((nextH.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned')}</strong></div>
+<div style="margin-top:8px"><a href="${nextH.url}" style="display:inline-block;background:#fbbf24;color:#1c1917;padding:6px 12px;border-radius:5px;font-size:11px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Open ticket &rarr;</a></div>
+</div>` : '<div style="margin-top:14px;padding:10px 14px;background:#dcfce7;border-radius:6px;font-size:12px;color:#166534">No human step blocking this area. CB executes next.</div>'}
+${nextA && nextA.id !== nextH?.id ? `<div style="margin-top:8px;padding:10px 14px;background:#dbeafe;border-radius:6px;font-size:11px;color:#1e3a8a"><strong>Next AI step:</strong> ${htmlEsc(stripEmDashes(stripHtml(nextA.content)))} (due ${nextA.due_on || 'unset'}). CB runs overnight.</div>` : ''}
+${blockedHere.length ? `<div style="margin-top:8px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:11px;color:#7f1d1d"><strong>${blockedHere.length} blocked task${blockedHere.length === 1 ? '' : 's'}:</strong> ${blockedHere.slice(0, 3).map((b) => htmlEsc(stripHtml(b.content).slice(0, 60))).join('; ')}${blockedHere.length > 3 ? '...' : ''}</div>` : ''}
+<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Open task sequence (top ${Math.min(15, area.openCount)} by due date)</div>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse">
+<thead><tr style="background:#1a365d"><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Owner</th></tr></thead>
+<tbody>${taskRows}</tbody></table>
+</div>`;
+}
+
+// ---------------------------------------------------------------------------
 // Email to Ali (Mandrill)
 // ---------------------------------------------------------------------------
-async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [] }) {
+async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog }) {
   if (!process.env.MANDRILL_API_KEY) return { skipped: 'no MANDRILL_API_KEY' };
   const nodemailer = require(path.resolve(__dirname, '../../../../node_modules/nodemailer'));
   const { validateBeforeSend } = require(path.resolve(__dirname, './mandrillPreflight'));
+
+  const today = state.today;
 
   const escRows = escalations.slice(0, 8).map((e) =>
     `<tr><td>${e.classification}</td><td>${e.days_overdue}d</td><td>${e.area}</td><td>${stripEmDashes(stripHtml(e.content)).slice(0, 80)}</td><td>${(e.assignees || []).join(', ') || 'unassigned'}</td></tr>`
   ).join('') || '<tr><td colspan="5">No escalations today.</td></tr>';
 
-  const humanRows = humanQueue.slice(0, 10).map((h) =>
-    `<tr><td>${h.due_on}</td><td>${h.area}</td><td>${stripEmDashes(stripHtml(h.content)).slice(0, 90)}</td><td>${(h.assignees || []).join(', ') || 'unassigned'}</td></tr>`
-  ).join('') || '<tr><td colspan="4">Empty queue.</td></tr>';
+  const feasibilityRows = [...state.areas]
+    .sort((a, b) => (a.feasibility.score - b.feasibility.score))
+    .map((a, i) => `<tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}">
+<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${htmlEsc(a.listName)}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${scoreBadge(a.feasibility)}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${a.feasibility.requiredDays}d work / ${a.feasibility.daysToLaunch}d left</td>
+<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">H ${a.humanCount} / AI ${a.aiCount}${a.eitherCount ? ` / E ${a.eitherCount}` : ''}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(a.feasibility.reason)}</td>
+</tr>`).join('');
 
-  const areaRows = state.areas.map((a) =>
-    `<tr><td>${a.listName}</td><td style="text-align:right">${a.pct}%</td><td style="text-align:right">${a.openCount}</td><td style="text-align:right">${a.overdue.length}</td></tr>`
-  ).join('');
+  const perAreaNextHumanRows = state.areas
+    .map((a) => {
+      const nextH = a.openTodos.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !blockerMap.get(t.id)?.blocked);
+      if (!nextH) return null;
+      const owner = (nextH.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned';
+      return `<tr><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${htmlEsc(a.listName)}</td>
+<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0">${duePill(nextH.due_on, today)}</td>
+<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${nextH.url}" style="color:#1a365d;text-decoration:none;font-weight:600">${htmlEsc(stripEmDashes(stripHtml(nextH.content))).slice(0, 110)}</a></td>
+<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(owner)}</td></tr>`;
+    })
+    .filter(Boolean).join('');
+
+  const areaCards = state.areas.map((a) => renderAreaCard(a, today, blockerMap)).join('');
 
   // Pick the single Ali-targeted "next human action" (his next decision-point).
   // If none assigned directly to Ali, fall back to the topmost human task by due date.
@@ -242,40 +428,71 @@ async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePost
 </div>`
     : '<div style="background:#dcfce7;border-left:6px solid #15803d;padding:14px 18px;margin:0 0 18px"><strong>You are clear.</strong> No human action queued for you right now.</div>';
 
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:arial,sans-serif">
-<div style="max-width:760px;margin:0 auto;background:white;color:#1a202c;line-height:1.55">
+  const aiDraftedRows = (aiLog?.recentDrafted || []).slice(0, 10).map((a) =>
+    `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(a.when || '').slice(0, 16).replace('T', ' ')}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px">${a.url ? `<a href="${a.url}" style="color:#1a365d;text-decoration:none">${htmlEsc(stripHtml(a.content)).slice(0, 90)}</a>` : htmlEsc(stripHtml(a.content)).slice(0, 90)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(a.area)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${(a.briefs || []).join(', ').slice(0, 60)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569;text-align:right">${a.chars}</td></tr>`).join('') || '<tr><td colspan="5" style="padding:8px;color:#64748b;font-size:12px">No AI drafts yet.</td></tr>';
 
-<div style="background:linear-gradient(135deg,#1a365d 0%,#2b6cb0 100%);color:white;padding:24px 32px">
-<div style="font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#fbbf24;font-weight:700">Launch PMO - Executive Update</div>
-<div style="font-size:22px;font-weight:800;margin-top:6px">${state.today} - ${state.daysToLaunch} days to launch</div>
-<div style="font-size:13px;color:#cbd5e0;margin-top:6px">Overall readiness: <strong>${state.overall}%</strong> | Open tasks: <strong>${state.areas.reduce((s, a) => s + a.openCount, 0)}</strong> | Escalations: <strong>${escalations.length}</strong> | Nurture posts today: <strong>${nurturePosted.length}</strong></div>
-</div>
+  const aiCompletedRows = (aiLog?.recentCompleted || []).slice(0, 10).map((a) =>
+    `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(a.completed_at || '').slice(0, 16).replace('T', ' ')}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${a.url}" style="color:#1a365d;text-decoration:none">${htmlEsc(stripHtml(a.content)).slice(0, 95)}</a></td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(a.area)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(a.completedBy)}</td></tr>`).join('') || '<tr><td colspan="4" style="padding:8px;color:#64748b;font-size:12px">No AI completions in last 7 days yet.</td></tr>';
 
-<div style="padding:22px 32px">
+  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f7fafc;font-family:arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc"><tr><td align="center">
+<table width="800" cellpadding="0" cellspacing="0" style="max-width:800px;background:#fff;border-radius:8px;margin:24px 0;overflow:hidden">
+
+<tr><td style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:#fff;padding:28px 32px">
+<div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">Launch PMO - Daily Update</div>
+<h1 style="margin:6px 0 8px;font-size:24px;font-weight:800;color:white">AI Systems Architect Accelerator &mdash; ${today}</h1>
+<div style="font-size:13px;color:#e2e8f0;line-height:1.6">${state.daysToLaunch} days to launch &middot; ${state.overall}% overall ready &middot; ${state.totalAi} AI-doable &middot; ${state.totalHuman} human-needed &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</div>
+</td></tr>
+
+<tr><td style="background:#1c1917;color:white;padding:18px 32px">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">For Ali - big picture</div>
+<div style="font-size:14px;margin-top:6px;line-height:1.55">${aiSummary.exec_summary || '(empty project)'}</div>
+${aiSummary.critical_path ? `<div style="font-size:13px;margin-top:8px;color:#fde68a"><strong>Critical path this week:</strong> ${aiSummary.critical_path}</div>` : ''}
+</td></tr>
+
+<tr><td style="padding:24px 32px 0">
 
 ${nextBanner}
 
-<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:0 0 10px">Executive summary</h2>
-<p style="font-size:14px;color:#1f2937;margin:0 0 10px">${aiSummary.exec_summary || '(no summary yet - empty project)'}</p>
-${aiSummary.critical_path ? `<p style="font-size:14px;color:#1f2937;margin:0"><strong>Critical path this week:</strong> ${aiSummary.critical_path}</p>` : ''}
+<table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px"><tr>
+<td style="text-align:center;padding:14px;background:#fef3c7;border-radius:8px;width:23%"><div style="font-size:26px;font-weight:800;color:#78350f">${state.totalHuman}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#78350f;font-weight:700">Human-needed</div></td>
+<td style="width:1%"></td>
+<td style="text-align:center;padding:14px;background:#dbeafe;border-radius:8px;width:23%"><div style="font-size:26px;font-weight:800;color:#1e3a8a">${state.totalAi}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a;font-weight:700">AI-doable</div></td>
+<td style="width:1%"></td>
+<td style="text-align:center;padding:14px;background:#fee2e2;border-radius:8px;width:23%"><div style="font-size:26px;font-weight:800;color:#7f1d1d">${state.totalOverdue}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f1d1d;font-weight:700">Overdue</div></td>
+<td style="width:1%"></td>
+<td style="text-align:center;padding:14px;background:#fee2e2;border-radius:8px;width:23%"><div style="font-size:26px;font-weight:800;color:#7f1d1d">${blockedHumanTasks.length}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f1d1d;font-weight:700">Blocked</div></td>
+</tr></table>
 
-<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Readiness by area</h2>
-<table cellpadding="8" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
-<tr style="background:#1a365d;color:white"><th align="left">Area</th><th align="right">Done %</th><th align="right">Open</th><th align="right">Overdue</th></tr>
-${areaRows}
-</table>
+<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Feasibility by area (lowest first)</h2>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px">
+<thead><tr style="background:#1a365d;color:white"><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">AREA</th><th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">SCORE</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">WORK vs TIME</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">TIER MIX</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">REASON</th></tr></thead>
+<tbody>${feasibilityRows}</tbody></table>
 
-<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Next action per teammate</h2>
-<table cellpadding="8" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
-<tr style="background:#1a365d;color:white"><th align="left">Who</th><th align="left">Due</th><th align="left">Task</th><th align="left">Area</th></tr>
-${perPersonRows || '<tr><td colspan="4">No queued tasks per teammate.</td></tr>'}
-</table>
+<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Next human step blocking each area</h2>
+${perAreaNextHumanRows ? `<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px">
+<thead><tr style="background:#1a365d;color:white"><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">AREA</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">DUE</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">NEXT HUMAN STEP</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">OWNER</th></tr></thead>
+<tbody>${perAreaNextHumanRows}</tbody></table>` : '<div style="background:#dcfce7;padding:14px 18px;border-radius:6px;color:#14532d;font-weight:600;margin-bottom:24px">All areas are unblocked on the human side. CB executes next.</div>'}
 
-<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">FULL HUMAN ACTION QUEUE (sorted by urgency)</h2>
-<table cellpadding="8" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
-<tr style="background:#1a365d;color:white"><th align="left">Due</th><th align="left">Area</th><th align="left">Task</th><th align="left">Owner</th></tr>
-${humanRows}
-</table>
+<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Areas in detail</h2>
+${areaCards}
+
+<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">AI work CB has drafted (last 12)</h2>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:14px">
+<thead><tr style="background:#1e3a8a;color:white"><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">WHEN</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">TASK</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">AREA</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">BRIEFS USED</th><th align="right" style="padding:8px 10px;font-size:10px;letter-spacing:1px">CHARS</th></tr></thead>
+<tbody>${aiDraftedRows}</tbody></table>
+
+<h2 style="color:#1a365d;font-size:17px;margin:18px 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">AI tasks marked complete (last 7 days)</h2>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px">
+<thead><tr style="background:#14532d;color:white"><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">WHEN</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">TASK</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">AREA</th><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">BY</th></tr></thead>
+<tbody>${aiCompletedRows}</tbody></table>
 
 ${blockedHumanTasks.length ? `<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Blocked tasks (excluded from queue above)</h2>
 <table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px;border:1px solid #cbd5e0">
@@ -298,9 +515,9 @@ ${escRows}
 
 ${aiSummary.risks?.length ? `<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Risks</h2><ul style="font-size:13px;margin:0 0 0 18px;padding:0">${aiSummary.risks.map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}
 
-<p style="font-size:11px;color:#94a3b8;margin-top:28px">Generated by CB System Launch PMO heartbeat. Source: <a href="https://3.basecamp.com/3945211/projects/${LAUNCH.projectId}" style="color:#2b6cb0">project ${LAUNCH.projectId}</a>. Replies welcome - I read your responses via the inbound dispatcher.</p>
+<p style="font-size:11px;color:#94a3b8;margin-top:28px">Generated by CB System Launch PMO heartbeat (Mon-Fri 8am CDT). Project: <a href="https://3.basecamp.com/3945211/projects/${LAUNCH.projectId}" style="color:#2b6cb0">project ${LAUNCH.projectId}</a>. Briefs: <a href="${(/*VAULT*/'')}https://app.basecamp.com/3945211/buckets/${LAUNCH.projectId}/vaults/9946496186" style="color:#2b6cb0">Launch Briefs vault folder</a>. Tag <code>@CB System</code> to ask CB for a PDF / Excel / image artifact or to queue a follow-up.</p>
 
-</div></div></body></html>`;
+</td></tr></table></td></tr></table></body></html>`;
 
   const text = stripEmDashes(`Launch PMO Update ${state.today} - ${state.daysToLaunch} days to launch.
 
@@ -344,62 +561,77 @@ Launch PMO for AI Systems Architect Accelerator`);
 // ---------------------------------------------------------------------------
 // MB post (HUMAN ACTION QUEUE)
 // ---------------------------------------------------------------------------
-async function postHumanActionQueue(state, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = []) {
+async function postHumanActionQueue(state, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog) {
   const today = state.today;
   const aliTasks = humanQueue.filter((h) => (h.assignees || []).some((a) => /Ali Muwwakkil/i.test(a)));
   const nextForAli = aliTasks[0] || humanQueue[0] || null;
-  const perPerson = {};
-  for (const h of humanQueue) {
-    for (const a of (h.assignees || [])) {
-      const name = (a || '').trim();
-      if (!name) continue;
-      if (!perPerson[name]) perPerson[name] = h;
-    }
-  }
-  const perPersonRows = Object.entries(perPerson).slice(0, 12)
-    .map(([name, t]) => `<tr><td>${name}</td><td>${t.due_on}</td><td>${stripEmDashes(stripHtml(t.content)).slice(0, 90)}</td><td>${t.area}</td></tr>`).join('');
 
-  const rows = humanQueue.slice(0, 12).map((h) =>
-    `<tr><td>${h.due_on}</td><td>${h.area}</td><td>${stripEmDashes(stripHtml(h.content)).slice(0, 90)}</td><td>${(h.assignees || []).join(', ') || 'unassigned'}</td></tr>`
-  ).join('') || '<tr><td colspan="4">Empty queue.</td></tr>';
+  const perAreaNextHumanRows = state.areas.map((a) => {
+    const nextH = a.openTodos.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !blockerMap.get(t.id)?.blocked);
+    if (!nextH) return null;
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${htmlEsc(a.listName)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${duePill(nextH.due_on, today)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${nextH.url}" style="color:#1a365d;text-decoration:none;font-weight:600">${htmlEsc(stripEmDashes(stripHtml(nextH.content))).slice(0, 100)}</a></td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc((nextH.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned')}</td></tr>`;
+  }).filter(Boolean).join('');
+
+  const feasibilityRows = [...state.areas]
+    .sort((a, b) => (a.feasibility.score - b.feasibility.score))
+    .map((a) => `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${htmlEsc(a.listName)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${scoreBadge(a.feasibility)}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">H ${a.humanCount} / AI ${a.aiCount}${a.eitherCount ? ` / E ${a.eitherCount}` : ''} - ${htmlEsc(a.feasibility.reason)}</td></tr>`).join('');
+
+  const aiCompletedRows = (aiLog?.recentCompleted || []).slice(0, 8).map((a) =>
+    `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(a.completed_at || '').slice(0, 16).replace('T', ' ')}</td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${a.url}" style="color:#1a365d">${htmlEsc(stripHtml(a.content)).slice(0, 90)}</a></td>
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(a.area)}</td></tr>`).join('');
 
   const escRows = escalations.slice(0, 5).map((e) =>
     `<li><strong>${e.classification}</strong> (${e.days_overdue}d): ${e.area} - ${stripEmDashes(stripHtml(e.content)).slice(0, 110)}</li>`
   ).join('');
 
   const banner = nextForAli
-    ? `<div style="background:#fef3c7;border-left:6px solid #d97706;padding:14px 18px;margin:0 0 16px">
-<strong style="color:#78350f;letter-spacing:1px">YOUR TURN ALI: </strong>
-<strong>${stripEmDashes(stripHtml(nextForAli.content))}</strong>
-(${nextForAli.area}, due ${nextForAli.due_on})
+    ? `<div style="background:#1c1917;color:white;padding:14px 18px;margin:0 0 16px;border-left:4px solid #fbbf24">
+<div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">YOUR TURN ALI - next decision</div>
+<a href="${nextForAli.url}" style="display:block;color:white;text-decoration:none;font-weight:700;margin-top:4px">${stripEmDashes(stripHtml(nextForAli.content))}</a>
+<div style="margin-top:4px;font-size:12px;color:#cbd5e0">${nextForAli.area} &middot; due ${nextForAli.due_on}</div>
 </div>`
-    : '<div><strong>You are clear.</strong> No human action queued for Ali right now.</div>';
+    : '<div style="background:#dcfce7;padding:14px 18px;border-radius:6px;color:#14532d;font-weight:600">You are clear. No human action queued for Ali right now.</div>';
 
   const content = `<div>
-<h3>HUMAN ACTION QUEUE - ${today}</h3>
-<p><strong>${state.daysToLaunch} days to launch</strong> | Overall readiness: ${state.overall}% | Nurture posts today: ${nurturePosted.length}</p>
+<h3>Launch Readiness Dashboard - ${today}</h3>
+<p><strong>${state.daysToLaunch} days to launch</strong> &middot; ${state.overall}% overall &middot; ${state.totalHuman} human-needed &middot; ${state.totalAi} AI-doable &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</p>
 ${banner}
-<h4>Next action per teammate</h4>
-<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
-<tr style="background:#1a365d;color:white"><th align="left">Who</th><th align="left">Due</th><th align="left">Task</th><th align="left">Area</th></tr>
-${perPersonRows || '<tr><td colspan="4">No queued tasks per teammate.</td></tr>'}
+<h4>Next human step blocking each area</h4>
+${perAreaNextHumanRows ? `<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;border-collapse:collapse;border:1px solid #e2e8f0">
+<tr style="background:#1a365d;color:white"><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">AREA</th><th align="left" style="padding:8px 10px;font-size:10px">DUE</th><th align="left" style="padding:8px 10px;font-size:10px">NEXT HUMAN STEP</th><th align="left" style="padding:8px 10px;font-size:10px">OWNER</th></tr>
+${perAreaNextHumanRows}
+</table>` : '<div>All areas unblocked on the human side. CB executes next.</div>'}
+
+<h4>Feasibility per area (lowest first)</h4>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;border-collapse:collapse;border:1px solid #e2e8f0">
+<tr style="background:#1a365d;color:white"><th align="left" style="padding:8px 10px;font-size:10px">AREA</th><th align="center" style="padding:8px 10px;font-size:10px">SCORE</th><th align="left" style="padding:8px 10px;font-size:10px">REASON</th></tr>
+${feasibilityRows}
 </table>
-<h4>Full queue (top 12 by urgency)</h4>
-<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
-<tr style="background:#1a365d;color:white"><th align="left">Due</th><th align="left">Area</th><th align="left">Task</th><th align="left">Owner</th></tr>
-${rows}
-</table>
+
+${aiCompletedRows ? `<h4>AI tasks marked complete (last 7 days)</h4>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;border-collapse:collapse;border:1px solid #e2e8f0">
+<tr style="background:#14532d;color:white"><th align="left" style="padding:8px 10px;font-size:10px">WHEN</th><th align="left" style="padding:8px 10px;font-size:10px">TASK</th><th align="left" style="padding:8px 10px;font-size:10px">AREA</th></tr>
+${aiCompletedRows}
+</table>` : ''}
+
 ${escRows ? `<h4>Escalations</h4><ul>${escRows}</ul>` : ''}
 ${blockedHumanTasks.length ? `<h4>Blocked tasks (waiting on upstream)</h4>
-<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px;border:1px solid #cbd5e0">
+<table cellpadding="6" cellspacing="0" style="width:100%;font-size:11px;border-collapse:collapse;border:1px solid #e2e8f0">
 <tr style="background:#1a365d;color:white"><th align="left">Task</th><th align="left">Owner</th><th align="left">Blocked on</th></tr>
-${blockedHumanTasks.slice(0, 8).map((b) => `<tr><td>${stripEmDashes(stripHtml(b.content)).slice(0, 70)}</td><td>${(b.assignees || []).join(', ') || 'unassigned'}</td><td>${b.blocker?.reason || ''}</td></tr>`).join('')}
+${blockedHumanTasks.slice(0, 6).map((b) => `<tr><td>${stripEmDashes(stripHtml(b.content)).slice(0, 80)}</td><td>${(b.assignees || []).join(', ') || 'unassigned'}</td><td>${b.blocker?.reason || ''}</td></tr>`).join('')}
 </table>` : ''}
-<p style="font-size:11px;color:#64748b">Auto-posted daily Mon-Fri 8am CST by CB System Launch PMO. Every task above links to its Basecamp todo. Tag <code>@CB System</code> to escalate, get AI execution, or ask for a PDF / Excel / image artifact. Blocked tasks excluded from queues.</p>
+
+<p style="font-size:11px;color:#64748b">Auto-posted daily Mon-Fri 8am CST by CB System Launch PMO. Each task links to its Basecamp todo. Tag <code>@CB System</code> for help (artifacts, follow-ups, AI execution). Blocked tasks excluded.</p>
 </div>`;
 
   return ops.postMessage({
-    subject: `Human Action Queue - ${today}`,
+    subject: `Launch Readiness Dashboard - ${today}`,
     content,
   });
 }
@@ -587,9 +819,10 @@ async function runDailyUpdate({ force = false } = {}) {
   const aiQueueAll = buildAiQueue(state);
   const aiQueue = aiQueueAll.filter((a) => !blockerMap.get(a.id)?.blocked);
   const aiSummary = await generateExecSummary(state, escalations, humanQueue, aiQueue);
+  const aiLog = await buildAiCompletionLog(state);
   const nurturePosted = await runNurtureCycle(state, LAUNCH.projectId);
-  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks });
-  const mbResult = await postHumanActionQueue(state, humanQueue, escalations, nurturePosted, blockedHumanTasks);
+  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog });
+  const mbResult = await postHumanActionQueue(state, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog);
   return {
     today: state.today,
     overall: state.overall,
