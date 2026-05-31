@@ -1,42 +1,49 @@
 #!/usr/bin/env node
 /**
- * Generate Week 0-1 tasks per area for AI Systems Architect Accelerator.
+ * Generate (v2) detailed launch tasks for AI Systems Architect Accelerator.
  *
  * Reads:
- *   - docs/training-program-2026-q3/TRAINING_INTEGRATION_PLAN.md (per-area sections)
- *   - docs/training-program-2026-q3/ASSUMPTIONS_LOG.md (locked decisions)
- *   - Ali's latest system-prompt directives (hardcoded extract; see ALI_DIRECTIVES)
+ *   - tmp/launch-briefs-vault-urls.json (run uploadLaunchBriefs.js first)
+ *   - docs/training-program-2026-q3/TRAINING_INTEGRATION_PLAN.md
+ *   - docs/training-program-2026-q3/ASSUMPTIONS_LOG.md
  *
- * For each area in the project, calls gpt-4o via lib/launchPmoTaskGenerator,
- * then writes the tasks to Basecamp via lib/launchPmoOps. Idempotent: existing
- * todos by same content are skipped.
+ * Per area:
+ *   1. (Default) Trash all existing todos in that list to avoid stale + dup
+ *   2. Call gpt-4o via launchPmoTaskGenerator
+ *   3. Write each task with a richly formatted description that includes:
+ *      - Tier badge + Owner
+ *      - Objective / Deliverable / Definition of Done / Dependencies
+ *      - "How to do this in Claude Code" mini-recipe
+ *      - Clickable links to the relevant briefs (BC Vault URLs)
+ *      - Pointer to the Launch Briefs vault folder
  *
  * Run: node backend/src/scripts/generateLaunchTasks.js
- *      Add --dry-run to preview without writing.
- *      Add --area="<name>" to limit to a single area.
+ *      --dry-run         preview without writing
+ *      --area="<name>"   limit to one area
+ *      --keep-existing   skip the trash-old step (default trashes first)
  */
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const ops = require('./lib/launchPmoOps');
 const { generateAreaTasks } = require('./lib/launchPmoTaskGenerator');
-const { TEAM, LAUNCH, provisioned, getByHandle } = require('./lib/launchPmoTeam');
+const { LAUNCH, provisioned, getByHandle } = require('./lib/launchPmoTeam');
 
 const DRY = process.argv.includes('--dry-run');
+const KEEP = process.argv.includes('--keep-existing');
 const areaArg = process.argv.find((a) => a.startsWith('--area='));
 const AREA_FILTER = areaArg ? areaArg.split('=')[1] : null;
 
-// ---------- Load context docs ------------
 const DOCS = path.resolve(__dirname, '../../../docs/training-program-2026-q3');
 const INTEGRATION_PLAN = fs.readFileSync(path.join(DOCS, 'TRAINING_INTEGRATION_PLAN.md'), 'utf8');
 const ASSUMPTIONS = fs.readFileSync(path.join(DOCS, 'ASSUMPTIONS_LOG.md'), 'utf8');
+const VAULT_MAP_PATH = path.resolve(__dirname, '../../../tmp/launch-briefs-vault-urls.json');
+if (!fs.existsSync(VAULT_MAP_PATH)) {
+  console.error('tmp/launch-briefs-vault-urls.json missing. Run uploadLaunchBriefs.js first.');
+  process.exit(1);
+}
+const VAULT_MAP = JSON.parse(fs.readFileSync(VAULT_MAP_PATH, 'utf8'));
 
-// Ali's directives from his 2026-05-31 system prompt comment (9946342528).
-// Captures additions beyond the integration plan: 9-hat operator role,
-// Mon-Fri-only tickets, Mailchimp ASAP, Open Houses recurring, GHL rebuild,
-// voice AI 972-992-1024, Cora inbox AI, training.colaberry.com vs
-// enterprise.colaberry.ai split, NotebookLM podcasts/videos, no auto-post to
-// LinkedIn, escalation cadence 1/3/5/7, daily exec update at 8am CST.
 const ALI_DIRECTIVES = `
 - CB System wears 9 hats: PMO, Chief of Staff, PM, Scrum Master, Ops Coordinator, Product Manager, Marketing Coordinator, Curriculum Coordinator, AI Systems Coordinator.
 - Monday-Friday tickets only. No weekend due dates.
@@ -44,102 +51,142 @@ const ALI_DIRECTIVES = `
   - training.colaberry.com (Tejesh) = public marketing site, career changer / working professional audience, swaps DA->AI Systems positioning while keeping testimonials + reviews + blogs.
   - enterprise.colaberry.ai (Kes) = student platform + CRM + portfolio + community + certification + incubator + AI agent ecosystem. Drives monthly subscription revenue.
 - Marketing strategy + landing pages + social media strategy by end of THIS week (2026-06-06). Mailchimp campaign to alumni/dropouts/non-signups ASAP (within 2 weeks). Content production starts 2 weeks from today (2026-06-14).
-- Viral videos in 2 weeks (2026-06-14). Aleem produces these. NO auto-post to LinkedIn - humans approve all publishing.
+- Viral videos in 2 weeks (2026-06-14). Aleem produces. NO auto-post to LinkedIn - humans approve all publishing.
 - All AI switched to new program in 3 weeks (2026-06-21): Cora (support@colaberry.com inbox AI), Voice AI on 972-992-1024, GHL workflows rebuild.
-- enterprise.colaberry.ai migration done 2026-06-07 (end of next week), 3 sessions planned in advance, curriculum flow testable 2026-06-07.
-- Curriculum design visuals (UI/UX-grade like a professional tool) in 2 days (2026-06-02). Aleem and Ali approve.
+- enterprise.colaberry.ai migration done 2026-06-07, 3 sessions planned in advance, curriculum flow testable 2026-06-07.
+- Curriculum design visuals (UI/UX-grade) in 2 days (2026-06-02). Aleem + Ali approve.
 - Both websites finalized 2026-06-21.
 - Open House design + materials + landing page + slides + follow-up sequence + sales process in 3 weeks (2026-06-21). Recurring Open House events.
 - TWC tasks divided evenly Mon-Fri through to launch.
-- Platform capacity analysis THIS week (how many projects/students the platform can manage in current state).
-- Daily executive update 8am CST (Ali email + Basecamp Message Board post).
-- Escalation: 1d reminder, 3d escalate to lead, 5d notify Ali, 7d CRITICAL_RISK on dashboard.
-- Roselen is the Sales/Admissions human-in-the-loop. NOT yet on Basecamp; Ali to provision. Until then, sales tasks go unassigned or to Taiwo (admissions ops).
-- Mentor agent MUST have a human-review queue from day 1 (Ali specifically called this out: don't pretend it's fully autonomous - students paid).
+- Platform capacity analysis THIS week.
+- Daily executive update 8am CST.
+- Escalation: 1d reminder, 3d escalate to lead, 5d notify Ali, 7d CRITICAL_RISK.
+- Roselen is the Sales/Admissions human-in-the-loop. NOT yet on Basecamp; Ali to provision. Until then, sales tasks go unassigned or Taiwo.
+- Mentor agent MUST have human-review queue from day 1.
 - Anthropic Partner Network status deadline 2026-06-12 (hard gate).
 `;
 
-// ---------- Map area name -> integration plan slice ------------
-// Extracts the relevant Section 3.x text for each area to focus the LLM.
-function sliceFor(areaName) {
-  function getSections(headerRegexes) {
-    const slices = [];
-    for (const re of headerRegexes) {
-      const m = INTEGRATION_PLAN.match(new RegExp(`(### ${re}[\\s\\S]*?)(?=\\n### |\\n## )`, 'i'));
-      if (m) slices.push(m[1].trim());
-    }
-    return slices.join('\n\n');
-  }
-  switch (areaName) {
-    case 'Curriculum':
-      return getSections(['3\\.1 Project Builder', '3\\.2 Anthropic Companion', '3\\.4 The 6 AI Agents']) + '\n\n' + extractSection('## 2. Curriculum structure');
-    case 'Website - training.colaberry.com':
-      return getSections(['3\\.7 Build Log auto-formatter', '3\\.11 Pricing']) + '\n\n' + extractSection('## 9. How this connects');
-    case 'Website - enterprise.colaberry.ai':
-      return getSections(['3\\.1 Project Builder', '3\\.2 Anthropic Companion', '3\\.5 Architect Portfolio Dashboard', '3\\.6 GitHub integration', '3\\.9 In-platform community']);
-    case 'Marketing':
-      return getSections(['3\\.7 Build Log auto-formatter', '3\\.11 Pricing']) + '\n\n' + extractSection('## 6. Open decisions');
-    case 'AI Systems':
-      return getSections(['3\\.3 Anthropic Intelligence Layer', '3\\.4 The 6 AI Agents', '3\\.6 GitHub integration']);
-    case 'Open Houses & Events':
-      return getSections(['3\\.10 Architect Expo']) + '\n\nNote: Recurring Open Houses are Ali-direct addition not in original plan; format = AI demo + Claude Code demo + student success + live Q&A + enrollment offer.';
-    case 'Sales & Admissions':
-      return getSections(['3\\.8 Project Marketplace', '3\\.11 Pricing']) + '\n\n' + extractSection('## 4. Team structure');
-    case 'TWC Compliance':
-      return getSections(['3\\.12 TWC compliance']) + '\n\n' + extractSection('## 2. Curriculum structure');
-    case 'Approval Queues':
-      return extractSection('## 6. Open decisions') + '\n\n' + extractSection('## 11. Decisions I made on Ali');
-    case 'Launch Readiness Dashboard':
-      return extractSection('## 5. The 41-day plan') + '\n\n' + extractSection('## 10. Risks');
-    default:
-      return '';
-  }
-}
+// Area name -> integration plan slices + suggested owner brief slug
+const AREA_CONFIG = {
+  'Curriculum': { suggestedOwnerBrief: 'swati-curriculum-twc', sections: ['3\\.1 Project Builder', '3\\.2 Anthropic Companion', '3\\.4 The 6 AI Agents'], extra: ['## 2. Curriculum structure'] },
+  'Website - training.colaberry.com': { suggestedOwnerBrief: 'tejesh-website-training', sections: ['3\\.7 Build Log auto-formatter', '3\\.11 Pricing'], extra: ['## 9. How this connects'] },
+  'Website - enterprise.colaberry.ai': { suggestedOwnerBrief: 'kes-ai-systems', sections: ['3\\.1 Project Builder', '3\\.2 Anthropic Companion', '3\\.5 Architect Portfolio Dashboard', '3\\.6 GitHub integration', '3\\.9 In-platform community'], extra: [] },
+  'Marketing': { suggestedOwnerBrief: 'sohail-marketing', sections: ['3\\.7 Build Log auto-formatter', '3\\.11 Pricing'], extra: ['## 6. Open decisions'] },
+  'AI Systems': { suggestedOwnerBrief: 'kes-ai-systems', sections: ['3\\.3 Anthropic Intelligence Layer', '3\\.4 The 6 AI Agents', '3\\.6 GitHub integration'], extra: [] },
+  'Open Houses & Events': { suggestedOwnerBrief: 'jackie-events', sections: ['3\\.10 Architect Expo'], extra: [] },
+  'Sales & Admissions': { suggestedOwnerBrief: 'roselen-sales', sections: ['3\\.8 Project Marketplace', '3\\.11 Pricing'], extra: ['## 4. Team structure'] },
+  'TWC Compliance': { suggestedOwnerBrief: 'swati-curriculum-twc', sections: ['3\\.12 TWC compliance'], extra: ['## 2. Curriculum structure'] },
+  'Approval Queues': { suggestedOwnerBrief: 'ali-decisions', sections: [], extra: ['## 6. Open decisions', '## 11. Decisions I made on Ali'] },
+  'Launch Readiness Dashboard': { suggestedOwnerBrief: 'cb-pmo-contract', sections: [], extra: ['## 5. The 41-day plan', '## 10. Risks'] },
+};
+
 function extractSection(heading) {
   const m = INTEGRATION_PLAN.match(new RegExp(`(${heading.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}[\\s\\S]*?)(?=\\n## |$)`, 'i'));
   return m ? m[1].trim() : '';
 }
+function getSection3x(re) {
+  const m = INTEGRATION_PLAN.match(new RegExp(`(### ${re}[\\s\\S]*?)(?=\\n### |\\n## )`, 'i'));
+  return m ? m[1].trim() : '';
+}
+function sliceFor(areaName) {
+  const cfg = AREA_CONFIG[areaName];
+  if (!cfg) return '';
+  const parts = [];
+  for (const sec of cfg.sections) parts.push(getSection3x(sec));
+  for (const sec of cfg.extra) parts.push(extractSection(sec));
+  return parts.filter(Boolean).join('\n\n');
+}
 
-// ---------- Main ------------
+function buildBriefLinks(slugs) {
+  const briefs = VAULT_MAP.briefs || {};
+  return slugs
+    .map((s) => briefs[s])
+    .filter(Boolean)
+    .map((b) => `<li><a href="${b.url}">${b.description || b.filename}</a> <span style="color:#94a3b8;font-size:11px">(${b.filename})</span></li>`)
+    .join('');
+}
+
+function buildDescription({ task, ownerLabel, today }) {
+  const tierBadge = task.tier === 'ai'
+    ? '<span style="background:#dbeafe;color:#1e40af;font-weight:700;font-size:11px;padding:2px 8px;border-radius:3px;letter-spacing:1px">AI TASK</span>'
+    : '<span style="background:#fef3c7;color:#92400e;font-weight:700;font-size:11px;padding:2px 8px;border-radius:3px;letter-spacing:1px">HUMAN TASK</span>';
+  const recipeBlock = task.claude_code_recipe
+    ? `<h3>How to do this in Claude Code</h3><p>${task.claude_code_recipe.replace(/\n/g, '<br>')}</p>`
+    : '';
+  const links = buildBriefLinks(task.relevant_brief_slugs);
+  const folderLink = VAULT_MAP.folder?.url
+    ? `<p style="font-size:11px;color:#64748b">All briefs: <a href="${VAULT_MAP.folder.url}">Launch Briefs vault folder</a></p>`
+    : '';
+  return `<div>
+${tierBadge} <strong>Owner:</strong> ${ownerLabel}
+<h3>Objective</h3>
+<p>${task.objective}</p>
+<h3>Deliverable</h3>
+<p>${task.deliverable}</p>
+<h3>Definition of done</h3>
+<p>${task.definition_of_done}</p>
+<h3>Dependencies</h3>
+<p>${task.dependencies || 'none'}</p>
+${recipeBlock}
+<h3>Briefs to read first</h3>
+<ul>${links}</ul>
+${folderLink}
+<p style="font-size:11px;color:#64748b">Generated by CB System Launch PMO on ${today}. Source briefs above. Tag <code>@CB System</code> to escalate or ask for AI execution.</p>
+</div>`;
+}
+
+async function trashTodoslist({ projectId, listId, listName }) {
+  // Trash all todos in the list (both open + completed). Idempotent.
+  const open = await ops.bcGetAll(`/buckets/${projectId}/todolists/${listId}/todos.json`);
+  const done = await ops.bcGetAll(`/buckets/${projectId}/todolists/${listId}/todos.json?completed=true`);
+  const all = [...(open || []), ...(done || [])];
+  console.log(`  trashing ${all.length} existing todos in "${listName}"`);
+  for (const t of all) {
+    try {
+      await ops.bcPut(`/buckets/${projectId}/recordings/${t.id}/status/trashed.json`, {});
+      await new Promise((r) => setTimeout(r, 100));
+    } catch (e) {
+      console.error(`    trash ${t.id} fail: ${e.message}`);
+    }
+  }
+}
+
 (async () => {
   const dock = await ops.getDock();
   const lists = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todosets/${dock.todoset.id}/todolists.json`);
   const roster = provisioned();
   const today = new Date().toISOString().slice(0, 10);
 
-  console.log(`Generating launch tasks${DRY ? ' [DRY-RUN]' : ''} - today=${today}, target=${LAUNCH.targetLaunchDate}`);
-  console.log(`Found ${lists.length} todolists in project ${LAUNCH.projectId}`);
+  console.log(`Generating launch tasks v2${DRY ? ' [DRY-RUN]' : ''} - today=${today}, target=${LAUNCH.targetLaunchDate}`);
+  console.log(`${lists.length} lists in project, ${Object.keys(VAULT_MAP.briefs || {}).length} briefs in vault`);
 
   for (const list of lists) {
     if (AREA_FILTER && list.name !== AREA_FILTER) continue;
     console.log(`\n=== ${list.name} ===`);
-    const slice = sliceFor(list.name);
-    if (!slice && list.name !== 'Launch Readiness Dashboard') {
-      console.log('  (no integration plan slice for this area; using general prompt)');
+    const cfg = AREA_CONFIG[list.name];
+    if (!cfg) { console.log('  (no config; skipping)'); continue; }
+    if (!KEEP && !DRY) {
+      await trashTodoslist({ projectId: LAUNCH.projectId, listId: list.id, listName: list.name });
     }
     try {
       const t0 = Date.now();
       const { tasks, rationale, tokenUsage } = await generateAreaTasks({
-        area: { name: list.name, description: list.description?.slice(0, 600) || '', focus: list.name },
-        integrationPlanSlice: slice,
+        area: { name: list.name, description: list.description?.slice(0, 600) || '', suggestedOwnerBrief: cfg.suggestedOwnerBrief },
+        integrationPlanSlice: sliceFor(list.name),
         assumptions: ASSUMPTIONS,
         teamRoster: roster,
         newDirectives: ALI_DIRECTIVES,
+        briefSlugMap: VAULT_MAP.briefs || {},
         todayIso: today,
         targetLaunch: LAUNCH.targetLaunchDate,
       });
       console.log(`  generated ${tasks.length} tasks in ${Date.now() - t0}ms (tokens=${tokenUsage?.total_tokens || '?'})`);
       console.log(`  rationale: ${rationale}`);
-
       for (const t of tasks) {
         const owner = getByHandle(t.owner_handle);
         const assigneeIds = owner && owner.basecampPersonId ? [owner.basecampPersonId] : [];
         const ownerLabel = owner ? owner.displayName : t.owner_handle;
-        const descHtml = `<div><strong>${t.tier === 'ai' ? 'AI Task' : 'Human Task'}</strong> | Owner: ${ownerLabel}</div>
-<div><br></div>
-<div>${t.note}</div>
-<div><br></div>
-<div style="font-size:11px;color:#64748b">Generated by CB System Launch PMO on ${today}. Source: TRAINING_INTEGRATION_PLAN.md + ASSUMPTIONS_LOG.md + Ali's 2026-05-31 directives.</div>`;
+        const descHtml = buildDescription({ task: t, ownerLabel, today });
         if (DRY) {
           console.log(`    [dry] ${t.due_on} ${t.owner_handle.padEnd(8)} ${t.tier.padEnd(5)} ${t.content.slice(0, 80)}`);
           continue;
@@ -152,14 +199,14 @@ function extractSection(heading) {
             assigneePersonIds: assigneeIds,
             dueOn: t.due_on,
           });
-          console.log(`    + [${t.due_on}] ${t.owner_handle.padEnd(8)} ${todo.id}: ${t.content.slice(0, 70)}`);
+          console.log(`    + [${t.due_on}] ${t.owner_handle.padEnd(8)} ${t.tier.padEnd(5)} ${todo.id}: ${t.content.slice(0, 70)}`);
           await new Promise((r) => setTimeout(r, 200));
         } catch (e) {
           console.error(`    FAIL "${t.content.slice(0, 60)}": ${e.message}`);
         }
       }
     } catch (e) {
-      console.error(`  area generation FAIL: ${e.message}`);
+      console.error(`  area gen FAIL: ${e.message}`);
     }
   }
 
