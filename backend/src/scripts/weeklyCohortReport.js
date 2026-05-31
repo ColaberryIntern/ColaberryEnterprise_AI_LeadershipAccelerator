@@ -124,13 +124,25 @@ async function fetchCohorts() {
     options: { encrypt: true, trustServerCertificate: true, requestTimeout: 60000 },
   });
 
-  // Pull all signups from recent cohorts. Filter to ClassStartDate within
-  // the lookback window. Per-cohort minimum size to drop test classes.
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - COHORT_LOOKBACK_MONTHS);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
+  // ACTIVE-ONLY filter via vw_QS_MetricsDashboard_ClassManagement.
+  // That view is denormalized per (class, section) so GROUP BY Class_ID and take
+  // MAX(Class_Active) / MAX(ClassCompleted) / MAX(Class_Cancelled) per class.
+  // A class qualifies as "active" only if it is currently active, not completed,
+  // and not cancelled.
   const result = await pool.request().query(`
+    WITH ClassStatus AS (
+      SELECT Class_ID,
+             MAX(ISNULL(Class_Active, 0)) AS IsActive,
+             MAX(ISNULL(ClassCompleted, 0)) AS IsCompleted,
+             MAX(ISNULL(Class_Cancelled, 0)) AS IsCancelled,
+             MAX(Class_ClassInstructor) AS Instructor
+      FROM vw_QS_MetricsDashboard_ClassManagement
+      GROUP BY Class_ID
+    )
     SELECT
       ep.ClassSignUpsID,
       ep.ClassId,
@@ -143,11 +155,62 @@ async function fetchCohorts() {
       ep.CurrentSection,
       ep.NoOfEvents,
       ep.TotalEventsCompleted,
-      ep.EventsCompletionPercentage
+      ep.EventsCompletionPercentage,
+      cs.Instructor AS InstructorName
     FROM vw_ClassSignUps_EventProgress ep
+    INNER JOIN ClassStatus cs ON cs.Class_ID = ep.ClassId
     WHERE ep.EnrollmentDate >= '${cutoffStr}'
       AND ep.NoOfSections > 0
+      AND cs.IsActive = 1
+      AND cs.IsCompleted = 0
+      AND cs.IsCancelled = 0
   `);
+
+  // Capture instructor per class (for badge in HTML) before we move on.
+  const instructorByClass = new Map();
+  for (const r of result.recordset) {
+    if (r.InstructorName) instructorByClass.set(r.ClassId, r.InstructorName);
+  }
+
+  // COMPLETED classes with IPBC signups: separate query. Get every IPBC signup
+  // whose original class is now marked complete (or cancelled / not-active),
+  // within the lookback window.
+  let ipbcRows = [];
+  try {
+    const ipbcResult = await pool.request().query(`
+      WITH ClassStatus AS (
+        SELECT Class_ID,
+               MAX(ISNULL(Class_Active, 0)) AS IsActive,
+               MAX(ISNULL(ClassCompleted, 0)) AS IsCompleted,
+               MAX(ISNULL(Class_Cancelled, 0)) AS IsCancelled,
+               MAX(Class_ClassInstructor) AS Instructor
+        FROM vw_QS_MetricsDashboard_ClassManagement
+        GROUP BY Class_ID
+      )
+      SELECT
+        ep.ClassId,
+        ep.ClassName,
+        ep.FirstName + ' ' + ep.LastName AS StudentName,
+        ep.Email,
+        ep.EventsCompletionPercentage AS ClassCompletionPct,
+        ep.EnrollmentDate,
+        cs.Instructor AS InstructorName,
+        ipbc.SignupDate AS IpbcSignupDate,
+        ipbc.PaymentStatus AS IpbcPaymentStatus,
+        ipbc.LastPaymentDate AS IpbcLastPaymentDate,
+        ipbc.SMIC_PaymentAmount AS IpbcPaymentAmount,
+        ipbc.TotalPaymentsCount AS IpbcPaymentsCount,
+        ipbc.ISAPaymentType AS IpbcPaymentType
+      FROM vw_ClassSignUps_EventProgress ep
+      INNER JOIN ClassStatus cs ON cs.Class_ID = ep.ClassId
+      INNER JOIN vw_ADF_Student_Marketing_SalesRepsIPBC_Signups ipbc ON ipbc.ClassSignupsID = ep.ClassSignUpsID
+      WHERE ep.EnrollmentDate >= '${cutoffStr}'
+        AND (cs.IsCompleted = 1 OR cs.IsActive = 0 OR cs.IsCancelled = 1)
+      ORDER BY ipbc.SignupDate DESC
+    `);
+    ipbcRows = ipbcResult.recordset;
+  } catch (e) { console.warn(`[cohort-report] IPBC query failed: ${e.message}`); }
+
   await pool.close();
   // Group by ClassId
   const byCohort = new Map();
@@ -190,6 +253,7 @@ async function fetchCohorts() {
     cohorts.push({
       classId: c.classId,
       className: c.className,
+      instructor: instructorByClass.get(c.classId) || null,
       enrollmentDateMin,
       totalStudents: c.students.length,
       medianPct: med,
@@ -203,14 +267,37 @@ async function fetchCohorts() {
   }
   // Sort by enrollmentDateMin desc (most recent cohort first)
   cohorts.sort((a, b) => String(b.enrollmentDateMin || '').localeCompare(String(a.enrollmentDateMin || '')));
-  return cohorts;
+
+  // Group ipbcRows by ClassId for the "Completed -> IPBC" tab.
+  const ipbcByClass = new Map();
+  for (const r of ipbcRows) {
+    if (!ipbcByClass.has(r.ClassId)) ipbcByClass.set(r.ClassId, { classId: r.ClassId, className: r.ClassName, instructor: r.InstructorName, signups: [] });
+    ipbcByClass.get(r.ClassId).signups.push({
+      name: r.StudentName,
+      email: r.Email,
+      classCompletionPct: parseFloat(r.ClassCompletionPct) || 0,
+      ipbcSignupDate: r.IpbcSignupDate ? new Date(r.IpbcSignupDate).toISOString() : null,
+      ipbcPaymentStatus: r.IpbcPaymentStatus,
+      ipbcLastPaymentDate: r.IpbcLastPaymentDate ? new Date(r.IpbcLastPaymentDate).toISOString() : null,
+      ipbcPaymentAmount: parseFloat(r.IpbcPaymentAmount) || 0,
+      ipbcPaymentsCount: r.IpbcPaymentsCount || 0,
+      ipbcPaymentType: r.IpbcPaymentType,
+    });
+  }
+  const completedWithIpbc = [...ipbcByClass.values()].sort((a, b) => {
+    const aDate = a.signups[0]?.ipbcSignupDate || '';
+    const bDate = b.signups[0]?.ipbcSignupDate || '';
+    return bDate.localeCompare(aDate);
+  });
+
+  return { cohorts, completedWithIpbc };
 }
 
 // ============================================================================
 // Interactive HTML render
 // ============================================================================
 
-function buildInteractiveHtml(cohorts, snapshotDate) {
+function buildInteractiveHtml(cohorts, snapshotDate, completedWithIpbc = []) {
   // Build per-cohort trend data and prior-snapshot delta
   const cohortBlocks = cohorts.map((c, idx) => {
     let prior = null, trend = [];
@@ -231,11 +318,14 @@ function buildInteractiveHtml(cohorts, snapshotDate) {
   const overallOnTrack = cohortBlocks.reduce((s, c) => s + c.onTrackCount, 0);
   const overallMedianAvg = cohortBlocks.reduce((s, c) => s + c.medianPct, 0) / Math.max(1, cohortBlocks.length);
 
+  const totalIpbcSignups = completedWithIpbc.reduce((s, c) => s + c.signups.length, 0);
+
   // Inline JSON payload that the browser-side JS reads
   const payload = JSON.stringify({
     snapshotDate,
-    overall: { totalStudents: overallTotal, atRisk: overallAtRisk, onTrack: overallOnTrack, high: overallHigh, medianAvg: overallMedianAvg, cohortCount: cohortBlocks.length },
+    overall: { totalStudents: overallTotal, atRisk: overallAtRisk, onTrack: overallOnTrack, high: overallHigh, medianAvg: overallMedianAvg, cohortCount: cohortBlocks.length, ipbcSignups: totalIpbcSignups, ipbcClassCount: completedWithIpbc.length },
     cohorts: cohortBlocks,
+    completedWithIpbc,
   }).replace(/</g, '\\u003c'); // safe inside <script>
 
   return `<!doctype html>
@@ -357,9 +447,10 @@ function buildInteractiveHtml(cohorts, snapshotDate) {
   <div class="kpi-grid" id="kpis"></div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="cohorts">Cohorts (<span id="cohort-count"></span>)</button>
+    <button class="tab active" data-tab="cohorts">Active Cohorts (<span id="cohort-count"></span>)</button>
     <button class="tab" data-tab="at-risk">At-Risk Students</button>
     <button class="tab" data-tab="trends">Trends</button>
+    <button class="tab" data-tab="ipbc">Completed &rarr; IPBC (${totalIpbcSignups})</button>
   </div>
 
   <div class="tab-content active" id="tab-cohorts">
@@ -384,6 +475,16 @@ function buildInteractiveHtml(cohorts, snapshotDate) {
 
   <div class="tab-content" id="tab-trends">
     <div id="trends-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px"></div>
+  </div>
+
+  <div class="tab-content" id="tab-ipbc">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-bottom:14px;font-size:13px;color:var(--muted)">
+      Students from <strong>completed / inactive cohorts</strong> who have signed up for IPBC. Sorted by most recent signup first.
+    </div>
+    <div class="filter-row">
+      <input type="text" id="ipbc-search" placeholder="Filter by name, email, or cohort..." oninput="renderIpbc()" style="flex:1;min-width:200px">
+    </div>
+    <div id="ipbc-list"></div>
   </div>
 
   <div class="footer">
@@ -594,6 +695,55 @@ function renderTrends() {
   });
 }
 
+// === IPBC tab ===
+function fmtDate(iso) { if (!iso) return '-'; const d = new Date(iso); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+function paymentStatusPill(status) {
+  if (!status) return '<span class="pill" style="background:var(--bg);color:var(--muted)">-</span>';
+  const s = status.toLowerCase();
+  if (s.includes('settle')) return '<span class="pill high">' + esc(status) + '</span>';
+  if (s.includes('refund')) return '<span class="pill at-risk">' + esc(status) + '</span>';
+  if (s.includes('fail') || s.includes('decline')) return '<span class="pill at-risk">' + esc(status) + '</span>';
+  return '<span class="pill on-track">' + esc(status) + '</span>';
+}
+
+function renderIpbc() {
+  const search = (document.getElementById('ipbc-search').value || '').toLowerCase();
+  const container = document.getElementById('ipbc-list');
+  if (!DATA.completedWithIpbc || DATA.completedWithIpbc.length === 0) {
+    container.innerHTML = '<div class="empty-state">No IPBC signups from completed cohorts in the lookback window.</div>';
+    return;
+  }
+  const matches = DATA.completedWithIpbc.map(c => ({
+    ...c,
+    signups: c.signups.filter(s => !search ||
+      (s.name || '').toLowerCase().includes(search) ||
+      (s.email || '').toLowerCase().includes(search) ||
+      (c.className || '').toLowerCase().includes(search))
+  })).filter(c => c.signups.length > 0);
+  if (matches.length === 0) {
+    container.innerHTML = '<div class="empty-state">No IPBC signups match this filter.</div>';
+    return;
+  }
+  container.innerHTML = matches.map(c => {
+    const rows = c.signups.map(s =>
+      '<tr>' +
+      '<td>' + esc(s.name) + '</td>' +
+      '<td><a href="mailto:' + esc(s.email) + '" style="color:var(--navy-light);text-decoration:none">' + esc(s.email || '') + '</a></td>' +
+      '<td>' + (s.classCompletionPct != null ? s.classCompletionPct.toFixed(0) + '%' : '-') + '</td>' +
+      '<td>' + fmtDate(s.ipbcSignupDate) + '</td>' +
+      '<td>' + paymentStatusPill(s.ipbcPaymentStatus) + '</td>' +
+      '<td>' + (s.ipbcPaymentAmount ? '$' + s.ipbcPaymentAmount.toLocaleString() : '-') + '</td>' +
+      '<td>' + (s.ipbcPaymentsCount || 0) + '</td>' +
+      '<td>' + esc(s.ipbcPaymentType || '-') + '</td>' +
+      '</tr>'
+    ).join('');
+    return '<div class="cohort-card">' +
+      '<div class="cohort-head"><div><div class="cohort-title">' + esc(c.className) + '</div><div class="cohort-meta">' + c.signups.length + ' IPBC signup' + (c.signups.length === 1 ? '' : 's') + (c.instructor ? ' &middot; instructor: ' + esc(c.instructor) : '') + ' &middot; class id ' + c.classId + '</div></div></div>' +
+      '<div class="drill-wrap"><table class="drill-table shown" style="font-size:12px"><thead><tr><th>Student</th><th>Email</th><th>Class %</th><th>IPBC Signup</th><th>Status</th><th>Plan $</th><th>Payments</th><th>Plan</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '</div>';
+  }).join('');
+}
+
 // === Tab switching ===
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
@@ -604,6 +754,7 @@ document.querySelectorAll('.tab').forEach(t => {
     target.classList.add('active');
     if (t.dataset.tab === 'at-risk') renderAtRisk();
     if (t.dataset.tab === 'trends') renderTrends();
+    if (t.dataset.tab === 'ipbc') renderIpbc();
   });
 });
 
@@ -619,7 +770,7 @@ renderCohorts();
 // Email
 // ============================================================================
 
-function buildEmailHtml(cohorts, snapshotDate, attachmentName) {
+function buildEmailHtml(cohorts, snapshotDate, attachmentName, completedWithIpbc = []) {
   const overallTotal = cohorts.reduce((s, c) => s + c.totalStudents, 0);
   const overallAtRisk = cohorts.reduce((s, c) => s + c.atRiskCount, 0);
   const overallHigh = cohorts.reduce((s, c) => s + c.highCount, 0);
@@ -637,6 +788,14 @@ function buildEmailHtml(cohorts, snapshotDate, attachmentName) {
   }
 
   const topAtRiskCohorts = [...cohorts].sort((a, b) => b.atRiskCount - a.atRiskCount).slice(0, 3);
+  const totalIpbcSignups = completedWithIpbc.reduce((s, c) => s + c.signups.length, 0);
+  // For email body: most recent 5 IPBC signups across completed classes
+  const recentIpbc = [];
+  for (const c of completedWithIpbc) {
+    for (const s of c.signups) recentIpbc.push({ ...s, className: c.className, classId: c.classId });
+  }
+  recentIpbc.sort((a, b) => String(b.ipbcSignupDate || '').localeCompare(String(a.ipbcSignupDate || '')));
+  const recentIpbcTop = recentIpbc.slice(0, 5);
 
   return `<!doctype html><html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:arial,sans-serif">
@@ -650,7 +809,7 @@ function buildEmailHtml(cohorts, snapshotDate, attachmentName) {
 
 <div style="background:#1c1917;color:white;padding:18px 32px">
 <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fbbf24;font-weight:700">For Ali</div>
-<div style="font-size:14px;margin-top:6px">Ali, this is the weekly cohort dashboard (replaces Taiwo's manual report). ${overallAtRisk > 0 ? `<strong>${overallAtRisk} students across ${cohorts.length} cohorts are in the at-risk tier (bottom 25% of their cohort).</strong>` : 'No students are flagged at-risk this week.'} ${worsening.length > 0 ? `<strong>${worsening.length} ${worsening.length === 1 ? 'cohort got' : 'cohorts got'} worse</strong> (+2 or more at-risk vs last week).` : ''} The interactive HTML report is attached - open it in a browser for filterable per-cohort drill-down, sortable student tables, and trend charts.</div>
+<div style="font-size:14px;margin-top:6px">Ali, weekly cohort dashboard. <strong>${cohorts.length} active cohorts</strong> (instructor-marked-complete classes are excluded). ${overallAtRisk > 0 ? `<strong>${overallAtRisk} students are in the at-risk tier</strong> (bottom 25% of their cohort).` : 'No students are flagged at-risk this week.'} ${worsening.length > 0 ? `<strong>${worsening.length} ${worsening.length === 1 ? 'cohort got' : 'cohorts got'} worse</strong> (+2 or more at-risk vs last week).` : ''} ${totalIpbcSignups > 0 ? `<strong>${totalIpbcSignups} students from completed cohorts have signed up for IPBC</strong> (separate tab in the HTML).` : ''} Attached HTML has filterable drill-down, sortable tables, trend charts, and the Completed -> IPBC view.</div>
 </div>
 
 <div style="padding:24px 32px">
@@ -679,6 +838,20 @@ ${improving.length > 0 ? `
 <ul style="font-size:13px;margin:0 0 0 18px;padding:0;color:#475569">
 ${improving.map((w) => `<li><strong>${htmlEscape(stripEmDashes(w.name))}</strong> - <span style="color:#16a34a">${w.delta} at-risk</span></li>`).join('')}
 </ul>` : ''}
+
+${totalIpbcSignups > 0 ? `
+<h2 style="font-size:16px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:8px;margin:24px 0 12px">Completed cohorts &rarr; IPBC (${totalIpbcSignups} total)</h2>
+<div style="font-size:13px;color:#475569;margin-bottom:10px">Most recent 5 IPBC signups from cohorts that are no longer active:</div>
+<table cellpadding="8" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px;border:1px solid #cbd5e0">
+<tr style="background:#1a365d;color:white"><th align="left" style="padding:8px">Student</th><th align="left" style="padding:8px">Cohort</th><th align="left" style="padding:8px">IPBC signup</th><th align="left" style="padding:8px">Status</th></tr>
+${recentIpbcTop.map((s, i) => `<tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}">
+<td style="padding:8px"><strong>${htmlEscape(stripEmDashes(s.name || ''))}</strong><br><span style="color:#94a3b8;font-size:11px">${htmlEscape(s.email || '')}</span></td>
+<td style="padding:8px;font-size:11px">${htmlEscape(stripEmDashes(s.className || ''))}</td>
+<td style="padding:8px">${s.ipbcSignupDate ? shortDate(s.ipbcSignupDate) : '-'}</td>
+<td style="padding:8px">${htmlEscape(s.ipbcPaymentStatus || '-')}</td>
+</tr>`).join('')}
+</table>
+<div style="font-size:11px;color:#64748b;margin-top:6px">${totalIpbcSignups - recentIpbcTop.length > 0 ? `+ ${totalIpbcSignups - recentIpbcTop.length} more in the Completed &rarr; IPBC tab in the HTML.` : 'Full list in the HTML.'}</div>` : ''}
 
 <div style="background:#f8fafc;border:1px solid #cbd5e0;border-radius:6px;padding:16px;margin-top:24px">
 <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#1a365d;font-weight:700;margin-bottom:10px">What you can do from here</div>
@@ -717,8 +890,8 @@ Source: CCPP <code>vw_ClassSignUps_EventProgress</code>. Snapshot stored in Post
     const snapshotDate = new Date().toISOString().slice(0, 10);
 
     console.log('[cohort-report] querying CCPP...');
-    const cohorts = await fetchCohorts();
-    console.log(`[cohort-report] ${cohorts.length} cohorts, ${cohorts.reduce((s, c) => s + c.totalStudents, 0)} students`);
+    const { cohorts, completedWithIpbc } = await fetchCohorts();
+    console.log(`[cohort-report] ${cohorts.length} active cohorts, ${cohorts.reduce((s, c) => s + c.totalStudents, 0)} students, ${completedWithIpbc.length} completed cohorts with ${completedWithIpbc.reduce((s, c) => s + c.signups.length, 0)} IPBC signups`);
 
     // Snapshot to Postgres
     if (!NO_SNAPSHOT && !DRY) {
@@ -730,7 +903,7 @@ Source: CCPP <code>vw_ClassSignUps_EventProgress</code>. Snapshot stored in Post
     }
 
     // Build the HTML
-    const html = buildInteractiveHtml(cohorts, snapshotDate);
+    const html = buildInteractiveHtml(cohorts, snapshotDate, completedWithIpbc);
     const attachmentName = `cohort-report-${snapshotDate}.html`;
     const htmlPath = path.resolve(OUTPUT_DIR, attachmentName);
     fs.writeFileSync(htmlPath, stripEmDashes(html));
@@ -738,7 +911,7 @@ Source: CCPP <code>vw_ClassSignUps_EventProgress</code>. Snapshot stored in Post
 
     // Email
     if (!DRY && !NO_EMAIL) {
-      const emailHtml = stripEmDashes(buildEmailHtml(cohorts, snapshotDate, attachmentName));
+      const emailHtml = stripEmDashes(buildEmailHtml(cohorts, snapshotDate, attachmentName, completedWithIpbc));
       const emailText = stripEmDashes(`Ali, weekly cohort report for week of ${shortDate(snapshotDate)}. ${cohorts.length} cohorts, ${cohorts.reduce((s, c) => s + c.totalStudents, 0)} students, ${cohorts.reduce((s, c) => s + c.atRiskCount, 0)} at-risk.\n\nOpen the attached HTML for filterable per-cohort drill-down, sortable student tables, and trend charts.\n\nWhat you can do:\n  - Drill into a cohort: open the HTML\n  - Reach out to at-risk: at-risk tab in HTML, clickable emails\n  - Check trends: trends tab in HTML\n  - Ask CB: tag @CB System <anything>\n  - Change tier thresholds: tell me preferred bands\n`);
       validateBeforeSend(emailHtml, emailText);
       const transport = nodemailer.createTransport({
