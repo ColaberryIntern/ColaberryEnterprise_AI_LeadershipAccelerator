@@ -42,6 +42,25 @@ function stripEmDashes(s) { return (s || '').replace(/—/g, '-').replace(/–/g
 // before preflight, then put the full name back only in the signature.
 function normalizeAliName(s) { return (s || '').replace(/Ali Muwwakkil/g, 'Ali'); }
 
+// Designated human reviewer per area. When CB drafts an AI task, this is the
+// human who should review + refine + mark complete. Used in the "AI drafts
+// awaiting human review" section and the per-area "Owner" column for drafted
+// rows. Shows the actual human responsible, NOT CB System (which is just the
+// BC assignee on the drafter side).
+const REVIEWER_BY_AREA = {
+  'Curriculum': 'Swati Raman',
+  'Website - training.colaberry.com': 'Sai Tejesh',
+  'Website - enterprise.colaberry.ai': 'Kes Delele',
+  'Marketing': 'Sohail Syed',
+  'AI Systems': 'Kes Delele',
+  'Open Houses & Events': 'Jackie Chalk',
+  'Sales & Admissions': 'Taiwo Oludimimu', // Roselen-pending
+  'TWC Compliance': 'Swati Raman',
+  'Approval Queues': 'Ali',
+  'Launch Readiness Dashboard': 'Ali',
+};
+function reviewerFor(areaName) { return REVIEWER_BY_AREA[areaName] || 'Ali'; }
+
 // Tier inference: read the "AI TASK" / "HUMAN TASK" badge embedded in the
 // description by the task generator. Fallback: assignee == CB System -> AI.
 function tierOf(todo) {
@@ -370,23 +389,42 @@ function renderAreaCard(area, today, blockerMap) {
   const draftedHere = area.openTodos.filter((t) => t.cbDrafted);
   const fs = area.feasibility;
   const fsColor = fs.tier === 'LIKELY_SCRAP' ? '#fef2f2' : fs.tier === 'AT_RISK' ? '#fffbeb' : '#f0fdf4';
-  const taskRows = area.openTodos.slice(0, 15).map((t, idx) => {
-    const isNext = t.id === (nextH?.id || area.nextStep?.id);
-    const isBlocked = blockerMap.get(t.id)?.blocked;
-    const isDrafted = t.cbDrafted;
-    const owner = (t.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || (t.tier === 'AI' ? 'CB System' : 'unassigned');
-    const rowBg = isBlocked ? '#fef2f2' : isDrafted ? '#eff6ff' : isNext ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white');
-    const stateLabel = isDrafted ? '<div style="font-size:10px;color:#1e40af;margin-top:2px;font-weight:700">DRAFTED BY CB - awaiting human review</div>'
-      : isBlocked ? '<div style="font-size:10px;color:#991b1b;margin-top:2px;font-style:italic">BLOCKED on upstream</div>'
-      : '';
+  // Split tasks: Actionable (undrafted + not blocked) vs Awaiting Review (drafted) vs Blocked.
+  // This stops drafted AI tasks from appearing as "next" in the sequence just
+  // because their due date is earlier. They live in their own table below.
+  const reviewer = reviewerFor(area.listName);
+  const actionable = area.openTodos.filter((t) => !t.cbDrafted && !blockerMap.get(t.id)?.blocked);
+  const awaitingReview = area.openTodos.filter((t) => t.cbDrafted);
+  const blockedList = area.openTodos.filter((t) => blockerMap.get(t.id)?.blocked);
+
+  const renderRow = (t, idx, kind) => {
+    const isNext = kind === 'actionable' && t.id === (nextH?.id || area.nextStep?.id);
+    const ownerRaw = (t.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali');
+    const owner = kind === 'awaiting' ? `${reviewer} to review`
+      : kind === 'blocked' ? (ownerRaw || (t.tier === 'AI' ? 'CB System' : 'unassigned'))
+      : (ownerRaw || (t.tier === 'AI' ? 'CB System' : 'unassigned'));
+    const rowBg = kind === 'blocked' ? '#fef2f2' : kind === 'awaiting' ? '#eff6ff' : isNext ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white');
     return `<tr style="background:${rowBg}">
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${idx + 1}</td>
-<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a>${stateLabel}</td>
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a></td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on, today)}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${htmlEsc(owner)}</td>
 </tr>`;
-  }).join('');
+  };
+
+  const buildTable = (label, items, kind, headerBg) => {
+    if (!items.length) return '';
+    const rows = items.slice(0, 15).map((t, i) => renderRow(t, i, kind)).join('');
+    return `<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">${label} (${items.length})</div>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse">
+<thead><tr style="background:${headerBg}"><th align="left" style="padding:8px 10px;color:white;font-size:10px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Owner</th></tr></thead>
+<tbody>${rows}</tbody></table>`;
+  };
+
+  const actionableTable = buildTable('Actionable now (sorted by due)', actionable, 'actionable', '#1a365d');
+  const awaitingTable = buildTable(`Awaiting ${reviewer} review (CB drafted)`, awaitingReview, 'awaiting', '#1e40af');
+  const blockedTable = buildTable('Blocked (waiting on upstream)', blockedList, 'blocked', '#7f1d1d');
   return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:14px">
 <div style="display:table;width:100%"><div style="display:table-cell"><div style="font-size:16px;font-weight:800;color:#1a365d">${htmlEsc(area.listName)}</div>
 <div style="font-size:11px;color:#64748b;margin-top:2px">${area.openCount} open &middot; ${area.done} done &middot; ${area.humanCount} human &middot; ${area.aiCount} AI &middot; <a href="${area.listUrl}" style="color:#2b6cb0">Open in Basecamp &rarr;</a></div></div>
@@ -399,11 +437,9 @@ ${nextH ? `<div style="margin-top:14px;background:#1c1917;color:white;padding:14
 <div style="margin-top:8px"><a href="${nextH.url}" style="display:inline-block;background:#fbbf24;color:#1c1917;padding:6px 12px;border-radius:5px;font-size:11px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Open ticket &rarr;</a></div>
 </div>` : '<div style="margin-top:14px;padding:10px 14px;background:#dcfce7;border-radius:6px;font-size:12px;color:#166534">No human step blocking this area. CB executes next.</div>'}
 ${nextA && nextA.id !== nextH?.id ? `<div style="margin-top:8px;padding:10px 14px;background:#dbeafe;border-radius:6px;font-size:11px;color:#1e3a8a"><strong>Next AI step:</strong> ${htmlEsc(stripEmDashes(stripHtml(nextA.content)))} (due ${nextA.due_on || 'unset'}). CB runs overnight.</div>` : ''}
+${draftedHere.length ? `<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-radius:6px;font-size:11px;color:#1e40af"><strong>${draftedHere.length} draft${draftedHere.length === 1 ? '' : 's'} awaiting ${reviewer} review.</strong> See "Awaiting review" table below.</div>` : ''}
 ${blockedHere.length ? `<div style="margin-top:8px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:11px;color:#7f1d1d"><strong>${blockedHere.length} blocked task${blockedHere.length === 1 ? '' : 's'}:</strong> ${blockedHere.slice(0, 3).map((b) => htmlEsc(stripHtml(b.content).slice(0, 60))).join('; ')}${blockedHere.length > 3 ? '...' : ''}</div>` : ''}
-<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Open task sequence (top ${Math.min(15, area.openCount)} by due date)</div>
-<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse">
-<thead><tr style="background:#1a365d"><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px;letter-spacing:1px">Owner</th></tr></thead>
-<tbody>${taskRows}</tbody></table>
+${actionableTable}${awaitingTable}${blockedTable}
 </div>`;
 }
 
@@ -448,11 +484,11 @@ async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePost
   // Awaiting-review queue (CB-drafted but human hasn't approved yet)
   const awaitingReview = buildAwaitingReviewQueue(state);
   const awaitingRows = awaitingReview.slice(0, 12).map((t) => {
-    const owner = (t.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned';
+    const reviewer = reviewerFor(t.area);
     return `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 100)}</a></td>
 <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(t.area)}</td>
 <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${duePill(t.due_on, today)}</td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(owner)}</td></tr>`;
+<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569;font-weight:600">${htmlEsc(reviewer)}</td></tr>`;
   }).join('');
 
   // Pick the single Ali-targeted "next human action" (his next decision-point).
