@@ -12,6 +12,31 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track A1 — pivoted off Twilio to Mandrill→gmail push (end-to-end live) (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-vip-pivot
+- What changed:
+  - Ali pushed back: "why do we need Twilio so bad — why can't we just use what we have?" Correct framing.
+  - Released the Twilio toll-free `+1 (888) 576-4480` (verification paperwork avoided).
+  - Rewired `vipSmsRouter.js`: new `sendVipAlertEmail()` uses Mandrill (already paid for) to send to `alimuwwakkil@gmail.com`. Gmail mobile push notification IS the alert. Subject engineered for lock-screen preview: `"VIP <name>: <summary>"` (~90 chars).
+  - Email body: dark header bar (lock-screen visible info at top), From/Subject metadata, original-message preview snippet.
+  - `communication_logs.channel='sms'` preserved (cap logic + admin views work unchanged). Provider tagged `'mandrill-vip'` for traceability.
+  - Mode flipped to `live` (no verification needed for Mandrill).
+- Why this is better than Twilio for Ali's use case:
+  - **$0/mo** vs $2.15/mo toll-free + per-msg fees
+  - **No verification paperwork** (Twilio TF verification takes 1-5 business days; Mandrill works instantly)
+  - **99%+ delivery** (Mandrill) vs variable carrier gateway
+  - **Richer content** (clickable links, summary, original preview) vs 160-char SMS
+  - **Already half-built** (Ali already gets gmail push notifications for everything we CC him on)
+- Verification:
+  - Smoke test: simulated Adalene email ("school pickup change") → gpt-4o-mini summary "Adalene: Can you call the school to change the pickup time to 2:15 tomorrow?" → email sent to alimuwwakkil@gmail.com (Mandrill `907c8c26-...`). Subject set for gmail push preview.
+  - Non-VIP smoke: returns `{vip: false, fired: false}` correctly. No alert sent.
+  - Cap query verified against `communication_logs`.
+- Still left in Phase 1:
+  - **A1.6** Microsoft Graph inbound poller — calls `routeInboundEmail()` every 1-2 min on new emails to ali@colaberry.com. Half-day build.
+  - **Disable T-Mobile carrier forwarder** so Ali doesn't get double-buzz (he asked for this in the original message).
+- Twilio env vars kept in `.env` in case we ever want true SMS in the future. Currently unused.
+
 ### Track A1 — Twilio wired but SMS sends blocked by 2024 US carrier verification rules (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-twilio-go + CC-20260531-twilio-block
