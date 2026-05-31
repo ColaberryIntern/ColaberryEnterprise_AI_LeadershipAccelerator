@@ -144,10 +144,71 @@ async function createScheduleEntry({ projectId = LAUNCH.projectId, summary, desc
   return bcPost(`/buckets/${projectId}/schedules/${dock.schedule.id}/entries.json`, body);
 }
 
+// =============================================================================
+// Vault uploads (briefs, design files, anything reusable)
+// Two-step: POST /attachments.json to register the file with Basecamp, then
+// POST /vaults/<vaultId>/uploads.json to surface it inside the Vault.
+//
+// Idempotent: if a file with the same filename already exists in the vault
+// folder we return the existing upload object (no re-upload).
+// =============================================================================
+function mimeFor(filename) {
+  const ext = (filename.match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase() || '';
+  return ({
+    md: 'text/markdown', txt: 'text/plain', html: 'text/html',
+    pdf: 'application/pdf', json: 'application/json',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  }[ext] || 'application/octet-stream');
+}
+
+async function uploadAttachment({ buffer, filename }) {
+  const url = `${BASE}/attachments.json?name=${encodeURIComponent(filename)}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      'User-Agent': 'Colaberry LaunchPMO (ali@colaberry.com)',
+      'Content-Type': mimeFor(filename),
+    },
+    body: buffer,
+  });
+  if (!r.ok) throw new Error(`POST /attachments.json -> ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+async function uploadToVault({ projectId = LAUNCH.projectId, vaultId, filename, content, description = '' }) {
+  const dock = await getDock(projectId);
+  const targetVault = vaultId || dock.vault.id;
+  // Idempotency: check existing uploads in this vault
+  const existing = await bcGetAll(`/buckets/${projectId}/vaults/${targetVault}/uploads.json`);
+  const match = (existing || []).find((u) => (u.filename || u.title || '').toLowerCase() === filename.toLowerCase());
+  if (match) return match;
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
+  const attach = await uploadAttachment({ buffer: buf, filename });
+  const r = await bcPost(`/buckets/${projectId}/vaults/${targetVault}/uploads.json`, {
+    attachable_sgid: attach.attachable_sgid,
+    base_name: filename,
+    description,
+  });
+  return r;
+}
+
+// Create a Vault sub-folder. Idempotent by title.
+async function createVaultFolder({ projectId = LAUNCH.projectId, title }) {
+  const dock = await getDock(projectId);
+  const existing = await bcGetAll(`/buckets/${projectId}/vaults/${dock.vault.id}/vaults.json`).catch(() => []);
+  const match = (existing || []).find((v) => v.title === title);
+  if (match) return match;
+  return bcPost(`/buckets/${projectId}/vaults/${dock.vault.id}/vaults.json`, { title });
+}
+
 module.exports = {
   bcGet, bcGetAll, bcPost, bcPut,
   getDock,
   createTodolist, createTodo, postMessage,
   addPeopleToProject, createScheduleEntry,
+  uploadToVault, createVaultFolder, uploadAttachment,
   getToken,
 };
