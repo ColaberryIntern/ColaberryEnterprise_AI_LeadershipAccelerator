@@ -172,45 +172,81 @@ function classifyKeyword(text) {
 // Basecamp events feed gives all account-level events. For now we use it to
 // find new comments where CB System is @mentioned by Ali.
 
+// Watched buckets: projects Ali actively works in. We poll todos + messages
+// in these directly because /buckets/<id>/events.json returns 404 with our
+// token (verified 2026-05-31).
+const WATCHED_BUCKETS = [
+  46697389, // AI Pathway
+  47126345, // ShipCES
+  46699826, // LandJet
+  47346103, // Gov Contracts
+  47477101, // Anthropic Partner Network
+  7463955,  // Ali Personal
+  24865175, // Internship / Apprenticeship
+  33392153, // Family Goals
+];
+
 async function findNewMentions(state) {
-  // Basecamp 3 has no account-wide events feed (404). Use per-bucket events.
-  // We hit every project Ali is in, look at recent events, then drill into
-  // any comment-events for CB-System @mentions by Ali.
-  const cutoff = new Date(Date.now() - LOOKBACK_HOURS * 3600 * 1000).toISOString();
-  let projects;
-  try { projects = await bcGetAll('/projects.json'); }
-  catch (e) { console.error('projects fetch failed:', e.message); return []; }
+  const cutoffMs = Date.now() - LOOKBACK_HOURS * 3600 * 1000;
   const newMentions = [];
-  for (const project of projects) {
-    const bucketId = project.id;
-    let events;
-    try { events = await bcGet(`/buckets/${bucketId}/events.json?since=` + encodeURIComponent(cutoff)); }
-    catch (e) { continue; }
-    if (!Array.isArray(events) || events.length === 0) continue;
-    for (const ev of events) {
-      if (ev.creator?.id !== ALI_ID) continue;
-      if (!ev.recording) continue;
-      const key = String(ev.id);
-      if (state.processed[key]) continue;
-      const recId = ev.recording.id;
-      // Pull comments on that recording to find the actual message text
-      try {
-        const comments = await bcGet(`/buckets/${bucketId}/recordings/${recId}/comments.json`);
-        const recent = (Array.isArray(comments) ? comments : []).filter(c => {
-          if (c.creator?.id !== ALI_ID) return false;
-          const created = new Date(c.created_at).getTime();
-          if (created < new Date(cutoff).getTime()) return false;
-          return isCBMention(c.content);
-        });
-        for (const c of recent) {
-          const ckey = `${bucketId}-${c.id}`;
-          if (state.processed[ckey]) continue;
-          newMentions.push({ bucketId, recId, comment: c, key: ckey });
+
+  for (const bucketId of WATCHED_BUCKETS) {
+    let project;
+    try { project = await bcGet(`/projects/${bucketId}.json`); }
+    catch (e) { console.error(`  bucket ${bucketId} fetch fail: ${e.message}`); continue; }
+    const dock = project.dock || [];
+    const todoset = dock.find((d) => d.name === 'todoset');
+    const messageBoard = dock.find((d) => d.name === 'message_board');
+
+    // 1. Walk todoset → todolists → todos → comments
+    if (todoset) {
+      let todolists = [];
+      try { todolists = await bcGet(`/buckets/${bucketId}/todosets/${todoset.id}/todolists.json`); }
+      catch (_e) {}
+      if (!Array.isArray(todolists)) todolists = [];
+      for (const list of todolists) {
+        let todos = [];
+        try { todos = await bcGet(`/buckets/${bucketId}/todolists/${list.id}/todos.json`); }
+        catch (_e) {}
+        if (!Array.isArray(todos)) continue;
+        for (const todo of todos) {
+          if (!todo.comments_count) continue;
+          if (todo.updated_at && new Date(todo.updated_at).getTime() < cutoffMs) continue;
+          await scanRecordingComments({ bucketId, recId: todo.id, cutoffMs, state, newMentions });
         }
-      } catch (e) { /* skip */ }
+      }
+    }
+
+    // 2. Walk message board (recent messages)
+    if (messageBoard) {
+      let messages = [];
+      try { messages = await bcGet(`/buckets/${bucketId}/message_boards/${messageBoard.id}/messages.json`); }
+      catch (_e) {}
+      if (Array.isArray(messages)) {
+        for (const msg of messages.slice(0, 10)) {
+          if (msg.updated_at && new Date(msg.updated_at).getTime() < cutoffMs) continue;
+          await scanRecordingComments({ bucketId, recId: msg.id, cutoffMs, state, newMentions });
+        }
+      }
     }
   }
   return newMentions;
+}
+
+async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMentions }) {
+  let comments = [];
+  try { comments = await bcGet(`/buckets/${bucketId}/recordings/${recId}/comments.json`); }
+  catch (_e) { return; }
+  if (!Array.isArray(comments)) return;
+  for (const c of comments) {
+    if (c.creator?.id !== ALI_ID) continue;
+    const ctime = new Date(c.created_at).getTime();
+    if (ctime < cutoffMs) continue;
+    if (!isCBMention(c.content)) continue;
+    const key = `${bucketId}-${c.id}`;
+    if (state.processed[key]) continue;
+    newMentions.push({ bucketId, recId, comment: c, key });
+  }
 }
 
 (async () => {
