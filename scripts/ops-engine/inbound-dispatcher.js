@@ -198,15 +198,23 @@ async function findNewMentions(state) {
     const todoset = dock.find((d) => d.name === 'todoset');
     const messageBoard = dock.find((d) => d.name === 'message_board');
 
-    // 1. Walk todoset → todolists → todos → comments
+    // 1. Walk todoset → todolists → todos → comments.
+    // CRITICAL: Use bcGetAll (paginated). Basecamp paginates at 15 per page.
+    // Previous bcGet-only walk silently missed Ali's mentions on any todo past
+    // position 15 in its parent list, or in any list past position 15 in the
+    // todoset. Pagination bug confirmed 2026-05-31 against bucket 7463955
+    // (Ali Personal), todolist "AI Products" (9939449052), todo 9945833396.
     if (todoset) {
       let todolists = [];
-      try { todolists = await bcGet(`/buckets/${bucketId}/todosets/${todoset.id}/todolists.json`); }
+      try { todolists = await bcGetAll(`/buckets/${bucketId}/todosets/${todoset.id}/todolists.json`); }
       catch (_e) {}
       if (!Array.isArray(todolists)) todolists = [];
       for (const list of todolists) {
+        // Skip lists that haven't been touched recently. This keeps cost down
+        // for buckets with lots of historical lists.
+        if (list.updated_at && new Date(list.updated_at).getTime() < cutoffMs) continue;
         let todos = [];
-        try { todos = await bcGet(`/buckets/${bucketId}/todolists/${list.id}/todos.json`); }
+        try { todos = await bcGetAll(`/buckets/${bucketId}/todolists/${list.id}/todos.json`); }
         catch (_e) {}
         if (!Array.isArray(todos)) continue;
         for (const todo of todos) {
