@@ -12,6 +12,31 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB v2: multi-user @CB + artifact tools + active nurture + YOUR TURN banner (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- Context: Ali asked CB to confirm three capabilities and build them if missing: (1) any team member (not just Ali) can tag @CB and get help, including artifacts like PDFs/Excels/images; (2) an active nurture system that constantly reaches out to ensure human tasks get nudged; (3) "next human task" identified prominently in updates the way Gov Contracts does it.
+- What changed:
+  - **Multi-user @CB**: `scripts/ops-engine/inbound-dispatcher.js` now uses `ALLOWED_REQUESTER_IDS` (set of 11 BC person IDs: Ali, Kes, Sohail, Swati, Aleem, Tejesh, Jackie, Taiwo, Dheeraj, Ram, Karun) instead of the old `ALI_ID`-only filter. Any of them can now tag @CB and the dispatcher routes their mention.
+  - **Per-tool permission gating** in `scripts/ops-engine/cb-system-handler.js`. `ALI_ONLY_TOOLS` set contains email_ali, set_intern_nudge_mode, set_vip_sms_mode, exit_intern_preview, all gov-bid tools, vip_list. Everything else (basecamp_reply, queue_followup, the 3 new artifact tools, finish) opens to any team member. `filterToolsForRequester(requesterId, aliId)` builds the per-call tool list. The system prompt also gets a requester-aware prefix telling the LLM who's asking.
+  - **Three new CB tools** in `scripts/ops-engine/cb-artifact-tools.js`:
+    - `create_pdf({title, sections, filename, caption})` - pdfkit, supports headings + body + bullets + tables
+    - `create_xlsx({sheets, filename, caption})` - ExcelJS, multi-sheet with headers + auto-sized columns
+    - `create_image({prompt, filename, size, caption})` - OpenAI gpt-image-1 (DALL-E successor) at ~$0.04/image
+    Each generates the file in /tmp, uploads via `/attachments.json`, then posts a comment on the requesting thread with the file embedded as a `<bc-attachment>`. Side-effect tracking captures the filename + comment id.
+  - **Active nurture cycle** in `backend/src/scripts/lib/launchPmoDailyUpdate.js#runNurtureCycle()`. Every daily heartbeat run (Mon-Fri 8am CDT) iterates every overdue task in project 47502609 and posts a per-task nudge comment at the appropriate level: 1d reminder / 3d escalate-to-lead / 5d notify-Ali (with @-mention) / 7d CRITICAL_RISK. State tracked at `tmp/launch-pmo-nurture-state.json` keyed by `taskId -> {level, lastPostedAt, lastCommentId}` so each level fires only once per task (no spam). Stale state cleaned up after 30 days.
+  - **YOUR TURN banner** at top of daily exec email + MB post. Mirrors the Gov-Contracts pattern: single most urgent task pinned at the header with task name + area + due date + Basecamp link. Underneath, a "Next action per teammate" table shows each provisioned team member's top queued task by due date. Below that, the full top-12 human queue. Nurture posts fired today get their own summary table when count > 0.
+  - **Installed exceljs** (locally + on VPS via `npm install --no-save`). `pdfkit` was already in repo; `openai` already used elsewhere.
+- Verification:
+  - Dispatcher tick post-fix: ran clean, 0 new mentions, no crash. (Real multi-user test deferred to first non-Ali @CB mention from a teammate.)
+  - End-to-end artifact smoke: generated `cb-artifact-smoke.pdf` (1.6KB) + `cb-artifact-smoke.xlsx` (6.7KB), uploaded both to the launch project kickoff message thread via `uploadAndAttach`. Both comments visible in BC at comment ids 9946529880 + 9946529885. Trashed after verification.
+  - Heartbeat with new YOUR TURN banner + nurture cycle: ran with `--force`, 104 open tasks, 0 escalations (no tasks overdue yet since project started today), email sent + MB post updated. Nurture state file created at `tmp/launch-pmo-nurture-state.json`.
+- What's now true for the team:
+  - **Any of the 11 team members** can tag `@CB System` on any task in the launch project (or any of the 8 watched buckets) and CB will process it.
+  - **CB can produce PDFs / Excels / images on demand**. Sohail: "@CB give me a PDF of the brand brief." Taiwo: "@CB build me an enrollment-dashboard XLSX template." Aleem: "@CB create a flat-illustration image of the Architect Workspace."
+  - **Overdue tasks get actively nudged** in their own threads, not just reported in Ali's email. Each level fires once; CB never spams.
+  - **YOUR TURN banner** at the top of the daily email + MB post shows Ali his single next decision-point. Per-teammate next-action table shows everyone else theirs.
+
 ### Launch PMO v2: per-unit briefs + Vault uploads + richer tasks (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
