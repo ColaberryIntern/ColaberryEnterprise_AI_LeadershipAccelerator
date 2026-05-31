@@ -12,6 +12,27 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track A1 — Twilio wired but SMS sends blocked by 2024 US carrier verification rules (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-twilio-go + CC-20260531-twilio-block
+- What changed:
+  - Ali sent Twilio creds (Account SID + API Key SID + Secret + his phone 682-597-5784). Wired into `/opt/colaberry-accelerator/.env`. Updated `cron-env-wrapper.sh` to forward TWILIO_* + ALI_PHONE_NUMBER. Force-recreated backend container so env loads.
+  - Router updated to use API Key SID + Secret as HTTP Basic auth (preferred for production, revocable per-key).
+  - Provisioning script bought a 682-area-code local number `+1 (682) 281-5240`. Sent test SMS → **error 30034 (US A2P 10DLC unregistered)**. 2024 rule: all US local numbers must complete brand+campaign registration before sending.
+  - Pivoted: released the 682 number, bought toll-free `+1 (888) 576-4480`. Retest → **error 30032 (Toll-Free verification required)**. 2024 rule: toll-free numbers also need Twilio's Toll-Free Verification process before any send.
+  - Persisted toll-free number in env. Router is ready to fire as soon as verification clears.
+  - Action email to Ali with the toll-free verification URL + the exact form data to paste (business name, use case description, 2 sample messages, volume estimate, opt-in language). Approval timeline 1-5 business days, often same-day for personal-notification use cases.
+- Verification:
+  - API Key auth confirmed working (Twilio accepted credentials, returned proper error codes for the verification blocks).
+  - Toll-free purchase API succeeded ($2.15/mo).
+  - Action email landed (Mandrill `1071e22c-...`).
+- Costs so far:
+  - 682 number bought + released: $0 (released within hours)
+  - Toll-free `+1 (888) 576-4480`: $2.15/mo, kept (would lose it on release)
+- Blocked on:
+  - Toll-free verification form submission by Ali (~10 min in Twilio Console)
+  - T-Mobile email-to-SMS forwarder disable by Ali
+
 ### Track A1 corrected — router re-pointed at existing inbox_vips (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-track-a1-fix
