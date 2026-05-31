@@ -98,13 +98,17 @@ function logSms({ to, from, body, status, providerMessageId, error, metadata }) 
 // SMS send (Twilio when live, no-op in log_only)
 // =============================================================================
 async function sendSmsViaTwilio({ to, body }) {
-  const sid = process.env.TWILIO_SID;
-  const token = process.env.TWILIO_TOKEN;
+  // API Key auth (preferred for production): use API Key SID + Secret as
+  // HTTP Basic creds. Account SID identifies the account in the URL path.
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const apiKeySid = process.env.TWILIO_API_KEY_SID;
+  const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
   const from = process.env.TWILIO_NUMBER;
-  if (!sid || !token || !from) throw new Error('TWILIO_SID / TWILIO_TOKEN / TWILIO_NUMBER not set');
-  // Use REST API directly (avoid the twilio npm dep until Ali approves install)
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
-  const auth = Buffer.from(`${sid}:${token}`).toString('base64');
+  if (!accountSid || !apiKeySid || !apiKeySecret || !from) {
+    throw new Error('TWILIO_ACCOUNT_SID / TWILIO_API_KEY_SID / TWILIO_API_KEY_SECRET / TWILIO_NUMBER all required');
+  }
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const auth = Buffer.from(`${apiKeySid}:${apiKeySecret}`).toString('base64');
   const r = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
