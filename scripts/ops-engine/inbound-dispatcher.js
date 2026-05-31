@@ -263,13 +263,31 @@ async function findNewMentions(state) {
   return newMentions;
 }
 
+// Team roster IDs allowed to tag @CB and trigger handling. Source of truth:
+// backend/src/scripts/lib/launchPmoTeam.js. We hardcode the IDs here so the
+// dispatcher (running on the VPS host outside the backend container) doesn't
+// need to resolve the team module via a fragile path. Keep in sync.
+const ALLOWED_REQUESTER_IDS = new Set([
+  17454835, // Ali Muwwakkil
+  52330127, // Kes Delele
+  47335940, // Sohail Syed
+  48041031, // Swati Raman
+  47335967, // Aleem
+  50567410, // Sai Tejesh
+  37184021, // Jackie Chalk
+  33623344, // Taiwo Oludimimu
+  34920126, // Dheeraj Garg
+  17346350, // Ram Katamaraja (CEO - keep in case he tags)
+  30193051, // Karun Swaroop (AI Tech Director)
+]);
+
 async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMentions }) {
   let comments = [];
   try { comments = await bcGet(`/buckets/${bucketId}/recordings/${recId}/comments.json`); }
   catch (_e) { return; }
   if (!Array.isArray(comments)) return;
   for (const c of comments) {
-    if (c.creator?.id !== ALI_ID) continue;
+    if (!ALLOWED_REQUESTER_IDS.has(c.creator?.id)) continue;
     const ctime = new Date(c.created_at).getTime();
     if (ctime < cutoffMs) continue;
     if (!isCBMention(c.content)) continue;
@@ -286,7 +304,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
     const state = loadState();
     console.log(`tick ${new Date().toISOString()}, last=${state.last_tick}`);
     const mentions = await findNewMentions(state);
-    console.log(`  ${mentions.length} new @CB mentions from Ali`);
+    console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
       const html = classifyKeyword(m.comment.content);
       if (html) {

@@ -9,8 +9,11 @@
 // MB message (idempotent: subject keyed on the date).
 
 const path = require('path');
+const fs = require('fs');
 const ops = require('./launchPmoOps');
 const { TEAM, LAUNCH, provisioned, missing, getByPersonId } = require('./launchPmoTeam');
+
+const NURTURE_STATE_PATH = path.resolve(__dirname, '../../../../tmp/launch-pmo-nurture-state.json');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -199,7 +202,7 @@ async function generateExecSummary(state, escalations, humanQueue, aiQueue) {
 // ---------------------------------------------------------------------------
 // Email to Ali (Mandrill)
 // ---------------------------------------------------------------------------
-async function emailAli({ state, aiSummary, humanQueue, escalations }) {
+async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [] }) {
   if (!process.env.MANDRILL_API_KEY) return { skipped: 'no MANDRILL_API_KEY' };
   const nodemailer = require(path.resolve(__dirname, '../../../../node_modules/nodemailer'));
   const { validateBeforeSend } = require(path.resolve(__dirname, './mandrillPreflight'));
@@ -216,16 +219,41 @@ async function emailAli({ state, aiSummary, humanQueue, escalations }) {
     `<tr><td>${a.listName}</td><td style="text-align:right">${a.pct}%</td><td style="text-align:right">${a.openCount}</td><td style="text-align:right">${a.overdue.length}</td></tr>`
   ).join('');
 
+  // Pick the single Ali-targeted "next human action" (his next decision-point).
+  // If none assigned directly to Ali, fall back to the topmost human task by due date.
+  const aliTasks = humanQueue.filter((h) => (h.assignees || []).some((a) => /Ali Muwwakkil/i.test(a)));
+  const nextForAli = aliTasks[0] || humanQueue[0] || null;
+  // Per-person "next human action" (top 1 per assignee, excluding Ali's).
+  const perPerson = {};
+  for (const h of humanQueue) {
+    for (const a of (h.assignees || [])) {
+      const name = (a || '').replace(/Ali Muwwakkil/i, '').trim();
+      if (!name) continue;
+      if (!perPerson[name]) perPerson[name] = h;
+    }
+  }
+  const perPersonRows = Object.entries(perPerson).slice(0, 8)
+    .map(([name, t]) => `<tr><td>${name}</td><td>${t.due_on}</td><td>${stripEmDashes(stripHtml(t.content)).slice(0, 90)}</td><td>${t.area}</td></tr>`).join('');
+  const nextBanner = nextForAli
+    ? `<div style="background:#fef3c7;border-left:6px solid #d97706;padding:16px 22px;margin:0 0 18px">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#78350f;font-weight:700">YOUR TURN - next decision to unblock the project</div>
+<div style="font-size:17px;font-weight:700;color:#1a202c;margin-top:6px">${stripEmDashes(stripHtml(nextForAli.content))}</div>
+<div style="font-size:13px;color:#1f2937;margin-top:6px">Area: <strong>${nextForAli.area}</strong> | Due: <strong>${nextForAli.due_on}</strong>${nextForAli.url ? ` | <a href="${nextForAli.url}" style="color:#1e40af">Open in Basecamp</a>` : ''}</div>
+</div>`
+    : '<div style="background:#dcfce7;border-left:6px solid #15803d;padding:14px 18px;margin:0 0 18px"><strong>You are clear.</strong> No human action queued for you right now.</div>';
+
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:arial,sans-serif">
 <div style="max-width:760px;margin:0 auto;background:white;color:#1a202c;line-height:1.55">
 
 <div style="background:linear-gradient(135deg,#1a365d 0%,#2b6cb0 100%);color:white;padding:24px 32px">
 <div style="font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#fbbf24;font-weight:700">Launch PMO - Executive Update</div>
 <div style="font-size:22px;font-weight:800;margin-top:6px">${state.today} - ${state.daysToLaunch} days to launch</div>
-<div style="font-size:13px;color:#cbd5e0;margin-top:6px">Overall readiness: <strong>${state.overall}%</strong> | Open tasks: <strong>${state.areas.reduce((s, a) => s + a.openCount, 0)}</strong> | Escalations: <strong>${escalations.length}</strong></div>
+<div style="font-size:13px;color:#cbd5e0;margin-top:6px">Overall readiness: <strong>${state.overall}%</strong> | Open tasks: <strong>${state.areas.reduce((s, a) => s + a.openCount, 0)}</strong> | Escalations: <strong>${escalations.length}</strong> | Nurture posts today: <strong>${nurturePosted.length}</strong></div>
 </div>
 
 <div style="padding:22px 32px">
+
+${nextBanner}
 
 <h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:0 0 10px">Executive summary</h2>
 <p style="font-size:14px;color:#1f2937;margin:0 0 10px">${aiSummary.exec_summary || '(no summary yet - empty project)'}</p>
@@ -237,11 +265,23 @@ ${aiSummary.critical_path ? `<p style="font-size:14px;color:#1f2937;margin:0"><s
 ${areaRows}
 </table>
 
-<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">NEXT HUMAN ACTIONS (sorted by urgency)</h2>
+<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Next action per teammate</h2>
+<table cellpadding="8" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
+<tr style="background:#1a365d;color:white"><th align="left">Who</th><th align="left">Due</th><th align="left">Task</th><th align="left">Area</th></tr>
+${perPersonRows || '<tr><td colspan="4">No queued tasks per teammate.</td></tr>'}
+</table>
+
+<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">FULL HUMAN ACTION QUEUE (sorted by urgency)</h2>
 <table cellpadding="8" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
 <tr style="background:#1a365d;color:white"><th align="left">Due</th><th align="left">Area</th><th align="left">Task</th><th align="left">Owner</th></tr>
 ${humanRows}
 </table>
+
+${nurturePosted.length ? `<h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Nurture posts fired today (${nurturePosted.length})</h2>
+<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px;border:1px solid #cbd5e0">
+<tr style="background:#1a365d;color:white"><th align="left">Level</th><th align="left">Task</th><th align="left">Owner</th></tr>
+${nurturePosted.slice(0, 8).map((n) => `<tr><td>${n.level}</td><td>${stripEmDashes(stripHtml(n.taskName)).slice(0, 90)}</td><td>${n.owner}</td></tr>`).join('')}
+</table>` : ''}
 
 <h2 style="font-size:17px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:6px;margin:24px 0 10px">Escalations</h2>
 <table cellpadding="8" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
@@ -297,8 +337,21 @@ Launch PMO for AI Systems Architect Accelerator`);
 // ---------------------------------------------------------------------------
 // MB post (HUMAN ACTION QUEUE)
 // ---------------------------------------------------------------------------
-async function postHumanActionQueue(state, humanQueue, escalations) {
+async function postHumanActionQueue(state, humanQueue, escalations, nurturePosted = []) {
   const today = state.today;
+  const aliTasks = humanQueue.filter((h) => (h.assignees || []).some((a) => /Ali Muwwakkil/i.test(a)));
+  const nextForAli = aliTasks[0] || humanQueue[0] || null;
+  const perPerson = {};
+  for (const h of humanQueue) {
+    for (const a of (h.assignees || [])) {
+      const name = (a || '').trim();
+      if (!name) continue;
+      if (!perPerson[name]) perPerson[name] = h;
+    }
+  }
+  const perPersonRows = Object.entries(perPerson).slice(0, 12)
+    .map(([name, t]) => `<tr><td>${name}</td><td>${t.due_on}</td><td>${stripEmDashes(stripHtml(t.content)).slice(0, 90)}</td><td>${t.area}</td></tr>`).join('');
+
   const rows = humanQueue.slice(0, 12).map((h) =>
     `<tr><td>${h.due_on}</td><td>${h.area}</td><td>${stripEmDashes(stripHtml(h.content)).slice(0, 90)}</td><td>${(h.assignees || []).join(', ') || 'unassigned'}</td></tr>`
   ).join('') || '<tr><td colspan="4">Empty queue.</td></tr>';
@@ -307,21 +360,122 @@ async function postHumanActionQueue(state, humanQueue, escalations) {
     `<li><strong>${e.classification}</strong> (${e.days_overdue}d): ${e.area} - ${stripEmDashes(stripHtml(e.content)).slice(0, 110)}</li>`
   ).join('');
 
+  const banner = nextForAli
+    ? `<div style="background:#fef3c7;border-left:6px solid #d97706;padding:14px 18px;margin:0 0 16px">
+<strong style="color:#78350f;letter-spacing:1px">YOUR TURN ALI: </strong>
+<strong>${stripEmDashes(stripHtml(nextForAli.content))}</strong>
+(${nextForAli.area}, due ${nextForAli.due_on})
+</div>`
+    : '<div><strong>You are clear.</strong> No human action queued for Ali right now.</div>';
+
   const content = `<div>
 <h3>HUMAN ACTION QUEUE - ${today}</h3>
-<p><strong>${state.daysToLaunch} days to launch</strong> | Overall readiness: ${state.overall}%</p>
+<p><strong>${state.daysToLaunch} days to launch</strong> | Overall readiness: ${state.overall}% | Nurture posts today: ${nurturePosted.length}</p>
+${banner}
+<h4>Next action per teammate</h4>
+<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
+<tr style="background:#1a365d;color:white"><th align="left">Who</th><th align="left">Due</th><th align="left">Task</th><th align="left">Area</th></tr>
+${perPersonRows || '<tr><td colspan="4">No queued tasks per teammate.</td></tr>'}
+</table>
+<h4>Full queue (top 12 by urgency)</h4>
 <table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #cbd5e0">
 <tr style="background:#1a365d;color:white"><th align="left">Due</th><th align="left">Area</th><th align="left">Task</th><th align="left">Owner</th></tr>
 ${rows}
 </table>
 ${escRows ? `<h4>Escalations</h4><ul>${escRows}</ul>` : ''}
-<p style="font-size:11px;color:#64748b">Auto-posted daily Mon-Fri 8am CST by CB System Launch PMO. Each task above links to its Basecamp todo.</p>
+<p style="font-size:11px;color:#64748b">Auto-posted daily Mon-Fri 8am CST by CB System Launch PMO. Every task above links to its Basecamp todo. Tag <code>@CB System</code> to escalate, get AI execution, or ask for a PDF / Excel / image artifact.</p>
 </div>`;
 
   return ops.postMessage({
     subject: `Human Action Queue - ${today}`,
     content,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Nurture cycle: post per-task nudge comments on overdue tasks
+// ---------------------------------------------------------------------------
+// Levels:
+//   1d -> friendly reminder
+//   3d -> escalation (also tag area lead if known)
+//   5d -> Ali notification + tag Ali on the task
+//   7d -> CRITICAL_RISK flag (only posted once per task)
+//
+// State file tracks which level has been posted per task so we never spam.
+function loadNurtureState() {
+  try { return JSON.parse(fs.readFileSync(NURTURE_STATE_PATH, 'utf8')); }
+  catch { return { tasks: {} }; }
+}
+function saveNurtureState(s) {
+  fs.mkdirSync(path.dirname(NURTURE_STATE_PATH), { recursive: true });
+  fs.writeFileSync(NURTURE_STATE_PATH, JSON.stringify(s, null, 2));
+}
+
+const ALI_SGID = 'BAh7BkkiC19yYWlscwY6BkVUewdJIglkYXRhBjsAVEkiKWdpZDovL2JjMy9QZXJzb24vMTc0NTQ4MzU_ZXhwaXJlc19pbgY7AFRJIghwdXIGOwBUSSIPYXR0YWNoYWJsZQY7AFQ=--119f405284666f646ff92128b896da907f10c3ab';
+function mention(sgid) { return `<bc-attachment sgid="${sgid}" content-type="application/vnd.basecamp.mention"></bc-attachment>`; }
+
+const TEAM_SGID = {
+  ali: ALI_SGID,
+};
+
+async function postNurtureComment({ projectId, taskId, body }) {
+  return ops.bcPost(`/buckets/${projectId}/recordings/${taskId}/comments.json`, { content: body });
+}
+
+async function runNurtureCycle(state, projectId) {
+  const nState = loadNurtureState();
+  const posted = [];
+  for (const area of state.areas) {
+    for (const t of area.overdue) {
+      const tid = String(t.id);
+      nState.tasks[tid] = nState.tasks[tid] || { level: 0, lastPostedAt: null };
+      const current = nState.tasks[tid];
+      const want = t.days_overdue >= 7 ? 7
+        : t.days_overdue >= 5 ? 5
+        : t.days_overdue >= 3 ? 3
+        : t.days_overdue >= 1 ? 1
+        : 0;
+      if (want === 0) continue;
+      if (current.level >= want) continue; // already nurtured at this level or higher
+
+      const owner = (t.assignees || [])[0] || 'unassigned';
+      let label, body;
+      if (want === 7) {
+        label = 'CRITICAL_RISK';
+        body = `<div><strong style="color:#dc2626">CRITICAL RISK</strong> - this task is ${t.days_overdue} days overdue (due ${t.due_on}). Owner: ${owner}. Marking on Launch Readiness Dashboard.</div>
+<div>${mention(ALI_SGID)} please redirect or unblock immediately.</div>`;
+      } else if (want === 5) {
+        label = 'NOTIFY_ALI';
+        body = `<div><strong style="color:#d97706">Escalation (5 days overdue)</strong> - due ${t.due_on}. Owner: ${owner}.</div>
+<div>${mention(ALI_SGID)} please review. This task is now in Ali's daily executive email until resolved.</div>`;
+      } else if (want === 3) {
+        label = 'ESCALATE_LEAD';
+        body = `<div><strong style="color:#b45309">3 days overdue</strong> - due ${t.due_on}. Owner: ${owner}.</div>
+<div>Please post a status update here or reassign. CB will escalate to Ali at 5 days if no movement.</div>`;
+      } else { // 1
+        label = 'REMINDER';
+        body = `<div><strong style="color:#0284c7">Reminder</strong> - this was due ${t.due_on} (1 day overdue). Owner: ${owner}.</div>
+<div>Quick status check: where are we on this?</div>`;
+      }
+      try {
+        const r = await postNurtureComment({ projectId, taskId: t.id, body });
+        nState.tasks[tid] = { level: want, lastPostedAt: new Date().toISOString(), lastCommentId: r.id };
+        posted.push({ taskId: t.id, taskName: t.content, level: label, owner });
+        await new Promise((res) => setTimeout(res, 200));
+      } catch (e) {
+        console.error(`nurture fail task ${t.id}: ${e.message}`);
+      }
+    }
+  }
+  // Cleanup: tasks no longer in overdue list and not modified in 30 days drop out
+  const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  for (const tid of Object.keys(nState.tasks)) {
+    if (nState.tasks[tid].lastPostedAt && nState.tasks[tid].lastPostedAt < cutoff) {
+      delete nState.tasks[tid];
+    }
+  }
+  saveNurtureState(nState);
+  return posted;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,14 +490,17 @@ async function runDailyUpdate({ force = false } = {}) {
   const humanQueue = buildHumanActionQueue(state);
   const aiQueue = buildAiQueue(state);
   const aiSummary = await generateExecSummary(state, escalations, humanQueue, aiQueue);
-  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations });
-  const mbResult = await postHumanActionQueue(state, humanQueue, escalations);
+  // Active nurture: post per-task nudge comments at 1d/3d/5d/7d overdue.
+  const nurturePosted = await runNurtureCycle(state, LAUNCH.projectId);
+  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted });
+  const mbResult = await postHumanActionQueue(state, humanQueue, escalations, nurturePosted);
   return {
     today: state.today,
     overall: state.overall,
     days_to_launch: state.daysToLaunch,
     open_count: state.areas.reduce((s, a) => s + a.openCount, 0),
     escalations_count: escalations.length,
+    nurture_posted: nurturePosted.length,
     email_message_id: emailResult.messageId,
     mb_message_id: mbResult.id,
   };

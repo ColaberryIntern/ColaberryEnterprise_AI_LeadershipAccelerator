@@ -241,12 +241,108 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'create_pdf',
+      description: 'Generate a PDF document and post it as an attachment on the current Basecamp thread. Use this when someone asks for a PDF: a meeting agenda, a one-pager, a briefing doc, a status report. The PDF will appear as a downloadable attachment under your reply.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Document title shown at the top of the PDF' },
+          filename: { type: 'string', description: 'Filename ending in .pdf (e.g., "open-house-agenda-2026-06-15.pdf")' },
+          sections: {
+            type: 'array',
+            description: 'Ordered list of content sections. Each section can have a heading, body text, bullet list, and/or a table.',
+            items: {
+              type: 'object',
+              properties: {
+                heading: { type: 'string', description: 'Section heading (optional)' },
+                body: { type: 'string', description: 'Paragraph text under the heading (optional)' },
+                bullets: { type: 'array', items: { type: 'string' }, description: 'Bullet list (optional)' },
+              },
+            },
+          },
+          caption: { type: 'string', description: 'One-line caption shown above the attachment in the Basecamp comment' },
+        },
+        required: ['title', 'filename', 'sections'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_xlsx',
+      description: 'Generate an Excel (.xlsx) spreadsheet and post it as an attachment on the current Basecamp thread. Use this for tabular data: roster, schedule, budget tracker, content calendar, A/B test plan, enrollment dashboard sample, etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filename: { type: 'string', description: 'Filename ending in .xlsx' },
+          sheets: {
+            type: 'array',
+            description: 'One or more sheets. Each has a name, optional headers row, and a 2D array of rows.',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Sheet name (<=30 chars)' },
+                headers: { type: 'array', items: { type: 'string' }, description: 'Top header row (optional, but recommended)' },
+                rows: { type: 'array', items: { type: 'array', items: {} }, description: '2D array of data rows. Each inner array is one row. Cell values can be strings, numbers, or null.' },
+              },
+              required: ['name', 'rows'],
+            },
+          },
+          caption: { type: 'string', description: 'One-line caption shown above the attachment in the Basecamp comment' },
+        },
+        required: ['filename', 'sheets'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_image',
+      description: 'Generate an image via OpenAI gpt-image-1 (DALL-E successor) and post it as an attachment on the current Basecamp thread. Use this for marketing visuals, mockups, brand-direction illustrations, social media graphics. Output is a single PNG image. Cost ~$0.04 per image.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Image generation prompt. Be specific about style ("flat illustration"), subject, mood, colors. Avoid generating real people\'s faces.' },
+          filename: { type: 'string', description: 'Filename ending in .png' },
+          size: { type: 'string', enum: ['1024x1024', '1536x1024', '1024x1536'], description: 'Image dimensions. Square for general use, landscape for headers, portrait for stories.' },
+          caption: { type: 'string', description: 'One-line caption shown above the attachment in the Basecamp comment' },
+        },
+        required: ['prompt', 'filename'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish',
       description: 'Done. No more actions needed.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
 ];
+
+// Per-tool permission gating. Tools listed here are restricted to Ali only
+// (creator.id === ALI_ID). All other tools default to "any allowed requester".
+// "Allowed requesters" is the team roster filter applied in the dispatcher
+// before this handler ever fires.
+const ALI_ONLY_TOOLS = new Set([
+  'email_ali',              // sends email to ali@colaberry.com - only Ali can request
+  'set_intern_nudge_mode',  // changes a global system mode
+  'set_vip_sms_mode',       // changes a global system mode
+  'exit_intern_preview',    // personnel preview
+  'scrap_gov_bid',          // gov-bid-specific Ali ops
+  'add_gov_bid',
+  'post_gov_bid_download_instructions',
+  'finalize_gov_bids_from_reply',
+  'vip_list',
+]);
+// Implicit always-allowed: basecamp_reply, queue_followup, create_pdf,
+// create_xlsx, create_image, finish.
+
+function filterToolsForRequester(requesterId, aliId) {
+  if (requesterId === aliId) return TOOLS;
+  return TOOLS.filter((t) => !ALI_ONLY_TOOLS.has(t.function?.name));
+}
 
 const SIGNATURE_HTML = `<br><br>--<br><strong>CB System</strong><br>Ali Muwwakkil's executive agent<br>Colaberry Inc.`;
 const SIGNATURE_TEXT = `\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
@@ -395,6 +491,39 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     } catch (e) { return { ok: false, error: e.message }; }
   }
 
+  // -------------------------------------------------------------------------
+  // Artifact tools: create_pdf, create_xlsx, create_image
+  // Each generates a file, uploads to BC, posts as comment attachment on the
+  // current thread. Side-effect tracking captures the comment URL.
+  // -------------------------------------------------------------------------
+  async function create_pdf({ title, filename, sections, caption }) {
+    try {
+      const { buildPdf, uploadAndAttach } = require('./cb-artifact-tools');
+      const localPath = await buildPdf({ title, sections, filename });
+      const result = await uploadAndAttach({ bcGet, bcPost, bucketId, recId, localFilePath: localPath, filename, caption });
+      sideEffects.artifactCreated = { kind: 'pdf', filename, commentId: result.commentId };
+      return { ok: true, kind: 'pdf', ...result };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  async function create_xlsx({ filename, sheets, caption }) {
+    try {
+      const { buildXlsx, uploadAndAttach } = require('./cb-artifact-tools');
+      const localPath = await buildXlsx({ sheets, filename });
+      const result = await uploadAndAttach({ bcGet, bcPost, bucketId, recId, localFilePath: localPath, filename, caption });
+      sideEffects.artifactCreated = { kind: 'xlsx', filename, commentId: result.commentId };
+      return { ok: true, kind: 'xlsx', ...result };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  async function create_image({ prompt, filename, size = '1024x1024', caption }) {
+    try {
+      const { buildImage, uploadAndAttach } = require('./cb-artifact-tools');
+      const localPath = await buildImage({ prompt, size, filename });
+      const result = await uploadAndAttach({ bcGet, bcPost, bucketId, recId, localFilePath: localPath, filename, caption });
+      sideEffects.artifactCreated = { kind: 'image', filename, commentId: result.commentId };
+      return { ok: true, kind: 'image', ...result };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   async function exit_intern_preview({ intern_query, reason }) {
     try {
       const { previewExit } = require(path.resolve(REPO, 'backend/src/scripts/lib/internExit'));
@@ -413,7 +542,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }
@@ -453,6 +582,10 @@ function summarizeComments(comments, aliId) {
 async function handleOpenEnded(ctx) {
   const { bcGet, bcPost, bucketId, recId, comment, mention, aliId } = ctx;
   const invocationId = `cb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const requesterId = comment.creator?.id;
+  const requesterName = comment.creator?.name || 'team member';
+  const isAli = requesterId === aliId;
+  const availableTools = filterToolsForRequester(requesterId, aliId);
 
   if (!process.env.OPENAI_API_KEY) {
     appendLog({ invocationId, comment_id: comment.id, status: 'no_api_key' });
@@ -462,7 +595,13 @@ async function handleOpenEnded(ctx) {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const { recording, comments } = await fetchThreadContext({ bcGet, bucketId, recId });
 
-  const userMessage = `Ali's comment (the one that tagged you):
+  const requesterContext = isAli
+    ? 'The requester is Ali Muwwakkil (Managing Director, Executive Sponsor).'
+    : `The requester is ${requesterName} (team member, not Ali). You can use basecamp_reply, queue_followup, create_pdf, create_xlsx, create_image, finish. Ali-only tools (email_ali, system mode toggles, gov-bid ops, exit_intern_preview, vip_list) are not available to non-Ali requesters.`;
+
+  const userMessage = `${requesterContext}
+
+Their comment (the one that tagged you):
 """
 ${(comment.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}
 """
@@ -490,7 +629,7 @@ Decide and act. Always end with basecamp_reply, then finish.`;
       resp = await openai.chat.completions.create({
         model: MODEL,
         messages,
-        tools: TOOLS,
+        tools: availableTools,
         tool_choice: 'auto',
         temperature: 0.3,
       });
