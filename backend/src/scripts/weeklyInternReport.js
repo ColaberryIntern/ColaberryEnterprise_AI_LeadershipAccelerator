@@ -19,6 +19,7 @@ const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodema
 const OpenAI = require(path.resolve(__dirname, '../../../node_modules/openai')).default;
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 const { buildInternActivity } = require(path.resolve(__dirname, './lib/internActivityTracker'));
+const recorder = require(path.resolve(__dirname, './lib/reportRunRecorder'));
 
 const BUCKET = parseInt(process.env.INTERN_REPORT_BUCKET || '24865175', 10);
 const MESSAGE_BOARD_ID = parseInt(process.env.INTERN_REPORT_MESSAGE_BOARD || '4450326153', 10);
@@ -276,6 +277,12 @@ ${renderInline('GREEN', green)}
 
 (async () => {
   console.log(`[intern-report] start ${new Date().toISOString()}, dry=${DRY}, no_mb=${NO_MB}, no_email=${NO_EMAIL}`);
+  const runRecord = await recorder.start('Weekly Intern Activity Report');
+  const messageIds = [];
+  const recipientsSent = [];
+  let runStatus = 'success';
+  let runError = null;
+  try {
   const rows = await buildInternActivity({ lookbackDays: 14, includeCompleted: false });
   console.log(`[intern-report] activity rows: ${rows.length}`);
   if (rows.length === 0) { console.error('Nothing to report.'); process.exit(0); }
@@ -318,6 +325,8 @@ ${renderInline('GREEN', green)}
       headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': totals.black > 0 ? 'high' : 'normal', 'X-Priority': totals.black > 0 ? '1' : '3' },
     });
     console.log('[intern-report] email sent:', r.messageId);
+    messageIds.push(r.messageId);
+    recipientsSent.push('ali@colaberry.com', 'alimuwwakkil@gmail.com');
   }
 
   if (!NO_MB && !DRY) {
@@ -328,8 +337,17 @@ ${renderInline('GREEN', green)}
         status: 'active',
       });
       console.log('[intern-report] message board posted:', mbResp.id);
+      messageIds.push(`bc-msg-${mbResp.id}`);
     } catch (e) { console.error('[intern-report] message board post failed:', e.message); }
   }
 
   console.log('[intern-report] done');
-})().catch(e => { console.error('[intern-report] FATAL:', e.stack || e.message); process.exit(1); });
+  } catch (e) {
+    runStatus = 'failure';
+    runError = e.message;
+    console.error('[intern-report] FATAL:', e.stack || e.message);
+    await recorder.end(runRecord, { status: runStatus, messageIds, recipientsSent, error: runError });
+    process.exit(1);
+  }
+  await recorder.end(runRecord, { status: runStatus, messageIds, recipientsSent });
+})();

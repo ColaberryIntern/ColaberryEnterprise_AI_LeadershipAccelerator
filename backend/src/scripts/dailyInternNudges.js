@@ -26,6 +26,7 @@ const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodema
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 const { buildInternActivity } = require(path.resolve(__dirname, './lib/internActivityTracker'));
 const { readMode } = require(path.resolve(__dirname, './lib/internNudgeMode'));
+const recorder = require(path.resolve(__dirname, './lib/reportRunRecorder'));
 
 const BUCKET = parseInt(process.env.INTERN_REPORT_BUCKET || '24865175', 10);
 const BC_TOKEN = process.env.BASECAMP_ACCESS_TOKEN || '';
@@ -226,6 +227,12 @@ ${interactionBlock}
 
 (async () => {
   console.log(`[intern-nudges] start ${new Date().toISOString()}, dry=${DRY}, mode=${NUDGE_MODE}, force=${FORCE}`);
+  const runRecord = await recorder.start('Daily Intern Nudges (Preview Mode)');
+  const messageIds = [];
+  const recipientsSent = [];
+  let runStatus = 'success';
+  let runError = null;
+  try {
   const state = loadState();
   const today = todayKey();
 
@@ -281,4 +288,13 @@ ${interactionBlock}
 
   console.log(`[intern-nudges] done. sent=Y${sent.YELLOW.length}/O${sent.ORANGE.length}/R${sent.RED.length}/B${sent.BLACK.length}, skipped=${skipped.length}`);
   if (skipped.length) for (const s of skipped) console.log(`  skip: ${s.name} - ${s.reason}`);
-})().catch(e => { console.error('[intern-nudges] FATAL:', e.stack || e.message); process.exit(1); });
+  recipientsSent.push('ali@colaberry.com');
+  } catch (e) {
+    runStatus = 'failure';
+    runError = e.message;
+    console.error('[intern-nudges] FATAL:', e.stack || e.message);
+    await recorder.end(runRecord, { status: runStatus, messageIds, recipientsSent, error: runError });
+    process.exit(1);
+  }
+  await recorder.end(runRecord, { status: runStatus, messageIds, recipientsSent });
+})();

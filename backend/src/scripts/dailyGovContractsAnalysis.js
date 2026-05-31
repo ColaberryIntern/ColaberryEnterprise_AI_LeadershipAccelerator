@@ -17,6 +17,7 @@ const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
+const recorder = require(path.resolve(__dirname, './lib/reportRunRecorder'));
 
 const PROJECT_ID = 47346103;
 const RECIPIENT = process.env.GOV_REPORT_RECIPIENT || 'ali@colaberry.com';
@@ -249,6 +250,7 @@ Generated ${now.toISOString()} &middot; Source: Basecamp project ${PROJECT_ID} &
 }
 
 (async () => {
+  const runRecord = await recorder.start('Daily Gov Contracts Analysis');
   try {
     const data = await build();
     const html = renderHtml(data);
@@ -292,8 +294,10 @@ Open the email for the per-bid breakdown and the human-task assignment suggestio
       },
     });
     console.log('Sent:', r.messageId);
+    await recorder.end(runRecord, { status: 'success', messageIds: [r.messageId], recipientsSent: [RECIPIENT, RECIPIENT_PHONE] });
   } catch (e) {
     console.error('FAIL:', e.message);
+    await recorder.end(runRecord, { status: 'failure', error: e.message });
     process.exit(1);
   }
 })();
