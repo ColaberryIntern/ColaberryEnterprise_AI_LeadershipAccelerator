@@ -403,9 +403,86 @@ function normalizeAliName(s) {
   return (s || '').replace(/Ali Muwwakkil/g, 'Ali');
 }
 
+// V2 render: matches Launch PMO format - YOUR TURN banner + 4-up KPIs +
+// feasibility per list + per-list Next Human Step + per-list detail cards +
+// AI completion log.
+function renderHtmlV2(analysis, framing) {
+  const today = new Date().toISOString().slice(0, 10);
+  const fmtToday = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const totalOpen = analysis.openTodos.length;
+  const totalHuman = analysis.openTodos.filter((t) => t.tier === 'HUMAN').length;
+  const totalAi = analysis.openTodos.filter((t) => t.tier === 'AI').length;
+  const overdue = analysis.openTodos.filter((t) => t.due_on && t.due_on < today);
+
+  // Group open todos by list
+  const byList = new Map();
+  for (const t of analysis.openTodos) {
+    if (!byList.has(t.listId)) byList.set(t.listId, { listId: t.listId, listName: t.listName, todos: [] });
+    byList.get(t.listId).todos.push(t);
+  }
+
+  function scoreBadge(open, overdueLocal) {
+    let score = open === 0 ? 100 : Math.max(0, 100 - open * 3 - overdueLocal * 8);
+    const tier = score >= 80 ? 'ON_TRACK' : score >= 50 ? 'AT_RISK' : 'LIKELY_SCRAP';
+    const color = tier === 'ON_TRACK' ? { bg: '#dcfce7', fg: '#14532d' } : tier === 'AT_RISK' ? { bg: '#fef3c7', fg: '#78350f' } : { bg: '#fee2e2', fg: '#7f1d1d' };
+    return { score, tier, html: `<span style="display:inline-block;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:700;background:${color.bg};color:${color.fg};letter-spacing:0.5px">${tier.replace('_', ' ')} &middot; ${score}</span>` };
+  }
+
+  const yourTurnBanner = analysis.nextHuman
+    ? `<div style="background:#fef3c7;border-left:6px solid #d97706;padding:16px 22px;margin:0 0 18px"><div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#78350f;font-weight:700">YOUR TURN - next decision on ${escape(analysis.shortName)}</div><div style="font-size:17px;font-weight:700;color:#1a202c;margin-top:6px">${escape(stripEmDashes(stripHtml(analysis.nextHuman.content)))}</div><div style="font-size:13px;color:#1f2937;margin-top:6px">List: <strong>${escape(analysis.nextHuman.listName)}</strong> | Due: <strong>${analysis.nextHuman.due_on || 'unset'}</strong> | <a href="${analysis.nextHuman.app_url}" style="color:#1e40af">Open ticket &rarr;</a></div></div>`
+    : (totalOpen === 0 ? '<div style="background:#dcfce7;border-left:6px solid #15803d;padding:14px 18px;margin:0 0 18px"><strong>All clear.</strong> Zero open tasks.</div>' : '<div style="background:#dbeafe;border-left:6px solid #1e40af;padding:14px 18px;margin:0 0 18px"><strong>No human action needed.</strong> All open tasks are AI-tier. Tag <code>@CB System</code> on any task to execute.</div>');
+
+  // Per-list Next Human Step rows
+  const perListRows = [...byList.values()].map((g) => {
+    const nextH = g.todos.find((t) => t.tier === 'HUMAN' || t.tier === 'EITHER');
+    if (!nextH) return null;
+    return `<tr><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${escape(g.listName)}</td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0">${duePill(nextH.due_on)}</td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${nextH.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600">${escape(stripEmDashes(nextH.content)).slice(0, 110)}</a></td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${escape((nextH.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || nextH.suggestedOwner)}</td></tr>`;
+  }).filter(Boolean).join('');
+
+  // Per-list feasibility rows
+  const feasRows = [...byList.values()]
+    .map((g) => ({ g, overdueCount: g.todos.filter((t) => t.due_on && t.due_on < today).length }))
+    .map(({ g, overdueCount }) => ({ g, overdueCount, badge: scoreBadge(g.todos.length, overdueCount) }))
+    .sort((a, b) => a.badge.score - b.badge.score)
+    .map(({ g, overdueCount, badge }) => `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${escape(g.listName)}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${badge.html}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${g.todos.length} open / ${overdueCount} overdue</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">H ${g.todos.filter((t) => t.tier === 'HUMAN').length} / AI ${g.todos.filter((t) => t.tier === 'AI').length}</td></tr>`)
+    .join('');
+
+  // Per-list detail cards
+  const listCards = [...byList.values()].map((g) => {
+    const nextH = g.todos.find((t) => t.tier === 'HUMAN' || t.tier === 'EITHER');
+    const nextA = g.todos.find((t) => t.tier === 'AI');
+    const oc = g.todos.filter((t) => t.due_on && t.due_on < today).length;
+    const badge = scoreBadge(g.todos.length, oc);
+    const taskRows = g.todos.slice(0, 15).map((t, i) => `<tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}"><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${i + 1}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${escape(stripEmDashes(t.content)).slice(0, 95)}</a></td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${escape((t.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned')}</td></tr>`).join('');
+    return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:14px"><div style="display:table;width:100%"><div style="display:table-cell"><div style="font-size:16px;font-weight:800;color:#1a365d">${escape(g.listName)}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${g.todos.length} open &middot; ${g.todos.filter((t) => t.tier === 'HUMAN').length} human &middot; ${g.todos.filter((t) => t.tier === 'AI').length} AI &middot; ${oc} overdue</div></div><div style="display:table-cell;text-align:right">${badge.html}</div></div>${nextH ? `<div style="margin-top:14px;background:#1c1917;color:white;padding:14px 16px;border-radius:8px;border-left:4px solid #fbbf24"><div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">Next human step blocking this list</div><a href="${nextH.app_url}" style="display:block;font-size:14px;color:white;text-decoration:none;font-weight:700;margin-top:4px">${escape(stripEmDashes(nextH.content))}</a><div style="margin-top:6px;font-size:11px;color:#cbd5e0">${duePill(nextH.due_on)} &middot; <strong style="color:white">${escape((nextH.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || nextH.suggestedOwner)}</strong></div></div>` : '<div style="margin-top:14px;padding:10px 14px;background:#dcfce7;border-radius:6px;font-size:12px;color:#166534">No human step blocking this list.</div>'}${nextA && nextA.id !== nextH?.id ? `<div style="margin-top:8px;padding:10px 14px;background:#dbeafe;border-radius:6px;font-size:11px;color:#1e3a8a"><strong>Next AI step:</strong> ${escape(stripEmDashes(nextA.content))} (due ${nextA.due_on || 'unset'}). Tag <code>@CB System</code> to execute.</div>` : ''}<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Open task sequence (top ${Math.min(15, g.todos.length)})</div><table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse"><thead><tr style="background:#1a365d"><th align="left" style="padding:8px 10px;color:white;font-size:10px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Owner</th></tr></thead><tbody>${taskRows}</tbody></table></div>`;
+  }).join('');
+
+  const recentMsgRows = (analysis.recentMessages || []).slice(0, 5).map((m) => `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(m.created_at || '').slice(0, 10)}</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${m.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600">${escape(m.subject)}</a><div style="font-size:11px;color:#64748b;margin-top:2px">${escape(m.excerpt).slice(0, 200)}</div></td></tr>`).join('');
+
+  return `<!doctype html><html><body style="margin:0;padding:0;background:#f7fafc;font-family:arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc"><tr><td align="center"><table width="800" cellpadding="0" cellspacing="0" style="max-width:800px;background:#fff;border-radius:8px;margin:24px 0;overflow:hidden">
+
+<tr><td style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:#fff;padding:28px 32px"><div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">Daily Client Project Update</div><h1 style="margin:6px 0 8px;font-size:24px;font-weight:800;color:white">${escape(analysis.projectName)} &mdash; ${escape(fmtToday)}</h1><div style="font-size:13px;color:#e2e8f0;line-height:1.6">${totalOpen} open todos &middot; ${totalHuman} human-needed &middot; ${totalAi} AI-doable &middot; ${overdue.length} overdue &middot; <a href="${analysis.appUrl}" style="color:#fde68a;text-decoration:none">Open project &rarr;</a></div></td></tr>
+
+<tr><td style="background:#1c1917;color:white;padding:18px 32px"><div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">For Ali - big picture</div><div style="font-size:14px;margin-top:6px;line-height:1.55">${escape(framing.goal)}</div>${framing.nextStepImportance ? `<div style="font-size:13px;margin-top:8px;color:#fde68a"><strong>Why the next step matters:</strong> ${escape(framing.nextStepImportance)}</div>` : ''}</td></tr>
+
+<tr><td style="padding:24px 32px 0">${yourTurnBanner}<table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px"><tr><td style="text-align:center;padding:14px;background:#fef3c7;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#78350f">${totalHuman}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#78350f;font-weight:700">Human-needed</div></td><td style="width:1%"></td><td style="text-align:center;padding:14px;background:#dbeafe;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#1e3a8a">${totalAi}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a;font-weight:700">AI-doable</div></td><td style="width:1%"></td><td style="text-align:center;padding:14px;background:#fee2e2;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#7f1d1d">${overdue.length}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f1d1d;font-weight:700">Overdue</div></td></tr></table>
+
+<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Feasibility per list (lowest first)</h2>${feasRows ? `<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px"><thead><tr style="background:#1a365d;color:white"><th align="left" style="padding:10px 12px;font-size:10px">LIST</th><th align="center" style="padding:10px 12px;font-size:10px">SCORE</th><th align="left" style="padding:10px 12px;font-size:10px">OPEN</th><th align="left" style="padding:10px 12px;font-size:10px">TIER MIX</th></tr></thead><tbody>${feasRows}</tbody></table>` : '<div style="background:#dcfce7;padding:14px 18px;border-radius:6px;color:#14532d;font-weight:600;margin-bottom:24px">No open work in this project.</div>'}
+
+<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Next human step blocking each list</h2>${perListRows ? `<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px"><thead><tr style="background:#1a365d;color:white"><th align="left" style="padding:10px 12px;font-size:10px">LIST</th><th align="left" style="padding:10px 12px;font-size:10px">DUE</th><th align="left" style="padding:10px 12px;font-size:10px">NEXT HUMAN STEP</th><th align="left" style="padding:10px 12px;font-size:10px">OWNER</th></tr></thead><tbody>${perListRows}</tbody></table>` : '<div style="background:#dcfce7;padding:14px 18px;border-radius:6px;color:#14532d;font-weight:600;margin-bottom:24px">All lists unblocked on the human side.</div>'}
+
+<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Lists in detail</h2>${listCards}
+
+${recentMsgRows ? `<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Recent message board activity</h2><table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px">${recentMsgRows}</table>` : ''}
+
+<p style="font-size:11px;color:#94a3b8;margin-top:18px">Generated by CB System Client Projects Report (Mon-Fri 8am CDT). Project: <a href="${analysis.appUrl}" style="color:#2b6cb0">${escape(analysis.projectName)}</a>. Tag <code>@CB System</code> on any task to escalate, get AI execution, or ask for a PDF / Excel / image artifact.</p>
+
+</td></tr></table></td></tr></table></body></html>`;
+}
+
 async function sendEmail(analysis, framing) {
   if (DRY) { console.log(`[client-report] DRY skip email for ${analysis.projectName}`); return null; }
-  const html = normalizeAliName(stripEmDashes(renderHtml(analysis, framing)));
+  const html = normalizeAliName(stripEmDashes(renderHtmlV2(analysis, framing)));
   const text = normalizeAliName(renderText(analysis, framing));
   validateBeforeSend(html, text);
   const transport = nodemailer.createTransport({
