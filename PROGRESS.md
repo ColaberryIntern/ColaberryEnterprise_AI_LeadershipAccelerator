@@ -12,6 +12,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts reset — dispatcher fix + scrap/add + your-turn notifier + @CB tools (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-bid-ops + CC-20260531-cb-fix + CC-20260531-turn + CC-20260531-cb-tools
+- What changed:
+  - **Dispatcher fix:** `/buckets/<id>/events.json` returns 404 with this token across every bucket tested. The dispatcher had been silently finding 0 mentions since v1. Switched to a watched-buckets + comment-poll strategy: for each of 8 active buckets, walk todoset → todolists → todos → comments + scan the message board top 10. Verified by Ali's two AI Pathway tags - CB replied to both within seconds of the fix.
+  - **Scrap + Add:** Trashed Harris County, SLCC, TDCJ, Southlake, Detroit (all LIKELY SCRAP). Created 5 placeholder bids "[NEW SLOT] Bid 1-5" with the standard 14-task template (read RFP → qual gate → pre-proposal → questions → functional → technical → security → compliance → exec summary → capability statement → narrative → pricing → review → submit Bonfire). Each task pre-tagged HUMAN/AI, due dates distributed backward from default deadline 2026-07-15.
+  - **`backend/src/scripts/lib/govBidOps.js`:** reusable `scrapBid(name)` + `addBid({title, deadline, agency, fit_thesis})`. Used by one-off CLI + @CB tools.
+  - **Your-Turn Notifier (`backend/src/scripts/govContractsTurnWatcher.js`):** polls Gov Contracts every 5 min via cron. Detects task completions since last tick. For each completion, looks at the bid's next-overall task. If next is HUMAN, fires "[Your Turn]" email immediately. If next is AI, stays silent (handoff to future auto-runner). State at `tmp/ops-engine/gov-turn-state.json`. Cron: `*/5 * * * *`. Honors Ali's "only bug me when it's my move" rule.
+  - **@CB tools:** `scrap_gov_bid(name_or_keyword)` and `add_gov_bid({title, deadline, agency_name?, fit_thesis?})`. Both wired to govBidOps. CB resolves bid names by substring match; errors if ambiguous.
+- Verification:
+  - Dispatcher manual run: `2 new @CB mentions from Ali` → both processed, replies posted on AI Pathway todo 9940746726.
+  - Scrap: all 5 named bids trashed (verified by listing remaining lists; none of the original 5 present).
+  - Add: 5 placeholders created with 14 tasks each, due dates 2026-05-31 to 2026-07-14.
+  - Turn watcher first run: `fired=0` (no completions since last tick), state file initialized with current completion ids per bid.
+  - Wrap-up email landed (Mandrill `dc5e95f2-...`).
+- Deferred to follow-up:
+  - **AI auto-runner**: when a task is completed and next-overall is AI, the system needs to actually execute that AI task (research/draft/compile) and mark it complete before pinging Ali. This is the "always stuck on human" promise. Today's Your-Turn-Notifier covers the email side; auto-runner is the next build.
+  - **Real Opportunity Pulse integration**: today the 5 placeholders are manual. Wiring `addBid` to a "fetch top 5 from Bonfire" feed needs the existing Opportunity Pulse scraper to expose a list-and-pick endpoint.
+
 ### Gov Contracts v3 — feasibility scoring + due-date backfill (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-gov-score
