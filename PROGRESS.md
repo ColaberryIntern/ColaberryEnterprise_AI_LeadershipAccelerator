@@ -12,6 +12,21 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov bid two-step flow — fixed URLs from historical scripts (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-gov-flow-fix
+- What changed:
+  - Replaced placeholder URLs in `postGovBidDownloadInstructions` with the real Opportunity Pulse + Bonfire navigation extracted from `processGovBid.js` + `tmp/op/*.js`:
+    - Opportunity Pulse base: `http://95.216.199.47` (internal VPS admin)
+    - Strategic feed: `/admin/bonfire/strategic`
+    - Per-opportunity readiness: `/admin/bonfire/<uuid>/submission-readiness`
+    - Bonfire account login: `https://account.bonfirehub.com/login`
+    - Vendor hub: `https://vendor.bonfirehub.com/opportunities`
+    - Per-agency portals: `{agency}.bonfirehub.com/opportunities/{numeric_id}`
+  - Step-by-step now mirrors the historical Colaberry flow exactly: open strategic feed → per-opportunity readiness page (confirms routing/deadline/AI pre-tailor) → click through to agency Bonfire portal → login with correct account per the gov-bid-account-routing rule (Colaberry-only via vendor.bonfirehub.com vs joint with Que) → download zip → reply with title/deadline/agency/uuid/bonfire URL.
+  - Env override knob renamed `OPPORTUNITY_PULSE_BASE` (was `OPPORTUNITY_PULSE_URL` + `BONFIRE_LOGIN_URL`).
+- Verification: smoke-test posted the updated MB content, then trashed. Content matches historical flow. CB called the tool correctly + posted the reply.
+
 ### Gov bid two-step flow — propose-with-download-instructions then finalize (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-gov-flow
