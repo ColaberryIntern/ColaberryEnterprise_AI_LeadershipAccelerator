@@ -128,21 +128,27 @@ async function fetchCohorts() {
   cutoff.setMonth(cutoff.getMonth() - COHORT_LOOKBACK_MONTHS);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
-  // ACTIVE-ONLY filter via vw_QS_MetricsDashboard_ClassManagement.
-  // That view is denormalized per (class, section) so GROUP BY Class_ID and take
-  // MAX(Class_Active) / MAX(ClassCompleted) / MAX(Class_Cancelled) per class.
-  // A class qualifies as "active" only if it is currently active, not completed,
-  // and not cancelled.
+  // Step 1: fetch class statuses once (small, fast).
+  // vw_QS_MetricsDashboard_ClassManagement is denormalized per section, so
+  // GROUP BY Class_ID and take MAX of each status column.
+  // "Active" = NOT (instructor-marked-complete OR cancelled). We do NOT require
+  // Class_Active=1 because that flag only marks the currently-in-progress
+  // session, not all sessions of an active class.
+  const statusResult = await pool.request().query(`
+    SELECT Class_ID,
+           MAX(ISNULL(ClassCompleted, 0)) AS IsCompleted,
+           MAX(ISNULL(Class_Cancelled, 0)) AS IsCancelled,
+           MAX(Class_ClassInstructor) AS Instructor
+    FROM vw_QS_MetricsDashboard_ClassManagement
+    GROUP BY Class_ID
+  `);
+  const classStatus = new Map(); // classId -> { isCompleted, isCancelled, instructor }
+  for (const r of statusResult.recordset) {
+    classStatus.set(r.Class_ID, { isCompleted: r.IsCompleted, isCancelled: r.IsCancelled, instructor: r.Instructor });
+  }
+
+  // Step 2: pull all enrollments in window (no JOIN — much faster).
   const result = await pool.request().query(`
-    WITH ClassStatus AS (
-      SELECT Class_ID,
-             MAX(ISNULL(Class_Active, 0)) AS IsActive,
-             MAX(ISNULL(ClassCompleted, 0)) AS IsCompleted,
-             MAX(ISNULL(Class_Cancelled, 0)) AS IsCancelled,
-             MAX(Class_ClassInstructor) AS Instructor
-      FROM vw_QS_MetricsDashboard_ClassManagement
-      GROUP BY Class_ID
-    )
     SELECT
       ep.ClassSignUpsID,
       ep.ClassId,
@@ -155,66 +161,61 @@ async function fetchCohorts() {
       ep.CurrentSection,
       ep.NoOfEvents,
       ep.TotalEventsCompleted,
-      ep.EventsCompletionPercentage,
-      cs.Instructor AS InstructorName
+      ep.EventsCompletionPercentage
     FROM vw_ClassSignUps_EventProgress ep
-    INNER JOIN ClassStatus cs ON cs.Class_ID = ep.ClassId
     WHERE ep.EnrollmentDate >= '${cutoffStr}'
       AND ep.NoOfSections > 0
-      AND cs.IsActive = 1
-      AND cs.IsCompleted = 0
-      AND cs.IsCancelled = 0
   `);
 
   // Capture instructor per class (for badge in HTML) before we move on.
   const instructorByClass = new Map();
-  for (const r of result.recordset) {
-    if (r.InstructorName) instructorByClass.set(r.ClassId, r.InstructorName);
+  for (const [classId, st] of classStatus.entries()) {
+    if (st.instructor) instructorByClass.set(classId, st.instructor);
   }
 
-  // COMPLETED classes with IPBC signups: separate query. Get every IPBC signup
-  // whose original class is now marked complete (or cancelled / not-active),
-  // within the lookback window.
+  // Step 3: identify completed/cancelled class IDs in window for the IPBC query.
+  const enrolledClassIds = new Set();
+  for (const r of result.recordset) enrolledClassIds.add(r.ClassId);
+  const completedClassIds = [...enrolledClassIds].filter((cid) => {
+    const st = classStatus.get(cid);
+    return st && (st.isCompleted === 1 || st.isCancelled === 1);
+  });
+
+  // Step 4: IPBC signups joined only against the completed class IDs (small list).
   let ipbcRows = [];
-  try {
-    const ipbcResult = await pool.request().query(`
-      WITH ClassStatus AS (
-        SELECT Class_ID,
-               MAX(ISNULL(Class_Active, 0)) AS IsActive,
-               MAX(ISNULL(ClassCompleted, 0)) AS IsCompleted,
-               MAX(ISNULL(Class_Cancelled, 0)) AS IsCancelled,
-               MAX(Class_ClassInstructor) AS Instructor
-        FROM vw_QS_MetricsDashboard_ClassManagement
-        GROUP BY Class_ID
-      )
-      SELECT
-        ep.ClassId,
-        ep.ClassName,
-        ep.FirstName + ' ' + ep.LastName AS StudentName,
-        ep.Email,
-        ep.EventsCompletionPercentage AS ClassCompletionPct,
-        ep.EnrollmentDate,
-        cs.Instructor AS InstructorName,
-        ipbc.SignupDate AS IpbcSignupDate,
-        ipbc.PaymentStatus AS IpbcPaymentStatus,
-        ipbc.LastPaymentDate AS IpbcLastPaymentDate,
-        ipbc.SMIC_PaymentAmount AS IpbcPaymentAmount,
-        ipbc.TotalPaymentsCount AS IpbcPaymentsCount,
-        ipbc.ISAPaymentType AS IpbcPaymentType
-      FROM vw_ClassSignUps_EventProgress ep
-      INNER JOIN ClassStatus cs ON cs.Class_ID = ep.ClassId
-      INNER JOIN vw_ADF_Student_Marketing_SalesRepsIPBC_Signups ipbc ON ipbc.ClassSignupsID = ep.ClassSignUpsID
-      WHERE ep.EnrollmentDate >= '${cutoffStr}'
-        AND (cs.IsCompleted = 1 OR cs.IsActive = 0 OR cs.IsCancelled = 1)
-      ORDER BY ipbc.SignupDate DESC
-    `);
-    ipbcRows = ipbcResult.recordset;
-  } catch (e) { console.warn(`[cohort-report] IPBC query failed: ${e.message}`); }
+  if (completedClassIds.length > 0) {
+    const idsCsv = completedClassIds.join(',');
+    try {
+      const ipbcResult = await pool.request().query(`
+        SELECT
+          ep.ClassId,
+          ep.ClassName,
+          ep.FirstName + ' ' + ep.LastName AS StudentName,
+          ep.Email,
+          ep.EventsCompletionPercentage AS ClassCompletionPct,
+          ep.EnrollmentDate,
+          ipbc.SignupDate AS IpbcSignupDate,
+          ipbc.PaymentStatus AS IpbcPaymentStatus,
+          ipbc.LastPaymentDate AS IpbcLastPaymentDate,
+          ipbc.SMIC_PaymentAmount AS IpbcPaymentAmount,
+          ipbc.TotalPaymentsCount AS IpbcPaymentsCount,
+          ipbc.ISAPaymentType AS IpbcPaymentType
+        FROM vw_ClassSignUps_EventProgress ep
+        INNER JOIN vw_ADF_Student_Marketing_SalesRepsIPBC_Signups ipbc ON ipbc.ClassSignupsID = ep.ClassSignUpsID
+        WHERE ep.ClassId IN (${idsCsv})
+        ORDER BY ipbc.SignupDate DESC
+      `);
+      ipbcRows = ipbcResult.recordset;
+    } catch (e) { console.warn(`[cohort-report] IPBC query failed: ${e.message}`); }
+  }
 
   await pool.close();
-  // Group by ClassId
+  // Group by ClassId, ACTIVE-ONLY filter applied in JS using the status map.
+  // Active = NOT (instructor-marked-complete OR cancelled).
   const byCohort = new Map();
   for (const r of result.recordset) {
+    const st = classStatus.get(r.ClassId);
+    if (st && (st.isCompleted === 1 || st.isCancelled === 1)) continue; // skip completed/cancelled
     if (!byCohort.has(r.ClassId)) {
       byCohort.set(r.ClassId, { classId: r.ClassId, className: r.ClassName, students: [] });
     }
