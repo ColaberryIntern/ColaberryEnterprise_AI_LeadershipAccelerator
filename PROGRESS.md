@@ -12,6 +12,19 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov bid two-step flow — propose-with-download-instructions then finalize (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-gov-flow
+- What changed:
+  - New `postGovBidDownloadInstructions({count, criteriaSummary?})` in `backend/src/scripts/lib/govBidOps.js`: posts a Message Board UPDATE on Gov Contracts with: links to Opportunity Pulse + Bonfire, step-by-step instructions, the reply-format template ("title + deadline + agency for each bid").
+  - New @CB tool `post_gov_bid_download_instructions(count, criteria_summary?)`. Wired into the handler.
+  - System prompt teaches the two-step flow:
+    - "add bid Harris County deadline 2026-06-22" with full details → call `add_gov_bid` directly (Ali has the docs)
+    - "add 5 bids" generic → call `post_gov_bid_download_instructions(5)` first; Ali downloads → replies with bid list → next @CB invocation calls `add_gov_bid` per bid
+    - Hard rule: "Never call add_gov_bid without a real title + real deadline."
+  - URLs configurable via env: `OPPORTUNITY_PULSE_URL` (default `https://opportunitypulse.colaberry.ai/`), `BONFIRE_LOGIN_URL` (default `https://bidopps.colaberry.com/login`).
+- Verification: smoke-test "@CB I want to add 5 new gov bids - look for AI / data platform RFPs" via the smoke harness. Result: handler called `post_gov_bid_download_instructions` then 4 basecamp_reply calls (LLM verbosely confirmed). MB message landed as "Action: Download 5 RFP packages from Opportunity Pulse" with full content + step-by-step. Test MB post trashed after verification.
+
 ### SMS + Voice alerting plan (planned, not built) (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-sms-voice-plan
