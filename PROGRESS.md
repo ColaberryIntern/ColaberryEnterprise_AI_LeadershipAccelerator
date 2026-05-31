@@ -12,6 +12,16 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Cohort report v2 — active-class filter + Completed→IPBC tab (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-cohort2 / cohort3
+- What changed: 
+  - Filter out classes where the instructor marked the class complete OR cancelled. Source: `vw_QS_MetricsDashboard_ClassManagement` GROUP BY Class_ID with MAX(ClassCompleted) / MAX(Class_Cancelled). Active-flag was too strict (only marks the currently-in-session row), so the filter checks "not completed AND not cancelled" instead.
+  - Pre-fetch class statuses into a JS Map and filter the main query result in memory (avoids expensive 3-way SQL JOIN that was timing out).
+  - New "Completed → IPBC" tab in HTML + email summary section. Lists every student from a now-completed or cancelled class who has an IPBC signup. Per signup: class %, IPBC signup date, payment status pill, plan amount, payment count, ISA plan type.
+  - IPBC query scoped to the small list of completed class IDs (was joining over 100K+ rows; now sub-second).
+- Verification: re-test (`--test`) returned `14 active cohorts, 557 students, 2 completed cohorts with 7 IPBC signups`. Email landed (Mandrill id `6367f04b-...`). 152KB HTML.
+
 ### Weekly Cohort Performance Report — replaces Taiwo's manual Wednesday report (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-cohort
