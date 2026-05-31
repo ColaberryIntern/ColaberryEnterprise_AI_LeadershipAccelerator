@@ -62,6 +62,25 @@ async function bcPut(p, body) {
   try { return JSON.parse(text); } catch { return { status: r.status, raw: text }; }
 }
 
+// Safe todo update: Basecamp's PUT replaces fields. If you PUT just
+// {content, assignee_ids} you LOSE due_on + description + everything else.
+// This helper fetches first, merges, then PUTs the full field set.
+// Use this for any todo edit instead of bcPut directly.
+async function updateTodo({ projectId = LAUNCH.projectId, todoId, patch }) {
+  const current = await bcGet(`/buckets/${projectId}/todos/${todoId}.json`);
+  const merged = {
+    content: current.content,
+    description: current.description || '',
+    assignee_ids: (current.assignees || []).map((a) => a.id),
+    completion_subscriber_ids: (current.completion_subscribers || []).map((a) => a.id),
+    notify: false,
+    due_on: current.due_on || null,
+    starts_on: current.starts_on || null,
+    ...patch,
+  };
+  return bcPut(`/buckets/${projectId}/todos/${todoId}.json`, merged);
+}
+
 // =============================================================================
 // Dock lookup (project IDs for todoset, message_board, schedule, etc).
 // =============================================================================
@@ -214,5 +233,6 @@ module.exports = {
   createTodolist, createTodo, postMessage,
   addPeopleToProject, createScheduleEntry,
   uploadToVault, createVaultFolder, uploadAttachment,
+  updateTodo,
   getToken,
 };
