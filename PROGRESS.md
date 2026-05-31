@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Inbound Dispatcher: backscan audit + skip-stale handling (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- What changed:
+  - Built `scripts/ops-engine/scan-missed-cb-mentions.js` — read-only audit walks all 8 watched buckets with full pagination and cross-references against `tmp/ops-engine/inbound-state.json`. Outputs a list of @CB mentions Ali sent but the pre-fix dispatcher never processed. JSON report written to `tmp/ops-engine/missed-cb-mentions-<ts>.json`.
+- Audit run (since 2026-04-01, ~60-day window):
+  - 6 total @CB mentions from Ali found across 8 buckets
+  - 3 already processed (in state)
+  - **3 missed** — all on bucket 24865175 (Internship/Apprenticeship), todolist "Marketing Automation", todo "LaunchForge AI" (Milad's project)
+    1. 2026-05-29 21:37 (comment 9944587618) — Ali to @Milad: "CB System is my AI going crazy. Demo on our 10am Tuesday call." → conversational reference, not a CB request
+    2. 2026-05-30 20:05 (comment 9945721143) — Ali to @CB + @Milad: "Give me stats about @Milad and when he joined Colaberry. Maybe show me some of his videos." → real ask
+    3. 2026-05-30 20:32 (comment 9945737296) — Ali to @CB + @Milad: "Send @Milad and myself this in an email and schedule a meeting on my calendar for Tuesday at 10am cst." → real ask
+- Decision (Ali, AskUserQuestion): all 3 already handled out-of-band. Skip.
+- Action: wrote `outcome: backfill-skipped` entries for all 3 keys into `inbound-state.json` so the dispatcher (post-pagination-fix) doesn't re-trigger them. Verified by running one tick: 0 new mentions.
+- Lesson logged: the dispatcher's `isCBMention` flags any plaintext "CB" appearance, which over-matches conversational references where Ali talks ABOUT CB to a third party. Worth tightening to "@CB at the start of the comment" or "CB sgid attachment present" only — but defer until it actively causes a problem (today only 1 of 6 mentions was conversational).
+
 ### Inbound Dispatcher: pagination + classifier hot-fixes (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
