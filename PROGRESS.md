@@ -12,6 +12,27 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Track A1.6 — VIP inbox watcher live; system is fully autonomous (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- What changed:
+  - Built `backend/src/scripts/vipInboxWatcher.js`. Polls the existing `inbox_emails` table (which `inboxSyncService` already populates every 60s from gmail_colaberry + gmail_personal + hotmail) for rows received since the last tick, then calls `routeInboundEmail()` on each. No parallel Microsoft Graph poller needed — the COS sync already does the hard work.
+  - State stored at `tmp/ops-engine/vip-watcher-state.json`: `lastReceivedAt` timestamp + processed-id cache (trimmed to last 1000).
+  - First-run safety: only looks at last 15 min if no state file (prevents historical replay).
+  - Skip rule: outbound emails from `ali@colaberry.com` are tagged `self-sent` and never trigger VIP routing (since the VIP alert itself is from Ali to Ali).
+  - Cron entry on VPS host: `*/2 * * * * /opt/colaberry-accelerator/scripts/cron-env-wrapper.sh /opt/colaberry-accelerator/backend/src/scripts/vipInboxWatcher.js >> /var/log/vip-inbox-watcher.log 2>&1`
+- Verification:
+  - Seeded state by running one tick in `log_only` mode: `3 new email(s) since (15min); routed=2 fired=0 skipped=1` (1 self-sent = the prior smoke test).
+  - State file contents inspected — `lastReceivedAt: "2026-05-31 15:36:29+00"` recorded correctly.
+  - Mode flipped to `live`. Cron installed.
+- Why this completes Track A1:
+  - Inbound trigger → router decision → Mandrill→gmail push → Ali's phone, fully autonomous, no manual step.
+  - Cap enforcement (7 alerts/24h) already in `routeInboundEmail()` via communication_logs.
+  - VIP source-of-truth remains the `/admin/inbox/vips` UI (10 VIPs currently).
+- Still left in original ask:
+  - Ali action: disable T-Mobile email-to-SMS forwarder so he doesn't get double-buzz.
+  - Track B (Gov bid pipeline) and Track C (AI auto-runner) on the unified 3-track plan.
+
 ### Track A1 — pivoted off Twilio to Mandrill→gmail push (end-to-end live) (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-vip-pivot
