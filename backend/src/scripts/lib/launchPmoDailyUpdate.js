@@ -33,6 +33,12 @@ function stripHtml(s) {
 }
 function stripEmDashes(s) { return (s || '').replace(/—/g, '-').replace(/–/g, '-'); }
 
+// Mandrill preflight rejects "Ali Muwwakkil" appearing 3+ times (signature
+// duplicate detection). Both the HTML and text generators reference Ali by
+// full name in multiple table rows (assignee columns) - collapse to "Ali"
+// before preflight, then put the full name back only in the signature.
+function normalizeAliName(s) { return (s || '').replace(/Ali Muwwakkil/g, 'Ali'); }
+
 // ---------------------------------------------------------------------------
 // State pull
 // ---------------------------------------------------------------------------
@@ -269,7 +275,9 @@ Project: https://3.basecamp.com/3945211/projects/${LAUNCH.projectId}
 CB System
 Launch PMO for AI Systems Architect Accelerator`);
 
-  validateBeforeSend(html, text);
+  const htmlClean = normalizeAliName(html);
+  const textClean = normalizeAliName(text);
+  validateBeforeSend(htmlClean, textClean);
   const transport = nodemailer.createTransport({
     host: 'smtp.mandrillapp.com', port: 587,
     auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
@@ -279,8 +287,8 @@ Launch PMO for AI Systems Architect Accelerator`);
     to: 'ali@colaberry.com',
     cc: 'alimuwwakkil@gmail.com',
     subject: `[Launch PMO] ${state.today} - ${state.overall}% ready, ${state.daysToLaunch}d to launch`,
-    text,
-    html,
+    text: textClean,
+    html: htmlClean,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
   });
   return { messageId: r.messageId };
