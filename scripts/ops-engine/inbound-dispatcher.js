@@ -155,16 +155,38 @@ function recipeUnknown(raw) {
 
 // Returns HTML if a fixed keyword recipe matched, otherwise null (caller falls
 // through to the LLM handler).
+//
+// We deliberately require the user-input to START with the keyword (after the
+// @CB mention). Free-form requests like "...you help me with X..." or
+// "...you can grep through your..." used to false-positive into the keyword
+// path because they contained "help" / "grep" as words. That kept Ali stuck
+// with the recipe-list reply when he sent real work. (Bug confirmed 2026-05-31
+// on comment 9946342528: PMO system-prompt spec sent to CB but routed to
+// help-recipe reply because "help" appeared in the body.)
 function classifyKeyword(text) {
-  const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const m = stripped.match(/(grep|ccpp|gmail|help)\s*:\s*(.+?)(?:$|\.|;)/i);
-  if (!m) return /\bhelp\b/i.test(stripped) ? recipeHelp() : null;
-  const kind = m[1].toLowerCase();
-  const arg = (m[2] || '').trim();
-  if (kind === 'help') return recipeHelp();
-  if (kind === 'grep') return recipeGrep(arg);
-  if (kind === 'ccpp') return `<div>${mention()} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
-  if (kind === 'gmail') return `<div>${mention()} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
+  // Strip HTML, strip the BC mention attachment, normalize whitespace.
+  const stripped = text
+    .replace(/<bc-attachment[^>]*content-type="application\/vnd\.basecamp\.mention"[^>]*>[\s\S]*?<\/bc-attachment>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Drop a leading "CB System" / "CB" / "@CB" if present (after mention strip
+  // the bare token may remain as plain text).
+  const cmd = stripped.replace(/^@?(CB System|CB Sys|CB)[:\s,]*/i, '').trim();
+  // Require the command to START with a recognized keyword + colon.
+  const m = cmd.match(/^(grep|ccpp|gmail)\s*:\s*(.+?)(?:$|\.|;)/i);
+  if (m) {
+    const kind = m[1].toLowerCase();
+    const arg = (m[2] || '').trim();
+    if (kind === 'grep') return recipeGrep(arg);
+    if (kind === 'ccpp') return `<div>${mention()} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
+    if (kind === 'gmail') return `<div>${mention()} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
+  }
+  // Help recipe: only when the message is JUST "help" (after stripping
+  // mention + CB prefix), nothing more. Anything substantive falls through
+  // to the LLM handler.
+  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp();
   return null;
 }
 
