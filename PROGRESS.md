@@ -12,6 +12,35 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Launch PMO v2: per-unit briefs + Vault uploads + richer tasks (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- Context: Ali asked CB to "break the requirements down into chunks that can be used by different units. For example, for Sohail to create marketing material, he needs only information about the program so he needs his own .md file ... Upload them documents they can use to easily plug into their Claude Code and start completing their tasks. Make the List and to-do's much more detailed and include attachments (loaded only once in To-Do's and then reuse the links) to help them better do their job. Update the task, make them more specific and keep that same energy the entire project. Create a plan for this and then execute."
+- What changed:
+  - **17 launch briefs** hand-curated from TRAINING_INTEGRATION_PLAN.md + ASSUMPTIONS_LOG.md + TWC_INTENSIVE_OUTCOMES.md + Ali's 2026-05-31 system-prompt directives. Committed to `docs/training-program-2026-q3/launch-briefs/`.
+    - 7 shared: `00-program-overview.md`, `01-brand-pricing.md`, `02-launch-timeline-41d.md`, `03-team-roster.md`, `04-decisions-locked.md`, `05-cb-pmo-contract.md`, `06-twc-context.md`
+    - 10 per person: `10-kes-ai-systems.md`, `11-swati-curriculum-twc.md`, `12-aleem-creative.md`, `13-sohail-marketing.md`, `14-tejesh-website-training.md`, `15-jackie-events.md`, `16-taiwo-admissions.md`, `17-dheeraj-ops.md`, `18-roselen-sales.md`, `19-ali-decisions.md`
+  - **New BC primitive `uploadToVault()`** in `lib/launchPmoOps.js` + `createVaultFolder()`. Two-step upload (`/attachments.json` then `/vaults/<id>/uploads.json`). Idempotent by filename. Also added `mimeFor()` helper.
+  - **`backend/src/scripts/uploadLaunchBriefs.js`** — uploaded all 17 briefs to a Vault sub-folder "Launch Briefs" (id 9946496186) on project 47502609. Writes `tmp/launch-briefs-vault-urls.json` slug→url map.
+  - **Task generator v2** (`lib/launchPmoTaskGenerator.js`) — new JSON schema fields per task: `objective`, `deliverable`, `definition_of_done`, `dependencies`, `claude_code_recipe`, `relevant_brief_slugs` (1-4 slugs per task). Strict enum on slugs prevents the LLM from hallucinating non-existent briefs.
+  - **`generateLaunchTasks.js`** rewritten — loads the Vault URL map, embeds brief links as `<a href>` in each todo description, formats a "How to do this in Claude Code" block, auto-trashes existing todos in each list before regenerating (avoids dup). Tier badge (AI / Human) at the top of every description.
+  - **`updateLaunchKickoff.js`** — refreshes the MB kickoff post to point at the Launch Briefs vault folder + lists all 17 briefs by name + per-team brief link + v2 instructions ("how to use this project: open your brief, pick a task, paste into Claude Code").
+  - **`trashStaleLaunchTodos.js`** — one-shot cleanup with `--cutoff` timestamp.
+  - **`bcPut` fix** — old version called `.json()` on 204 No Content responses (which Basecamp's status-change endpoints return). Fixed to return `{status: 204}` on empty body. This was silently breaking trash calls during v2 generation (the PUT actually succeeded; only the response parse blew up).
+- Verification:
+  - Vault folder created: https://app.basecamp.com/3945211/buckets/47502609/vaults/9946496186
+  - 17/17 briefs uploaded, URLs captured in `tmp/launch-briefs-vault-urls.json` on VPS.
+  - v2 generation: 10 areas regenerated. Approx 100+ richer todos now in the project (each with linked briefs + DoD + Claude Code recipe). Old 88 v1 todos auto-trashed.
+  - Kickoff message updated (same id 9946469043, content replaced via `postMessage` idempotent path).
+  - Heartbeat smoke: ran successfully against the new state — 104 open todos, 41 days to launch, email sent (`<658bfe2b-...`), MB post updated.
+- Mistake worth noting:
+  - The v2 generator first run silently mass-failed all trashes because `bcPut` couldn't parse the 204 response. The PUTs DID succeed server-side, but my logs showed "Unexpected end of JSON input" for each one. The new richer todos still landed (because `createTodo` still worked) — so the project briefly had ~176 todos before the trashes propagated. Caught when I went to clean up "stale" todos and `trashStaleLaunchTodos.js` found none matching the cutoff (because they'd all already been trashed). Verified by querying the live BC state.
+- What's now navigable for the team:
+  - **Open the project:** https://3.basecamp.com/3945211/projects/47502609
+  - **Read the kickoff Message Board post:** it lists all 17 briefs with direct links
+  - **Drill into any area todolist:** every todo has the tier badge, DoD, dependencies, Claude Code recipe, and 1-3 brief attachment links
+  - **Drop a brief + a todo into Claude Code:** the assignee can execute end-to-end without further clarification
+
 ### Launch PMO live: project 47502609 fully populated + daily heartbeat (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
