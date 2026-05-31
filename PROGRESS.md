@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Execute-through-issues pass — assumptions locked + foundational drafts shipped (2026-05-30)
+- Date: 2026-05-30
+- Session: CC-20260530-execute
+- What changed:
+  - New `docs/training-program-2026-q3/ASSUMPTIONS_LOG.md` (8.3KB): 17 strategic decisions locked as working assumptions (brand name, persona, pricing model, cohort cadence/size, mentor sourcing, refund policy, capstone rubric, Architect Expo format, Skilljar sync, mid-cohort blueprint change, marketplace governance, etc.). Override mechanism documented (reply on BC todo with assumption ID + new value, OR tag @CB with `override assumption A3 to <value>`). If silent, downstream work proceeds on these locks.
+  - New `docs/training-program-2026-q3/TWC_INTENSIVE_OUTCOMES.md` (9.5KB): counsel-ready draft for the Jun 13 TWC gate. Per-intensive independent outcome statements (Build Your AI Foundation / Create Your AI Team / Connect AI To The Real World / Design AI That Scales). Each has: independent achievements, independent stand-alone value, independent completion criteria, no-prereq statement. Plus 5 open questions for counsel review.
+  - New `docs/training-program-2026-q3/TEAM_LEAD_JOB_DESCRIPTIONS.md` (8.3KB): 4 ready-to-post JDs (Website Lead full-time, Marketing Lead part-time, AI Team Contract Dev full-time, Sales SDR part-time). Each has: role / engagement / what-you-own / who-you-are / why-interesting / compensation / how-to-apply.
+  - New `docs/training-program-2026-q3/ccpp-training-schema.sql` (8.4KB): 4 new CCPP tables (ADF_TrainingPrograms, ADF_TrainingCohorts, ADF_TrainingEnrollments, ADF_TrainingDropReasons) plus a vw_ADF_ActiveTrainingEnrollments convenience view. Mirrors existing ADF_InternshipProgram pattern. Wrapped in BEGIN TRANSACTION with sanity-check SELECT before COMMIT. NOT YET EXECUTED — Ali runs when ready.
+  - New `backend/src/scripts/sendAnthropicPartnerDrillDown.js`: per-person view of the 10-member cohort. Sorted by most at-risk. Each card: completed/total, last-completion gap, status (DONE/MOVING/IDLE/STALLED), what's still open, link to their BC list. Chase-script template included.
+  - New `backend/src/scripts/sendExecuteSummary.js`: wrap-up email + BC comment with 4 attachments.
+- Verification:
+  - All 4 attachments + Anthropic drill-down landed via Mandrill (ids `bf35708f-...` and `b8dfe578-...`).
+  - BC comment 9945888438 posted on training tracker 9945833396 with summary + override syntax.
+- Notes:
+  - Decision Queue items requiring Ali personally (BLACK exits, nudge mode flip, Anthropic Partner chase, TWC counsel engagement, JD posting, schema execution) remain in his court. Per Pattern I doctrine, the irreversible personnel actions (BLACK exits) and the production CCPP writes (schema) cannot autonomously proceed.
+
 ### Outstanding-issues cleanup pass — run history + BLACK pre-review + roster reconciliation + decision queue (2026-05-30)
 - Date: 2026-05-30
 - Session: CC-20260530-cleanup
