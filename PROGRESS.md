@@ -12,6 +12,35 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Project kickoff: blocker detection + AI auto-runner + missing upstreams + nightly cron (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-9k4m
+- Context: Ali asked to kick off the launch project so the AI execution starts overnight, fire the YOUR TURN email tonight (India team works overnight), and fix the blocker logic. He flagged that todo 9946498218 "Review and approve Curriculum design visuals" was being shown as next-up even though no upstream task existed to create those visuals.
+- What changed:
+  - **Blocker detector** (`detectBlockedTasks()` in `launchPmoDailyUpdate.js`). Heuristic links "Review/Approve/Finalize/Sign-off X" tasks to upstream "Draft/Create/Design/Build/Develop X" tasks by subject overlap >=60% on words longer than 3 chars. When an upstream is OPEN, the dependent is BLOCKED. Filters apply to YOUR TURN selection, per-teammate Next Action table, full human queue, AND the AI auto-runner's candidate pool. Surfaces blocked tasks in a dedicated "Blocked tasks (waiting on upstream)" section of the email + MB post.
+  - **9 missing upstream tasks** added via `addMissingUpstreamTasks.js`. Each is an AI-tier task assigned to CB User, due 1-2 days before its matching Approval Queue task. Fixes the gap Ali flagged. New todos: 9946581728 (Curriculum design visuals), 9946581737 (viral video concepts), 9946581741 (Open House package), 9946581746 (websites plan), plus 5 in Approval Queues for memos and proposals.
+  - **CB AI auto-runner** (`runCbAiTasks.js`). For every UNBLOCKED AI-tier task due within N days (default 5; cron uses 7), CB: posts a "CB starting now" status comment, reads the relevant briefs (parsed from the task description's filename refs), calls gpt-4o with task + briefs + ASSUMPTIONS_LOG as context, posts the first-pass deliverable as a follow-up comment. State tracked at `tmp/launch-pmo-ai-runner-state.json` so already-handled tasks don't get redone. Owner reviews + refines.
+  - **Nightly cron** installed: `0 2 * * 1-5` (Mon-Fri 2am UTC = 7am IST). Per Ali's directive: "the India team works overnight so feel free to kick off." India team has fresh first-pass drafts on every assigned AI task when their day starts.
+- Verification:
+  - 9 missing upstream tasks created live (one batch run, no failures).
+  - Daily heartbeat fired with new blocker logic: `blocked_count: 2`, indicating the heuristic correctly excluded blocked items from the YOUR TURN selection. Email landed (`<80cf7254-...`), MB post updated (id 9946474466). 113 open tasks (was 104 before the 9 upstreams), still 0 escalations (Day 1).
+  - Auto-runner dry-run identified 12 unblocked AI-tier tasks due in next 5 days across Curriculum / Marketing / AI Systems / Open Houses / Sales / Website-enterprise / Launch Readiness Dashboard / TWC.
+  - Live auto-runner run kicked off in background (max=12). Each task gets a "CB starting" comment + a gpt-4o-drafted deliverable comment (~600-2000 words depending on task type). Token cost ~$0.05/task.
+  - All 3 crons live and confirmed via `crontab -l`:
+    - `*/3 * * * *` inbound dispatcher (multi-user @CB)
+    - `0 13 * * 1-5` daily PMO heartbeat (YOUR TURN email)
+    - `0 2 * * 1-5` nightly CB AI auto-runner
+- The system now runs without Ali touching it:
+  - **3am-7am IST (Mon-Fri):** CB auto-drafts overnight AI tasks. India team wakes up to first-pass deliverables on every assigned task.
+  - **8am CDT (Mon-Fri):** Ali gets YOUR TURN email with his single most urgent decision + per-teammate Next Action + Blocked tasks (filtered out, listed separately) + escalation status. MB post mirrors on the project.
+  - **Continuous:** Inbound dispatcher polls every 3 min. Any of 11 team members can tag @CB to get help (artifacts, follow-ups, AI execution requests). Per-tool permission gating keeps sensitive ops Ali-only.
+  - **End of day:** CB recomputes Launch Readiness % + posts the dashboard top task update.
+  - **1d/3d/5d/7d overdue:** Per-task nurture comments fire on each level once (no spam).
+- What still needs Ali:
+  - Provision Roselen on Basecamp account 3945211 (only remaining human blocker).
+  - Review the 12 first-pass deliverables CB drops overnight; refine where they need it. (CB drafts honestly, doesn't ship without review.)
+  - Override any of the 17 locked assumptions if they're wrong.
+
 ### CB v2: multi-user @CB + artifact tools + active nurture + YOUR TURN banner (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-9k4m
