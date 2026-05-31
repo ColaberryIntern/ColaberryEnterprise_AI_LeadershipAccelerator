@@ -137,4 +137,66 @@ async function addBid({ displayTitle, deadline, opportunityUuid, fitThesis, agen
   };
 }
 
-module.exports = { scrapBid, addBid, STANDARD_TEMPLATE };
+// =============================================================================
+// POST a Gov-Contracts Message Board UPDATE with download instructions.
+// This is step 1 of the two-step "add bids" flow:
+//   1. propose_gov_bids_download_instructions(count) -> posts MB update with
+//      Opportunity Pulse + Bonfire links, step-by-step instructions
+//   2. Ali downloads the RFP zips manually
+//   3. Ali comments back with the bid list (title + deadline + agency per bid)
+//   4. CB calls addBid() per item to create the real todolist
+// =============================================================================
+
+const OPPORTUNITY_PULSE_URL = process.env.OPPORTUNITY_PULSE_URL || 'https://opportunitypulse.colaberry.ai/';
+const BONFIRE_LOGIN_URL = process.env.BONFIRE_LOGIN_URL || 'https://bidopps.colaberry.com/login';
+
+async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
+  // Fetch the message board id from the project dock
+  const proj = await bcGet(`/projects/${PROJECT_ID}.json`);
+  const mb = proj.dock.find((d) => d.name === 'message_board');
+  if (!mb) throw new Error('Message board not found on Gov Contracts project');
+
+  const subject = `Action: Download ${count} RFP package${count === 1 ? '' : 's'} from Opportunity Pulse`;
+
+  const content = `<div><strong>What CB needs from you next:</strong></div>
+<div>I cannot pull RFP packages on my own (Opportunity Pulse + Bonfire require a logged-in browser session). Once you have the documents, I will build out the full project with the 14-task template, due dates back-distributed from the submission deadline, and feasibility scoring.</div>
+<div><br></div>
+<div><strong>Step-by-step:</strong></div>
+<ol>
+<li>Open <a href="${OPPORTUNITY_PULSE_URL}">Opportunity Pulse</a>${criteriaSummary ? ` and pick ${count} ${criteriaSummary}` : ` and pick the ${count} opportunit${count === 1 ? 'y' : 'ies'} you want to pursue`}.</li>
+<li>For each opportunity, login to <a href="${BONFIRE_LOGIN_URL}">Bonfire</a> (use the routing rule per opportunity: Colaberry-only vs joint with Que).</li>
+<li>Download the full RFP zip from Bonfire for each opportunity.</li>
+<li>Once you have all ${count} zip${count === 1 ? '' : 's'} downloaded, reply on this message board post with the following for each bid:
+<ul>
+<li><strong>Title</strong> (e.g., "Harris County - Agenda &amp; Meeting Management System (RFP 26_0075)")</li>
+<li><strong>Submission deadline</strong> (YYYY-MM-DD)</li>
+<li><strong>Agency</strong></li>
+<li><em>Optional:</em> short fit thesis (1-2 sentences on why we're bidding)</li>
+</ul>
+</li>
+<li>Tag <strong>@CB System</strong> in your reply so I see it. I will create the ${count} full project${count === 1 ? '' : 's'} with the 14-task template + due dates immediately.</li>
+</ol>
+<div><br></div>
+<div><strong>Format example for your reply:</strong></div>
+<div style="background:#f1f5f9;border-left:3px solid #1a365d;padding:10px 14px;font-family:monospace;font-size:12px">
+&#64;CB System ready - here are the ${count} bid${count === 1 ? '' : 's'}:<br>
+1. Harris County - Agenda &amp; Meeting Management (RFP 26_0075), deadline 2026-06-22, agency Harris County TX<br>
+2. SLCC - Enterprise Analytics Platform (SLCC2026-M6006), deadline 2026-07-15, agency SLCC<br>
+3. ...
+</div>
+<div><br></div>
+<div style="font-size:12px;color:#64748b">For a single bid where you already know the title and deadline, you can skip this entire step and just tag <code>&#64;CB System add gov bid &lt;title&gt; deadline &lt;YYYY-MM-DD&gt;</code> directly.</div>`;
+
+  const r = await bcPost(`/buckets/${PROJECT_ID}/message_boards/${mb.id}/messages.json`, {
+    subject,
+    content,
+    status: 'active',
+  });
+  return {
+    messageId: r.id,
+    appUrl: r.app_url,
+    subject,
+  };
+}
+
+module.exports = { scrapBid, addBid, postGovBidDownloadInstructions, STANDARD_TEMPLATE };

@@ -67,6 +67,14 @@ TOOL PICKING GUIDE
 - queue_followup: when the request needs work you cannot do in this turn (live research, cross-system lookups, external comms drafting, calendar booking). Creates a Basecamp todo in the same project, assigned to Ali, with your notes so Claude Code can finish it in his next session.
 - exit_intern_preview: when Ali asks you to remove, exit, terminate, kick out, or place-out an intern. PREVIEW ONLY - it does NOT execute the exit. Returns the CCPP candidate and the Basecamp todos that would be affected. You MUST follow exit_intern_preview with a basecamp_reply that shows Ali the preview AND the exact CLI command he can run to confirm. The execution is intentionally outside your reach - personnel actions need a human in the loop.
 - set_intern_nudge_mode: when Ali says "go live with nudges", "pause nudges", "enable intern nudges", "set nudge mode preview/live", or anything that flips the daily intern nudge cycle between digest-only (preview) and intern-facing (live). Updates a file on the VPS that the next scheduled run reads. ALWAYS follow this with a basecamp_reply confirming the change (what mode it was, what mode it is now, when it takes effect).
+
+GOV BIDS - two-step add flow (IMPORTANT):
+When Ali asks to add Gov Contracts bids, FIRST determine whether he has already downloaded the RFP packages from Opportunity Pulse + Bonfire.
+- If Ali specified a SPECIFIC bid title + deadline (e.g., "add bid Harris County RFP 26_0075 deadline 2026-06-22") → he has the documents, call add_gov_bid directly with that info.
+- If Ali says generically "add N bids" / "find me N new gov bids" / "I want to add more" with NO titles + deadlines → he does NOT yet have the documents. Call post_gov_bid_download_instructions(count). This posts a Message Board UPDATE on Gov Contracts with download instructions. Then tell Ali in your basecamp_reply: "Posted instructions to the Message Board (link in the result). Once you have the zips downloaded, reply on that MB post with the title + deadline + agency for each bid and tag me again - I will build out the projects."
+- When Ali later replies with the list of bids (title + deadline + agency per bid), parse his text and call add_gov_bid once per bid.
+
+Never call add_gov_bid when you do not have a real title + a real deadline. Placeholders defeat the purpose.
 - finish: terminates the loop. Call after your final basecamp_reply.
 
 ALWAYS END WITH: basecamp_reply, then finish.`;
@@ -148,8 +156,23 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'post_gov_bid_download_instructions',
+      description: 'Post a Message Board UPDATE on Gov Contracts telling Ali to go to Opportunity Pulse + Bonfire and download RFP packages. Use this when Ali says "add N bids" / "find me new gov bids" / "I want to add more bids" WITHOUT specifying titles + deadlines. The MB message gives him step-by-step instructions and asks him to reply with (title, deadline, agency) for each bid once he has the downloads. He then tags CB again with that list and you call add_gov_bid per item. This two-step flow is necessary because CB cannot pull RFP packages on its own (they require a logged-in browser session).',
+      parameters: {
+        type: 'object',
+        properties: {
+          count: { type: 'integer', description: 'Number of bids Ali wants to add (1-10).' },
+          criteria_summary: { type: 'string', description: 'Optional. Short summary of any criteria Ali mentioned (e.g., "AI / data platform RFPs", "Texas state agencies", "anything closing in the next 30 days").' },
+        },
+        required: ['count'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'add_gov_bid',
-      description: 'Add a new Gov Contracts bid to Basecamp with the standard 14-task template. Use when Ali says "add bid X" / "create a new bid for X" / "open a slot for X". Tasks are pre-populated with HUMAN/AI tier classification and due dates distributed backward from the deadline.',
+      description: 'Add a new Gov Contracts bid to Basecamp with the standard 14-task template. Use ONLY when Ali has already downloaded the RFP package and is providing the title + deadline + agency. Tasks are pre-populated with HUMAN/AI tier classification and due dates distributed backward from the deadline. If Ali just said "add N bids" without specifying titles + deadlines, call post_gov_bid_download_instructions instead - he needs to download the packages first.',
       parameters: {
         type: 'object',
         properties: {
@@ -264,6 +287,15 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     }
   }
 
+  async function post_gov_bid_download_instructions({ count, criteria_summary }) {
+    try {
+      const { postGovBidDownloadInstructions } = require(path.resolve(REPO, 'backend/src/scripts/lib/govBidOps'));
+      const result = await postGovBidDownloadInstructions({ count, criteriaSummary: criteria_summary });
+      sideEffects.govBidInstructionsPosted = { messageId: result.messageId, count };
+      return { ok: true, ...result };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   async function scrap_gov_bid({ name_or_keyword }) {
     try {
       const { scrapBid } = require(path.resolve(REPO, 'backend/src/scripts/lib/govBidOps'));
@@ -300,7 +332,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }
