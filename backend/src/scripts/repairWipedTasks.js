@@ -125,24 +125,27 @@ ${folderLink}
     const reviewerName = reviewer?.displayName || 'Ali';
     const briefSlugs = BRIEFS_BY_AREA[list.name] || ['program-overview'];
 
-    // Find the latest existing date in the area; if none, use launch - 14 days
-    const latestExistingDate = withDate.length
-      ? withDate.map((t) => t.due_on).sort().pop()
-      : workdaysBackward(LAUNCH.targetLaunchDate, 14);
-
-    // Back-distribute the undated tasks across Mon-Fri days between
-    // latestExistingDate and launch. Spread them evenly with ~2-day spacing.
+    // Linear distribution: spread undated tasks evenly between today and
+    // launch (2026-07-11). Skip weekends. The K-th undated task in the area
+    // gets the K-th Mon-Fri slot in the available window.
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const launch = new Date(`${LAUNCH.targetLaunchDate}T00:00:00Z`);
+    // Build list of Mon-Fri dates between today+1 and launch-1
+    const workdays = [];
+    const cursor = new Date(today);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    while (cursor < launch) {
+      const dow = cursor.getUTCDay();
+      if (dow !== 0 && dow !== 6) workdays.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    // Spread N undated tasks across the workdays. If more tasks than days,
+    // bunch from the start; if fewer, spread evenly.
+    const N = withoutDate.length;
     const dueDatesNew = withoutDate.map((_, i) => {
-      // Place starting 2 work-days after latestExistingDate, spaced by 2 work-days
-      let d = new Date(`${latestExistingDate}T00:00:00Z`);
-      let added = 0, needed = 2 + i * 2;
-      while (added < needed) {
-        d.setUTCDate(d.getUTCDate() + 1);
-        const dow = d.getUTCDay();
-        if (dow !== 0 && dow !== 6) added++;
-      }
-      const iso = d.toISOString().slice(0, 10);
-      return iso > LAUNCH.targetLaunchDate ? LAUNCH.targetLaunchDate : iso;
+      const ratio = N > 1 ? i / (N - 1) : 0;
+      const slot = Math.round(ratio * (workdays.length - 1));
+      return workdays[Math.min(slot, workdays.length - 1)] || LAUNCH.targetLaunchDate;
     });
 
     for (let i = 0; i < withoutDate.length; i++) {
