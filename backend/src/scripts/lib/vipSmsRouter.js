@@ -1,18 +1,22 @@
-// VIP SMS Router — Track A Phase 1
+// VIP Alert Router — Track A Phase 1
 //
 // Given an inbound email payload, decide if the sender is a VIP and (if so):
 //   1. Summarize the email with gpt-4o-mini into a tight "sender + ask" line
-//   2. Forward the full email to alimuwwakkil@gmail.com with a stable subject
-//      so the SMS link can deep-link to it
-//   3. Send an SMS to Ali's phone via Twilio (when SMS_MODE=live; otherwise
-//      log-only)
-//   4. Log to communication_logs for cap tracking + audit
+//   2. Send a VIP-marked email via Mandrill to alimuwwakkil@gmail.com
+//      Gmail's mobile push notification IS the alert. Preview shows
+//      "VIP <name>: <summary>" on Ali's lock screen.
+//   3. Log to communication_logs for cap tracking + audit
+//
+// We dropped Twilio (2026-05-31) because:
+//   - 2024 US carrier rules require A2P 10DLC / toll-free verification
+//   - For Ali's volume (max 7/day, recipient = himself), gmail push
+//     notifications work identically and require zero new infrastructure
+//   - Mandrill is already paid for and battle-tested in this codebase
+//   - Richer alert content (clickable links, summaries) than SMS allows
 //
 // Mode file: tmp/ops-engine/vip-sms-mode.txt
-//   "log_only" (default) - everything except the actual SMS send
-//   "live"               - real SMS via Twilio
-//
-// This lets us build + test the full pipeline before Ali approves Twilio.
+//   "log_only" (default) - log entries but do NOT send via Mandrill
+//   "live"               - send VIP alerts to gmail
 
 const fs = require('fs');
 const path = require('path');
@@ -88,35 +92,60 @@ function canMakeVoiceCall() { return voiceCount24h() < VOICE_CAP; }
 // =============================================================================
 // Log
 // =============================================================================
-function logSms({ to, from, body, status, providerMessageId, error, metadata }) {
+function logVipAlert({ to, body, status, providerMessageId, error, metadata }) {
+  // We keep channel='sms' so existing cap logic + admin views work unchanged.
+  // The "alert via gmail push" is functionally equivalent to SMS for capping.
   const md = JSON.stringify(metadata || {}).replace(/'/g, "''");
-  const sql = `INSERT INTO communication_logs (id, channel, direction, status, to_address, from_address, body, provider, provider_message_id, error_message, metadata, created_at) VALUES (gen_random_uuid(), 'sms', 'outbound', '${status}', '${(to || '').replace(/'/g, "''")}', '${(from || '').replace(/'/g, "''")}', '${(body || '').replace(/'/g, "''")}', 'twilio', ${providerMessageId ? `'${providerMessageId.replace(/'/g, "''")}'` : 'NULL'}, ${error ? `'${error.replace(/'/g, "''")}'` : 'NULL'}, '${md}'::jsonb, NOW())`;
-  try { execPg(sql); } catch (e) { console.error('logSms fail:', e.message); }
+  const sql = `INSERT INTO communication_logs (id, channel, direction, status, to_address, from_address, body, provider, provider_message_id, error_message, metadata, created_at) VALUES (gen_random_uuid(), 'sms', 'outbound', '${status}', '${(to || '').replace(/'/g, "''")}', 'ali@colaberry.com', '${(body || '').slice(0, 4000).replace(/'/g, "''")}', 'mandrill-vip', ${providerMessageId ? `'${providerMessageId.replace(/'/g, "''")}'` : 'NULL'}, ${error ? `'${error.replace(/'/g, "''")}'` : 'NULL'}, '${md}'::jsonb, NOW())`;
+  try { execPg(sql); } catch (e) { console.error('logVipAlert fail:', e.message); }
 }
 
 // =============================================================================
 // SMS send (Twilio when live, no-op in log_only)
 // =============================================================================
-async function sendSmsViaTwilio({ to, body }) {
-  // API Key auth (preferred for production): use API Key SID + Secret as
-  // HTTP Basic creds. Account SID identifies the account in the URL path.
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const apiKeySid = process.env.TWILIO_API_KEY_SID;
-  const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
-  const from = process.env.TWILIO_NUMBER;
-  if (!accountSid || !apiKeySid || !apiKeySecret || !from) {
-    throw new Error('TWILIO_ACCOUNT_SID / TWILIO_API_KEY_SID / TWILIO_API_KEY_SECRET / TWILIO_NUMBER all required');
-  }
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-  const auth = Buffer.from(`${apiKeySid}:${apiKeySecret}`).toString('base64');
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ To: to, From: from, Body: body }).toString(),
+async function sendVipAlertEmail({ to, vipName, summary, originalSender, originalSubject, originalSnippet }) {
+  // Gmail mobile push notification IS the alert. Subject is engineered so the
+  // lock-screen preview reads "VIP <name>: <summary>" at a glance.
+  const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+  if (!process.env.MANDRILL_API_KEY) throw new Error('MANDRILL_API_KEY not set');
+
+  // Subject = the notification preview. Gmail shows ~50 chars on lock screen.
+  const subject = `VIP ${vipName}: ${summary}`.slice(0, 90);
+
+  // Body: structured for fast scan when Ali opens the notification.
+  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:arial,sans-serif">
+<div style="max-width:560px;margin:0 auto;background:white;color:#1a202c;line-height:1.55;padding:20px 24px">
+<div style="background:#1c1917;color:white;padding:14px 18px;border-radius:6px;margin-bottom:14px">
+<div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">VIP - act fast</div>
+<div style="font-size:16px;margin-top:4px;font-weight:700">${(vipName || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>
+<div style="font-size:13px;color:#cbd5e0;margin-top:4px">${(summary || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>
+</div>
+
+<table cellpadding="6" cellspacing="0" style="width:100%;font-size:13px">
+<tr><td style="color:#475569;width:90px">From:</td><td>${(originalSender || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</td></tr>
+<tr><td style="color:#475569">Subject:</td><td><strong>${(originalSubject || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</strong></td></tr>
+</table>
+
+${originalSnippet ? `<div style="background:#f8fafc;border-left:4px solid #1a365d;padding:12px 14px;margin-top:14px;font-size:13px;color:#475569"><strong style="color:#1a365d">Preview:</strong><br>${(originalSnippet || '').slice(0, 800).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>')}</div>` : ''}
+
+<div style="margin-top:18px;font-size:11px;color:#94a3b8">This alert fires when one of your VIP contacts (managed at <a href="https://enterprise.colaberry.ai/admin/inbox" style="color:#2b6cb0">/admin/inbox</a>) sends you an email. Capped at 7/day. Reply to the original email at ali@colaberry.com to respond.</div>
+</div></body></html>`;
+
+  const text = `VIP ${vipName}\n${summary}\n\nFrom: ${originalSender}\nSubject: ${originalSubject}\n\n${(originalSnippet || '').slice(0, 600)}`;
+
+  const transport = nodemailer.createTransport({
+    host: 'smtp.mandrillapp.com', port: 587,
+    auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
   });
-  if (!r.ok) throw new Error(`Twilio ${r.status}: ${await r.text()}`);
-  const data = await r.json();
-  return { providerMessageId: data.sid };
+  const r = await transport.sendMail({
+    from: '"VIP Alert" <ali@colaberry.com>',
+    to,
+    subject,
+    text,
+    html,
+    headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': 'high', 'X-Priority': '1' },
+  });
+  return { providerMessageId: r.messageId };
 }
 
 // =============================================================================
@@ -146,6 +175,8 @@ async function summarizeEmail({ senderName, subject, body }) {
 // =============================================================================
 // Main entry: route an inbound email
 // =============================================================================
+const ALI_GMAIL = process.env.ALI_GMAIL || 'alimuwwakkil@gmail.com';
+
 async function routeInboundEmail({ senderEmail, senderName, subject, body, gmailMessageUrl }) {
   const mode = readMode();
   const vip = findVip(senderEmail);
@@ -153,19 +184,28 @@ async function routeInboundEmail({ senderEmail, senderName, subject, body, gmail
     return { vip: false, mode, fired: false, reason: 'sender not in VIP list' };
   }
   if (!canSendSms()) {
-    logSms({ to: process.env.ALI_PHONE_NUMBER || 'unknown', from: process.env.TWILIO_NUMBER || 'unknown', body: '[cap reached - logged only]', status: 'deferred-cap', metadata: { vip_id: vip.id, sender_email: senderEmail, subject, mode } });
-    return { vip: true, mode, fired: false, reason: 'daily SMS cap reached (7/24h)' };
+    logVipAlert({ to: ALI_GMAIL, body: '[cap reached - logged only]', status: 'deferred-cap', metadata: { vip_id: vip.id, sender_email: senderEmail, subject, mode } });
+    return { vip: true, mode, fired: false, reason: 'daily alert cap reached (7/24h)' };
   }
   const displayName = vip.displayName || senderName || senderEmail;
   const summary = await summarizeEmail({ senderName: displayName, subject, body });
-  const linkPart = gmailMessageUrl ? ` ${gmailMessageUrl}` : '';
-  const smsBody = `VIP ${summary}${linkPart}`.slice(0, 320);
+
+  // Snippet for the alert body (first 800 chars of original, plain text)
+  const snippet = (body || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 800);
+
   let providerMessageId = null;
   let error = null;
   let status = 'log_only';
   if (mode === 'live') {
     try {
-      const sent = await sendSmsViaTwilio({ to: process.env.ALI_PHONE_NUMBER, body: smsBody });
+      const sent = await sendVipAlertEmail({
+        to: ALI_GMAIL,
+        vipName: displayName,
+        summary,
+        originalSender: senderEmail,
+        originalSubject: subject,
+        originalSnippet: snippet,
+      });
       providerMessageId = sent.providerMessageId;
       status = 'sent';
     } catch (e) {
@@ -173,13 +213,13 @@ async function routeInboundEmail({ senderEmail, senderName, subject, body, gmail
       status = 'failed';
     }
   }
-  logSms({
-    to: process.env.ALI_PHONE_NUMBER || 'unknown',
-    from: process.env.TWILIO_NUMBER || 'log_only',
-    body: smsBody, status, providerMessageId, error,
+  logVipAlert({
+    to: ALI_GMAIL,
+    body: `VIP ${displayName}: ${summary}`,
+    status, providerMessageId, error,
     metadata: { vip_id: vip.id, sender_email: senderEmail, sender_name: displayName, subject, mode },
   });
-  return { vip: true, mode, fired: status === 'sent', status, smsBody, providerMessageId, error };
+  return { vip: true, mode, fired: status === 'sent', status, summary, vipName: displayName, providerMessageId, error };
 }
 
 module.exports = {
