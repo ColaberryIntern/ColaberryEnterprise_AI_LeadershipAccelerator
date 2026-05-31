@@ -12,6 +12,26 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Daily Client Projects Report — AI Pathway / ShipCES / LandJet (2026-05-31)
+- Date: 2026-05-31
+- Session: CC-20260531-clients
+- What changed:
+  - New `backend/src/scripts/dailyClientProjectsReport.js`: loops over 3 hardcoded client project IDs (AI Pathway 46697389, ShipCES 47126345, LandJet 46699826). For each: fetches todolists + open todos + recent message board posts, classifies tasks HUMAN/AI/EITHER with patterns tuned for client work (meeting/decide/approve/call/demo/sign-off etc. as HUMAN; build/code/draft/test/deploy/research etc. as AI), sorts by `due_on` then `created_at`, identifies next human step.
+  - Per-project LLM framing via gpt-4o-mini: 2-3 sentence executive briefing connecting the next human task to the overall project goal. Reads the project description + last 5 MB posts + open task list.
+  - One email per project (subject prefix `[Daily: AI Pathway]` / `[Daily: ShipCES]` / `[Daily: LandJet]`). Same shape as Gov Contracts v2: "For Ali" navy block with project goal, NEXT STEP WAITING ON A HUMAN dark callout with click-through button + LLM-derived importance line, sequence-sorted task list with row numbers and pills, overdue section, recent MB activity, "What you can do from here" block.
+  - Empty-project handling: for projects with 0 open tasks, surfaces "Last MB activity X days ago. Project may be stalled - consider check-in." (e.g., LandJet last activity 60 days ago).
+  - Normalize "Ali Muwwakkil" → "Ali" in body before preflight (avoids tripping the duplicate-signature check when LLM echoes his full name).
+  - New `backend/src/scripts/sendClientProjectsWrapup.js`: one-time confirmation email.
+  - Registered "Daily Client Projects Report" in `automated_reports` with cron `30 13 * * *` (8:30am CT DST, after Gov Contracts at 8:00am).
+  - Crontab on prod VPS: daily run, all 3 reports + run-recorder.
+- Verification:
+  - All 3 emails sent (Mandrill ids `9e6c9425-...` AI Pathway, `87a38521-...` ShipCES, `6047ce68-...` LandJet).
+  - Wrap-up email sent (`97fa747c-...`).
+  - AI Pathway: 6 open tasks, next human = "Ali + Luda 9amET call - present root cause findings and proposed fix" with LLM goal framing.
+  - ShipCES: 1 open task ("DAT Payload", AI-doable), no human gating action.
+  - LandJet: 0 open, last MB 60 days ago, flagged as possibly stalled.
+- Notes: To add a new project to the daily loop, edit the PROJECTS array in the script. v1.1 will support DB-driven project list.
+
 ### Gov Contracts report v2 — sequence sort + next-step highlight + contrast fix (2026-05-31)
 - Date: 2026-05-31
 - Session: CC-20260531-gov
