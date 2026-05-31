@@ -156,40 +156,8 @@ const TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'vip_add',
-      description: 'Add a VIP contact so their inbound emails trigger SMS routing. Use when Ali says "add <name> to VIP list" / "mark <person> as VIP" / "VIP <email>". Email and/or domain can be specified; at least one is required. Priority 1-10 (1=highest, default 5).',
-      parameters: {
-        type: 'object',
-        properties: {
-          email: { type: 'string', description: 'Specific email address (case-insensitive).' },
-          domain: { type: 'string', description: 'Email domain (e.g., colaberry.com). Matches any sender at that domain.' },
-          display_name: { type: 'string', description: 'How the VIP appears in SMS body (e.g., "Mike Reynolds" or "ShipCES team").' },
-          topic_tags: { type: 'array', items: { type: 'string' }, description: 'Optional topic tags (e.g., ["client", "gov-bid"]).' },
-          priority: { type: 'integer', description: 'Routing priority 1-10. 1 = highest. Default 5.' },
-        },
-        required: ['display_name'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'vip_remove',
-      description: 'Deactivate a VIP contact (does not delete, just sets active=false). Use when Ali says "remove <person> from VIP" / "stop SMS for <email>".',
-      parameters: {
-        type: 'object',
-        properties: {
-          email: { type: 'string' },
-          domain: { type: 'string' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'vip_list',
-      description: 'List all VIP contacts (active + inactive). Use when Ali asks "who is on the VIP list" / "show VIPs" / "list my important contacts".',
+      description: 'List VIP contacts from the Inbox COS VIP manager (the same list Ali manages at /admin/inbox/vips). Use when Ali asks "who is on the VIP list" / "show VIPs". To ADD or REMOVE VIPs, direct Ali to the admin UI at https://enterprise.colaberry.ai/admin/inbox (the UI is the source of truth, not CB).',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -341,20 +309,6 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     }
   }
 
-  async function vip_add({ email, domain, display_name, topic_tags, priority }) {
-    try {
-      const { addVip } = require(path.resolve(REPO, 'backend/src/scripts/lib/vipSmsRouter'));
-      const result = addVip({ email, domain, displayName: display_name, topicTags: topic_tags, priority });
-      sideEffects.vipAdded = { id: result.id, displayName: result.displayName };
-      return result;
-    } catch (e) { return { ok: false, error: e.message }; }
-  }
-  async function vip_remove({ email, domain }) {
-    try {
-      const { removeVip } = require(path.resolve(REPO, 'backend/src/scripts/lib/vipSmsRouter'));
-      return removeVip({ email, domain });
-    } catch (e) { return { ok: false, error: e.message }; }
-  }
   async function vip_list() {
     try {
       const { listVips } = require(path.resolve(REPO, 'backend/src/scripts/lib/vipSmsRouter'));
@@ -416,7 +370,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, vip_add, vip_remove, vip_list, set_vip_sms_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, vip_list, set_vip_sms_mode, exit_intern_preview, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }

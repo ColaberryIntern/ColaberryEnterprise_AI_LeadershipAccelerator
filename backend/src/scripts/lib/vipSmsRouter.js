@@ -49,49 +49,25 @@ function execPg(sql) {
   return (r.stdout || '').trim();
 }
 
+// Source of truth: inbox_vips table (managed via the admin UI at
+// /admin/inbox/vips). Lower priority number = more important
+// (Adalene=1=highest, business contacts=30-50, etc).
 function findVip(senderEmail) {
   if (!senderEmail) return null;
   const email = senderEmail.toLowerCase().trim().replace(/'/g, "''");
-  const domain = email.split('@')[1] || '';
-  // Match by exact email first, then by domain
-  const row = execPg(`SELECT id, email, domain, display_name, topic_tags, priority FROM vip_contacts WHERE active = TRUE AND (LOWER(email) = '${email}' OR (domain IS NOT NULL AND LOWER(domain) = '${domain}')) ORDER BY (CASE WHEN LOWER(email) = '${email}' THEN 0 ELSE 1 END), priority ASC LIMIT 1`);
+  const row = execPg(`SELECT id, email_address, name, relationship, priority FROM inbox_vips WHERE LOWER(email_address) = '${email}' LIMIT 1`);
   if (!row) return null;
-  const [id, em, dom, name, tagsRaw, priority] = row.split('|');
-  return { id: parseInt(id, 10), email: em, domain: dom, displayName: name, topicTags: tagsRaw, priority: parseInt(priority, 10) };
+  const [id, em, name, relationship, priority] = row.split('|');
+  return { id, email: em, displayName: name || em, relationship, priority: parseInt(priority, 10) };
 }
 
 function listVips() {
-  const out = execPg(`SELECT id, COALESCE(email, ''), COALESCE(domain, ''), display_name, COALESCE(array_to_string(topic_tags, ','), ''), priority, active FROM vip_contacts ORDER BY active DESC, priority ASC, display_name`);
+  const out = execPg(`SELECT id, email_address, COALESCE(name, ''), relationship, priority FROM inbox_vips ORDER BY priority ASC, name`);
   if (!out) return [];
   return out.split('\n').filter(Boolean).map((line) => {
-    const [id, email, domain, name, tags, priority, active] = line.split('|');
-    return { id: parseInt(id, 10), email, domain, displayName: name, topicTags: tags ? tags.split(',') : [], priority: parseInt(priority, 10), active: active === 't' };
+    const [id, email, name, relationship, priority] = line.split('|');
+    return { id, email, displayName: name, relationship, priority: parseInt(priority, 10) };
   });
-}
-
-function addVip({ email, domain, displayName, topicTags, priority, notes }) {
-  if (!email && !domain) throw new Error('Either email or domain required');
-  if (!displayName) throw new Error('displayName required');
-  const tagsArr = (topicTags && topicTags.length) ? `ARRAY[${topicTags.map((t) => `'${t.replace(/'/g, "''")}'`).join(',')}]` : 'NULL';
-  const fields = [];
-  const values = [];
-  if (email) { fields.push('email'); values.push(`'${email.toLowerCase().replace(/'/g, "''")}'`); }
-  if (domain) { fields.push('domain'); values.push(`'${domain.toLowerCase().replace(/'/g, "''")}'`); }
-  fields.push('display_name'); values.push(`'${displayName.replace(/'/g, "''")}'`);
-  fields.push('topic_tags'); values.push(tagsArr);
-  fields.push('priority'); values.push(String(priority ?? 5));
-  if (notes) { fields.push('notes'); values.push(`'${notes.replace(/'/g, "''")}'`); }
-  const sql = `INSERT INTO vip_contacts (${fields.join(',')}) VALUES (${values.join(',')}) ON CONFLICT ${email ? '(email)' : '(domain)'} DO UPDATE SET display_name = EXCLUDED.display_name, topic_tags = EXCLUDED.topic_tags, priority = EXCLUDED.priority, active = TRUE, updated_at = NOW() RETURNING id`;
-  const id = execPg(sql);
-  return { ok: true, id: parseInt(id, 10), email, domain, displayName };
-}
-
-function removeVip({ email, domain }) {
-  if (!email && !domain) throw new Error('Either email or domain required');
-  const where = email ? `LOWER(email) = '${email.toLowerCase().replace(/'/g, "''")}'` : `LOWER(domain) = '${domain.toLowerCase().replace(/'/g, "''")}'`;
-  const id = execPg(`UPDATE vip_contacts SET active = FALSE, updated_at = NOW() WHERE ${where} RETURNING id`);
-  if (!id) return { ok: false, error: 'No VIP matched' };
-  return { ok: true, deactivatedId: parseInt(id, 10) };
 }
 
 // =============================================================================
@@ -204,7 +180,7 @@ async function routeInboundEmail({ senderEmail, senderName, subject, body, gmail
 
 module.exports = {
   readMode, writeMode,
-  findVip, listVips, addVip, removeVip,
+  findVip, listVips,
   canSendSms, canMakeVoiceCall,
   smsCount24h, voiceCount24h,
   routeInboundEmail,
