@@ -282,6 +282,9 @@ async function processBid({ bidConfig, basecampIds, basecampToken, opts = {} }) 
     workDirRoot = path.resolve(__dirname, '../../../../tmp/gov-bids'),
     opportunityPulseBase = 'http://95.216.199.47',
     opportunityPulseCreds = null,
+    generateTasksFromContent = false,
+    taskGeneratorFn = null,        // DI for smoke tests
+    contentExtractorFn = null,     // DI for smoke tests
   } = opts;
 
   const { accountId, projectId, vaultId, todosetId, messageBoardId } = basecampIds;
@@ -293,6 +296,31 @@ async function processBid({ bidConfig, basecampIds, basecampToken, opts = {} }) 
   fs.mkdirSync(filesDir, { recursive: true });
   const files = await extractZip(bidConfig.zip_path, filesDir);
   const opp = await fetchOpportunity({ opportunityPulseBase, opportunityPulseCreds, opportunityUuid: bidConfig.opportunity_uuid });
+
+  // Phase 1b: AI task generation from RFP content (optional).
+  // Only runs when caller asked for it AND bidConfig.tasks wasn't pre-supplied.
+  let aiTaskMeta = null;
+  if (generateTasksFromContent && !(Array.isArray(bidConfig.tasks) && bidConfig.tasks.length)) {
+    try {
+      const extract = contentExtractorFn || (async () => {
+        const { extractTextFromFiles } = require('./govBidContentExtractor');
+        return extractTextFromFiles(filesDir);
+      });
+      const generate = taskGeneratorFn || (async (args) => {
+        const { generateTasksFromContent: gen } = require('./govBidTaskGenerator');
+        return gen(args);
+      });
+      const fileTexts = await extract(filesDir);
+      const genResult = await generate({ bidConfig, fileTexts });
+      // Mutate bidConfig so downstream buildTaskList sees the AI-generated tasks.
+      bidConfig.tasks = genResult.tasks;
+      aiTaskMeta = { modelUsed: genResult.modelUsed, tokens: genResult.tokens, fileTextCount: fileTexts.length };
+    } catch (e) {
+      // Fail-soft: if AI generation fails we fall back to the generic 5-task
+      // template. Surface the reason in the result so the caller can log it.
+      aiTaskMeta = { error: e.message };
+    }
+  }
 
   // Phase 2: Vault folder + uploads
   const folder = await findOrCreateVaultFolder({ bcClient, projectId, vaultId, title: bidConfig.display_title, dryRun });
@@ -342,7 +370,7 @@ async function processBid({ bidConfig, basecampIds, basecampToken, opts = {} }) 
   };
   if (!dryRun) fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
 
-  return { workDir, filesDir, files, folder, list, kickoff, uploaded, tasks: createdTasks, summary, summaryPath };
+  return { workDir, filesDir, files, folder, list, kickoff, uploaded, tasks: createdTasks, summary, summaryPath, aiTaskMeta };
 }
 
 // =============================================================================

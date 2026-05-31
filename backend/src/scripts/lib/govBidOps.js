@@ -284,6 +284,7 @@ async function finalizeBidsFromReply({ replyBody, addBidFn, processZipBidFn, bas
             },
             basecampIds: args.basecampIds,
             basecampToken: args.basecampToken,
+            opts: { generateTasksFromContent: true },
           });
         });
         const r = await runZip({
