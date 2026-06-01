@@ -12,6 +12,27 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB context walker (4-layer Basecamp graph walk): List + Task + Comments + Documents (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `scripts/ops-engine/cb-context-walker.js` (new, ~330 lines): the BC graph walker Ali described. `walkContext({ bcGet, bucketId, recId })` returns `{ list, task, comments, documents, stats }`:
+    - LAYER 1 LIST: parent todolist name + description + up to 20 sibling-task one-liners (with completed/due markers).
+    - LAYER 2 TASK: current recording title + full description (no truncation).
+    - LAYER 3 COMMENTS: every comment paginated via Link headers, 4000 chars per comment cap.
+    - LAYER 4 DOCUMENTS: extracts URLs from description + every comment, classifies (BC upload / BC recording / BC todolist / external), fetches each. BC uploads download the file and run `pdf-parse` for PDFs or `mammoth` for docx (text-extracted, capped at CB_WALK_MAX_DOC_BYTES=60000). BC recordings recurse one level for their description + recent 8 comments. External URLs gated by `CB_FOLLOW_EXTERNAL_URLS=1` (default off), HTML-to-text via simple regex strip (no new deps). Recursion depth capped at 2. Per-invocation visited Set prevents re-fetches.
+    - Per-URL fetch timeout 15s. Per-document size cap 60KB. External HTML cap 40KB.
+  - `scripts/ops-engine/cb-system-handler.js`: replaces old `fetchThreadContext` call with the walker. The walker output is formatted via `formatContextForLlm()` and injected into the user message as `## LAYER 1/2/3/4` sections. Graceful fallback to old fetch on walker error.
+  - `mammoth` installed locally + on VPS (`/opt/colaberry-accelerator/node_modules/`). `pdf-parse` was already present. Both loaded lazily via `tryRequire` so missing deps degrade gracefully.
+  - `backend/src/scripts/smokeTestCbContextWalker.js` (new): walks the ShipCES todo 9946715864 and prints the formatted LLM context.
+- Verification: smoke test on the ShipCES todo confirmed all 4 layers populate:
+    - LIST: "Phase A - Finish Quoting (Ram's track, ~2 weeks)" with description + 18 sibling tasks
+    - TASK: full title + 1232-char description (no truncation, includes the embedded BC URL)
+    - COMMENTS: 10 comments untruncated (CB's 3982-char deliverable rendered verbatim)
+    - DOCUMENTS: 1 seed URL detected (the Brett W1 message), 1 document fetched
+    Total context 8495 chars, well within gpt-4o budget.
+- Why: Ali 2026-06-01 - "It should be able to detect links and keep going back until it has context from the documents in the link. List / task / comments / documents."
+
 ### CB handler: fix 400-char comment truncation + page-1 fetch + add extract-verbatim rule (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2

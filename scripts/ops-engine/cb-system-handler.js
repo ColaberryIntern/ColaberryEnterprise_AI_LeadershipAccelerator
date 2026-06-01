@@ -655,7 +655,21 @@ async function handleOpenEnded(ctx) {
   }
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const { recording, comments } = await fetchThreadContext({ bcGet, bucketId, recId });
+
+  // 4-layer Basecamp graph walk (Ali 2026-06-01): LIST + TASK + COMMENTS + DOCUMENTS,
+  // with URLs in description/comments auto-followed (BC uploads -> text extract via
+  // pdf-parse / mammoth; BC todo/message links -> body + recent comments; external
+  // URLs gated by CB_FOLLOW_EXTERNAL_URLS=1). Recursion depth capped.
+  let walkedContext = '';
+  try {
+    const { walkContext, formatContextForLlm } = require('./cb-context-walker');
+    const ctx = await walkContext({ bcGet, bucketId, recId });
+    walkedContext = formatContextForLlm(ctx, aliId);
+  } catch (e) {
+    console.error('[cb-handler] context-walker failed, falling back:', e.message);
+    const fb = await fetchThreadContext({ bcGet, bucketId, recId });
+    walkedContext = `## TASK\n${summarizeRecording(fb.recording)}\n\n## RECENT COMMENTS\n${summarizeComments(fb.comments, aliId) || '(none)'}\n(walker fallback: ${e.message})`;
+  }
 
   const requesterContext = isAli
     ? 'The requester is Ali Muwwakkil (Managing Director, Executive Sponsor).'
@@ -668,10 +682,11 @@ Their comment (the one that tagged you):
 ${(comment.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}
 """
 
-Parent recording: ${summarizeRecording(recording)}
+# CONTEXT (4-layer Basecamp graph walk)
 
-Recent thread (last 10 comments):
-${summarizeComments(comments, aliId) || '(none)'}
+${walkedContext}
+
+# END CONTEXT
 
 Decide and act. Always end with basecamp_reply, then finish.`;
 
