@@ -12,6 +12,16 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov bid post: fix Opp Pulse URL host op.colaberry.ai -> 95.216.199.47 (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `backend/src/scripts/lib/govBidOps.js` line 218 had a hardcoded `https://op.colaberry.ai/admin/bonfire/{uuid}/submission-readiness` inside the per-card render. The lib's `OPPORTUNITY_PULSE_BASE` constant already pointed to `http://95.216.199.47` but this line bypassed it. Fixed to use the constant. Also fixed the footer-source text reference that still said `op.colaberry.ai`.
+  - `backend/src/scripts/fixGovBidsMessageV3.js`: same fix in the one-off script that PUTs the live message.
+  - `backend/src/scripts/inspectOppPulseUrls.js` (new): Playwright login + URL discovery against `http://95.216.199.47` using `PROD_ADMIN_PASSWORD` env var. Confirmed `/admin/bonfire/strategic`, `/admin/bonfire/{uuid}`, and `/admin/bonfire/{uuid}/submission-readiness` all return 200 (SPA shell). Login form selectors matched but post-submit URL stuck at `/login` - may need different login flow but URLs work regardless.
+- Why: Ali 2026-06-01 - "Opportunity pulse website is this right now - http://95.216.199.47 - make the changes on the links. None of the links you have works".
+- Verification: re-PUT msg 9950817863 with corrected URLs (status 200). Preview re-emailed `<e7f3246a-a46d-9846-63cf-10e1e571299f@colaberry.com>`.
+
 ### Gov bid post v3: 10-day filter + workflow-ordered buttons + tracked-end-state (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2

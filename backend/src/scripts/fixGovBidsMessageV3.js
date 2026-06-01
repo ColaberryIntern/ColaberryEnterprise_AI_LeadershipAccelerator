@@ -51,7 +51,7 @@ function urgencyEmoji(days) {
   const top = active.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0)).slice(0, COUNT);
 
   const cards = top.map((o, i) => {
-    const oppPulseUrl = `https://op.colaberry.ai/admin/bonfire/${o.id}/submission-readiness`;
+    const oppPulseUrl = `http://95.216.199.47/admin/bonfire/${o.id}/submission-readiness`;
     const bonfireUrl = o.sourceUrl || '';
     const signals = (o.signals || []).filter(s => s).slice(0, 3).join(' &middot; ');
     const summary = o.rawText && o.rawText !== o.title ? o.rawText : (o.description || '');
@@ -118,7 +118,7 @@ ${cards}
 
 <div style="margin-top:18px;padding:10px 14px;text-align:center;font-size:11px;color:#94a3b8;line-height:1.6">
   Source: Opportunity Pulse strategic feed &middot; cached ${(allOpps.data?.[0]?.enrichedAt || '').slice(0, 10) || 'recently'} &middot; ${active.length} active in 10-365d window<br>
-  <a href="https://op.colaberry.ai/admin/strategic" style="color:#94a3b8">op.colaberry.ai/admin/strategic</a> &middot; Bonfire account routing per the gov-bid-account-routing rule
+  <a href="http://95.216.199.47/admin/bonfire/strategic" style="color:#94a3b8">95.216.199.47/admin/bonfire/strategic</a> &middot; Bonfire account routing per the gov-bid-account-routing rule
 </div>
 
 </div>`;

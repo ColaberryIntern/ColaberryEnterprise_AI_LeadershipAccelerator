@@ -215,7 +215,7 @@ async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
   let cardsHtml = '';
   if (oppResult.ok) {
     cardsHtml = oppResult.top.map((o, i) => {
-      const oppPulseUrl = `https://op.colaberry.ai/admin/bonfire/${o.id}/submission-readiness`;
+      const oppPulseUrl = `${OPPORTUNITY_PULSE_BASE}/admin/bonfire/${o.id}/submission-readiness`;
       const bonfireUrl = o.sourceUrl || '';
       const signals = (o.signals || []).filter(s => s).slice(0, 3).join(' &middot; ');
       const summary = o.rawText && o.rawText !== o.title ? o.rawText : (o.description || '');
@@ -287,7 +287,7 @@ ${cardsHtml}
 
 <div style="margin-top:18px;padding:10px 14px;text-align:center;font-size:11px;color:#94a3b8;line-height:1.6">
   Source: Opportunity Pulse strategic feed &middot; cached ${dataFreshness} &middot; ${activeTotal} active total<br>
-  <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#94a3b8">op.colaberry.ai/admin/strategic</a> &middot; Bonfire account routing per the gov-bid-account-routing rule
+  <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#94a3b8">${OPPORTUNITY_PULSE_STRATEGIC.replace(/^https?:\/\//, '')}</a> &middot; Bonfire account routing per the gov-bid-account-routing rule
 </div>
 
 </div>`;
