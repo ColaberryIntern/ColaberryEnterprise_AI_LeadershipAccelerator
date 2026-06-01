@@ -470,13 +470,24 @@ export async function handleDigestAction(req: Request, res: Response) {
       SILENT_HOLD: 'kept on hold',
     };
 
+    const adminConsoleUrl = `${process.env.APP_BASE_URL || 'https://enterprise.colaberry.ai'}/admin/inbox`;
+
+    // For "Show Me" (action=inbox), redirect straight to the admin inbox so
+    // Ali lands on the email itself instead of a "Done!" confirmation page
+    // that previously linked to /admin/inbox/decisions (a non-existent route -
+    // the actual route is /admin/inbox with internal tabs). For Dismiss /
+    // Keep Holding, the action is terminal so a confirmation page is correct.
+    if (action === 'inbox') {
+      return res.redirect(302, `${adminConsoleUrl}?tab=decisions&emailId=${encodeURIComponent(String(emailId))}`);
+    }
+
     res.send(`
       <!DOCTYPE html>
       <html><head><title>Inbox COS</title></head>
       <body style="font-family: Arial, sans-serif; max-width: 500px; margin: 80px auto; text-align: center;">
         <h2 style="color: #38a169;">Done!</h2>
         <p>Email has been <strong>${stateLabels[newState]}</strong>.</p>
-        <a href="${process.env.APP_BASE_URL || 'https://enterprise.colaberry.ai'}/admin/inbox/decisions"
+        <a href="${adminConsoleUrl}"
            style="color: #2b6cb0;">Open Admin Console</a>
       </body></html>
     `);
