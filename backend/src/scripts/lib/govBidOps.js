@@ -198,48 +198,79 @@ async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
   const subject = `Top ${count} active opportunit${count === 1 ? 'y' : 'ies'} from Opportunity Pulse`;
 
   // Pull top N from the cached Opp Pulse strategic feed (priority-ranked).
-  // Per Ali 2026-06-01: post should focus on the actual contracts, not the
-  // generic walkthrough that BC truncated.
+  // Per Ali 2026-06-01: focus on the actual contracts, breathing room between
+  // cards, emojis for fast visual scan, very explicit upload note.
   const oppResult = _readTopOpportunities(count);
+  const _daysUntil = (iso) => { if (!iso) return null; const d=new Date(iso); const t=new Date(); return Math.round((d-t)/86400000); };
+  const _urgencyEmoji = (d) => d == null ? '' : d <= 3 ? '🔥' : d <= 14 ? '⏰' : '📅';
   let cardsHtml = '';
-  let footerNote = '';
   if (oppResult.ok) {
     cardsHtml = oppResult.top.map((o, i) => {
       const oppPulseUrl = `https://op.colaberry.ai/admin/bonfire/${o.id}/submission-readiness`;
       const bonfireUrl = o.sourceUrl || '';
-      const signals = (o.signals || []).join(' &middot; ');
+      const signals = (o.signals || []).filter(s => s).slice(0, 3).join(' &middot; ');
       const summary = o.rawText && o.rawText !== o.title ? o.rawText : (o.description || '');
       const valueStr = _fmtMoney(o.estimatedValue);
-      return `<div style="border:1px solid #cbd5e0;border-radius:6px;padding:14px 16px;margin-top:12px;background:#ffffff">
-<div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase;font-weight:700">Bid ${i + 1} of ${count}</div>
-<div style="font-size:15px;font-weight:700;color:#1a365d;margin-top:4px">${_escape(o.title)}</div>
-<div style="font-size:12px;color:#475569;margin-top:4px"><strong>${_escape(o.agency || '')}</strong> &middot; Deadline <strong>${(o.closeDate || '').slice(0, 10)}</strong>${valueStr ? ` &middot; Est value ${valueStr}` : ''}</div>
-<div style="font-size:11px;color:#475569;margin-top:4px">Category: <strong>${_escape(o.aiCategory || '-')}</strong> &middot; Recommended product: <strong>${_escape(o.recommendedProduct || '-')}</strong></div>
-<div style="font-size:11px;color:#475569;margin-top:4px">Scores: priority <strong>${o.priorityScore || '?'}</strong> &middot; fit <strong>${o.fitScore || '?'}</strong> &middot; automation <strong>${o.automationPotential || '?'}</strong>${signals ? ` &middot; ${signals}` : ''}</div>
-${summary ? `<div style="font-size:12px;color:#1f2937;margin-top:8px;font-style:italic">${_escape(summary).slice(0, 280)}</div>` : ''}
-<div style="margin-top:10px;font-size:12px"><a href="${oppPulseUrl}" style="color:#1a365d;text-decoration:underline">Opp Pulse readiness &rarr;</a> &middot; <a href="${bonfireUrl}" style="color:#1a365d;text-decoration:underline">Bonfire opportunity &rarr;</a></div>
+      const days = _daysUntil(o.closeDate);
+      const dueLabel = days != null ? (days < 0 ? `${Math.abs(days)}d ago` : days === 0 ? 'today' : `in ${days}d`) : '';
+      return `
+<div style="border:1px solid #cbd5e1;border-radius:10px;padding:22px 24px;margin:24px 0;background:#ffffff;box-shadow:0 1px 3px rgba(15,23,42,0.05)">
+  <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;font-weight:700">Bid ${i + 1} of ${count}</div>
+  <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:8px;line-height:1.3">${_escape(o.title)}</div>
+  <div style="margin-top:14px;font-size:13px;color:#475569;line-height:1.8">
+    🏛️ &nbsp;<strong style="color:#0f172a">${_escape(o.agency || 'Unknown agency')}</strong><br>
+    ${_urgencyEmoji(days)} &nbsp;Deadline: <strong style="color:#0f172a">${(o.closeDate || '').slice(0, 10)}</strong>${dueLabel ? ` <span style="color:#64748b">(${dueLabel})</span>` : ''}${valueStr ? `<br>💰 &nbsp;Est value: <strong style="color:#0f172a">${valueStr}</strong>` : ''}
+  </div>
+  <div style="margin-top:16px;padding-top:14px;border-top:1px solid #f1f5f9;font-size:12px;color:#475569;line-height:1.8">
+    ⚙️ &nbsp;Category: <strong>${_escape(o.aiCategory || '-')}</strong><br>
+    🚀 &nbsp;Recommended product: <strong>${_escape(o.recommendedProduct || '-')}</strong><br>
+    🎯 &nbsp;Scores: priority <strong>${o.priorityScore ?? '?'}</strong> &middot; fit <strong>${o.fitScore ?? '?'}</strong> &middot; automation <strong>${o.automationPotential ?? '?'}</strong>${signals ? `<br>✨ &nbsp;Signals: <strong>${signals}</strong>` : ''}
+  </div>
+  ${summary ? `<div style="margin-top:16px;padding:12px 14px;background:#f8fafc;border-radius:6px;font-size:13px;color:#1f2937;font-style:italic;line-height:1.5">"${_escape(summary).slice(0, 280)}${summary.length > 280 ? '...' : ''}"</div>` : ''}
+  <div style="margin-top:18px;display:block">
+    <a href="${oppPulseUrl}" style="display:inline-block;background:#1a365d;color:white;padding:9px 16px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;margin-right:8px">📂 Opp Pulse readiness &rarr;</a>
+    <a href="${bonfireUrl}" style="display:inline-block;background:#ffffff;color:#1a365d;padding:9px 16px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;border:1.5px solid #1a365d">🔗 Bonfire opportunity &rarr;</a>
+  </div>
 </div>`;
     }).join('');
-    footerNote = `<div style="margin-top:12px;font-size:11px;color:#94a3b8">Source: Opportunity Pulse strategic feed (cached ${oppResult.dataFreshness || 'recently'}, ${oppResult.activeTotal} active total). Bonfire account routing per the gov-bid-account-routing rule. Opp Pulse strategic page: <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#94a3b8">op.colaberry.ai/admin/strategic</a></div>`;
   } else {
-    cardsHtml = `<div style="border:1px solid #fee2e2;border-radius:6px;padding:14px 16px;margin-top:12px;background:#fef2f2;color:#7f1d1d;font-size:13px">Could not read the cached Opp Pulse strategic feed (${_escape(oppResult.error)}). Open <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#7f1d1d">${OPPORTUNITY_PULSE_STRATEGIC}</a> directly to pick ${count} ${criteriaSummary || 'opportunities'} and proceed with the upload flow below.</div>`;
+    cardsHtml = `<div style="border:1px solid #fee2e2;border-radius:10px;padding:22px 24px;margin:24px 0;background:#fef2f2;color:#7f1d1d;font-size:13px">Could not read the cached Opp Pulse strategic feed (${_escape(oppResult.error)}). Open <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#7f1d1d">${OPPORTUNITY_PULSE_STRATEGIC}</a> directly to pick ${count} ${criteriaSummary || 'opportunities'} and proceed with the upload flow below.</div>`;
   }
+  const activeTotal = oppResult.ok ? oppResult.activeTotal : 0;
+  const dataFreshness = oppResult.ok ? (oppResult.dataFreshness || 'recently') : 'unknown';
 
-  const content = `<div>Top ${count} active opportunit${count === 1 ? 'y' : 'ies'} from Opportunity Pulse, ranked by priority score${criteriaSummary ? ` (${_escape(criteriaSummary)})` : ''}.</div>
+  const content = `<div style="font-size:14px;color:#1a202c;line-height:1.6">
+
+<div style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:white;padding:22px 24px;border-radius:10px">
+  <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">🎯 Top ${count} active opportunit${count === 1 ? 'y' : 'ies'}</div>
+  <div style="font-size:18px;font-weight:700;margin-top:6px">From Opportunity Pulse, ranked by priority score${criteriaSummary ? ` (${_escape(criteriaSummary)})` : ''}</div>
+  <div style="font-size:13px;color:#cbd5e0;margin-top:6px">${activeTotal} active total in the strategic feed. Showing the ${count} highest-priority below.</div>
+</div>
+
 ${cardsHtml}
 
-<div style="margin-top:18px;padding:14px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:0 6px 6px 0">
-<div style="font-size:12px;font-weight:700;color:#78350f;letter-spacing:1px;text-transform:uppercase">Before I can add these as projects</div>
-<div style="font-size:13px;color:#78350f;margin-top:6px">For each bid you want to pursue, do the following <strong>in Opp Pulse</strong>:</div>
-<ol style="font-size:13px;color:#1f2937;margin:8px 0 0;padding-left:20px">
-<li>Click "Opp Pulse readiness" above to open the per-bid page.</li>
-<li>Download the RFP zip from the Bonfire link on that page.</li>
-<li>Upload the zip to the <strong>Documents</strong> section of that opportunity in Opp Pulse (NOT to Basecamp - upload in Opp Pulse only).</li>
-</ol>
-<div style="font-size:13px;color:#1f2937;margin-top:8px">Once the docs are in Opp Pulse, reply to this thread with the bid number(s) you want to add (e.g. "@CB add bids 1, 3, 5") and I will build the per-bid Basecamp project with the 14-task template, due dates back-distributed from the deadline, and feasibility scoring.</div>
-<div style="font-size:12px;color:#78350f;margin-top:8px"><strong>I cannot add a bid that does not yet have its documents in Opp Pulse</strong> - the docs are how I generate the per-bid task descriptions.</div>
+<div style="margin-top:32px;padding:20px 22px;background:#fffbeb;border:2px solid #f59e0b;border-radius:10px">
+  <div style="font-size:12px;font-weight:700;color:#78350f;letter-spacing:2px;text-transform:uppercase">⚠️ Before I can add these as projects</div>
+  <div style="font-size:14px;color:#78350f;margin-top:10px;font-weight:600">For each bid you want to pursue, do this in Opp Pulse:</div>
+  <ol style="font-size:13px;color:#1f2937;margin:14px 0 0;padding-left:24px;line-height:1.9">
+    <li>📂 Click the <strong>Opp Pulse readiness</strong> button on the card above to open the per-bid page.</li>
+    <li>⬇️ Download the RFP zip from the Bonfire link on that page.</li>
+    <li>⬆️ Upload the zip to the <strong>Documents section of that opportunity in Opp Pulse</strong>. <strong style="color:#7f1d1d">NOT to Basecamp.</strong> Upload in Opp Pulse only.</li>
+  </ol>
+  <div style="margin-top:16px;padding:12px 14px;background:#ffffff;border-radius:6px;border-left:4px solid #f59e0b;font-size:13px;color:#1f2937;line-height:1.6">
+    ✅ &nbsp;Once docs are in Opp Pulse, reply on this thread with the bid numbers you want, e.g. <code style="background:#fef3c7;padding:2px 6px;border-radius:3px;font-weight:700">@CB add bids 1, 3, 5</code> - I'll build the Basecamp projects with the 14-task template, due dates back-distributed from the deadline, and feasibility scoring.
+  </div>
+  <div style="margin-top:12px;font-size:12px;color:#78350f;font-weight:700;text-align:center">
+    🚫 I cannot add a bid that does not yet have its documents in Opp Pulse - the docs are how I generate per-bid task descriptions.
+  </div>
 </div>
-${footerNote}`;
+
+<div style="margin-top:18px;padding:10px 14px;text-align:center;font-size:11px;color:#94a3b8;line-height:1.6">
+  Source: Opportunity Pulse strategic feed &middot; cached ${dataFreshness} &middot; ${activeTotal} active total<br>
+  <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#94a3b8">op.colaberry.ai/admin/strategic</a> &middot; Bonfire account routing per the gov-bid-account-routing rule
+</div>
+
+</div>`;
 
   const r = await bcPost(`/buckets/${PROJECT_ID}/message_boards/${mb.id}/messages.json`, {
     subject,

@@ -12,6 +12,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov bid post v2: spacing + emojis + preview emailed (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `backend/src/scripts/lib/govBidOps.js` `postGovBidDownloadInstructions()` template synced with v2 layout: hero band (gradient bg, fbbf24 accent, bid count + active-total context). Card spacing 24px between (was 12px), padding 22-24px inside (was 14-16px), subtle box shadow. Emojis as per-row anchors (🏛️ agency, 📅/⏰/🔥 deadline urgency-based, 💰 value, ⚙️ category, 🚀 product, 🎯 scores, ✨ signals). Two-tone CTA buttons (solid Opp Pulse, outlined Bonfire). Quote-style summary block. Beefed-up footer (⚠️ headline, 🚫 hard-stop, ✅ reply-format highlight).
+  - `backend/src/scripts/fixGovBidsMessageV2.js` (new one-off): re-edited live msg 9950817863 with v2 template in place.
+  - `backend/src/scripts/renderGovBidsPreview.js` (new one-off): renders the live message HTML in headless Chromium against `file://`, captures full-page PNG (178KB, 900x?px), emails Ali the inlined preview so he can see it without needing to be on Basecamp. Mandrill `<169546e3-61bb-69d0-7825-6ab733a0b2d8@colaberry.com>`.
+- Why: Ali 2026-06-01 - "everything is all bunched together. We can use emojis and all that. Update and let me see the new look."
+
 ### Gov bid post: rewrite to focus on actual contracts + Opp Pulse upload flow (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
