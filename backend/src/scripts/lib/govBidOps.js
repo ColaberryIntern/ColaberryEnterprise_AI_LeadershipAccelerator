@@ -128,12 +128,26 @@ async function addBid({ displayTitle, deadline, opportunityUuid, fitThesis, agen
     createdTasks.push({ id: todo.id, content: t.content, tier: t.tier, due_on: datesPerTask?.[i] });
   }
 
+  // Mark this UUID as used so it never re-appears in find-N-bids recommendations.
+  // Tolerant to missing UUID (some manual adds may have none) and idempotent.
+  if (opportunityUuid) {
+    _markUuidUsed(opportunityUuid, {
+      title: displayTitle,
+      deadline: deadline || null,
+      agency: agencyName || null,
+      bcListId: newList.id,
+      bcListUrl: newList.app_url,
+      source: 'addBid',
+    });
+  }
+
   return {
     listId: newList.id,
     listName: newList.name,
     appUrl: newList.app_url,
     tasksCreated: createdTasks.length,
     tasks: createdTasks,
+    markedUsed: !!opportunityUuid,
   };
 }
 
@@ -174,6 +188,35 @@ function _fmtMoney(n) {
   return '$' + v;
 }
 
+// Used-UUID tracking per Ali 2026-06-01: once a contract has been added to
+// the BC Gov Contracts project, it must NEVER appear again in a "find me N
+// bids" recommendation. Persisted in tmp/op-pulse/used-uuids.json (file format
+// is a UUID-keyed object: { uuid: { title, deadline, addedAt, source } }).
+function _usedUuidsPath() {
+  const path = require('path');
+  return path.resolve(__dirname, '../../../../tmp/op-pulse/used-uuids.json');
+}
+function _readUsedUuids() {
+  const fs = require('fs');
+  try {
+    const raw = fs.readFileSync(_usedUuidsPath(), 'utf8');
+    return JSON.parse(raw) || {};
+  } catch { return {}; }
+}
+function _writeUsedUuids(map) {
+  const fs = require('fs');
+  const path = require('path');
+  fs.mkdirSync(path.dirname(_usedUuidsPath()), { recursive: true });
+  fs.writeFileSync(_usedUuidsPath(), JSON.stringify(map, null, 2));
+}
+function _markUuidUsed(uuid, meta = {}) {
+  if (!uuid) return;
+  const map = _readUsedUuids();
+  if (map[uuid]) return; // idempotent
+  map[uuid] = { ...meta, addedAt: meta.addedAt || new Date().toISOString() };
+  _writeUsedUuids(map);
+}
+
 function _readTopOpportunities(count) {
   const fs = require('fs');
   const path = require('path');
@@ -186,13 +229,21 @@ function _readTopOpportunities(count) {
     const now = Date.now();
     const minClose = now + 10 * 86400000;
     const maxClose = now + 365 * 86400000;
+    // Exclude any UUID already added to Gov Contracts. Once used, never re-recommended.
+    const usedSet = new Set(Object.keys(_readUsedUuids()));
     const active = (allOpps.data || []).filter((o) => {
       if (!o.closeDate) return false;
+      if (o.id && usedSet.has(o.id)) return false;
       const t = new Date(o.closeDate).getTime();
       return t >= minClose && t <= maxClose;
     });
     const top = active.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0)).slice(0, count);
-    return { ok: true, top, activeTotal: active.length, dataFreshness: (allOpps.data?.[0]?.enrichedAt || '').slice(0, 10) };
+    return {
+      ok: true, top,
+      activeTotal: active.length,
+      usedCount: usedSet.size,
+      dataFreshness: (allOpps.data?.[0]?.enrichedAt || '').slice(0, 10),
+    };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -388,4 +439,8 @@ async function finalizeBidsFromReply({ replyBody, addBidFn, processZipBidFn, bas
   return { results, parseWarnings, parsedCount: bids.length };
 }
 
-module.exports = { scrapBid, addBid, postGovBidDownloadInstructions, finalizeBidsFromReply, STANDARD_TEMPLATE };
+module.exports = {
+  scrapBid, addBid, postGovBidDownloadInstructions, finalizeBidsFromReply, STANDARD_TEMPLATE,
+  // Used-UUID tracking (for backfill scripts + future tools)
+  _readUsedUuids, _markUuidUsed, _usedUuidsPath,
+};

@@ -12,6 +12,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov bid: never re-recommend a used contract (used-UUID exclusion set) (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `backend/src/scripts/lib/govBidOps.js`: new persistent used-UUID set stored at `tmp/op-pulse/used-uuids.json` (UUID-keyed object with `{ title, deadline, agency, bcListId, bcListUrl, addedAt, source }`). Helpers: `_readUsedUuids`, `_markUuidUsed`, `_usedUuidsPath` (all exported). `_readTopOpportunities()` now excludes any UUID present in the set BEFORE applying the 10-365 day window. `addBid()` automatically calls `_markUuidUsed(opportunityUuid, {...})` on successful list creation, so any path that goes through `addBid` (including `finalizeBidsFromReply`) marks UUIDs as used for free. Mark is idempotent (no double-write).
+  - `backend/src/scripts/backfillUsedGovBidUuids.js` (new): scans the Gov Contracts BC project's todolists for either (a) "Opportunity UUID: <uuid>" pattern in the description (direct hit) or (b) a fuzzy title match against the cached Opp Pulse strategic feed (Jaccard >= 0.45 of 4-char+ tokens) and seeds the used-set so legacy bids carry over.
+- Why: Ali 2026-06-01 - "I want to make sure this system doesn't recommend the same contract twice. Once it has been used, it can never be retrieved again."
+- Verification: `node -c` passes. Backfill ran: 5 BC todolists scanned, 0 historical UUIDs found (all 5 are "[NEW SLOT] Bid N - awaiting Opportunity Pulse selection" placeholders), 0 fuzzy matches. used-uuids.json currently empty. Once Ali completes the first @CB add, the UUID lands in both the BC list description and the JSON file, and the next @CB find call skips it automatically.
+
 ### Gov bid post: fix Opp Pulse URL host op.colaberry.ai -> 95.216.199.47 (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
