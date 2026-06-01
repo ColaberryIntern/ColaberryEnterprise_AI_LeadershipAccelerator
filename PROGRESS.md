@@ -12,6 +12,14 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB dispatcher: iterate ALL todosets + ALL message boards per project (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `scripts/ops-engine/inbound-dispatcher.js` `findNewMentions()` changed `dock.find((d) => d.name === 'todoset' / 'message_board')` to `dock.filter(...)` and iterates each. BC projects can have multiple of each kind in their dock (Power BI - COE has 3 todosets + 6 message boards). The old find-only code scanned only the first dock entry; everything in the other todosets/MBs was invisible.
+- Why: Ali tagged @CB at 2:23pm + 5:46pm on Power BI - COE bucket 24864171 message 9728438673 ("Critique Lucy's last dashboard post" / "What about the dashboard she created..."). Dispatcher state confirmed zero entries from that bucket ever. Probe of the project's dock showed 6 message_boards; my probe of the message confirmed its parent board is id 4327456492 (position 2 in dock), but dispatcher was scanning only the first board id 4327456479. Wrong board.
+- Verification: `node -c` passes. Next tick after deploy will catch all of Ali's queued mentions on the Power BI thread.
+- Notes: Fourth @CB-silent dispatcher bug class in one day (1. hardcoded WATCHED_BUCKETS, 2. bcGet single-page comments, 3. MB body scan missing, 4. now dock.find-vs-filter). Each was invisible until a specific project shape exposed it.
+
 ### CB context walker (4-layer Basecamp graph walk): List + Task + Comments + Documents (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2

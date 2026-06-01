@@ -240,23 +240,25 @@ async function findNewMentions(state) {
     try { project = await bcGet(`/projects/${bucketId}.json`); }
     catch (e) { console.error(`  bucket ${bucketId} fetch fail: ${e.message}`); continue; }
     const dock = project.dock || [];
-    const todoset = dock.find((d) => d.name === 'todoset');
-    const messageBoard = dock.find((d) => d.name === 'message_board');
+    // CRITICAL: BC projects can have MULTIPLE todosets and MULTIPLE message
+    // boards in the dock (multi-track projects like Power BI - Center of
+    // Excellence have 3 todosets and 6 MBs). Old code used dock.find which
+    // returned only the first - everything in the other docks was invisible.
+    // Confirmed 2026-06-01: Ali tagged @CB on bucket 24864171 message
+    // 9728438673 which lives in MB id 4327456492 (position 2 in dock), but
+    // the dispatcher was only scanning MB id 4327456479 (position 6, first
+    // match). Iterate all docks of each type.
+    const todosets = dock.filter((d) => d.name === 'todoset');
+    const messageBoards = dock.filter((d) => d.name === 'message_board');
 
-    // 1. Walk todoset → todolists → todos → comments.
-    // CRITICAL: Use bcGetAll (paginated). Basecamp paginates at 15 per page.
-    // Previous bcGet-only walk silently missed Ali's mentions on any todo past
-    // position 15 in its parent list, or in any list past position 15 in the
-    // todoset. Pagination bug confirmed 2026-05-31 against bucket 7463955
-    // (Ali Personal), todolist "AI Products" (9939449052), todo 9945833396.
-    if (todoset) {
+    // 1. Walk every todoset -> todolists -> todos -> comments.
+    // Use bcGetAll for pagination on todolists + todos.
+    for (const todoset of todosets) {
       let todolists = [];
       try { todolists = await bcGetAll(`/buckets/${bucketId}/todosets/${todoset.id}/todolists.json`); }
       catch (_e) {}
       if (!Array.isArray(todolists)) todolists = [];
       for (const list of todolists) {
-        // Skip lists that haven't been touched recently. This keeps cost down
-        // for buckets with lots of historical lists.
         if (list.updated_at && new Date(list.updated_at).getTime() < cutoffMs) continue;
         let todos = [];
         try { todos = await bcGetAll(`/buckets/${bucketId}/todolists/${list.id}/todos.json`); }
@@ -270,20 +272,14 @@ async function findNewMentions(state) {
       }
     }
 
-    // 2. Walk message board (recent messages)
-    if (messageBoard) {
+    // 2. Walk every message board (recent messages) and scan both body + comments.
+    for (const messageBoard of messageBoards) {
       let messages = [];
       try { messages = await bcGet(`/buckets/${bucketId}/message_boards/${messageBoard.id}/messages.json`); }
       catch (_e) {}
       if (Array.isArray(messages)) {
         for (const msg of messages.slice(0, 10)) {
           if (msg.updated_at && new Date(msg.updated_at).getTime() < cutoffMs) continue;
-          // CRITICAL: scan the message body itself, not just comments on it.
-          // Ali's 2026-06-01 "@CB find me 5 new gov bids" was posted as a NEW
-          // MB message ("New Bids" / bucket 47346103 / msg 9950734082), not
-          // as a comment on an existing one. Without this body scan the
-          // dispatcher walks right past it. Same bug class as the earlier
-          // pagination + hardcoded-buckets misses.
           try {
             const fullMsg = msg.content
               ? msg
@@ -308,7 +304,6 @@ async function findNewMentions(state) {
               }
             }
           } catch (_e) {}
-          // Then scan comments on the message
           await scanRecordingComments({ bucketId, recId: msg.id, cutoffMs, state, newMentions });
         }
       }
