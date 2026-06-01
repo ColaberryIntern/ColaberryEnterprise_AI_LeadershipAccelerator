@@ -12,6 +12,20 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Intern nudge auto-exit at BLACK + reinstatement protocol + Ali+Dhee notification (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `backend/src/scripts/dailyInternNudges.js`. At BLACK tier (10+ days dark) in live mode, the script now:
+  1. Looks up the CCPP intern record via `findInternByQuery(r.name)`. **Safety: only proceeds if there is an exact email match between the Basecamp intern row and a CCPP candidate.** No email match -> skip auto-exit and log.
+  2. Calls `executeExit({ internId, reasonKey: 'nochow', confirmedBy: 'auto-cb-nudge' })` -> writes CCPP InternIsActive=0, end date, reason ID 2; unassigns from active BC todos in project 24865175.
+  3. Sends the intern an exit email with: full nudge history (rendered from `state[internId].events[]`), reinstatement protocol (4-section email format the intern can fill out + send to Ali within 72hrs). BCC ali@colaberry.com + dhee@colaberry.com.
+  4. Creates a BC todo in Ali Personal AI Products list assigned to Ali (17454835) + Dhee (34920126) titled `[Intern Removed YYYY-MM-DD] Name - auto-exit NCNS, Nd dark` with full audit details.
+  5. Records the action in `state[internId].events[]` (date, level, days dark, email sent, BC comment count, autoExit subobject). Capped at last 50 events per intern.
+- Daily Ali digest now includes: a top "AUTO-EXITED TODAY" red callout block (only renders if exits actually happened), and per-tier rows now show audit info (BC comment count, email sent flag, auto-exit status + CCPP ID + BC unassign count). Dhee added to digest CC.
+- Reinstatement protocol (designed per Ali ask): intern emails `ali@colaberry.com` within 72hrs with subject `Reinstatement Request - Name - InternID N` and a 4-section body: (1) why the inactivity, (2) what changed, (3) commitment, (4) acknowledgment that a second exit is final. If no email arrives in 72hrs, exit is final and file closed.
+- Verification: `node -c` passes. Code shipped to prod (commit `[pending`]). Prod nudge mode = `live` (Ali set this at 12:07pm via @CB). Next cron run: today 22:00 UTC (5pm CDT) - first run that exercises the new BLACK auto-exit.
+- Notes: Safety gates: PREVIEW_MODE blocks the auto-exit branch entirely (existing gate, same one that already blocks intern emails). DRY flag also blocks. CCPP candidate must email-match the BC intern. If Ali wants a dry-run before 5pm tonight he can tag `@CB System set intern nudge mode preview` and the run will email him a preview-only digest, then flip back to live afterwards.
+
 ### CB System: add complete_todo tool + backfill 2 missed mentions (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
