@@ -67,6 +67,7 @@ TOOL PICKING GUIDE
 - queue_followup: when the request needs work you cannot do in this turn (live research, cross-system lookups, external comms drafting, calendar booking). Creates a Basecamp todo in the same project, assigned to Ali, with your notes so Claude Code can finish it in his next session.
 - exit_intern_preview: when Ali asks you to remove, exit, terminate, kick out, or place-out an intern. PREVIEW ONLY - it does NOT execute the exit. Returns the CCPP candidate and the Basecamp todos that would be affected. You MUST follow exit_intern_preview with a basecamp_reply that shows Ali the preview AND the exact CLI command he can run to confirm. The execution is intentionally outside your reach - personnel actions need a human in the loop.
 - set_intern_nudge_mode: when Ali says "go live with nudges", "pause nudges", "enable intern nudges", "set nudge mode preview/live", or anything that flips the daily intern nudge cycle between digest-only (preview) and intern-facing (live). Updates a file on the VPS that the next scheduled run reads. ALWAYS follow this with a basecamp_reply confirming the change (what mode it was, what mode it is now, when it takes effect).
+- complete_todo: when Ali (or the requester) says "close this", "mark done", "complete it", "close out", "we're done here", or anything that resolves the ticket. Pass a closure_note explaining the reason - it gets posted as an auditable comment before completion. NEVER say "I will close this ticket" in a basecamp_reply without actually calling complete_todo in the same turn. Saying you will close it and then not closing it is the single worst failure pattern: Ali sees the promise, trusts you, then has to come back hours later and notice the ticket is still open. Either call complete_todo or do not promise to close.
 
 GOV BIDS - two-step add flow (IMPORTANT):
 When Ali asks to add Gov Contracts bids, FIRST determine whether he has already downloaded the RFP packages from Opportunity Pulse + Bonfire.
@@ -314,6 +315,21 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'complete_todo',
+      description: 'Mark a Basecamp todo as complete (close the ticket). Default closes the current todo (the one this @CB mention is on). Pass a different todo_id to close a related ticket in the same project. Use when the requester says "close this", "mark done", "complete", "close out", or has explicitly resolved the work described in the ticket. Posts a closure-note comment before flipping the completion flag so the close is auditable in the thread.',
+      parameters: {
+        type: 'object',
+        properties: {
+          todo_id: { type: 'integer', description: 'Optional. If omitted, closes the current todo. Pass to close a different todo in the same project.' },
+          closure_note: { type: 'string', description: 'One-line note explaining WHY you are closing. Posted as a comment first.' },
+        },
+        required: ['closure_note'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish',
       description: 'Done. No more actions needed.',
       parameters: { type: 'object', properties: {}, required: [] },
@@ -369,6 +385,22 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: html });
     sideEffects.repliedHtml = html;
     return { ok: true };
+  }
+
+  async function complete_todo({ todo_id, closure_note }) {
+    const targetId = todo_id || recId;
+    try {
+      if (closure_note) {
+        const noteHtml = `<div>${mention()} closing this todo. <em>${stripEmDashes(closure_note)}</em></div>`;
+        await bcPost(`/buckets/${bucketId}/recordings/${targetId}/comments.json`, { content: noteHtml });
+      }
+      // Completion endpoint takes empty body. bcPost serializes {} which BC accepts.
+      await bcPost(`/buckets/${bucketId}/todos/${targetId}/completion.json`, {});
+      sideEffects.completedTodoId = targetId;
+      return { ok: true, todo_id: targetId };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   }
 
   async function email_ali({ subject, body_html, body_text }) {
@@ -542,7 +574,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, complete_todo, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }

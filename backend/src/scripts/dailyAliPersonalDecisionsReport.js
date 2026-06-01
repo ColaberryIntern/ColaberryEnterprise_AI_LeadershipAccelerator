@@ -220,6 +220,27 @@ async function buildExecSummary({ totalOpen, totalHuman, totalAi, overdueCount, 
     name: g.name, list_url: g.list_url, task: g.nextHumanStep,
   }));
 
+  // Single highest-priority HUMAN task across all lists. The "YOUR TURN"
+  // banner picks this. Priority order:
+  //   1. Overdue first (most overdue wins)
+  //   2. Then earliest due date
+  //   3. Then tasks in lowest-scoring (most stalled) groups
+  const humanTasksWithCtx = groups.flatMap((g) => g.items
+    .filter((t) => t.tier === 'HUMAN')
+    .map((t) => ({ task: t, groupName: g.name, groupScore: g.feasibility.score, groupUrl: g.list_url }))
+  );
+  humanTasksWithCtx.sort((a, b) => {
+    const aOverdue = a.task.due_on && a.task.due_on < today;
+    const bOverdue = b.task.due_on && b.task.due_on < today;
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+    if (aOverdue && bOverdue) return a.task.due_on.localeCompare(b.task.due_on);
+    if (a.task.due_on && b.task.due_on) return a.task.due_on.localeCompare(b.task.due_on);
+    if (a.task.due_on) return -1;
+    if (b.task.due_on) return 1;
+    return a.groupScore - b.groupScore;
+  });
+  const yourTurn = humanTasksWithCtx[0] || null;
+
   const execSummary = await buildExecSummary({
     totalOpen, totalHuman, totalAi, overdueCount: overdueTasks.length, perGroupNext,
   });
@@ -335,7 +356,45 @@ async function buildExecSummary({ totalOpen, totalHuman, totalAi, overdueCount, 
 <td style="text-align:center;padding:16px;background:#fee2e2;border-radius:8px;width:24%"><div style="font-size:28px;font-weight:800;color:#7f1d1d">${overdueTasks.length}</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#7f1d1d;font-weight:700">Overdue</div></td>
 </tr></table>
 
-<h2 style="color:#1a365d;font-size:18px;margin-top:24px;border-bottom:2px solid #1a365d;padding-bottom:6px">Each list's next human step</h2>
+${yourTurn ? `
+<div style="background:#fef3c7;border-left:6px solid #f59e0b;padding:18px 22px;border-radius:0 8px 8px 0;margin-top:8px">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#78350f;font-weight:700">📌 Your turn - the most important task right now</div>
+<div style="margin-top:6px;font-size:11px;color:#92400e;font-weight:700">NEXT DECISION ON ${escape((yourTurn.groupName || '').toUpperCase())}</div>
+<a href="${yourTurn.task.app_url}" style="display:block;font-size:18px;font-weight:700;color:#1c1917;text-decoration:none;margin-top:4px;line-height:1.3">${escape(yourTurn.task.content)}</a>
+<div style="margin-top:8px;font-size:12px;color:#475569">List: <strong>${escape(yourTurn.groupName)}</strong>${yourTurn.task.due_on ? ' &middot; Due: <strong>' + yourTurn.task.due_on + '</strong>' : ' &middot; <strong>No due date</strong>'} &middot; <a href="${yourTurn.task.app_url}" style="color:#2b6cb0">Open ticket &rarr;</a></div>
+</div>
+` : `
+<div style="background:#dcfce7;border-left:6px solid #16a34a;padding:14px 18px;border-radius:0 8px 8px 0;margin-top:8px;font-size:13px;color:#14532d;font-weight:600">
+📌 Nothing needs your decision right now. CB System handles the next AI-doable items before the next report.
+</div>
+`}
+
+<h2 style="color:#1a365d;font-size:18px;margin-top:32px;border-bottom:2px solid #1a365d;padding-bottom:6px">List scorecard</h2>
+<p style="margin:0 0 10px;font-size:13px;color:#475569">All lists sorted by score (lowest first). Stalled lists at the top get priority attention.</p>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e2e8f0">
+<thead><tr style="background:#1a365d;color:white">
+<th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">LIST</th>
+<th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">SCORE</th>
+<th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">OPEN</th>
+<th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">HUMAN</th>
+<th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">AI</th>
+<th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">OVERDUE</th>
+</tr></thead>
+<tbody>
+${[...groups].sort((a, b) => a.feasibility.score - b.feasibility.score).map((g, i) => `
+<tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}">
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d">${g.list_url ? `<a href="${g.list_url}" style="color:#1a365d;text-decoration:none">${escape(g.name)}</a>` : escape(g.name)}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${scoreBadge(g.feasibility)}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569">${g.items.length}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center;color:${g.humanCount > 0 ? '#78350f' : '#94a3b8'};font-weight:${g.humanCount > 0 ? '700' : '400'}">${g.humanCount}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center;color:${g.aiCount > 0 ? '#1e3a8a' : '#94a3b8'};font-weight:${g.aiCount > 0 ? '700' : '400'}">${g.aiCount}</td>
+<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center;color:${g.overdueCount > 0 ? '#7f1d1d' : '#94a3b8'};font-weight:${g.overdueCount > 0 ? '700' : '400'}">${g.overdueCount}</td>
+</tr>`).join('')}
+</tbody>
+</table>
+<div style="margin-top:8px;font-size:11px;color:#64748b">Score: <strong>75+ ON TRACK</strong>, 50-74 AT RISK, &lt;50 STALLED. Formula: 100 - (8 x human) - (12 x overdue) - (2 x noDue, capped at 5).</div>
+
+<h2 style="color:#1a365d;font-size:18px;margin-top:32px;border-bottom:2px solid #1a365d;padding-bottom:6px">Each list's next human step</h2>
 ${perGroupNext.length === 0 ? '<div style="background:#dcfce7;padding:14px 18px;border-radius:6px;color:#14532d;font-weight:600">No lists are waiting on you. All next steps are AI-doable. CB System runs next.</div>' : `
 <p style="margin:0 0 10px;font-size:13px;color:#475569"><strong>${perGroupNext.length} list${perGroupNext.length === 1 ? '' : 's'} waiting on you.</strong> Sorted by due date. Click any row to open the ticket.</p>
 <table cellpadding="0" cellspacing="0" style="width:100%;font-size:13px;border-collapse:collapse;border:1px solid #e2e8f0">

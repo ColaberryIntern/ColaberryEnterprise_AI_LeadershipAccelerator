@@ -12,6 +12,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB System: add complete_todo tool + backfill 2 missed mentions (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `scripts/ops-engine/cb-system-handler.js`: new `complete_todo` tool. Marks the current todo (or any other in the same project via `todo_id`) complete via `POST /buckets/{b}/todos/{id}/completion.json`, after posting an auditable closure-note comment. Wired into TOOLS, buildToolImpls, and the impls registration. NOT Ali-only - any allowed @CB requester can close a todo they're working on.
+  - `scripts/ops-engine/cb-system-handler.js` system prompt: new TOOL PICKING GUIDE entry for complete_todo with a hard rule against saying "I will close this ticket" without calling the tool in the same turn. Why: CB twice promised to close ShipCES 9946715807 today (13:42 + 17:03) but had no tool to do it, leaving the ticket open. The promise-without-execution is the worst failure pattern.
+  - `backend/src/scripts/backfillCbMissedMentions.js` (new): one-off script that posted a CB-styled apology comment + marked ShipCES 9946715807 complete, and posted a CB-styled answer on Internship PIOS 9570979826 explaining Tyra's activity status (last 2026-03-17, 76 days dormant) plus the CLI command for exit-intern execution. These two mentions could not be auto-recovered by the dispatcher because they fell outside `LOOKBACK_HOURS=2` after the pagination fix shipped.
+- Verification: `node -c` passes. Backfill script executed cleanly - ShipCES apology comment posted, ticket marked complete; Internship PIOS answer comment posted.
+- Notes: Why "exit intern" still won't auto-execute: `exit_intern_preview` is preview-only by design (personnel actions require the standalone `confirmInternExit.js` CLI for human-in-the-loop confirmation). Documented in the backfill answer to Ali.
+
+### Ali Personal Decisions report: YOUR TURN banner + list scorecard (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `backend/src/scripts/dailyAliPersonalDecisionsReport.js`. Added two new sections between the KPI strip and "Each list's next human step" table:
+  1. **YOUR TURN banner** (amber, like the ShipCES per-project Next Decision card). Picks the single highest-priority HUMAN task across all lists. Priority: most-overdue > earliest-due > task in lowest-scoring group. Banner shows list name, task content, due date, click-through to BC.
+  2. **List scorecard** table. All lists sorted by feasibility score lowest-first (stalled at top). Columns: list (linked to BC list URL), score badge, open count, human count, AI count, overdue count. Footer explains the 75/50 ON TRACK/AT RISK/STALLED bands.
+- Verification: `node -c` passes. Live test sent `<43d7355a-26ea-242c-5fb5-d76f21142510@colaberry.com>`. 41 todos, 35 lists, picked highest-priority HUMAN task for the banner.
+- Notes: Ali asked for both sections in his 2026-06-01 message. Layout order now: hero → KPI cards → YOUR TURN → list scorecard → "Each list's next human step" rollup → overdue → per-list cards → recently completed → footer.
+
 ### Inbound dispatcher: fix comments-pagination miss on @CB mentions (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
