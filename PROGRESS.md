@@ -12,6 +12,14 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB dispatcher: enumerate every project dynamically instead of hardcoded watch list (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `scripts/ops-engine/inbound-dispatcher.js` no longer iterates a hardcoded `WATCHED_BUCKETS` array. New `getWatchedBuckets()` calls `bcGetAll('/projects.json?status=active')` each tick and iterates every project CB has access to. The previous hardcoded list is renamed `WATCHED_BUCKETS_FALLBACK` and used only when the API call fails. Added Power BI - COE (24864171) to the fallback list as belt-and-suspenders.
+- Why: Ali tagged @CB at 1:29pm CDT on the Power BI - Center of Excellence "Stress Test 2 - Retail Sales Analysis" message thread (bucket 24864171, message 9728438673) asking for suggestions to improve Lucy's report. The dispatcher never saw the mention because that bucket was not in the hardcoded list, even though CB has access to the project. Same failure class Ali called out at the Internship project earlier today: "The agent should work every project it has access to."
+- `backend/src/scripts/backfillPowerBiCbReply.js` (new): posted CB's substantive reply on the Power BI message - 8 suggestions to improve Lucy's stress-test report (baseline-paired stats, ROI as decision support, equal-axis Case 1 vs 2 chart, end the 50-word summary with recommendation, name the target audience, annotated chart, included/excluded segments, label-swap bias test). Comment id 9950597067.
+- Verification: `node -c` passes. Backfill comment posted (status 201). Dispatcher fix shipping in same commit; next cron tick (~3 min) will enumerate all projects and scan them.
+
 ### Intern nudge templates: fix standard from 3/day to 3/week (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2

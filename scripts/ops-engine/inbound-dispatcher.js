@@ -194,10 +194,16 @@ function classifyKeyword(text) {
 // Basecamp events feed gives all account-level events. For now we use it to
 // find new comments where CB System is @mentioned by Ali.
 
-// Watched buckets: projects Ali actively works in. We poll todos + messages
-// in these directly because /buckets/<id>/events.json returns 404 with our
-// token (verified 2026-05-31).
-const WATCHED_BUCKETS = [
+// Watched buckets: every active project CB has access to. We enumerate via
+// /projects.json each tick rather than maintaining a hardcoded list because
+// (a) hardcoded lists silently miss projects Ali adds CB to (Power BI - COE
+// missed Ali's 2026-06-01 1:29pm @CB ping on bucket 24864171 because the
+// project was not in the hardcoded list, even though CB had access), and
+// (b) Ali's directive 2026-06-01: "The agent should work every project it
+// has access to." If the projects.json call fails (auth, transient), fall
+// back to a known-good list of high-traffic buckets so we never go fully
+// blind on critical projects.
+const WATCHED_BUCKETS_FALLBACK = [
   46697389, // AI Pathway
   47126345, // ShipCES
   46699826, // LandJet
@@ -206,13 +212,30 @@ const WATCHED_BUCKETS = [
   7463955,  // Ali Personal
   24865175, // Internship / Apprenticeship
   33392153, // Family Goals
+  24864171, // Power BI - Center of Excellence
 ];
+
+async function getWatchedBuckets() {
+  try {
+    const projects = await bcGetAll('/projects.json?status=active');
+    if (Array.isArray(projects) && projects.length > 0) {
+      return projects.map((p) => p.id);
+    }
+    console.warn('  /projects.json returned empty; falling back to hardcoded list');
+  } catch (e) {
+    console.warn(`  /projects.json failed (${e.message}); falling back to hardcoded list`);
+  }
+  return WATCHED_BUCKETS_FALLBACK;
+}
 
 async function findNewMentions(state) {
   const cutoffMs = Date.now() - LOOKBACK_HOURS * 3600 * 1000;
   const newMentions = [];
 
-  for (const bucketId of WATCHED_BUCKETS) {
+  const watchedBuckets = await getWatchedBuckets();
+  console.log(`  scanning ${watchedBuckets.length} project${watchedBuckets.length === 1 ? '' : 's'}`);
+
+  for (const bucketId of watchedBuckets) {
     let project;
     try { project = await bcGet(`/projects/${bucketId}.json`); }
     catch (e) { console.error(`  bucket ${bucketId} fetch fail: ${e.message}`); continue; }
