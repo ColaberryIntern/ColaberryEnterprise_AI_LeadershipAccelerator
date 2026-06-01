@@ -128,7 +128,7 @@ function renderAuditEmail(now, auditResults, sendResults) {
   const totalPass = auditResults.filter((r) => r.overall === 'ok').length;
   const totalWarn = auditResults.filter((r) => r.overall === 'warn').length;
   const totalFail = auditResults.filter((r) => r.overall === 'fail').length;
-  const sentCount = sendResults.filter((s) => s.exitCode === 0).length;
+  const sentCount = sendResults.filter((s) => s?.exitCode === 0).length;
 
   const rows = auditResults.map((r, idx) => {
     const send = sendResults[idx];
