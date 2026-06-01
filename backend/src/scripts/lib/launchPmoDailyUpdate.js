@@ -152,10 +152,25 @@ async function pullProjectState() {
     const total = all.length;
     const done = completedTodos.length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    // Per-area recently completed (last 7 days), all tiers (not just AI)
+    const cutoffMs = Date.now() - 7 * 86400000;
+    const recentCompleted = (completedTodos || [])
+      .filter((t) => {
+        const ca = t.completion?.created_at;
+        return ca && new Date(ca).getTime() >= cutoffMs;
+      })
+      .map((t) => ({
+        id: t.id, content: t.content, url: t.app_url,
+        completed_at: t.completion.created_at,
+        completedBy: t.completion?.creator?.name || 'unknown',
+        tier: tierOf(t),
+      }))
+      .sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
+
     const area = {
       listId: list.id, listName: list.name, listUrl: list.app_url,
       total, done, pct, openCount: openTodos.length,
-      openTodos, overdue, upcoming,
+      openTodos, overdue, upcoming, recentCompleted,
     };
     // Compute per-area "next" steps. blocked-task + cb-drafted filters apply.
     // Key rule (per Ali's audit): if a task is AI-tier and CB has already
@@ -389,42 +404,49 @@ function renderAreaCard(area, today, blockerMap) {
   const draftedHere = area.openTodos.filter((t) => t.cbDrafted);
   const fs = area.feasibility;
   const fsColor = fs.tier === 'LIKELY_SCRAP' ? '#fef2f2' : fs.tier === 'AT_RISK' ? '#fffbeb' : '#f0fdf4';
-  // Split tasks: Actionable (undrafted + not blocked) vs Awaiting Review (drafted) vs Blocked.
-  // This stops drafted AI tasks from appearing as "next" in the sequence just
-  // because their due date is earlier. They live in their own table below.
+  // ONE unified sequence per area, ordered by due date (next at top).
+  // Per Ali's spec: every task visible in order. AI tasks CB drafted stay
+  // in line; the FIRST unblocked HUMAN task is the visual "next" highlight;
+  // every row carries its tier badge + state badge.
   const reviewer = reviewerFor(area.listName);
-  const actionable = area.openTodos.filter((t) => !t.cbDrafted && !blockerMap.get(t.id)?.blocked);
-  const awaitingReview = area.openTodos.filter((t) => t.cbDrafted);
-  const blockedList = area.openTodos.filter((t) => blockerMap.get(t.id)?.blocked);
+  const ordered = [...area.openTodos].sort((a, b) => {
+    const ad = a.due_on || '9999-12-31', bd = b.due_on || '9999-12-31';
+    if (ad !== bd) return ad.localeCompare(bd);
+    // Same due date: AI before HUMAN (CB drafts first, human reviews)
+    if (a.tier !== b.tier) return a.tier === 'AI' ? -1 : 1;
+    return 0;
+  });
+  // First unblocked HUMAN task is the visual "next" highlight
+  const firstNextHuman = ordered.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !t.cbDrafted && !blockerMap.get(t.id)?.blocked);
 
-  const renderRow = (t, idx, kind) => {
-    const isNext = kind === 'actionable' && t.id === (nextH?.id || area.nextStep?.id);
+  const taskRows = ordered.slice(0, 20).map((t, idx) => {
+    const isBlocked = blockerMap.get(t.id)?.blocked;
+    const isDrafted = t.cbDrafted;
+    const isNextHuman = firstNextHuman && t.id === firstNextHuman.id;
     const ownerRaw = (t.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali');
-    const owner = kind === 'awaiting' ? `${reviewer} to review`
-      : kind === 'blocked' ? (ownerRaw || (t.tier === 'AI' ? 'CB System' : 'unassigned'))
+    const owner = isDrafted
+      ? `${reviewer} to review`
       : (ownerRaw || (t.tier === 'AI' ? 'CB System' : 'unassigned'));
-    const rowBg = kind === 'blocked' ? '#fef2f2' : kind === 'awaiting' ? '#eff6ff' : isNext ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white');
+    const rowBg = isNextHuman ? '#fef9c3'
+      : isBlocked ? '#fef2f2'
+      : isDrafted ? '#eff6ff'
+      : (idx % 2 === 0 ? '#f8fafc' : 'white');
+    const stateBadge = isNextHuman ? '<div style="font-size:10px;color:#92400e;margin-top:2px;font-weight:700">&larr; NEXT HUMAN STEP</div>'
+      : isBlocked ? '<div style="font-size:10px;color:#991b1b;margin-top:2px;font-style:italic">BLOCKED on upstream</div>'
+      : isDrafted ? `<div style="font-size:10px;color:#1e40af;margin-top:2px;font-weight:700">DRAFTED BY CB - ${reviewer} to review</div>`
+      : '';
     return `<tr style="background:${rowBg}">
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${idx + 1}</td>
-<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a></td>
+<td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a>${stateBadge}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on, today)}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td>
 <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${htmlEsc(owner)}</td>
 </tr>`;
-  };
+  }).join('');
 
-  const buildTable = (label, items, kind, headerBg) => {
-    if (!items.length) return '';
-    const rows = items.slice(0, 15).map((t, i) => renderRow(t, i, kind)).join('');
-    return `<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">${label} (${items.length})</div>
-<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse">
-<thead><tr style="background:${headerBg}"><th align="left" style="padding:8px 10px;color:white;font-size:10px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Owner</th></tr></thead>
-<tbody>${rows}</tbody></table>`;
-  };
-
-  const actionableTable = buildTable('Actionable now (sorted by due)', actionable, 'actionable', '#1a365d');
-  const awaitingTable = buildTable(`Awaiting ${reviewer} review (CB drafted)`, awaitingReview, 'awaiting', '#1e40af');
-  const blockedTable = buildTable('Blocked (waiting on upstream)', blockedList, 'blocked', '#7f1d1d');
+  // Recently completed in this area (last 7 days)
+  const recentRows = (area.recentCompleted || []).slice(0, 5).map((t) =>
+    `<tr style="background:#f0fdf4"><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#166534">&#x2713;</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${t.url}" style="color:#1a365d;text-decoration:none">${htmlEsc(stripEmDashes(stripHtml(t.content))).slice(0, 95)}</a></td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(t.completed_at || '').slice(0, 10)}</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(t.completedBy || '')}</td></tr>`).join('');
   return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:14px">
 <div style="display:table;width:100%"><div style="display:table-cell"><div style="font-size:16px;font-weight:800;color:#1a365d">${htmlEsc(area.listName)}</div>
 <div style="font-size:11px;color:#64748b;margin-top:2px">${area.openCount} open &middot; ${area.done} done &middot; ${area.humanCount} human &middot; ${area.aiCount} AI &middot; <a href="${area.listUrl}" style="color:#2b6cb0">Open in Basecamp &rarr;</a></div></div>
@@ -437,9 +459,16 @@ ${nextH ? `<div style="margin-top:14px;background:#1c1917;color:white;padding:14
 <div style="margin-top:8px"><a href="${nextH.url}" style="display:inline-block;background:#fbbf24;color:#1c1917;padding:6px 12px;border-radius:5px;font-size:11px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Open ticket &rarr;</a></div>
 </div>` : '<div style="margin-top:14px;padding:10px 14px;background:#dcfce7;border-radius:6px;font-size:12px;color:#166534">No human step blocking this area. CB executes next.</div>'}
 ${nextA && nextA.id !== nextH?.id ? `<div style="margin-top:8px;padding:10px 14px;background:#dbeafe;border-radius:6px;font-size:11px;color:#1e3a8a"><strong>Next AI step:</strong> ${htmlEsc(stripEmDashes(stripHtml(nextA.content)))} (due ${nextA.due_on || 'unset'}). CB runs overnight.</div>` : ''}
-${draftedHere.length ? `<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-radius:6px;font-size:11px;color:#1e40af"><strong>${draftedHere.length} draft${draftedHere.length === 1 ? '' : 's'} awaiting ${reviewer} review.</strong> See "Awaiting review" table below.</div>` : ''}
+${draftedHere.length ? `<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-radius:6px;font-size:11px;color:#1e40af"><strong>${draftedHere.length} CB draft${draftedHere.length === 1 ? '' : 's'} in line for ${reviewer} to review.</strong></div>` : ''}
 ${blockedHere.length ? `<div style="margin-top:8px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:11px;color:#7f1d1d"><strong>${blockedHere.length} blocked task${blockedHere.length === 1 ? '' : 's'}:</strong> ${blockedHere.slice(0, 3).map((b) => htmlEsc(stripHtml(b.content).slice(0, 60))).join('; ')}${blockedHere.length > 3 ? '...' : ''}</div>` : ''}
-${actionableTable}${awaitingTable}${blockedTable}
+<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Task sequence (${area.openCount} open, ordered by due date)</div>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse">
+<thead><tr style="background:#1a365d"><th align="left" style="padding:8px 10px;color:white;font-size:10px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Owner</th></tr></thead>
+<tbody>${taskRows}</tbody></table>
+${recentRows ? `<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Recently completed (last 5)</div>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse">
+<thead><tr style="background:#14532d"><th align="left" style="padding:8px 10px;color:white;font-size:10px">&#x2713;</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Completed</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">By</th></tr></thead>
+<tbody>${recentRows}</tbody></table>` : ''}
 </div>`;
 }
 
