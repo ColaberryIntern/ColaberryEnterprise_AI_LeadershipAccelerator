@@ -50,14 +50,14 @@ const REPORTS = [
   {
     name: 'ShipCES (Autonomous Brokerage)',
     scriptPath: 'backend/src/scripts/dailyClientProjectsReport.js',
-    args: ['--only=ShipCES'],
+    args: ['--only=ShipCES', '--cc-add=karun@colaberry.com'],
     projectId: 47126345,
     needsOpenai: true,
-    recipients: STANDARD_RECIPIENTS,
+    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com', 'karun@colaberry.com'] },
     cbRunnerState: 'tmp/cb-ai-runner-state-47126345.json',
     skipFlag: '--skip-clients',
     cadence: 'daily',
-    description: 'Client project. Per-list cards with DRAFTED BY CB pattern.',
+    description: 'Client project. Per-list cards with DRAFTED BY CB pattern. Karun on CC (added 2026-06-01).',
   },
   {
     name: 'LandJet',
@@ -82,6 +82,19 @@ const REPORTS = [
     skipFlag: '--skip-anthropic',
     cadence: 'daily',
     description: 'Daily countdown + per-employee progress on the 4 Anthropic courses.',
+  },
+  // ---- Personal decisions report ----
+  {
+    name: 'Ali Personal Decisions',
+    scriptPath: 'backend/src/scripts/dailyAliPersonalDecisionsReport.js',
+    args: [],
+    projectId: 7463955,
+    needsOpenai: true,
+    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com'] },
+    cbRunnerState: null,
+    skipFlag: '--skip-ali-personal',
+    cadence: 'daily',
+    description: 'Daily decisions-owed report for Ali Personal. Gov Contracts format: per-topic-group cards with NEXT HUMAN STEP, full task sequence, tier pills, recently-completed. Replaces the Mon/Wed/Fri sendAliDecisionsOwedDigest.js cadence.',
   },
   // ---- Intern reports ----
   {

@@ -282,8 +282,14 @@ const ALLOWED_REQUESTER_IDS = new Set([
 ]);
 
 async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMentions }) {
+  // CRITICAL: bcGetAll (paginated). Basecamp paginates at 15 per page and
+  // returns oldest-first. Previous bcGet-only fetch silently missed @CB
+  // mentions on any todo with more than 15 comments. Confirmed 2026-06-01
+  // against Internship todo 9570979826 (PIOS, 51 comments, "What's up with
+  // Tyra's activity" sat on page 4). Same pagination-skip bug class as the
+  // one fixed for todolists/todos above.
   let comments = [];
-  try { comments = await bcGet(`/buckets/${bucketId}/recordings/${recId}/comments.json`); }
+  try { comments = await bcGetAll(`/buckets/${bucketId}/recordings/${recId}/comments.json`); }
   catch (_e) { return; }
   if (!Array.isArray(comments)) return;
   for (const c of comments) {

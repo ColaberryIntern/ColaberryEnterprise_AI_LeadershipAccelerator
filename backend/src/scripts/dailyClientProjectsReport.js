@@ -18,10 +18,13 @@ const BASE = 'https://3.basecampapi.com/3945211';
 const H = { Authorization: 'Bearer ' + BASECAMP_TOKEN, 'User-Agent': 'Colaberry Client Projects', Accept: 'application/json' };
 
 const RECIPIENT = 'ali@colaberry.com';
-const CC = ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
+const BASE_CC = ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
 const TEST = process.argv.includes('--test');
 const DRY = process.argv.includes('--dry');
 const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length);
+const CC_ADD = (process.argv.find((a) => a.startsWith('--cc-add='))?.slice('--cc-add='.length) || '')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+const CC = Array.from(new Set([...BASE_CC, ...CC_ADD]));
 
 const PROJECTS = [
   { id: 46697389, name: 'AI Pathway',   shortName: 'AI Pathway' },
