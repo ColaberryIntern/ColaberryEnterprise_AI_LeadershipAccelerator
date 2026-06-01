@@ -283,6 +283,17 @@ async function build() {
     const nextHumanStep = classified.find(t => t.tier === 'HUMAN') || null;
     // Find Bonfire submission task (typically the bid's terminal action)
     const bonfireTask = classified.find(t => /submit|bonfire|upload/i.test(t.content)) || null;
+    // Recently completed (last 7 days) per bid
+    const cutoffMs = Date.now() - 7 * 86400000;
+    const recentCompleted = (allTodos || [])
+      .filter((t) => t.completion?.created_at && new Date(t.completion.created_at).getTime() >= cutoffMs)
+      .map((t) => ({
+        id: t.id, content: t.content, app_url: t.app_url,
+        completed_at: t.completion.created_at,
+        completedBy: t.completion?.creator?.name || 'unknown',
+      }))
+      .sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
+
     bidData.push({
       id: list.id,
       name: list.name,
@@ -290,6 +301,7 @@ async function build() {
       completed: allTodos.length,
       open: openTodos.length,
       open_todos: classified,
+      recentCompleted,
       ratio: list.completed_ratio,
       nextStep,
       nextHumanStep,
@@ -425,7 +437,7 @@ function renderHtml({ proj, bidData, msgs }) {
   <div style="margin-top:14px;padding:10px 14px;background:#dcfce7;border-radius:6px;font-size:12px;color:#166534">No human steps remaining. Last steps are AI-doable. CB System will execute before next report.</div>
   `}
 
-  <div style="margin-top:14px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Full task sequence (${b.open} open, in execution order)</div>
+  <div style="margin-top:14px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Task sequence (${b.open} open, ordered by due date)</div>
   <table cellpadding="6" cellspacing="0" style="width:100%;font-size:13px;margin-top:6px;border-collapse:collapse">
     <thead><tr style="background:#1a365d">
       <th align="left" style="padding:10px;color:white;font-size:10px;letter-spacing:1px">#</th>
@@ -435,21 +447,27 @@ function renderHtml({ proj, bidData, msgs }) {
       <th align="left" style="padding:10px;color:white;font-size:10px;letter-spacing:1px">Owner</th>
     </tr></thead>
     <tbody>
-  ${b.open_todos.map((t, idx) => {
-    const isNext = t.id === (nextHuman?.id || nextStep?.id);
+  ${b.open_todos.slice(0, 20).map((t, idx) => {
+    const isNextHuman = nextHuman && t.id === nextHuman.id;
+    const stateBadge = isNextHuman ? '<div style="font-size:10px;color:#92400e;margin-top:2px;font-weight:700">&larr; NEXT HUMAN STEP</div>' : '';
     return `
-    <tr style="background:${isNext ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white')}">
+    <tr style="background:${isNextHuman ? '#fef9c3' : (idx % 2 === 0 ? '#f8fafc' : 'white')}">
       <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700">${idx + 1}</td>
       <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">
-        <a href="${t.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600">${escape(t.content)}</a>
+        <a href="${t.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600">${escape(t.content)}</a>${stateBadge}${t.backfilled ? '<div style="font-size:9px;color:#94a3b8;margin-top:2px;font-style:italic">backfilled</div>' : ''}
       </td>
-      <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}${t.backfilled ? '<div style="font-size:9px;color:#94a3b8;margin-top:2px;font-style:italic">backfilled</div>' : ''}</td>
+      <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}</td>
       <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td>
       <td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${escape(t.humanSuggestion || (t.tier === 'AI' ? 'CB System' : t.assignees))}</td>
     </tr>`;
   }).join('')}
     </tbody>
   </table>
+  ${(b.recentCompleted && b.recentCompleted.length) ? `<div style="margin-top:14px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Recently completed (last 5)</div>
+  <table cellpadding="6" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse">
+    <thead><tr style="background:#14532d"><th align="left" style="padding:8px 10px;color:white;font-size:10px">&#x2713;</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Completed</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">By</th></tr></thead>
+    <tbody>${b.recentCompleted.slice(0, 5).map((r) => `<tr style="background:#f0fdf4"><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#166534">&#x2713;</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${r.app_url}" style="color:#1a365d;text-decoration:none">${escape(r.content).slice(0, 95)}</a></td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(r.completed_at || '').slice(0, 10)}</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${escape(r.completedBy)}</td></tr>`).join('')}</tbody>
+  </table>` : ''}
 </div>`;
   }).join('');
 

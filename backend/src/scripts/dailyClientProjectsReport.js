@@ -115,9 +115,11 @@ async function analyzeProject(p) {
   const todoset = dock.find((d) => d.name === 'todoset');
   const mb = dock.find((d) => d.name === 'message_board');
 
-  // Pull all todolists + their open todos
+  // Pull all todolists + their open todos + recently-completed
   const lists = todoset ? await bcGetAll(`/buckets/${p.id}/todosets/${todoset.id}/todolists.json`) : [];
   const openTodos = [];
+  const completedByList = new Map();
+  const cutoffMs = Date.now() - 7 * 86400000;
   for (const list of lists) {
     if (list.completed) continue;
     try {
@@ -136,6 +138,17 @@ async function analyzeProject(p) {
           tier: classify(t.content, t.description),
         });
       }
+      // Recently completed (last 7 days) per list
+      const done = await bcGetAll(`/buckets/${p.id}/todolists/${list.id}/todos.json?completed=true`);
+      const recent = (done || [])
+        .filter((t) => t.completion?.created_at && new Date(t.completion.created_at).getTime() >= cutoffMs)
+        .map((t) => ({
+          id: t.id, content: stripHtml(t.content), app_url: t.app_url,
+          completed_at: t.completion.created_at,
+          completedBy: t.completion?.creator?.name || 'unknown',
+        }))
+        .sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
+      completedByList.set(list.id, recent);
     } catch (_e) {}
   }
 
@@ -178,6 +191,7 @@ async function analyzeProject(p) {
     description,
     todolists: lists,
     openTodos,
+    completedByList,
     nextStep,
     nextHuman,
     recentMessages,
@@ -447,14 +461,39 @@ function renderHtmlV2(analysis, framing) {
     .map(({ g, overdueCount, badge }) => `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${escape(g.listName)}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${badge.html}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${g.todos.length} open / ${overdueCount} overdue</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">H ${g.todos.filter((t) => t.tier === 'HUMAN').length} / AI ${g.todos.filter((t) => t.tier === 'AI').length}</td></tr>`)
     .join('');
 
-  // Per-list detail cards
+  // Per-list detail cards (NEW format matches Launch PMO)
   const listCards = [...byList.values()].map((g) => {
-    const nextH = g.todos.find((t) => t.tier === 'HUMAN' || t.tier === 'EITHER');
-    const nextA = g.todos.find((t) => t.tier === 'AI');
+    // Order tasks by due date (nulls last), AI before HUMAN on tie
+    const ordered = [...g.todos].sort((a, b) => {
+      const ad = a.due_on || '9999-12-31', bd = b.due_on || '9999-12-31';
+      if (ad !== bd) return ad.localeCompare(bd);
+      if (a.tier !== b.tier) return a.tier === 'AI' ? -1 : 1;
+      return 0;
+    });
+    const firstNextHuman = ordered.find((t) => t.tier === 'HUMAN' || t.tier === 'EITHER');
     const oc = g.todos.filter((t) => t.due_on && t.due_on < today).length;
     const badge = scoreBadge(g.todos.length, oc);
-    const taskRows = g.todos.slice(0, 15).map((t, i) => `<tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}"><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${i + 1}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${escape(stripEmDashes(t.content)).slice(0, 95)}</a></td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${escape((t.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned')}</td></tr>`).join('');
-    return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:14px"><div style="display:table;width:100%"><div style="display:table-cell"><div style="font-size:16px;font-weight:800;color:#1a365d">${escape(g.listName)}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${g.todos.length} open &middot; ${g.todos.filter((t) => t.tier === 'HUMAN').length} human &middot; ${g.todos.filter((t) => t.tier === 'AI').length} AI &middot; ${oc} overdue</div></div><div style="display:table-cell;text-align:right">${badge.html}</div></div>${nextH ? `<div style="margin-top:14px;background:#1c1917;color:white;padding:14px 16px;border-radius:8px;border-left:4px solid #fbbf24"><div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">Next human step blocking this list</div><a href="${nextH.app_url}" style="display:block;font-size:14px;color:white;text-decoration:none;font-weight:700;margin-top:4px">${escape(stripEmDashes(nextH.content))}</a><div style="margin-top:6px;font-size:11px;color:#cbd5e0">${duePill(nextH.due_on)} &middot; <strong style="color:white">${escape((nextH.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || nextH.suggestedOwner)}</strong></div></div>` : '<div style="margin-top:14px;padding:10px 14px;background:#dcfce7;border-radius:6px;font-size:12px;color:#166534">No human step blocking this list.</div>'}${nextA && nextA.id !== nextH?.id ? `<div style="margin-top:8px;padding:10px 14px;background:#dbeafe;border-radius:6px;font-size:11px;color:#1e3a8a"><strong>Next AI step:</strong> ${escape(stripEmDashes(nextA.content))} (due ${nextA.due_on || 'unset'}). Tag <code>@CB System</code> to execute.</div>` : ''}<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Open task sequence (top ${Math.min(15, g.todos.length)})</div><table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse"><thead><tr style="background:#1a365d"><th align="left" style="padding:8px 10px;color:white;font-size:10px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Owner</th></tr></thead><tbody>${taskRows}</tbody></table></div>`;
+    const recent = (analysis.completedByList?.get(g.listId) || []);
+
+    const taskRows = ordered.slice(0, 20).map((t, i) => {
+      const isNextHuman = firstNextHuman && t.id === firstNextHuman.id;
+      const rowBg = isNextHuman ? '#fef9c3' : (i % 2 === 0 ? '#f8fafc' : 'white');
+      const stateBadge = isNextHuman ? '<div style="font-size:10px;color:#92400e;margin-top:2px;font-weight:700">&larr; NEXT HUMAN STEP</div>' : '';
+      const owner = (t.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || (t.tier === 'AI' ? 'CB System' : 'unassigned');
+      return `<tr style="background:${rowBg}"><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${i + 1}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${escape(stripEmDashes(t.content)).slice(0, 95)}</a>${stateBadge}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${escape(owner)}</td></tr>`;
+    }).join('');
+
+    const recentRows = recent.slice(0, 5).map((r) =>
+      `<tr style="background:#f0fdf4"><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#166534">&#x2713;</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${r.app_url}" style="color:#1a365d;text-decoration:none">${escape(stripEmDashes(r.content)).slice(0, 95)}</a></td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(r.completed_at || '').slice(0, 10)}</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${escape(r.completedBy)}</td></tr>`).join('');
+
+    return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 22px;margin-bottom:14px">
+<div style="display:table;width:100%"><div style="display:table-cell"><div style="font-size:16px;font-weight:800;color:#1a365d">${escape(g.listName)}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${g.todos.length} open &middot; ${g.todos.filter((t) => t.tier === 'HUMAN').length} human &middot; ${g.todos.filter((t) => t.tier === 'AI').length} AI &middot; ${oc} overdue</div></div><div style="display:table-cell;text-align:right">${badge.html}</div></div>
+${firstNextHuman ? `<div style="margin-top:14px;background:#1c1917;color:white;padding:14px 16px;border-radius:8px;border-left:4px solid #fbbf24"><div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">Next human step blocking this list</div><a href="${firstNextHuman.app_url}" style="display:block;font-size:14px;color:white;text-decoration:none;font-weight:700;margin-top:4px">${escape(stripEmDashes(firstNextHuman.content))}</a><div style="margin-top:6px;font-size:11px;color:#cbd5e0">${duePill(firstNextHuman.due_on)} &middot; <strong style="color:white">${escape((firstNextHuman.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || firstNextHuman.suggestedOwner)}</strong></div><div style="margin-top:8px"><a href="${firstNextHuman.app_url}" style="display:inline-block;background:#fbbf24;color:#1c1917;padding:6px 12px;border-radius:5px;font-size:11px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Open ticket &rarr;</a></div></div>` : '<div style="margin-top:14px;padding:10px 14px;background:#dcfce7;border-radius:6px;font-size:12px;color:#166534">No human step blocking this list.</div>'}
+<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Task sequence (${g.todos.length} open, ordered by due date)</div>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse"><thead><tr style="background:#1a365d"><th align="left" style="padding:8px 10px;color:white;font-size:10px">#</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Due</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Tier</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Owner</th></tr></thead><tbody>${taskRows}</tbody></table>
+${recentRows ? `<div style="margin-top:14px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Recently completed (last 5)</div>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse"><thead><tr style="background:#14532d"><th align="left" style="padding:8px 10px;color:white;font-size:10px">&#x2713;</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Task</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">Completed</th><th align="left" style="padding:8px 10px;color:white;font-size:10px">By</th></tr></thead><tbody>${recentRows}</tbody></table>` : ''}
+</div>`;
   }).join('');
 
   const recentMsgRows = (analysis.recentMessages || []).slice(0, 5).map((m) => `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(m.created_at || '').slice(0, 10)}</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${m.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600">${escape(m.subject)}</a><div style="font-size:11px;color:#64748b;margin-top:2px">${escape(m.excerpt).slice(0, 200)}</div></td></tr>`).join('');
