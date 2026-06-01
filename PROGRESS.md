@@ -4829,3 +4829,16 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
 | `backend/src/scripts/sendAliAlcoholVisualSummary.js` | NEW. Email v1 HTML to Ali. |
 | `backend/src/scripts/sendAliAlcoholPdfV2.js` | NEW. Email v2 PDF to Ali (single inbox). |
 | `backend/src/scripts/sendAliAlcoholPdfAllInboxes.js` | NEW. Email PDF to all 3 of Ali's inboxes (resend). |
+
+- [x] **CB walker: pdf-parse v2 API fix + Coca-Cola context dossier demo.**
+  - Date: 2026-06-01
+  - Session: CC-20260601-k7x2
+  - What changed: `scripts/ops-engine/cb-context-walker.js` `extractPdf` now detects pdf-parse v2 class API (`new PDFParse({ data }).getText()`) and falls back to v1 function call. Without this, every PDF was returning ~46 chars instead of full content. `backend/src/scripts/buildCocaColaContextPdf.js` (NEW) synthesizes the Lahme correspondence + 10 use cases + Darrell quotes + June 4 sequencing + About Colaberry evolution into an 8.8 KB PDF, uploads to a new "CB Context Dossiers" Vault folder in Ali Personal (folder `9951810661`, upload `9951810672`), links from a comment on the Coca-Cola todo `9951791925` so the walker auto-fetches it on every @CB call.
+  - Verification: Ran walker against todo 9951791925 - fetched the PDF, extracted 7,256 chars, Darrell's "cost center to growth center" quote + Use Case 6 (AI Governance Workflow) both present in the LLM context. Commit `8b4c2281` pushed + deployed to VPS via `git pull`.
+  - Notes: Closes the CB context starvation gap raised in Ali's question on todo 9951791925. First attempt only used bc-attachment sgid (walker URL extractor missed it); switched to BC Vault upload so the https URL is detectable.
+
+- [x] **CB context architecture email to Ali.**
+  - Date: 2026-06-01
+  - Session: CC-20260601-k7x2
+  - What changed: `backend/src/scripts/sendAliCbContextArchitectureEmail.js` (NEW). HTML email explaining (1) current state (CB sees only Basecamp content via 4-layer walker, Gmail invisible), (2) what just shipped for Coca-Cola (Vault dossier, walker extracts 7,256 chars verified), (3) three options ranked: A per-account dossier PDF (just shipped, recommended), B nightly auto-refresh from Gmail, C live gmail_search tool inside CB, (4) ask: reply "go" to generate dossiers for the remaining 17 sales-rep tasks.
+  - Verification: Mandrill msg-id `83b76697-de33-b898-7ae4-35e66806456c` delivered to ali@colaberry.com + alimuwwakkil@gmail.com; reply-to `claude-code@reply.colaberry.ai`.
