@@ -12,6 +12,32 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Intern nudge templates: fix standard from 3/day to 3/week (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `backend/src/scripts/dailyInternNudges.js`. Every reference to "3 updates per day" / "3 updates/day" / "3 substantive updates per day" replaced with "3 updates per week" / "3 substantive updates per week". Affects: YELLOW/ORANGE/RED nudge templates (BC comment + email), BLACK exit email body, reinstatement protocol text. YELLOW nudge restructured: drops `todayCount`/`dailyTarget`/`todayShortfall` framing (which assumed a daily cadence); now just notes the dark-day count and says "stay on pace" against the weekly standard. Reinstatement protocol's commitment line: "miss a day" -> "miss a week".
+- Verification: `node -c` passes. Live in-place edit of Meghana's already-posted welcome comment on BC (todo 9950486302, comment 9950486397) via `PUT /buckets/24865175/comments/9950486397.json` - the comment now says "3 substantive updates per week" and notes the 2026-06-01 correction in the footer.
+- Notes: The dark-day thresholds (1-3 / 4-6 / 7-9 / 10+) are unchanged - they remain meaningful as activity-gap signals under the weekly standard. The cron schedule (Mon-Fri 5pm CDT) also unchanged.
+
+### Onboard Meghana Chowdary to BC (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: triggered by Swati's 2026-05-29 email + Dhee's 2026-06-01 "Please advise" forward, onboarded `b.meghana.chowdary02@gmail.com` to the Internship project.
+  - `backend/src/scripts/onboardMeghanaToInternship.js` (new): one-off orchestration. Reads source templates (todo 9732705547 "Sarbjit - New Internship Onboarding" + todo 9541162475 "OBI - Colaberry Internship Build System"), creates duplicates in destination lists 9506875341 + 9538503852 respectively, posts welcome comment tagging Meghana + Dhee + Ali.
+  - `backend/src/scripts/grantMeghanaBcAccess.js` (new): re-grants BC access using the `create` body format (the initial onboarding script used `grant` which returned empty). Got Meghana's BC person ID 52489233 + attached her as assignee on both todos.
+  - `backend/src/scripts/fixMeghanaWelcomeComment.js` (new): in-place edit of the welcome comment to correct "3 per day" -> "3 per week" per Ali's mid-session correction.
+  - `backend/src/scripts/sendDheeSwatiMeghanaOnboarded.js` (new): reply to Dhee + Swati on the "Basecamp access for Meghana" thread with the onboarding summary, both task URLs, what was communicated to Meghana, and the open CCPP-record thread (deferred - Meghana Chowdary has no CCPP user yet, ADF_ColaberryActiveUsers insert deemed too risky without tracing the upstream registration flow).
+  - Created: BC onboarding todo 9950486302, BC build-system todo 9950486363, welcome comment 9950486397 (edited).
+- Verification: All BC writes returned 200. Dhee/Swati reply Mandrill id `<e5a18cab-c0f1-c725-1a7f-20edfbb58ecb@colaberry.com>`.
+- Notes: CCPP add deferred - the two paths in the email are (a) Dhee adds her manually via normal provisioning OR (b) Claude Code builds the safe CCPP-add helper next. Today's onboarding does not block on CCPP - she has access + tasks + welcome comment + is ready to start. The new CB tool `add_intern_to_program` from Ali's same-day request is still to-do; this one-off script is the manual analog.
+
+### Auto-exit preview render emailed to Ali + prod nudge mode flipped to preview (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `backend/src/scripts/previewAutoExitRender.js` (new) - one-off render of three sample artifacts (intern exit email, daily digest with AUTO-EXITED TODAY block, BC notify todo description) emailed as a single combined preview to Ali. Sample uses fabricated "Sample Intern" with 11 days dark and a 5-event nudge history. Flipped prod `tmp/ops-engine/intern-nudge-mode.txt` from `live` to `preview` so tonight's 5pm CDT cron emails Ali the preview-only digest instead of actually executing exits. Audit log entry written to `tmp/ops-engine/intern-nudge-mode-log.jsonl`.
+- Verification: Mandrill id `<5d98603b-e209-6036-5ecd-475687069c94@colaberry.com>`.
+- Notes: Once Ali reviews + approves, he flips back to live via `@CB System set intern nudge mode live` in any BC thread.
+
 ### Intern nudge auto-exit at BLACK + reinstatement protocol + Ali+Dhee notification (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2

@@ -87,32 +87,32 @@ function nudgeFor(row) {
   const projects = row.projects.map((p) => p.title).join(', ');
   const todayShortfall = Math.max(0, row.dailyTarget - row.todayCount);
   if (row.level === 'YELLOW') {
-    const bc = `<div>${fn} The standard is 3 updates per day and your last activity was ${days} day${days === 1 ? '' : 's'} ago. Please add today's updates before end of day.</div>`;
-    const text = `${fn},\n\nThe program standard is 3 updates per day on your project. Your last activity in Basecamp was ${days} day${days === 1 ? '' : 's'} ago and you have ${row.todayCount} update${row.todayCount === 1 ? '' : 's'} today.\n\nPlease add your remaining ${todayShortfall} update${todayShortfall === 1 ? '' : 's'} before end of day.\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
+    const bc = `<div>${fn} You have gone ${days} day${days === 1 ? '' : 's'} without Basecamp activity. The program standard is 3 substantive updates per week. Please post today to stay on pace.</div>`;
+    const text = `${fn},\n\nYou have gone ${days} day${days === 1 ? '' : 's'} without Basecamp activity. The program standard is 3 substantive updates per week on your project. Please post today to stay on pace.\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
     return {
       bcHtml: bc,
-      emailSubject: `[Reminder] Your project needs 3 updates today (${row.todayCount}/${row.dailyTarget} so far)`,
-      emailHtml: `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55"><div>${fn},</div><div><br></div><div>The program standard is <strong>3 updates per day</strong> on your project. Your last activity in Basecamp was <strong>${days} day${days === 1 ? '' : 's'} ago</strong> and you have ${row.todayCount} update${row.todayCount === 1 ? '' : 's'} today.</div><div><br></div><div>Please add your remaining ${todayShortfall} update${todayShortfall === 1 ? '' : 's'} before end of day.</div><div><br></div><div>--<br><strong>CB System</strong><br>Ali Muwwakkil's executive agent<br>Colaberry Inc.</div></div>`,
+      emailSubject: `[Reminder] ${days} day${days === 1 ? '' : 's'} without Basecamp activity - stay on the 3/week pace`,
+      emailHtml: `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55"><div>${fn},</div><div><br></div><div>You have gone <strong>${days} day${days === 1 ? '' : 's'} without Basecamp activity</strong>. The program standard is <strong>3 substantive updates per week</strong> on your project. Please post today to stay on pace.</div><div><br></div><div>--<br><strong>CB System</strong><br>Ali Muwwakkil's executive agent<br>Colaberry Inc.</div></div>`,
       emailText: text,
     };
   }
   if (row.level === 'ORANGE') {
-    const bc = `<div>${fn} You are at ${days} days without activity. Per the program standard (3 updates/day), this is putting your seat at risk. Please post an update today and reply with anything blocking you.</div>`;
-    const text = `${fn},\n\nYou are at ${days} days without any Basecamp activity. The program standard is 3 updates per day on your project. At this point your seat is at risk.\n\nPlease post an update today. If something is blocking you, reply to this email and explain what you need.\n\nIf no activity by day 10 you will be processed out of the internship.\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
+    const bc = `<div>${fn} You are at ${days} days without activity. Per the program standard (3 updates per week), this is putting your seat at risk. Please post an update today and reply with anything blocking you.</div>`;
+    const text = `${fn},\n\nYou are at ${days} days without any Basecamp activity. The program standard is 3 substantive updates per week on your project. At this point your seat is at risk.\n\nPlease post an update today. If something is blocking you, reply to this email and explain what you need.\n\nIf no activity by day 10 you will be processed out of the internship.\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
     return {
       bcHtml: bc,
       emailSubject: `[Warning] ${days} days without activity - your internship spot is at risk`,
-      emailHtml: `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55"><div>${fn},</div><div><br></div><div>You are at <strong>${days} days without any Basecamp activity</strong>. The program standard is 3 updates per day on your project. At this point your seat is at risk.</div><div><br></div><div>Please post an update today. If something is blocking you, reply to this email and explain what you need.</div><div><br></div><div><strong>If no activity by day 10 you will be processed out of the internship.</strong></div><div><br></div><div>--<br><strong>CB System</strong><br>Ali Muwwakkil's executive agent<br>Colaberry Inc.</div></div>`,
+      emailHtml: `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55"><div>${fn},</div><div><br></div><div>You are at <strong>${days} days without any Basecamp activity</strong>. The program standard is <strong>3 substantive updates per week</strong> on your project. At this point your seat is at risk.</div><div><br></div><div>Please post an update today. If something is blocking you, reply to this email and explain what you need.</div><div><br></div><div><strong>If no activity by day 10 you will be processed out of the internship.</strong></div><div><br></div><div>--<br><strong>CB System</strong><br>Ali Muwwakkil's executive agent<br>Colaberry Inc.</div></div>`,
       emailText: text,
     };
   }
   if (row.level === 'RED') {
-    const bc = `<div>${fn} This is a formal warning. ${days} days without an update violates the program's 3 updates/day standard. At day 10 (${10 - days} day${10 - days === 1 ? '' : 's'} from now) you will be removed from the internship. Please reply today with either an update or a written reason.</div>`;
-    const text = `${fn},\n\nThis is a formal warning. You are at ${days} days without any Basecamp activity, in violation of the program's 3 updates per day standard.\n\nAt day 10 (${10 - days} day${10 - days === 1 ? '' : 's'} from now) your seat will be processed out of the internship, with a "No Call No Show" reason recorded.\n\nPlease respond today with either:\n  1. An update posted to your Basecamp project, OR\n  2. A written reason for the gap (reply to this email).\n\nSilence will be treated as voluntary exit.\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
+    const bc = `<div>${fn} This is a formal warning. ${days} days without an update violates the program's 3-updates-per-week standard. At day 10 (${10 - days} day${10 - days === 1 ? '' : 's'} from now) you will be removed from the internship. Please reply today with either an update or a written reason.</div>`;
+    const text = `${fn},\n\nThis is a formal warning. You are at ${days} days without any Basecamp activity, in violation of the program's 3-updates-per-week standard.\n\nAt day 10 (${10 - days} day${10 - days === 1 ? '' : 's'} from now) your seat will be processed out of the internship, with a "No Call No Show" reason recorded.\n\nPlease respond today with either:\n  1. An update posted to your Basecamp project, OR\n  2. A written reason for the gap (reply to this email).\n\nSilence will be treated as voluntary exit.\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
     return {
       bcHtml: bc,
       emailSubject: `[FORMAL WARNING] ${days} days dark - day 10 removal in ${10 - days} day${10 - days === 1 ? '' : 's'}`,
-      emailHtml: `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55"><div>${fn},</div><div><br></div><div><strong>This is a formal warning.</strong> You are at <strong>${days} days without any Basecamp activity</strong>, in violation of the program's 3 updates per day standard.</div><div><br></div><div>At day 10 (<strong>${10 - days} day${10 - days === 1 ? '' : 's'} from now</strong>) your seat will be processed out of the internship, with a "No Call No Show" reason recorded.</div><div><br></div><div>Please respond today with either:</div><ol><li>An update posted to your Basecamp project, OR</li><li>A written reason for the gap (reply to this email)</li></ol><div><strong>Silence will be treated as voluntary exit.</strong></div><div><br></div><div>--<br><strong>CB System</strong><br>Ali Muwwakkil's executive agent<br>Colaberry Inc.</div></div>`,
+      emailHtml: `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55"><div>${fn},</div><div><br></div><div><strong>This is a formal warning.</strong> You are at <strong>${days} days without any Basecamp activity</strong>, in violation of the program's 3-updates-per-week standard.</div><div><br></div><div>At day 10 (<strong>${10 - days} day${10 - days === 1 ? '' : 's'} from now</strong>) your seat will be processed out of the internship, with a "No Call No Show" reason recorded.</div><div><br></div><div>Please respond today with either:</div><ol><li>An update posted to your Basecamp project, OR</li><li>A written reason for the gap (reply to this email)</li></ol><div><strong>Silence will be treated as voluntary exit.</strong></div><div><br></div><div>--<br><strong>CB System</strong><br>Ali Muwwakkil's executive agent<br>Colaberry Inc.</div></div>`,
       emailText: text,
     };
   }
@@ -204,8 +204,8 @@ Hi Ali,
 [One paragraph concrete description of what is different now.]
 
 3) Commitment going forward
-I commit to posting at least 3 substantive updates per day on my Basecamp project, every weekday, starting [DATE].
-If I miss a day, I will email you proactively that morning explaining the reason before end-of-day.
+I commit to posting at least 3 substantive updates per week on my Basecamp project, starting [DATE].
+If I miss a week, I will email you proactively that week explaining the reason.
 
 4) Acknowledgment
 I understand that a second exit will be final and I will not be eligible for further reinstatement.
@@ -241,7 +241,7 @@ function buildExitEmailContent(internRow, ccppRecord, stateEntry) {
 
 <p>Your seat in the Colaberry internship program has been processed out today. The reason recorded in our system is <strong>"No Call No Show"</strong>.</p>
 
-<p><strong>Why this happened:</strong> The program standard is 3 substantive Basecamp updates per day on your project. You went <strong>${daysDark} days</strong> without any activity. The program has a hard day-10 exit cliff. You passed it.</p>
+<p><strong>Why this happened:</strong> The program standard is 3 substantive Basecamp updates per week on your project. You went <strong>${daysDark} days</strong> without any activity. The program has a hard day-10 exit cliff. You passed it.</p>
 
 <h3 style="color:#1a365d;margin-top:24px;border-bottom:2px solid #1a365d;padding-bottom:6px">Full nudge history</h3>
 <p>For full transparency, here is every nudge you received from CB System on this issue before today:</p>
@@ -258,7 +258,7 @@ ${reinstateHtml}
 
 Your seat in the Colaberry internship program has been processed out today. The reason recorded is "No Call No Show".
 
-Why: The program standard is 3 substantive Basecamp updates per day. You went ${daysDark} days without any activity. The program has a hard day-10 exit cliff. You passed it.
+Why: The program standard is 3 substantive Basecamp updates per week. You went ${daysDark} days without any activity. The program has a hard day-10 exit cliff. You passed it.
 
 Full nudge history:
 ${historyText}
@@ -277,8 +277,8 @@ Email ali@colaberry.com within 72 hours using the exact subject and structure be
      [One paragraph concrete description.]
 
   3) Commitment going forward
-     I commit to 3 substantive updates per day on my Basecamp project, every weekday, starting [DATE].
-     If I miss a day, I will email you proactively that morning before end-of-day.
+     I commit to 3 substantive updates per week on my Basecamp project, starting [DATE].
+     If I miss a week, I will email you proactively that week explaining the reason.
 
   4) Acknowledgment
      I understand that a second exit will be final and I will not be eligible for further reinstatement.
