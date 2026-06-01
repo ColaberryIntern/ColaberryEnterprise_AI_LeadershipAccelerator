@@ -87,11 +87,22 @@ function classifyUrl(url) {
 // =============================================================================
 
 async function extractPdf(buffer) {
-  const pdfParse = tryRequire('pdf-parse');
-  if (!pdfParse) return '[pdf-parse not installed - PDF text extraction skipped]';
+  const pdfMod = tryRequire('pdf-parse');
+  if (!pdfMod) return '[pdf-parse not installed - PDF text extraction skipped]';
   try {
-    const r = await pdfParse(buffer, { max: 30 }); // first 30 pages
-    return (r.text || '').slice(0, MAX_DOC_BYTES);
+    // pdf-parse v2 API (class-based): new PDFParse({ data: buffer }).getText()
+    if (pdfMod.PDFParse) {
+      const parser = new pdfMod.PDFParse({ data: buffer });
+      const r = await parser.getText();
+      return (r.text || '').slice(0, MAX_DOC_BYTES);
+    }
+    // pdf-parse v1 API (function): pdf(buffer).then(r => r.text)
+    const fn = pdfMod.default || pdfMod;
+    if (typeof fn === 'function') {
+      const r = await fn(buffer, { max: 30 });
+      return (r.text || '').slice(0, MAX_DOC_BYTES);
+    }
+    return '[pdf-parse module shape unrecognized]';
   } catch (e) { return `[pdf parse failed: ${e.message}]`; }
 }
 
