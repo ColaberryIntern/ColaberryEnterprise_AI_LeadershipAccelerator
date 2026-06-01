@@ -109,11 +109,19 @@ function tierPill(tier) {
 // Per-project fetch + analyze
 // =============================================================================
 
+function loadCbDraftedSet(projectId) {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.resolve(__dirname, `../../../tmp/cb-ai-runner-state-${projectId}.json`), 'utf8'));
+    return new Set(Object.keys(s.tasks || {}).map(String));
+  } catch { return new Set(); }
+}
+
 async function analyzeProject(p) {
   const project = await bcGet(`/projects/${p.id}.json`);
   const dock = project.dock || [];
   const todoset = dock.find((d) => d.name === 'todoset');
   const mb = dock.find((d) => d.name === 'message_board');
+  const cbDrafted = loadCbDraftedSet(p.id);
 
   // Pull all todolists + their open todos + recently-completed
   const lists = todoset ? await bcGetAll(`/buckets/${p.id}/todosets/${todoset.id}/todolists.json`) : [];
@@ -136,6 +144,7 @@ async function analyzeProject(p) {
           listId: list.id,
           listName: list.name,
           tier: classify(t.content, t.description),
+          cbDrafted: cbDrafted.has(String(t.id)),
         });
       }
       // Recently completed (last 7 days) per list
@@ -475,11 +484,18 @@ function renderHtmlV2(analysis, framing) {
     const badge = scoreBadge(g.todos.length, oc);
     const recent = (analysis.completedByList?.get(g.listId) || []);
 
+    // Restrict firstNextHuman to undrafted, since drafted AI tasks await human review separately
+    const firstNextHumanFiltered = ordered.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !t.cbDrafted);
     const taskRows = ordered.slice(0, 20).map((t, i) => {
-      const isNextHuman = firstNextHuman && t.id === firstNextHuman.id;
-      const rowBg = isNextHuman ? '#fef9c3' : (i % 2 === 0 ? '#f8fafc' : 'white');
-      const stateBadge = isNextHuman ? '<div style="font-size:10px;color:#92400e;margin-top:2px;font-weight:700">&larr; NEXT HUMAN STEP</div>' : '';
-      const owner = (t.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || (t.tier === 'AI' ? 'CB System' : 'unassigned');
+      const isNextHuman = firstNextHumanFiltered && t.id === firstNextHumanFiltered.id;
+      const isDrafted = t.cbDrafted;
+      const reviewerName = ((t.assignees || '').split(',').find((a) => !/CB System/i.test(a)) || 'Ali').trim().replace('Ali Muwwakkil', 'Ali');
+      const rowBg = isNextHuman ? '#fef9c3' : isDrafted ? '#eff6ff' : (i % 2 === 0 ? '#f8fafc' : 'white');
+      const stateBadge = isNextHuman ? '<div style="font-size:10px;color:#92400e;margin-top:2px;font-weight:700">&larr; NEXT HUMAN STEP</div>'
+        : isDrafted ? `<div style="font-size:10px;color:#1e40af;margin-top:2px;font-weight:700">DRAFTED BY CB - ${escape(reviewerName)} to review</div>`
+        : '';
+      const owner = isDrafted ? `${reviewerName} to review`
+        : ((t.assignees || '').replace(/Ali Muwwakkil/g, 'Ali') || (t.tier === 'AI' ? 'CB System' : 'unassigned'));
       return `<tr style="background:${rowBg}"><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;color:#64748b;font-weight:700;font-size:11px">${i + 1}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px"><a href="${t.app_url}" style="color:#1a365d;text-decoration:none;font-weight:600;font-size:12px">${escape(stripEmDashes(t.content)).slice(0, 95)}</a>${stateBadge}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${duePill(t.due_on)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px">${tierPill(t.tier)}</td><td style="border-bottom:1px solid #e2e8f0;padding:8px 10px;font-size:11px;color:#475569">${escape(owner)}</td></tr>`;
     }).join('');
 
