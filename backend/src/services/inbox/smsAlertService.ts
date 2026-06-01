@@ -1,10 +1,21 @@
 /**
- * SMS Alert Service for Inbox COS.
- * Sends text messages via T-Mobile email-to-SMS gateway.
+ * Inbox COS Alert Service.
+ *
+ * REPURPOSED 2026-06-01: previously sent SMS via T-Mobile email-to-SMS
+ * gateway (6825975784@tmomail.net). Ali asked to disable - the alerts
+ * were too frequent and the VIP alerts duplicated the new
+ * vipInboxWatcher -> Mandrill -> gmail push system.
+ *
+ * NEW: every alert now routes through Mandrill to alimuwwakkil@gmail.com.
+ * Gmail's mobile push notification is the alert (same UX as the VIP
+ * system). Subject line is engineered for lock-screen preview.
+ *
+ * Same callers, same alert content - just a different delivery rail.
  */
 import nodemailer from 'nodemailer';
 
-const LOG_PREFIX = '[InboxCOS][SMS]';
+const LOG_PREFIX = '[InboxCOS][Alert]';
+const ALERT_TO = process.env.INBOX_COS_ALERT_GMAIL || 'alimuwwakkil@gmail.com';
 
 const URGENT_KEYWORDS = [
   'urgent', 'asap', 'deadline', 'emergency', 'immediate',
@@ -12,36 +23,35 @@ const URGENT_KEYWORDS = [
   'overdue', 'final notice', 'last chance',
 ];
 
-function getTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  });
-}
-
-function getSmsTo(): string | null {
-  return process.env.INBOX_COS_SMS_TO || null;
-}
-
 async function sendSms(message: string): Promise<boolean> {
-  const to = getSmsTo();
-  if (!to) return false;
-
+  if (!process.env.MANDRILL_API_KEY) {
+    console.warn(`${LOG_PREFIX} MANDRILL_API_KEY missing - alert dropped`);
+    return false;
+  }
   try {
-    const transporter = getTransporter();
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || 'info@colaberry.com',
-      to,
-      text: message.slice(0, 160),
-      encoding: 'binary',
-      textEncoding: 'base64',
-      raw: `From: ${process.env.EMAIL_FROM || 'info@colaberry.com'}\r\nTo: ${to}\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\n${message.slice(0, 160)}`,
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com',
+      port: 587,
+      auth: {
+        user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com',
+        pass: process.env.MANDRILL_API_KEY,
+      },
     });
-    console.log(`${LOG_PREFIX} SMS sent: ${message.slice(0, 50)}...`);
+    // First line of the message becomes the subject (lock-screen preview).
+    const firstLine = message.split('\n')[0].slice(0, 90);
+    const restOfBody = message.split('\n').slice(1).join('\n').trim();
+    await transport.sendMail({
+      from: '"Inbox COS" <ali@colaberry.com>',
+      to: ALERT_TO,
+      subject: firstLine,
+      text: message,
+      html: `<div style="font-family:arial,sans-serif;line-height:1.55"><div style="background:#1c1917;color:white;padding:14px 18px;border-radius:6px"><div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">Inbox COS Alert</div><div style="font-size:14px;margin-top:6px">${firstLine.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div></div>${restOfBody ? `<div style="background:#f8fafc;border-left:4px solid #1a365d;padding:12px 14px;margin-top:10px;font-size:13px;color:#475569;white-space:pre-wrap">${restOfBody.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>` : ''}<div style="margin-top:12px;font-size:11px;color:#94a3b8">Inbox COS alert. Same UX as VIP alerts: gmail push hits your phone. SMS path (T-Mobile email-to-SMS) was disabled 2026-06-01.</div></div>`,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': 'high' },
+    });
+    console.log(`${LOG_PREFIX} alert routed to gmail: ${firstLine.slice(0, 50)}...`);
     return true;
   } catch (err: any) {
-    console.error(`${LOG_PREFIX} SMS failed: ${err.message}`);
+    console.error(`${LOG_PREFIX} alert send failed: ${err.message}`);
     return false;
   }
 }
