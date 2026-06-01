@@ -216,10 +216,17 @@ const WATCHED_BUCKETS_FALLBACK = [
 ];
 
 async function getWatchedBuckets() {
+  // CRITICAL: /projects.json?status=active returns 400 - BC's status param does
+  // NOT accept "active" (only "archived" or "trashed"). Active is the default
+  // when no status param is passed. This was the root cause of multiple
+  // "@CB silent" failures on projects added after the hardcoded WATCHED_BUCKETS
+  // list was written (Launch PMO bucket 47502609, etc.). Fixed 2026-06-01.
   try {
-    const projects = await bcGetAll('/projects.json?status=active');
+    const projects = await bcGetAll('/projects.json');
     if (Array.isArray(projects) && projects.length > 0) {
-      return projects.map((p) => p.id);
+      // Filter out trashed/archived explicitly in case the API ever changes default
+      const active = projects.filter((p) => !p.status || p.status === 'active');
+      return active.map((p) => p.id);
     }
     console.warn('  /projects.json returned empty; falling back to hardcoded list');
   } catch (e) {

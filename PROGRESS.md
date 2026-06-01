@@ -12,6 +12,16 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB systematic coverage: /projects.json fix + cb-coverage-check.js tool (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `scripts/ops-engine/inbound-dispatcher.js`: `getWatchedBuckets()` now calls `/projects.json` instead of `/projects.json?status=active`. BC's `status` param does NOT accept "active" - it returns 400 - only "archived" or "trashed" are valid. Active is the default when no param is passed. This was THE ROOT CAUSE of multiple "@CB silent" issues all day - projects added to BC after the hardcoded `WATCHED_BUCKETS_FALLBACK` list was written (Launch PMO bucket 47502609, plus 35+ others) were invisible to the dispatcher because the dynamic enumeration always failed back to the fallback list.
+  - `scripts/ops-engine/cb-coverage-check.js` (new): CLI tool that runs 12 deterministic checks against any BC URL or (bucketId, recId) and reports whether the dispatcher will catch a @CB mention on it. Checks include: bucket appears in /projects.json, project dock fetchable, dock has todoset + message_board, recording fetchable, parent list in todoset, list+todo updated_at in lookback, comments paginated + fetchable, recent comments exist, allowed-requester author present, @CB mention regex matches. Exits non-zero on any failure. Usage: `node scripts/ops-engine/cb-coverage-check.js <bc-url>` or `--all-active` for project enumeration audit.
+- Why: Ali tagged @CB at 6:12pm + 6:14pm on Launch PMO Curriculum todo 9946500342. Dispatcher logs showed 0 mentions found every tick. Probe revealed bucket 47502609 wasn't in the fallback list AND `/projects.json?status=active` was returning 400 (had been all day). Same root cause class as morning's "hardcoded WATCHED_BUCKETS" fix, but the dynamic-enumeration fix never actually worked because the URL had a bad param. After fix: coverage check on the failed todo passes 12 of 12 checks - dispatcher will catch it on next tick.
+- Verification: `node -c` passes. Coverage check tool tested live against the failed todo: PASS. After deploy, dispatcher will dynamically enumerate all 50 active projects every tick, no more "project not in fallback list" silent failures.
+- Notes: Today's 6 @CB-silent dispatcher bug classes (1: hardcoded WATCHED_BUCKETS; 2: bcGet single-page comments; 3: MB body scan missing; 4: dock.find returns first only; 5: ?status=active 400; 6: add bid N misrouting). The cb-coverage-check tool gives Ali a CLI to verify any BC URL is dispatcher-visible without needing to wait for a failure.
+
 ### CB add_gov_bid_by_number tool: parse numbered bid cards from prior MB UPDATE (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
