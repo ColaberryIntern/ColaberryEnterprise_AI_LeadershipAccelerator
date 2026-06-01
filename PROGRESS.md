@@ -12,6 +12,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB handler: fix 400-char comment truncation + page-1 fetch + add extract-verbatim rule (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `scripts/ops-engine/cb-system-handler.js` `fetchThreadContext()`: replaced single-page `bcGet` for comments with paginated Link-walking loop (same fix class as the dispatcher comments-pagination fix earlier today). Comments slice raised from `last 10` to `last 12`.
+  - `summarizeComments()`: per-comment truncation raised from **400 chars to 4000 chars**. This was the root cause of the ShipCES failure - CB's own 3982-char prior deliverable was being sliced to 400 chars before the LLM saw it, so when Ali asked to PDF it, the LLM hallucinated a single paragraph to fill the gap.
+  - System prompt: new "EXTRACTING PRIOR CONTENT" section above the ALWAYS-END line. Zero-tolerance instruction: when Ali references prior CB output ("PDF this," "format that," "include everything from your prior deliverable"), the LLM must COPY the prior text verbatim into the new artifact's parameters - never regenerate, summarize, or paraphrase. Names the ShipCES failure (todo 9946715864) by reference so the model has the negative example.
+  - `backend/src/scripts/fixShipCesQuoteEnginePdf.js` (new one-off): rebuilt the broken PDF from BC comment 9946730206 (the original 3982-char deliverable), parsed 34 semantic blocks via tokenized HTML scan, generated a properly-structured Letter-size PDF via pdfkit, uploaded as BC attachment, posted as a corrective comment on todo 9946715864 with note explaining why the earlier attempts were broken.
+- Why: Ali 2026-06-01 - "CB System doesn't seem to remember what it did in this ticket. Can we assess the knowledge base it is using in these different situations and make sure they are sufficient."
+- Verification: `node -c` passes. Broken PDF replaced via comment 9951571519. Handler fixes go live on next dispatcher tick after deploy.
+
 ### Gov bid: never re-recommend a used contract (used-UUID exclusion set) (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2

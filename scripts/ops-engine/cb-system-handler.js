@@ -80,6 +80,14 @@ When Ali asks to add Gov Contracts bids, FIRST determine whether he has already 
 Never call add_gov_bid when you do not have a real title + a real deadline. Placeholders defeat the purpose.
 - finish: terminates the loop. Call after your final basecamp_reply.
 
+EXTRACTING PRIOR CONTENT (zero tolerance for hallucinated regeneration)
+When Ali says "PDF this" / "format that" / "email me what you sent" / "include everything from your prior deliverable" / "put it in xlsx" or any reference to PRIOR CB OUTPUT in the thread:
+- READ the prior CB System comments in the thread context BLOCK BY BLOCK.
+- COPY the prior text VERBATIM into the new artifact (create_pdf sections[].body, create_xlsx sheets[].rows cells, etc.). Word-for-word, including bullets, structure, examples.
+- DO NOT regenerate, summarize, paraphrase, or substitute placeholder text. The 2026-06-01 ShipCES failure (todo 9946715864) was exactly this: CB regenerated a "small paragraph" PDF instead of copying its 3982-char prior deliverable. That is the worst failure mode.
+- If the prior deliverable is multi-section, the new PDF MUST have one section per logical block of the original. Section headings inherit from the prior structure.
+- If you genuinely cannot find the prior deliverable in your context window, say so explicitly in basecamp_reply and ask Ali to paste it. Do not fabricate.
+
 ALWAYS END WITH: basecamp_reply, then finish.`;
 
 const TOOLS = [
@@ -584,8 +592,22 @@ async function fetchThreadContext({ bcGet, bucketId, recId }) {
   let comments = [];
   try { recording = await bcGet(`/buckets/${bucketId}/recordings/${recId}.json`); } catch (_e) {}
   try {
-    const all = await bcGet(`/buckets/${bucketId}/recordings/${recId}/comments.json`);
-    comments = (Array.isArray(all) ? all : []).slice(-10);
+    // BC paginates comments at 15 per page, oldest-first. Walk Link headers
+    // to get the full set, then take the last 12 so we always include the
+    // most recent activity. Single-page bcGet would miss recent comments on
+    // any todo with more than 15 entries.
+    let next = `https://3.basecampapi.com/3945211/buckets/${bucketId}/recordings/${recId}/comments.json`;
+    const all = [];
+    while (next) {
+      const r = await fetch(next, { headers: { Authorization: `Bearer ${(process.env.BASECAMP_ACCESS_TOKEN || '').replace(/^bearer\s+/i, '')}`, 'User-Agent': 'Colaberry CB Handler', Accept: 'application/json' } });
+      if (!r.ok) break;
+      const page = await r.json();
+      if (!Array.isArray(page)) break;
+      all.push(...page);
+      const lh = (r.headers.get('link') || '').match(/<([^>]+)>;\s*rel="next"/);
+      next = lh ? lh[1] : null;
+    }
+    comments = all.slice(-12);
   } catch (_e) {}
   return { recording, comments };
 }
@@ -598,10 +620,18 @@ function summarizeRecording(r) {
 }
 
 function summarizeComments(comments, aliId) {
+  // CRITICAL: do NOT truncate to 400 chars. CB needs to see its own prior
+  // multi-paragraph deliverables verbatim so that when Ali asks to PDF /
+  // email / format the prior output, the LLM has the actual text to copy.
+  // Confirmed 2026-06-01 against ShipCES todo 9946715864 where CB's prior
+  // deliverable was 3982 chars - truncating to 400 caused the regenerated
+  // PDF to contain a single paragraph (LLM hallucinated to fill the gap).
+  // Cap each comment at 4000 chars (still defends gpt-4o input budget for a
+  // 12-comment window) instead.
   return comments.map((c) => {
     const who = c.creator?.id === aliId ? 'Ali' : (c.creator?.name || 'Other');
     const when = c.created_at;
-    const text = (c.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400);
+    const text = (c.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
     return `- [${when}] ${who}: ${text}`;
   }).join('\n');
 }
