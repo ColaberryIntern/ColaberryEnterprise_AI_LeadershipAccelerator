@@ -180,8 +180,17 @@ function _readTopOpportunities(count) {
   const allOppsPath = path.resolve(__dirname, '../../../../tmp/op-pulse/all-opps.json');
   try {
     const allOpps = JSON.parse(fs.readFileSync(allOppsPath, 'utf8'));
-    const today = new Date();
-    const active = (allOpps.data || []).filter((o) => o.closeDate && new Date(o.closeDate) > today);
+    // Filter window per Ali 2026-06-01: only pull opportunities at LEAST
+    // 10 days out (no rush jobs) and at MOST 365 days out (filters obvious
+    // 2035/2037 data errors in the Opp Pulse feed).
+    const now = Date.now();
+    const minClose = now + 10 * 86400000;
+    const maxClose = now + 365 * 86400000;
+    const active = (allOpps.data || []).filter((o) => {
+      if (!o.closeDate) return false;
+      const t = new Date(o.closeDate).getTime();
+      return t >= minClose && t <= maxClose;
+    });
     const top = active.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0)).slice(0, count);
     return { ok: true, top, activeTotal: active.length, dataFreshness: (allOpps.data?.[0]?.enrichedAt || '').slice(0, 10) };
   } catch (e) {
@@ -228,8 +237,8 @@ async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
   </div>
   ${summary ? `<div style="margin-top:16px;padding:12px 14px;background:#f8fafc;border-radius:6px;font-size:13px;color:#1f2937;font-style:italic;line-height:1.5">"${_escape(summary).slice(0, 280)}${summary.length > 280 ? '...' : ''}"</div>` : ''}
   <div style="margin-top:18px;display:block">
-    <a href="${oppPulseUrl}" style="display:inline-block;background:#1a365d;color:white;padding:9px 16px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;margin-right:8px">📂 Opp Pulse readiness &rarr;</a>
-    <a href="${bonfireUrl}" style="display:inline-block;background:#ffffff;color:#1a365d;padding:9px 16px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;border:1.5px solid #1a365d">🔗 Bonfire opportunity &rarr;</a>
+    <a href="${bonfireUrl}" style="display:inline-block;background:#1a365d;color:white;padding:10px 18px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;margin-right:10px;margin-bottom:6px">🔗 Step 1: Bonfire (download zip)</a>
+    <a href="${oppPulseUrl}" style="display:inline-block;background:#7c3aed;color:white;padding:10px 18px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;margin-bottom:6px">📂 Step 2: Opp Pulse (upload zip + screenshot)</a>
   </div>
 </div>`;
     }).join('');
@@ -249,19 +258,30 @@ async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
 
 ${cardsHtml}
 
-<div style="margin-top:32px;padding:20px 22px;background:#fffbeb;border:2px solid #f59e0b;border-radius:10px">
-  <div style="font-size:12px;font-weight:700;color:#78350f;letter-spacing:2px;text-transform:uppercase">⚠️ Before I can add these as projects</div>
-  <div style="font-size:14px;color:#78350f;margin-top:10px;font-weight:600">For each bid you want to pursue, do this in Opp Pulse:</div>
-  <ol style="font-size:13px;color:#1f2937;margin:14px 0 0;padding-left:24px;line-height:1.9">
-    <li>📂 Click the <strong>Opp Pulse readiness</strong> button on the card above to open the per-bid page.</li>
-    <li>⬇️ Download the RFP zip from the Bonfire link on that page.</li>
-    <li>⬆️ Upload the zip to the <strong>Documents section of that opportunity in Opp Pulse</strong>. <strong style="color:#7f1d1d">NOT to Basecamp.</strong> Upload in Opp Pulse only.</li>
-  </ol>
-  <div style="margin-top:16px;padding:12px 14px;background:#ffffff;border-radius:6px;border-left:4px solid #f59e0b;font-size:13px;color:#1f2937;line-height:1.6">
-    ✅ &nbsp;Once docs are in Opp Pulse, reply on this thread with the bid numbers you want, e.g. <code style="background:#fef3c7;padding:2px 6px;border-radius:3px;font-weight:700">@CB add bids 1, 3, 5</code> - I'll build the Basecamp projects with the 14-task template, due dates back-distributed from the deadline, and feasibility scoring.
+<div style="margin-top:32px;padding:22px 24px;background:#fffbeb;border:2px solid #f59e0b;border-radius:10px">
+  <div style="font-size:12px;font-weight:700;color:#78350f;letter-spacing:2px;text-transform:uppercase">⚠️ Three steps to add a bid</div>
+
+  <div style="margin-top:14px;display:block">
+    <div style="background:#ffffff;border-left:4px solid #1a365d;padding:14px 16px;margin-bottom:10px;border-radius:0 6px 6px 0">
+      <div style="font-size:11px;color:#1a365d;letter-spacing:1px;text-transform:uppercase;font-weight:700">🔗 Step 1 - Bonfire</div>
+      <div style="font-size:13px;color:#1f2937;margin-top:4px">Click the <strong>Bonfire</strong> button on the bid card. Login with the right account (Colaberry-only via vendor.bonfirehub.com, or Que's for joint bids). <strong>Download the RFP zip.</strong></div>
+    </div>
+    <div style="background:#ffffff;border-left:4px solid #7c3aed;padding:14px 16px;margin-bottom:10px;border-radius:0 6px 6px 0">
+      <div style="font-size:11px;color:#5b21b6;letter-spacing:1px;text-transform:uppercase;font-weight:700">📂 Step 2 - Opp Pulse</div>
+      <div style="font-size:13px;color:#1f2937;margin-top:4px">Click the <strong>Opp Pulse</strong> button. Upload <strong>both</strong> the RFP zip AND a screenshot of the Bonfire opportunity page to the Documents section of that opportunity. <strong style="color:#7f1d1d">In Opp Pulse, not Basecamp.</strong></div>
+    </div>
+    <div style="background:#ffffff;border-left:4px solid #16a34a;padding:14px 16px;border-radius:0 6px 6px 0">
+      <div style="font-size:11px;color:#166534;letter-spacing:1px;text-transform:uppercase;font-weight:700">✅ Step 3 - Reply here</div>
+      <div style="font-size:13px;color:#1f2937;margin-top:4px">Reply on this thread: <code style="background:#dcfce7;padding:2px 6px;border-radius:3px;font-weight:700">@CB add bids 1, 3, 5</code> (or whichever numbers you uploaded). I'll create the Basecamp project in Gov Contracts, generate + populate all 14 tasks from the RFP, back-distribute due dates from the deadline, score feasibility, and the AI starts on the AI-doable tasks immediately.</div>
+    </div>
   </div>
+
+  <div style="margin-top:16px;padding:14px 16px;background:#dcfce7;border-radius:6px;font-size:13px;color:#14532d;line-height:1.6">
+    🎯 <strong>End state:</strong> the contract is now tracked by the Gov Contracts process and shows up in your daily Gov Contracts report moving forward. Per-bid next human step, feasibility score, AI progress, due dates - all surfaced automatically.
+  </div>
+
   <div style="margin-top:12px;font-size:12px;color:#78350f;font-weight:700;text-align:center">
-    🚫 I cannot add a bid that does not yet have its documents in Opp Pulse - the docs are how I generate per-bid task descriptions.
+    🚫 I cannot add a bid until Steps 1 + 2 are complete - the zip and screenshot in Opp Pulse are how I generate the per-bid task descriptions.
   </div>
 </div>
 

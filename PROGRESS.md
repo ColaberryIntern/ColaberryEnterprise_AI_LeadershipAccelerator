@@ -12,6 +12,14 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov bid post v3: 10-day filter + workflow-ordered buttons + tracked-end-state (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `backend/src/scripts/lib/govBidOps.js`: `_readTopOpportunities()` filter window is now 10 days minimum, 365 days maximum. Drops rush jobs (under 10d, no time for the 14-task template + AI work) AND obvious 2035/2037 data errors in the Opp Pulse feed. 30 active in the current window vs 88 before. Button order swapped to match Ali's workflow: Step 1 navy = Bonfire (download zip), Step 2 purple = Opp Pulse (upload zip + screenshot). Footer rewritten as 3 numbered cards (navy/purple/green) tied to button colors, each with the exact action verb. New green "End state" callout: "the contract is now tracked by the Gov Contracts process and shows up in your daily Gov Contracts report moving forward."
+  - `backend/src/scripts/fixGovBidsMessageV3.js`: re-edited live msg 9950817863 in place + captured headless screenshot + emailed Ali the preview. Mandrill `<3698a4e3-c073-89d0-deb7-9b42898b2951@colaberry.com>`.
+- Why: Ali 2026-06-01 - "We should only be pulling things that have at least 10 days out. We need both the bonfire link and the Opportunity Pulse link because both need to be accessed... 1st you have to login to bonfire and download. Then go to opp pulse and upload the zip and a screenshot. Once those are done, then I should be able to add a comment to get it uploaded to Basecamp... This contract is now being tracked by the Gov process and I will see them in my reports moving fwd."
+
 ### Gov bid post v2: spacing + emojis + preview emailed (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
