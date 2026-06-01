@@ -439,8 +439,101 @@ async function finalizeBidsFromReply({ replyBody, addBidFn, processZipBidFn, bas
   return { results, parseWarnings, parsedCount: bids.length };
 }
 
+// =============================================================================
+// PARSE bid cards from a "Top N active opportunities" MB UPDATE that CB
+// previously posted via postGovBidDownloadInstructions. Used by the
+// add_gov_bid_by_number tool when Ali says "@CB add bid 5" or
+// "@CB add bids 1, 3, 5" referring to numbered cards.
+//
+// Returns: [{ number, title, agency, deadline, uuid, oppPulseUrl, bonfireUrl }]
+// =============================================================================
+function parseBidCardsFromMbUpdate(htmlContent) {
+  if (!htmlContent) return [];
+  // Normalize whitespace + HTML entities for stable regex matching
+  const c = String(htmlContent)
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+  // Each card starts with "Bid N of M" header text
+  const positions = [];
+  const headerRe = /Bid\s+(\d+)\s+of\s+(\d+)/gi;
+  let m;
+  while ((m = headerRe.exec(c)) !== null) {
+    positions.push({ num: parseInt(m[1], 10), start: m.index });
+  }
+  const cards = [];
+  for (let i = 0; i < positions.length; i++) {
+    const startIdx = positions[i].start;
+    const endIdx = i + 1 < positions.length ? positions[i + 1].start : c.length;
+    const chunk = c.slice(startIdx, endIdx);
+    // Title: text content of the bid-title div, typically right after "Bid N of M"
+    const titleMatch = chunk.match(/Bid\s+\d+\s+of\s+\d+[^<]*<\/div>\s*<div[^>]*>([^<]+)<\/div>/i)
+      || chunk.match(/<div[^>]*font-size:17px[^>]*>([^<]+)<\/div>/i);
+    // Agency: <strong> right after the building emoji
+    const agencyMatch = chunk.match(/<strong[^>]*>([^<]+)<\/strong>/);
+    // Deadline: <strong>YYYY-MM-DD</strong> after "Deadline:"
+    const deadlineMatch = chunk.match(/Deadline:\s*(?:<[^>]+>\s*)*([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+    // Opp Pulse + Bonfire links (the host part can be anything; we just want the UUID)
+    const oppPulseUrlMatch = chunk.match(/href="([^"]*\/admin\/bonfire\/[a-f0-9-]{36}[^"]*)"/i);
+    const uuidMatch = chunk.match(/admin\/bonfire\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    const bonfireUrlMatch = chunk.match(/href="(https?:\/\/[^"]*bonfirehub[^"]*)"/i);
+
+    cards.push({
+      number: positions[i].num,
+      title: titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : null,
+      agency: agencyMatch ? agencyMatch[1].replace(/\s+/g, ' ').trim() : null,
+      deadline: deadlineMatch ? deadlineMatch[1] : null,
+      uuid: uuidMatch ? uuidMatch[1].toLowerCase() : null,
+      oppPulseUrl: oppPulseUrlMatch ? oppPulseUrlMatch[1] : null,
+      bonfireUrl: bonfireUrlMatch ? bonfireUrlMatch[1] : null,
+    });
+  }
+  return cards;
+}
+
+// =============================================================================
+// ADD bids by number from a prior CB MB UPDATE. The caller passes the BC
+// message id of the UPDATE (typically the recId the user replied to) plus an
+// array of bid numbers. We fetch the message, parse the cards, and call
+// addBid per number. Returns a results array.
+// =============================================================================
+async function addBidsByNumber({ messageId, bidNumbers, bucketId = PROJECT_ID }) {
+  const msg = await bcGet(`/buckets/${bucketId}/messages/${messageId}.json`);
+  const cards = parseBidCardsFromMbUpdate(msg.content || '');
+  if (cards.length === 0) {
+    return { ok: false, error: `no bid cards found in message ${messageId}`, results: [] };
+  }
+  const results = [];
+  for (const num of bidNumbers) {
+    const card = cards.find((c) => c.number === num);
+    if (!card) {
+      results.push({ bidNumber: num, ok: false, error: `bid #${num} not found in parsed list (parsed ${cards.length} cards)` });
+      continue;
+    }
+    if (!card.title || !card.deadline) {
+      results.push({ bidNumber: num, ok: false, error: `incomplete parse for bid #${num} (missing title or deadline)`, parsed: card });
+      continue;
+    }
+    try {
+      const r = await addBid({
+        displayTitle: card.title,
+        deadline: card.deadline,
+        opportunityUuid: card.uuid,
+        agencyName: card.agency,
+        fitThesis: null,
+      });
+      results.push({ bidNumber: num, ok: true, parsed: card, ...r });
+    } catch (e) {
+      results.push({ bidNumber: num, ok: false, error: e.message, parsed: card });
+    }
+  }
+  return { ok: results.every((r) => r.ok), results };
+}
+
 module.exports = {
   scrapBid, addBid, postGovBidDownloadInstructions, finalizeBidsFromReply, STANDARD_TEMPLATE,
+  parseBidCardsFromMbUpdate, addBidsByNumber,
   // Used-UUID tracking (for backfill scripts + future tools)
   _readUsedUuids, _markUuidUsed, _usedUuidsPath,
 };

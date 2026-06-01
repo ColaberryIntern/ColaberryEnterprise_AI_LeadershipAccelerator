@@ -69,10 +69,23 @@ TOOL PICKING GUIDE
 - set_intern_nudge_mode: when Ali says "go live with nudges", "pause nudges", "enable intern nudges", "set nudge mode preview/live", or anything that flips the daily intern nudge cycle between digest-only (preview) and intern-facing (live). Updates a file on the VPS that the next scheduled run reads. ALWAYS follow this with a basecamp_reply confirming the change (what mode it was, what mode it is now, when it takes effect).
 - complete_todo: when Ali (or the requester) says "close this", "mark done", "complete it", "close out", "we're done here", or anything that resolves the ticket. Pass a closure_note explaining the reason - it gets posted as an auditable comment before completion. NEVER say "I will close this ticket" in a basecamp_reply without actually calling complete_todo in the same turn. Saying you will close it and then not closing it is the single worst failure pattern: Ali sees the promise, trusts you, then has to come back hours later and notice the ticket is still open. Either call complete_todo or do not promise to close.
 
-GOV BIDS - two-step add flow (IMPORTANT):
-When Ali asks to add Gov Contracts bids, FIRST determine whether he has already downloaded the RFP packages from Opportunity Pulse + Bonfire.
-- If Ali specified a SPECIFIC bid title + deadline (e.g., "add bid Harris County RFP 26_0075 deadline 2026-06-22") → he has the documents, call add_gov_bid directly with that info.
-- If Ali says generically "add N bids" / "find me N new gov bids" / "I want to add more" with NO titles + deadlines → he does NOT yet have the documents. Call post_gov_bid_download_instructions(count). This posts a Message Board UPDATE on Gov Contracts with download instructions. Then tell Ali in your basecamp_reply: "Posted instructions to the Message Board (link in the result). Once you have the zips downloaded, reply on that MB post with the title + deadline + agency for each bid and tag me again - I will build out the projects."
+GOV BIDS - three flows (IMPORTANT, read carefully):
+When Ali asks to add Gov Contracts bids, identify the SHAPE of the request:
+
+FLOW A (NUMBERED reference to prior list) - use add_gov_bid_by_number:
+- "@CB add bid 5" / "@CB add bids 1, 3, 5" / "go ahead and add bid 3" / any reference to numbered bid cards from a prior "Top N active opportunities" MB UPDATE that you posted earlier.
+- The CURRENT thread is the MB UPDATE itself (the user is replying on it). Call add_gov_bid_by_number({ bid_numbers: [5] }) or [1, 3, 5]. The tool parses the cards from the parent message deterministically and calls add_gov_bid per number.
+- CRITICAL: when the user says "add bid 5" or "add bid N" where N is a small number (1-9) AND the thread looks like a numbered-bids list, do NOT interpret N as the COUNT of bids to find. That is Flow C and re-runs the discovery step. Use Flow A.
+- After the tool returns, basecamp_reply with the BC project URL for each added bid (or per-bid error if any failed).
+
+FLOW B (SPECIFIC bid with full info) - use add_gov_bid directly:
+- "add bid Harris County RFP 26_0075 deadline 2026-06-22" / Ali pasted a specific title + deadline + agency.
+- He has the document. Call add_gov_bid(displayTitle, deadline, opportunityUuid?, agencyName?, fitThesis?) directly.
+
+FLOW C (DISCOVERY) - use post_gov_bid_download_instructions:
+- "find me 5 new gov bids" / "I want to add more bids" / "show me what's available" / NO specific titles + NO numbered references to a prior list.
+- He has NOT yet selected anything. Call post_gov_bid_download_instructions(count). Posts a new MB UPDATE with the top N opportunities + 3-step upload flow. Then tell Ali "Posted Top N opportunities to the MB. Once you've uploaded the zips + screenshots in Opp Pulse, reply on that post with the bid numbers (e.g. @CB add bids 1, 3, 5) and I'll build the projects."
+- When ambiguous between Flow A and Flow C: look at the current thread title/subject. If it's "Top N active opportunities..." you're in Flow A territory; "add bid 5" means card #5. If it's a fresh thread with no prior list, Flow C.
 - When Ali later replies with the list of bids (title + deadline + agency per bid), do NOT call add_gov_bid yourself N times - instead call finalize_gov_bids_from_reply(reply_body=<Ali's reply text>) ONCE. The deterministic parser inside that tool is more reliable than LLM extraction for multi-bid lists. After it returns, post a basecamp_reply listing each bid that landed (with its BC list URL + the "mode" it used: zip-aware or light) and any that failed (with the reason). If failures happened, give Ali the exact correction (e.g., "Mystery RFP - add deadline YYYY-MM-DD") so he can fix and re-tag you.
 - If Ali replies with ONLY ONE bid and a clean title+deadline (e.g., "@CB add bid Plano IT, deadline 2026-09-01"), you may call add_gov_bid directly OR finalize_gov_bids_from_reply (both work; finalize is fine for the single-bid case too).
 - Zip-aware mode: if Ali pastes a Basecamp Vault upload URL on a bid row (with "zip <url>" or just the bare URL), the finalize tool will download that zip, extract it, upload each file to a per-bid Docs & Files sub-folder, and create a richer todolist that links to each uploaded file. Mode will show as "zip-aware" in the per-bid result. If no zip is provided, the lighter 14-task template path runs ("mode": "light").
@@ -323,6 +336,24 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'add_gov_bid_by_number',
+      description: 'Add a specific numbered bid (or set of numbered bids) from a previously-posted "Top N active opportunities" Gov Contracts MB UPDATE. Use when the requester says "add bid N", "add bids X, Y, Z", "add bid 5 only", "go ahead and add bid 3", etc. - any reference to a numbered card in the prior list. The CURRENT thread MUST be that MB UPDATE itself (the requester replied on it). Parses the bid cards deterministically by number, extracts title + agency + deadline + Opp Pulse UUID, and calls add_gov_bid per number. DO NOT use post_gov_bid_download_instructions when the requester is referencing a numbered prior bid - that tool is only for the initial "find me N bids" request.',
+      parameters: {
+        type: 'object',
+        properties: {
+          bid_numbers: {
+            type: 'array',
+            items: { type: 'integer' },
+            description: 'Array of bid numbers to add. For "add bid 5" pass [5]. For "add bids 1, 3, 5" pass [1, 3, 5].',
+          },
+        },
+        required: ['bid_numbers'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'complete_todo',
       description: 'Mark a Basecamp todo as complete (close the ticket). Default closes the current todo (the one this @CB mention is on). Pass a different todo_id to close a related ticket in the same project. Use when the requester says "close this", "mark done", "complete", "close out", or has explicitly resolved the work described in the ticket. Posts a closure-note comment before flipping the completion flag so the close is auditable in the thread.',
       parameters: {
@@ -356,6 +387,7 @@ const ALI_ONLY_TOOLS = new Set([
   'exit_intern_preview',    // personnel preview
   'scrap_gov_bid',          // gov-bid-specific Ali ops
   'add_gov_bid',
+  'add_gov_bid_by_number',
   'post_gov_bid_download_instructions',
   'finalize_gov_bids_from_reply',
   'vip_list',
@@ -393,6 +425,18 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: html });
     sideEffects.repliedHtml = html;
     return { ok: true };
+  }
+
+  async function add_gov_bid_by_number({ bid_numbers }) {
+    try {
+      const { addBidsByNumber } = require(path.resolve(REPO, 'backend/src/scripts/lib/govBidOps'));
+      // The current recId IS the MB UPDATE the user replied on
+      const result = await addBidsByNumber({ messageId: recId, bidNumbers: bid_numbers || [], bucketId });
+      sideEffects.govBidsAddedByNumber = result;
+      return result;
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   }
 
   async function complete_todo({ todo_id, closure_note }) {
@@ -582,7 +626,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
   }
 
   return {
-    impls: { basecamp_reply, complete_todo, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, complete_todo, add_gov_bid_by_number, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }

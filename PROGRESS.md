@@ -12,6 +12,21 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB add_gov_bid_by_number tool: parse numbered bid cards from prior MB UPDATE (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `backend/src/scripts/lib/govBidOps.js`: new `parseBidCardsFromMbUpdate(html)` deterministically parses the "Top N active opportunities" MB UPDATE format (V3 layout) into `[{number, title, agency, deadline, uuid, oppPulseUrl, bonfireUrl}]`. Regex anchors on "Bid N of M" headers and walks each card's HTML chunk for title (font-size:17px div), agency (first strong), deadline (YYYY-MM-DD after "Deadline:"), and Opp Pulse UUID. New `addBidsByNumber({ messageId, bidNumbers, bucketId })` fetches the message, parses cards, calls `addBid` per number, returns per-number results. Both exported.
+  - `scripts/ops-engine/cb-system-handler.js`: new tool `add_gov_bid_by_number({ bid_numbers: [...] })` that calls `addBidsByNumber` against the current `recId` (the MB UPDATE the user replied on). Added to `ALI_ONLY_TOOLS`. Wired into `impls`.
+  - System prompt's gov-bids section rewritten as 3 flows:
+    - FLOW A: "@CB add bid N" / "@CB add bids X, Y, Z" → `add_gov_bid_by_number`. EXPLICITLY says "do NOT interpret N as the COUNT of bids to find."
+    - FLOW B: specific title + deadline → `add_gov_bid` directly.
+    - FLOW C: discovery ("find me N bids", no specifics) → `post_gov_bid_download_instructions`.
+    - Ambiguity rule: look at thread subject. If it's "Top N active opportunities..." → Flow A.
+  - `backend/src/scripts/runAddGovBid5.js` (new one-off): manually ran the new logic to add bid 5 (Tech Innovation Challenge - AI for Muni-code Search, City of Detroit, deadline 2026-06-12, UUID 7011f5af) from the Top-5 MB UPDATE msg 9950817863. Posted CB-styled correction comment on the thread explaining the misrouting + the shipped fix.
+- Why: Ali tagged `@CB add bid 5` at 22:55 expecting bid #5 from the prior list. CB called `post_gov_bid_download_instructions(count=5)` instead - re-posting download instructions. The LLM interpreted "5" as the count of bids to find. No tool or system prompt rule existed for the "numbered reference to prior list" intent.
+- Verification: parser confirmed against the live message: all 5 cards extracted with complete metadata. `addBidsByNumber` for [5] returned ok=true with the new BC list 9951731402. Correction comment posted (comment id in the recording URL).
+
 ### CB dispatcher: iterate ALL todosets + ALL message boards per project (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
