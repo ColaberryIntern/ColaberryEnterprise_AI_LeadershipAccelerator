@@ -12,6 +12,16 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov bid post: rewrite to focus on actual contracts + Opp Pulse upload flow (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `backend/src/scripts/lib/govBidOps.js` `postGovBidDownloadInstructions()` rewritten. Was: generic 6-step walkthrough (downloading, accounts, format examples) that BC truncated. Now: reads top N opportunities from `tmp/op-pulse/all-opps.json` (cached strategic feed), filters for active (closeDate > today), ranks by priorityScore, renders one card per bid (title, agency, deadline, est value, AI category, recommended product, priority/fit/automation scores, signals, raw text summary, Opp Pulse readiness link, Bonfire link). Tight footer is extremely clear: upload zips to the Documents section of each opportunity in Opp Pulse (NOT Basecamp), reply with bid numbers, CB builds the BC projects. Subject is now "Top N active opportunities from Opportunity Pulse".
+  - `backend/src/scripts/fixGovBidsMessage.js` (new one-off): edited live truncated MB message 9950817863 in place with the new format so Ali can use it now.
+- Why: Ali 2026-06-01 - "The message was cut off. It should focus on giving me the links in bonfire. Shorten the instructions. Spend most of the content on the contracts and what they are about and then give me the link to access on Opp Pulse. Then at the bottom, you leave a little note saying you can add them only after the files have been downloaded and added to the project in Opp Pulse and make it extremely clear where the documents need to be uploaded before you can add the project."
+- Verification: `node -c` passes. Live PUT on msg 9950817863 returned 200. New content 8824 chars vs prior bloat that hit BC's truncation limit.
+- Notes: Source data is cached strategic feed (last enriched ~2 weeks ago). For fresher data, the Bonfire scraper at `scripts/bonfireExplore3.js` re-fetches via Playwright-with-credentials. Doc upload location wording follows Ali's exact instruction: "Documents section of that opportunity in Opp Pulse (NOT Basecamp)".
+
 ### CB dispatcher: scan MB message bodies (not just comments) + backfill Gov Bids ask (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2

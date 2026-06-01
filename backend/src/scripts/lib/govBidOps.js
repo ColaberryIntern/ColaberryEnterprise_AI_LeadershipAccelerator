@@ -163,59 +163,83 @@ const OPPORTUNITY_PULSE_ALL = `${OPPORTUNITY_PULSE_BASE}/admin/bonfire`;
 const BONFIRE_ACCOUNT_LOGIN = 'https://account.bonfirehub.com/login';
 const BONFIRE_VENDOR_HUB = 'https://vendor.bonfirehub.com/opportunities';
 
+function _escape(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function _fmtMoney(n) {
+  if (!n) return '';
+  const v = parseInt(n, 10);
+  if (isNaN(v)) return '';
+  if (v >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
+  return '$' + v;
+}
+
+function _readTopOpportunities(count) {
+  const fs = require('fs');
+  const path = require('path');
+  const allOppsPath = path.resolve(__dirname, '../../../../tmp/op-pulse/all-opps.json');
+  try {
+    const allOpps = JSON.parse(fs.readFileSync(allOppsPath, 'utf8'));
+    const today = new Date();
+    const active = (allOpps.data || []).filter((o) => o.closeDate && new Date(o.closeDate) > today);
+    const top = active.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0)).slice(0, count);
+    return { ok: true, top, activeTotal: active.length, dataFreshness: (allOpps.data?.[0]?.enrichedAt || '').slice(0, 10) };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 async function postGovBidDownloadInstructions({ count, criteriaSummary }) {
   // Fetch the message board id from the project dock
   const proj = await bcGet(`/projects/${PROJECT_ID}.json`);
   const mb = proj.dock.find((d) => d.name === 'message_board');
   if (!mb) throw new Error('Message board not found on Gov Contracts project');
 
-  const subject = `Action: Download ${count} RFP package${count === 1 ? '' : 's'} from Opportunity Pulse`;
+  const subject = `Top ${count} active opportunit${count === 1 ? 'y' : 'ies'} from Opportunity Pulse`;
 
-  const content = `<div><strong>What CB needs from you next:</strong></div>
-<div>I cannot pull RFP packages on my own (Opportunity Pulse + Bonfire require a logged-in browser session). Walk the historical flow below; once you have the documents downloaded, reply on this post and I will build out the projects with the 14-task template, due dates back-distributed from the submission deadline, and feasibility scoring.</div>
-<div><br></div>
-<div><strong>Step-by-step (matches our historical process):</strong></div>
-<ol>
-<li><strong>Open the Opportunity Pulse strategic feed:</strong> <a href="${OPPORTUNITY_PULSE_STRATEGIC}">${OPPORTUNITY_PULSE_STRATEGIC}</a><br>
-${criteriaSummary ? `Pick ${count} ${criteriaSummary}.` : `Pick the ${count} opportunit${count === 1 ? 'y' : 'ies'} you want to pursue.`} The strategic page shows them already ranked.</li>
-<li><strong>For each opportunity, open its readiness page</strong> at <code>${OPPORTUNITY_PULSE_BASE}/admin/bonfire/&lt;uuid&gt;/submission-readiness</code>. Confirm: routing (Colaberry-only via vendor.bonfirehub.com vs joint with Que), submission deadline, and any pre-tailored analysis.</li>
-<li><strong>Click through to the agency Bonfire portal</strong> from the readiness page. Per-agency portals live at <code>{agency}.bonfirehub.com/opportunities/{numeric_id}</code> (e.g., <code>harriscountytx.bonfirehub.com/opportunities/228389</code>, <code>tdcj.bonfirehub.com/opportunities/234405</code>).</li>
-<li><strong>Login to Bonfire with the right account</strong> for the routing:
-<ul>
-<li>For Colaberry-only: <a href="${BONFIRE_ACCOUNT_LOGIN}">${BONFIRE_ACCOUNT_LOGIN}</a> (your colaberry account, vendor hub at <a href="${BONFIRE_VENDOR_HUB}">${BONFIRE_VENDOR_HUB}</a>)</li>
-<li>For joint with Que: Que's credentials (per the gov-bid-account-routing rule)</li>
-</ul></li>
-<li><strong>Download the full RFP zip</strong> from the agency portal for each opportunity.</li>
-<li><strong>Reply on this Message Board post</strong> with the following for each bid, and tag <strong>@CB System</strong> in your reply:
-<ul>
-<li><strong>Title</strong> (e.g., "Harris County - Agenda &amp; Meeting Management System (RFP 26_0075)")</li>
-<li><strong>Submission deadline</strong> (YYYY-MM-DD)</li>
-<li><strong>Agency</strong></li>
-<li><strong>Opportunity UUID</strong> (from the Opportunity Pulse URL)</li>
-<li><strong>Bonfire URL</strong> (the per-agency one you opened in step 3)</li>
-<li><em>Optional:</em> short fit thesis (1-2 sentences on why we're bidding)</li>
-<li><strong>Zip URL (optional but recommended):</strong> drop the RFP zip into the Gov Contracts Docs &amp; Files area, then paste the upload's Basecamp URL (looks like <code>https://3.basecamp.com/3945211/buckets/47346103/uploads/&lt;id&gt;</code>). If you include it as <code>zip &lt;url&gt;</code>, I will download the zip, upload each file to a per-bid sub-folder, and build a richer todolist that links every task to its source document. If you skip it, I will use the lighter 14-task generic template.</li>
-</ul>
-</li>
+  // Pull top N from the cached Opp Pulse strategic feed (priority-ranked).
+  // Per Ali 2026-06-01: post should focus on the actual contracts, not the
+  // generic walkthrough that BC truncated.
+  const oppResult = _readTopOpportunities(count);
+  let cardsHtml = '';
+  let footerNote = '';
+  if (oppResult.ok) {
+    cardsHtml = oppResult.top.map((o, i) => {
+      const oppPulseUrl = `https://op.colaberry.ai/admin/bonfire/${o.id}/submission-readiness`;
+      const bonfireUrl = o.sourceUrl || '';
+      const signals = (o.signals || []).join(' &middot; ');
+      const summary = o.rawText && o.rawText !== o.title ? o.rawText : (o.description || '');
+      const valueStr = _fmtMoney(o.estimatedValue);
+      return `<div style="border:1px solid #cbd5e0;border-radius:6px;padding:14px 16px;margin-top:12px;background:#ffffff">
+<div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase;font-weight:700">Bid ${i + 1} of ${count}</div>
+<div style="font-size:15px;font-weight:700;color:#1a365d;margin-top:4px">${_escape(o.title)}</div>
+<div style="font-size:12px;color:#475569;margin-top:4px"><strong>${_escape(o.agency || '')}</strong> &middot; Deadline <strong>${(o.closeDate || '').slice(0, 10)}</strong>${valueStr ? ` &middot; Est value ${valueStr}` : ''}</div>
+<div style="font-size:11px;color:#475569;margin-top:4px">Category: <strong>${_escape(o.aiCategory || '-')}</strong> &middot; Recommended product: <strong>${_escape(o.recommendedProduct || '-')}</strong></div>
+<div style="font-size:11px;color:#475569;margin-top:4px">Scores: priority <strong>${o.priorityScore || '?'}</strong> &middot; fit <strong>${o.fitScore || '?'}</strong> &middot; automation <strong>${o.automationPotential || '?'}</strong>${signals ? ` &middot; ${signals}` : ''}</div>
+${summary ? `<div style="font-size:12px;color:#1f2937;margin-top:8px;font-style:italic">${_escape(summary).slice(0, 280)}</div>` : ''}
+<div style="margin-top:10px;font-size:12px"><a href="${oppPulseUrl}" style="color:#1a365d;text-decoration:underline">Opp Pulse readiness &rarr;</a> &middot; <a href="${bonfireUrl}" style="color:#1a365d;text-decoration:underline">Bonfire opportunity &rarr;</a></div>
+</div>`;
+    }).join('');
+    footerNote = `<div style="margin-top:12px;font-size:11px;color:#94a3b8">Source: Opportunity Pulse strategic feed (cached ${oppResult.dataFreshness || 'recently'}, ${oppResult.activeTotal} active total). Bonfire account routing per the gov-bid-account-routing rule. Opp Pulse strategic page: <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#94a3b8">op.colaberry.ai/admin/strategic</a></div>`;
+  } else {
+    cardsHtml = `<div style="border:1px solid #fee2e2;border-radius:6px;padding:14px 16px;margin-top:12px;background:#fef2f2;color:#7f1d1d;font-size:13px">Could not read the cached Opp Pulse strategic feed (${_escape(oppResult.error)}). Open <a href="${OPPORTUNITY_PULSE_STRATEGIC}" style="color:#7f1d1d">${OPPORTUNITY_PULSE_STRATEGIC}</a> directly to pick ${count} ${criteriaSummary || 'opportunities'} and proceed with the upload flow below.</div>`;
+  }
+
+  const content = `<div>Top ${count} active opportunit${count === 1 ? 'y' : 'ies'} from Opportunity Pulse, ranked by priority score${criteriaSummary ? ` (${_escape(criteriaSummary)})` : ''}.</div>
+${cardsHtml}
+
+<div style="margin-top:18px;padding:14px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:0 6px 6px 0">
+<div style="font-size:12px;font-weight:700;color:#78350f;letter-spacing:1px;text-transform:uppercase">Before I can add these as projects</div>
+<div style="font-size:13px;color:#78350f;margin-top:6px">For each bid you want to pursue, do the following <strong>in Opp Pulse</strong>:</div>
+<ol style="font-size:13px;color:#1f2937;margin:8px 0 0;padding-left:20px">
+<li>Click "Opp Pulse readiness" above to open the per-bid page.</li>
+<li>Download the RFP zip from the Bonfire link on that page.</li>
+<li>Upload the zip to the <strong>Documents</strong> section of that opportunity in Opp Pulse (NOT to Basecamp - upload in Opp Pulse only).</li>
 </ol>
-<div><br></div>
-<div><strong>Format example for your reply (with zip - rich mode):</strong></div>
-<div style="background:#f1f5f9;border-left:3px solid #1a365d;padding:10px 14px;font-family:monospace;font-size:12px">
-&#64;CB System ready - here are the ${count} bid${count === 1 ? '' : 's'}:<br>
-1. Harris County - Agenda &amp; Meeting Management (RFP 26_0075), deadline 2026-06-22, agency Harris County TX, uuid 7011f5af-..., bonfire harriscountytx.bonfirehub.com/opportunities/228389, zip https://3.basecamp.com/3945211/buckets/47346103/uploads/9912345678<br>
-2. SLCC - Enterprise Analytics Platform (SLCC2026-M6006), deadline 2026-07-15, agency SLCC, uuid ..., bonfire ..., zip https://3.basecamp.com/3945211/buckets/47346103/uploads/...<br>
-3. ...
+<div style="font-size:13px;color:#1f2937;margin-top:8px">Once the docs are in Opp Pulse, reply to this thread with the bid number(s) you want to add (e.g. "@CB add bids 1, 3, 5") and I will build the per-bid Basecamp project with the 14-task template, due dates back-distributed from the deadline, and feasibility scoring.</div>
+<div style="font-size:12px;color:#78350f;margin-top:8px"><strong>I cannot add a bid that does not yet have its documents in Opp Pulse</strong> - the docs are how I generate the per-bid task descriptions.</div>
 </div>
-<div><br></div>
-<div><strong>Or without zip (light mode, generic template):</strong></div>
-<div style="background:#f8fafc;border-left:3px solid #94a3b8;padding:10px 14px;font-family:monospace;font-size:12px">
-&#64;CB System ready - here are the ${count} bid${count === 1 ? '' : 's'}:<br>
-1. Harris County - Agenda &amp; Meeting Management, deadline 2026-06-22, agency Harris County TX<br>
-2. SLCC - Enterprise Analytics Platform, deadline 2026-07-15, agency SLCC<br>
-3. ...
-</div>
-<div><br></div>
-<div style="font-size:12px;color:#64748b">For a single bid where you already know the title and deadline, you can skip this entire step and just tag <code>&#64;CB System add gov bid &lt;title&gt; deadline &lt;YYYY-MM-DD&gt;</code> directly.</div>`;
+${footerNote}`;
 
   const r = await bcPost(`/buckets/${PROJECT_ID}/message_boards/${mb.id}/messages.json`, {
     subject,
