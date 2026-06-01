@@ -337,6 +337,7 @@ async function buildExecSummary({ totalOpen, totalHuman, totalAi, overdueCount, 
   <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">📌 Ali Personal - Daily Decisions Report</div>
   <h1 style="margin:6px 0 8px;font-size:26px;font-weight:800;color:white">${totalHuman} decision${totalHuman === 1 ? '' : 's'} owed &mdash; ${escape(dateStr)}</h1>
   <div style="font-size:13px;color:#e2e8f0;line-height:1.6">${groups.length} active list${groups.length === 1 ? '' : 's'} &middot; ${totalOpen} open &middot; ${totalHuman} human-needed &middot; ${totalAi} AI-doable &middot; ${overdueTasks.length} overdue</div>
+  <div style="margin-top:14px"><a href="https://app.basecamp.com/3945211/projects/${ALI_PERSONAL}" style="display:inline-block;background:#fbbf24;color:#1c1917;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Open Ali Personal in Basecamp &rarr;</a></div>
 </td></tr>
 
 <tr><td style="background:#1c1917;color:white;padding:18px 32px">

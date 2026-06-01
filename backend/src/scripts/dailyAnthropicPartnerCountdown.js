@@ -127,6 +127,7 @@ ${bar(pctComplete)} ${pctComplete}%
 <div style="font-size:42px;font-weight:900;margin:6px 0 4px;color:white;line-height:1">${pctComplete}%</div>
 <div style="font-size:14px;color:#cbd5e0">${totalCompleted} of 40 course completions</div>
 <div style="margin:18px 0 0;background:rgba(255,255,255,0.15);border-radius:6px;height:14px;overflow:hidden"><div style="background:#10b981;height:100%;width:${pctComplete}%"></div></div>
+<div style="margin-top:18px"><a href="https://app.basecamp.com/3945211/projects/47477101" style="display:inline-block;background:#fbbf24;color:#1c1917;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Open Anthropic Partner Network in Basecamp &rarr;</a></div>
 </div>
 
 <div style="background:#fef3c7;border-bottom:1px solid #fde68a;padding:14px 28px;font-size:14px;color:#92400e;text-align:center">

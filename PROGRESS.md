@@ -12,6 +12,18 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Reports: project link in header + Opportunity Pulse 5-bids path in Gov Contracts footer (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed:
+  - `backend/src/scripts/dailyGovContractsAnalysis.js`: hero now has prominent yellow "Open Gov Contracts in Basecamp" CTA. "What you can do from here" footer reorganized: top row is the project link, second row is the new "Add new bids (Opportunity Pulse)" path - tag `@CB System find me N new gov bids`, get download instructions on the MB, reply with title + deadline + agency lines (zip-aware if Vault URL pasted), CB calls `finalize_gov_bids_from_reply` to build out per-bid project + todolist + Docs folder. Also added a "Scrap a bid" row pointing to the existing `@CB scrap bid` tool.
+  - `backend/src/scripts/dailyAliPersonalDecisionsReport.js`: hero now has "Open Ali Personal in Basecamp" CTA.
+  - `backend/src/scripts/dailyAnthropicPartnerCountdown.js`: hero now has "Open Anthropic Partner Network in Basecamp" CTA.
+  - `backend/src/scripts/dailyClientProjectsReport.js`: hero already had "Open project →" link (kept).
+  - `backend/src/scripts/lib/launchPmoDailyUpdate.js`: hero + per-area cards already have "Open in Basecamp" links (kept).
+- Why: Ali 2026-06-01: "Every report I have should have a link at a very minimum to the Project. I can't talk to CB System when I'm not on Basecamp." Plus: "yesterday we built something that would go find tasks in Opportunity Pulse so we can add new proposals. That path should be in the 'What You can do from here' part of the email."
+- Verification: `node -c` passes on all 3 edited files. Test Gov Contracts run sent `<9908b46d-50d4-2fb2-7d80-2a656a382b5d@colaberry.com>` to ali + alimuwwakkil + ram so Ali can follow the 5-proposals path.
+
 ### CB dispatcher: enumerate every project dynamically instead of hardcoded watch list (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
