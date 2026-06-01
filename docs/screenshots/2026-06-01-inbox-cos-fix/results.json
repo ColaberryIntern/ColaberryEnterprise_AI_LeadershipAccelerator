@@ -1,0 +1,71 @@
+[
+  {
+    "step": "Show Me click",
+    "url": "https://enterprise.colaberry.ai/api/admin/inbox/digest-action?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJiYXRjaF9pZCI6InZlcmlmeS0xNzgwMzQwOTcwMDg4IiwiZW1haWxfaWRzIjpbImExMTk4ZjNmLTkyMTktNDBkNS04NDQwLTg3N2RmNGExMTFiOCJdLCJpYXQiOjE3ODAzNDA5NzAsImV4cCI6MTc4MDQyNzM3MH0.NjJWjmDqeSU7bpwG_WaM1mKVzSY_PlI9fyAZkXcMS3E&emailId=a1198f3f-9219-40d5-8440-877df4a111b8&action=inbox",
+    "finalUrl": "https://enterprise.colaberry.ai/admin/login",
+    "expected": "should redirect to /admin/inbox?tab=decisions&emailId=...",
+    "ok": false,
+    "responseChain": [
+      {
+        "status": 302,
+        "url": "https://enterprise.colaberry.ai/api/admin/inbox/digest-action?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJiYXRjaF9pZCI6InZlcmlmeS0xNzgwMzQwOTcwMDg4IiwiZW1haWxfaWRzIjpbImExMTk4ZjNmLTkyMTktNDBkNS04NDQwLTg3N2RmNGExMTFiOCJdLCJpYXQiOjE3ODAzNDA5NzAsImV4cCI6MTc4MDQyNzM3MH0.NjJWjmDqeSU7bpwG_WaM1mKVzSY_PlI9fyAZkXcMS3E&emailId=a1198f3f-9219-40d5-8440-877df4a111b8&action=inbox"
+      },
+      {
+        "status": 200,
+        "url": "https://enterprise.colaberry.ai/admin/inbox?tab=decisions&emailId=a1198f3f-9219-40d5-8440-877df4a111b8"
+      },
+      {
+        "status": 200,
+        "url": "https://enterprise.colaberry.ai/static/css/main.c14eaebd.css"
+      },
+      {
+        "status": 200,
+        "url": "https://d3js.org/d3.v7.min.js"
+      },
+      {
+        "status": 200,
+        "url": "https://enterprise.colaberry.ai/static/js/main.91a7dea5.js"
+      },
+      {
+        "status": 200,
+        "url": "https://enterprise.colaberry.ai/colaberry-icon.png"
+      }
+    ],
+    "shot": "01-show-me-landing.png"
+  },
+  {
+    "step": "Dismiss click",
+    "url": "https://enterprise.colaberry.ai/api/admin/inbox/digest-action?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJiYXRjaF9pZCI6InZlcmlmeS0xNzgwMzQwOTc3NTY5IiwiZW1haWxfaWRzIjpbIjgzYTJhYzYxLWRmZDAtNGE5NS1hMWE2LTUzYWFhNjQwZDk4YSJdLCJpYXQiOjE3ODAzNDA5NzcsImV4cCI6MTc4MDQyNzM3N30.mn7-ylaMIYFP-yw8LbdBorU-rK0N4RxDO2XNobf3ubA&emailId=83a2ac61-dfd0-4a95-a1a6-53aaa640d98a&action=automation",
+    "finalUrl": "https://enterprise.colaberry.ai/api/admin/inbox/digest-action?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJiYXRjaF9pZCI6InZlcmlmeS0xNzgwMzQwOTc3NTY5IiwiZW1haWxfaWRzIjpbIjgzYTJhYzYxLWRmZDAtNGE5NS1hMWE2LTUzYWFhNjQwZDk4YSJdLCJpYXQiOjE3ODAzNDA5NzcsImV4cCI6MTc4MDQyNzM3N30.mn7-ylaMIYFP-yw8LbdBorU-rK0N4RxDO2XNobf3ubA&emailId=83a2ac61-dfd0-4a95-a1a6-53aaa640d98a&action=automation",
+    "expected": "Done! page with link to /admin/inbox (not /admin/inbox/decisions)",
+    "ok": true,
+    "linkHref": "https://enterprise.colaberry.ai/admin/inbox",
+    "shot": "02-dismiss-done-page.png"
+  },
+  {
+    "step": "Keep Holding click",
+    "url": "https://enterprise.colaberry.ai/api/admin/inbox/digest-action?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJiYXRjaF9pZCI6InZlcmlmeS0xNzgwMzQwOTc4MjQyIiwiZW1haWxfaWRzIjpbIjA1ZTU4Nzk4LWM0ZjMtNDI4YS05OWRkLTJkMThiOTYwZTYyYiJdLCJpYXQiOjE3ODAzNDA5NzgsImV4cCI6MTc4MDQyNzM3OH0.rv_N6D9XMgsbQW9Df74Uy7Ve9kvxemWVKfeblw-rv5o&emailId=05e58798-c4f3-428a-99dd-2d18b960e62b&action=hold",
+    "finalUrl": "https://enterprise.colaberry.ai/api/admin/inbox/digest-action?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJiYXRjaF9pZCI6InZlcmlmeS0xNzgwMzQwOTc4MjQyIiwiZW1haWxfaWRzIjpbIjA1ZTU4Nzk4LWM0ZjMtNDI4YS05OWRkLTJkMThiOTYwZTYyYiJdLCJpYXQiOjE3ODAzNDA5NzgsImV4cCI6MTc4MDQyNzM3OH0.rv_N6D9XMgsbQW9Df74Uy7Ve9kvxemWVKfeblw-rv5o&emailId=05e58798-c4f3-428a-99dd-2d18b960e62b&action=hold",
+    "expected": "Done! page with link to /admin/inbox",
+    "ok": true,
+    "linkHref": "https://enterprise.colaberry.ai/admin/inbox",
+    "shot": "03-hold-done-page.png"
+  },
+  {
+    "step": "Click Open Admin Console",
+    "url": "https://enterprise.colaberry.ai/api/admin/inbox/digest-action?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJiYXRjaF9pZCI6InZlcmlmeS0xNzgwMzQwOTgxMDQwIiwiZW1haWxfaWRzIjpbIjgzYTJhYzYxLWRmZDAtNGE5NS1hMWE2LTUzYWFhNjQwZDk4YSJdLCJpYXQiOjE3ODAzNDA5ODEsImV4cCI6MTc4MDQyNzM4MX0.GraEZ6IbyOZ3AEjQCB0hr7pCdrhWir8gj-4T4FOyuHk&emailId=83a2ac61-dfd0-4a95-a1a6-53aaa640d98a&action=automation",
+    "finalUrl": "https://enterprise.colaberry.ai/admin/inbox",
+    "expected": "lands on /admin/inbox - either page or login redirect, not 404",
+    "ok": true,
+    "status": 200,
+    "shot": "04-after-click-open-admin-console.png"
+  },
+  {
+    "step": "Control: direct /admin/inbox/decisions",
+    "url": "https://enterprise.colaberry.ai/admin/inbox/decisions",
+    "finalUrl": "https://enterprise.colaberry.ai/admin/inbox/decisions",
+    "expected": "the OLD route - shows whatever the SPA does for an unknown sub-route",
+    "ok": null,
+    "shot": "05-old-broken-path-control.png"
+  }
+]

@@ -12,6 +12,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Inbox COS digest action: fix broken link + 302 Show Me to admin inbox + headless verify (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `backend/src/controllers/inboxController.ts` `handleDigestAction()`. Two bugs in one fix:
+  1. The "Open Admin Console" link on the Done page linked to `/admin/inbox/decisions` which is NOT a real frontend route - the actual route is `/admin/inbox` (with internal tabs). Clicking the link hit the SPA's catch-all and looked broken.
+  2. "Show Me" (action=inbox) used to show a "Done!" interstitial confirmation page. That extra click is what surfaced the broken link to Ali. Now it 302-redirects directly to `/admin/inbox?tab=decisions&emailId=<id>` after the state update.
+- Dismiss + Keep Holding (action=automation, hold) still show the Done page because the action is terminal, but now with the corrected `/admin/inbox` link.
+- Verification: `backend/src/scripts/verifyInboxCosDigestFlow.js` (new) - headless Playwright walkthrough against live prod. 5 steps captured: Show Me lands on `/admin/inbox?tab=decisions&emailId=...` (status 200), Dismiss + Keep Holding both render Done page with linkHref `/admin/inbox`, clicking the link lands on `/admin/inbox` status 200, plus a control screenshot of the old broken `/admin/inbox/decisions` path. Screenshots saved to `docs/screenshots/2026-06-01-inbox-cos-fix/`. 4 of 4 expected outcomes PASS.
+- `backend/src/scripts/sendInboxCosFixVerificationEmail.js` (new): emails Ali the verification report with 5 base64-inlined screenshots + per-step expected/actual/PASS-FAIL. Mandrill id `<1fa9360f-6305-cd1e-fe15-80417ca92640@colaberry.com>`.
+- Notes: Backend rebuild deployed via `docker compose up -d --build backend` on the VPS. Commit `934a679f`.
+
 ### Reports: project link in header + Opportunity Pulse 5-bids path in Gov Contracts footer (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
