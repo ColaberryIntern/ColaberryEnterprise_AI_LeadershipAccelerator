@@ -50,14 +50,29 @@ function saveState(s) { fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true
 function stripHtml(s) { return (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); }
 function stripEm(s) { return (s || '').replace(/—/g, '-').replace(/–/g, '-'); }
 
-// AI-tier classifier (same patterns as dailyClientProjectsReport).
-const AI_RES = [/draft|generate|write|compile|summarize|extract/i, /build|code|implement|develop|deploy/i, /test|qa|validate.*data/i, /analyze|analysis|score|rank|rate/i, /research|investigate|find/i, /design|wireframe|prototype|mock/i, /pull|fetch|retrieve|sync|migrate/i, /document|update.*docs|create.*spec/i];
-const HUMAN_RES = [/meeting|sync|call|demo|review with|present to/i, /decide|approval|approve|sign.off|authorize/i, /negotiate|relationship|escalate|client (call|response)/i, /pay|invoice|wire|contract|legal|sow|nda/i];
+// Tier classifier - defaults to AI unless content clearly matches a
+// human-only pattern (meeting, approval, signature, payment, hire). This
+// lets CB draft first-pass content for any task that COULD benefit from
+// AI prep, even outbound communications (drafted, never sent by CB).
+//
+// Per Ali (2026-06-01): "make it to where if AI is owner and task isn't
+// clearly human-only, CB drafts. Status emails / follow-ups / requests
+// all qualify - CB drafts, human reviews + sends."
+const HUMAN_ONLY_RES = [
+  /\b(meeting|sync|call|demo|attend|join)\b/i,
+  /\b(approval|approve|sign[- ]?off|signoff|authorize|notarize|sign\b)/i,
+  /\b(negotiate|interview|hire|onboard)/i,
+  /\b(pay|invoice|wire|contract|legal|nda|sow)\b/i,
+  /\b(present to|review with)\b/i,
+];
 function isAi(content, description, assignees) {
   const text = ((content || '') + ' ' + stripHtml(description || '')).toLowerCase();
-  if (HUMAN_RES.some((r) => r.test(text))) return false;
-  if (AI_RES.some((r) => r.test(text))) return true;
-  return (assignees || []).some((n) => /CB System/i.test(n));
+  // Hard exclusions: clearly human-only
+  if (HUMAN_ONLY_RES.some((r) => r.test(text))) return false;
+  // Everything else: default to AI. CB will draft; human reviews + sends
+  // anything outbound. Outbound communications get tagged "[DRAFT -
+  // <reviewer> reviews + sends]" by the gpt-4o system prompt.
+  return true;
 }
 
 const APPROVE_VERBS_RE = /^(review and approve|review|approve|finalize|sign[- ]?off|conduct (final )?review)\s+/i;

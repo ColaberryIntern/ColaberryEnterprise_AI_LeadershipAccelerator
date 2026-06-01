@@ -76,9 +76,12 @@ function classify(content, description) {
   const text = (content + ' ' + stripHtml(description)).toLowerCase();
   const humanScore = HUMAN_PATTERNS.reduce((s, p) => s + (p.test(text) ? 1 : 0), 0);
   const aiScore = AI_PATTERNS.reduce((s, p) => s + (p.test(text) ? 1 : 0), 0);
-  if (humanScore > aiScore) return 'HUMAN';
+  // If clearly human-tier (multiple human patterns, or human > AI), mark HUMAN
+  if (humanScore > aiScore && humanScore > 0) return 'HUMAN';
   if (aiScore > 0) return 'AI';
-  return 'EITHER';
+  // Default: AI. Per Ali 2026-06-01 - if it's not clearly human-only, CB
+  // can draft a first pass. Email badges align with runner's tier logic.
+  return 'AI';
 }
 function suggestOwner(content, assignees) {
   const c = content.toLowerCase();
