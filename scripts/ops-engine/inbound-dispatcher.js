@@ -278,6 +278,37 @@ async function findNewMentions(state) {
       if (Array.isArray(messages)) {
         for (const msg of messages.slice(0, 10)) {
           if (msg.updated_at && new Date(msg.updated_at).getTime() < cutoffMs) continue;
+          // CRITICAL: scan the message body itself, not just comments on it.
+          // Ali's 2026-06-01 "@CB find me 5 new gov bids" was posted as a NEW
+          // MB message ("New Bids" / bucket 47346103 / msg 9950734082), not
+          // as a comment on an existing one. Without this body scan the
+          // dispatcher walks right past it. Same bug class as the earlier
+          // pagination + hardcoded-buckets misses.
+          try {
+            const fullMsg = msg.content
+              ? msg
+              : await bcGet(`/buckets/${bucketId}/messages/${msg.id}.json`);
+            const created = new Date(fullMsg.created_at || msg.created_at).getTime();
+            if (created >= cutoffMs
+                && ALLOWED_REQUESTER_IDS.has(fullMsg.creator?.id ?? msg.creator?.id)
+                && isCBMention(fullMsg.content || '')) {
+              const key = `${bucketId}-msg-${msg.id}`;
+              if (!state.processed[key]) {
+                newMentions.push({
+                  bucketId,
+                  recId: msg.id,
+                  comment: {
+                    id: msg.id,
+                    content: fullMsg.content || '',
+                    creator: fullMsg.creator || msg.creator,
+                    created_at: fullMsg.created_at || msg.created_at,
+                  },
+                  key,
+                });
+              }
+            }
+          } catch (_e) {}
+          // Then scan comments on the message
           await scanRecordingComments({ bucketId, recId: msg.id, cutoffMs, state, newMentions });
         }
       }

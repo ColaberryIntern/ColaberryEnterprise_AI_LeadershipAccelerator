@@ -12,6 +12,14 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### CB dispatcher: scan MB message bodies (not just comments) + backfill Gov Bids ask (2026-06-01)
+- Date: 2026-06-01
+- Session: CC-20260601-k7x2
+- What changed: `scripts/ops-engine/inbound-dispatcher.js` `findNewMentions()` now scans the BODY of each recent message board message for @CB mentions, not just comments on it. Before this fix, the dispatcher only iterated `scanRecordingComments()` per MB message, which meant a NEW MB post (zero comments) containing @CB in the body was invisible. Same bug class as the earlier comments-pagination miss + the hardcoded-WATCHED_BUCKETS miss earlier today.
+- Why: Ali posted "New Bids" MB message (bucket 47346103, msg 9950734082) with body `@CB find me 5 new gov bids`. Dispatcher walked past it. Third "@CB silent" issue in one day, all dispatcher-visibility bugs.
+- `backend/src/scripts/backfillGovBidsCbReply.js` (new): posted CB's missing reply as a comment on Ali's New Bids message (comment 9950808379). Includes the 6-step Opportunity Pulse + Bonfire download flow + reply format (zip-aware rich mode vs light 14-task generic). Equivalent to what `post_gov_bid_download_instructions` would have built, but as a reply on the existing thread instead of a new MB UPDATE.
+- Verification: `node -c` passes on dispatcher. Backfill comment posted (status 201).
+
 ### Inbox COS digest action: fix broken link + 302 Show Me to admin inbox + headless verify (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
