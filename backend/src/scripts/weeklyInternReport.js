@@ -320,7 +320,7 @@ ${renderInline('GREEN', green)}
     const r = await transport.sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
-      cc: 'alimuwwakkil@gmail.com',
+      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
       subject, text, html,
       headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': totals.black > 0 ? 'high' : 'normal', 'X-Priority': totals.black > 0 ? '1' : '3' },
     });

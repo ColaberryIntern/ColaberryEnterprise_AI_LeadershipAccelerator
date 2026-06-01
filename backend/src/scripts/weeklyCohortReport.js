@@ -37,7 +37,7 @@ const TIER_HIGH_PCTILE = 0.75;
 
 const OUTPUT_DIR = path.resolve(__dirname, '../../../tmp/cohort-reports');
 const ALI_EMAIL = 'ali@colaberry.com';
-const CC_EMAIL = 'alimuwwakkil@gmail.com';
+const CC_EMAIL = ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
 
 function stripEmDashes(s) { return (s || '').replace(/—/g, '-').replace(/–/g, '-'); }
 function shortDate(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }

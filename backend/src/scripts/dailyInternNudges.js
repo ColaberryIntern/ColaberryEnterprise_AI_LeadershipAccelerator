@@ -132,7 +132,7 @@ async function postBcComment(row, html) {
   return results;
 }
 
-async function sendEmail({ to, subject, html, text, replyTo, bypassNoEmail = false }) {
+async function sendEmail({ to, cc, subject, html, text, replyTo, bypassNoEmail = false }) {
   if (DRY) return { messageId: 'dry' };
   if (NO_EMAIL && !bypassNoEmail) return { messageId: 'no-email-flag' };
   validateBeforeSend(html, text);
@@ -142,7 +142,7 @@ async function sendEmail({ to, subject, html, text, replyTo, bypassNoEmail = fal
   });
   return await transport.sendMail({
     from: '"Colaberry CB System" <ali@colaberry.com>',
-    to, replyTo: replyTo || 'ali@colaberry.com',
+    to, cc, replyTo: replyTo || 'ali@colaberry.com',
     subject, html, text,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
   });
@@ -214,6 +214,7 @@ ${interactionBlock}
   try {
     await sendEmail({
       to: 'ali@colaberry.com',
+      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
       subject: `[Intern Nudges]${previewMode ? ' [PREVIEW]' : ''} ${allSent.BLACK.length} BLACK, ${allSent.RED.length} RED, ${allSent.ORANGE.length} ORANGE, ${allSent.YELLOW.length} YELLOW`,
       html: stripEmDashes(html),
       text: stripEmDashes(text),

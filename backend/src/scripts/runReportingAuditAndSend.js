@@ -23,14 +23,17 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const { auditAll } = require('./lib/reportingPreflight');
+const { REPORTS: REGISTRY, shouldFireToday } = require('./lib/reportingRegistry');
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 
 const AUDIT_ONLY = process.argv.includes('--audit-only');
+const FORCE_ALL = process.argv.includes('--force-all'); // Ignore cadence; fire every report once
 const REPO = path.resolve(__dirname, '../../..');
 
-// ---------------- Report registry ----------------
-const REPORTS = [
+// ---------------- Report registry (LEGACY inline copy - now driven by lib/reportingRegistry.js) ----------------
+// Kept here for reference; the active list is REGISTRY imported above.
+const REPORTS_LEGACY_UNUSED = [
   {
     name: 'Launch PMO',
     scriptPath: 'backend/src/scripts/runLaunchPmoDailyUpdate.js',
@@ -90,6 +93,28 @@ const REPORTS = [
     recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'] },
     cbRunnerState: null,
     skipFlag: '--skip-anthropic',
+  },
+  {
+    name: 'Intern Daily Nudges (BLACK/RED/ORANGE digest)',
+    scriptPath: 'backend/src/scripts/dailyInternNudges.js',
+    args: [],
+    projectId: 24865175, // Internship / Apprenticeship Projects
+    needsOpenai: true,
+    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'] },
+    cbRunnerState: null,
+    skipFlag: '--skip-intern',
+  },
+  {
+    name: 'Intern Weekly Report (last 10 days activity)',
+    scriptPath: 'backend/src/scripts/weeklyInternReport.js',
+    args: [],
+    projectId: 24865175,
+    needsOpenai: true,
+    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'] },
+    cbRunnerState: null,
+    skipFlag: '--skip-intern',
+    // Weekly cadence: only run on Mondays unless --force-intern-weekly passed
+    onlyOnDayOfWeek: 1,
   },
 ];
 
@@ -191,9 +216,18 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   const now = new Date();
   console.log(`[audit] start ${now.toISOString()}`);
 
-  // Filter reports based on skip flags
-  const active = REPORTS.filter((r) => !process.argv.includes(r.skipFlag));
+  // Filter reports by:
+  //   1. cadence (daily fires every weekday cron; weekly fires only on its dayOfWeek)
+  //   2. skip flags (manual override)
+  //   3. --force-all (ignore cadence)
+  const active = REGISTRY
+    .filter((r) => FORCE_ALL || shouldFireToday(r, now))
+    .filter((r) => !process.argv.includes(r.skipFlag));
+  const skippedForCadence = REGISTRY.filter((r) => !FORCE_ALL && !shouldFireToday(r, now));
   console.log(`[audit] active: ${active.map((r) => r.name).join(', ')}`);
+  if (skippedForCadence.length) {
+    console.log(`[audit] skipped (off-cadence today): ${skippedForCadence.map((r) => `${r.name} (${typeof r.cadence === 'object' ? `day=${r.cadence.dayOfWeek}` : r.cadence})`).join(', ')}`);
+  }
 
   // 1. Preflight all
   const auditResults = await auditAll(active);
