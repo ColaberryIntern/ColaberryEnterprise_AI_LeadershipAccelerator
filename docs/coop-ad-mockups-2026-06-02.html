@@ -535,32 +535,53 @@
     flex: 1;
   }
   .m4-tile {
-    background: var(--cream);
-    border: 1px solid #e2e8f0;
     border-radius: 4px;
     padding: 12px 10px;
     text-align: center;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-end;
+    color: white;
+    background-size: cover;
+    background-position: center;
+    background-blend-mode: multiply, normal;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
   }
-  .m4-tile .icon {
-    font-size: 24px;
-    color: var(--navy);
-    margin-bottom: 6px;
+  .m4-tile::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(15,23,42,0.35) 0%, rgba(15,23,42,0.85) 100%);
+    pointer-events: none;
   }
   .m4-tile .name {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
-    color: var(--navy-deep);
+    color: white;
     line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   }
   .m4-tile .desc {
     font-size: 9px;
-    color: var(--slate);
-    margin-top: 6px;
+    color: #e2e8f0;
+    margin-top: 4px;
     line-height: 1.4;
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
   }
+  .m4-tile.t1 { background-image: url('img/ad-mockups-2026-06-02/tile-1-scada.jpg'); }
+  .m4-tile.t2 { background-image: url('img/ad-mockups-2026-06-02/tile-2-lineman-tablet.jpg'); }
+  .m4-tile.t3 { background-image: url('img/ad-mockups-2026-06-02/tile-3-csr-headset.jpg'); }
+  .m4-tile.t4 { background-image: url('img/ad-mockups-2026-06-02/tile-4-document-signing.jpg'); }
+  .m4-tile.t5 { background-image: url('img/ad-mockups-2026-06-02/tile-5-hardhat.jpg'); }
   .m4-footer {
     padding: 10px 24px;
     border-top: 1px solid #e2e8f0;
@@ -571,10 +592,19 @@
     color: var(--slate);
   }
   .m4-footer .logo {
-    font-weight: 800;
+    height: 22px;
+    width: auto;
+    display: block;
+  }
+  .m4-footer .logo-url {
+    font-weight: 700;
     color: var(--navy-deep);
-    font-size: 13px;
-    letter-spacing: 1px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  .m3-logo-img {
+    height: 22px;
+    filter: brightness(0) invert(1);
   }
   .m4-footer .badge {
     background: var(--navy);
@@ -736,9 +766,9 @@
 <div class="doc">
 
 <div class="doc-header">
-<div class="eyebrow">RE Magazine - NRECA Membership Directory - July 2026</div>
-<h1>Half-page horizontal ad mockups. 5 visual directions. Red as the punch color, per David's note this morning.</h1>
-<p>For Ali review before sending to David + Ram. David booked half-page, 4-color, horizontal. Copy deadline Thursday EOD. Each mockup below is at trim aspect ratio (1.54:1) and uses real typography, colors, and layout - not ASCII sketches this time. Pick one (or remix two) and tell me what to change.</p>
+<div class="eyebrow">RE Magazine - NRECA Membership Directory - July 2026 - V3</div>
+<h1>5 ad mockups, V3. Real Colaberry logo, real enterprise.colaberry.ai URLs, photography on every tile.</h1>
+<p>V3 fixes: (1) every made-up "colaberry.ai/co-op-platforms" type URL replaced with a real route from enterprise.colaberry.ai (verified against frontend/src/routes/publicRoutes.tsx), (2) the text "COLABERRY" footers replaced with the actual brand logo, (3) Mockup 4 platform tiles now have background photography per tile - SCADA control room, lineman with field gear, CSR with headset, document signing, hard hat on workbench.</p>
 <div class="spec-callout"><strong>From David's response (2026-06-02 morning):</strong> "I've booked a half page, four color, horizontal ad. All copy must be uploaded by Thursday evening at the latest. We'll need to pack a punch ... what attracts our eye's as readers? My thought is red - so lets see 'what' in red can be integrated into the ad for the 'punch'."</div>
 </div>
 
@@ -766,8 +796,10 @@
 <div>Tribal knowledge captured before journeymen retire.</div>
 </div>
 </div>
-<div class="m1-footer">
-<strong style="color:var(--navy-deep)">colaberry.ai/co-ops</strong>&nbsp;&middot;&nbsp;David Lahme, 603-828-6265
+<div class="m1-footer" style="display:flex;align-items:center;gap:10px;margin-top:14px">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry.png" alt="Colaberry" style="height:22px">
+<strong style="color:var(--navy-deep);font-size:11px">enterprise.colaberry.ai/utility-ai</strong>
+<span style="color:var(--slate);font-size:10px">&middot; David Lahme, 603-828-6265</span>
 </div>
 <div class="m1-stamp">
 TRUSTED<br>
@@ -816,9 +848,12 @@ TRUSTED<br>
 </div>
 </div>
 <div class="footer">
-<div class="footer-text">
-<strong style="color:var(--navy-deep)">colaberry.ai/co-op-briefing</strong><br>
-David Lahme, VP Global Partnerships - 603-828-6265
+<div class="footer-text" style="display:flex;align-items:center;gap:10px">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry.png" alt="Colaberry" style="height:22px">
+<div>
+<strong style="color:var(--navy-deep);font-size:11px">enterprise.colaberry.ai/strategy-call-prep</strong><br>
+<span style="font-size:10px">David Lahme, VP Global Partnerships &middot; 603-828-6265</span>
+</div>
 </div>
 <div class="cta-button">Book a 30-min Briefing &rarr;</div>
 </div>
@@ -862,8 +897,8 @@ David Lahme, VP Global Partnerships - 603-828-6265
 <div class="metric"><div class="n">30-day</div><div class="l">Pilot<br>standup</div></div>
 </div>
 <div class="footer">
-<div>See it live at TechAdvantage 2026 &middot; Booth TBD</div>
-<div class="m3-logo">COLABERRY</div>
+<div>See it live at TechAdvantage 2026 &middot; Booth TBD &middot; <strong style="color:white">enterprise.colaberry.ai/utility-ai</strong></div>
+<img src="img/ad-mockups-2026-06-02/logo-colaberry.png" class="m3-logo-img" alt="Colaberry">
 </div>
 </div>
 </div>
@@ -896,14 +931,17 @@ RUNS ON YOUR STACK &middot; ON-PREM OR CLOUD &middot; SOC 2 + NERC CIP
 <div class="m4-headline">Pick the one that solves your sharpest pain.<br>Use the rest when you're ready.</div>
 <div class="m4-sub">All five run on your stack: on-prem, AWS, Azure, or GCP. SOC 2 + NERC CIP documented. No model training on your data. Pilot in 30 days.</div>
 <div class="m4-tiles">
-<div class="m4-tile"><div class="icon">&#9889;</div><div class="name">Outage IQ</div><div class="desc">SCADA-aware root cause analyst</div></div>
-<div class="m4-tile"><div class="icon">&#128300;</div><div class="name">Crew Capture</div><div class="desc">Tribal knowledge to searchable playbook</div></div>
-<div class="m4-tile"><div class="icon">&#128222;</div><div class="name">Member Voice</div><div class="desc">Inbound call triage + FAQ bot</div></div>
-<div class="m4-tile"><div class="icon">&#128202;</div><div class="name">Rate Case IQ</div><div class="desc">Filing prep + precedent scan</div></div>
-<div class="m4-tile"><div class="icon">&#10004;</div><div class="name">Compliance Companion</div><div class="desc">NERC + NESC + OSHA tracker</div></div>
+<div class="m4-tile t1"><div class="name">Outage IQ</div><div class="desc">SCADA-aware root cause analyst</div></div>
+<div class="m4-tile t2"><div class="name">Crew Capture</div><div class="desc">Tribal knowledge to searchable playbook</div></div>
+<div class="m4-tile t3"><div class="name">Member Voice</div><div class="desc">Inbound call triage + FAQ bot</div></div>
+<div class="m4-tile t4"><div class="name">Rate Case IQ</div><div class="desc">Filing prep + precedent scan</div></div>
+<div class="m4-tile t5"><div class="name">Compliance Companion</div><div class="desc">NERC + NESC + OSHA tracker</div></div>
 </div>
 <div class="m4-footer">
-<div class="logo">colaberry.ai/co-op-platforms</div>
+<div style="display:flex;align-items:center;gap:10px">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry.png" class="logo" alt="Colaberry">
+<div class="logo-url">enterprise.colaberry.ai/utility-ai</div>
+</div>
 <div>David Lahme &middot; 603-828-6265</div>
 <div class="badge">NRECA MEMBER</div>
 </div>
@@ -942,7 +980,10 @@ RUNS ON YOUR STACK &middot; ON-PREM OR CLOUD &middot; SOC 2 + NERC CIP
 </div>
 <div>
 <div class="cta">Schedule a 20-min walk-through &rarr;</div>
-<div class="footer">colaberry.ai/crew-capture &middot; David Lahme, 603-828-6265 &middot; NRECA Supporting Member</div>
+<div class="footer" style="display:flex;align-items:center;gap:10px;margin-top:10px">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry.png" alt="Colaberry" style="height:22px">
+<span style="font-size:9px"><strong style="color:var(--navy-deep);font-size:10px">enterprise.colaberry.ai/utility-ai</strong> &middot; David Lahme, 603-828-6265 &middot; NRECA Supporting Member</span>
+</div>
 </div>
 </div>
 </div>
