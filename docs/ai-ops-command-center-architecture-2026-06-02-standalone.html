@@ -1,0 +1,1152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Operations Command Center — Architecture Brief for Ali</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-deep: #0f172a;
+    --gold: #d4a017;
+    --gold-light: #fbbf24;
+    --cream: #faf3e3;
+    --red: #c1272d;
+    --green: #14532d;
+    --green-light: #bbf7d0;
+    --slate: #475569;
+    --muted: #94a3b8;
+    --gray: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f1f5f9; font-family: Georgia, 'Times New Roman', serif; color: #1a202c; line-height: 1.65; }
+  .doc { max-width: 1080px; margin: 0 auto; background: #fefaf3; }
+
+  .hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1a365d 50%, #7c2d12 100%);
+    color: white;
+    padding: 60px 56px;
+    text-align: center;
+  }
+  .hero img { height: 44px; display: block; margin: 0 auto 20px; }
+  .hero .eyebrow {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 5px;
+    text-transform: uppercase; color: var(--gold-light); font-weight: 700;
+  }
+  .hero h1 { margin: 14px 0 8px; font-size: 44px; line-height: 1.04; letter-spacing: -1px; font-weight: 800; }
+  .hero p { margin: 14px auto 0; color: #cbd5e0; font-size: 16px; max-width: 720px; line-height: 1.6; }
+  .hero .role-tag {
+    display: inline-block; margin-top: 16px; padding: 6px 14px;
+    background: rgba(251,191,36,0.18); border-radius: 18px;
+    font-family: Arial, sans-serif; font-size: 11px;
+    letter-spacing: 1.5px; color: var(--gold-light);
+    text-transform: uppercase; font-weight: 700;
+  }
+
+  .section { padding: 44px 56px; }
+  .section.alt { background: #fefaf3; }
+  .section.dark { background: #0f172a; color: white; }
+  .section.cream { background: #faf3e3; }
+  .section.navy-pad { background: var(--navy); color: white; }
+  .section.gold-pad { background: #7c5012; color: white; }
+  .section.red-pad { background: #7c2d12; color: white; }
+
+  .section-eyebrow {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 3px;
+    text-transform: uppercase; font-weight: 700; color: var(--red);
+  }
+  .section.dark .section-eyebrow, .section.navy-pad .section-eyebrow,
+  .section.gold-pad .section-eyebrow, .section.red-pad .section-eyebrow { color: var(--gold-light); }
+  .section h2 { margin: 8px 0 16px; font-size: 32px; line-height: 1.12; }
+  .section h3 { font-size: 22px; margin: 26px 0 10px; }
+  .section h4 { font-size: 16px; margin: 18px 0 6px; font-family: Arial, sans-serif; font-weight: 800; }
+  .section p { font-size: 15px; margin: 0 0 12px; }
+  .section.dark p, .section.navy-pad p, .section.gold-pad p, .section.red-pad p { color: #cbd5e0; }
+  code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 3px; font-size: 0.9em; font-family: 'Courier New', monospace; }
+  .section.dark code, .section.navy-pad code, .section.gold-pad code, .section.red-pad code { background: rgba(255,255,255,0.12); color: var(--gold-light); }
+
+  /* ============ STACK DIAGRAM ============ */
+  .stack {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 26px;
+    margin-top: 22px;
+    font-family: Arial, sans-serif;
+  }
+  .stack-layer {
+    background: #334155;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border-left: 5px solid;
+  }
+  .stack-layer.presentation { border-left-color: var(--gold-light); background: linear-gradient(90deg, #7c5012 0%, #92400e 100%); }
+  .stack-layer.intelligence { border-left-color: var(--green-light); background: linear-gradient(90deg, #14532d 0%, #166534 100%); }
+  .stack-layer.workflow { border-left-color: #fed7aa; background: linear-gradient(90deg, #7c2d12 0%, #9a3412 100%); }
+  .stack-layer.agents { border-left-color: #c4b5fd; background: linear-gradient(90deg, #4c1d95 0%, #5b21b6 100%); }
+  .stack-layer.sync { border-left-color: #93c5fd; background: linear-gradient(90deg, #1a365d 0%, #1e40af 100%); }
+  .stack-layer.data { border-left-color: var(--muted); background: linear-gradient(90deg, #1f2937 0%, #334155 100%); }
+  .stack-layer .left { flex: 1; }
+  .stack-layer .label {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(255,255,255,0.7); font-weight: 700;
+  }
+  .stack-layer h4 {
+    margin: 4px 0 6px; font-size: 17px; color: white; font-weight: 800;
+  }
+  .stack-layer .desc {
+    font-size: 12px; color: rgba(255,255,255,0.92); line-height: 1.5;
+  }
+  .stack-layer .right {
+    flex: 0 0 200px;
+    font-size: 11px; color: rgba(255,255,255,0.7);
+    border-left: 1px solid rgba(255,255,255,0.2);
+    padding-left: 14px;
+    font-family: 'Courier New', monospace;
+    line-height: 1.55;
+  }
+
+  /* ============ TABLES ============ */
+  table.spec {
+    width: 100%; border-collapse: collapse; font-family: Arial, sans-serif;
+    font-size: 13px; margin-top: 12px; background: white;
+    border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  table.spec th {
+    background: var(--navy); color: white; padding: 10px 14px;
+    text-align: left; font-size: 11px; letter-spacing: 1px;
+  }
+  table.spec td {
+    padding: 9px 14px; border-bottom: 1px solid var(--gray);
+    vertical-align: top; font-size: 13px;
+  }
+  table.spec tr:last-child td { border-bottom: 0; }
+  table.spec tr.zebra { background: #f8fafc; }
+  table.spec code {
+    background: #0f172a; color: var(--gold-light);
+    padding: 2px 6px; border-radius: 3px; font-size: 11px;
+  }
+
+  /* ============ AGENT GRID ============ */
+  .agent-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin-top: 18px; font-family: Arial, sans-serif;
+  }
+  .agent-card {
+    background: white; border-radius: 10px; padding: 18px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border-left: 5px solid var(--navy);
+  }
+  .agent-card.cheap { border-left-color: #14532d; background: #ecfdf5; }
+  .agent-card.mid { border-left-color: var(--gold); background: #fef9e7; }
+  .agent-card.heavy { border-left-color: var(--red); background: #fef2f2; }
+  .agent-card .name {
+    font-size: 16px; font-weight: 800; color: var(--navy-deep);
+  }
+  .agent-card .model-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    background: var(--navy-deep); color: white; font-size: 9px;
+    letter-spacing: 1.2px; margin-top: 5px;
+  }
+  .agent-card.cheap .model-tag { background: var(--green); }
+  .agent-card.mid .model-tag { background: var(--gold); color: var(--navy-deep); }
+  .agent-card.heavy .model-tag { background: var(--red); }
+  .agent-card .job {
+    font-size: 12px; color: #1f2937; margin-top: 10px; line-height: 1.55;
+  }
+  .agent-card .io {
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--gray);
+    font-size: 11px; color: var(--slate); font-family: 'Courier New', monospace;
+  }
+
+  /* ============ WIREFRAME ============ */
+  .wireframe {
+    background: white; border-radius: 12px; padding: 20px;
+    margin-top: 18px; border: 2px solid var(--gray);
+    font-family: 'Courier New', monospace; font-size: 11px; color: #475569;
+    line-height: 1.4; overflow-x: auto;
+  }
+  .wireframe .wf-grid {
+    display: grid; gap: 8px;
+  }
+  .wireframe.cmd-center .wf-grid {
+    grid-template-columns: 200px 1fr 220px;
+  }
+  .wireframe.panel .wf-grid {
+    grid-template-columns: 1fr;
+  }
+  .wf-pane {
+    background: #f8fafc; border: 1px solid var(--gray);
+    border-radius: 6px; padding: 12px 14px;
+  }
+  .wf-pane .wf-title {
+    font-family: Arial, sans-serif;
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--navy); font-weight: 700; margin-bottom: 6px;
+  }
+  .wf-row {
+    padding: 5px 0;
+    border-bottom: 1px dotted var(--gray);
+    font-family: Arial, sans-serif; font-size: 12px;
+  }
+  .wf-row:last-child { border-bottom: 0; }
+  .wf-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 9px; letter-spacing: 0.5px; font-weight: 700; margin-right: 4px;
+  }
+  .wf-badge.urgent { background: var(--red); color: white; }
+  .wf-badge.high { background: var(--gold); color: var(--navy-deep); }
+  .wf-badge.mid { background: var(--navy); color: white; }
+  .wf-badge.low { background: var(--gray); color: var(--slate); }
+
+  /* ============ DECISION TREE ============ */
+  .decision-tree {
+    background: white; border-radius: 12px; padding: 24px;
+    margin-top: 18px; border: 1px solid var(--gray);
+    font-family: Arial, sans-serif;
+  }
+  .dt-node {
+    background: var(--navy-deep); color: white;
+    padding: 12px 16px; border-radius: 8px;
+    text-align: center; max-width: 480px; margin: 0 auto 8px;
+    font-size: 13px; font-weight: 700;
+  }
+  .dt-branches {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 10px; margin-bottom: 8px;
+  }
+  .dt-branch {
+    padding: 11px 14px; border-radius: 8px;
+    font-size: 11px; line-height: 1.4; text-align: center;
+  }
+  .dt-branch.go { background: #dcfce7; border-left: 4px solid var(--green); color: var(--green); }
+  .dt-branch.confirm { background: #fef9e7; border-left: 4px solid var(--gold); color: #78350f; }
+  .dt-branch.escalate { background: #fee2e2; border-left: 4px solid var(--red); color: #7f1d1d; }
+  .dt-branch.queue { background: #dbeafe; border-left: 4px solid var(--navy); color: var(--navy); }
+  .dt-branch .lbl {
+    display: block; font-size: 9px; letter-spacing: 1.5px;
+    text-transform: uppercase; font-weight: 800; margin-bottom: 4px;
+  }
+
+  /* ============ MVP CALLOUT ============ */
+  .mvp-callout {
+    background: linear-gradient(135deg, #14532d 0%, #166534 100%);
+    color: white; border-radius: 14px;
+    padding: 28px 32px; margin-top: 22px;
+    box-shadow: 0 8px 32px rgba(20,83,45,0.3);
+  }
+  .mvp-callout .label {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--gold-light); font-weight: 700;
+  }
+  .mvp-callout h3 {
+    color: white !important; font-size: 28px; margin: 8px 0 12px;
+    line-height: 1.15;
+  }
+  .mvp-callout p { color: #d1fae5; font-size: 14px; }
+
+  /* ============ PHASE TIMELINE ============ */
+  .timeline {
+    margin-top: 22px;
+  }
+  .phase {
+    background: white; border-radius: 10px; padding: 18px 22px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    border-left: 6px solid var(--navy);
+    font-family: Arial, sans-serif;
+  }
+  .phase.p0 { border-left-color: var(--muted); }
+  .phase.p1 { border-left-color: var(--green); }
+  .phase.p2 { border-left-color: var(--gold); }
+  .phase.p3 { border-left-color: #fed7aa; }
+  .phase.p4 { border-left-color: #c4b5fd; }
+  .phase.p5 { border-left-color: var(--red); }
+  .phase-head {
+    display: flex; justify-content: space-between;
+    align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;
+  }
+  .phase-head .name {
+    font-size: 17px; font-weight: 800; color: var(--navy-deep);
+  }
+  .phase-head .when {
+    font-size: 11px; letter-spacing: 1px; color: var(--slate);
+    text-transform: uppercase; font-weight: 700;
+  }
+  .phase-deliverables {
+    font-size: 13px; color: #1f2937; line-height: 1.7;
+  }
+
+  /* ============ RISK CARD ============ */
+  .risk-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin-top: 18px; font-family: Arial, sans-serif;
+  }
+  .risk-card {
+    background: white; border-radius: 10px; padding: 16px 18px;
+    border-top: 4px solid var(--red);
+  }
+  .risk-card .level {
+    font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--red); font-weight: 800;
+  }
+  .risk-card h4 {
+    margin: 4px 0 6px; font-size: 15px; color: var(--navy-deep);
+  }
+  .risk-card .body {
+    font-size: 12px; color: #1f2937; line-height: 1.5; margin-bottom: 8px;
+  }
+  .risk-card .mitigation {
+    background: #ecfdf5; padding: 8px 12px; border-radius: 4px;
+    border-left: 3px solid var(--green); font-size: 11px; color: var(--green);
+  }
+
+  /* ============ FOOTER ============ */
+  .doc-footer {
+    background: #0f172a; color: white; padding: 40px 56px; text-align: center;
+    font-family: Arial, sans-serif;
+  }
+  .doc-footer img { height: 30px; margin-bottom: 12px; }
+  .doc-footer p { font-size: 13px; color: #cbd5e0; max-width: 580px; margin: 0 auto; }
+
+  .pull-quote {
+    background: rgba(212,160,23,0.15); border-left: 6px solid var(--gold);
+    padding: 18px 24px; margin: 20px 0; font-family: Georgia, serif;
+    font-size: 18px; font-style: italic; color: #78350f; border-radius: 0 6px 6px 0;
+    line-height: 1.5;
+  }
+  .section.dark .pull-quote, .section.navy-pad .pull-quote,
+  .section.gold-pad .pull-quote, .section.red-pad .pull-quote {
+    background: rgba(212,160,23,0.2); color: #fef3c7;
+  }
+
+  .api-endpoint {
+    background: #0f172a; color: #cbd5e0;
+    padding: 10px 14px; border-radius: 6px;
+    font-family: 'Courier New', monospace; font-size: 12px;
+    margin: 6px 0; display: flex; align-items: center; gap: 12px;
+  }
+  .api-method {
+    display: inline-block; padding: 2px 8px; border-radius: 3px;
+    font-size: 10px; font-weight: 800; letter-spacing: 1px;
+  }
+  .api-method.get { background: #14532d; color: white; }
+  .api-method.post { background: #7c5012; color: white; }
+  .api-method.put { background: #1a365d; color: white; }
+  .api-method.delete { background: var(--red); color: white; }
+  .api-method.sse { background: #4c1d95; color: white; }
+  .api-endpoint .path { color: var(--gold-light); font-weight: 700; }
+  .api-endpoint .desc { color: var(--muted); margin-left: auto; font-size: 10px; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<!-- ===================== HERO ===================== -->
+<div class="hero">
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAUoUlEQVR4Xu2dBbBcNRfHCwVaHIq7u7tT3N29uLu7tLi7uzsM7u7u7l7cHfLNLx9nXza5927u28crnfn/Zv7TRzbXcnNOTk6yS48eQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgjR7QyUJKlUPZwkSaVKCiRJ6lBSIElSh5ICSZI6lBRIktShpECSpA4lBd2iGWec0a255ppu7bXXdsstt5wbbrjhkjqS9B9QUvCva8QRR3TzzjuvG3PMMd24447rTj/9dHf11Ve7UUcdNakrSYNYSUG3aMUVV/RGMuSQQ7oZZpjBvffee+7tt992u+66q5tssslcr169kmMkaRAoKeg2Lbvssm7hhRd2G264ofvggw+c8dVXX7lTTz3VLbTQQm7SSSeVsUiDUklBt2mIIYZwk08+udtyyy3dm2++2TAQ+Pvvv90XX3zhXnrpJXfrrbe6E044wW2zzTZupZVW8iPP7LPP7v9dYYUV3HbbbefWW289N9RQQyXXkKQ2lRR0uwizxhtvPDdgwAD38ccfNxmK8ddff7nffvvN/fTTT+6HH35w33//vf+X/6acz6eddtrk3JLUppKC2qKD472HGWYYHw4NPfTQviyul6O55prLnXvuue7VV191n3zyifv111+bDISRpYhffvnFjT/++Mn5ysToxX3a/cafd7doP+4FdbbtpH9FSUGWevfu3UjVMrE++OCD3dFHH+2OOeYYd8ghh7hddtnFrbXWWm7qqaf2dePjW6lnz55+RHjyySfd119/7T799FN36aWXuosvvtg98cQTfkL/0Ucf+cn9M8884/bZZx9voPF5ykQGjXvkfrfYYgs3wggjJHW6U0svvbS/lyOPPNLNPPPMyefSIFNSUCkyTocddpi79tpr3bvvvhs78oTXX3/d1z3wwAPdVFNNlZyvSksssYR77bXXvAFyzYceesgtueSSbowxxnDTTz+9m3XWWd1MM81Ua+QwcTyjFNx///3eYOI63anDDz/c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" alt="Colaberry">
+<div class="eyebrow">Architecture Brief · For Ali · 2026-06-02</div>
+<h1>The AI Operations<br>Command Center.</h1>
+<p>The fastest path to "what should happen next" for every ticket in the company. This document presents the full system architecture before any code is written. 15 deliverables. One mental model. One lean MVP recommendation at the end that delivers 80% of the value in two weeks.</p>
+<div class="role-tag">Principal Product Architect · UX Lead · Staff Engineer · Workflow Automation Expert · AI Operations Designer</div>
+</div>
+
+<!-- ===================== PRELUDE ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Prelude · The reframe</div>
+<h2>This is not a tool. This is the operating system.</h2>
+<p>Basecamp tracks tasks. Cory writes briefings. Inbox COS sorts mail. Each is useful in isolation. None of them answer the question that actually matters every morning - <em>"what is the single fastest path through everything that has to happen today?"</em> That question lives between systems, in the white space, and is currently answered by you holding it in your head.</p>
+
+<p>The Command Center is the layer that owns that question. It sits on top of Basecamp (which stays the system of record), reads everything that moves, scores everything by urgency, identifies what AI can finish, what only you can decide, what is blocked and why, and what should be turned into a permanent skill. It is the cockpit. Basecamp is the engine.</p>
+
+<div class="pull-quote">Optimize for one number: <strong>average "waiting on human" hours per ticket.</strong> Everything else - throughput, automation count, skills compounded, hours saved - falls out of driving that single metric to zero.</div>
+
+</div>
+
+<!-- ===================== PART I: SYSTEM ARCHITECTURE ===================== -->
+<div class="section dark">
+<div class="section-eyebrow">Part I · Deliverable 1 · System Architecture</div>
+<h2>The six-layer stack, top to bottom.</h2>
+<p>Six layers, each isolated, each replaceable. The dependency graph runs top-to-bottom and never sideways - the Presentation layer never talks to BC directly, the Workflow layer never invokes the LLM directly. Strict layering keeps the system testable.</p>
+
+<div class="stack">
+
+<div class="stack-layer presentation">
+<div class="left">
+<div class="label">Layer 6 · Presentation</div>
+<h4>Command Center UI + mobile approval queue + Run-My-Day mode</h4>
+<div class="desc">React + Tailwind. Three-column desktop view + single-column mobile approval queue. Server-sent events for real-time updates. No business logic here - the UI only reads + emits intent.</div>
+</div>
+<div class="right">React · Tailwind · SSE · React Query · Recharts</div>
+</div>
+
+<div class="stack-layer workflow">
+<div class="left">
+<div class="label">Layer 5 · Workflow</div>
+<h4>Approval router + automation engine + revision workspace</h4>
+<div class="desc">Stateful. Holds the approval queue, runs the automation triggers, manages multi-step continuations. Every "approve / revise / reject" comes through here. Every "on-approve, fire next step" comes from here.</div>
+</div>
+<div class="right">Node.js · PostgreSQL · node-cron · BullMQ-lite</div>
+</div>
+
+<div class="stack-layer intelligence">
+<div class="left">
+<div class="label">Layer 4 · Intelligence</div>
+<h4>Priority engine + AI Opportunity engine + Brand engine + Skill extractor + Meeting eliminator</h4>
+<div class="desc">Five scoring engines that run on every new event. Each produces a numerical score (0-100) + a reasoning JSON. Engines are stateless functions of (ticket context + history). Cheap models for triage, expensive only when reasoning matters.</div>
+</div>
+<div class="right">OpenAI · Anthropic · prompt cache · rubric library</div>
+</div>
+
+<div class="stack-layer agents">
+<div class="left">
+<div class="label">Layer 3 · Agents</div>
+<h4>Eight named agents - one per job</h4>
+<div class="desc">Triage / Priority / AI-Opportunity / Brand / Skill Extraction / Communication / Meeting Eliminator / Chief of Staff. Each agent is a single Node module with a typed input + typed output + cost ceiling. They never call each other - the Workflow layer orchestrates.</div>
+</div>
+<div class="right">LangChain-free · MCP-shaped · cost-aware</div>
+</div>
+
+<div class="stack-layer sync">
+<div class="left">
+<div class="label">Layer 2 · Sync</div>
+<h4>Continuous mirror of every source of truth into a local read-model</h4>
+<div class="desc">BC API every 2 min (with webhook backup). Gmail OAuth every 5 min. GitHub webhooks for skill commits. Calendar OAuth every 10 min. Sync workers never mutate the upstream - they only read + index. Push-back is the Workflow layer's job.</div>
+</div>
+<div class="right">node-cron · PostgreSQL · Redis pub/sub</div>
+</div>
+
+<div class="stack-layer data">
+<div class="left">
+<div class="label">Layer 1 · Data sources</div>
+<h4>Basecamp · Gmail · GitHub · Calendar · CCPP · existing prod backend</h4>
+<div class="desc">The external sources of truth. Basecamp remains canonical for project state. Gmail remains canonical for communication. GitHub remains canonical for code + approved skills. We never duplicate state - we mirror it for read speed + score it for intelligence.</div>
+</div>
+<div class="right">Basecamp 3 API · Gmail API · GitHub API · Google Calendar API</div>
+</div>
+
+</div>
+
+<div class="pull-quote">The architecture's load-bearing decision is that <strong>nothing in the system mutates an upstream source of truth except the Workflow layer</strong>. That single constraint is what lets us add capabilities without ever wrecking the underlying records.</div>
+
+</div>
+
+<!-- ===================== PART II: DATABASE SCHEMA ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Part II · Deliverable 2 · Database schema</div>
+<h2>Twelve tables. Postgres. Nothing exotic.</h2>
+<p>The schema follows the architecture - mirror tables for upstream sources, intelligence tables for our scoring, workflow tables for the approval queue, metric tables for the dashboard. Below are the key tables (full DDL in the implementation phase).</p>
+
+<table class="spec">
+<thead><tr><th>Table</th><th>Purpose</th><th>Key columns</th></tr></thead>
+<tbody>
+<tr><td><code>users</code></td><td>Internal employee directory + each person's Claude Code config</td><td>id, email, bc_user_id, role, claude_config (JSONB), preferences (JSONB)</td></tr>
+<tr class="zebra"><td><code>bc_projects</code></td><td>Mirror of BC projects (read-only)</td><td>bc_id, name, status, dock (JSONB), last_synced_at</td></tr>
+<tr><td><code>bc_todos</code></td><td>Mirror of BC todos with our scores attached</td><td>bc_id, project_id, title, description, due_on, assignee_ids, urgency_score, ai_opportunity_score, category</td></tr>
+<tr class="zebra"><td><code>bc_comments</code></td><td>Mirror of BC comments (for context fetching)</td><td>bc_id, todo_id, author_id, body, created_at</td></tr>
+<tr><td><code>ai_assessments</code></td><td>Per-todo scoring history (audit trail)</td><td>id, todo_id, urgency_score, ai_opportunity_score, brand_score, reasoning (JSONB), computed_at, agent_version</td></tr>
+<tr class="zebra"><td><code>artifacts</code></td><td>Every AI-produced output (email draft, HTML, PDF, etc)</td><td>id, todo_id, type, payload (JSONB), version, approved_by, created_by_agent</td></tr>
+<tr><td><code>approval_queue</code></td><td>The most important table - what humans need to decide right now</td><td>id, todo_id, artifact_id, summary, recommended_decision, confidence, estimated_review_seconds, blocked_downstream_count, decided_at, decision, decided_by</td></tr>
+<tr class="zebra"><td><code>skills</code></td><td>Approved skills in the library (mirror of GitHub)</td><td>id, slug, name, github_path, github_sha, status, version, approved_by, approved_at, use_count, last_used</td></tr>
+<tr><td><code>skill_candidates</code></td><td>Workflows the Skill Agent thinks should become skills</td><td>id, source_todo_ids (JSONB), proposed_name, proposed_definition (JSONB), status, reviewed_at, reviewed_by</td></tr>
+<tr class="zebra"><td><code>automations</code></td><td>Active triggers - "when X happens, do Y"</td><td>id, name, trigger, condition (JSONB), actions (JSONB), status, run_count, last_run_at</td></tr>
+<tr><td><code>workflow_runs</code></td><td>Every multi-step continuation - durable execution trace</td><td>id, started_from_todo_id, steps (JSONB), current_step, status, next_action_at</td></tr>
+<tr class="zebra"><td><code>metrics_daily</code></td><td>Pre-aggregated daily roll-up for the dashboard</td><td>date, approvals_completed, approvals_avg_seconds, hours_saved, hours_blocked, revenue_at_risk, revenue_protected, meetings_eliminated</td></tr>
+</tbody>
+</table>
+
+<p style="margin-top:14px;font-size:13px;color:var(--slate);font-style:italic">Indexes on bc_todos.urgency_score, approval_queue.decided_at IS NULL (for the open queue), and ai_assessments(todo_id, computed_at DESC). Everything else is straightforward FK + B-tree.</p>
+
+</div>
+
+<!-- ===================== PART III: AGENT ARCHITECTURE ===================== -->
+<div class="section navy-pad">
+<div class="section-eyebrow">Part III · Deliverable 3 · Agent architecture</div>
+<h2>Eight agents. Three model tiers. Strict cost accounting.</h2>
+<p>Each agent is a Node module exporting a single function with typed input + typed output. Agents never call each other. They are pure functions of (context, prompt, model) → (result, confidence, cost). The Workflow layer orchestrates.</p>
+
+<div class="agent-grid">
+
+<div class="agent-card cheap">
+<div class="name">Triage Agent</div>
+<div class="model-tag">CLAUDE HAIKU · $</div>
+<div class="job">Classify every new BC todo into one of 5 buckets: human-required / AI-can-finish / AI-can-prepare / can-be-eliminated / wait-for-dependency. Sub-second response time. Runs on every new event.</div>
+<div class="io">in: {todo, recent_comments}<br>out: {category, confidence, reasoning}</div>
+</div>
+
+<div class="agent-card cheap">
+<div class="name">Priority Agent</div>
+<div class="model-tag">CLAUDE HAIKU · $</div>
+<div class="job">Score urgency 0-100 from rubric: due date, revenue impact, customer impact, dependencies, blocked downstream, waiting time, contract value, executive visibility, legal/compliance. Runs daily on every open todo + on any state change.</div>
+<div class="io">in: {todo, project_context, downstream_blocked_count}<br>out: {urgency_score, factor_breakdown}</div>
+</div>
+
+<div class="agent-card mid">
+<div class="name">AI Opportunity Agent</div>
+<div class="model-tag">GPT-4O-MINI · $$</div>
+<div class="job">For each todo: can AI finish / partially finish / prepare / eliminate? Produces concrete recommended action + estimated time savings. Runs daily on every open todo.</div>
+<div class="io">in: {todo, available_skills, user_role}<br>out: {opportunity_score, recommended_action, estimated_savings_minutes}</div>
+</div>
+
+<div class="agent-card mid">
+<div class="name">Communication Agent</div>
+<div class="model-tag">GPT-4O-MINI · $$</div>
+<div class="job">Draft emails, calendar invites, Basecamp comments, Slack messages, executive summaries, status updates, meeting agendas, decision memos. Triggered by user request or by automation engine.</div>
+<div class="io">in: {prompt, audience, tone, source_artifacts}<br>out: {draft_html, draft_text, suggested_subject, recipients}</div>
+</div>
+
+<div class="agent-card mid">
+<div class="name">Brand Compliance Agent</div>
+<div class="model-tag">GPT-4O-MINI · $$</div>
+<div class="job">Review any visual or written artifact for brand alignment, visual quality, readability, executive quality, consistency. Returns Brand Score 0-100 + one-click fix list. Runs on every artifact before approval queue entry.</div>
+<div class="io">in: {artifact_html_or_image, brand_rubric_version}<br>out: {brand_score, factor_scores, one_click_fixes[]}</div>
+</div>
+
+<div class="agent-card mid">
+<div class="name">Meeting Elimination Agent</div>
+<div class="model-tag">GPT-4O-MINI · $$</div>
+<div class="job">When a todo contains "meeting / call / discussion / review session," evaluate: can this be replaced by async work? Proposes specific alternative (email, decision doc, approval form, async collab) + estimated savings.</div>
+<div class="io">in: {meeting_todo, participants, prior_async_attempts}<br>out: {can_replace, alternative, estimated_savings_minutes}</div>
+</div>
+
+<div class="agent-card heavy">
+<div class="name">Skill Extraction Agent</div>
+<div class="model-tag">CLAUDE OPUS · $$$</div>
+<div class="job">After a workflow completes, examine: should this become a reusable skill? Pattern-match against existing skills + propose a skill definition with name, trigger, inputs, outputs, required approvals. Outputs candidate for Ali's weekly review queue.</div>
+<div class="io">in: {workflow_run, related_completed_todos}<br>out: {should_extract, skill_definition (YAML), confidence}</div>
+</div>
+
+<div class="agent-card heavy">
+<div class="name">Chief of Staff Agent</div>
+<div class="model-tag">CLAUDE OPUS · $$$</div>
+<div class="job">Synthesizes org-wide state into "Run My Day" view. Top 5 decisions / 5 approvals / 5 bottlenecks / 5 opportunities / 5 automations. Runs at 7am daily + on-demand. The only agent that sees the whole org.</div>
+<div class="io">in: {full_org_state_snapshot}<br>out: {five_lists, expected_impact, total_review_minutes}</div>
+</div>
+
+</div>
+
+<div class="pull-quote">Budget envelope: at scale, we expect ~50,000 agent calls/day across all 8 agents. With aggressive tiering + caching, target spend: <strong>$120-180/day</strong> on LLM costs ($3.6-5.4K/month). The $90/$10 ratio from Alden's playbook puts our headcount AI budget at ~$3K/mo - we land inside.</div>
+
+</div>
+
+<!-- ===================== PART IV: UI WIREFRAMES ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Part IV · Deliverable 4 · UI wireframes</div>
+<h2>Three screens. Everything else is a variation.</h2>
+
+<h3>Screen 1 — Command Center (desktop)</h3>
+<p>The three-column layout from your spec. Persistent across pages. Middle column is the work surface.</p>
+
+<div class="wireframe cmd-center">
+<div class="wf-grid">
+
+<div class="wf-pane">
+<div class="wf-title">Left rail</div>
+<div class="wf-row"><strong>PROJECTS</strong></div>
+<div class="wf-row">All projects (12)</div>
+<div class="wf-row"><span class="wf-badge urgent">●</span> Urgent (3)</div>
+<div class="wf-row"><span class="wf-badge high">●</span> Wait Human (8)</div>
+<div class="wf-row"><span class="wf-badge mid">●</span> Wait AI (4)</div>
+<div class="wf-row"><span class="wf-badge low">●</span> Blocked (2)</div>
+<div class="wf-row">─────</div>
+<div class="wf-row"><strong>SKILLS</strong></div>
+<div class="wf-row">Active (47)</div>
+<div class="wf-row">Pending review (5)</div>
+<div class="wf-row">─────</div>
+<div class="wf-row"><strong>AUTOMATIONS</strong></div>
+<div class="wf-row">Active (23)</div>
+<div class="wf-row">Paused (1)</div>
+</div>
+
+<div class="wf-pane" style="background:#fefaf3;border-color:#d4a017">
+<div class="wf-title">Middle · Current task</div>
+<div class="wf-row" style="font-family:Georgia,serif;font-size:18px;color:#1a365d;font-weight:800">ShipCES Export Decision</div>
+<div class="wf-row"><span class="wf-badge urgent">URGENCY 97</span> <span class="wf-badge high">AI OPP 68</span> <span class="wf-badge mid">BRAND 91</span></div>
+<div class="wf-row">Blocks 5 downstream tasks · 3-day potential delay · Estimated review: 90s</div>
+<div class="wf-row" style="background:#fef9e7;padding:10px;border-radius:4px;margin-top:8px">
+<strong style="color:#78350f">AI RECOMMENDATION:</strong> Approve export approach. Confidence: 92%. Reasoning: 3 prior similar approvals all signed off; matches existing /export-data skill pattern; no unusual flags.
+</div>
+<div class="wf-row" style="margin-top:8px"><strong>WHAT AI COMPLETED:</strong></div>
+<div class="wf-row" style="padding-left:14px">→ Export script drafted</div>
+<div class="wf-row" style="padding-left:14px">→ Format approval doc ready</div>
+<div class="wf-row" style="padding-left:14px">→ Customer notification draft</div>
+<div class="wf-row" style="margin-top:10px"><strong>DECISION NEEDED:</strong> Approve current approach? Alternative options: A) more conservative format, B) defer to manual handoff.</div>
+<div class="wf-row" style="margin-top:12px">
+[ APPROVE ] · [ APPROVE + CONTINUE ] · [ APPROVE + CONVERT TO SKILL ]
+</div>
+<div class="wf-row">[ REQUEST REVISION ] · [ REJECT ] · [ ESCALATE ]</div>
+</div>
+
+<div class="wf-pane">
+<div class="wf-title">Right rail</div>
+<div class="wf-row"><strong>NEXT BEST ACTIONS</strong></div>
+<div class="wf-row">1. ShipCES decision (you are here)</div>
+<div class="wf-row">2. Coke pre-read v6 approve</div>
+<div class="wf-row">3. RE Magazine ad lock</div>
+<div class="wf-row">─────</div>
+<div class="wf-row"><strong>TIME SAVED TODAY</strong></div>
+<div class="wf-row" style="font-size:20px;color:#14532d;font-weight:800">+ 2h 14m</div>
+<div class="wf-row">─────</div>
+<div class="wf-row"><strong>AUTOMATION OPPS</strong></div>
+<div class="wf-row">/ship-ces-export (use 4x)</div>
+<div class="wf-row">/weekly-status (use 6x)</div>
+<div class="wf-row">─────</div>
+<div class="wf-row"><strong>RELATED SKILLS</strong></div>
+<div class="wf-row">/export-data</div>
+<div class="wf-row">/customer-notify</div>
+</div>
+
+</div>
+</div>
+
+<h3>Screen 2 — Waiting on Human (the most important screen)</h3>
+<p>Sorted by urgency × value × time-to-decide. One-click "Approve + Continue" advances to the next item without page navigation. Built for batch processing during Run My Day.</p>
+
+<div class="wireframe panel">
+<div class="wf-grid">
+<div class="wf-pane" style="background:#fef2f2;border-color:#c1272d">
+<div class="wf-title" style="color:#7f1d1d">Waiting on Human · 8 items · ~14 min total</div>
+<div class="wf-row" style="display:flex;gap:8px;align-items:center;padding:10px 0">
+<span style="font-family:Georgia,serif;font-size:24px;color:#c1272d;font-weight:800">97</span>
+<div style="flex:1">
+<div><strong>ShipCES Export Decision</strong> · 30s</div>
+<div style="font-size:11px;color:#7f1d1d">Blocks 5 downstream · 3-day delay risk · AI rec: APPROVE 92%</div>
+</div>
+<div>[ APPROVE ] [ REVIEW ]</div>
+</div>
+<div class="wf-row" style="display:flex;gap:8px;align-items:center;padding:10px 0">
+<span style="font-family:Georgia,serif;font-size:24px;color:#c1272d;font-weight:800">94</span>
+<div style="flex:1">
+<div><strong>Coca-Cola v6 pre-read final approval</strong> · 60s</div>
+<div style="font-size:11px;color:#7f1d1d">June 4 meeting impact · AI rec: APPROVE 88%</div>
+</div>
+<div>[ APPROVE ] [ REVIEW ]</div>
+</div>
+<div class="wf-row" style="display:flex;gap:8px;align-items:center;padding:10px 0">
+<span style="font-family:Georgia,serif;font-size:24px;color:#d4a017;font-weight:800">82</span>
+<div style="flex:1">
+<div><strong>RE Magazine ad finalist lock</strong> · 45s</div>
+<div style="font-size:11px;color:#7f1d1d">Thursday EOD deadline · AI rec: REVIEW M4+M3</div>
+</div>
+<div>[ REVIEW ]</div>
+</div>
+<div class="wf-row" style="display:flex;gap:8px;align-items:center;padding:10px 0">
+<span style="font-family:Georgia,serif;font-size:24px;color:#d4a017;font-weight:800">71</span>
+<div style="flex:1">
+<div><strong>Karun PRD writeup session schedule</strong> · 20s</div>
+<div style="font-size:11px;color:#7f1d1d">Pilot start dependency · AI rec: CONFIRM Wed 10am</div>
+</div>
+<div>[ APPROVE ] [ REVIEW ]</div>
+</div>
+<div class="wf-row" style="display:flex;gap:8px;align-items:center;padding:10px 0">
+<span style="font-family:Georgia,serif;font-size:24px;color:#1a365d;font-weight:800">58</span>
+<div style="flex:1">
+<div><strong>Akiwam Bonfire training session</strong> · 45s</div>
+<div style="font-size:11px;color:#7f1d1d">Phase 1 dependency · AI rec: APPROVE 76%</div>
+</div>
+<div>[ APPROVE ] [ REVIEW ]</div>
+</div>
+</div>
+</div>
+</div>
+
+<h3>Screen 3 — Run My Day modal</h3>
+<p>One-button start. 14-min budget. Walks you through everything in priority order. No navigation. Just decide + next.</p>
+
+<div class="wireframe panel">
+<div class="wf-grid">
+<div class="wf-pane" style="background:#0f172a;color:white;border:0">
+<div class="wf-title" style="color:#fbbf24">Run My Day · Tuesday 2026-06-02 · Expected 14 min</div>
+<div class="wf-row" style="color:white;padding:14px 0">
+<div style="font-family:Georgia,serif;font-size:24px;margin-bottom:8px">Today's impact dashboard</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px">
+<div style="background:#1e293b;padding:12px;border-radius:6px"><div style="font-size:10px;color:#fbbf24;letter-spacing:1px">APPROVALS</div><div style="font-size:24px;font-weight:800">6</div><div style="font-size:10px;color:#cbd5e0">14 min</div></div>
+<div style="background:#1e293b;padding:12px;border-radius:6px"><div style="font-size:10px;color:#fbbf24;letter-spacing:1px">DOWNSTREAM RELEASED</div><div style="font-size:24px;font-weight:800">23</div><div style="font-size:10px;color:#cbd5e0">tasks</div></div>
+<div style="background:#1e293b;padding:12px;border-radius:6px"><div style="font-size:10px;color:#fbbf24;letter-spacing:1px">REVENUE IMPACT</div><div style="font-size:24px;font-weight:800">$185K</div><div style="font-size:10px;color:#cbd5e0">protected</div></div>
+<div style="background:#1e293b;padding:12px;border-radius:6px"><div style="font-size:10px;color:#fbbf24;letter-spacing:1px">HOURS SAVED</div><div style="font-size:24px;font-weight:800">2.4h</div><div style="font-size:10px;color:#cbd5e0">vs unaided</div></div>
+</div>
+</div>
+<div class="wf-row" style="color:white;padding:14px 0">
+<div style="background:#fbbf24;color:#0f172a;padding:14px;text-align:center;border-radius:6px;font-weight:800">[ BEGIN — start with highest impact decision (90s) ]</div>
+</div>
+<div class="wf-row" style="color:#cbd5e0;font-size:12px">After approvals: 0 bottlenecks remaining · 2 skill candidates pending review · 1 new automation suggested</div>
+</div>
+</div>
+</div>
+
+</div>
+
+<!-- ===================== PART V: BASECAMP INTEGRATION ===================== -->
+<div class="section cream">
+<div class="section-eyebrow">Part V · Deliverable 5 · Basecamp integration</div>
+<h2>BC stays the source of truth. We mirror, score, push back.</h2>
+<p>The integration is bidirectional but asymmetric. We pull aggressively (every 2 min cron + webhooks where available) and mirror to our DB for fast querying. We push back narrowly - only through the Workflow layer, only as comments, todos, and uploads - never overwriting BC state directly.</p>
+
+<table class="spec">
+<thead><tr><th>Direction</th><th>What</th><th>How</th><th>Frequency</th></tr></thead>
+<tbody>
+<tr><td><strong>PULL</strong></td><td>events.json (all activity)</td><td>BC API <code>/events.json?since=T</code></td><td>Every 2 min cron</td></tr>
+<tr class="zebra"><td><strong>PULL</strong></td><td>Projects + todos + comments + uploads</td><td>BC API <code>/projects/&lt;id&gt;.json</code> etc</td><td>On event change</td></tr>
+<tr><td><strong>PULL</strong></td><td>Webhook for instant updates</td><td>BC webhook subscription</td><td>Real-time</td></tr>
+<tr class="zebra"><td><strong>PUSH</strong></td><td>Approval results posted as comments</td><td><code>POST /buckets/&lt;b&gt;/recordings/&lt;r&gt;/comments.json</code></td><td>On user approve</td></tr>
+<tr><td><strong>PUSH</strong></td><td>Artifacts uploaded to Vault</td><td><code>POST /attachments.json</code> + Vault flow</td><td>On artifact creation</td></tr>
+<tr class="zebra"><td><strong>PUSH</strong></td><td>New todos for follow-up work</td><td><code>POST /buckets/&lt;b&gt;/todolists/&lt;l&gt;/todos.json</code></td><td>On workflow continuation</td></tr>
+<tr><td><strong>PUSH</strong></td><td>Mark todos complete</td><td><code>PUT /buckets/&lt;b&gt;/todos/&lt;t&gt;/completion.json</code></td><td>On final approval</td></tr>
+</tbody>
+</table>
+
+<p style="margin-top:14px"><strong>Rate-limit strategy:</strong> BC's limit is 50 req/10s. The sync worker keeps a token bucket + queues + retries with backoff. The push side is gated through a single rate-limited service so multiple workflow continuations cannot trample BC.</p>
+
+</div>
+
+<!-- ===================== PART VI: GITHUB SKILL ARCHITECTURE ===================== -->
+<div class="section dark">
+<div class="section-eyebrow">Part VI · Deliverable 6 · GitHub skill architecture</div>
+<h2>Skills are Markdown files. GitHub is the canonical store.</h2>
+<p>The AI_ProjectArchitect repo (<code>github.com/ColaberryIntern/AI_ProjectArchitect</code>) is the authority. Every approved skill lands there as a Markdown file with YAML frontmatter. Local <code>.claude/skills/</code> on each employee's machine is a read-only mirror that syncs nightly.</p>
+
+<h3>Repository structure</h3>
+<pre style="background:#1e293b;color:#cbd5e0;padding:18px;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;overflow-x:auto">
+/skills
+  /shared/                          # available to all employees
+    polish-ai-landing-to-pdf.md
+    schedule-deep-dive.md
+    brand-review.md
+    weekly-status-roll-up.md
+  /karun/                           # Karun-only skills
+    account-readout.md
+    coca-cola-pre-read.md
+  /kes/                             # Kes-only
+    voice-ai-incident-postmortem.md
+    deploy-with-checks.md
+  /bonfire/                         # restricted: Akiwam + Obi
+    bonfire-discovery.md
+    bonfire-rfp-fit-score.md
+/library/                           # source for the localhost:8765 library
+  /use-cases/
+  /agents/
+</pre>
+
+<h3>Skill file format (YAML frontmatter + Markdown body)</h3>
+<pre style="background:#1e293b;color:#cbd5e0;padding:18px;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;overflow-x:auto;line-height:1.55">
+---
+name: Schedule a deep-dive session
+slug: schedule-deep-dive
+status: approved
+version: 1.2
+approved_by: ali@colaberry.com
+approved_at: 2026-06-15
+use_count: 23
+last_used: 2026-08-04
+visibility: shared             # shared | personal | restricted
+inputs:
+  - name: attendee_email
+    type: email
+    required: true
+  - name: topic
+    type: text
+    required: true
+outputs:
+  - calendar_event_id
+  - email_thread_id
+required_approvals:
+  - send_email                 # must pass send gate
+  - calendar_invite            # must pass invite gate
+estimated_time: 45 seconds
+estimated_savings: 18 minutes
+---
+
+# Schedule a deep-dive session
+
+Given an attendee + topic, this skill:
+
+1. Pulls user's calendar for next 2 business days
+2. Picks 3 viable 30-min slots (no conflicts, business hours)
+3. Drafts email to attendee with the 3 slots
+4. Sends after user confirmation (gate fires)
+5. Watches for reply, books picked slot
+6. Logs to originating BC ticket
+
+[Detailed Claude Code instructions follow...]
+</pre>
+
+<h3>Approval-to-publish flow</h3>
+<ol style="font-size:13px;line-height:1.7;color:#cbd5e0">
+<li>Skill Extraction Agent identifies a completed workflow as candidate, writes proposed YAML</li>
+<li>Posts to <code>skill_candidates</code> table + adds to Ali's weekly review queue</li>
+<li>Ali reviews on Friday, clicks "Approve" in the Command Center</li>
+<li>Workflow layer creates a PR on the AI_ProjectArchitect repo with the skill file + auto-merges</li>
+<li>Nightly sync job on each employee's laptop pulls the new skill into their <code>.claude/skills/</code></li>
+<li>Skill is now slash-invokable across the company</li>
+</ol>
+
+</div>
+
+<!-- ===================== PART VII: APPROVAL WORKFLOW ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Part VII · Deliverable 7 · Approval workflow</div>
+<h2>One decision tree. Five outcomes. Every approval routes through here.</h2>
+
+<div class="decision-tree">
+<div class="dt-node">Event arrives (BC comment / AI artifact / user request)</div>
+<div style="text-align:center;color:var(--gold);font-size:24px;margin:4px">↓</div>
+<div class="dt-node" style="background:#7c2d12">Triage Agent + Priority Agent + AI Opportunity Agent score the event</div>
+<div style="text-align:center;color:var(--gold);font-size:24px;margin:4px">↓</div>
+<div class="dt-branches">
+<div class="dt-branch go"><span class="lbl">AUTO-RUN</span>AI can finish + no irreversible action + confidence ≥ 0.9 → execute immediately, log to BC</div>
+<div class="dt-branch confirm"><span class="lbl">EMPLOYEE CONFIRMS</span>AI can finish but needs employee "yes" on external action → enters that employee's queue</div>
+<div class="dt-branch queue"><span class="lbl">ALI QUEUE</span>Needs strategic decision or high-value approval → enters Ali's Waiting on Human panel</div>
+<div class="dt-branch escalate"><span class="lbl">ESCALATE</span>Confidence &lt; 0.7, or unknown territory, or anomaly detected → page Ali immediately</div>
+</div>
+<div style="text-align:center;color:var(--gold);font-size:24px;margin:4px">↓</div>
+<div class="dt-node" style="background:#14532d">User selects: APPROVE / APPROVE+CONTINUE / APPROVE+CONVERT-TO-SKILL / REVISE / REJECT / ESCALATE</div>
+<div style="text-align:center;color:var(--gold);font-size:24px;margin:4px">↓</div>
+<div class="dt-branches" style="grid-template-columns:1fr 1fr 1fr">
+<div class="dt-branch go"><span class="lbl">APPROVE</span>Mark artifact approved · trigger next_action · update metrics</div>
+<div class="dt-branch confirm"><span class="lbl">REVISE</span>Route to Revision Workspace · user highlights what to change · AI regenerates · returns to queue</div>
+<div class="dt-branch escalate"><span class="lbl">REJECT</span>Mark rejected · notify originating agent · log reason</div>
+</div>
+</div>
+
+<h3>Approval action payloads</h3>
+<p>Every approval action is a typed event the Workflow layer consumes:</p>
+<pre style="background:#0f172a;color:#cbd5e0;padding:18px;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;overflow-x:auto;line-height:1.55">
+{
+  "type": "approval_decision",
+  "approval_queue_id": 12847,
+  "decision": "approve_and_continue",
+  "decided_by": "ali@colaberry.com",
+  "decided_at": "2026-06-04T14:32:11Z",
+  "reasoning": "Matches existing pattern; no concerns",
+  "next_actions": [                              // computed by Workflow layer
+    {"action": "post_bc_comment", "ticket_id": 9955562788, "body": "..."},
+    {"action": "send_email", "to": "dlahme@", "subject": "...", "body": "..."},
+    {"action": "advance_workflow_run", "id": 4471, "to_step": 3}
+  ]
+}
+</pre>
+
+</div>
+
+<!-- ===================== PART VIII: AUTOMATION ENGINE ===================== -->
+<div class="section gold-pad">
+<div class="section-eyebrow">Part VIII · Deliverable 8 · Automation workflow engine</div>
+<h2>Trigger → Condition → Actions. Pure event-driven.</h2>
+<p>Automations are typed rules that fire on events from the Sync layer. Each automation is a JSON document in the <code>automations</code> table. The engine subscribes to event streams, evaluates conditions, runs actions (often invoking agents). Designed to be the same data model Ali sees in the Command Center "Automations" sidebar.</p>
+
+<h3>Automation JSON shape</h3>
+<pre style="background:rgba(0,0,0,0.4);color:#fef3c7;padding:18px;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;overflow-x:auto;line-height:1.55">
+{
+  "name": "Daily Bonfire Discovery for Akiwam + Obi",
+  "status": "active",
+  "trigger": {
+    "type": "schedule",
+    "cron": "0 9 * * 1-5"            // weekday 9am
+  },
+  "condition": {
+    "type": "always_true"
+  },
+  "actions": [
+    {
+      "agent": "bonfire-discovery-skill",
+      "args": {"account": "both", "min_days_out": 10, "max_results": 7}
+    },
+    {
+      "action": "create_bc_todo",
+      "project_id": 7463955,
+      "todolist_id": 9951791920,
+      "title": "Today's Bonfire candidates ({{count}})",
+      "assignee_ids": ["akiwam_bc_id", "obi_bc_id"],
+      "description": "{{generated_card_markdown}}"
+    }
+  ]
+}
+</pre>
+
+<h3>Trigger types supported</h3>
+<table class="spec" style="background:rgba(0,0,0,0.3);color:white">
+<thead><tr><th>Type</th><th>Fires when</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td><code>schedule</code></td><td>Cron expression matches</td><td>Daily Cory briefing at 7am</td></tr>
+<tr class="zebra" style="background:rgba(0,0,0,0.2)"><td><code>bc_event</code></td><td>New BC comment / todo / completion</td><td>"On any comment to Coca-Cola ticket, run Brand Agent"</td></tr>
+<tr><td><code>email_match</code></td><td>Gmail message matches filter</td><td>David ad reply auto-processor (already live!)</td></tr>
+<tr class="zebra" style="background:rgba(0,0,0,0.2)"><td><code>workflow_advance</code></td><td>A workflow_run reaches a specific step</td><td>"When approval queue depth &gt; 10, escalate to mobile push"</td></tr>
+<tr><td><code>artifact_created</code></td><td>An AI produces a new artifact</td><td>"On every AI email draft, run Brand Agent before queueing"</td></tr>
+</tbody>
+</table>
+
+<div class="pull-quote">The auto-trigger we shipped today (<code>processDavidAdReply.js</code>) is the canonical example. Every future automation follows the same shape: read trigger → check condition → invoke agent → take actions. The engine generalizes that pattern.</div>
+
+</div>
+
+<!-- ===================== PART IX: API SPECS ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Part IX · Deliverable 9 · API specifications</div>
+<h2>REST for state, SSE for real-time. No GraphQL.</h2>
+<p>The frontend talks to a single Express backend with conventional REST endpoints + a server-sent-events stream for live updates. Authentication via session cookies (same as existing portal).</p>
+
+<h3>Core REST endpoints</h3>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/dashboard</span><span class="desc">primary dashboard payload (counts + top items)</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/run-my-day</span><span class="desc">5 lists × 5 items for the Run My Day mode</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/queue/waiting-human</span><span class="desc">ordered approval queue (filterable, paginated)</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/queue/waiting-ai</span><span class="desc">items where AI is mid-processing</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/todo/:bc_id</span><span class="desc">single todo with full ai_assessment + artifacts</span></div>
+<div class="api-endpoint"><span class="api-method post">POST</span><span class="path">/api/ops/approve</span><span class="desc">submit approval decision (the single most-called endpoint)</span></div>
+<div class="api-endpoint"><span class="api-method post">POST</span><span class="path">/api/ops/revise</span><span class="desc">request a revision with highlighted notes</span></div>
+<div class="api-endpoint"><span class="api-method post">POST</span><span class="path">/api/ops/escalate</span><span class="desc">escalate item to next-tier approver</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/skills</span><span class="desc">list of skills + status + use counts</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/skills/candidates</span><span class="desc">Ali's weekly review queue</span></div>
+<div class="api-endpoint"><span class="api-method post">POST</span><span class="path">/api/ops/skills/:id/approve</span><span class="desc">approve candidate → commit to GitHub</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/automations</span><span class="desc">list active + paused automations</span></div>
+<div class="api-endpoint"><span class="api-method put">PUT</span><span class="path">/api/ops/automations/:id/pause</span><span class="desc">pause/resume an automation</span></div>
+<div class="api-endpoint"><span class="api-method get">GET</span><span class="path">/api/ops/metrics?range=7d</span><span class="desc">metrics for dashboards + analytics</span></div>
+
+<h3>Server-sent events (real-time)</h3>
+<div class="api-endpoint"><span class="api-method sse">SSE</span><span class="path">/api/ops/stream</span><span class="desc">live event firehose - queue updates, AI completions, escalations</span></div>
+<p style="margin-top:8px;font-size:13px;color:var(--slate)">Event types: <code>approval.added</code> · <code>approval.decided</code> · <code>artifact.created</code> · <code>artifact.revised</code> · <code>workflow.advanced</code> · <code>automation.fired</code> · <code>escalation.raised</code> · <code>metric.update</code></p>
+
+</div>
+
+<!-- ===================== PART X: PHASED IMPLEMENTATION ===================== -->
+<div class="section dark">
+<div class="section-eyebrow">Part X · Deliverable 10 · Phased implementation plan</div>
+<h2>Six phases. Ten weeks to scale. MVP in two weeks.</h2>
+
+<div class="timeline">
+
+<div class="phase p0">
+<div class="phase-head"><div class="name">Phase 0 — Foundation</div><div class="when">Week 0-1 · 5-7 days</div></div>
+<div class="phase-deliverables">
+DB schema + migrations · BC sync worker (read-only mirror) · authentication + user model · basic Command Center shell · health monitoring. <strong>Exit criteria:</strong> all BC activity visible in our DB within 2 min of happening; users can log in.
+</div>
+</div>
+
+<div class="phase p1">
+<div class="phase-head"><div class="name">Phase 1 — MVP (the 80/20 cut)</div><div class="when">Week 2-3 · 10 days</div></div>
+<div class="phase-deliverables">
+Priority Engine (urgency scoring, rule-based, no LLM yet) · Waiting on Human panel · Approval workflow (approve / revise / reject) · Run My Day mode (basic 5×5 lists) · metrics_daily rollup. <strong>Exit criteria:</strong> Ali can process the daily approval queue in &lt; 15 min without leaving the panel. This is the MVP.
+</div>
+</div>
+
+<div class="phase p2">
+<div class="phase-head"><div class="name">Phase 2 — AI Layer</div><div class="when">Week 4-5 · 10 days</div></div>
+<div class="phase-deliverables">
+AI Opportunity Agent · Communication Agent (draft emails / comments / messages) · Skill Extraction Agent (proposes candidates). Right-rail "AI Suggestions" appears. <strong>Exit criteria:</strong> at least 50% of approvals come with a recommended decision + confidence; skill candidates flow into Ali's review queue.
+</div>
+</div>
+
+<div class="phase p3">
+<div class="phase-head"><div class="name">Phase 3 — Polish + Brand</div><div class="when">Week 6-7 · 10 days</div></div>
+<div class="phase-deliverables">
+Brand Compliance Agent · Revision Workspace (highlight + regenerate) · Meeting Elimination Agent · sidebar AI suggestions. <strong>Exit criteria:</strong> any artifact in the queue can be revised in &lt; 30 seconds; Brand Agent flags 90%+ of off-brand drafts before they reach Ali.
+</div>
+</div>
+
+<div class="phase p4">
+<div class="phase-head"><div class="name">Phase 4 — Automation Engine</div><div class="when">Week 8-9 · 10 days</div></div>
+<div class="phase-deliverables">
+Automation engine (trigger → condition → action) · skill execution from BC (slash commands in BC comments fire the corresponding skill) · multi-step workflow continuation · workflow_runs table active. <strong>Exit criteria:</strong> 20+ active automations; "approve and continue" runs end-to-end.
+</div>
+</div>
+
+<div class="phase p5">
+<div class="phase-head"><div class="name">Phase 5 — Enterprise Scale</div><div class="when">Week 10+ · ongoing</div></div>
+<div class="phase-deliverables">
+Multi-user / multi-role permissions · audit + compliance views · external API for third-party agents · mobile app (read-only + approval queue) · Chief of Staff Agent (full org synthesis) · advanced analytics. <strong>Exit criteria:</strong> all 17 active employees onboarded with role-scoped views.
+</div>
+</div>
+
+</div>
+
+</div>
+
+<!-- ===================== PART XI: MVP SCOPE ===================== -->
+<div class="section navy-pad">
+<div class="section-eyebrow">Part XI · Deliverable 11 · MVP scope (the 80/20)</div>
+<h2>Two weeks. Five components. One screen Ali lives in.</h2>
+
+<table class="spec">
+<thead><tr><th>Component</th><th>What it does</th><th>What it does NOT do</th></tr></thead>
+<tbody>
+<tr><td><strong>BC sync worker</strong></td><td>Mirrors all BC todos + comments + uploads into local PG every 2 min</td><td>No webhooks yet · no Gmail · no Calendar</td></tr>
+<tr class="zebra"><td><strong>Priority Engine v0</strong></td><td>Rule-based urgency 0-100 from: due date, downstream blocked count, age, assignee = Ali</td><td>No LLM yet · no revenue impact yet · no contract-value lookup yet</td></tr>
+<tr><td><strong>Waiting on Human panel</strong></td><td>The single screen Ali opens in the morning. Sorted by urgency. One-click approve.</td><td>No revision workspace · no AI recommendations · no batch actions</td></tr>
+<tr class="zebra"><td><strong>Approval write-back</strong></td><td>On approve: post comment to BC + mark todo complete + log to <code>approval_queue.decided_at</code></td><td>No automation continuation · no skill conversion · no escalation routing</td></tr>
+<tr><td><strong>Daily metrics</strong></td><td>Pre-compute and display: approvals completed today / hours of work unblocked / oldest pending item</td><td>No revenue tracking yet · no historical charts · no per-person breakdowns</td></tr>
+</tbody>
+</table>
+
+<div class="mvp-callout">
+<div class="label">The MVP test</div>
+<h3>"Can Ali handle his entire daily approval queue from one screen in under 15 minutes?"</h3>
+<p>If yes, MVP ships. Everything else is additive. The next two weeks earn the right to build the next ten weeks.</p>
+</div>
+
+</div>
+
+<!-- ===================== PART XII: ENTERPRISE SCOPE ===================== -->
+<div class="section red-pad">
+<div class="section-eyebrow">Part XII · Deliverable 12 · Enterprise scale scope</div>
+<h2>When the team grows past 30 people.</h2>
+<p>The MVP scales to ~5 power users + a read-only audience. Enterprise scope kicks in when Phase 5 needs to support every Colaberry employee, including non-pilot users, contractors, and external advisors.</p>
+
+<table class="spec">
+<thead><tr><th>Capability</th><th>Why now</th></tr></thead>
+<tbody>
+<tr><td><strong>Multi-tenant scoping</strong></td><td>Each employee sees only their projects + queues. Akiwam sees Bonfire surface only. Karun sees sales. Role-based ACL on every endpoint.</td></tr>
+<tr class="zebra"><td><strong>Mobile-first approval app</strong></td><td>Ali needs to approve during the Coca-Cola tour. Phone-native approval flow with biometric confirmation on irreversible actions.</td></tr>
+<tr><td><strong>Audit + compliance dashboards</strong></td><td>For SOC 2 / NERC CIP conversations. Every approval decision searchable by who/when/why. Decision provenance.</td></tr>
+<tr class="zebra"><td><strong>External agent API</strong></td><td>Tier C "Colaberry AI Box" needs to expose this same architecture to a client. API auth + per-client throttling + multi-region deployment.</td></tr>
+<tr><td><strong>Real-time collaboration</strong></td><td>Two execs reviewing the same approval queue without conflicting. Optimistic locking + presence indicators.</td></tr>
+<tr class="zebra"><td><strong>Advanced metric attribution</strong></td><td>"Hours saved per person per skill per quarter." Drives the $90/$10 budget allocation per Phase 2 of the Alden plan.</td></tr>
+<tr><td><strong>LLM cost dashboards</strong></td><td>Per-agent / per-employee / per-project burn rate. Alerts at 80% of monthly cap.</td></tr>
+<tr class="zebra"><td><strong>Failure-mode response playbooks</strong></td><td>Per-Failure-First-Design (CLAUDE.md): explicit playbooks for BC outage, LLM downtime, model regression. Dead-letter queue for failed automations.</td></tr>
+</tbody>
+</table>
+
+</div>
+
+<!-- ===================== PART XIII: RISKS ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Part XIII · Deliverable 13 · Risks identified</div>
+<h2>Six risks, each with a specific mitigation.</h2>
+
+<div class="risk-grid">
+
+<div class="risk-card">
+<div class="level">High · Operational</div>
+<h4>Over-automation eats decisions Ali should own</h4>
+<div class="body">The Workflow layer takes actions without enough human visibility. A bad pattern compounds before anyone notices.</div>
+<div class="mitigation"><strong>Mitigation:</strong> every "auto-run" tier has a confidence threshold (default 0.9) + a weekly retro that surfaces every auto-decision for Ali's review. A 5-minute audit on Fridays.</div>
+</div>
+
+<div class="risk-card">
+<div class="level">High · Cost</div>
+<h4>LLM bills spiral as agent calls grow</h4>
+<div class="body">Phase 4 automation engine + 17 users + 50 daily skills could push to $500+/day in LLM if not tiered carefully.</div>
+<div class="mitigation"><strong>Mitigation:</strong> per-day budget cap with auto-pause at 80%. Tiering: Claude Haiku for triage, GPT-4o-mini for routine drafts, Claude Opus reserved for the Chief of Staff + Skill Extraction agents.</div>
+</div>
+
+<div class="risk-card">
+<div class="level">Medium · Integration</div>
+<h4>BC API rate limits + state divergence</h4>
+<div class="body">Our mirror drifts from BC truth. We push back stale data. Workflows fail mid-flight.</div>
+<div class="mitigation"><strong>Mitigation:</strong> sync worker has reconciliation pass every hour (compare hash of local vs BC). Drift alerts page Ali. Push side uses a single rate-limit queue.</div>
+</div>
+
+<div class="risk-card">
+<div class="level">Medium · UX</div>
+<h4>Approval fatigue from too many queue items</h4>
+<div class="body">If everything is "important," nothing is. Ali tunes out the panel and we are back to BC plus extra noise.</div>
+<div class="mitigation"><strong>Mitigation:</strong> Run-My-Day caps daily at 5 + 5 + 5 + 5 + 5. Everything else queues. Auto-batch + Cory digest absorb the rest. Aggressive de-duplication.</div>
+</div>
+
+<div class="risk-card">
+<div class="level">Medium · Quality</div>
+<h4>Skill Extraction Agent hallucinates patterns</h4>
+<div class="body">Marks one-off workflows as "reusable" and clutters the library with junk skills nobody uses.</div>
+<div class="mitigation"><strong>Mitigation:</strong> usage tracking on every skill. Auto-deprecate skills not invoked in 90 days. Weekly review queue stays - Ali catches the bad ones.</div>
+</div>
+
+<div class="risk-card">
+<div class="level">Low · Trust</div>
+<h4>Brand Agent gives false-positive "non-compliant" flags</h4>
+<div class="body">Routine artifacts get blocked at the Brand step, users disable the gate, brand drift returns.</div>
+<div class="mitigation"><strong>Mitigation:</strong> Brand rubric is versioned; users can mark "false positive" inline. Brand Agent retrains on labeled feedback monthly. Confidence threshold stays high.</div>
+</div>
+
+</div>
+
+</div>
+
+<!-- ===================== PART XIV: COST OPTIMIZATION ===================== -->
+<div class="section cream">
+<div class="section-eyebrow">Part XIV · Deliverable 14 · Cost optimization</div>
+<h2>The biggest line item is LLM tokens. Here is how we keep it sane.</h2>
+
+<ol style="font-size:14px;line-height:1.8;padding-left:22px">
+<li><strong>Tiered model selection.</strong> Triage and Priority use Claude Haiku ($0.25/1M in, $1.25/1M out). Routine drafting (Communication, Brand, Meeting Eliminator) uses GPT-4o-mini ($0.15/1M in, $0.60/1M out). Chief of Staff + Skill Extraction use Claude Opus only when reasoning matters ($15/1M in, $75/1M out). Expected blended cost per call: $0.001-0.003 for tier 1, $0.005-0.015 for tier 2, $0.05-0.20 for tier 3.</li>
+
+<li><strong>Aggressive caching.</strong> Daily Priority scores compute once + cache 24h. AI Opportunity scores re-compute only on state change. Brand Agent caches results by artifact hash. Anthropic prompt caching is enabled across all calls.</li>
+
+<li><strong>Batch where possible.</strong> Score 20 todos in one Priority Agent call, not 20 separate calls. Reduce per-call overhead.</li>
+
+<li><strong>No streaming for batch operations.</strong> Streaming costs slightly more in tokens and adds latency. Reserved for UI-facing interactions only.</li>
+
+<li><strong>Per-employee daily cap.</strong> Hard limit per user (default $5/day). Soft alert at 80%. The cap is the safety net for runaway behavior.</li>
+
+<li><strong>Skill cache.</strong> A skill's standard prompt + skeleton is cached. Only the user inputs vary, so per-invocation cost is mostly in caching.</li>
+
+<li><strong>Drop redundant context.</strong> The BC walker truncates aggressively. We do not feed the LLM every comment ever - just the most relevant recent N.</li>
+
+<li><strong>Self-host nothing yet.</strong> Even with the costs above, hosted Claude + OpenAI APIs come in well under $5K/month. Self-hosting a 70B model on the Hetzner VPS is a 2027 conversation, not now.</li>
+</ol>
+
+<div class="pull-quote">Expected monthly LLM spend at full Phase 5 scale (17 employees, 23+ active automations, ~50K agent calls/day): <strong>$3.6K - $5.4K/month</strong>. Inside Alden's $90/$10 ratio for a 30-person org budgeted at $30K/mo on payroll.</div>
+
+</div>
+
+<!-- ===================== PART XV: THE 80/20 ===================== -->
+<div class="section dark">
+<div class="section-eyebrow">Part XV · Deliverable 15 · The leanest 80/20 architecture</div>
+<h2>One screen. One engine. Two weeks. 80% of the value.</h2>
+
+<p>If I could only build a single thing that delivers 80% of the promise — the thing that turns Basecamp from a tracking system into an AI-guided operations system — it is:</p>
+
+<div class="mvp-callout">
+<div class="label">The 80/20 recommendation</div>
+<h3>The Waiting on Human panel + the rule-based Priority Engine.</h3>
+<p>That is it. No LLM-driven priority agent yet. No Brand Agent. No Skill Extraction yet. Just: mirror BC → rule-score each open todo for urgency → list them in a single sorted panel with one-click approve → on approve, post a comment + mark complete + advance to the next item.</p>
+<p style="margin-top:14px"><strong>Ali's day looks like this:</strong> open Command Center at 7am. See 8 items in the Waiting on Human panel, sorted by urgency. Each one shows: title, why it's urgent (downstream blocked count + due date), and an "Approve / Review" pair of buttons. Approve advances. Review opens the full BC ticket inline. 14 minutes later, the queue is clear and the org is unblocked.</p>
+</div>
+
+<p style="margin-top:18px">Everything else - AI suggestions, Brand scoring, skill extraction, meeting elimination, Run My Day, automation engine, Chief of Staff synthesis - is additive and earns its place after the MVP proves the panel reduces "waiting on human" hours.</p>
+
+<h3>Why this is the cut</h3>
+<ul style="font-size:14px;line-height:1.7;color:#cbd5e0">
+<li><strong>It does not need any AI to ship.</strong> Rule-based urgency is enough. Adding LLM scoring is a Phase 2 improvement, not a Phase 1 requirement.</li>
+<li><strong>It addresses the highest-leverage pain.</strong> "Waiting on human" is the bottleneck. The panel makes it visible + actionable in one place.</li>
+<li><strong>It is fully owned by us.</strong> No external integrations beyond BC + Postgres + a simple React frontend. Two weeks of work.</li>
+<li><strong>It produces immediate metrics.</strong> Day 1 ships with "approvals completed today" + "hours unblocked." Ali knows by day 7 whether this is working.</li>
+<li><strong>It does not require trust in agents yet.</strong> Every decision is still Ali's. The system just makes the queue legible. Trust in agents is earned over Phase 2.</li>
+</ul>
+
+<div class="pull-quote">The MVP test is binary: <strong>can Ali close his daily approval queue from one panel in under 15 minutes?</strong> If yes after two weeks, we earned the right to build Phase 2. If no, we diagnose first, build second.</div>
+
+</div>
+
+<!-- ===================== CLOSING ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Closing · What I need from you before any code is written</div>
+<h2>Three decisions, one approval.</h2>
+
+<div style="background:white;border-radius:10px;padding:24px 28px;border:2px solid var(--red);margin-top:18px;font-family:Arial,sans-serif">
+
+<ol style="font-size:14px;line-height:1.8;padding-left:20px">
+<li><strong>Ratify the MVP scope (Phase 1, Part XI).</strong> The 5-component cut + the "one panel, 15 minutes" success test. If you want to add or subtract from the MVP, tell me before I start.</li>
+<li><strong>Confirm the tech stack.</strong> React + Tailwind frontend, Node.js + Express backend, Postgres, SSE for real-time. All match the existing stack so we ship inside the existing deployment pipeline. Any concerns?</li>
+<li><strong>Approve the LLM tier strategy + budget cap.</strong> Haiku for triage, GPT-4o-mini for drafting, Claude Opus only for synthesis. Per-day budget cap at $200 for MVP, scaling to $500 at Phase 5. Tell me if the caps need adjustment.</li>
+<li><strong>Approve me starting Phase 0 (Foundation).</strong> If you say yes today, I commit to MVP demo by 2026-06-16 — two weeks from now.</li>
+</ol>
+
+<div style="margin-top:18px;padding:14px 18px;background:#fef9e7;border-left:5px solid var(--gold);border-radius:0 6px 6px 0;font-size:13px;color:#78350f">
+<strong>Per CLAUDE.md operating bias:</strong> I am not waiting for governance approval to proceed with architecture choices that fall inside the autonomy lane (naming, file structure, tool choices). I am asking for the four items above because they are strategic - they shape the next 10 weeks. Everything else I will execute and surface, not block on.
+</div>
+</div>
+
+<p style="margin-top:18px;font-size:14px">Reply with edits to any section, ratification of the four asks, or "go" on the MVP. I will refactor the doc rather than just answer the question.</p>
+
+</div>
+
+<!-- ===================== FOOTER ===================== -->
+<div class="doc-footer">
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAUoUlEQVR4Xu2dBbBcNRfHCwVaHIq7u7tT3N29uLu7tLi7uzsM7u7u7l7cHfLNLx9nXza5927u28crnfn/Zv7TRzbXcnNOTk6yS48eQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgjR7QyUJKlUPZwkSaVKCiRJ6lBSIElSh5ICSZI6lBRIktShpECSpA4lBd2iGWec0a255ppu7bXXdsstt5wbbrjhkjqS9B9QUvCva8QRR3TzzjuvG3PMMd24447rTj/9dHf11Ve7UUcdNakrSYNYSUG3aMUVV/RGMuSQQ7oZZpjBvffee+7tt992u+66q5tssslcr169kmMkaRAoKeg2Lbvssm7hhRd2G264ofvggw+c8dVXX7lTTz3VLbTQQm7SSSeVsUiDUklBt2mIIYZwk08+udtyyy3dm2++2TAQ+Pvvv90XX3zhXnrpJXfrrbe6E044wW2zzTZupZVW8iPP7LPP7v9dYYUV3HbbbefWW289N9RQQyXXkKQ2lRR0uwizxhtvPDdgwAD38ccfNxmK8ddff7nffvvN/fTTT+6HH35w33//vf+X/6acz6eddtrk3JLUppKC2qKD472HGWYYHw4NPfTQviyul6O55prLnXvuue7VV191n3zyifv111+bDISRpYhffvnFjT/++Mn5ysToxX3a/cafd7doP+4FdbbtpH9FSUGWevfu3UjVMrE++OCD3dFHH+2OOeYYd8ghh7hddtnFrbXWWm7qqaf2dePjW6lnz55+RHjyySfd119/7T799FN36aWXuosvvtg98cQTfkL/0Ucf+cn9M8884/bZZx9voPF5ykQGjXvkfrfYYgs3wggjJHW6U0svvbS/lyOPPNLNPPPMyefSIFNSUCkyTocddpi79tpr3bvvvhs78oTXX3/d1z3wwAPdVFNNlZyvSksssYR77bXXvAFyzYceesgtueSSbowxxnDTTz+9m3XWWd1MM81Ua+QwcTyjFNx///3eYOI63anDDz/c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" alt="Colaberry">
+<p>Architecture Brief · AI Operations Command Center · Drafted 2026-06-02 by Claude (Principal Product Architect role). Per CLAUDE.md, no code begins until architecture is complete and approved. Standalone HTML for the durable record - also attached to the AI_ProjectArchitect rollout overview BC ticket.</p>
+</div>
+
+</div>
+</body></html>
