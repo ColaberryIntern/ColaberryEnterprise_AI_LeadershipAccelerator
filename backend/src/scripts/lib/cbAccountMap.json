@@ -1,0 +1,139 @@
+{
+  "_doc": "Account → BC ticket + Vault folder mapping. The unit of CB context is an Ali Personal ticket; every artifact for that account is uploaded to its Vault folder + indexed in a comment on the ticket. searchTerms shape what one-time Gmail backfills pull. participants are required (email-address match), keywords are OR-matched in subject+body.",
+  "bucketId": 7463955,
+  "parentVaultFolderName": "CB Context Dossiers",
+  "accounts": {
+    "coca-cola-consolidated": {
+      "displayName": "Coca-Cola Consolidated",
+      "ticketId": 9951791925,
+      "folderName": "Coca-Cola Consolidated",
+      "rep": "David Lahme",
+      "searchTerms": {
+        "participants": ["dlahme@advizerz.com", "dlahme@", "lahme"],
+        "keywords": ["Coca-Cola", "Coca Cola", "Coke", "Snyder", "Darrell", "CCC", "Coca-Cola Consolidated"]
+      }
+    },
+    "beckway": {
+      "displayName": "Beckway",
+      "ticketId": 9951791931,
+      "folderName": "Beckway",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Beckway", "Mark Beckway"] }
+    },
+    "weisiger-group": {
+      "displayName": "Weisiger Group",
+      "ticketId": 9951791935,
+      "folderName": "Weisiger Group",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Weisiger", "Charlotte"] }
+    },
+    "nreca": {
+      "displayName": "NRECA / Co-Ops",
+      "ticketId": 9951791937,
+      "folderName": "NRECA - Co-Ops",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["NRECA", "Co-Op", "Cooperative"] }
+    },
+    "preco-utility": {
+      "displayName": "PRECO Utility",
+      "ticketId": 9951791941,
+      "folderName": "PRECO Utility",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["PRECO", "Max Baker", "PowerBI User Group"] }
+    },
+    "phoenix-park-gas": {
+      "displayName": "Phoenix Park Gas Processors",
+      "ticketId": 9951791948,
+      "folderName": "Phoenix Park Gas Processors",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Phoenix Park", "PPGPL", "Trinidad"] }
+    },
+    "apparo": {
+      "displayName": "Apparo",
+      "ticketId": 9951791955,
+      "folderName": "Apparo",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Apparo", "Kristen Reed"] }
+    },
+    "compass-uol": {
+      "displayName": "Compass UOL",
+      "ticketId": 9951791960,
+      "folderName": "Compass UOL",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Compass UOL", "Brazil", "Market Research Assistant"] }
+    },
+    "jeld-wen": {
+      "displayName": "Jeld-Wen",
+      "ticketId": 9951791974,
+      "folderName": "Jeld-Wen",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Jeld-Wen", "Jeld Wen", "Procurement AI"] }
+    },
+    "about-colaberry-overview": {
+      "displayName": "About Colaberry overview + Coke notes PDFs",
+      "ticketId": 9951791981,
+      "folderName": "About Colaberry overview",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["About Colaberry", "Coke notes"] }
+    },
+    "life-sciences-summit-boston": {
+      "displayName": "AI in Life Sciences Summit Boston",
+      "ticketId": 9951791995,
+      "folderName": "Life Sciences Summit Boston",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Life Sciences Summit", "Boston"] }
+    },
+    "baa-essnova": {
+      "displayName": "BAA Technical Areas (Essnova)",
+      "ticketId": 9951792003,
+      "folderName": "BAA Essnova",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Essnova", "BAA"] }
+    },
+    "nashville-electric": {
+      "displayName": "Nashville Electric Service RFP Z0668",
+      "ticketId": 9951792019,
+      "folderName": "Nashville Electric Service",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Nashville Electric", "Z0668"] }
+    },
+    "ameren": {
+      "displayName": "Ameren Supplier Qualification",
+      "ticketId": 9951792024,
+      "folderName": "Ameren",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Ameren", "QMS", "Supplier Quality"] }
+    },
+    "iou-utilities": {
+      "displayName": "IOU Utilities (Duke / Oncor)",
+      "ticketId": 9951792031,
+      "folderName": "IOU Utilities Duke Oncor",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Duke", "Oncor", "IOU Utilities"] }
+    },
+    "apollo-seats": {
+      "displayName": "Apollo seats + Hubspot",
+      "ticketId": 9951792043,
+      "folderName": "Apollo seats",
+      "rep": "David Lahme",
+      "searchTerms": { "participants": ["dlahme"], "keywords": ["Apollo", "Hubspot"] }
+    },
+    "patriot-insurance": {
+      "displayName": "Patriot Insurance",
+      "ticketId": 9951792055,
+      "folderName": "Patriot Insurance",
+      "rep": "JJ McBride",
+      "searchTerms": {
+        "participants": ["jj@", "mcbride", "drayer"],
+        "keywords": ["Patriot Insurance", "Andrew Drayer", "REMARKETING", "SBU"]
+      }
+    },
+    "patriot-sbu-sop": {
+      "displayName": "Patriot SBU SOP review",
+      "ticketId": 9951792062,
+      "folderName": "Patriot SBU SOP",
+      "rep": "JJ McBride",
+      "searchTerms": { "participants": ["jj@", "mcbride"], "keywords": ["Patriot SBU", "SOP"] }
+    }
+  }
+}

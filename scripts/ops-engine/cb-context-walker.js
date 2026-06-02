@@ -52,8 +52,11 @@ const URL_RE = /https?:\/\/[^\s<>"')]+/gi;
 
 function extractUrls(html) {
   if (!html) return [];
-  const stripped = String(html).replace(/<[^>]+>/g, ' ');
-  const matches = stripped.match(URL_RE) || [];
+  // Match URLs anywhere - both in href="..." attributes and in visible text.
+  // Earlier we stripped HTML first, which lost any URL that lived only inside
+  // an href attribute (common in BC index comments where the link text is a
+  // human label, not the URL itself).
+  const matches = String(html).match(URL_RE) || [];
   return [...new Set(matches.map((u) => u.replace(/[.,;:!?)\]]+$/g, '')))];
 }
 
@@ -74,6 +77,7 @@ function classifyUrl(url) {
           if (kind === 'uploads') return { kind: 'bc-upload', bucketId, recordingId: id };
           if (kind === 'todos' || kind === 'messages' || kind === 'recordings') return { kind: 'bc-recording', bucketId, recordingId: id };
           if (kind === 'todolists') return { kind: 'bc-todolist', bucketId, recordingId: id };
+          if (kind === 'vaults') return { kind: 'bc-vault', bucketId, vaultId: id };
         }
       }
       return { kind: 'bc-other' };
@@ -188,6 +192,53 @@ async function fetchBcUpload({ bucketId, uploadId }) {
   }
 }
 
+async function fetchBcVault({ bucketId, vaultId }) {
+  // List both uploads + subfolders in this vault folder. Returns a synthetic
+  // record the walker can pivot off of (kind=bc-vault). Walker then walks each
+  // upload child as a normal bc-upload and recurses into each subfolder.
+  try {
+    const meta = await fetchWithTimeout(`${BC_API_BASE}/buckets/${bucketId}/vaults/${vaultId}.json`, { headers: bcAuthHeaders() });
+    const m = meta.ok ? await meta.json() : {};
+    let uploads = [];
+    let subfolders = [];
+    // Paginated listing - BC returns ~15 per page with a Link: rel="next" header.
+    try {
+      let next = `${BC_API_BASE}/buckets/${bucketId}/vaults/${vaultId}/uploads.json`;
+      while (next) {
+        const u = await fetchWithTimeout(next, { headers: bcAuthHeaders() });
+        if (!u.ok) break;
+        const page = await u.json();
+        if (!Array.isArray(page)) break;
+        uploads.push(...page);
+        const lh = (u.headers.get('link') || '').match(/<([^>]+)>;\s*rel="next"/);
+        next = lh ? lh[1] : null;
+      }
+    } catch {}
+    try {
+      let next = `${BC_API_BASE}/buckets/${bucketId}/vaults/${vaultId}/vaults.json`;
+      while (next) {
+        const s = await fetchWithTimeout(next, { headers: bcAuthHeaders() });
+        if (!s.ok) break;
+        const page = await s.json();
+        if (!Array.isArray(page)) break;
+        subfolders.push(...page);
+        const lh = (s.headers.get('link') || '').match(/<([^>]+)>;\s*rel="next"/);
+        next = lh ? lh[1] : null;
+      }
+    } catch {}
+    return {
+      title: m.title || m.name || '(vault)',
+      app_url: m.app_url,
+      uploadCount: Array.isArray(uploads) ? uploads.length : 0,
+      subfolderCount: Array.isArray(subfolders) ? subfolders.length : 0,
+      childUploadUrls: (Array.isArray(uploads) ? uploads : []).map((u) => u.app_url).filter(Boolean),
+      childSubfolderUrls: (Array.isArray(subfolders) ? subfolders : []).map((s) => s.app_url).filter(Boolean),
+    };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 async function fetchExternal(url) {
   if (!FOLLOW_EXTERNAL) return { skipped: 'CB_FOLLOW_EXTERNAL_URLS not enabled' };
   try {
@@ -243,6 +294,17 @@ async function walkDocuments({ bcGet, seedUrls, visited, depth }) {
     if (cls.kind === 'bc-upload') {
       const r = await fetchBcUpload({ bucketId: cls.bucketId, uploadId: cls.recordingId });
       docs.push({ url, kind: 'bc-upload', ...r });
+    } else if (cls.kind === 'bc-vault') {
+      const r = await fetchBcVault({ bucketId: cls.bucketId, vaultId: cls.vaultId });
+      docs.push({ url, kind: 'bc-vault', ...r });
+      // Walk every upload + every subfolder in the same depth budget. Subfolders
+      // get their own recursive call (depth+1) so a deep folder tree degrades
+      // gracefully against the depth cap.
+      if (!r.error) {
+        const folderSeeds = [...(r.childUploadUrls || []), ...(r.childSubfolderUrls || [])];
+        const deeper = await walkDocuments({ bcGet, seedUrls: folderSeeds, visited, depth: depth + 1 });
+        docs.push(...deeper);
+      }
     } else if (cls.kind === 'bc-recording' || cls.kind === 'bc-todolist') {
       const r = await fetchBcRecording({ bcGet, bucketId: cls.bucketId, recordingId: cls.recordingId });
       docs.push({ url, kind: cls.kind, ...r });
@@ -378,6 +440,9 @@ function formatContextForLlm(ctx, aliId) {
       if (d.kind === 'bc-upload') {
         lines.push(`Filename: ${d.filename} (${d.contentType || '?'}, ${d.size || 0} bytes)`);
         if (d.extracted) lines.push(`Extracted text:\n${d.extracted}`);
+      } else if (d.kind === 'bc-vault') {
+        lines.push(`Vault folder: ${d.title} (${d.uploadCount || 0} files, ${d.subfolderCount || 0} subfolders)`);
+        lines.push(`(uploads + subfolders walked separately below)`);
       } else if (d.kind === 'bc-recording' || d.kind === 'bc-todolist') {
         lines.push(`Title: ${d.title} (${d.type || '?'})`);
         if (d.description) {
