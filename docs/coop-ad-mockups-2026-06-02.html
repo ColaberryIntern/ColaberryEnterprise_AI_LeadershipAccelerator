@@ -656,6 +656,124 @@
     line-height: 1.1;
     max-width: 55px;
   }
+  /* ===== M4 V5 (David's 2026-06-02 edits) ===== */
+  /* 1. Red headline at TOP - V1 format, reworded */
+  .m4-v5 .m4-bar-v5 {
+    background: var(--red);
+    color: white;
+    padding: 16px 24px;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    line-height: 1.15;
+  }
+  /* 2. Tile content: same level + +1 font size + no split sentences */
+  .m4-v5 .m4-tile {
+    padding: 12px 8px 11px;
+  }
+  .m4-v5 .m4-tile .name {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .m4-v5 .m4-tile .desc {
+    font-size: 10.5px;
+    line-height: 1.35;
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .m4-v5 .m4-tile .roi {
+    font-size: 10.5px;
+    line-height: 1.3;
+    margin-top: 7px;
+    padding-top: 6px;
+  }
+  /* 3. ROI strip — white, bigger */
+  .m4-v5 .m4-roi-strip-v5 {
+    background: var(--navy-deep);
+    color: white;
+    padding: 11px 22px;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  /* 4. Footer reflow: 4 columns - [Colaberry+url | QR | NRECA centered | David+phone+email] */
+  .m4-v5 .m4-footer-v5 {
+    background: white;
+    padding: 14px 22px;
+    border-top: 1px solid #e2e8f0;
+    display: grid;
+    grid-template-columns: 1fr auto auto 1fr;
+    align-items: center;
+    gap: 18px;
+  }
+  .m4-v5 .m4-footer-v5 .col-colaberry { text-align: left; }
+  .m4-v5 .m4-footer-v5 .col-colaberry img.logo {
+    height: 28px;
+    width: auto;
+    display: block;
+  }
+  .m4-v5 .m4-footer-v5 .col-colaberry .url {
+    margin-top: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 10.5px;
+    color: var(--navy-deep);
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .m4-v5 .m4-footer-v5 .col-qr img {
+    height: 54px;
+    width: 54px;
+    display: block;
+  }
+  .m4-v5 .m4-footer-v5 .col-nreca { text-align: center; }
+  .m4-v5 .m4-footer-v5 .col-nreca .nreca-badge {
+    background: var(--red);
+    color: white;
+    padding: 8px 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    border-radius: 3px;
+    box-shadow: 0 2px 0 #8b1e22;
+    display: inline-block;
+    line-height: 1.1;
+  }
+  .m4-v5 .m4-footer-v5 .col-nreca .nreca-badge span {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    opacity: 0.95;
+    margin-top: 2px;
+  }
+  .m4-v5 .m4-footer-v5 .col-david {
+    text-align: right;
+    font-family: 'Inter', sans-serif;
+  }
+  .m4-v5 .m4-footer-v5 .col-david .david-name {
+    font-size: 11.5px;
+    color: var(--navy-deep);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .m4-v5 .m4-footer-v5 .col-david .david-email {
+    font-size: 10.5px;
+    color: var(--navy-deep);
+    font-weight: 700;
+    margin-top: 3px;
+    text-align: center;
+  }
+
   .m4-tile.t1 { background-image: url('img/ad-mockups-2026-06-02/tile-1-scada.jpg'); }
   .m4-tile.t2 { background-image: url('img/ad-mockups-2026-06-02/tile-2-lineman-tablet.jpg'); }
   .m4-tile.t3 { background-image: url('img/ad-mockups-2026-06-02/tile-3-csr-headset.jpg'); }
@@ -851,7 +969,7 @@
 <div style="font-size:11px;letter-spacing:3px;color:#fbbf24;font-weight:700">FOR DAVID + RAM &middot; HALF-PAGE HORIZONTAL &middot; RED PUNCH</div>
 </div>
 <div class="eyebrow">RE Magazine - NRECA Membership Directory - July 2026 - V4</div>
-<h1>David - your edits applied to Mockup 4. Other 4 untouched - waiting for your read.</h1>
+<h1>David - M4 V5 with your 2026-06-02 edits applied. Other 4 untouched - waiting for your read.</h1>
 <p>V4 changes (Mockup 4 only, per your June 2 critique): headline moved to top + larger + bold ("Five AI Products. One pilot. Immediate ROI."), every tile gets an ROI line in gold, full ROI promise strip across the bottom ("typical co-op pilot pays back in < 90 days"), NRECA badge enlarged + in red, your name + phone bold, QR code added bottom-right pointing to enterprise.colaberry.ai/utility-ai with "SCAN ME" tag. Mockups 1-3 + 5 unchanged - you did not weigh in on them, so I left them. If you want the same ROI treatment applied to those too, say the word.</p>
 <div class="spec-callout"><strong>From David's response (2026-06-02 morning):</strong> "I've booked a half page, four color, horizontal ad. All copy must be uploaded by Thursday evening at the latest. We'll need to pack a punch ... what attracts our eye's as readers? My thought is red - so lets see 'what' in red can be integrated into the ad for the 'punch'."</div>
 </div>
@@ -1001,58 +1119,58 @@ TRUSTED<br>
 <div class="ad-mockup-shell">
 <div class="ad-mockup-meta">
 <div>
-<div class="label">Mockup 4 · V2 (David's edits applied)</div>
-<div class="name">Five Platforms — Immediate ROI</div>
+<div class="label">Mockup 4 · V5 (David's 2026-06-02 edits applied)</div>
+<div class="name">Five AI Automation Models — Built for Co-op Utilities</div>
 </div>
-<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>CHANGES: Headline at top + larger / ROI on every tile + bottom strip / NRECA red badge / bold David details / QR "SCAN ME" → utility-ai</div>
+<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>V5 CHANGES: Red headline at top reworded (V1 format) / Tile content aligned to same level + larger / Yellow ROI kept / "AUTOMATION ROI IN UNDER 90 DAYS" white +1 font / Footer reflowed: Colaberry left + URL under, QR between logos, NRECA centered, David right + email centered under</div>
 </div>
-<div class="ad-mockup m4">
-<!-- David's edit: Headline at TOP, larger + bold -->
-<div class="m4-headline">Five AI Products. One pilot.<br>Immediate ROI for your co-op.</div>
-<div class="m4-sub">All five run on your stack - on-prem, AWS, Azure, or GCP. SOC 2 + NERC CIP. No model training on your data. Pilot pays back in &lt; 90 days.</div>
-<div class="m4-bar">FIVE AI PRODUCTS &middot; BUILT FOR COOPERATIVE UTILITIES</div>
+<div class="ad-mockup m4 m4-v5">
+<!-- David's V5 edit: red headline at TOP, V1 format, reworded -->
+<div class="m4-bar-v5">FIVE AI AUTOMATION MODELS &middot; BUILT SPECIFIC TO CO-OP UTILITIES</div>
 <div class="m4-tiles">
 <div class="m4-tile t1">
 <div class="name">Outage IQ</div>
-<div class="desc">Predictive + post-event root-cause analyst. SCADA-aware.</div>
-<div class="roi">$180K saved per major outage. 7-min RCA.</div>
+<div class="desc">Predictive plus post-event root-cause analyst.<br>SCADA-aware.</div>
+<div class="roi">$180K saved per major outage.<br>7-min RCA.</div>
 </div>
 <div class="m4-tile t2">
 <div class="name">Crew Capture</div>
-<div class="desc">Voice-dictated outage reports (90s/truck-roll). OSHA + NESC auto-drafted.</div>
-<div class="roi">38% faster journeyman ramp. Tribal knowledge preserved.</div>
+<div class="desc">Voice-dictated outage reports.<br>OSHA + NESC auto-drafted.</div>
+<div class="roi">38% faster journeyman ramp.<br>Tribal knowledge preserved.</div>
 </div>
 <div class="m4-tile t3">
 <div class="name">Member Voice</div>
-<div class="desc">Inbound triage + storm-aware FAQ. Auto + human handoff.</div>
-<div class="roi">60% lower CSR wait. Member NPS +12 pts.</div>
+<div class="desc">Inbound triage + storm-aware FAQ.<br>Auto plus human handoff.</div>
+<div class="roi">60% lower CSR wait.<br>Member NPS +12 pts.</div>
 </div>
 <div class="m4-tile t4">
 <div class="name">Rate Case IQ</div>
-<div class="desc">Filing prep + precedent scan. Combines w/ Compliance.</div>
-<div class="roi">3 weeks &rarr; 4 days. Zero NERC violations.</div>
+<div class="desc">Filing prep + precedent scan.<br>Combines with Compliance.</div>
+<div class="roi">3 weeks to 4 days.<br>Zero NERC violations.</div>
 </div>
 <div class="m4-tile t5">
 <div class="name">Compliance Companion</div>
-<div class="desc">NERC + NESC + OSHA tracker. Audit-ready every day.</div>
+<div class="desc">NERC + NESC + OSHA tracker.<br>Audit-ready every day.</div>
 <div class="roi">$50K/yr penalty avoidance per pilot.</div>
 </div>
 </div>
-<!-- David's edit: ROI strip across bottom -->
-<div class="m4-roi-strip">Typical co-op pilot pays back in <span class="pct">&lt; 90 days</span></div>
-<!-- David's edit: NRECA larger + RED + bold David details + QR code "Scan Me" -->
-<div class="m4-footer-v2">
-<div class="left">
+<!-- David's V5 edit: ROI strip - "AUTOMATION ROI IN UNDER 90 DAYS" white, +1 font -->
+<div class="m4-roi-strip-v5">AUTOMATION ROI IN UNDER 90 DAYS</div>
+<!-- David's V5 edit: footer reflow - 4 columns -->
+<div class="m4-footer-v5">
+<div class="col col-colaberry">
 <img src="img/ad-mockups-2026-06-02/logo-colaberry.png" class="logo" alt="Colaberry">
-<div class="contact">
 <div class="url">enterprise.colaberry.ai/utility-ai</div>
-<div class="name">David Lahme &middot; 603-828-6265</div>
 </div>
-</div>
-<div class="nreca-v2">NRECA<span class="small">SUPPORTING MEMBER</span></div>
-<div class="qr-block">
+<div class="col col-qr">
 <img src="img/ad-mockups-2026-06-02/qr-utility-ai.png" alt="QR to enterprise.colaberry.ai/utility-ai">
-<div class="scan">SCAN ME</div>
+</div>
+<div class="col col-nreca">
+<div class="nreca-badge">NRECA<span>SUPPORTING MEMBER</span></div>
+</div>
+<div class="col col-david">
+<div class="david-name">David Lahme &middot; 603-828-6265</div>
+<div class="david-email">dlahme@colaberry.com</div>
 </div>
 </div>
 </div>
