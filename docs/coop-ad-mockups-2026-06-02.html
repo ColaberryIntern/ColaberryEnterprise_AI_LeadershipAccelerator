@@ -164,34 +164,18 @@
     font-family: Georgia, 'Times New Roman', serif;
   }
   .m1-left {
-    background: var(--navy-deep);
+    background-image: linear-gradient(135deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.25) 60%, rgba(15,23,42,0.85) 100%), url('img/ad-mockups-2026-06-02/01-lineman-silhouette.jpg');
+    background-size: cover;
+    background-position: center;
     color: white;
-    padding: 28px 24px;
+    padding: 22px 20px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-  }
-  .m1-left .photo-slug {
-    flex: 1;
-    border: 1px dashed rgba(255,255,255,0.3);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: #cbd5e0;
-    font-size: 11px;
-    letter-spacing: 1.5px;
-    padding: 16px;
-  }
-  .m1-left .silhouette {
-    font-size: 64px;
-    color: var(--gold-light);
-    line-height: 1;
-    margin-bottom: 8px;
+    justify-content: flex-end;
+    position: relative;
   }
   .m1-left .nreca-badge {
-    margin-top: 14px;
+    margin-top: auto;
     padding: 6px 10px;
     background: white;
     color: var(--navy);
@@ -200,6 +184,14 @@
     letter-spacing: 1.5px;
     text-align: center;
     border-radius: 2px;
+  }
+  .m1-left .photo-credit {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.5px;
   }
   .m1-right {
     padding: 30px 30px 24px;
@@ -272,12 +264,27 @@
      MOCKUP 2: AI in Plain English (cream, 3-col, red CTA button)
      ============================================ */
   .m2 {
-    background: var(--cream);
+    background-color: var(--cream);
+    background-image:
+      linear-gradient(90deg, var(--cream) 0%, var(--cream) 62%, rgba(250,243,227,0.85) 70%, rgba(250,243,227,0) 100%),
+      url('img/ad-mockups-2026-06-02/03-executive-portrait.jpg');
+    background-size: cover;
+    background-position: 90% center;
+    background-repeat: no-repeat;
     padding: 26px 30px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     font-family: 'Inter', sans-serif;
+    position: relative;
+  }
+  .m2 .photo-credit-strip {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    font-size: 8px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
   }
   .m2 .pre-head {
     font-size: 10px;
@@ -300,6 +307,7 @@
     grid-template-columns: 1fr 1fr 1fr;
     gap: 18px;
     margin-top: 18px;
+    max-width: 62%;
   }
   .m2 .col .q {
     font-size: 13px;
@@ -382,6 +390,20 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    background-image:
+      linear-gradient(135deg, rgba(26,26,26,0.92) 0%, rgba(26,26,26,0.7) 50%, rgba(26,26,26,0.95) 100%),
+      url('img/ad-mockups-2026-06-02/02-power-grid-sunset.jpg');
+    background-size: cover;
+    background-position: center;
+    position: relative;
+  }
+  .m3-right .photo-credit {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.45);
+    letter-spacing: 0.5px;
   }
   .m3-right .pre-head {
     font-size: 10px;
@@ -459,10 +481,39 @@
     text-transform: uppercase;
     text-align: center;
   }
-  .m4-headline {
-    padding: 20px 26px 14px;
+  .m4-hero-strip {
+    height: 78px;
+    background-image:
+      linear-gradient(180deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.85) 100%),
+      url('img/ad-mockups-2026-06-02/06-data-viz.jpg');
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    letter-spacing: 3px;
+    font-weight: 700;
+    text-transform: uppercase;
     text-align: center;
-    font-size: 26px;
+    padding: 0 22px;
+    position: relative;
+  }
+  .m4-hero-strip .photo-credit {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 0.5px;
+    text-transform: none;
+    font-weight: 400;
+  }
+  .m4-headline {
+    padding: 16px 26px 10px;
+    text-align: center;
+    font-size: 24px;
     font-family: Georgia, serif;
     color: var(--navy-deep);
     font-weight: 700;
@@ -553,18 +604,34 @@
     position: relative;
   }
   .m5-photo-block {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px dashed rgba(255,255,255,0.25);
-    margin: 12px;
+    background-size: cover;
+    background-position: center;
+    margin: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 10px;
+    color: white;
     font-size: 10px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: #cbd5e0;
-    padding: 10px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    position: relative;
+  }
+  .m5-photo-block.veteran {
+    background-image: linear-gradient(180deg, rgba(0,0,0,0.0) 50%, rgba(0,0,0,0.7) 100%), url('img/ad-mockups-2026-06-02/04-veteran-worker.jpg');
+  }
+  .m5-photo-block.apprentice {
+    background-image: linear-gradient(180deg, rgba(0,0,0,0.0) 50%, rgba(0,0,0,0.7) 100%), url('img/ad-mockups-2026-06-02/05-apprentice-worker.jpg');
+  }
+  .m5-photo-block .credit {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 7px;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 0.3px;
+    text-transform: none;
   }
   .m5-gap-label {
     background: var(--red);
@@ -686,13 +753,8 @@
 </div>
 <div class="ad-mockup m1">
 <div class="m1-left">
-<div class="photo-slug">
-<div class="silhouette">&#9650;</div>
-[HERO PHOTO TBD]<br>
-Lineman atop pole<br>
-golden hour silhouette
-</div>
 <div class="nreca-badge">NRECA SUPPORTING MEMBER</div>
+<div class="photo-credit">Mohammad Razaghi / Unsplash</div>
 </div>
 <div class="m1-right">
 <div>
@@ -734,7 +796,8 @@ TRUSTED<br>
 <div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>RED ELEMENT: Italic CEO questions + red CTA button</div>
 </div>
 <div class="ad-mockup m2">
-<div>
+<div class="photo-credit-strip">Vitaly Gariev / Unsplash</div>
+<div style="max-width:62%">
 <div class="pre-head">Independent &middot; Member-aligned &middot; NRECA Supporting Member</div>
 <div class="headline">What 837 co-op CEOs asked us<br>about AI last quarter.</div>
 </div>
@@ -787,6 +850,7 @@ David Lahme, VP Global Partnerships - 603-828-6265
 <div class="caption">Outage report to root cause.<br>Average across 6 co-op pilots.</div>
 </div>
 <div class="m3-right">
+<div class="photo-credit">Matthew Henry / Unsplash</div>
 <div>
 <div class="pre-head">Colaberry Outage Intelligence</div>
 <div class="headline">From outage report<br>to root cause -<br>before the truck rolls.</div>
@@ -825,6 +889,10 @@ David Lahme, VP Global Partnerships - 603-828-6265
 </div>
 <div class="ad-mockup m4">
 <div class="m4-bar">FIVE AI PRODUCTS &middot; BUILT FOR COOPERATIVE UTILITIES</div>
+<div class="m4-hero-strip">
+RUNS ON YOUR STACK &middot; ON-PREM OR CLOUD &middot; SOC 2 + NERC CIP
+<div class="photo-credit">Logan Voss / Unsplash</div>
+</div>
 <div class="m4-headline">Pick the one that solves your sharpest pain.<br>Use the rest when you're ready.</div>
 <div class="m4-sub">All five run on your stack: on-prem, AWS, Azure, or GCP. SOC 2 + NERC CIP documented. No model training on your data. Pilot in 30 days.</div>
 <div class="m4-tiles">
@@ -862,9 +930,9 @@ David Lahme, VP Global Partnerships - 603-828-6265
 </div>
 <div class="ad-mockup m5">
 <div class="m5-left">
-<div class="m5-photo-block">[VETERAN<br>JOURNEYMAN]<br>30 years experience</div>
+<div class="m5-photo-block veteran">VETERAN<br>30 yrs experience<div class="credit">Ricardio de Penning / Unsplash</div></div>
 <div class="m5-gap-label">8 YEARS</div>
-<div class="m5-photo-block">[APPRENTICE]<br>3 months on the job</div>
+<div class="m5-photo-block apprentice">APPRENTICE<br>3 months in<div class="credit">Mufid Majnun / Unsplash</div></div>
 </div>
 <div class="m5-right">
 <div>
