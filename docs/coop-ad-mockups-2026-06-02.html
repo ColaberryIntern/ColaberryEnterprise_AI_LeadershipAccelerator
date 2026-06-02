@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RE Magazine half-page horizontal ad mockups - for Ali review 2026-06-02</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-deep: #0f172a;
+    --gold: #d4a017;
+    --gold-light: #fbbf24;
+    --cream: #faf3e3;
+    --sand: #f5ead0;
+    --red: #c1272d;
+    --red-bright: #e11d2e;
+    --ink: #0a0a0a;
+    --slate: #475569;
+    --muted: #94a3b8;
+    --gray-line: #cbd5e1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #e2e8f0;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: #1a202c;
+    line-height: 1.5;
+  }
+  .doc {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  .doc-header {
+    background: linear-gradient(135deg, #0f172a 0%, #1a365d 100%);
+    color: white;
+    padding: 28px 36px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+  .doc-header .eyebrow {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    font-weight: 700;
+  }
+  .doc-header h1 {
+    margin: 8px 0 6px;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+  .doc-header p {
+    margin: 0;
+    color: #cbd5e0;
+    font-size: 14px;
+  }
+  .spec-callout {
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: rgba(212, 30, 46, 0.18);
+    border-left: 4px solid var(--red-bright);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    color: #fee2e2;
+  }
+  .spec-callout strong { color: white; }
+
+  /* The actual ad mockup container - half-page horizontal. */
+  /* Half-page horizontal trim is roughly 7.5" x 4.875" = aspect 1.54:1. */
+  /* We render at 920px wide x 597px tall for fidelity. */
+  .ad-mockup-shell {
+    background: white;
+    border-radius: 10px;
+    padding: 24px 26px;
+    margin-bottom: 28px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+  .ad-mockup-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .ad-mockup-meta .label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .ad-mockup-meta .name {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--navy-deep);
+  }
+  .ad-mockup-meta .placement {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--slate);
+  }
+  .ad-mockup {
+    width: 100%;
+    aspect-ratio: 1.54 / 1;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--gray-line);
+    border-radius: 4px;
+  }
+  .ad-meta-strip {
+    font-size: 11px;
+    color: var(--slate);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+  .ad-meta-strip strong { color: var(--navy); }
+
+  /* Feedback widget */
+  .feedback {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border-radius: 6px;
+  }
+  .feedback .heading {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--navy);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .feedback label {
+    display: inline-block;
+    margin-right: 18px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .feedback label strong { font-weight: 700; }
+  .feedback textarea {
+    width: 100%;
+    min-height: 80px;
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid var(--gray-line);
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    box-sizing: border-box;
+    resize: vertical;
+  }
+
+  /* ============================================
+     MOCKUP 1: Crew Productivity (cream + navy + red stamp)
+     ============================================ */
+  .m1 {
+    background: var(--cream);
+    display: grid;
+    grid-template-columns: 35% 65%;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .m1-left {
+    background: var(--navy-deep);
+    color: white;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .m1-left .photo-slug {
+    flex: 1;
+    border: 1px dashed rgba(255,255,255,0.3);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #cbd5e0;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    padding: 16px;
+  }
+  .m1-left .silhouette {
+    font-size: 64px;
+    color: var(--gold-light);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .m1-left .nreca-badge {
+    margin-top: 14px;
+    padding: 6px 10px;
+    background: white;
+    color: var(--navy);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-align: center;
+    border-radius: 2px;
+  }
+  .m1-right {
+    padding: 30px 30px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+  }
+  .m1-right .pre-head {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+  }
+  .m1-right .headline {
+    font-size: 30px;
+    line-height: 1.1;
+    color: var(--navy-deep);
+    font-weight: 700;
+    margin-top: 10px;
+    letter-spacing: -0.5px;
+  }
+  .m1-right .bullets {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.7;
+  }
+  .m1-right .bullets div { padding-left: 18px; position: relative; }
+  .m1-right .bullets div:before {
+    content: '+';
+    position: absolute;
+    left: 0;
+    color: var(--gold);
+    font-weight: 700;
+  }
+  .m1-stamp {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    transform: rotate(-6deg);
+    background: var(--red);
+    color: white;
+    padding: 10px 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    border-radius: 2px;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+    text-align: center;
+    line-height: 1.3;
+  }
+  .m1-stamp .big {
+    display: block;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+  }
+  .m1-footer {
+    font-size: 10px;
+    color: var(--slate);
+    font-family: 'Inter', sans-serif;
+    margin-top: 14px;
+  }
+
+  /* ============================================
+     MOCKUP 2: AI in Plain English (cream, 3-col, red CTA button)
+     ============================================ */
+  .m2 {
+    background: var(--cream);
+    padding: 26px 30px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-family: 'Inter', sans-serif;
+  }
+  .m2 .pre-head {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 700;
+  }
+  .m2 .headline {
+    font-size: 30px;
+    font-family: Georgia, serif;
+    color: var(--navy-deep);
+    margin-top: 8px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .m2 .cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 18px;
+    margin-top: 18px;
+  }
+  .m2 .col .q {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--red);
+    font-style: italic;
+  }
+  .m2 .col .a {
+    font-size: 11px;
+    color: var(--ink);
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+  .m2 .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0,0,0,0.1);
+  }
+  .m2 .footer-text {
+    font-size: 11px;
+    color: var(--slate);
+  }
+  .m2 .cta-button {
+    background: var(--red);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 22px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 3px 0 #8b1e22;
+  }
+
+  /* ============================================
+     MOCKUP 3: 7 Minutes (charcoal + giant red numeral)
+     ============================================ */
+  .m3 {
+    background: #1a1a1a;
+    color: white;
+    display: grid;
+    grid-template-columns: 40% 60%;
+    font-family: 'Inter', sans-serif;
+  }
+  .m3-left {
+    padding: 22px 18px 22px 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    border-right: 1px solid rgba(255,255,255,0.1);
+  }
+  .m3-left .huge {
+    font-size: 140px;
+    font-weight: 800;
+    color: var(--red-bright);
+    line-height: 0.85;
+    letter-spacing: -6px;
+    font-family: 'Inter', sans-serif;
+  }
+  .m3-left .min-label {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-top: -6px;
+    color: white;
+  }
+  .m3-left .caption {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .m3-right {
+    padding: 26px 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .m3-right .pre-head {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    font-weight: 700;
+  }
+  .m3-right .headline {
+    font-size: 26px;
+    color: white;
+    line-height: 1.15;
+    margin-top: 8px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .m3-right .body {
+    margin-top: 12px;
+    font-size: 11px;
+    color: #cbd5e0;
+    line-height: 1.6;
+  }
+  .m3-right .metric-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.12);
+  }
+  .m3-right .metric .n {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--gold-light);
+  }
+  .m3-right .metric .l {
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .m3-right .footer {
+    margin-top: 14px;
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .m3-logo {
+    color: white;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+
+  /* ============================================
+     MOCKUP 4: Five Platforms (red top bar + tile row)
+     ============================================ */
+  .m4 {
+    background: white;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Inter', sans-serif;
+  }
+  .m4-bar {
+    background: var(--red);
+    color: white;
+    padding: 10px 24px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .m4-headline {
+    padding: 20px 26px 14px;
+    text-align: center;
+    font-size: 26px;
+    font-family: Georgia, serif;
+    color: var(--navy-deep);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+  }
+  .m4-sub {
+    padding: 0 26px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--slate);
+    margin-top: 2px;
+  }
+  .m4-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 10px;
+    padding: 18px 22px;
+    flex: 1;
+  }
+  .m4-tile {
+    background: var(--cream);
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 12px 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .m4-tile .icon {
+    font-size: 24px;
+    color: var(--navy);
+    margin-bottom: 6px;
+  }
+  .m4-tile .name {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--navy-deep);
+    line-height: 1.2;
+  }
+  .m4-tile .desc {
+    font-size: 9px;
+    color: var(--slate);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+  .m4-footer {
+    padding: 10px 24px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: var(--slate);
+  }
+  .m4-footer .logo {
+    font-weight: 800;
+    color: var(--navy-deep);
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+  .m4-footer .badge {
+    background: var(--navy);
+    color: white;
+    padding: 4px 8px;
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    border-radius: 2px;
+  }
+
+  /* ============================================
+     MOCKUP 5: 40% Workforce Crisis (split + giant red %)
+     ============================================ */
+  .m5 {
+    background: var(--cream);
+    display: grid;
+    grid-template-columns: 42% 58%;
+    font-family: 'Inter', sans-serif;
+  }
+  .m5-left {
+    background: linear-gradient(180deg, #2c5282 0%, #1a365d 100%);
+    color: white;
+    display: grid;
+    grid-template-rows: 1fr auto 1fr;
+    padding: 0;
+    position: relative;
+  }
+  .m5-photo-block {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px dashed rgba(255,255,255,0.25);
+    margin: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #cbd5e0;
+    padding: 10px;
+  }
+  .m5-gap-label {
+    background: var(--red);
+    color: white;
+    text-align: center;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin: 0 12px;
+  }
+  .m5-right {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+  }
+  .m5-right .huge-pct {
+    font-size: 96px;
+    font-weight: 800;
+    color: var(--red);
+    line-height: 0.9;
+    letter-spacing: -4px;
+  }
+  .m5-right .headline {
+    font-family: Georgia, serif;
+    font-size: 22px;
+    color: var(--navy-deep);
+    margin-top: 4px;
+    line-height: 1.15;
+    font-weight: 700;
+  }
+  .m5-right .sub {
+    font-size: 12px;
+    color: var(--ink);
+    margin-top: 10px;
+    line-height: 1.55;
+  }
+  .m5-right .cta {
+    margin-top: 12px;
+    display: inline-block;
+    background: var(--navy-deep);
+    color: white;
+    padding: 10px 18px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border-radius: 2px;
+  }
+  .m5-right .footer {
+    margin-top: 12px;
+    font-size: 9px;
+    color: var(--slate);
+    letter-spacing: 0.5px;
+  }
+
+  .doc-footer {
+    margin-top: 40px;
+    padding: 28px 36px;
+    background: var(--navy-deep);
+    color: white;
+    border-radius: 12px;
+  }
+  .doc-footer .eyebrow {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    font-weight: 700;
+  }
+  .doc-footer ul { font-size: 13px; color: #cbd5e0; line-height: 1.7; }
+  .gen-btn {
+    margin-top: 16px;
+    background: var(--gold-light);
+    color: var(--navy-deep);
+    padding: 12px 28px;
+    border: 0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .gen-output {
+    width: 100%;
+    min-height: 220px;
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    background: #1e293b;
+    color: #cbd5e0;
+    box-sizing: border-box;
+    resize: vertical;
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<div class="doc-header">
+<div class="eyebrow">RE Magazine - NRECA Membership Directory - July 2026</div>
+<h1>Half-page horizontal ad mockups. 5 visual directions. Red as the punch color, per David's note this morning.</h1>
+<p>For Ali review before sending to David + Ram. David booked half-page, 4-color, horizontal. Copy deadline Thursday EOD. Each mockup below is at trim aspect ratio (1.54:1) and uses real typography, colors, and layout - not ASCII sketches this time. Pick one (or remix two) and tell me what to change.</p>
+<div class="spec-callout"><strong>From David's response (2026-06-02 morning):</strong> "I've booked a half page, four color, horizontal ad. All copy must be uploaded by Thursday evening at the latest. We'll need to pack a punch ... what attracts our eye's as readers? My thought is red - so lets see 'what' in red can be integrated into the ad for the 'punch'."</div>
+</div>
+
+<!-- ============================================ MOCKUP 1 ============================================ -->
+<div class="ad-mockup-shell">
+<div class="ad-mockup-meta">
+<div>
+<div class="label">Mockup 1</div>
+<div class="name">Crew Productivity</div>
+</div>
+<div class="placement">SUGGESTED: RHP opp. Co-op People / Co-op Forum<br>RED ELEMENT: Diagonal "Trusted Co-Op Partner" stamp</div>
+</div>
+<div class="ad-mockup m1">
+<div class="m1-left">
+<div class="photo-slug">
+<div class="silhouette">&#9650;</div>
+[HERO PHOTO TBD]<br>
+Lineman atop pole<br>
+golden hour silhouette
+</div>
+<div class="nreca-badge">NRECA SUPPORTING MEMBER</div>
+</div>
+<div class="m1-right">
+<div>
+<div class="pre-head">Field-grade AI for distribution co-ops</div>
+<div class="headline">Your linemen<br>shouldn't be writing<br>reports.</div>
+<div class="bullets">
+<div>Voice-dictated outage reports. 90 seconds per truck-roll.</div>
+<div>OSHA + NESC forms auto-drafted from the work order.</div>
+<div>Tribal knowledge captured before journeymen retire.</div>
+</div>
+</div>
+<div class="m1-footer">
+<strong style="color:var(--navy-deep)">colaberry.ai/co-ops</strong>&nbsp;&middot;&nbsp;David Lahme, 603-828-6265
+</div>
+<div class="m1-stamp">
+TRUSTED<br>
+<span class="big">CO-OP PARTNER</span>
+</div>
+</div>
+</div>
+<div class="ad-meta-strip"><strong>Mood:</strong> Patagonia field-gear, not SaaS. Cream + navy + gold; red is the diagonal stamp only - eye-catch in a sea of utility ads. <strong>Photography:</strong> commissioned or NRECA archive lineman silhouette at golden hour. <strong>Print risk:</strong> 30pt headline drops to ~28 at half-page; still readable.</div>
+<div class="feedback">
+<div class="heading">Your feedback on Mockup 1</div>
+<label><input type="radio" name="v-1" value="finalist"> <strong style="color:#14532d">Make this the finalist</strong></label>
+<label><input type="radio" name="v-1" value="keep"> <strong>Keep, push to production</strong></label>
+<label><input type="radio" name="v-1" value="edit"> <strong style="color:#78350f">Keep with edits</strong></label>
+<label><input type="radio" name="v-1" value="drop"> <strong style="color:#7f1d1d">Drop</strong></label>
+<textarea id="n-1" placeholder="Specific edits: headline rewrite, swap the photo, add/remove the NRECA badge, change the stamp text..."></textarea>
+</div>
+</div>
+
+<!-- ============================================ MOCKUP 2 ============================================ -->
+<div class="ad-mockup-shell">
+<div class="ad-mockup-meta">
+<div>
+<div class="label">Mockup 2</div>
+<div class="name">AI in Plain English</div>
+</div>
+<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>RED ELEMENT: Italic CEO questions + red CTA button</div>
+</div>
+<div class="ad-mockup m2">
+<div>
+<div class="pre-head">Independent &middot; Member-aligned &middot; NRECA Supporting Member</div>
+<div class="headline">What 837 co-op CEOs asked us<br>about AI last quarter.</div>
+</div>
+<div class="cols">
+<div class="col">
+<div class="q">"Is it safe?"</div>
+<div class="a">We explain the risk model and the SOC 2 + NERC CIP controls in plain English. No jargon, no slides.</div>
+</div>
+<div class="col">
+<div class="q">"Will it replace our people?"</div>
+<div class="a">We show how AI augments your crew, not eliminates it. Field examples from co-ops already piloting.</div>
+</div>
+<div class="col">
+<div class="q">"Where do we start?"</div>
+<div class="a">We help you pick one use case that pays for the next one. Production in 90 days, not 18 months.</div>
+</div>
+</div>
+<div class="footer">
+<div class="footer-text">
+<strong style="color:var(--navy-deep)">colaberry.ai/co-op-briefing</strong><br>
+David Lahme, VP Global Partnerships - 603-828-6265
+</div>
+<div class="cta-button">Book a 30-min Briefing &rarr;</div>
+</div>
+</div>
+<div class="ad-meta-strip"><strong>Mood:</strong> trusted-advisor, editorial. Cream + navy + red + one gold accent. <strong>The italic red questions</strong> + the rounded red CTA button are the punch. <strong>Print risk:</strong> 3-column body at half-page is tight; if 12pt is too small at press, collapse to 2 columns.</div>
+<div class="feedback">
+<div class="heading">Your feedback on Mockup 2</div>
+<label><input type="radio" name="v-2" value="finalist"> <strong style="color:#14532d">Make this the finalist</strong></label>
+<label><input type="radio" name="v-2" value="keep"> <strong>Keep, push to production</strong></label>
+<label><input type="radio" name="v-2" value="edit"> <strong style="color:#78350f">Keep with edits</strong></label>
+<label><input type="radio" name="v-2" value="drop"> <strong style="color:#7f1d1d">Drop</strong></label>
+<textarea id="n-2" placeholder="Swap a question, change the CTA wording, tighten the body, change the count from 837 to something else..."></textarea>
+</div>
+</div>
+
+<!-- ============================================ MOCKUP 3 ============================================ -->
+<div class="ad-mockup-shell">
+<div class="ad-mockup-meta">
+<div>
+<div class="label">Mockup 3</div>
+<div class="name">7 Minutes (Outage to Insight)</div>
+</div>
+<div class="placement">SUGGESTED: RHP opp. G&amp;T Focus<br>RED ELEMENT: Oversized "7" numeral fills the left third</div>
+</div>
+<div class="ad-mockup m3">
+<div class="m3-left">
+<div class="huge">7</div>
+<div class="min-label">MINUTES</div>
+<div class="caption">Outage report to root cause.<br>Average across 6 co-op pilots.</div>
+</div>
+<div class="m3-right">
+<div>
+<div class="pre-head">Colaberry Outage Intelligence</div>
+<div class="headline">From outage report<br>to root cause -<br>before the truck rolls.</div>
+<div class="body">SCADA-aware. Crew-aware. NERC-aware. Sits on top of your existing OMS - no rip-and-replace. Six co-ops in pilot, two in production.</div>
+</div>
+<div class="metric-strip">
+<div class="metric"><div class="n">93%</div><div class="l">Pattern<br>match rate</div></div>
+<div class="metric"><div class="n">$0</div><div class="l">Net new<br>infrastructure</div></div>
+<div class="metric"><div class="n">30-day</div><div class="l">Pilot<br>standup</div></div>
+</div>
+<div class="footer">
+<div>See it live at TechAdvantage 2026 &middot; Booth TBD</div>
+<div class="m3-logo">COLABERRY</div>
+</div>
+</div>
+</div>
+<div class="ad-meta-strip"><strong>Mood:</strong> McKinsey + ABB. Confidence through numbers. Charcoal/black background is the high-contrast move (most other utility ads will be white). <strong>The red "7"</strong> is the eye-magnet. <strong>Print risk:</strong> dark background uses more ink budget at press - confirm with magazine.</div>
+<div class="feedback">
+<div class="heading">Your feedback on Mockup 3</div>
+<label><input type="radio" name="v-3" value="finalist"> <strong style="color:#14532d">Make this the finalist</strong></label>
+<label><input type="radio" name="v-3" value="keep"> <strong>Keep, push to production</strong></label>
+<label><input type="radio" name="v-3" value="edit"> <strong style="color:#78350f">Keep with edits</strong></label>
+<label><input type="radio" name="v-3" value="drop"> <strong style="color:#7f1d1d">Drop</strong></label>
+<textarea id="n-3" placeholder="Change the number (7 -> 5? 10?), adjust the metric callouts, kill the dark background and go cream, swap the CTA..."></textarea>
+</div>
+</div>
+
+<!-- ============================================ MOCKUP 4 ============================================ -->
+<div class="ad-mockup-shell">
+<div class="ad-mockup-meta">
+<div>
+<div class="label">Mockup 4</div>
+<div class="name">Five Platforms (Catalog)</div>
+</div>
+<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>RED ELEMENT: Full-width red bar at the top + accent line</div>
+</div>
+<div class="ad-mockup m4">
+<div class="m4-bar">FIVE AI PRODUCTS &middot; BUILT FOR COOPERATIVE UTILITIES</div>
+<div class="m4-headline">Pick the one that solves your sharpest pain.<br>Use the rest when you're ready.</div>
+<div class="m4-sub">All five run on your stack: on-prem, AWS, Azure, or GCP. SOC 2 + NERC CIP documented. No model training on your data. Pilot in 30 days.</div>
+<div class="m4-tiles">
+<div class="m4-tile"><div class="icon">&#9889;</div><div class="name">Outage IQ</div><div class="desc">SCADA-aware root cause analyst</div></div>
+<div class="m4-tile"><div class="icon">&#128300;</div><div class="name">Crew Capture</div><div class="desc">Tribal knowledge to searchable playbook</div></div>
+<div class="m4-tile"><div class="icon">&#128222;</div><div class="name">Member Voice</div><div class="desc">Inbound call triage + FAQ bot</div></div>
+<div class="m4-tile"><div class="icon">&#128202;</div><div class="name">Rate Case IQ</div><div class="desc">Filing prep + precedent scan</div></div>
+<div class="m4-tile"><div class="icon">&#10004;</div><div class="name">Compliance Companion</div><div class="desc">NERC + NESC + OSHA tracker</div></div>
+</div>
+<div class="m4-footer">
+<div class="logo">colaberry.ai/co-op-platforms</div>
+<div>David Lahme &middot; 603-828-6265</div>
+<div class="badge">NRECA MEMBER</div>
+</div>
+</div>
+<div class="ad-meta-strip"><strong>Mood:</strong> tech catalog, scannable. <strong>Top red bar</strong> is the eye-catch - readable from across a desk. <strong>Print risk:</strong> 5 tiles at half-page = each tile is ~120px wide; icon + name + 1-line desc only. If we feel cramped at press, drop to 4 tiles.</div>
+<div class="feedback">
+<div class="heading">Your feedback on Mockup 4</div>
+<label><input type="radio" name="v-4" value="finalist"> <strong style="color:#14532d">Make this the finalist</strong></label>
+<label><input type="radio" name="v-4" value="keep"> <strong>Keep, push to production</strong></label>
+<label><input type="radio" name="v-4" value="edit"> <strong style="color:#78350f">Keep with edits</strong></label>
+<label><input type="radio" name="v-4" value="drop"> <strong style="color:#7f1d1d">Drop</strong></label>
+<textarea id="n-4" placeholder="Different platform names, different icons (no emoji - real symbols), drop to 4 tiles, change top bar text, kill the NRECA badge..."></textarea>
+</div>
+</div>
+
+<!-- ============================================ MOCKUP 5 ============================================ -->
+<div class="ad-mockup-shell">
+<div class="ad-mockup-meta">
+<div>
+<div class="label">Mockup 5</div>
+<div class="name">40% Workforce Crisis</div>
+</div>
+<div class="placement">SUGGESTED: LHP opp. Co-op People<br>RED ELEMENT: Giant 40% numeral + red gap label</div>
+</div>
+<div class="ad-mockup m5">
+<div class="m5-left">
+<div class="m5-photo-block">[VETERAN<br>JOURNEYMAN]<br>30 years experience</div>
+<div class="m5-gap-label">8 YEARS</div>
+<div class="m5-photo-block">[APPRENTICE]<br>3 months on the job</div>
+</div>
+<div class="m5-right">
+<div>
+<div class="huge-pct">40%</div>
+<div class="headline">of your linemen retire in 8 years.<br>What's your transition plan?</div>
+<div class="sub"><strong>Crew Capture</strong> turns voice + photo + GPS in the field into searchable repair playbooks indexed by equipment model, fault type, and crew lead. New crews pull up "how Roy fixed it" in 8 seconds.</div>
+</div>
+<div>
+<div class="cta">Schedule a 20-min walk-through &rarr;</div>
+<div class="footer">colaberry.ai/crew-capture &middot; David Lahme, 603-828-6265 &middot; NRECA Supporting Member</div>
+</div>
+</div>
+</div>
+<div class="ad-meta-strip"><strong>Mood:</strong> emotional + data. The split veteran/apprentice photos with the red "8 YEARS" gap label is the visual hook. <strong>40%</strong> in oversized red is the eye-magnet. <strong>Photography risk:</strong> needs commissioned shots (real co-op crews) or NRECA archive - stock will feel hollow. <strong>If we can't get photography:</strong> swap left half for typography + the 7 cooperative principles list.</div>
+<div class="feedback">
+<div class="heading">Your feedback on Mockup 5</div>
+<label><input type="radio" name="v-5" value="finalist"> <strong style="color:#14532d">Make this the finalist</strong></label>
+<label><input type="radio" name="v-5" value="keep"> <strong>Keep, push to production</strong></label>
+<label><input type="radio" name="v-5" value="edit"> <strong style="color:#78350f">Keep with edits</strong></label>
+<label><input type="radio" name="v-5" value="drop"> <strong style="color:#7f1d1d">Drop</strong></label>
+<textarea id="n-5" placeholder="Different statistic, photography direction, change Crew Capture to another product, rewrite the headline..."></textarea>
+</div>
+</div>
+
+<div class="doc-footer">
+<div class="eyebrow">Open questions for the production round</div>
+<ul>
+<li><strong>Photography path:</strong> Mockup 1 + Mockup 5 both call for real co-op crew shots. Options - (a) commission a half-day shoot at a local co-op, (b) license from NRECA archive, (c) substitute with typography-only versions if no photos available by Thursday.</li>
+<li><strong>NRECA Supporting Member badge:</strong> can we use it? David's earlier "Independent. Member-aligned. NRECA Supporting Member" pre-head only works if so.</li>
+<li><strong>Gold tier commitment:</strong> the 50% ad discount requires Gold ($9,500/yr). Without it the half-page is at sticker. Ram - need a yes/no.</li>
+<li><strong>QR code:</strong> mockups 1 and 4 have implicit URLs. Want a QR on any of them?</li>
+<li><strong>Stats verification:</strong> "837 co-op CEOs" (M2), "40% retire in 8 years" (M5), "93% pattern match + 6 co-ops in pilot" (M3) - confirm before press or soften to round numbers.</li>
+</ul>
+<button class="gen-btn" id="gen-btn">Generate reply for David + Ram</button>
+<textarea class="gen-output" id="gen-out" placeholder="After you pick verdicts above, click the button. Output appears here."></textarea>
+</div>
+
+</div>
+
+<script>
+document.getElementById('gen-btn').addEventListener('click', function() {
+  var names = {1:'Crew Productivity',2:'AI in Plain English',3:'7 Minutes (Outage to Insight)',4:'Five Platforms catalog',5:'40% Workforce Crisis'};
+  var verdictLabels = {finalist:'FINALIST',keep:'KEEP',edit:'KEEP W/ EDITS',drop:'DROP'};
+  var lines = [];
+  lines.push('David, Ram - half-page horizontal mockups review:');
+  lines.push('');
+  var finalists = [];
+  for (var i = 1; i <= 5; i++) {
+    var v = document.querySelector('input[name="v-' + i + '"]:checked');
+    var n = document.getElementById('n-' + i).value.trim();
+    if (!v && !n) continue;
+    var verdict = v ? verdictLabels[v.value] : '(no verdict)';
+    lines.push('MOCKUP ' + i + ' (' + names[i] + '): ' + verdict);
+    if (n) lines.push('  Notes: ' + n);
+    lines.push('');
+    if (v && v.value === 'finalist') finalists.push(i);
+  }
+  if (finalists.length) lines.push('FINALIST(S): Mockup ' + finalists.join(', '));
+  else lines.push('(No finalist marked - pick one to lock the production round.)');
+  document.getElementById('gen-out').value = lines.join('\n');
+});
+</script>
+
+</body></html>
