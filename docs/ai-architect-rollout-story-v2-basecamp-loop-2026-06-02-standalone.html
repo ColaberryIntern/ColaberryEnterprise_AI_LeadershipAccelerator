@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Basecamp loop — how a person + Claude Code + a BC ticket close together</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-deep: #0f172a;
+    --gold: #d4a017;
+    --gold-light: #fbbf24;
+    --cream: #faf3e3;
+    --red: #c1272d;
+    --green: #14532d;
+    --green-light: #bbf7d0;
+    --ink: #0a0a0a;
+    --slate: #475569;
+    --muted: #94a3b8;
+    --gray: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f1f5f9; font-family: Georgia, 'Times New Roman', serif; color: #1a202c; line-height: 1.65; }
+  .doc { max-width: 980px; margin: 0 auto; background: #fefaf3; }
+
+  .hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1a365d 60%, #14532d 100%);
+    color: white;
+    padding: 56px 48px;
+    text-align: center;
+  }
+  .hero img { height: 42px; display: block; margin: 0 auto 18px; }
+  .hero .eyebrow {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 5px;
+    text-transform: uppercase; color: var(--gold-light); font-weight: 700;
+  }
+  .hero h1 { margin: 14px 0 8px; font-size: 40px; line-height: 1.05; letter-spacing: -1px; font-weight: 800; }
+  .hero p { margin: 14px auto 0; color: #cbd5e0; font-size: 15px; max-width: 700px; line-height: 1.6; }
+
+  .section { padding: 44px 48px; }
+  .section.alt { background: #fefaf3; }
+  .section.dark { background: #0f172a; color: white; }
+  .section.cream { background: #faf3e3; }
+  .section.green-pad { background: #14532d; color: white; }
+  .section.gold-pad { background: #7c5012; color: white; }
+  .section.navy-pad { background: var(--navy); color: white; }
+
+  .section-eyebrow {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 3px;
+    text-transform: uppercase; font-weight: 700; color: var(--green);
+  }
+  .section.dark .section-eyebrow, .section.green-pad .section-eyebrow,
+  .section.navy-pad .section-eyebrow, .section.gold-pad .section-eyebrow {
+    color: var(--gold-light);
+  }
+  .section h2 { margin: 8px 0 16px; font-size: 30px; line-height: 1.15; }
+  .section h3 { font-size: 20px; margin: 22px 0 10px; }
+  .section p { font-size: 15px; margin: 0 0 12px; }
+  .section.dark p, .section.green-pad p, .section.navy-pad p, .section.gold-pad p { color: #cbd5e0; }
+
+  /* ============ THE LOOP DIAGRAM ============ */
+  .loop {
+    background: #0f172a;
+    border-radius: 12px;
+    padding: 32px 28px;
+    margin-top: 22px;
+    font-family: Arial, sans-serif;
+    position: relative;
+  }
+  .loop-ring {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .loop-node {
+    background: #1e293b;
+    border-radius: 10px;
+    padding: 16px 18px;
+    border-left: 4px solid var(--gold-light);
+    position: relative;
+  }
+  .loop-node.start { border-left-color: #c1272d; }
+  .loop-node.middle { border-left-color: var(--gold-light); }
+  .loop-node.end { border-left-color: var(--green-light); }
+  .loop-node .step-num {
+    font-family: Georgia, serif;
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--gold-light);
+    line-height: 0.9;
+  }
+  .loop-node .label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    margin-top: 4px;
+  }
+  .loop-node h4 {
+    color: white;
+    font-size: 15px;
+    margin: 4px 0 6px;
+    line-height: 1.2;
+  }
+  .loop-node .desc {
+    color: #cbd5e0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .loop-arrow {
+    text-align: center;
+    color: var(--gold-light);
+    font-size: 24px;
+    margin: 6px 0;
+    font-family: monospace;
+  }
+
+  /* ============ ROLES STRIP ============ */
+  .roles {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-top: 22px;
+    font-family: Arial, sans-serif;
+  }
+  .role-card {
+    background: white;
+    border-radius: 10px;
+    padding: 22px 22px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border-top: 6px solid var(--navy);
+  }
+  .role-card.human { border-top-color: #14532d; background: #ecfdf5; }
+  .role-card.ai { border-top-color: #d4a017; background: #fef9e7; }
+  .role-card.bc { border-top-color: var(--navy); background: #eff6ff; }
+  .role-card .icon {
+    font-size: 32px;
+    color: var(--navy);
+    line-height: 1;
+  }
+  .role-card.human .icon { color: var(--green); }
+  .role-card.ai .icon { color: #78350f; }
+  .role-card .role-name {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--navy-deep);
+    margin-top: 6px;
+    line-height: 1.2;
+  }
+  .role-card .role-job {
+    font-size: 12px;
+    color: var(--slate);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  /* ============ SCENARIO ============ */
+  .scenario {
+    background: white;
+    border-radius: 12px;
+    margin-top: 26px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  .scenario .head {
+    background: var(--navy);
+    color: white;
+    padding: 18px 26px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: Arial, sans-serif;
+  }
+  .scenario .head .num {
+    font-family: Georgia, serif;
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--gold-light);
+    line-height: 0.9;
+  }
+  .scenario .head .title {
+    font-size: 20px;
+    font-weight: 800;
+    flex: 1;
+    line-height: 1.2;
+  }
+  .scenario .head .actors {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #cbd5e0;
+  }
+  .scenario .body { padding: 22px 28px; }
+  .scenario .step {
+    display: flex;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px dashed var(--gray);
+    align-items: flex-start;
+  }
+  .scenario .step:last-child { border-bottom: 0; }
+  .scenario .step .time {
+    flex: 0 0 80px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--slate);
+    padding-top: 2px;
+  }
+  .scenario .step .who {
+    flex: 0 0 110px;
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--navy);
+    padding-top: 2px;
+  }
+  .scenario .step .who.akiwam { color: #14532d; }
+  .scenario .step .who.claude { color: #78350f; }
+  .scenario .step .who.bc { color: var(--navy); }
+  .scenario .step .who.jen { color: #7c2d12; }
+  .scenario .step .what {
+    flex: 1;
+    font-size: 13.5px;
+    line-height: 1.5;
+    font-family: Arial, sans-serif;
+  }
+  .scenario .step.gate {
+    background: #fef9e7;
+    margin: 0 -28px;
+    padding: 14px 28px;
+    border-radius: 0;
+  }
+  .scenario .step.gate .what {
+    color: #78350f;
+    font-weight: 600;
+  }
+  .scenario .step.gate::before {
+    content: '\26A0';
+    font-size: 18px;
+    margin-right: 4px;
+  }
+  .scenario .step.audit {
+    background: #ecfdf5;
+    margin: 0 -28px;
+    padding: 14px 28px;
+  }
+  .scenario .step.audit .what {
+    color: var(--green);
+    font-weight: 600;
+    font-style: italic;
+  }
+  .scenario .step.skill {
+    background: #fef3c7;
+    margin: 0 -28px;
+    padding: 16px 28px;
+    border-top: 2px solid var(--gold);
+  }
+  .scenario .step.skill .what {
+    color: #7c5012;
+    font-weight: 700;
+  }
+  .scenario .step.skill::before {
+    content: '\2728';
+    font-size: 16px;
+    margin-right: 4px;
+  }
+
+  /* ============ PERSONAL BASECAMP MODEL ============ */
+  .personal-bc {
+    background: white;
+    border-radius: 12px;
+    padding: 28px;
+    margin-top: 22px;
+    border: 2px solid var(--navy);
+    font-family: Arial, sans-serif;
+  }
+  .personal-bc h3 {
+    margin: 0 0 14px;
+    font-family: Georgia, serif;
+    color: var(--navy-deep);
+    font-size: 24px;
+  }
+  .personal-bc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .person-bc-card {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 16px 14px;
+    border-left: 4px solid var(--navy);
+    text-align: center;
+  }
+  .person-bc-card .name {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--navy-deep);
+  }
+  .person-bc-card .label {
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .person-bc-card .ticket-row {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--gray);
+    font-size: 11px;
+    color: var(--slate);
+    text-align: left;
+    line-height: 1.7;
+  }
+  .person-bc-card .ticket-row .tk {
+    display: block;
+    margin-bottom: 4px;
+  }
+  .person-bc-card .ticket-row .tk:before {
+    content: '\25A0';
+    color: var(--green);
+    margin-right: 5px;
+    font-size: 9px;
+  }
+  .person-bc-card .ticket-row .tk.pending:before {
+    color: var(--gold);
+    content: '\25A1';
+  }
+
+  /* ============ SKILL EXTRACTION PIPELINE ============ */
+  .pipeline {
+    background: linear-gradient(90deg, #1a365d 0%, #14532d 100%);
+    border-radius: 12px;
+    padding: 26px 28px;
+    margin-top: 22px;
+    color: white;
+    font-family: Arial, sans-serif;
+  }
+  .pipe-stages {
+    display: grid;
+    grid-template-columns: 1fr 30px 1fr 30px 1fr 30px 1fr;
+    gap: 0;
+    margin-top: 16px;
+    align-items: center;
+  }
+  .pipe-stage {
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 16px 14px;
+    text-align: center;
+    border: 1px solid rgba(251,191,36,0.3);
+  }
+  .pipe-stage .label {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    font-weight: 700;
+  }
+  .pipe-stage h4 {
+    font-size: 14px;
+    color: white;
+    margin: 6px 0 6px;
+    line-height: 1.2;
+  }
+  .pipe-stage .ex {
+    font-size: 10px;
+    color: #cbd5e0;
+    font-style: italic;
+    line-height: 1.4;
+  }
+  .pipe-arrow {
+    text-align: center;
+    color: var(--gold-light);
+    font-size: 28px;
+  }
+
+  /* ============ ALI DASHBOARD ============ */
+  .ali-dash {
+    background: white;
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-top: 22px;
+    border-top: 6px solid var(--red);
+    font-family: Arial, sans-serif;
+  }
+  .ali-dash h3 {
+    margin: 0 0 12px;
+    font-family: Georgia, serif;
+    font-size: 22px;
+    color: var(--navy-deep);
+  }
+  .ali-dash .queue {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-top: 14px;
+  }
+  .ali-dash .queue-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray);
+  }
+  .ali-dash .queue-row:last-child { border-bottom: 0; }
+  .ali-dash .queue-row .source {
+    flex: 0 0 90px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--slate);
+    font-weight: 700;
+  }
+  .ali-dash .queue-row .what {
+    flex: 1;
+    font-size: 13px;
+    color: #1f2937;
+  }
+  .ali-dash .queue-row .btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .ali-dash .queue-row .btn.approve {
+    background: var(--green);
+    color: white;
+  }
+  .ali-dash .queue-row .btn.review {
+    background: var(--gold);
+    color: white;
+  }
+  .ali-dash .queue-row .btn.reject {
+    background: var(--red);
+    color: white;
+  }
+
+  /* ============ FOOTER ============ */
+  .doc-footer {
+    background: #0f172a;
+    color: white;
+    padding: 36px 48px;
+    text-align: center;
+    font-family: Arial, sans-serif;
+  }
+  .doc-footer img { height: 30px; margin-bottom: 12px; }
+  .doc-footer p { font-size: 13px; color: #cbd5e0; max-width: 580px; margin: 0 auto; }
+
+  /* ============ INLINE STYLE HELPERS ============ */
+  .pull-quote {
+    background: rgba(212,160,23,0.15);
+    border-left: 6px solid var(--gold);
+    padding: 18px 24px;
+    margin: 20px 0;
+    font-family: Georgia, serif;
+    font-size: 18px;
+    font-style: italic;
+    color: #78350f;
+    border-radius: 0 6px 6px 0;
+    line-height: 1.5;
+  }
+  .section.dark .pull-quote, .section.navy-pad .pull-quote,
+  .section.green-pad .pull-quote, .section.gold-pad .pull-quote {
+    background: rgba(212,160,23,0.2);
+    color: #fef3c7;
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<!-- ===================== HERO ===================== -->
+<div class="hero">
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAUoUlEQVR4Xu2dBbBcNRfHCwVaHIq7u7tT3N29uLu7tLi7uzsM7u7u7l7cHfLNLx9nXza5927u28crnfn/Zv7TRzbXcnNOTk6yS48eQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgjR7QyUJKlUPZwkSaVKCiRJ6lBSIElSh5ICSZI6lBRIktShpECSpA4lBd2iGWec0a255ppu7bXXdsstt5wbbrjhkjqS9B9QUvCva8QRR3TzzjuvG3PMMd24447rTj/9dHf11Ve7UUcdNakrSYNYSUG3aMUVV/RGMuSQQ7oZZpjBvffee+7tt992u+66q5tssslcr169kmMkaRAoKeg2Lbvssm7hhRd2G264ofvggw+c8dVXX7lTTz3VLbTQQm7SSSeVsUiDUklBt2mIIYZwk08+udtyyy3dm2++2TAQ+Pvvv90XX3zhXnrpJXfrrbe6E044wW2zzTZupZVW8iPP7LPP7v9dYYUV3HbbbefWW289N9RQQyXXkKQ2lRR0uwizxhtvPDdgwAD38ccfNxmK8ddff7nffvvN/fTTT+6HH35w33//vf+X/6acz6eddtrk3JLUppKC2qKD472HGWYYHw4NPfTQviyul6O55prLnXvuue7VV191n3zyifv111+bDISRpYhffvnFjT/++Mn5ysToxX3a/cafd7doP+4FdbbtpH9FSUGWevfu3UjVMrE++OCD3dFHH+2OOeYYd8ghh7hddtnFrbXWWm7qqaf2dePjW6lnz55+RHjyySfd119/7T799FN36aWXuosvvtg98cQTfkL/0Ucf+cn9M8884/bZZx9voPF5ykQGjXvkfrfYYgs3wggjJHW6U0svvbS/lyOPPNLNPPPMyefSIFNSUCkyTocddpi79tpr3bvvvhs78oTXX3/d1z3wwAPdVFNNlZyvSksssYR77bXXvAFyzYceesgtueSSbowxxnDTTz+9m3XWWd1MM81Ua+QwcTyjFNx///3eYOI63anDDz/c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" alt="Colaberry">
+<div class="eyebrow">Visual story #2 · The Basecamp loop · For Ali · 2026-06-02</div>
+<h1>Basecamp is the work queue.<br>Claude Code is the agent.<br>The loop closes every time.</h1>
+<p>You asked for a richer picture: how Akiwam (or anyone) actually <em>operates</em> with Claude Code while Basecamp tracks the work. This document shows two scenarios in detail, then explains the deeper architecture you described — every person has a personal Basecamp, every task becomes a record, every record becomes the raw material for the next skill. Once the org runs this way, it generates its own training set.</p>
+</div>
+
+<!-- ===================== THE 3 ROLES ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Chapter 1 · The three roles in every interaction</div>
+<h2>Every workflow has these three actors. Always the same three.</h2>
+<p>The picture is simpler than it sounds. There is a HUMAN (Akiwam). There is an AI (her Claude Code, scoped to her role). There is a TICKET (the Basecamp record that holds the work). The loop runs through all three, every time.</p>
+
+<div class="roles">
+<div class="role-card human">
+<div class="icon">&#128100;</div>
+<div class="role-name">Akiwam</div>
+<div class="role-job">The human. Owns the goal, the judgment calls, the final approvals. Tells Claude Code what to do in plain English. Verifies output before it ships.</div>
+</div>
+<div class="role-card ai">
+<div class="icon">&#129302;</div>
+<div class="role-name">Akiwam's Claude Code</div>
+<div class="role-job">The agent. Scoped to her role's tools + skills. Reads Basecamp tickets, gathers context, drafts output, posts back. Asks for confirmation on anything write-heavy or external.</div>
+</div>
+<div class="role-card bc">
+<div class="icon">&#128203;</div>
+<div class="role-name">Akiwam's Basecamp project</div>
+<div class="role-job">The record. Holds every task she owns or AI-completes. Becomes the durable trace of her work + the mining ground for new skills.</div>
+</div>
+</div>
+
+<div class="pull-quote">The three roles never collapse. The human never directly touches the tool (Bonfire, Calendar, Gmail) — she talks to her Claude Code. Claude Code never executes without confirmation on irreversible actions. The Basecamp ticket holds the truth so future-Akiwam (or another person) can replay it later.</div>
+
+</div>
+
+<!-- ===================== THE LOOP ===================== -->
+<div class="section dark">
+<div class="section-eyebrow">Chapter 2 · The loop, drawn once</div>
+<h2>Six steps. Top-left to bottom-right. Read it as a clock.</h2>
+
+<div class="loop">
+
+<div class="loop-ring">
+<div class="loop-node start">
+<div class="step-num">1</div>
+<div class="label">TASK ARRIVES</div>
+<h4>BC ticket created</h4>
+<div class="desc">By a human (Ali, Vinay), by Cory, by an AI that needs verification. Lands on Akiwam's personal Basecamp project.</div>
+</div>
+<div class="loop-node start">
+<div class="step-num">2</div>
+<div class="label">ALERT FIRES</div>
+<h4>Akiwam's system pings her</h4>
+<div class="desc">Daily 7am digest, real-time push for high-priority items, or chat-style "@akiwam needs review" from her Claude Code.</div>
+</div>
+<div class="loop-node start">
+<div class="step-num">3</div>
+<div class="label">SHE INVOKES</div>
+<h4>"Claude, this needs XYZ"</h4>
+<div class="desc">Akiwam opens her Claude Code, references the ticket, tells it what to do in her own words. Plain English. Her judgment, the agent's hands.</div>
+</div>
+</div>
+
+<div class="loop-arrow">&darr; &darr; &darr;</div>
+
+<div class="loop-ring">
+<div class="loop-node end">
+<div class="step-num">6</div>
+<div class="label">SKILL CANDIDATE</div>
+<h4>Becomes future skill</h4>
+<div class="desc">The completed loop is auto-tagged as a skill candidate. Ali sees it in his weekly queue and approves (or not) for the company library.</div>
+</div>
+<div class="loop-node end">
+<div class="step-num">5</div>
+<div class="label">POSTED BACK</div>
+<h4>Ticket updated + closed</h4>
+<div class="desc">Claude Code posts the deliverable as a comment on the BC ticket. Akiwam reviews + checks it off. The ticket is now the record of the work.</div>
+</div>
+<div class="loop-node middle">
+<div class="step-num">4</div>
+<div class="label">CLAUDE EXECUTES</div>
+<h4>Reads BC + acts</h4>
+<div class="desc">Claude Code reads the ticket + related context, calls the tools (Calendar, Gmail, Bonfire), drafts output, asks Akiwam to confirm anything external.</div>
+</div>
+</div>
+
+</div>
+
+<div class="pull-quote">Read the loop in one line: <strong>a task in Basecamp creates an alert, Akiwam tells Claude what to do, Claude does it, the ticket gets updated, the workflow becomes a candidate skill.</strong></div>
+
+</div>
+
+<!-- ===================== SCENARIO 1 — AI VERIFICATION ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Chapter 3 · Scenario 1</div>
+<h2>The AI built half the work. Akiwam finishes it.</h2>
+<p>Ali approved an AI to draft a Colaberry landing page for a new utility-sector pilot. The AI produced a working page — but only the raw text. No layout, no UX, no PDF. Akiwam picks up the verification + the polish.</p>
+
+<div class="scenario">
+<div class="head"><div class="num">1</div><div class="title">Landing page from text to client-ready PDF</div><div class="actors">Akiwam · her Claude Code · Basecamp</div></div>
+<div class="body">
+
+<div class="step audit"><div class="time">10:14 AM</div><div class="who bc">Basecamp</div><div class="what">A new ticket lands on Akiwam's Personal BC: <em>"[REVIEW NEEDED] AI drafted utility-sector landing copy. Polish + format. Ship as PDF."</em> Auto-tagged. AI has already posted its raw text in the description.</div></div>
+
+<div class="step"><div class="time">10:16 AM</div><div class="who akiwam">Akiwam</div><div class="what">Sees the alert in her Claude Code chat ("@you have 1 new task requiring verification"). Opens it.</div></div>
+
+<div class="step"><div class="time">10:17 AM</div><div class="who akiwam">Akiwam</div><div class="what">Reads the AI's raw text. It is good content but no design. She types: <em>"@Claude — read ticket 9XXX, take this text, format it like our standard utility pre-read (navy + cream + red accent, exec-style typography), pull in the Colaberry logo + the 5-platform tile from the co-op ad, finalize as a 2-page PDF. Use the About Colaberry v6 layout as the template."</em></div></div>
+
+<div class="step audit"><div class="time">10:17 AM</div><div class="who claude">Claude (logs)</div><div class="what">Records the instruction. Begins fetching: reads BC ticket 9XXX, finds the About Colaberry v6 template in repo, locates the Colaberry logo + co-op ad tile, opens the standard utility pre-read CSS.</div></div>
+
+<div class="step"><div class="time">10:18 AM</div><div class="who claude">Claude</div><div class="what">Generates a 2-page HTML using the standard navy/cream/red theme. Renders to PDF via Playwright. Shows Akiwam a preview in the terminal.</div></div>
+
+<div class="step"><div class="time">10:20 AM</div><div class="who akiwam">Akiwam</div><div class="what">Reviews the PDF. Asks for one change: <em>"Add a footer with David Lahme's contact info — pull from his vCard."</em></div></div>
+
+<div class="step"><div class="time">10:21 AM</div><div class="who claude">Claude</div><div class="what">Re-renders with the footer. New PDF ready. Akiwam approves.</div></div>
+
+<div class="step gate"><div class="time">10:22 AM</div><div class="who claude">Hook</div><div class="what">"About to post the final PDF as a comment on BC ticket 9XXX + check off the ticket. Confirm 'yes' + one-line reason."</div></div>
+
+<div class="step"><div class="time">10:22 AM</div><div class="who akiwam">Akiwam</div><div class="what">"Polished + reviewed, ready to ship. yes."</div></div>
+
+<div class="step audit"><div class="time">10:23 AM</div><div class="who bc">Basecamp</div><div class="what">PDF attached as comment. Ticket marked complete. Description updated with the final asset link + Akiwam's name as the verifier.</div></div>
+
+<div class="step skill"><div class="time">10:23 AM</div><div class="who claude">Claude (auto)</div><div class="what">Tags this completed workflow as a skill candidate: <code>polish-ai-landing-text-to-pdf</code>. Captures the instruction Akiwam used + the template + the steps. Goes into Ali's weekly skill approval queue.</div></div>
+
+</div>
+</div>
+
+<div class="pull-quote">Look at the rhythm. AI did the first half (text generation). Akiwam did the second half (verification + design judgment + polish). Claude Code did the boring middle (template lookup, rendering, posting). The ticket holds the record. The workflow is now a candidate skill — next time, "polish AI landing text to PDF" becomes a one-line slash command anyone on the team can use.</div>
+
+</div>
+
+<!-- ===================== SCENARIO 2 — HUMAN TASK BECOMES SKILL ===================== -->
+<div class="section navy-pad">
+<div class="section-eyebrow">Chapter 4 · Scenario 2</div>
+<h2>A human task. Done once. Then turned into a skill the whole team can use.</h2>
+<p>Akiwam's BC says: "Schedule a 30-minute deep-dive with Jen Nakahara." Routine task. But this is where the architecture earns its keep — Akiwam does it once with Claude Code, and the same workflow becomes <code>/schedule-deep-dive</code> for everyone, forever.</p>
+
+<div class="scenario">
+<div class="head"><div class="num">2</div><div class="title">Schedule deep-dive with Jen → becomes a reusable skill</div><div class="actors">Akiwam · Claude Code · Calendar · Gmail · Library</div></div>
+<div class="body">
+
+<div class="step audit"><div class="time">2:30 PM</div><div class="who bc">Basecamp</div><div class="what">Ticket on Akiwam's personal BC: <em>"Schedule 30-min deep-dive with Jen Nakahara — gov contract strategy."</em></div></div>
+
+<div class="step"><div class="time">2:31 PM</div><div class="who akiwam">Akiwam</div><div class="what">Opens Claude Code. Types: <em>"@Claude — schedule a 30-min deep-dive with Jen. Email her, pick 3 slots in the next 2 days from my calendar, send the invite to whichever she picks, log it on the BC ticket."</em></div></div>
+
+<div class="step"><div class="time">2:31 PM</div><div class="who claude">Claude</div><div class="what">Reads BC ticket. Finds Jen's email in CCPP / Apollo. Checks Akiwam's calendar for the next 2 business days. Identifies 3 viable 30-min slots that don't conflict.</div></div>
+
+<div class="step"><div class="time">2:32 PM</div><div class="who claude">Claude</div><div class="what">Drafts an email to Jen: subject "Deep-dive on gov contract strategy — 3 slots for your pick." Body has the 3 slots. Shows Akiwam the draft.</div></div>
+
+<div class="step gate"><div class="time">2:33 PM</div><div class="who claude">Hook</div><div class="what">"About to send email to jen@example.com from your account. Type 'yes' + one-line reason."</div></div>
+
+<div class="step"><div class="time">2:33 PM</div><div class="who akiwam">Akiwam</div><div class="what">"Initiating gov contract deep-dive per BC ticket. yes."</div></div>
+
+<div class="step audit"><div class="time">2:33 PM</div><div class="who bc">Basecamp</div><div class="what">Comment on the ticket: "Email sent to Jen with 3 proposed slots: [Wed 10am, Wed 2pm, Thu 11am]. Awaiting reply."</div></div>
+
+<div class="step"><div class="time">5:42 PM</div><div class="who jen">Jen</div><div class="what">Replies via email: "Thursday at 11am works."</div></div>
+
+<div class="step"><div class="time">5:45 PM</div><div class="who claude">Claude</div><div class="what">Detects Jen's reply (Cory inbox watcher). Shows Akiwam: "Jen picked Thu 11am. Send calendar invite + confirm?"</div></div>
+
+<div class="step"><div class="time">5:46 PM</div><div class="who akiwam">Akiwam</div><div class="what">"Yes — go."</div></div>
+
+<div class="step audit"><div class="time">5:46 PM</div><div class="who bc">Basecamp</div><div class="what">Calendar invite sent. Ticket updated: "Confirmed Thu 11am with Jen. Invite delivered." Ticket marked complete.</div></div>
+
+<div class="step skill"><div class="time">5:47 PM</div><div class="who claude">Claude (auto)</div><div class="what">Tags this workflow as a candidate skill: <code>/schedule-deep-dive</code>. Captures the pattern: read attendee from ticket, pick N slots in M days, draft email, send w/ gate, watch for reply, send confirm invite, log to BC. Sends to Ali's weekly skill queue.</div></div>
+
+<div class="step audit"><div class="time">EOD</div><div class="who claude">Cory digest</div><div class="what">Tomorrow's digest mentions: "1 new skill candidate from Akiwam — /schedule-deep-dive — for your weekly approval queue. Used once today."</div></div>
+
+</div>
+</div>
+
+<div class="pull-quote">Notice what just happened. Akiwam did the work <em>once</em>, with Claude Code orchestrating. The next time anyone on the team needs to "schedule a deep-dive with someone external," they type <code>/schedule-deep-dive Jen</code> and the same workflow runs. <strong>The org has just turned a one-time task into a reusable skill, without anyone writing code.</strong></div>
+
+</div>
+
+<!-- ===================== PERSONAL BASECAMP CONCEPT ===================== -->
+<div class="section cream">
+<div class="section-eyebrow">Chapter 5 · Personal Basecamp projects</div>
+<h2>Every person has a Basecamp project that is their work history.</h2>
+<p>The deeper architectural move: each employee has their own Basecamp project. <strong>Every task they own, every AI-completed task they verify, every conversation they have with their Claude Code — lands as a ticket or comment in their personal project.</strong> The project becomes the durable record + the mining ground for skills.</p>
+
+<div class="personal-bc">
+<h3>The four personal projects in pilot</h3>
+
+<div class="personal-bc-grid">
+<div class="person-bc-card">
+<div class="name">Karun</div>
+<div class="label">VP Business Lead</div>
+<div class="ticket-row">
+<span class="tk">Coca-Cola use case taxonomy locked</span>
+<span class="tk">v5 pre-read sent to Darrell</span>
+<span class="tk pending">Patriot pipeline review (today)</span>
+<span class="tk pending">Anthropic Q3 partner check-in</span>
+</div>
+</div>
+<div class="person-bc-card">
+<div class="name">Kes</div>
+<div class="label">AI Systems Architect</div>
+<div class="ticket-row">
+<span class="tk">Voice AI agent 3 NPE hotfix shipped</span>
+<span class="tk">Inbox COS hardRule expanded</span>
+<span class="tk pending">Calendar MCP wired</span>
+<span class="tk pending">Student platform sprint v7</span>
+</div>
+</div>
+<div class="person-bc-card">
+<div class="name">Akiwam</div>
+<div class="label">Bonfire Intern</div>
+<div class="ticket-row">
+<span class="tk">3 Bonfire bids triaged</span>
+<span class="tk">AI landing copy polished to PDF</span>
+<span class="tk">Deep-dive scheduled w/ Jen</span>
+<span class="tk pending">Pair-review Obi's drafts</span>
+</div>
+</div>
+<div class="person-bc-card">
+<div class="name">Obi</div>
+<div class="label">Bonfire Intern</div>
+<div class="ticket-row">
+<span class="tk">Reviewed Akiwam's 4 fit-cards</span>
+<span class="tk">Declined RFP #3 (budget too small)</span>
+<span class="tk pending">Detroit gov bid draft</span>
+<span class="tk pending">PP-2024-Detroit reference pull</span>
+</div>
+</div>
+</div>
+
+<div style="margin-top:18px;padding:14px 18px;background:#fefaf3;border-left:5px solid var(--green);font-size:13px;font-family:Arial,sans-serif">
+<strong>Why this matters:</strong> when Akiwam onboards a new intern next month, that intern reads Akiwam's BC project to learn the rhythm. When Ali wants to know "what skills has Kes been building?" he scans Kes's project. When someone leaves, their project + their skills <em>stay</em>. Yohan's "skills are the organization" answer from the Alden talk - this is how we operationalize it.
+</div>
+</div>
+
+<div class="pull-quote">Personal Basecamp is the durable trace. Every conversation a person has with their Claude Code that touches a tool, posts a comment, sends an email, deploys code - it gets logged here. Six months from now you can replay any decision. Twelve months from now you have a 30-person org's worth of training data, organized by domain.</div>
+
+</div>
+
+<!-- ===================== SKILL EXTRACTION PIPELINE ===================== -->
+<div class="section gold-pad">
+<div class="section-eyebrow">Chapter 6 · The skill extraction pipeline</div>
+<h2>From a single completed ticket to a company-wide capability.</h2>
+<p>Here is the path a one-time workflow takes to become a "Colaberry approved" skill in the library — the thing every employee can then slash-invoke.</p>
+
+<div class="pipeline">
+<div class="pipe-stages">
+<div class="pipe-stage">
+<div class="label">Stage 1</div>
+<h4>Completed ticket</h4>
+<div class="ex">"Schedule deep-dive with Jen" — done by Akiwam, logged in her BC.</div>
+</div>
+<div class="pipe-arrow">&rarr;</div>
+<div class="pipe-stage">
+<div class="label">Stage 2</div>
+<h4>Auto-tag as candidate</h4>
+<div class="ex">Claude detects a repeatable pattern. Tags + saves the instruction template.</div>
+</div>
+<div class="pipe-arrow">&rarr;</div>
+<div class="pipe-stage">
+<div class="label">Stage 3</div>
+<h4>Ali weekly review</h4>
+<div class="ex">Friday 30-min: Ali sees the queue, approves or rejects each candidate.</div>
+</div>
+<div class="pipe-arrow">&rarr;</div>
+<div class="pipe-stage">
+<div class="label">Stage 4</div>
+<h4>Colaberry approved → library</h4>
+<div class="ex">Skill is committed to the AI Project Architect repo. Auto-syncs to all 4 employees' Claude Code overnight.</div>
+</div>
+</div>
+</div>
+
+<div class="pull-quote">The math: if each pilot person produces 2 skill candidates per week, and Ali approves half, that is 4 skills/week joining the company library. <strong>After 90 days, the library has ~50 reusable skills the whole team can invoke.</strong> That is the compounding curve. Year-one ends with the org having codified its own playbook.</div>
+
+</div>
+
+<!-- ===================== ALI'S DASHBOARD ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Chapter 7 · What you (Ali) see on Friday afternoon</div>
+<h2>The weekly skill approval queue. 30 minutes. Done.</h2>
+
+<div class="ali-dash">
+<h3>This week's skill candidates from the team</h3>
+<div style="font-size:13px;color:#475569;margin-top:4px;font-family:Arial,sans-serif">5 candidates · 2 from Akiwam · 1 from Karun · 1 from Kes · 1 from Obi</div>
+
+<div class="queue">
+
+<div class="queue-row">
+<div class="source">From Akiwam</div>
+<div class="what"><strong>polish-ai-landing-text-to-pdf</strong> — takes raw AI-generated text, applies Colaberry standard branding, ships as PDF. Used 1x. Estimated reuse: weekly.</div>
+<div class="btn approve">APPROVE</div>
+</div>
+
+<div class="queue-row">
+<div class="source">From Akiwam</div>
+<div class="what"><strong>/schedule-deep-dive</strong> — given a person + topic, picks 3 slots, drafts + sends email, watches for reply, sends invite, logs to BC. Used 1x.</div>
+<div class="btn approve">APPROVE</div>
+</div>
+
+<div class="queue-row">
+<div class="source">From Karun</div>
+<div class="what"><strong>/account-readout</strong> — given a sales account, pulls last 30d Gmail + BC + HubSpot, generates 1-page executive readout. Used 4x this week.</div>
+<div class="btn approve">APPROVE</div>
+</div>
+
+<div class="queue-row">
+<div class="source">From Kes</div>
+<div class="what"><strong>voice-ai-incident-postmortem</strong> — pulls voice AI logs, generates blameless postmortem in standard template. Used 2x. <em>Includes one debatable design call — review before approving.</em></div>
+<div class="btn review">REVIEW</div>
+</div>
+
+<div class="queue-row">
+<div class="source">From Obi</div>
+<div class="what"><strong>bonfire-rfp-fit-score</strong> — given an opportunity URL, generates a 1-page fit-score card against capability statement. Used 7x. <em>Note: needs cleanup before going company-wide.</em></div>
+<div class="btn review">REVIEW</div>
+</div>
+
+</div>
+
+<div style="margin-top:14px;padding:12px 16px;background:#dcfce7;border-left:4px solid var(--green);font-size:12px;color:var(--green);font-family:Arial,sans-serif;border-radius:0 6px 6px 0">
+<strong>Time investment from you:</strong> 30 minutes on Friday afternoon. The library compounds without further work from you.
+</div>
+</div>
+
+</div>
+
+<!-- ===================== CLOSING ===================== -->
+<div class="section green-pad">
+<div class="section-eyebrow">Closing · The compounding effect</div>
+<h2>One paragraph you can repeat to anyone.</h2>
+<div class="pull-quote" style="font-size:20px">"Each person has a personal Basecamp project. Every task they own + every AI-completed task they verify lives in that project as a ticket. They never touch the tools directly - they tell their Claude Code what to do, Claude reads the ticket, executes (with confirmation on irreversible actions), and posts back. Completed workflows auto-tag as candidate skills; Ali reviews the queue weekly and approves them for the company library. After 90 days the library has 50+ slash-invokable skills the whole org can use. The org becomes its own training set."</div>
+
+<p>If a person can repeat that paragraph back to you, they understand the architecture. The first visual story I sent (the 4-personas + security + governance doc) explains the <em>permission model</em>. This one explains the <em>operational rhythm</em>. Together they describe the whole system.</p>
+
+</div>
+
+<!-- ===================== FOOTER ===================== -->
+<div class="doc-footer">
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAUoUlEQVR4Xu2dBbBcNRfHCwVaHIq7u7tT3N29uLu7tLi7uzsM7u7u7l7cHfLNLx9nXza5927u28crnfn/Zv7TRzbXcnNOTk6yS48eQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgjR7QyUJKlUPZwkSaVKCiRJ6lBSIElSh5ICSZI6lBRIktShpECSpA4lBd2iGWec0a255ppu7bXXdsstt5wbbrjhkjqS9B9QUvCva8QRR3TzzjuvG3PMMd24447rTj/9dHf11Ve7UUcdNakrSYNYSUG3aMUVV/RGMuSQQ7oZZpjBvffee+7tt992u+66q5tssslcr169kmMkaRAoKeg2Lbvssm7hhRd2G264ofvggw+c8dVXX7lTTz3VLbTQQm7SSSeVsUiDUklBt2mIIYZwk08+udtyyy3dm2++2TAQ+Pvvv90XX3zhXnrpJXfrrbe6E044wW2zzTZupZVW8iPP7LPP7v9dYYUV3HbbbefWW289N9RQQyXXkKQ2lRR0uwizxhtvPDdgwAD38ccfNxmK8ddff7nffvvN/fTTT+6HH35w33//vf+X/6acz6eddtrk3JLUppKC2qKD472HGWYYHw4NPfTQviyul6O55prLnXvuue7VV191n3zyifv111+bDISRpYhffvnFjT/++Mn5ysToxX3a/cafd7doP+4FdbbtpH9FSUGWevfu3UjVMrE++OCD3dFHH+2OOeYYd8ghh7hddtnFrbXWWm7qqaf2dePjW6lnz55+RHjyySfd119/7T799FN36aWXuosvvtg98cQTfkL/0Ucf+cn9M8884/bZZx9voPF5ykQGjXvkfrfYYgs3wggjJHW6U0svvbS/lyOPPNLNPPPMyefSIFNSUCkyTocddpi79tpr3bvvvhs78oTXX3/d1z3wwAPdVFNNlZyvSksssYR77bXXvAFyzYceesgtueSSbowxxnDTTz+9m3XWWd1MM81Ua+QwcTyjFNx///3eYOI63anDDz/c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" alt="Colaberry">
+<p>Visual story #2. Drafted 2026-06-02 in response to your "I need to see a visual diagram of a use case where akiwam is working along side Basecamp." Reply with anything that does not land. I refactor the doc, not just answer the question.</p>
+</div>
+
+</div>
+</body></html>
