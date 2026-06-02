@@ -32,10 +32,26 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   const bodyLower = (email.body_text || '').toLowerCase();
   const headers = email.headers || {};
 
-  // --- 0a. Weekly/Daily Reports from Cory → INBOX (keep visible) ---
-  if (fromLower.includes('ali@colaberry.com') && (subjectLower.includes('weekly report') || subjectLower.includes('daily report') || subjectLower.includes('cory'))) {
-    const reason = 'Cory report email - keep in INBOX';
-    console.log(`${LOG_PREFIX} Cory report: ${reason}`);
+  // --- 0a. Cory + Inbox COS system emails → INBOX (keep visible) ---
+  // Cory's daily/weekly briefings and the Inbox COS decision digests are sent
+  // FROM info@colaberry.com (not ali@colaberry.com). The prior version of this
+  // rule checked the wrong From and never matched, so every Cory briefing was
+  // falling through to the LLM classifier, getting tagged AUTOMATION, and
+  // auto-archived. Caught 2026-06-02 after Ali noticed they were missing.
+  const isColaberrySystemSender =
+    fromLower.includes('info@colaberry.com') ||
+    fromLower.includes('ali@colaberry.com');
+  const isCorySubject =
+    subjectLower.includes('weekly report') ||
+    subjectLower.includes('daily report') ||
+    subjectLower.includes('cory') ||
+    subjectLower.includes('inbox cos') ||
+    subjectLower.includes("here's what happened today") ||
+    subjectLower.includes("here's your week in review") ||
+    /^ali,\s+here'?s\s+/i.test(email.subject || '');
+  if (isColaberrySystemSender && isCorySubject) {
+    const reason = 'Cory briefing / Inbox COS digest - keep in INBOX';
+    console.log(`${LOG_PREFIX} Cory/InboxCOS report: ${reason}`);
     return { matched: true, state: 'INBOX', reason, classified_by: 'hard_rule' };
   }
 
