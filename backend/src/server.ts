@@ -100,6 +100,124 @@ app.get('/i/:tag', async (req, res) => {
 
 app.use(errorHandler);
 
+// Explicit migration: AI Ops Command Center (Phase 0) — create the 4 ops tables.
+//
+// Why explicit instead of `sequelize.sync({ alter: true })`: that path is
+// unreliable on prod because the alter pass hits a pre-existing index
+// conflict elsewhere in the 215-model graph and the fallback create-only
+// sync also fails on the same conflict. The explicit CREATE TABLE IF NOT
+// EXISTS path matches the lead-ingestion schema pattern below and is the
+// only reliable way to land new tables on prod right now.
+async function ensureOpsCommandCenterSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS ops_bc_todos (
+       bc_id VARCHAR(50) PRIMARY KEY,
+       project_id VARCHAR(50) NOT NULL,
+       todolist_id VARCHAR(50),
+       title TEXT NOT NULL,
+       description TEXT,
+       status VARCHAR(30) NOT NULL DEFAULT 'active',
+       due_on DATE,
+       assignee_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+       bc_creator_id VARCHAR(50),
+       bc_app_url TEXT,
+       urgency_score INTEGER,
+       ai_opportunity_score INTEGER,
+       brand_score INTEGER,
+       category VARCHAR(40) NOT NULL DEFAULT 'unscored',
+       last_human_action_at TIMESTAMPTZ,
+       downstream_blocked_count INTEGER NOT NULL DEFAULT 0,
+       bc_created_at TIMESTAMPTZ NOT NULL,
+       bc_updated_at TIMESTAMPTZ NOT NULL,
+       last_synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_bc_todos_project ON ops_bc_todos (project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_bc_todos_status ON ops_bc_todos (status)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_bc_todos_urgency ON ops_bc_todos (urgency_score)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_bc_todos_category ON ops_bc_todos (category)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_bc_todos_due ON ops_bc_todos (due_on)`,
+
+    `CREATE TABLE IF NOT EXISTS ops_ai_assessments (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       todo_bc_id VARCHAR(50) NOT NULL,
+       agent VARCHAR(60) NOT NULL,
+       agent_version VARCHAR(20) NOT NULL,
+       urgency_score INTEGER,
+       ai_opportunity_score INTEGER,
+       brand_score INTEGER,
+       category VARCHAR(40),
+       reasoning JSONB,
+       llm_model VARCHAR(60),
+       llm_input_tokens INTEGER,
+       llm_output_tokens INTEGER,
+       llm_cost_usd DECIMAL(10,5),
+       computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_ai_assess_todo ON ops_ai_assessments (todo_bc_id, computed_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_ai_assess_agent ON ops_ai_assessments (agent)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_ai_assess_computed ON ops_ai_assessments (computed_at)`,
+
+    `CREATE TABLE IF NOT EXISTS ops_approval_queue (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       todo_bc_id VARCHAR(50) NOT NULL,
+       artifact_id UUID,
+       summary TEXT NOT NULL,
+       recommended_decision VARCHAR(40),
+       confidence DECIMAL(4,3),
+       estimated_review_seconds INTEGER,
+       blocked_downstream_count INTEGER NOT NULL DEFAULT 0,
+       urgency_snapshot INTEGER,
+       ai_opportunity_snapshot INTEGER,
+       target_user_id VARCHAR(100),
+       enqueued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       decided_at TIMESTAMPTZ,
+       decision VARCHAR(40),
+       decided_by VARCHAR(100),
+       decision_reasoning TEXT,
+       next_actions JSONB,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_approval_open ON ops_approval_queue (decided_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_approval_urgency ON ops_approval_queue (urgency_snapshot)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_approval_user_open ON ops_approval_queue (target_user_id, decided_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_approval_todo ON ops_approval_queue (todo_bc_id)`,
+
+    `CREATE TABLE IF NOT EXISTS ops_metrics_daily (
+       date DATE PRIMARY KEY,
+       approvals_completed INTEGER NOT NULL DEFAULT 0,
+       approvals_open_at_end INTEGER NOT NULL DEFAULT 0,
+       approvals_avg_seconds INTEGER,
+       approvals_p95_seconds INTEGER,
+       downstream_unblocked INTEGER NOT NULL DEFAULT 0,
+       hours_saved_estimated DECIMAL(8,2) NOT NULL DEFAULT 0,
+       hours_blocked_estimated DECIMAL(8,2) NOT NULL DEFAULT 0,
+       revenue_at_risk_estimated DECIMAL(12,2),
+       revenue_protected_estimated DECIMAL(12,2),
+       meetings_eliminated INTEGER NOT NULL DEFAULT 0,
+       skills_created INTEGER NOT NULL DEFAULT 0,
+       skills_used INTEGER NOT NULL DEFAULT 0,
+       automations_fired INTEGER NOT NULL DEFAULT 0,
+       agent_calls_count INTEGER NOT NULL DEFAULT 0,
+       agent_total_cost_usd DECIMAL(10,4) NOT NULL DEFAULT 0,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn(`[DB] Ops Command Center schema statement failed:`, err.message?.split('\n')[0]);
+    }
+  }
+  console.log('[DB] Ops Command Center schema ensured');
+}
+
 // Explicit migration: ensure Lead Ingestion tables + Lead columns exist.
 // Runs BEFORE sequelize.sync so the FK on leads.source_id can resolve during alter.
 async function ensureIngestionSchema() {
@@ -252,6 +370,9 @@ async function start(): Promise<void> {
 
   // Ingestion schema first — so the leads.source_id FK can resolve during alter sync.
   await ensureIngestionSchema();
+  // Ops Command Center schema — explicit creation because alter sync hits
+  // pre-existing index conflicts elsewhere and never reaches the ops_* models.
+  await ensureOpsCommandCenterSchema();
 
   try {
     await sequelize.sync({ alter: true });
