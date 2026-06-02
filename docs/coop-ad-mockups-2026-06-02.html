@@ -766,9 +766,14 @@
 <div class="doc">
 
 <div class="doc-header">
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry-dark.png" alt="Colaberry" style="height:38px;display:block">
+<div style="height:32px;width:1px;background:rgba(255,255,255,0.25)"></div>
+<div style="font-size:11px;letter-spacing:3px;color:#fbbf24;font-weight:700">FOR DAVID + RAM &middot; HALF-PAGE HORIZONTAL &middot; RED PUNCH</div>
+</div>
 <div class="eyebrow">RE Magazine - NRECA Membership Directory - July 2026 - V3</div>
-<h1>5 ad mockups, V3. Real Colaberry logo, real enterprise.colaberry.ai URLs, photography on every tile.</h1>
-<p>V3 fixes: (1) every made-up "colaberry.ai/co-op-platforms" type URL replaced with a real route from enterprise.colaberry.ai (verified against frontend/src/routes/publicRoutes.tsx), (2) the text "COLABERRY" footers replaced with the actual brand logo, (3) Mockup 4 platform tiles now have background photography per tile - SCADA control room, lineman with field gear, CSR with headset, document signing, hard hat on workbench.</p>
+<h1>David - 5 ad mockups. Critique with red pen. Download this file, fill it in, reply.</h1>
+<p>This is the version you asked for: same review-tool pattern as the About Colaberry overview. Each mockup has a feedback widget (Finalist / Keep / Edits / Drop + free-text notes). At the bottom there is a Generate Reply button - click it, copy the textbox content, paste back to Ali in a reply email. Same flow you used last time.</p>
 <div class="spec-callout"><strong>From David's response (2026-06-02 morning):</strong> "I've booked a half page, four color, horizontal ad. All copy must be uploaded by Thursday evening at the latest. We'll need to pack a punch ... what attracts our eye's as readers? My thought is red - so lets see 'what' in red can be integrated into the ad for the 'punch'."</div>
 </div>
 
@@ -998,6 +1003,12 @@ RUNS ON YOUR STACK &middot; ON-PREM OR CLOUD &middot; SOC 2 + NERC CIP
 </div>
 </div>
 
+<div style="margin-top:36px;padding:24px 28px;background:#1a365d;color:white;border-radius:10px;text-align:center">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry-dark.png" alt="Colaberry" style="height:32px;margin-bottom:10px">
+<div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">When you are done</div>
+<div style="font-size:14px;color:#cbd5e0;margin-top:6px">Scroll down. Hit Generate Reply. Copy the textbox. Paste back to Ali. He will process every concept verdict + note automatically into the Basecamp tracker before Wednesday morning.</div>
+</div>
+
 <div class="doc-footer">
 <div class="eyebrow">Open questions for the production round</div>
 <ul>
@@ -1018,21 +1029,27 @@ document.getElementById('gen-btn').addEventListener('click', function() {
   var names = {1:'Crew Productivity',2:'AI in Plain English',3:'7 Minutes (Outage to Insight)',4:'Five Platforms catalog',5:'40% Workforce Crisis'};
   var verdictLabels = {finalist:'FINALIST',keep:'KEEP',edit:'KEEP W/ EDITS',drop:'DROP'};
   var lines = [];
-  lines.push('David, Ram - half-page horizontal mockups review:');
+  // Machine-readable header so Ali's auto-processor knows this is a critique reply
+  lines.push('[CB-AD-CRITIQUE-V1] RE Magazine half-page horizontal mockups');
+  lines.push('Reviewer: ' + (window.prompt('Your name for the record?', 'David Lahme') || 'David Lahme'));
+  lines.push('Submitted: ' + new Date().toISOString());
+  lines.push('---');
   lines.push('');
   var finalists = [];
   for (var i = 1; i <= 5; i++) {
     var v = document.querySelector('input[name="v-' + i + '"]:checked');
     var n = document.getElementById('n-' + i).value.trim();
     if (!v && !n) continue;
-    var verdict = v ? verdictLabels[v.value] : '(no verdict)';
+    var verdict = v ? verdictLabels[v.value] : 'NO VERDICT';
     lines.push('MOCKUP ' + i + ' (' + names[i] + '): ' + verdict);
     if (n) lines.push('  Notes: ' + n);
     lines.push('');
     if (v && v.value === 'finalist') finalists.push(i);
   }
   if (finalists.length) lines.push('FINALIST(S): Mockup ' + finalists.join(', '));
-  else lines.push('(No finalist marked - pick one to lock the production round.)');
+  else lines.push('FINALIST(S): (none marked - pick one to lock the production round)');
+  lines.push('');
+  lines.push('[CB-AD-CRITIQUE-END]');
   document.getElementById('gen-out').value = lines.join('\n');
 });
 </script>

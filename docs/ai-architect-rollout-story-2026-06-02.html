@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Project Architect — how the rollout works, for Ali</title>
+<style>
+  :root {
+    --navy: #1a365d;
+    --navy-deep: #0f172a;
+    --gold: #d4a017;
+    --gold-light: #fbbf24;
+    --cream: #faf3e3;
+    --red: #c1272d;
+    --green: #14532d;
+    --green-light: #bbf7d0;
+    --ink: #0a0a0a;
+    --slate: #475569;
+    --muted: #94a3b8;
+    --gray: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f1f5f9; font-family: Georgia, 'Times New Roman', serif; color: #1a202c; line-height: 1.65; }
+  .doc { max-width: 980px; margin: 0 auto; background: #fefaf3; }
+
+  /* ============ HERO ============ */
+  .hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1a365d 60%, #7c2d12 100%);
+    color: white;
+    padding: 56px 48px;
+    text-align: center;
+  }
+  .hero img { height: 42px; display: block; margin: 0 auto 18px; }
+  .hero .eyebrow {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 5px;
+    text-transform: uppercase; color: var(--gold-light); font-weight: 700;
+  }
+  .hero h1 { margin: 14px 0 8px; font-size: 40px; line-height: 1.05; letter-spacing: -1px; font-weight: 800; }
+  .hero p { margin: 14px auto 0; color: #cbd5e0; font-size: 15px; max-width: 660px; line-height: 1.6; }
+
+  /* ============ SECTIONS ============ */
+  .section { padding: 44px 48px; }
+  .section.alt { background: #fefaf3; }
+  .section.dark { background: #0f172a; color: white; }
+  .section.cream { background: #faf3e3; }
+  .section.red-pad { background: #7c2d12; color: white; }
+  .section.navy-pad { background: var(--navy); color: white; }
+
+  .section-eyebrow {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 3px;
+    text-transform: uppercase; font-weight: 700; color: var(--red);
+  }
+  .section.dark .section-eyebrow, .section.red-pad .section-eyebrow, .section.navy-pad .section-eyebrow { color: var(--gold-light); }
+  .section h2 { margin: 8px 0 16px; font-size: 30px; line-height: 1.15; }
+  .section h3 { font-size: 20px; margin: 22px 0 10px; }
+  .section p { font-size: 15px; margin: 0 0 12px; }
+  .section.dark p, .section.red-pad p, .section.navy-pad p { color: #cbd5e0; }
+
+  /* ============ THE CAST ============ */
+  .cast-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 22px;
+  }
+  .cast-card {
+    background: white; border-radius: 10px; padding: 24px 26px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 8px solid var(--navy);
+  }
+  .cast-card.pilot { border-left-color: var(--gold); background: #fef9e7; }
+  .cast-card.intern { border-left-color: var(--green); background: #ecfdf5; }
+  .cast-card .name {
+    font-size: 22px; font-weight: 800; color: var(--navy-deep); line-height: 1.1;
+  }
+  .cast-card .role {
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--slate); font-weight: 700; margin-top: 4px;
+  }
+  .cast-card .tag {
+    display: inline-block; padding: 3px 10px; border-radius: 11px;
+    background: var(--navy); color: white;
+    font-family: Arial, sans-serif; font-size: 10px; letter-spacing: 1px;
+    font-weight: 700; margin-top: 10px;
+  }
+  .cast-card.pilot .tag { background: var(--gold); color: var(--navy-deep); }
+  .cast-card.intern .tag { background: var(--green); }
+  .cast-card .scope {
+    margin-top: 14px; font-size: 13px; color: #1f2937; line-height: 1.55; font-family: Arial, sans-serif;
+  }
+  .cast-card .systems {
+    margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--gray);
+    font-family: Arial, sans-serif; font-size: 11px; color: var(--slate);
+  }
+  .cast-card .systems strong { color: var(--navy); }
+
+  /* ============ ARCHITECTURE DIAGRAM ============ */
+  .arch {
+    background: #1e293b; border-radius: 12px; padding: 28px;
+    margin-top: 22px; font-family: Arial, sans-serif;
+  }
+  .arch .layer {
+    background: #334155; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  }
+  .arch .layer.users { background: linear-gradient(90deg, #14532d 0%, #166534 100%); }
+  .arch .layer.tool { background: linear-gradient(90deg, #7c2d12 0%, #c1272d 100%); }
+  .arch .layer.repo { background: linear-gradient(90deg, #d4a017 0%, #fbbf24 100%); color: var(--navy-deep); }
+  .arch .layer.gates { background: linear-gradient(90deg, #1a365d 0%, #2c5282 100%); }
+  .arch .layer.systems { background: linear-gradient(90deg, #0c4a6e 0%, #075985 100%); }
+  .arch .layer .label {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(255,255,255,0.7); font-weight: 700;
+  }
+  .arch .layer.repo .label { color: rgba(15,23,42,0.7); }
+  .arch .layer h4 {
+    margin: 4px 0 6px; font-size: 17px; color: white; font-weight: 800;
+  }
+  .arch .layer.repo h4 { color: var(--navy-deep); }
+  .arch .layer .desc {
+    font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.55; max-width: 480px;
+  }
+  .arch .layer.repo .desc { color: rgba(15,23,42,0.85); }
+  .arch .arrow {
+    text-align: center; font-size: 24px; color: var(--gold-light); line-height: 0.5;
+    margin: -2px 0 -2px;
+  }
+
+  /* ============ SECURITY LAYERS ============ */
+  .gates-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-top: 22px;
+    font-family: Arial, sans-serif;
+  }
+  .gate {
+    background: rgba(255,255,255,0.06); border-radius: 10px; padding: 20px 18px;
+    border-top: 4px solid var(--gold-light);
+  }
+  .gate .num {
+    font-family: Georgia, serif; font-size: 36px; font-weight: 800;
+    color: var(--gold-light); line-height: 0.9;
+  }
+  .gate .name {
+    font-size: 13px; font-weight: 800; color: white; margin-top: 8px;
+    letter-spacing: 0.5px;
+  }
+  .gate .desc {
+    font-size: 12px; color: #cbd5e0; margin-top: 8px; line-height: 1.55;
+  }
+
+  /* ============ GOVERNANCE DECISION TREE ============ */
+  .gov-tree {
+    background: white; border-radius: 12px; padding: 28px;
+    margin-top: 22px; font-family: Arial, sans-serif;
+    border: 1px solid var(--gray);
+  }
+  .gov-row {
+    display: flex; align-items: stretch; gap: 14px; margin-bottom: 10px;
+  }
+  .gov-row .question {
+    flex: 1; background: var(--navy-deep); color: white; padding: 14px 18px;
+    border-radius: 8px; display: flex; align-items: center; font-size: 14px;
+  }
+  .gov-row .answers {
+    display: flex; gap: 8px; flex: 1.5;
+  }
+  .gov-row .answer {
+    flex: 1; padding: 12px 14px; border-radius: 8px; font-size: 12px;
+    line-height: 1.4; display: flex; flex-direction: column; gap: 4px;
+  }
+  .gov-row .answer.auto { background: #dcfce7; border-left: 4px solid var(--green); color: var(--green); }
+  .gov-row .answer.confirm { background: #fef9e7; border-left: 4px solid var(--gold); color: #78350f; }
+  .gov-row .answer.escalate { background: #fee2e2; border-left: 4px solid var(--red); color: #7f1d1d; }
+  .gov-row .answer .lbl {
+    font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 800;
+  }
+
+  /* ============ SCENARIOS ============ */
+  .scenario {
+    background: white; border-radius: 12px; margin-top: 26px; overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  .scenario .head {
+    background: var(--navy); color: white; padding: 16px 24px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    font-family: Arial, sans-serif;
+  }
+  .scenario .head .num {
+    font-family: Georgia, serif; font-size: 28px; font-weight: 800;
+    color: var(--gold-light); line-height: 0.9;
+  }
+  .scenario .head .title {
+    font-size: 18px; font-weight: 800; flex: 1; line-height: 1.2;
+  }
+  .scenario .head .actors {
+    font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: #cbd5e0;
+  }
+  .scenario .body { padding: 22px 28px; }
+  .scenario .step {
+    display: flex; gap: 16px; padding: 14px 0; border-bottom: 1px dashed var(--gray);
+    align-items: flex-start;
+  }
+  .scenario .step:last-child { border-bottom: 0; }
+  .scenario .step .time {
+    flex: 0 0 70px; font-family: 'Courier New', monospace; font-size: 11px;
+    color: var(--slate); padding-top: 2px;
+  }
+  .scenario .step .who {
+    flex: 0 0 90px;
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 1px;
+    text-transform: uppercase; font-weight: 700; color: var(--navy); padding-top: 2px;
+  }
+  .scenario .step .what {
+    flex: 1; font-size: 13.5px; line-height: 1.5; font-family: Arial, sans-serif;
+  }
+  .scenario .step.gate { background: #fef9e7; margin: 0 -28px; padding: 14px 28px; border-radius: 0; }
+  .scenario .step.gate .what { color: #78350f; font-weight: 600; }
+  .scenario .step.gate::before {
+    content: '⛔'; font-size: 18px; margin-right: 4px;
+  }
+  .scenario .step.audit { background: #ecfdf5; margin: 0 -28px; padding: 14px 28px; }
+  .scenario .step.audit .what { color: var(--green); font-weight: 600; font-style: italic; }
+
+  /* ============ THE BONFIRE TRACK CALLOUT ============ */
+  .bonfire-callout {
+    background: #fef2f2; border: 2px solid var(--red); border-radius: 12px;
+    padding: 28px; margin-top: 24px; font-family: Arial, sans-serif;
+  }
+  .bonfire-callout h3 {
+    margin: 0 0 12px; font-family: Georgia, serif; font-size: 24px; color: #7f1d1d;
+  }
+  .bonfire-callout .why {
+    background: white; padding: 18px 22px; border-radius: 8px;
+    border-left: 4px solid var(--red); margin-top: 14px; font-size: 13px;
+    color: #1f2937; line-height: 1.6;
+  }
+  .bonfire-callout .why strong { color: var(--red); }
+  .bonfire-callout ul { font-size: 13px; line-height: 1.7; padding-left: 22px; }
+
+  /* ============ ALI'S VIEW ============ */
+  .ali-view {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 22px;
+    font-family: Arial, sans-serif;
+  }
+  .ali-view .panel {
+    background: white; border-radius: 10px; padding: 22px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-top: 4px solid var(--navy);
+  }
+  .ali-view .panel .label {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--slate); font-weight: 700;
+  }
+  .ali-view .panel h4 {
+    margin: 4px 0 10px; font-size: 16px; color: var(--navy-deep);
+  }
+  .ali-view .panel ul {
+    font-size: 12.5px; line-height: 1.6; color: #1f2937; padding-left: 18px;
+    margin: 0;
+  }
+
+  /* ============ FOOTER ============ */
+  .doc-footer {
+    background: #0f172a; color: white; padding: 36px 48px; text-align: center;
+    font-family: Arial, sans-serif;
+  }
+  .doc-footer img { height: 30px; margin-bottom: 12px; }
+  .doc-footer p { font-size: 13px; color: #cbd5e0; max-width: 580px; margin: 0 auto; }
+
+  /* ============ INLINE STYLE HELPERS ============ */
+  .pull-quote {
+    background: rgba(212,160,23,0.15); border-left: 6px solid var(--gold);
+    padding: 18px 24px; margin: 20px 0; font-family: Georgia, serif;
+    font-size: 18px; font-style: italic; color: #78350f; border-radius: 0 6px 6px 0;
+    line-height: 1.5;
+  }
+  .section.dark .pull-quote, .section.navy-pad .pull-quote, .section.red-pad .pull-quote {
+    background: rgba(212,160,23,0.2); color: #fef3c7;
+  }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 0.5px;
+    font-weight: 700; margin: 0 2px;
+  }
+  .badge.go { background: #dcfce7; color: var(--green); }
+  .badge.ask { background: #fef9e7; color: #78350f; }
+  .badge.stop { background: #fee2e2; color: #7f1d1d; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<!-- ===================== HERO ===================== -->
+<div class="hero">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry-dark.png" alt="Colaberry">
+<div class="eyebrow">The story of how it works · For Ali · 2026-06-02</div>
+<h1>You hire AI Project Architect once.<br>Four people get the same brain. Each with a different door.</h1>
+<p>This document explains - in story form, with diagrams - how Karun, Kes, Akiwam, and Obi will operate inside the same Colaberry-approved skill library, what each one is allowed to do, where the approval gates are, where your eyes never need to be, and where you must stay in the loop. Read it as a Sunday-afternoon narrative; act on it Monday.</p>
+</div>
+
+<!-- ===================== THE CAST ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Chapter 1 · The cast</div>
+<h2>Four people, four very different surfaces.</h2>
+<p>The architecture is the same for everyone. The <em>permissions</em> are not. Karun and Kes get broad autonomy. Akiwam and Obi get a narrow knife-edge - they touch gov contracts only, in a sandboxed surface.</p>
+
+<div class="cast-grid">
+<div class="cast-card pilot">
+<div class="name">Karun Swaroop</div>
+<div class="role">VP Business Lead</div>
+<span class="tag">Pilot · Phase 1 / Week 1</span>
+<div class="scope">Runs strategic sales (Coca-Cola, Patriot Insurance, Anthropic partnership). His Claude Code can read his BC + Gmail + HubSpot + Apollo; can draft + send replies (with approval); can update BC tickets in projects he owns. Cannot touch HR, finance, code repos, or other reps' accounts.</div>
+<div class="systems"><strong>Systems wired:</strong> Basecamp, Gmail, HubSpot, Apollo, CCPP read-only, Anthropic Partner Portal</div>
+</div>
+
+<div class="cast-card pilot">
+<div class="name">Kesetebirhan Delele (Kes)</div>
+<div class="role">AI Systems Architect</div>
+<span class="tag">Pilot · Phase 1 / Week 1</span>
+<div class="scope">Owns the platform. Voice AI, Inbox AI, GHL workflows, the student platform, the operations platform. His Claude Code can read + write code in any tech repo; can deploy (with approval); can read every system's telemetry. Cannot touch finance, HR, or send mass communications.</div>
+<div class="systems"><strong>Systems wired:</strong> GitHub (all tech repos), Basecamp, GHL, Voice/Inbox AI infra, production telemetry, Claude Code (full)</div>
+</div>
+
+<div class="cast-card intern">
+<div class="name">Akiwam</div>
+<div class="role">Intern · Bonfire / Gov Contracts</div>
+<span class="tag">Phase 1 / Week 2 · Narrow surface</span>
+<div class="scope">Eyes on Bonfire only. Discovers gov RFPs, reads RFP requirements, drafts bid responses against capability statements, flags bid/no-bid recommendations for Vinay + David Lahme. Cannot send any external email; cannot touch customer data; cannot modify capability statements (read-only).</div>
+<div class="systems"><strong>Systems wired:</strong> Bonfire (Que-only account + Colaberry-only account, both read), Basecamp (Gov Contracts project), capability-statement library (read-only)</div>
+</div>
+
+<div class="cast-card intern">
+<div class="name">Obi (Osarumwense / Kingsley Obi)</div>
+<div class="role">Intern · Bonfire / Gov Contracts</div>
+<span class="tag">Phase 1 / Week 2 · Narrow surface</span>
+<div class="scope">Same surface as Akiwam. The two of them pair on gov contract discovery + drafting. One can review the other's drafts before Vinay sees them. Same restrictions: no external email, no customer data, no edits to capability statements without escalation.</div>
+<div class="systems"><strong>Systems wired:</strong> Bonfire (both accounts, read), Basecamp (Gov Contracts project), capability-statement library (read-only)</div>
+</div>
+</div>
+
+<div class="pull-quote">All four use the same Claude Code binary. All four pull skills from the same Colaberry-approved library. What changes per person is the <em>shape</em> of what their Claude Code is allowed to do.</div>
+
+</div>
+
+<!-- ===================== ARCHITECTURE DIAGRAM ===================== -->
+<div class="section dark">
+<div class="section-eyebrow">Chapter 2 · The architecture</div>
+<h2>One flow, drawn end-to-end. Bottom-up reads like a Lego instruction.</h2>
+<p>Each employee's laptop talks to Claude Code. Claude Code reads canonical skills from the AI Project Architect GitHub repo. When the employee invokes a skill, three approval gates sit between intent and any external system. Every action is logged. Here is the picture.</p>
+
+<div class="arch">
+
+<div class="layer users">
+<div>
+<div class="label">Layer 1 · Identity</div>
+<h4>The 4 employees, each on their own laptop</h4>
+<div class="desc">Karun, Kes, Akiwam, Obi sign in to Claude Code with their own credentials. Their personal Basecamp OAuth refresh tokens, Gmail tokens, Bonfire tokens are stored locally in <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">~/.colaberry/credentials.json</code>. Their access to your APIs follows their existing role in each system.</div>
+</div>
+</div>
+<div class="arrow">↓</div>
+
+<div class="layer tool">
+<div>
+<div class="label">Layer 2 · Tool</div>
+<h4>Claude Code, configured per person</h4>
+<div class="desc">A starter <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">.claude/</code> folder shapes what their Claude can do. Per-user CLAUDE.md sets their persona. <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">.claude/settings.json</code> tool allow/deny lists. <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">.claude/hooks/</code> intercept high-risk actions for confirmation.</div>
+</div>
+</div>
+<div class="arrow">↓</div>
+
+<div class="layer repo">
+<div>
+<div class="label">Layer 3 · Source of truth</div>
+<h4>AI Project Architect GitHub repo (canonical skills + use cases + agents)</h4>
+<div class="desc">Every Colaberry-approved Use Case, Skill, and Agent lives here. Each employee's <code style="background:rgba(255,255,255,0.5);padding:1px 5px;border-radius:3px">.claude/skills/</code> auto-syncs nightly from this repo. Personal local skills are allowed but do not replicate. When you flag a new skill "Colaberry approved" in the library, it lands here as a Markdown file - everyone gets it on next sync.</div>
+</div>
+</div>
+<div class="arrow">↓</div>
+
+<div class="layer gates">
+<div>
+<div class="label">Layer 4 · Approval gates (three of them, stacked)</div>
+<h4>Default prompt mode · Hooks · Plan mode</h4>
+<div class="desc">Gate A: default permission mode prompts before every tool call. Gate B: hooks intercept high-risk actions (BC writes, email sends, deploys, deletes) and require typing a one-line reason + "yes." Gate C: for big tasks, the agent enters plan mode, produces a written plan, the user reads + approves before any tool fires.</div>
+</div>
+</div>
+<div class="arrow">↓</div>
+
+<div class="layer systems">
+<div>
+<div class="label">Layer 5 · External systems</div>
+<h4>Basecamp · Gmail · HubSpot · Bonfire · GitHub · GHL · CCPP · Telemetry</h4>
+<div class="desc">The actual systems. Each call is logged with: timestamp, employee, skill used, what was sent, what came back, which gate approved it. The log flows into Cory's daily digest to you.</div>
+</div>
+</div>
+</div>
+
+<div class="pull-quote">Nothing executes against an external system unless the employee personally said "yes" to the action, OR the action is on the explicit auto-allow list for their role. There is no autonomous magic. The system is loud about asking.</div>
+
+</div>
+
+<!-- ===================== SECURITY LAYERS ===================== -->
+<div class="section navy-pad">
+<div class="section-eyebrow">Chapter 3 · The four security layers</div>
+<h2>Defense in depth. Any one of these would catch a bad action; we stack four.</h2>
+
+<div class="gates-grid">
+<div class="gate">
+<div class="num">1</div>
+<div class="name">Identity</div>
+<div class="desc">Each person has their OWN credentials. Akiwam cannot accidentally do something as Karun because she does not have Karun's tokens. Bonfire credentials never leave the laptop they were set up on.</div>
+</div>
+<div class="gate">
+<div class="num">2</div>
+<div class="name">Authorization</div>
+<div class="desc">Their existing system roles enforce permissions BEFORE Claude even tries an action. Akiwam can read Bonfire but cannot post a bid (Bonfire role says so). Karun can comment on his BC projects but cannot delete the company; Basecamp role says so. No Claude code change can override this.</div>
+</div>
+<div class="gate">
+<div class="num">3</div>
+<div class="name">Approval gates</div>
+<div class="desc">Even on actions they are authorized to take, Claude Code asks. Default mode prompts on every tool call. Hooks add extra friction on high-risk actions (send email, deploy, delete). Plan mode adds a written plan + sign-off for big multi-step tasks.</div>
+</div>
+<div class="gate">
+<div class="num">4</div>
+<div class="name">Audit</div>
+<div class="desc">Every action gets logged - who, when, what skill, what input, what output, which gate approved. Cory rolls this up to you nightly. Anomalies (deletes, mass changes, off-pattern behavior) page you immediately. Nothing happens without a trace.</div>
+</div>
+</div>
+
+</div>
+
+<!-- ===================== GOVERNANCE DECISION TREE ===================== -->
+<div class="section alt">
+<div class="section-eyebrow">Chapter 4 · When does the system check in with you (Ali)?</div>
+<h2>The decision tree, drawn flat.</h2>
+<p>Three categories: <span class="badge go">AUTO</span> = runs without bothering you, <span class="badge ask">ASK EMPLOYEE</span> = the employee confirms with the gate prompt, <span class="badge stop">ESCALATE TO ALI</span> = Cory pings you before anything fires.</p>
+
+<div class="gov-tree">
+<div class="gov-row">
+<div class="question"><strong>Karun reads his own BC + Gmail to answer a question</strong></div>
+<div class="answers">
+<div class="answer auto"><span class="lbl">Auto</span>No prompt. No escalation. The dashboard fires and Karun reads it.</div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+</div>
+</div>
+
+<div class="gov-row">
+<div class="question"><strong>Karun drafts a reply to a customer (send action)</strong></div>
+<div class="answers">
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer confirm"><span class="lbl">Karun confirms</span>Hook intercepts the send. Karun types "yes" + one-line reason before it goes.</div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+</div>
+</div>
+
+<div class="gov-row">
+<div class="question"><strong>Kes deploys a hotfix to prod</strong></div>
+<div class="answers">
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer confirm"><span class="lbl">Kes confirms</span>Hook intercepts <code>docker compose up -d --build</code>. Kes types "yes" + one-line reason. Logged.</div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+</div>
+</div>
+
+<div class="gov-row">
+<div class="question"><strong>Akiwam wants to submit a bid via Bonfire (high-stakes external)</strong></div>
+<div class="answers">
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer escalate"><span class="lbl">Escalate to Ali + Vinay</span>Hook blocks the submit. Pages Vinay first, then you. Submission requires Vinay's typed approval, your typed acknowledgment.</div>
+</div>
+</div>
+
+<div class="gov-row">
+<div class="question"><strong>Akiwam wants to email an external person (any send)</strong></div>
+<div class="answers">
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer escalate"><span class="lbl">Hard block</span>Interns cannot send external emails. Action is denied at the tool layer, not the gate layer. Period.</div>
+</div>
+</div>
+
+<div class="gov-row">
+<div class="question"><strong>Karun proposes a new "Colaberry approved" skill (write to library)</strong></div>
+<div class="answers">
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer escalate"><span class="lbl">Escalate to Ali</span>Anything that becomes the canonical skill for the company must be approved by you. Karun's pull request enters a queue you review weekly.</div>
+</div>
+</div>
+
+<div class="gov-row">
+<div class="question"><strong>Any anomaly: mass delete, off-hours run, repeated retries on a failing call</strong></div>
+<div class="answers">
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer auto" style="background:transparent;border:none"></div>
+<div class="answer escalate"><span class="lbl">Page Ali immediately</span>Cory's anomaly detector triggers. SMS + email + BC ticket all simultaneously. Action is paused until you respond.</div>
+</div>
+</div>
+</div>
+
+<div class="pull-quote">Translation in one line: <strong>read = silent, write = ask employee, external + irreversible = escalate to Ali.</strong></div>
+
+</div>
+
+<!-- ===================== SCENARIOS ===================== -->
+<div class="section">
+<div class="section-eyebrow">Chapter 5 · Six scenarios, drawn as little stories</div>
+<h2>What it actually looks like, Monday through Friday.</h2>
+<p>The point of stories: you see the rhythm. You see where you appear, where you do not, where the gates fire. Six scenes, mix of Karun, Kes, Akiwam, Obi - and one where they cross paths.</p>
+
+<!-- SCENARIO 1 -->
+<div class="scenario">
+<div class="head"><div class="num">1</div><div class="title">Karun preps for a Coca-Cola check-in</div><div class="actors">Karun · Solo</div></div>
+<div class="body">
+<div class="step"><div class="time">8:30 AM</div><div class="who">Karun</div><div class="what">Boots Claude Code. Runs <code>/karun-dash coca-cola</code>. (Skill came from your Colaberry-approved library overnight.)</div></div>
+<div class="step audit"><div class="time">8:30 AM</div><div class="who">System</div><div class="what">Logs: "Karun invoked /karun-dash with arg 'coca-cola.'"</div></div>
+<div class="step"><div class="time">8:31 AM</div><div class="who">Claude</div><div class="what">Pulls David Lahme's last 30 days of Gmail on the account, the Coca-Cola BC ticket, the HubSpot pipeline stage, the Apollo last-touch date.</div></div>
+<div class="step"><div class="time">8:32 AM</div><div class="who">Claude</div><div class="what">Generates a dashboard HTML: 5 numbers + the 10 use cases + key conversation quotes from David. Opens it in browser.</div></div>
+<div class="step"><div class="time">9:00 AM</div><div class="who">Karun</div><div class="what">Walks into the 1:1 with you, dashboard already in hand. No "where's the data" 15 minutes. Straight to "should we push case 6 or case 4 with Darrell?"</div></div>
+<div class="step audit"><div class="time">9:32 AM</div><div class="who">System</div><div class="what">Today's audit entry for Karun: 1 dashboard generated, 0 sends, 0 writes. Cory's nightly digest mentions it as a green checkmark.</div></div>
+</div>
+</div>
+
+<!-- SCENARIO 2 -->
+<div class="scenario">
+<div class="head"><div class="num">2</div><div class="title">Karun drafts a follow-up to David Lahme. The send gate fires.</div><div class="actors">Karun · with approval gate</div></div>
+<div class="body">
+<div class="step"><div class="time">2:14 PM</div><div class="who">Karun</div><div class="what">"@Claude — David asked for v6 of the About Colaberry deck with utility examples. Draft me an email with the v6 link + a calendar invite for Thursday."</div></div>
+<div class="step"><div class="time">2:14 PM</div><div class="who">Claude</div><div class="what">Pulls the v6 PDF link from the BC ticket. Drafts a 4-paragraph email. Shows Karun the draft + the calendar invite in the terminal.</div></div>
+<div class="step gate"><div class="time">2:15 PM</div><div class="who">Hook</div><div class="what">"You're about to send email to dlahme@colaberry.com from your account. Type a one-line reason + 'yes' to confirm, or 'no' to cancel."</div></div>
+<div class="step"><div class="time">2:15 PM</div><div class="who">Karun</div><div class="what">Types: "Following up on About Colaberry v6 + Thursday cal. yes."</div></div>
+<div class="step audit"><div class="time">2:15 PM</div><div class="who">System</div><div class="what">Email sent via Gmail. Logged: "Karun · email · to:dlahme · subject:Re: About Colaberry v6 · reason:'Following up on About Colaberry v6 + Thursday cal.'"</div></div>
+</div>
+</div>
+
+<!-- SCENARIO 3 -->
+<div class="scenario">
+<div class="head"><div class="num">3</div><div class="title">Kes ships a hotfix to production</div><div class="actors">Kes · Solo · with approval gate</div></div>
+<div class="body">
+<div class="step"><div class="time">11:42 PM</div><div class="who">Cory</div><div class="what">Alerts Kes: "Voice AI agent #3 stopped responding 4 min ago. Stack trace says null pointer in transcription callback."</div></div>
+<div class="step"><div class="time">11:43 PM</div><div class="who">Kes</div><div class="what">Opens Claude Code. "@Claude - read the stack trace, find the bug, propose the fix, do not push yet."</div></div>
+<div class="step"><div class="time">11:45 PM</div><div class="who">Claude</div><div class="what">Reads the trace, finds the bug in <code>backend/src/services/voiceAI/transcriptCallback.ts</code> line 87. Shows Kes the proposed diff + a test.</div></div>
+<div class="step"><div class="time">11:47 PM</div><div class="who">Kes</div><div class="what">Reads the diff, agrees, runs the test locally - passes. "Ship it."</div></div>
+<div class="step gate"><div class="time">11:48 PM</div><div class="who">Hook</div><div class="what">"You're about to run <code>docker compose -f docker-compose.production.yml up -d --build backend</code> against PROD (95.216.199.47). Type reason + 'yes' to confirm."</div></div>
+<div class="step"><div class="time">11:48 PM</div><div class="who">Kes</div><div class="what">"Voice AI agent 3 NPE hotfix - tested locally. yes."</div></div>
+<div class="step audit"><div class="time">11:51 PM</div><div class="who">System</div><div class="what">Deploy succeeded. Voice AI agent 3 back online. Logged: deploy author/reason/time/commit SHA. Ali gets the line in tomorrow's Cory digest.</div></div>
+</div>
+</div>
+
+<!-- SCENARIO 4 -->
+<div class="scenario">
+<div class="head"><div class="num">4</div><div class="title">Akiwam discovers a new Bonfire RFP. Stays narrow.</div><div class="actors">Akiwam · Bonfire-only surface</div></div>
+<div class="body">
+<div class="step"><div class="time">9:00 AM</div><div class="who">Akiwam</div><div class="what">Boots Claude Code. Runs <code>/bonfire-discovery</code>. (Skill is Colaberry-approved + scoped only to her Bonfire surface.)</div></div>
+<div class="step"><div class="time">9:01 AM</div><div class="who">Claude</div><div class="what">Logs into both Bonfire accounts (Que-shared + Colaberry-only). Pulls 23 new opportunities posted in the last 24h.</div></div>
+<div class="step"><div class="time">9:03 AM</div><div class="who">Claude</div><div class="what">Filters: ≥10 days out (per the rule), ≤365 days, excludes already-used opportunity UUIDs (the dedup list). 7 candidates remain.</div></div>
+<div class="step"><div class="time">9:08 AM</div><div class="who">Claude</div><div class="what">For each candidate, generates a 1-page summary card: scope, agency, deadline, est. budget, fit score (1-10) against the capability statement.</div></div>
+<div class="step"><div class="time">9:10 AM</div><div class="who">Akiwam</div><div class="what">Reads the 7 cards. Picks 3 worth pursuing. Drops a comment on the gov contracts BC ticket with her recommendations.</div></div>
+<div class="step gate"><div class="time">9:12 AM</div><div class="who">Hook</div><div class="what">"You're about to write a comment to BC ticket Gov-2026-06-02-new-bids. Confirm with 'yes' + one-line reason."</div></div>
+<div class="step"><div class="time">9:12 AM</div><div class="who">Akiwam</div><div class="what">"Recommended pursue: bids #2, #4, #7 — see fit-score rationale. yes."</div></div>
+<div class="step audit"><div class="time">9:13 AM</div><div class="who">System</div><div class="what">Comment posted. Vinay tagged. Vinay sees it in his inbox + BC notification.</div></div>
+<div class="step audit"><div class="time">9:14 AM</div><div class="who">System</div><div class="what">Note: Akiwam attempted at 9:11 AM to email dlahme@colaberry.com directly — denied at tool layer (interns cannot send external email). Logged as a "policy decline," not an error.</div></div>
+</div>
+</div>
+
+<!-- SCENARIO 5 (CROSS-TEAM) -->
+<div class="scenario">
+<div class="head"><div class="num">5</div><div class="title">Karun finds a gov contract opportunity, hands it off to Akiwam + Obi</div><div class="actors">Karun → Akiwam → Obi · cross-team handoff</div></div>
+<div class="body">
+<div class="step"><div class="time">10:00 AM</div><div class="who">Karun</div><div class="what">In a Coca-Cola conversation, Darrell mentions Coca-Cola bottling partners (200+) might be interested in a sovereignty-box product. Some are on state utility commissions = gov contract surface.</div></div>
+<div class="step"><div class="time">10:30 AM</div><div class="who">Karun</div><div class="what">"@Claude - search Bonfire for any RFPs mentioning bottling, beverage manufacturing, state-level. Pass the list to Akiwam + Obi via the BC gov contracts list."</div></div>
+<div class="step"><div class="time">10:31 AM</div><div class="who">Claude</div><div class="what">Searches Bonfire. Finds 4 candidates. Drafts a BC comment on the Gov Contracts list tagging Akiwam + Obi.</div></div>
+<div class="step gate"><div class="time">10:32 AM</div><div class="who">Hook</div><div class="what">"You're about to post to BC + tag two interns. Confirm 'yes' + reason."</div></div>
+<div class="step"><div class="time">10:32 AM</div><div class="who">Karun</div><div class="what">"From Darrell call - bottling partners + utility commissions might be a thread. yes."</div></div>
+<div class="step audit"><div class="time">10:33 AM</div><div class="who">System</div><div class="what">Comment posted. Akiwam + Obi receive BC notifications.</div></div>
+<div class="step"><div class="time">11:15 AM</div><div class="who">Akiwam</div><div class="what">Sees the tag. Boots Claude Code. <code>/bonfire-deep-dive</code> on the 4 candidates. Generates fit-score cards. Tags Obi for second-pass review.</div></div>
+<div class="step"><div class="time">2:00 PM</div><div class="who">Obi</div><div class="what">Reviews Akiwam's fit-score cards. Disagrees on candidate #3 (too small a budget). Drops a comment with his rationale.</div></div>
+<div class="step audit"><div class="time">2:01 PM</div><div class="who">System</div><div class="what">Vinay receives end-of-day digest: "2 interns reviewed 4 Karun-flagged bids. 3 recommended pursue, 1 declined, all rationales in BC."</div></div>
+</div>
+</div>
+
+<!-- SCENARIO 6 -->
+<div class="scenario">
+<div class="head"><div class="num">6</div><div class="title">Akiwam tries to submit a bid. The system stops her.</div><div class="actors">Akiwam · ESCALATION SCENARIO</div></div>
+<div class="body">
+<div class="step"><div class="time">3:30 PM</div><div class="who">Akiwam</div><div class="what">Excited about candidate #2 (a State of Texas IT modernization RFP). Tries: "@Claude - go ahead and submit our bid on this one."</div></div>
+<div class="step gate"><div class="time">3:30 PM</div><div class="who">Hook</div><div class="what">"This action would submit a Bonfire bid - a high-stakes external commitment. Interns cannot complete this action alone. PAGING Vinay (gov contracts owner) + Ali (executive sponsor). Action paused."</div></div>
+<div class="step"><div class="time">3:30 PM</div><div class="who">System</div><div class="what">Sends Vinay an SMS + email. Sends Ali a Cory alert. Posts to the Gov Contracts BC list. Akiwam's request is queued, not executed.</div></div>
+<div class="step"><div class="time">4:15 PM</div><div class="who">Vinay</div><div class="what">Reviews the draft bid. Spots a missing past-performance reference. Replies on the BC thread: "Pause. We need PP-2024-Detroit before this goes."</div></div>
+<div class="step"><div class="time">4:20 PM</div><div class="who">Ali</div><div class="what">Reads the digest line. Acknowledges the pause. No further action needed - Vinay caught it.</div></div>
+<div class="step audit"><div class="time">EOD</div><div class="who">System</div><div class="what">Cory's daily: "1 escalation today: Akiwam attempted Bonfire bid submission on Texas IT mod RFP. Paused by Vinay (missing past-performance ref). No action required from Ali."</div></div>
+</div>
+</div>
+
+<div class="pull-quote">Notice the rhythm. <strong>You appear in scenarios 6 (escalation) only.</strong> Five of the six are handled by the gate + the audit. Your scarce attention goes where it matters: when an irreversible thing is about to happen.</div>
+
+</div>
+
+<!-- ===================== BONFIRE TRACK CALLOUT ===================== -->
+<div class="section red-pad">
+<div class="section-eyebrow">Chapter 6 · The Bonfire / gov-contracts surface (special handling)</div>
+<h2>Why Akiwam + Obi get a knife-edge surface, not the full kitchen.</h2>
+<p>Gov contracts have stakes other workflows do not. A submitted bid is an irreversible commitment. A missed clause in a capability statement is a compliance issue. A confidentiality breach on RFP content is a contract violation. Interns get a sandboxed surface so the upside (faster discovery + better fit scoring) is captured without the downside (someone clicks Submit on a bad bid).</p>
+
+<div class="bonfire-callout" style="background:#fef9e7;border-color:#d4a017;color:#78350f">
+<h3 style="color:#7c2d12">What Akiwam + Obi CAN do</h3>
+<ul>
+<li>Read both Bonfire accounts (Que-shared + Colaberry-only)</li>
+<li>Search, filter, and triage opportunities (≥10 days out, exclude used UUIDs)</li>
+<li>Generate fit-score cards against the capability statement</li>
+<li>Draft bid responses (text only - not the final document)</li>
+<li>Post comments + recommendations on the Gov Contracts BC list</li>
+<li>Tag Vinay or David Lahme on findings</li>
+<li>Pair-review each other's drafts before passing to Vinay</li>
+</ul>
+
+<h3 style="color:#7c2d12;margin-top:18px">What they CANNOT do (hard blocks at the tool layer)</h3>
+<ul>
+<li><strong>Submit any bid via Bonfire</strong> - escalation to Vinay + Ali required</li>
+<li><strong>Send any external email</strong> from any account - tool-layer denial</li>
+<li><strong>Modify the capability statement</strong> - read-only access</li>
+<li><strong>Access customer data</strong> on HubSpot or CCPP - no token issued</li>
+<li><strong>Touch finance, HR, or any other team's BC project</strong> - role-locked</li>
+<li><strong>Write to GitHub repos other than the gov-contracts pull-only workspace</strong> - tool-layer denial</li>
+</ul>
+
+<div class="why">
+<strong>The deeper why:</strong> the goal is to give Akiwam + Obi enough surface to learn the trade (RFP comprehension, bid/no-bid reasoning, capability-statement craft) without letting a single click of theirs commit the company to a bad outcome. Vinay still owns every submitted bid. The interns accelerate Vinay; they do not replace Vinay.
+</div>
+</div>
+
+</div>
+
+<!-- ===================== ALI'S VIEW ===================== -->
+<div class="section cream">
+<div class="section-eyebrow">Chapter 7 · What you (Ali) actually see</div>
+<h2>Three surfaces. None of them require staring at logs.</h2>
+<p>You have a day job. The system knows this. The three surfaces below are the only places you should ever appear in this architecture.</p>
+
+<div class="ali-view">
+<div class="panel">
+<div class="label">Daily · 7:00 AM</div>
+<h4>Cory's morning digest</h4>
+<ul>
+<li>Yesterday's activity per person (counts: sessions, sends, deploys, escalations)</li>
+<li>Top decisions logged + their rationales</li>
+<li>Any anomalies caught (mass deletes, off-pattern behavior)</li>
+<li>Open queue: skill PRs from the team awaiting your "Colaberry approved" stamp</li>
+</ul>
+</div>
+
+<div class="panel">
+<div class="label">Real-time · escalations only</div>
+<h4>Cory's pages</h4>
+<ul>
+<li>SMS + email + BC ticket when an escalation fires</li>
+<li>3 types: high-stakes external commitment, hard-blocked attempt by a junior person, anomaly</li>
+<li>Your acknowledgment closes the loop</li>
+<li>Goal: less than 2 pages per week once steady-state</li>
+</ul>
+</div>
+
+<div class="panel">
+<div class="label">Weekly · 30 minutes</div>
+<h4>Skill PR review queue</h4>
+<ul>
+<li>Karun, Kes, etc. submit new skills to the library</li>
+<li>You review the queue once a week + flag "Colaberry approved" on the ones you want everyone to have</li>
+<li>Approved skills auto-sync to every employee overnight</li>
+<li>Your weekly batch session is the canonical governance touch point</li>
+</ul>
+</div>
+</div>
+
+</div>
+
+<!-- ===================== CLOSING ===================== -->
+<div class="section dark">
+<div class="section-eyebrow">Closing · The mental model</div>
+<h2>One paragraph you can repeat to anyone who asks.</h2>
+<div class="pull-quote" style="font-size:20px">"Everyone runs the same Claude Code with the same skill library. The skill library is governed by Ali - he ratifies what becomes 'Colaberry approved.' Each employee's Claude Code is shaped to their role - what tools, what systems, what permissions. Three approval gates sit between intent and any external action: a permission prompt, a hook with a reason field, and plan mode for big tasks. Everything is logged. Ali sees daily digests, escalation pages, and a weekly skill-approval queue. Nothing else."</div>
+
+<p>That is the whole architecture. If a person can hold this paragraph in their head, they understand the system.</p>
+
+</div>
+
+<!-- ===================== FOOTER ===================== -->
+<div class="doc-footer">
+<img src="img/ad-mockups-2026-06-02/logo-colaberry-dark.png" alt="Colaberry">
+<p>Drafted 2026-06-02 in response to your "I'm still having a hard time understanding how the gov and security looks." Reply with anything that does not land. I will refactor the doc, not just answer the question.</p>
+</div>
+
+</div>
+</body></html>
