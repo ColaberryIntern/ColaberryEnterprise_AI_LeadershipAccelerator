@@ -44,6 +44,7 @@ import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
 import AdminReportsPage from '../pages/admin/AdminReportsPage';
 import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
+import AiOpsCommandCenter from '../pages/admin/AiOpsCommandCenter';
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
@@ -92,6 +93,7 @@ const adminRoutes = (
         <Route path="/admin/automation" element={<AdminAutomationPage />} />
         <Route path="/admin/reports" element={<AdminReportsPage />} />
         <Route path="/admin/ceo" element={<CEOCommandCenter />} />
+        <Route path="/admin/ops" element={<AiOpsCommandCenter />} />
       </Route>
     </Route>
   </>

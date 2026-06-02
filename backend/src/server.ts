@@ -299,6 +299,25 @@ async function start(): Promise<void> {
     );
   });
 
+  // AI Ops Command Center BC mirror — pulls all projects → todolists → todos
+  // every 2 min so the Command Center reads from a fresh local mirror.
+  cron.schedule('*/2 * * * *', () => {
+    import('./services/ops/bcSyncService')
+      .then(({ runBcSync }) => runBcSync())
+      .then((result) => {
+        import('./routes/admin/opsRoutes')
+          .then((mod) => mod.setLastSync(result))
+          .catch(() => {});
+        if (result.errors.length > 0) {
+          console.warn(
+            `[OpsBcSync] completed with ${result.errors.length} errors`,
+            result.errors.slice(0, 3),
+          );
+        }
+      })
+      .catch((err) => console.warn('[OpsBcSync] scheduled run failed:', err?.message));
+  });
+
   // Server-side Architect build retrieval: pull + build out completed Architect
   // builds even if the user closed the tab (client polling can't be relied on
   // for a ~15-min build). Runs every 2 minutes; idempotent.

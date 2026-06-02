@@ -241,6 +241,12 @@ MayaConversationOutcome.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
 CampaignGovernanceConfig.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
+// AI Ops Command Center (Phase 0 schema)
+import OpsBcTodo from './OpsBcTodo';
+import OpsAiAssessment from './OpsAiAssessment';
+import OpsApprovalQueueItem from './OpsApprovalQueueItem';
+import OpsMetricsDaily from './OpsMetricsDaily';
+
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
 Enrollment.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
@@ -1016,6 +1022,11 @@ export {
   GovernanceRecommendation,
   PreparedRemediationPlan,
   GovernanceAuditEntry,
+  // AI Ops Command Center (Phase 0)
+  OpsBcTodo,
+  OpsAiAssessment,
+  OpsApprovalQueueItem,
+  OpsMetricsDaily,
 };
 
 // --- AI Company Layer associations ---
