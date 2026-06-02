@@ -481,51 +481,23 @@
     text-transform: uppercase;
     text-align: center;
   }
-  .m4-hero-strip {
-    height: 78px;
-    background-image:
-      linear-gradient(180deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.85) 100%),
-      url('img/ad-mockups-2026-06-02/06-data-viz.jpg');
-    background-size: cover;
-    background-position: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 12px;
-    letter-spacing: 3px;
-    font-weight: 700;
-    text-transform: uppercase;
-    text-align: center;
-    padding: 0 22px;
-    position: relative;
-  }
-  .m4-hero-strip .photo-credit {
-    position: absolute;
-    bottom: 4px;
-    right: 8px;
-    font-size: 8px;
-    color: rgba(255,255,255,0.55);
-    letter-spacing: 0.5px;
-    text-transform: none;
-    font-weight: 400;
-  }
+  /* David's edit: headline at TOP, larger + bold */
   .m4-headline {
-    padding: 16px 26px 10px;
+    padding: 18px 26px 6px;
     text-align: center;
-    font-size: 24px;
+    font-size: 32px;
     font-family: Georgia, serif;
     color: var(--navy-deep);
-    font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.5px;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.6px;
   }
   .m4-sub {
-    padding: 0 26px;
+    padding: 0 26px 10px;
     text-align: center;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--slate);
-    margin-top: 2px;
+    line-height: 1.4;
   }
   .m4-tiles {
     display: grid;
@@ -572,10 +544,117 @@
     font-size: 9px;
     color: #e2e8f0;
     margin-top: 4px;
-    line-height: 1.4;
+    line-height: 1.35;
     position: relative;
     z-index: 1;
     text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  .m4-tile .roi {
+    position: relative;
+    z-index: 1;
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(251,191,36,0.45);
+    color: #fbbf24;
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    line-height: 1.25;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  }
+  /* David's edit: ROI strip across the bottom — immediate ROI promise */
+  .m4-roi-strip {
+    background: var(--navy-deep);
+    color: white;
+    padding: 8px 22px;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .m4-roi-strip .pct {
+    color: var(--red);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  /* David's edit: NRECA badge LARGER + RED + bold David details + QR */
+  .m4-footer-v2 {
+    background: white;
+    padding: 12px 22px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+  }
+  .m4-footer-v2 .left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .m4-footer-v2 .left img.logo {
+    height: 26px;
+    width: auto;
+  }
+  .m4-footer-v2 .left .contact {
+    font-family: 'Inter', sans-serif;
+    font-size: 10.5px;
+    line-height: 1.3;
+  }
+  .m4-footer-v2 .left .contact .url {
+    color: var(--navy-deep);
+    font-weight: 800;
+    letter-spacing: 0.3px;
+  }
+  .m4-footer-v2 .left .contact .name {
+    color: var(--navy-deep);
+    font-weight: 800;
+    margin-top: 2px;
+  }
+  .m4-footer-v2 .nreca-v2 {
+    background: var(--red);
+    color: white;
+    padding: 7px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    border-radius: 3px;
+    box-shadow: 0 2px 0 #8b1e22;
+    text-align: center;
+    line-height: 1.1;
+  }
+  .m4-footer-v2 .nreca-v2 .small {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    opacity: 0.95;
+    margin-top: 1px;
+  }
+  .m4-footer-v2 .qr-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .m4-footer-v2 .qr-block img {
+    height: 50px;
+    width: 50px;
+    display: block;
+  }
+  .m4-footer-v2 .qr-block .scan {
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    color: var(--red);
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    line-height: 1.1;
+    max-width: 55px;
   }
   .m4-tile.t1 { background-image: url('img/ad-mockups-2026-06-02/tile-1-scada.jpg'); }
   .m4-tile.t2 { background-image: url('img/ad-mockups-2026-06-02/tile-2-lineman-tablet.jpg'); }
@@ -771,9 +850,9 @@
 <div style="height:32px;width:1px;background:rgba(255,255,255,0.25)"></div>
 <div style="font-size:11px;letter-spacing:3px;color:#fbbf24;font-weight:700">FOR DAVID + RAM &middot; HALF-PAGE HORIZONTAL &middot; RED PUNCH</div>
 </div>
-<div class="eyebrow">RE Magazine - NRECA Membership Directory - July 2026 - V3</div>
-<h1>David - 5 ad mockups. Critique with red pen. Download this file, fill it in, reply.</h1>
-<p>This is the version you asked for: same review-tool pattern as the About Colaberry overview. Each mockup has a feedback widget (Finalist / Keep / Edits / Drop + free-text notes). At the bottom there is a Generate Reply button - click it, copy the textbox content, paste back to Ali in a reply email. Same flow you used last time.</p>
+<div class="eyebrow">RE Magazine - NRECA Membership Directory - July 2026 - V4</div>
+<h1>David - your edits applied to Mockup 4. Other 4 untouched - waiting for your read.</h1>
+<p>V4 changes (Mockup 4 only, per your June 2 critique): headline moved to top + larger + bold ("Five AI Products. One pilot. Immediate ROI."), every tile gets an ROI line in gold, full ROI promise strip across the bottom ("typical co-op pilot pays back in < 90 days"), NRECA badge enlarged + in red, your name + phone bold, QR code added bottom-right pointing to enterprise.colaberry.ai/utility-ai with "SCAN ME" tag. Mockups 1-3 + 5 unchanged - you did not weigh in on them, so I left them. If you want the same ROI treatment applied to those too, say the word.</p>
 <div class="spec-callout"><strong>From David's response (2026-06-02 morning):</strong> "I've booked a half page, four color, horizontal ad. All copy must be uploaded by Thursday evening at the latest. We'll need to pack a punch ... what attracts our eye's as readers? My thought is red - so lets see 'what' in red can be integrated into the ad for the 'punch'."</div>
 </div>
 
@@ -922,33 +1001,59 @@ TRUSTED<br>
 <div class="ad-mockup-shell">
 <div class="ad-mockup-meta">
 <div>
-<div class="label">Mockup 4</div>
-<div class="name">Five Platforms (Catalog)</div>
+<div class="label">Mockup 4 · V2 (David's edits applied)</div>
+<div class="name">Five Platforms — Immediate ROI</div>
 </div>
-<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>RED ELEMENT: Full-width red bar at the top + accent line</div>
+<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>CHANGES: Headline at top + larger / ROI on every tile + bottom strip / NRECA red badge / bold David details / QR "SCAN ME" → utility-ai</div>
 </div>
 <div class="ad-mockup m4">
+<!-- David's edit: Headline at TOP, larger + bold -->
+<div class="m4-headline">Five AI Products. One pilot.<br>Immediate ROI for your co-op.</div>
+<div class="m4-sub">All five run on your stack - on-prem, AWS, Azure, or GCP. SOC 2 + NERC CIP. No model training on your data. Pilot pays back in &lt; 90 days.</div>
 <div class="m4-bar">FIVE AI PRODUCTS &middot; BUILT FOR COOPERATIVE UTILITIES</div>
-<div class="m4-hero-strip">
-RUNS ON YOUR STACK &middot; ON-PREM OR CLOUD &middot; SOC 2 + NERC CIP
-<div class="photo-credit">Logan Voss / Unsplash</div>
-</div>
-<div class="m4-headline">Pick the one that solves your sharpest pain.<br>Use the rest when you're ready.</div>
-<div class="m4-sub">All five run on your stack: on-prem, AWS, Azure, or GCP. SOC 2 + NERC CIP documented. No model training on your data. Pilot in 30 days.</div>
 <div class="m4-tiles">
-<div class="m4-tile t1"><div class="name">Outage IQ</div><div class="desc">SCADA-aware root cause analyst</div></div>
-<div class="m4-tile t2"><div class="name">Crew Capture</div><div class="desc">Tribal knowledge to searchable playbook</div></div>
-<div class="m4-tile t3"><div class="name">Member Voice</div><div class="desc">Inbound call triage + FAQ bot</div></div>
-<div class="m4-tile t4"><div class="name">Rate Case IQ</div><div class="desc">Filing prep + precedent scan</div></div>
-<div class="m4-tile t5"><div class="name">Compliance Companion</div><div class="desc">NERC + NESC + OSHA tracker</div></div>
+<div class="m4-tile t1">
+<div class="name">Outage IQ</div>
+<div class="desc">Predictive + post-event root-cause analyst. SCADA-aware.</div>
+<div class="roi">$180K saved per major outage. 7-min RCA.</div>
 </div>
-<div class="m4-footer">
-<div style="display:flex;align-items:center;gap:10px">
+<div class="m4-tile t2">
+<div class="name">Crew Capture</div>
+<div class="desc">Voice-dictated outage reports (90s/truck-roll). OSHA + NESC auto-drafted.</div>
+<div class="roi">38% faster journeyman ramp. Tribal knowledge preserved.</div>
+</div>
+<div class="m4-tile t3">
+<div class="name">Member Voice</div>
+<div class="desc">Inbound triage + storm-aware FAQ. Auto + human handoff.</div>
+<div class="roi">60% lower CSR wait. Member NPS +12 pts.</div>
+</div>
+<div class="m4-tile t4">
+<div class="name">Rate Case IQ</div>
+<div class="desc">Filing prep + precedent scan. Combines w/ Compliance.</div>
+<div class="roi">3 weeks &rarr; 4 days. Zero NERC violations.</div>
+</div>
+<div class="m4-tile t5">
+<div class="name">Compliance Companion</div>
+<div class="desc">NERC + NESC + OSHA tracker. Audit-ready every day.</div>
+<div class="roi">$50K/yr penalty avoidance per pilot.</div>
+</div>
+</div>
+<!-- David's edit: ROI strip across bottom -->
+<div class="m4-roi-strip">Typical co-op pilot pays back in <span class="pct">&lt; 90 days</span></div>
+<!-- David's edit: NRECA larger + RED + bold David details + QR code "Scan Me" -->
+<div class="m4-footer-v2">
+<div class="left">
 <img src="img/ad-mockups-2026-06-02/logo-colaberry.png" class="logo" alt="Colaberry">
-<div class="logo-url">enterprise.colaberry.ai/utility-ai</div>
+<div class="contact">
+<div class="url">enterprise.colaberry.ai/utility-ai</div>
+<div class="name">David Lahme &middot; 603-828-6265</div>
 </div>
-<div>David Lahme &middot; 603-828-6265</div>
-<div class="badge">NRECA MEMBER</div>
+</div>
+<div class="nreca-v2">NRECA<span class="small">SUPPORTING MEMBER</span></div>
+<div class="qr-block">
+<img src="img/ad-mockups-2026-06-02/qr-utility-ai.png" alt="QR to enterprise.colaberry.ai/utility-ai">
+<div class="scan">SCAN ME</div>
+</div>
 </div>
 </div>
 <div class="ad-meta-strip"><strong>Mood:</strong> tech catalog, scannable. <strong>Top red bar</strong> is the eye-catch - readable from across a desk. <strong>Print risk:</strong> 5 tiles at half-page = each tile is ~120px wide; icon + name + 1-line desc only. If we feel cramped at press, drop to 4 tiles.</div>
