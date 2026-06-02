@@ -140,16 +140,92 @@ async function uploadBcAttachment(buffer, filename, contentType) {
   return (await r.json()).attachable_sgid;
 }
 
+// Senders we want color-coded in the chip. Anyone else gets a neutral chip.
+const SENDER_COLORS = {
+  'ali@colaberry.com': { bg: '#1a365d', fg: 'white', label: 'Ali' },
+  'ram@colaberry.com': { bg: '#7c2d12', fg: 'white', label: 'Ram' },
+  'karun@colaberry.com': { bg: '#0c4a6e', fg: 'white', label: 'Karun' },
+  'dlahme@colaberry.com': { bg: '#14532d', fg: 'white', label: 'David Lahme' },
+};
+
+function senderChip(fromHeader) {
+  const m = (fromHeader || '').match(/<([^>]+)>/) || [null, (fromHeader || '').trim()];
+  const email = (m[1] || '').toLowerCase();
+  const c = SENDER_COLORS[email] || { bg: '#475569', fg: 'white', label: fromHeader.split('<')[0].trim() || email };
+  return `<span style="display:inline-block;padding:3px 10px;border-radius:11px;background:${c.bg};color:${c.fg};font-size:11px;font-weight:700;letter-spacing:0.3px">${escapeHtml(c.label)}</span>`;
+}
+
+function shortDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(+d)) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function shortDateTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(+d)) return dateStr;
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
+}
+
+function formatBodyAsHtml(text) {
+  // Convert plaintext email body into readable HTML paragraphs while preserving
+  // intentional line breaks. Strip the standard signature block (everything
+  // after a "-- " or "--" line) into a collapsed footer so the body reads cleanly.
+  if (!text) return '<em style="color:#94a3b8">[no body]</em>';
+  let body = String(text);
+  let signature = '';
+  const sigMatch = body.match(/\n\s*-{2,}\s*\n([\s\S]+)$/);
+  if (sigMatch) {
+    signature = sigMatch[1].trim();
+    body = body.slice(0, sigMatch.index).trimEnd();
+  }
+  // Strip trailing quoted block ("On X, Y wrote:" followed by > lines)
+  body = body.replace(/\n(On\s+[^\n]{0,120}\s+wrote:[\s\S]*?)$/i, (m) => `\n<div style="display:none">${escapeHtml(m)}</div>`);
+  const paragraphs = body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const html = paragraphs.map((p) => {
+    // Convert single newlines inside a paragraph to <br>
+    const withBreaks = escapeHtml(p).replace(/\n/g, '<br>');
+    return `<p style="margin:0 0 10px;font-size:14px;line-height:1.6;color:#1f2937">${withBreaks}</p>`;
+  }).join('\n');
+  let sigHtml = '';
+  if (signature) {
+    sigHtml = `<div style="margin-top:12px;padding-top:10px;border-top:1px dotted #cbd5e1;font-size:11px;color:#94a3b8;font-style:italic">${escapeHtml(signature.split('\n').slice(0, 6).join(' / '))}</div>`;
+  }
+  return html + sigHtml;
+}
+
 function buildCommentHtml({ thread, threadMarker }) {
   const messages = thread.messages || [];
   const firstSubject = header(messages[0]?.payload?.headers, 'subject') || '(no subject)';
   const firstDate = header(messages[0]?.payload?.headers, 'date') || '';
-  const dateShort = firstDate ? new Date(firstDate).toISOString().slice(0, 10) : '';
+  const lastDate = header(messages[messages.length - 1]?.payload?.headers, 'date') || firstDate;
+  const dateRange = (shortDate(firstDate) === shortDate(lastDate))
+    ? shortDate(firstDate)
+    : `${shortDate(firstDate)} → ${shortDate(lastDate)}`;
+
+  // Collect unique participants for the header chip strip
+  const participants = new Set();
+  for (const m of messages) {
+    const h = m.payload?.headers || [];
+    for (const field of ['from', 'to', 'cc']) {
+      const v = header(h, field);
+      const re = /<([^>]+@[^>]+)>|([\w.+-]+@[\w.-]+\.\w+)/g;
+      let mm;
+      while ((mm = re.exec(v))) participants.add((mm[1] || mm[2]).toLowerCase());
+    }
+  }
+  const participantChips = [...participants]
+    .map((e) => senderChip(`<${e}>`))
+    .join(' ');
 
   const lines = [];
-  lines.push(`<div><strong>Email thread:</strong> ${escapeHtml(firstSubject)}</div>`);
-  lines.push(`<div style="margin-top:4px;font-size:12px;color:#94a3b8">${escapeHtml(dateShort)} - ${messages.length} message${messages.length === 1 ? '' : 's'} - Gmail thread ${escapeHtml(thread.id)}</div>`);
-  lines.push(`<hr>`);
+  lines.push(`<div style="background:#fef9e7;border-left:6px solid #fbbf24;border-radius:0 6px 6px 0;padding:14px 18px;margin-bottom:14px">`);
+  lines.push(`  <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#78350f;font-weight:700">Email thread - ${messages.length} message${messages.length === 1 ? '' : 's'} - ${escapeHtml(dateRange)}</div>`);
+  lines.push(`  <div style="font-size:17px;font-weight:700;color:#0f172a;margin-top:3px;line-height:1.3">${escapeHtml(firstSubject)}</div>`);
+  if (participantChips) lines.push(`  <div style="margin-top:8px">${participantChips}</div>`);
+  lines.push(`</div>`);
 
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
@@ -162,18 +238,31 @@ function buildCommentHtml({ thread, threadMarker }) {
     const parts = extractParts(m.payload);
     const body = parts.textBody.trim() || htmlToText(parts.htmlBody);
 
-    if (i > 0) lines.push(`<hr style="border:none;border-top:1px dashed #cbd5e1;margin:12px 0">`);
-    lines.push(`<div style="font-size:12px;color:#475569"><strong>Message ${i + 1}/${messages.length}</strong> - ${escapeHtml(date)}</div>`);
-    lines.push(`<div style="font-size:12px;color:#475569"><strong>From:</strong> ${escapeHtml(from)}</div>`);
-    lines.push(`<div style="font-size:12px;color:#475569"><strong>To:</strong> ${escapeHtml(to)}</div>`);
-    if (cc) lines.push(`<div style="font-size:12px;color:#475569"><strong>Cc:</strong> ${escapeHtml(cc)}</div>`);
-    if (subject && subject !== firstSubject) lines.push(`<div style="font-size:12px;color:#475569"><strong>Subject:</strong> ${escapeHtml(subject)}</div>`);
-    lines.push(`<div style="margin-top:6px;white-space:pre-wrap;font-family:inherit">${escapeHtml(body || '[no body]')}</div>`);
+    lines.push(`<div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:12px">`);
+    // Header row: sender chip + small meta
+    lines.push(`  <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:10px">`);
+    lines.push(`    <div>${senderChip(from)} <span style="font-size:11px;color:#94a3b8;margin-left:6px">Message ${i + 1} of ${messages.length}</span></div>`);
+    lines.push(`    <div style="font-size:11px;color:#94a3b8">${escapeHtml(shortDateTime(date))}</div>`);
+    lines.push(`  </div>`);
+    // Recipients (compact)
+    const toList = to ? to.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : '';
+    const ccList = cc ? cc.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : '';
+    if (toList || ccList) {
+      lines.push(`  <div style="font-size:11px;color:#64748b;margin-bottom:10px">`);
+      if (toList) lines.push(`    <strong>To:</strong> ${escapeHtml(toList)}`);
+      if (ccList) lines.push(`    ${toList ? '&nbsp;&middot;&nbsp;' : ''}<strong>Cc:</strong> ${escapeHtml(ccList)}`);
+      lines.push(`  </div>`);
+    }
+    if (subject && subject !== firstSubject) {
+      lines.push(`  <div style="font-size:11px;color:#64748b;margin-bottom:8px"><strong>Subject:</strong> ${escapeHtml(subject)}</div>`);
+    }
+    // Body
+    lines.push(`  <div style="background:#f8fafc;border-radius:6px;padding:14px 16px">${formatBodyAsHtml(body)}</div>`);
+    lines.push(`</div>`);
   }
 
-  // Hidden tracking marker for idempotency
+  // Hidden idempotency marker (must stay hidden so the comment looks clean)
   lines.push(`<div style="display:none">${threadMarker}</div>`);
-
   return lines.join('\n');
 }
 
