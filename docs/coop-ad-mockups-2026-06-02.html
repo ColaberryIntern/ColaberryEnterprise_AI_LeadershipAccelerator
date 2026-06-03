@@ -890,6 +890,62 @@
     opacity: 0.85;
   }
 
+  /* ===== M4 V8 (David's 2026-06-03 "top portion restored from Jun 2 7:56 AM") ===== */
+  .m4-v8 .m4-hero-strip-v8 {
+    position: relative;
+    padding: 14px 24px 16px;
+    text-align: center;
+    /* Charcoal navy with subtle red + green pinpoint highlights to read like
+       the dark Logan Voss / Unsplash photo in David's screenshot. Swap for
+       the literal photo at press handoff if he prefers. */
+    background-image:
+      radial-gradient(ellipse at 18% 50%, rgba(200,30,40,0.28) 0%, transparent 30%),
+      radial-gradient(ellipse at 78% 55%, rgba(34,180,90,0.22) 0%, transparent 26%),
+      radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.05) 0%, transparent 60%),
+      linear-gradient(90deg, #11192a 0%, #060912 50%, #11192a 100%);
+  }
+  .m4-v8 .m4-hero-strip-v8 .hero-bullets {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: white;
+    display: inline-block;
+  }
+  .m4-v8 .m4-hero-strip-v8 .hero-credit {
+    position: absolute;
+    right: 14px;
+    bottom: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 8px;
+    color: rgba(255,255,255,0.45);
+    font-style: italic;
+    letter-spacing: 0.3px;
+  }
+  .m4-v8 .m4-headline-block-v8 {
+    background: white;
+    padding: 16px 28px 14px;
+    text-align: center;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .m4-v8 .m4-headline-block-v8 .m4-headline {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 8px;
+    line-height: 1.22;
+  }
+  .m4-v8 .m4-headline-block-v8 .m4-subhead {
+    font-family: 'Inter', sans-serif;
+    font-size: 10.5px;
+    color: #64748b;
+    margin: 0 auto;
+    line-height: 1.45;
+    max-width: 720px;
+  }
+
   .m4-tile.t1 { background-image: url('img/ad-mockups-2026-06-02/tile-1-scada.jpg'); }
   .m4-tile.t2 { background-image: url('img/ad-mockups-2026-06-02/tile-2-lineman-tablet.jpg'); }
   .m4-tile.t3 { background-image: url('img/ad-mockups-2026-06-02/tile-3-csr-headset.jpg'); }
@@ -1235,14 +1291,24 @@ TRUSTED<br>
 <div class="ad-mockup-shell">
 <div class="ad-mockup-meta">
 <div>
-<div class="label">Mockup 4 · V7 (David's 2026-06-03 "lastest edits" applied)</div>
-<div class="name">Five AI Automation Models — Built for Co-op Utilities</div>
+<div class="label">Mockup 4 · V8 (David's 2026-06-03 "top portion restored from Jun 2 7:56 AM" applied)</div>
+<div class="name">Five AI Products — Built for Cooperative Utilities</div>
 </div>
-<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>V7 CHANGES: Tile renames + content (Crew Productivity, Rate Case Automation, Regulatory Compliance) / ROI strip now RED with new copy "ROI for AI AUTOMATION in UNDER 90 DAYS" / NRECA badge now BLACK (centered) / SCAN label under QR / "Please contact:" right-justified above David / White text tightened to yellow rule / Tile names locked to one vertical plane</div>
+<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>V8 CHANGES: Top portion restored from the Jun 2 7:56 AM version per David's inline screenshot — red bar text reworded ("Five AI Products / Built for Cooperative Utilities"), dark hero strip with "Runs on your stack" trust bullets + photo credit, Georgia headline "Pick the one that solves your sharpest pain" + sub-line. V7 tile + footer changes preserved.</div>
 </div>
-<div class="ad-mockup m4 m4-v5 m4-v7">
-<!-- David's V6 edit: red headline at TOP, V1 format -->
-<div class="m4-bar-v5">FIVE AI AUTOMATION MODELS &middot; BUILT SPECIFIC TO CO-OP UTILITIES</div>
+<div class="ad-mockup m4 m4-v5 m4-v7 m4-v8">
+<!-- V8: red bar text per David's Jun 2 7:56 AM version -->
+<div class="m4-bar-v5">FIVE AI PRODUCTS &middot; BUILT FOR COOPERATIVE UTILITIES</div>
+<!-- V8: dark hero trust-strip (placeholder gradient that reads as the Logan Voss / Unsplash photo) -->
+<div class="m4-hero-strip-v8">
+<span class="hero-bullets">RUNS ON YOUR STACK &middot; ON-PREM OR CLOUD &middot; SOC 2 + NERC CIP</span>
+<span class="hero-credit">Logan Voss / Unsplash</span>
+</div>
+<!-- V8: Georgia headline + sub-line -->
+<div class="m4-headline-block-v8">
+<h2 class="m4-headline">Pick the one that solves your sharpest pain.<br>Use the rest when you're ready.</h2>
+<p class="m4-subhead">All five run on your stack: on-prem, AWS, Azure, or GCP. SOC 2 + NERC CIP documented. No model training on your data. Pilot in 30 days.</p>
+</div>
 <div class="m4-tiles">
 <div class="m4-tile t1">
 <div class="name">Outage IQ</div>
