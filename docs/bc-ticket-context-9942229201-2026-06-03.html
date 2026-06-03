@@ -1,0 +1,278 @@
+<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1a202c;line-height:1.6">
+<div style="max-width:900px;margin:0 auto;background:white">
+
+<div style="background:linear-gradient(135deg,#0b1220 0%,#1d3a8a 100%);color:white;padding:28px 32px">
+<div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">Basecamp ticket source · for context-reading</div>
+<h1 style="margin:8px 0 6px;font-size:22px;font-weight:800;line-height:1.3">Plan: Inbox Manager v1 (Gmail + Hotmail + Addie shared, 4-layer engine)</h1>
+<div style="font-size:13px;color:#cbd5e0">
+todo id <code>9942229201</code> ·
+1 comment ·
+due 2026-05-30 ·
+<span style="color:#fbbf24;font-weight:700">ACTIVE</span>
+</div>
+<div style="margin-top:8px;font-size:13px"><a href="https://app.basecamp.com/3945211/buckets/7463955/todos/9942229201" style="color:#fbbf24">Open on Basecamp &rarr;</a></div>
+</div>
+
+<div style="padding:24px 32px">
+
+<h2 style="font-size:16px;margin:0 0 8px;color:#0f172a">Ticket description</h2>
+<div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;white-space:pre-wrap;word-break:break-word;font-family:Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:#1f2937">Goal: CB System owns the inbox manager. Cuts daily volume, surfaces what matters, kills the noise, sweeps action items into Basecamp + calendar automatically. Three mailboxes: ali@colaberry.com (mailto:ali@colaberry.com) (Gmail), ali_muwwakkil@hotmail.com (mailto:ali_muwwakkil@hotmail.com) (Outlook/M365), and Addie's gmail for shared family/finance/tax threads.
+
+ACCESS GAP: Microsoft 365 connector in claude.ai shows &quot;Not connected.&quot; NO Outlook/Hotmail MCP tools are surfaced in this session. The Gmail re-auth we did earlier worked because the Gmail connector was already connected - it just needed the modify scope. The Microsoft 365 connector needs to be connected from scratch. See section 9.
+
+1. Today's inbox snapshot (ali@colaberry.com (mailto:ali@colaberry.com), last 24 hours)
+I swept the inbox - here is what I classified. This is the baseline the manager has to beat.
+
+P1 - true actionable (~12 today, real reply latency matters)
+
+• Karun replied: 10th Anthropic cohort = Srinivas Bala (5/29 3:27am) - existing tracking todo unblocked
+
+• Narendra @mention - Dev Team payment options issue
+
+• Cora forwarded - Edward Bongani Ngwenya fee payment, class starts tomorrow
+
+• Modern Treasury - $41.69 payment received
+
+• Paysimple - Martinique Thomas Owens scheduled payment failed
+
+• Bonfire - 6 new Southlake Q&amp;A messages (RFP active)
+
+• Bonfire - 1 new Euna bid match batch (SharePoint redesign)
+
+• Internship interns 4+ @critique requests (Audrey, Aleem, Meera/Swati, Power BI x3)
+
+• Dr Patel calendar reminder 8am today
+
+P2 - aggregate / informational (~10 today)
+
+• Basecamp &quot;Here's the latest activity&quot; daily roll-ups x2
+
+• Aircall incident lifecycle (investigating -&gt; monitoring -&gt; resolved, 3 emails for 1 incident)
+
+• VFS system processing report
+
+• Paysimple Transactions Updates x4 today (every few hours)
+
+• Cory &quot;Ali, here's what happened today&quot; (the existing 7am UTC = 2am CT brief - currently broken on time)
+
+P3 - noise (~20 today)
+
+• Marketing: Priceline, Lyft, Pipdecks, IFTTT, Vimeo, Bizjournals
+
+• Social: Nextdoor x2, Instagram, Reddit r/ClaudeAI, Skool
+
+• Newsletters: The Information, Substack (Business Analytics), Economic Times x3 (same day!)
+
+• Indeed job alert (ali_muwwakkil@hotmail.com (mailto:ali_muwwakkil@hotmail.com))
+
+If I had killed P3 today, you would have seen 22 emails instead of 40. If P2 were aggregated to 2 digests, you would have seen ~14. Add the Microsoft 365 traffic missing from this picture and you are at the 40/day baseline you are complaining about. Cutting P3 alone is the single biggest dial.
+
+2. Architecture - 4 layers
++--------------------------------------+
+| Layer 1 - Source coverage            |
+|  Gmail (ali@colaberry.com)  - HAVE   |
+|  Hotmail (ali_muwwakkil@)   - NEED   |
+|  Addie's Gmail (shared threads)      |
++-------------------+------------------+
+                    |
+                    v
++--------------------------------------+
+| Layer 2 - Classifier                 |
+|  Rule-based v1 (sender, subject)     |
+|  LLM-augmented v2 (Claude haiku)     |
+|  Outputs: P0/P1/P2/P3 + topic        |
++-------------------+------------------+
+                    |
+                    v
++--------------------------------------+
+| Layer 3 - Actions                    |
+|  P3: auto-archive + tag              |
+|  P2: queue for 8am + 5pm digest      |
+|  P1: SMS now (via router) + label    |
+|  P0: SMS immediately, bypass quiet   |
+|  Extract -&gt; Basecamp todo (Pattern E)|
+|  Extract -&gt; Google Calendar event    |
++-------------------+------------------+
+                    |
+                    v
++--------------------------------------+
+| Layer 4 - Observability              |
+|  Weekly stats: volume, P-mix, latency|
+|  Mistakes: P1 archived, P3 surfaced  |
+|  Dashboard - Basecamp meta tracking  |
++--------------------------------------+
+
+3. Auto-actions per tier (v1 rules)
+P3 senders to auto-archive (immediate, with label &quot;Inbox Manager: Archived&quot;):
+
+• @deals.priceline.com, @rs.email.nextdoor.com, @is.email.nextdoor.com
+
+• @marketing.lyftmail.com, @vimeo.com
+
+• @noreply.bizjournals.com, @news.bizjournals.com
+
+• @charles@pipdecks.com (mailto:charles@pipdecks.com), @ifttt.com
+
+• @theinformation.com, @substack.com
+
+• @notifications-economictimes.com, @economictimesnews.com
+
+• @redditmail.com, @posts-recaps@mail.instagram.com (mailto:posts-recaps@mail.instagram.com)
+
+• @noreply@skool.com (mailto:noreply@skool.com) (unless P1 sender mentioned in body)
+
+• @match.indeed.com, @donotreply@match.indeed.com (mailto:donotreply@match.indeed.com)
+
+• @quora.com
+
+P2 senders to digest (suppress per-email, surface in 8am + 5pm digest):
+
+• Basecamp &quot;Here's the latest activity&quot; daily roll-ups
+
+• Paysimple Transactions Updates (collapse all of today into 1 line: &quot;Paysimple: 2 new + 0 updated through 12pm&quot;)
+
+• Aircall incident lifecycle (collapse all stages of 1 incident into 1 digest line)
+
+• VFS system reports
+
+• techadmin@ Zap error alerts (already covered by Pattern D)
+
+• Cory &quot;what happened today&quot; - this IS a digest, do not re-digest
+
+P1 senders / patterns (label &quot;Reply needed&quot;, optionally SMS):
+
+• From: Ram, Karun, Luda (lvbrownecpa.com), Lakeesha, Sai Tejesh, Jackie, Vivek, Narendra, Cora, Sohail, Aleem, Swati, Kes
+
+• Subject patterns: &quot;Verification Request&quot;, &quot;Action needed&quot;, &quot;Order&quot;, &quot;Invoice&quot;, &quot;Payment&quot;, school comms (Primrose, Procare, Procareconnect)
+
+• Reply to a sent thread you started in last 14 days
+
+• Modern Treasury / Paysimple payment IN/OUT over $threshold
+
+• Bonfire RFP Q&amp;A on a project in MONITORED_PROJECTS
+
+Action extraction (when seen on a P1 or P2 email):
+
+• &quot;Field trip&quot; / &quot;permission slip&quot; / &quot;school closure&quot; / &quot;early dismissal&quot; -&gt; create Google Calendar event + Basecamp Family-list todo
+
+• &quot;Appointment&quot; / &quot;scheduled for&quot; / &quot;your booking&quot; -&gt; create Calendar event
+
+• &quot;Please sign&quot; / &quot;review attached&quot; / &quot;verification form&quot; -&gt; create Basecamp todo, Pattern E source-link block
+
+4. Cross-channel sweep / dedup
+Today I saw the same Power BI critique email arrive TWICE - once to ali@colaberry.com (mailto:ali@colaberry.com) and once to ali_muwwakkil+1@hotmail.com (mailto:ali_muwwakkil%2B1@hotmail.com) (same Basecamp comment, both inboxes). The manager will:
+
+• Dedup by Basecamp recording_id or Message-Id when an email lands in both inboxes
+
+• Archive the duplicate in the mailbox you actively work LESS in (configurable: default keep in colaberry, archive in hotmail)
+
+5. Weekly stats dashboard
+Posted as a comment on a meta &quot;[Tracking] Inbox manager activity&quot; todo every Monday 9am CT:
+
+• Total emails received per day (chart)
+
+• Breakdown by P-tier per day
+
+• P1 reply latency p50 / p95 (how long it took you to reply)
+
+• Mistakes flagged: P1 you archived (manager misclassified DOWN), P3 you starred (manager misclassified UP) - both feed back into the rules
+
+• Top 10 senders by volume + their auto-tier
+
+6. Build phases (~8 hours total over 2 days)
+
+• Phase 0 (now, 15 min): you connect Microsoft 365 in claude.ai. See section 9.
+
+• Phase 1 (~2 hr): ship scripts/ops-engine/inbox-manager.js with rule-based classifier + P3 auto-archive on Gmail only. Polls every 3 min. Tests against today's traffic (already classified above).
+
+• Phase 2 (~1.5 hr): P2 aggregator + 8am + 5pm digest (lands in Basecamp comment on meta tracking todo + optional SMS once router ships).
+
+• Phase 3 (~1.5 hr): action extraction (Procare -&gt; Calendar, verification forms -&gt; Basecamp todos). Reuses Pattern E source-link format.
+
+• Phase 4 (~1.5 hr): extend to Microsoft 365 inbox once connector is live. Dedup logic.
+
+• Phase 5 (~1.5 hr): weekly stats dashboard + mistake feedback loop.
+
+7. What the manager does NOT do (scope discipline)
+
+• Never auto-replies to anyone. Drafts only.
+
+• Never hard-deletes anything. Archive + label only (Pattern E discipline).
+
+• Never marks Ali-assigned Basecamp todos complete.
+
+• Never sends external comms without an Ali-approved draft.
+
+8. Decisions you own
+
+• P3 auto-archive senders - confirm the list in section 3, add/remove names
+
+• P1 allowlist - confirm or edit the section 3 list
+
+• Payment-in/out threshold for P0 page-now
+
+• Digest channel: SMS only / Basecamp comment only / both
+
+• Dedup default: when an email hits both inboxes, archive in colaberry or in hotmail?
+
+• Microsoft 365 connector - see section 9, this is the blocker
+
+9. Microsoft 365 connector setup (blocker)
+
+• Open claude.ai (https://claude.ai) in browser
+
+• Avatar -&gt; Settings -&gt; Connectors (or &quot;Integrations&quot;)
+
+• Scroll to &quot;Not connected&quot; section - find Microsoft 365
+
+• Click Connect
+
+• Microsoft OAuth screen pops - sign in with your hotmail (ali_muwwakkil@hotmail.com)
+
+• Grant scopes: tick &quot;Mail (read + modify)&quot; and &quot;Calendars (read)&quot; minimum
+
+• Click Allow
+
+• Reply &quot;M365 done&quot; here - I will sweep hotmail for Procare + missing P1 senders + add to the classifier rules
+
+Until M365 lands, manager only covers Gmail. ~50% of your real signal (school comms, family payments, etc.) stays invisible to the system.
+
+10. Addie's Gmail (Phase 4.5 - optional)
+Some threads are cc'd between you, Addie, and an external party (Lakeesha tax, Primrose school). To dedup correctly we either need Addie's Gmail connected OR a forwarding rule from her gmail of school/tax threads to ali@colaberry.com (mailto:ali@colaberry.com). NOT essential for v1 - just better dedup.</div>
+
+<h2 style="font-size:16px;margin:24px 0 8px;color:#0f172a">Comments (oldest first)</h2>
+<div style="font-size:12px;color:#475569;margin-bottom:4px">Plaintext-stripped from BC HTML. Attachments shown as <code>[Attachment: filename]</code>. Long comments truncated at 8000 chars with a marker.</div>
+
+<div style="margin:14px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:white">
+<div style="background:#f8fafc;padding:8px 14px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:12px">
+<div><span style="background:#0b1220;color:#fbbf24;padding:3px 9px;border-radius:4px;font-weight:700;letter-spacing:0.5px;font-size:11px">CB System</span> <span style="color:#475569;margin-left:6px">#1 of 1</span></div>
+<div style="color:#475569">5/29/2026, 8:01:35 AM</div>
+</div>
+<div style="padding:12px 16px;white-space:pre-wrap;word-break:break-word;font-family:Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:#1f2937;background:#fafafa">[Image: Ali Muwwakkil]
+  
+    Ali
+  
+ plan in description. 10 sections. The TL;DR is:
+
+1. 50% of the noise is killable today - 20 marketing/social/newsletter emails today alone, all from a known list of P3 senders. Ship the P3 auto-archive in Phase 1 (~2 hr) and you go from 40 to ~20 visible without touching anything else.
+2. Microsoft 365 connector is the blocker. Right now I cannot see your hotmail at all - the connector shows &quot;Not connected&quot; in claude.ai. Step-by-step in section 9. Takes ~30 sec on your end.
+3. Existing engine pieces this builds on: Pattern D (24h unresponded), Pattern E (source-link + archive), Pattern G (worker), Pattern H-1 (inbound dispatcher). Inbox manager is the missing front-end that turns email volume into engine-actionable signal.
+
+Once you:
+
+• Connect Microsoft 365 (15 sec, section 9)
+
+• Approve the 6 decisions in section 8 (even 1-line responses work)
+
+I ship Phase 1 same session, you start seeing the cut by tomorrow morning.
+
+And the scheduler edit from before - the 6:45am CT briefing change is sitting uncommitted on my local. Want me to ship that alongside Phase 1 of the inbox manager? Same deploy.</div>
+</div>
+
+</div>
+
+<div style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#475569">
+Source material for Contextual Suggestion v2 worked example. Read this alongside the earlier comparison email to see the diff.
+</div>
+
+</div></body></html>
