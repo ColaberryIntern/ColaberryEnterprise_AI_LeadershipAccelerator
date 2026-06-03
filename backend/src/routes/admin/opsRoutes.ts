@@ -21,7 +21,7 @@ import OpsMetricsDaily from '../../models/OpsMetricsDaily';
 import OpsApprovalQueueItem from '../../models/OpsApprovalQueueItem';
 import { runBcSync, BcSyncResult } from '../../services/ops/bcSyncService';
 import { runPriorityEngine, PriorityEngineRunResult } from '../../services/ops/priorityEngineService';
-import { generatePrompt } from '../../services/ops/runMyDayPromptService';
+import { generatePrompt, buildSuggestion } from '../../services/ops/runMyDayPromptService';
 import {
   recordDecision,
   fetchTodoComments,
@@ -224,8 +224,11 @@ router.get('/api/admin/ops/projects', requireAdmin, async (_req: Request, res: R
 router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Response) => {
   try {
     const projectId = req.query.project_id ? String(req.query.project_id) : null;
-    const includePrompts = req.query.prompts !== 'false';
 
+    // Slim payload: no prompt bodies in the list. Each task carries a
+    // boolean has_suggestion so the UI knows whether to show the "Decide"
+    // workspace expander. The full prompt + structured suggestion are
+    // fetched per task via /workspace.
     const rows = await sequelize.query<{
       bc_id: string;
       project_id: string;
@@ -233,7 +236,6 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
       todolist_id: string | null;
       todolist_name: string | null;
       title: string;
-      description: string | null;
       bc_app_url: string | null;
       due_on: string | null;
       bc_updated_at: string;
@@ -241,7 +243,7 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
       category: string;
     }>(
       `SELECT t.bc_id, t.project_id, p.name AS project_name,
-              t.todolist_id, t.todolist_name, t.title, t.description,
+              t.todolist_id, t.todolist_name, t.title,
               t.bc_app_url, t.due_on, t.bc_updated_at,
               t.urgency_score, t.category
          FROM ops_bc_todos t
@@ -264,17 +266,15 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
       },
     );
 
-    // Group: project -> todolist -> [todos]
     type Task = {
       bc_id: string;
       title: string;
-      description: string | null;
       bc_app_url: string | null;
       due_on: string | null;
       bc_updated_at: string;
       urgency_score: number | null;
       category: any;
-      recommended_prompt: string | null;
+      has_suggestion: boolean;
     };
     type Todolist = {
       todolist_id: string | null;
@@ -313,32 +313,15 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
         };
         proj.todolists.push(tl);
       }
-      const prompt =
-        includePrompts && (r.urgency_score || 0) >= PROMPT_THRESHOLD_URGENCY
-          ? generatePrompt({
-              bc_id: r.bc_id,
-              title: r.title,
-              description: r.description,
-              bc_app_url: r.bc_app_url,
-              project_id: r.project_id,
-              project_name: r.project_name,
-              todolist_name: r.todolist_name,
-              due_on: r.due_on,
-              bc_updated_at: r.bc_updated_at,
-              urgency_score: r.urgency_score,
-              category: r.category as any,
-            })
-          : null;
       tl.tasks.push({
         bc_id: r.bc_id,
         title: r.title,
-        description: r.description,
         bc_app_url: r.bc_app_url,
         due_on: r.due_on,
         bc_updated_at: r.bc_updated_at,
         urgency_score: r.urgency_score,
         category: r.category,
-        recommended_prompt: prompt,
+        has_suggestion: (r.urgency_score || 0) >= PROMPT_THRESHOLD_URGENCY,
       });
       proj.task_count++;
       if ((r.urgency_score || 0) >= 70) proj.red_count++;
@@ -355,6 +338,119 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * GET /api/admin/ops/todos/:bc_id/workspace
+ *
+ * Single round-trip context bundle for the Approval Workspace:
+ *   - the full todo row
+ *   - the structured suggestion (steps, resources, stop_conditions)
+ *   - the raw Claude Code prompt (for terminal copy)
+ *   - the last 15 BC comments
+ *   - decision history
+ *
+ * BC comments fetch has a 5s timeout so a slow upstream doesn't hang
+ * the workspace. We return whatever we have within the budget.
+ */
+router.get(
+  '/api/admin/ops/todos/:bc_id/workspace',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const bcId = String(req.params.bc_id);
+      const row = await sequelize.query<{
+        bc_id: string;
+        project_id: string;
+        project_name: string;
+        todolist_id: string | null;
+        todolist_name: string | null;
+        title: string;
+        description: string | null;
+        bc_app_url: string | null;
+        due_on: string | null;
+        bc_updated_at: string;
+        urgency_score: number | null;
+        category: string;
+      }>(
+        `SELECT t.bc_id, t.project_id, p.name AS project_name,
+                t.todolist_id, t.todolist_name, t.title, t.description,
+                t.bc_app_url, t.due_on, t.bc_updated_at,
+                t.urgency_score, t.category
+           FROM ops_bc_todos t
+           JOIN ops_bc_projects p ON p.bc_id = t.project_id
+          WHERE t.bc_id = :bc_id
+          LIMIT 1`,
+        { type: QueryTypes.SELECT, replacements: { bc_id: bcId } },
+      );
+      const t = row[0];
+      if (!t) {
+        res.status(404).json({ error: 'todo not found' });
+        return;
+      }
+
+      const todoForPrompt = {
+        bc_id: t.bc_id,
+        title: t.title,
+        description: t.description,
+        bc_app_url: t.bc_app_url,
+        project_id: t.project_id,
+        project_name: t.project_name,
+        todolist_name: t.todolist_name,
+        due_on: t.due_on,
+        bc_updated_at: t.bc_updated_at,
+        urgency_score: t.urgency_score,
+        category: t.category as any,
+      };
+
+      const suggestion = buildSuggestion(todoForPrompt);
+      const prompt = generatePrompt(todoForPrompt);
+
+      // BC comments + decisions in parallel, both with a hard timeout.
+      const TIMEOUT_MS = 5000;
+      const timeoutPromise = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<T>((resolve) => setTimeout(() => resolve(fallback), TIMEOUT_MS)),
+        ]);
+
+      const [commentsResult, decisions] = await Promise.all([
+        timeoutPromise(
+          fetchTodoComments(bcId).then((r) => ({ ok: true, ...r })).catch((err) => ({
+            ok: false,
+            comments: [],
+            error: err.message,
+          })),
+          { ok: false, comments: [] as any[], error: 'BC comments fetch timed out (5s)' },
+        ),
+        fetchDecisionsForTodo(bcId).catch(() => [] as any[]),
+      ]);
+
+      res.json({
+        todo: {
+          bc_id: t.bc_id,
+          title: t.title,
+          description: t.description,
+          bc_app_url: t.bc_app_url,
+          project_id: t.project_id,
+          project_name: t.project_name,
+          todolist_id: t.todolist_id,
+          todolist_name: t.todolist_name,
+          due_on: t.due_on,
+          bc_updated_at: t.bc_updated_at,
+          urgency_score: t.urgency_score,
+          category: t.category,
+        },
+        suggestion,
+        prompt,
+        comments: (commentsResult as any).comments,
+        comments_error: (commentsResult as any).ok ? null : (commentsResult as any).error || null,
+        decisions,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 /**
  * POST /api/admin/ops/projects/:bc_id/cb-managed

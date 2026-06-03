@@ -66,13 +66,50 @@ interface ProjectChip {
 interface QueueTask {
   bc_id: string;
   title: string;
-  description: string | null;
   bc_app_url: string | null;
   due_on: string | null;
   bc_updated_at: string;
   urgency_score: number | null;
   category: Category;
-  recommended_prompt: string | null;
+  has_suggestion: boolean;
+}
+
+type ResourceKind = 'tool' | 'skill' | 'agent' | 'workflow' | 'mcp';
+
+interface Resource {
+  kind: ResourceKind;
+  name: string;
+  why: string;
+}
+
+interface Suggestion {
+  action_kind: 'decision' | 'reply' | 'meeting' | 'research' | 'default';
+  one_line: string;
+  steps: string[];
+  resources: Resource[];
+  stop_conditions: string[];
+  urgency_summary: string;
+}
+
+interface WorkspacePayload {
+  todo: {
+    bc_id: string;
+    title: string;
+    description: string | null;
+    bc_app_url: string | null;
+    project_id: string;
+    project_name: string | null;
+    todolist_name: string | null;
+    due_on: string | null;
+    bc_updated_at: string;
+    urgency_score: number | null;
+    category: Category;
+  };
+  suggestion: Suggestion;
+  prompt: string;
+  comments: BcComment[];
+  comments_error: string | null;
+  decisions: DecisionRow[];
 }
 
 interface QueueTodolist {
@@ -185,11 +222,12 @@ const AiOpsCommandCenter: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [opsPanelOpen, setOpsPanelOpen] = useState(false);
-  const [expandedPromptIds, setExpandedPromptIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showPromptIds, setShowPromptIds] = useState<Set<string>>(new Set());
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<Set<string>>(new Set());
-  const [comments, setComments] = useState<Record<string, BcComment[]>>({});
-  const [decisionsByTodo, setDecisionsByTodo] = useState<Record<string, DecisionRow[]>>({});
+  const [workspaces, setWorkspaces] = useState<Record<string, WorkspacePayload>>({});
+  const [workspaceLoading, setWorkspaceLoading] = useState<Set<string>>(new Set());
+  const [workspaceError, setWorkspaceError] = useState<Record<string, string>>({});
   const [reasoning, setReasoning] = useState<Record<string, string>>({});
   const [postToBc, setPostToBc] = useState<Record<string, boolean>>({});
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
@@ -218,18 +256,30 @@ const AiOpsCommandCenter: React.FC = () => {
     }
   }, [selectedProject]);
 
-  const loadWorkspaceContext = useCallback(async (bcId: string) => {
+  const loadWorkspace = useCallback(async (bcId: string) => {
+    if (workspaces[bcId]) return; // already loaded
+    setWorkspaceLoading((prev) => new Set(prev).add(bcId));
+    setWorkspaceError((prev) => {
+      const next = { ...prev };
+      delete next[bcId];
+      return next;
+    });
     try {
-      const [c, d] = await Promise.all([
-        api.get<{ comments: BcComment[] }>(`/api/admin/ops/todos/${bcId}/comments`),
-        api.get<{ decisions: DecisionRow[] }>(`/api/admin/ops/todos/${bcId}/decisions`),
-      ]);
-      setComments((prev) => ({ ...prev, [bcId]: c.data.comments }));
-      setDecisionsByTodo((prev) => ({ ...prev, [bcId]: d.data.decisions }));
+      const r = await api.get<WorkspacePayload>(`/api/admin/ops/todos/${bcId}/workspace`, {
+        timeout: 10_000,
+      });
+      setWorkspaces((prev) => ({ ...prev, [bcId]: r.data }));
     } catch (err: any) {
-      setError(err?.response?.data?.error || err?.message || 'failed to load workspace');
+      const msg = err?.response?.data?.error || err?.message || 'failed to load workspace';
+      setWorkspaceError((prev) => ({ ...prev, [bcId]: msg }));
+    } finally {
+      setWorkspaceLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(bcId);
+        return next;
+      });
     }
-  }, []);
+  }, [workspaces]);
 
   const toggleWorkspace = (bcId: string) => {
     setExpandedWorkspaceIds((prev) => {
@@ -238,11 +288,20 @@ const AiOpsCommandCenter: React.FC = () => {
         next.delete(bcId);
       } else {
         next.add(bcId);
-        if (!comments[bcId]) loadWorkspaceContext(bcId);
+        if (!workspaces[bcId]) loadWorkspace(bcId);
         if (postToBc[bcId] === undefined) {
           setPostToBc((p) => ({ ...p, [bcId]: true }));
         }
       }
+      return next;
+    });
+  };
+
+  const togglePromptCopy = (bcId: string) => {
+    setShowPromptIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(bcId)) next.delete(bcId);
+      else next.add(bcId);
       return next;
     });
   };
@@ -271,15 +330,6 @@ const AiOpsCommandCenter: React.FC = () => {
         setError(`Decision saved but BC comment failed: ${r.data.bc_post_error}`);
       }
       setRecentDecidedIds((prev) => ({ ...prev, [bcId]: decision }));
-      // Refresh decisions trail for this todo
-      try {
-        const d = await api.get<{ decisions: DecisionRow[] }>(
-          `/api/admin/ops/todos/${bcId}/decisions`,
-        );
-        setDecisionsByTodo((prev) => ({ ...prev, [bcId]: d.data.decisions }));
-      } catch {
-        // non-fatal
-      }
       // Refresh today's stats
       try {
         const t = await api.get<TodayStats>('/api/admin/ops/decisions/today?mine=true');
@@ -296,7 +346,7 @@ const AiOpsCommandCenter: React.FC = () => {
           next.delete(bcId);
           if (nextId) {
             next.add(nextId);
-            if (!comments[nextId]) loadWorkspaceContext(nextId);
+            if (!workspaces[nextId]) loadWorkspace(nextId);
             if (postToBc[nextId] === undefined) {
               setPostToBc((p) => ({ ...p, [nextId]: true }));
             }
@@ -367,15 +417,6 @@ const AiOpsCommandCenter: React.FC = () => {
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'toggle failed');
     }
-  };
-
-  const togglePrompt = (id: string) => {
-    setExpandedPromptIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   };
 
   const copyPrompt = async (id: string, prompt: string) => {
@@ -525,8 +566,6 @@ const AiOpsCommandCenter: React.FC = () => {
                     {tl.tasks.map((t) => {
                       const cat = CATEGORY_STYLE[t.category] || CATEGORY_STYLE.unscored;
                       const sc = scoreColor(t.urgency_score);
-                      const expanded = expandedPromptIds.has(t.bc_id);
-                      const copied = copiedId === t.bc_id;
                       const wsOpen = expandedWorkspaceIds.has(t.bc_id);
                       const recentDecision = recentDecidedIds[t.bc_id];
                       return (
@@ -607,98 +646,47 @@ const AiOpsCommandCenter: React.FC = () => {
                                 <span style={{ color: palette.textDim }}>#{t.bc_id}</span>
                               </div>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                              {t.recommended_prompt && (
-                                <button
-                                  onClick={() => togglePrompt(t.bc_id)}
-                                  style={{
-                                    background: expanded ? palette.accent : 'transparent',
-                                    color: expanded ? '#001225' : palette.accent,
-                                    border: `1px solid ${palette.accent}`,
-                                    borderRadius: 5,
-                                    padding: '6px 10px',
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {expanded ? 'Hide prompt' : 'Run in Claude Code'}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => toggleWorkspace(t.bc_id)}
-                                style={{
-                                  background: wsOpen ? palette.ok : 'transparent',
-                                  color: wsOpen ? '#001225' : palette.ok,
-                                  border: `1px solid ${palette.ok}`,
-                                  borderRadius: 5,
-                                  padding: '6px 10px',
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {wsOpen ? 'Hide decision' : 'Decide'}
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => toggleWorkspace(t.bc_id)}
+                              disabled={!t.has_suggestion}
+                              title={t.has_suggestion ? undefined : 'Below suggestion threshold (urgency < 40)'}
+                              style={{
+                                background: wsOpen ? palette.ok : 'transparent',
+                                color: wsOpen ? '#001225' : (t.has_suggestion ? palette.ok : palette.textDim),
+                                border: `1px solid ${t.has_suggestion ? palette.ok : palette.border}`,
+                                borderRadius: 5,
+                                padding: '6px 12px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: t.has_suggestion ? 'pointer' : 'not-allowed',
+                                whiteSpace: 'nowrap',
+                                opacity: t.has_suggestion ? 1 : 0.5,
+                              }}
+                            >
+                              {wsOpen ? 'Hide workspace' : 'Open workspace'}
+                            </button>
                           </div>
                           {wsOpen && (
                             <ApprovalWorkspace
                               taskId={t.bc_id}
-                              comments={comments[t.bc_id]}
-                              decisions={decisionsByTodo[t.bc_id]}
+                              workspace={workspaces[t.bc_id]}
+                              loading={workspaceLoading.has(t.bc_id)}
+                              loadError={workspaceError[t.bc_id]}
                               reasoning={reasoning[t.bc_id] || ''}
                               setReasoning={(v) => setReasoning((p) => ({ ...p, [t.bc_id]: v }))}
                               postToBc={postToBc[t.bc_id] !== false}
                               setPostToBc={(v) => setPostToBc((p) => ({ ...p, [t.bc_id]: v }))}
                               inFlight={decisionInFlight.has(t.bc_id)}
                               recentDecision={recentDecision}
+                              showPrompt={showPromptIds.has(t.bc_id)}
+                              togglePrompt={() => togglePromptCopy(t.bc_id)}
+                              copyPrompt={() =>
+                                workspaces[t.bc_id]?.prompt && copyPrompt(t.bc_id, workspaces[t.bc_id].prompt)
+                              }
+                              promptCopied={copiedId === t.bc_id}
                               onDecide={(kind) => decide(t.bc_id, kind)}
+                              onRetry={() => loadWorkspace(t.bc_id)}
                             />
-                          )}
-                          {expanded && t.recommended_prompt && (
-                            <div style={{ marginTop: 10 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                <div style={{ fontSize: 11, color: palette.textDim, letterSpacing: 0.5, textTransform: 'uppercase', fontWeight: 700 }}>
-                                  Paste into Claude Code
-                                </div>
-                                <button
-                                  onClick={() => copyPrompt(t.bc_id, t.recommended_prompt || '')}
-                                  style={{
-                                    background: copied ? palette.ok : 'transparent',
-                                    color: copied ? '#001225' : palette.text,
-                                    border: `1px solid ${copied ? palette.ok : palette.border}`,
-                                    borderRadius: 4,
-                                    padding: '4px 10px',
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  {copied ? 'Copied' : 'Copy'}
-                                </button>
-                              </div>
-                              <pre
-                                style={{
-                                  background: '#0b1220',
-                                  color: '#cbd5e1',
-                                  border: `1px solid ${palette.border}`,
-                                  borderRadius: 6,
-                                  padding: 12,
-                                  fontSize: 12,
-                                  lineHeight: 1.55,
-                                  margin: 0,
-                                  maxHeight: 360,
-                                  overflow: 'auto',
-                                  whiteSpace: 'pre-wrap',
-                                  wordBreak: 'break-word',
-                                }}
-                              >
-                                {t.recommended_prompt}
-                              </pre>
-                            </div>
                           )}
                         </div>
                       );
@@ -857,18 +845,113 @@ function htmlToPlain(html: string): string {
     .trim();
 }
 
+const RESOURCE_KIND_STYLE: Record<ResourceKind, { label: string; bg: string; fg: string }> = {
+  tool:     { label: 'Tool',     bg: '#0e1729', fg: '#4dabf7' },
+  skill:    { label: 'Skill',    bg: '#0d2b27', fg: '#5cd9a3' },
+  agent:    { label: 'Agent',    bg: '#1f0e2e', fg: '#c084fc' },
+  workflow: { label: 'Workflow', bg: '#2d2410', fg: '#ffb84d' },
+  mcp:      { label: 'MCP',      bg: '#0e1c4a', fg: '#a5b4fc' },
+};
+
+const ACTION_KIND_STYLE: Record<Suggestion['action_kind'], { label: string; color: string }> = {
+  reply:    { label: 'REPLY',    color: '#4dabf7' },
+  decision: { label: 'DECISION', color: '#ffb84d' },
+  meeting:  { label: 'MEETING',  color: '#a5b4fc' },
+  research: { label: 'RESEARCH', color: '#5cd9a3' },
+  default:  { label: 'NEXT ACTION', color: '#cbd5e1' },
+};
+
 const ApprovalWorkspace: React.FC<{
   taskId: string;
-  comments: BcComment[] | undefined;
-  decisions: DecisionRow[] | undefined;
+  workspace: WorkspacePayload | undefined;
+  loading: boolean;
+  loadError: string | undefined;
   reasoning: string;
   setReasoning: (v: string) => void;
   postToBc: boolean;
   setPostToBc: (v: boolean) => void;
   inFlight: boolean;
   recentDecision: DecisionKind | undefined;
+  showPrompt: boolean;
+  togglePrompt: () => void;
+  copyPrompt: () => void;
+  promptCopied: boolean;
   onDecide: (kind: DecisionKind) => void;
-}> = ({ taskId, comments, decisions, reasoning, setReasoning, postToBc, setPostToBc, inFlight, recentDecision, onDecide }) => {
+  onRetry: () => void;
+}> = ({
+  taskId,
+  workspace,
+  loading,
+  loadError,
+  reasoning,
+  setReasoning,
+  postToBc,
+  setPostToBc,
+  inFlight,
+  recentDecision,
+  showPrompt,
+  togglePrompt,
+  copyPrompt,
+  promptCopied,
+  onDecide,
+  onRetry,
+}) => {
+  if (loading && !workspace) {
+    return (
+      <div
+        style={{
+          marginTop: 10,
+          background: '#0b1220',
+          border: `1px solid ${palette.border}`,
+          borderRadius: 6,
+          padding: 14,
+          color: palette.textDim,
+          fontSize: 13,
+        }}
+      >
+        Loading workspace…
+      </div>
+    );
+  }
+
+  if (loadError && !workspace) {
+    return (
+      <div
+        style={{
+          marginTop: 10,
+          background: '#0b1220',
+          border: `1px solid ${palette.err}`,
+          borderRadius: 6,
+          padding: 14,
+          color: palette.err,
+          fontSize: 13,
+        }}
+      >
+        Failed to load workspace: {loadError}
+        <button
+          onClick={onRetry}
+          style={{
+            marginLeft: 10,
+            background: 'transparent',
+            border: `1px solid ${palette.err}`,
+            color: palette.err,
+            padding: '4px 10px',
+            borderRadius: 4,
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!workspace) return null;
+  const { suggestion, comments, comments_error, decisions, prompt } = workspace;
+  const actionStyle = ACTION_KIND_STYLE[suggestion.action_kind] || ACTION_KIND_STYLE.default;
+
   return (
     <div
       style={{
@@ -882,77 +965,191 @@ const ApprovalWorkspace: React.FC<{
         gap: 14,
       }}
     >
-      {/* Left: BC thread + decision history */}
+      {/* LEFT — the suggestion as primary content */}
       <div>
-        <div
-          style={{
-            fontSize: 11,
-            color: palette.textDim,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
-            marginBottom: 6,
-          }}
-        >
-          Recent Basecamp comments
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 0.8,
+              padding: '2px 8px',
+              borderRadius: 3,
+              color: actionStyle.color,
+              border: `1px solid ${actionStyle.color}`,
+            }}
+          >
+            {actionStyle.label}
+          </span>
+          <span style={{ fontSize: 11, color: palette.textDim }}>
+            {suggestion.urgency_summary}
+          </span>
         </div>
-        {comments === undefined && (
-          <div style={{ color: palette.textDim, fontSize: 12 }}>Loading…</div>
-        )}
-        {comments && comments.length === 0 && (
-          <div style={{ color: palette.textDim, fontSize: 12 }}>No comments yet on this todo.</div>
-        )}
-        {comments && comments.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
-            {comments.slice().reverse().slice(0, 6).map((c) => (
+        <div style={{ fontSize: 13.5, color: palette.text, marginBottom: 12, lineHeight: 1.5 }}>
+          {suggestion.one_line}
+        </div>
+
+        <SectionHeading>Suggested steps</SectionHeading>
+        <ol style={{ margin: '0 0 14px', padding: '0 0 0 22px', color: palette.text, fontSize: 12.5, lineHeight: 1.55 }}>
+          {suggestion.steps.map((s, i) => (
+            <li key={i} style={{ marginBottom: 4 }}>{s}</li>
+          ))}
+        </ol>
+
+        <SectionHeading>Tools / Skills / Agents / Workflows</SectionHeading>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+          {suggestion.resources.map((r, i) => {
+            const ks = RESOURCE_KIND_STYLE[r.kind];
+            return (
               <div
-                key={c.id}
+                key={`${r.kind}:${r.name}:${i}`}
                 style={{
                   background: '#0e1729',
                   border: `1px solid ${palette.border}`,
                   borderRadius: 4,
-                  padding: 8,
+                  padding: '8px 10px',
                   fontSize: 12,
-                  color: palette.text,
                 }}
               >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <span
+                    style={{
+                      background: ks.bg,
+                      color: ks.fg,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 0.8,
+                      textTransform: 'uppercase',
+                      padding: '2px 6px',
+                      borderRadius: 3,
+                    }}
+                  >
+                    {ks.label}
+                  </span>
+                  <span style={{ color: palette.text, fontWeight: 700 }}>{r.name}</span>
+                </div>
+                <div style={{ color: palette.textDim, lineHeight: 1.5 }}>{r.why}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {suggestion.stop_conditions.length > 0 && (
+          <>
+            <SectionHeading color={palette.warn}>Stop conditions</SectionHeading>
+            <ul
+              style={{
+                margin: '0 0 14px',
+                padding: '0 0 0 22px',
+                color: palette.warn,
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              {suggestion.stop_conditions.map((s, i) => (
+                <li key={i} style={{ marginBottom: 3 }}>{s}</li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <button
+              onClick={togglePrompt}
+              style={{
+                background: 'transparent',
+                color: palette.accent,
+                border: `1px solid ${palette.accent}`,
+                borderRadius: 4,
+                padding: '4px 10px',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {showPrompt ? 'Hide raw prompt' : 'Show raw prompt for Claude Code'}
+            </button>
+            {showPrompt && (
+              <button
+                onClick={copyPrompt}
+                style={{
+                  background: promptCopied ? palette.ok : 'transparent',
+                  color: promptCopied ? '#001225' : palette.text,
+                  border: `1px solid ${promptCopied ? palette.ok : palette.border}`,
+                  borderRadius: 4,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {promptCopied ? 'Copied' : 'Copy'}
+              </button>
+            )}
+          </div>
+          {showPrompt && (
+            <pre
+              style={{
+                background: '#0b1220',
+                color: '#cbd5e1',
+                border: `1px solid ${palette.border}`,
+                borderRadius: 6,
+                padding: 12,
+                fontSize: 11.5,
+                lineHeight: 1.55,
+                margin: 0,
+                maxHeight: 280,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {prompt}
+            </pre>
+          )}
+        </div>
+
+        {comments.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <SectionHeading>Recent Basecamp comments ({comments.length})</SectionHeading>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
+              {comments.slice().reverse().slice(0, 4).map((c) => (
                 <div
+                  key={c.id}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    color: palette.textDim,
-                    fontSize: 11,
-                    marginBottom: 4,
+                    background: '#0e1729',
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: 4,
+                    padding: 8,
+                    fontSize: 11.5,
+                    color: palette.text,
                   }}
                 >
-                  <span>{c.creator}</span>
-                  <span>{new Date(c.created_at).toLocaleString()}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: palette.textDim, fontSize: 10.5, marginBottom: 3 }}>
+                    <span>{c.creator}</span>
+                    <span>{new Date(c.created_at).toLocaleString()}</span>
+                  </div>
+                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                    {htmlToPlain(c.content).slice(0, 420)}
+                    {htmlToPlain(c.content).length > 420 ? '…' : ''}
+                  </div>
                 </div>
-                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.45 }}>
-                  {htmlToPlain(c.content).slice(0, 600)}
-                  {htmlToPlain(c.content).length > 600 ? '…' : ''}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+        )}
+        {comments_error && (
+          <div style={{ marginTop: 10, fontSize: 11, color: palette.warn }}>
+            BC comments unavailable: {comments_error}
           </div>
         )}
 
-        {decisions && decisions.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div
-              style={{
-                fontSize: 11,
-                color: palette.textDim,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                textTransform: 'uppercase',
-                marginBottom: 6,
-              }}
-            >
-              Decision history
-            </div>
+        {decisions.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <SectionHeading>Decision history</SectionHeading>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {decisions.slice(0, 5).map((d) => (
+              {decisions.slice(0, 4).map((d) => (
                 <div
                   key={d.id}
                   style={{
@@ -964,7 +1161,9 @@ const ApprovalWorkspace: React.FC<{
                     color: palette.textDim,
                   }}
                 >
-                  <span style={{ color: palette.text, fontWeight: 700 }}>{DECISION_LABEL_MAP[d.decision] || d.decision}</span>
+                  <span style={{ color: palette.text, fontWeight: 700 }}>
+                    {DECISION_LABEL_MAP[d.decision] || d.decision}
+                  </span>
                   {' · '}
                   {new Date(d.decided_at).toLocaleString()}
                   {d.decided_by ? ` · ${d.decided_by}` : ''}
@@ -978,20 +1177,9 @@ const ApprovalWorkspace: React.FC<{
         )}
       </div>
 
-      {/* Right: decision form */}
+      {/* RIGHT — decision form */}
       <div>
-        <div
-          style={{
-            fontSize: 11,
-            color: palette.textDim,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
-            marginBottom: 6,
-          }}
-        >
-          Your decision
-        </div>
+        <SectionHeading>Your decision</SectionHeading>
         <textarea
           value={reasoning}
           onChange={(e) => setReasoning(e.target.value)}
@@ -1052,14 +1240,7 @@ const ApprovalWorkspace: React.FC<{
           ))}
         </div>
         {recentDecision && (
-          <div
-            style={{
-              marginTop: 10,
-              fontSize: 12,
-              color: palette.ok,
-              fontWeight: 700,
-            }}
-          >
+          <div style={{ marginTop: 10, fontSize: 12, color: palette.ok, fontWeight: 700 }}>
             {DECISION_LABEL_MAP[recentDecision]}. Logged + posted.
           </div>
         )}
@@ -1070,6 +1251,21 @@ const ApprovalWorkspace: React.FC<{
     </div>
   );
 };
+
+const SectionHeading: React.FC<{ children: React.ReactNode; color?: string }> = ({ children, color }) => (
+  <div
+    style={{
+      fontSize: 10.5,
+      color: color || palette.textDim,
+      fontWeight: 700,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      marginBottom: 6,
+    }}
+  >
+    {children}
+  </div>
+);
 
 const ProjectTab: React.FC<{
   label: string;
