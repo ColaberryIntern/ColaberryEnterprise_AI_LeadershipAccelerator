@@ -1,0 +1,174 @@
+<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1a202c;line-height:1.6">
+<div style="max-width:1080px;margin:0 auto;background:white">
+
+<div style="background:linear-gradient(135deg,#0b1220 0%,#1d3a8a 100%);color:white;padding:32px 36px">
+<div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">Suggestion architecture · v0 worked example</div>
+<h1 style="margin:10px 0 6px;font-size:24px;font-weight:800;line-height:1.25">Same BC ticket, two suggestion engines. Template (current) vs Contextual v2 (proposed).</h1>
+<div style="font-size:14px;color:#cbd5e0;max-width:780px">Plan: Inbox Manager v1 (Gmail + Hotmail + Addie shared, 4-layer engine) &middot; <a href="https://app.basecamp.com/3945211/buckets/7463955/todos/9942229201" style="color:#fbbf24">https://app.basecamp.com/3945211/buckets/7463955/todos/9942229201</a></div>
+</div>
+
+<div style="padding:24px 36px">
+
+<h2 style="font-size:17px;margin:0 0 8px;color:#0f172a">What the contextual engine extracted from the ticket</h2>
+<p style="font-size:13px;color:#475569;margin-top:0">From 12,359 chars of context (title + description + every BC comment + linked docs). One GPT-4o-mini call. Cost: $0.00078.</p>
+
+<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-size:13px;margin-top:10px">
+<tbody>
+<tr><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-weight:700;width:160px;color:#475569">Goal</td><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0">Connect the Microsoft 365 inbox to the CB System to enable the Inbox Manager to process emails from Outlook/Hotmail.</td></tr>
+<tr><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-weight:700;color:#475569">Progress so far</td><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0">The Microsoft 365 connector is currently not connected, which is a blocker for the project. The Gmail connector was successfully modified earlier, but the Outlook connector needs to be set up from scratch as outlined in section 9. A detailed plan for the inbox manager's architecture and functionality has been established, including auto-archiving and digest features.</td></tr>
+<tr><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-weight:700;color:#475569">Last action</td><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0">The last meaningful event was the identification of the Microsoft 365 connector as a blocker that needs to be connected for the project to proceed.</td></tr>
+<tr><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-weight:700;color:#475569">Next step</td><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;color:#14532d;font-weight:600">Connect the Microsoft 365 inbox in claude.ai by following the steps outlined in section 9 and reply 'M365 done' once completed.</td></tr>
+<tr><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-weight:700;color:#475569">Blockers</td><td style="padding:10px 14px;border-bottom:1px solid #e2e8f0"><div>&middot; Microsoft 365 connector needs to be connected.</div></td></tr>
+<tr><td style="padding:10px 14px;background:#f8fafc;font-weight:700;color:#475569">Complexity / time</td><td style="padding:10px 14px"><strong>medium</strong> &middot; ~15 min</td></tr>
+</tbody>
+</table>
+
+<h3 style="font-size:14px;margin:18px 0 6px;color:#0f172a">Tools / Skills suggested</h3>
+<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;font-size:13px">
+<thead><tr style="background:#1a365d;color:white">
+<th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:1px;width:30%">Tool</th>
+<th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:1px">Why it fits this step</th>
+</tr></thead>
+<tbody>
+<tr>
+<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:700;color:#7f1d1d">Microsoft 365 connector <span style="font-size:10px;background:#fee2e2;color:#7f1d1d;padding:1px 6px;border-radius:3px;margin-left:4px">create</span></td>
+<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:12.5px">This tool is essential to connect the Outlook/Hotmail inbox to the CB System for processing emails.<div style="margin-top:4px;font-size:11.5px;color:#7f1d1d"><em>To create:</em> Create a Microsoft 365 connector that allows for email and calendar integration.</div></td>
+</tr></tbody>
+</table>
+
+<h2 style="font-size:17px;margin:32px 0 8px;color:#0f172a">Side-by-side: basic steps in the email</h2>
+<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px">
+<tr>
+<td style="vertical-align:top;width:50%;padding:14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px 0 0 8px">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#7f1d1d;font-weight:700">CURRENT (template)</div>
+<div style="font-size:13.5px;margin-top:6px;font-weight:700;color:#7f1d1d">"DECISION"</div>
+<ol style="padding-left:22px;margin-top:8px;color:#1f2937"><li style="margin-bottom:4px">Pull the full ticket context via the CB walker.</li><li style="margin-bottom:4px">Summarize the decision points in one HTML block: what is being decided, the options, the constraints, the recommended call with a one-line rationale.</li><li style="margin-bottom:4px">Post that summary as a BC comment on this ticket.</li><li style="margin-bottom:4px">DO NOT send anything externally yet. Wait for Approve / Revise / Reject reply on the BC comment.</li><li style="margin-bottom:4px">After Approve, execute the resulting action (email via sendWithBcAttach with this ticketId, or BC comment, or Vault upload).</li></ol>
+<div style="margin-top:10px;font-size:11px;color:#7f1d1d;font-style:italic">Same 5 steps for every "decision" task. No reference to what this ticket is actually about.</div>
+</td>
+<td style="vertical-align:top;width:50%;padding:14px;background:#dcfce7;border:1px solid #86efac;border-radius:0 8px 8px 0">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#14532d;font-weight:700">PROPOSED (contextual v2)</div>
+<div style="font-size:13.5px;margin-top:6px;font-weight:700;color:#14532d">"Connect the Microsoft 365 inbox to the CB System to enable the Inbox Manager to ..."</div>
+<ol style="padding-left:22px;margin-top:8px;color:#1f2937"><li style="margin-bottom:4px">Resolve blocker: Microsoft 365 connector needs to be connected.</li><li style="margin-bottom:4px">Connect the Microsoft 365 inbox in claude.ai by following the steps outlined in section 9 and reply 'M365 done' once completed.</li><li style="margin-bottom:4px">Create Microsoft 365 connector: Create a Microsoft 365 connector that allows for email and calendar integration.</li></ol>
+<div style="margin-top:10px;font-size:11px;color:#14532d;font-style:italic">Steps reference the actual goal + last action + concrete next thing. Tools listed are specific to this task.</div>
+</td>
+</tr>
+</table>
+
+<h2 style="font-size:17px;margin:32px 0 8px;color:#0f172a">Side-by-side: the long prompt behind the Copy button</h2>
+<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:12px">
+<tr>
+<td style="vertical-align:top;width:50%;padding:14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px 0 0 8px">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#7f1d1d;font-weight:700">CURRENT</div>
+<pre style="background:#0b1220;color:#cbd5e1;border:1px solid #1d2a44;border-radius:6px;padding:10px;font-size:10.5px;line-height:1.45;margin-top:8px;overflow:auto;max-height:480px;white-space:pre-wrap;word-break:break-word;font-family:Menlo,Consolas,monospace"># Run-my-day task: Plan: Inbox Manager v1 (Gmail + Hotmail + Addie shared, 4-layer engine)
+
+## Task context
+- Project: **Ali Personal**
+- Todolist: **AI Products**
+- BC ticket: https://app.basecamp.com/3945211/buckets/7463955/todos/9942229201
+- BC todo id: `9942229201`
+- Urgency: OVERDUE by 5d
+- Last updated: 2026-05-29T13:01:35.164Z
+
+## What you (Claude Code) have access to in this repo
+- Basecamp 3 API via `BASECAMP_ACCESS_TOKEN` (env)
+- `backend/src/scripts/lib/sendWithBcAttach.js` — REQUIRED outbound email path; sends via Mandrill, uploads any produced docs to BC Vault, and posts a structured comment on the originating ticket. `ticketId` is required at the call site.
+- `scripts/ops-engine/cb-context-walker.js` — pulls the full BC ticket context (comments, attached emails, linked Vault docs) into LLM-readable form. Invoke: `node scripts/ops-engine/cb-context-walker.js https://app.basecamp.com/3945211/buckets/7463955/todos/9942229201`
+- Gmail MCP (`mcp__claude_ai_Gmail__*`) — search/get threads, attach labels
+- Google Drive MCP, Google Calendar MCP
+- Mandrill SMTP for outbound from `ali@colaberry.com`
+
+## What I want you to do
+1. Pull the full ticket context via the CB walker.
+2. Summarize the decision points in one HTML block: what is being decided, the options, the constraints, the recommended call with a one-line rationale.
+3. Post that summary as a BC comment on this ticket.
+4. DO NOT send anything externally yet. Wait for Approve / Revise / Reject reply on the BC comment.
+5. After Approve, execute the resulting action (email via sendWithBcAttach with this ticketId, or BC comment, or Vault upload).
+
+## Auto-attach contract
+- Every outbound email **must** use `sendWithBcAttach` with `ticketId: 9942229201`.
+- Em-dashes are auto-stripped from outbound bodies.
+- Any produced doc gets uploaded to BC Vault under the &quot;CB Context Dossiers&quot; folder and linked in the BC comment.
+- If the task does not have an obvious outbound, post your output as a BC comment on todo `9942229201` instead.
+
+## Stop conditions
+- Never execute the decision's downstream action before Ali approves.
+- If the recommended call is ambiguous, surface both options + recommend the more conservative one.
+
+Start now.</pre>
+</td>
+<td style="vertical-align:top;width:50%;padding:14px;background:#f0fdf4;border:1px solid #86efac;border-radius:0 8px 8px 0">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#14532d;font-weight:700">PROPOSED</div>
+<pre style="background:#0b1220;color:#cbd5e1;border:1px solid #1d2a44;border-radius:6px;padding:10px;font-size:10.5px;line-height:1.45;margin-top:8px;overflow:auto;max-height:480px;white-space:pre-wrap;word-break:break-word;font-family:Menlo,Consolas,monospace"># Task: Plan: Inbox Manager v1 (Gmail + Hotmail + Addie shared, 4-layer engine)
+
+## What this ticket is trying to accomplish
+Connect the Microsoft 365 inbox to the CB System to enable the Inbox Manager to process emails from Outlook/Hotmail.
+
+## What has already been done
+The Microsoft 365 connector is currently not connected, which is a blocker for the project. The Gmail connector was successfully modified earlier, but the Outlook connector needs to be set up from scratch as outlined in section 9. A detailed plan for the inbox manager's architecture and functionality has been established, including auto-archiving and digest features.
+
+**Last action:** The last meaningful event was the identification of the Microsoft 365 connector as a blocker that needs to be connected for the project to proceed.
+
+## What you need to do RIGHT NOW
+Connect the Microsoft 365 inbox in claude.ai by following the steps outlined in section 9 and reply 'M365 done' once completed.
+
+Complexity: **medium** · Estimated: **~15 minutes**
+
+## Blockers to resolve first
+- Microsoft 365 connector needs to be connected.
+
+
+## Read the ticket first (always)
+Before writing any code or sending any message, pull the FULL context with the CB walker so you see everything I see:
+```
+node scripts/ops-engine/cb-context-walker.js https://app.basecamp.com/3945211/buckets/7463955/todos/9942229201
+```
+That returns every BC comment, every linked Vault doc, every attached email thread. Read it before deciding anything.
+
+## Tools / Skills / Agents / MCPs you will use
+### Microsoft 365 connector (DOES NOT EXIST YET — create it first)
+**Why this one:** This tool is essential to connect the Outlook/Hotmail inbox to the CB System for processing emails.
+**Creation step:** Create a Microsoft 365 connector that allows for email and calendar integration.
+Before using this tool, create it. Follow the pattern of the closest existing tool in the repo (look in `scripts/ops-engine/`, `.claude/skills/`, or `backend/src/services/`). Commit + push + verify it loads.
+
+## Auto-attach contract
+Every outbound (email / BC comment / artifact) goes through `sendWithBcAttach` with `ticketId: 9942229201`. Em-dashes are stripped automatically. Vault uploads happen on every produced doc.
+
+## Done definition
+After you ship the next-step action:
+1. Post the result back on this BC ticket as a structured comment. Color-code by outcome (green = applied + sent, amber = partial, red = blocked + escalating).
+2. Attach any artifact (PDF / xlsx / HTML doc) via sendWithBcAttach so it lands on the ticket AND in Vault.
+3. Update the todo status if the next-step resolves the ticket entirely.
+
+## Stop conditions
+- Do NOT send any external email to a new party without Ali approving the recipients first.
+- Do NOT commit to money, contracts, hiring, or anything that crosses a CLAUDE.md governance boundary.
+- If the context is ambiguous, post a 1-comment summary of your read + the 2-3 branches + recommend one + wait for Ali's go.
+
+Start by running the walker. Then propose your concrete plan in 5 bullets before executing.</pre>
+</td>
+</tr>
+</table>
+
+<h2 style="font-size:17px;margin:32px 0 8px;color:#0f172a">Cost + cadence + fallback</h2>
+<ul style="font-size:14px;padding-left:22px;line-height:1.7">
+<li><strong>Per-task cost</strong>: ~$0.00078 on GPT-4o-mini for this one. Budget ceiling: $1/day. At 50 tasks/day you spend ~$0.10 with this model, ~$1 with GPT-4o.</li>
+<li><strong>Cadence</strong>: cache for 30 min keyed on (bc_id, bc_updated_at). Re-running the same task in the same window is free.</li>
+<li><strong>Fallback</strong>: any LLM error returns the deterministic template (current behavior), so the email always ships <em>something</em>.</li>
+<li><strong>Cap</strong>: context trimmed to 60K chars (~15K tokens in). Oldest comments dropped first; head + tail kept since the goal lives at the start and the next-step lives at the end.</li>
+</ul>
+
+<h2 style="font-size:17px;margin:32px 0 8px;color:#0f172a">Next moves (your call)</h2>
+<ol style="font-size:14px;padding-left:22px;line-height:1.7">
+<li><strong>Wire v2 into the daily "Your Turn" digest</strong> &mdash; replace the template for the top 5 cards. Compact rows for tasks 6-N stay template-based (cheap + no LLM cost) since they're "tag @CB on Basecamp" links anyway.</li>
+<li><strong>Wire v2 into <code>/admin/ops</code> workspace</strong> &mdash; when you click Open Workspace, the right column shows the contextual analysis instead of the generic action recipe.</li>
+<li><strong>Wire v2 into the <code>@CB suggest_prompt</code> tool</strong> &mdash; when you tag <code>@CB suggest prompt</code> in BC, the comment posted back is the contextual v2 output, not the template.</li>
+</ol>
+<p style="font-size:14px">If the analysis on this one task feels right, I do all three in one bundle. ~2 hours of work, deploy mid-afternoon, you spot-check 5 tasks before I light up the daily cron.</p>
+
+</div>
+
+<div style="padding:18px 36px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#475569">
+Ali &middot; worked example on bc_id 9942229201. Session CC-20260602-9q4r into 2026-06-03.
+</div>
+
+</div></body></html>
