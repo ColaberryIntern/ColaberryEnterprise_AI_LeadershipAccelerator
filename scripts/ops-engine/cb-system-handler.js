@@ -369,6 +369,14 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'suggest_prompt',
+      description: 'Generate a Claude Code prompt for the current Basecamp todo and post it as a comment. Use when Ali (or any allowed requester) says "suggest prompt", "give me the prompt", "build me a prompt for this", "what should I run in Claude Code", or asks @CB for the next-step prompt. Pulls the todo title + description + project context, classifies the action kind (reply / decision / meeting / research / default), and produces a copy-paste-ready prompt block formatted for Claude Code. The prompt explicitly declares what tools / skills / agents the runner has access to + step-by-step instructions + auto-attach contract + stop conditions. The runner pastes the prompt block into a Claude Code session and the agent does the work; result lands back on this BC ticket via sendWithBcAttach.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish',
       description: 'Done. No more actions needed.',
       parameters: { type: 'object', properties: {}, required: [] },
@@ -625,8 +633,68 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     }
   }
 
+  async function suggest_prompt() {
+    try {
+      const { buildSuggestion, generatePrompt } = require(path.resolve(REPO, 'backend/src/scripts/lib/buildOpsSuggestionLite'));
+      // Pull the current todo's metadata via BC. recId is the todo id.
+      const todo = await bcGet(`/buckets/${bucketId}/todos/${recId}.json`);
+      const todoForPrompt = {
+        bc_id: String(todo.id),
+        title: todo.title || '',
+        description: todo.description || todo.content || '',
+        bc_app_url: todo.app_url || null,
+        project_id: String(bucketId),
+        project_name: todo.bucket?.name || null,
+        todolist_name: todo.parent?.title || null,
+        due_on: todo.due_on || null,
+        bc_updated_at: todo.updated_at || new Date().toISOString(),
+        urgency_score: null,
+        category: 'unscored',
+      };
+      const suggestion = buildSuggestion(todoForPrompt);
+      const prompt = generatePrompt(todoForPrompt);
+
+      // Format the BC comment with a structured suggestion block + the
+      // copy-paste-ready prompt in a pre tag so the operator can grab it.
+      const stepsHtml = suggestion.steps
+        .map((s, i) => `<li style="margin-bottom:4px">${stripEmDashes(s)}</li>`)
+        .join('');
+      const resourcesHtml = suggestion.resources
+        .map((r) => `<li style="margin-bottom:3px"><strong>[${r.kind}] ${stripEmDashes(r.name)}</strong> - ${stripEmDashes(r.why)}</li>`)
+        .join('');
+      const stopsHtml = suggestion.stop_conditions
+        .map((s) => `<li style="margin-bottom:3px;color:#78350f">${stripEmDashes(s)}</li>`)
+        .join('');
+      const escapedPrompt = String(prompt)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const commentHtml = `<div style="background:linear-gradient(135deg,#14532d 0%,#1a365d 100%);color:white;padding:18px 22px;border-radius:8px">
+<div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">@CB suggested prompt</div>
+<div style="font-size:15px;font-weight:700;margin-top:6px">Action: ${suggestion.action_kind.toUpperCase()} - ${stripEmDashes(suggestion.one_line)}</div>
+</div>
+<div style="margin-top:14px"><strong>Suggested steps</strong></div>
+<ol style="padding-left:22px;line-height:1.6">${stepsHtml}</ol>
+<div style="margin-top:12px"><strong>Tools / Skills / Agents / Workflows you have access to</strong></div>
+<ul style="padding-left:22px;line-height:1.5">${resourcesHtml}</ul>
+${suggestion.stop_conditions.length ? `<div style="margin-top:12px"><strong style="color:#78350f">Stop conditions</strong></div><ul style="padding-left:22px;line-height:1.5">${stopsHtml}</ul>` : ''}
+<div style="margin-top:18px;padding:12px 14px;background:#fef9e7;border-left:5px solid #d4a017;border-radius:0 6px 6px 0">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#78350f;font-weight:700">Paste this into Claude Code</div>
+<pre style="background:#0b1220;color:#cbd5e1;border:1px solid #1d2a44;border-radius:6px;padding:12px;font-size:11.5px;line-height:1.5;margin-top:8px;overflow-x:auto;white-space:pre-wrap;word-break:break-word">${escapedPrompt}</pre>
+</div>
+<div style="margin-top:10px;font-size:12px;color:#475569;font-style:italic">When the Claude Code agent completes, its result will land on this ticket as the next comment (via sendWithBcAttach with ticketId ${recId}).</div>`;
+
+      await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: commentHtml });
+      sideEffects.suggestedPromptPosted = { todoId: recId, actionKind: suggestion.action_kind };
+      return { ok: true, action_kind: suggestion.action_kind, steps_count: suggestion.steps.length };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   return {
-    impls: { basecamp_reply, complete_todo, add_gov_bid_by_number, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, complete_todo, add_gov_bid_by_number, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, suggest_prompt, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }
