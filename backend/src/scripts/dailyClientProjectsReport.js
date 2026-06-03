@@ -22,6 +22,11 @@ const BASE_CC = ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
 const TEST = process.argv.includes('--test');
 const DRY = process.argv.includes('--dry');
 const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length);
+// When set, runs the contextual v2 analysis on the nextHuman task only and
+// surfaces basic steps + a "copy long prompt" button below the YOUR TURN
+// banner. The long prompt itself is NOT inlined in the email — it ships
+// as a .txt attachment so the operator opens it once + copies.
+const WITH_CONTEXTUAL = process.argv.includes('--with-contextual');
 const CC_ADD = (process.argv.find((a) => a.startsWith('--cc-add='))?.slice('--cc-add='.length) || '')
   .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 const CC = Array.from(new Set([...BASE_CC, ...CC_ADD]));
@@ -435,7 +440,41 @@ function normalizeAliName(s) {
 // V2 render: matches Launch PMO format - YOUR TURN banner + 4-up KPIs +
 // feasibility per list + per-list Next Human Step + per-list detail cards +
 // AI completion log.
-function renderHtmlV2(analysis, framing) {
+function renderContextualBlock(contextual, nextHuman) {
+  // Inject below the YOUR TURN banner. Shows basic steps + a styled button
+  // linking to a .txt attachment that contains the long Claude Code prompt.
+  // The prompt is NOT inlined in the email body — operator clicks the
+  // attachment to copy it.
+  if (!contextual || !nextHuman) return '';
+  const steps = (contextual.basic_steps || []).slice(0, 6);
+  if (!steps.length) return '';
+  const stepsHtml = steps.map((s) => `<li style="margin-bottom:5px;font-size:13px;color:#1f2937">${escape(stripEmDashes(s))}</li>`).join('');
+  const analysis = contextual.analysis || {};
+  const goalLine = analysis.goal
+    ? `<div style="font-size:12px;color:#475569;margin-bottom:8px"><strong style="color:#0f172a">Goal:</strong> ${escape(stripEmDashes(analysis.goal))}</div>`
+    : '';
+  const progressLine = analysis.progress_so_far
+    ? `<div style="font-size:12px;color:#475569;margin-bottom:8px"><strong style="color:#0f172a">Progress so far:</strong> ${escape(stripEmDashes(analysis.progress_so_far))}</div>`
+    : '';
+  const blockersLine = (analysis.blockers || []).length
+    ? `<div style="font-size:12px;color:#7f1d1d;margin-bottom:8px"><strong>Blockers:</strong> ${(analysis.blockers || []).map((b) => escape(stripEmDashes(b))).join('; ')}</div>`
+    : '';
+  const complexityChip = analysis.complexity
+    ? `<span style="background:#0e1729;color:#cbd5e1;border-radius:3px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-left:8px">${escape(analysis.complexity)} · ~${analysis.estimated_minutes || '?'}min</span>`
+    : '';
+  const sourceTag = contextual.source === 'contextual_v2'
+    ? `<span style="font-size:10px;color:#5cd9a3;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-left:6px">v2 · $${(contextual.cost_usd || 0).toFixed(5)}</span>`
+    : `<span style="font-size:10px;color:#fbbf24;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-left:6px">template fallback</span>`;
+  return `<div style="background:#fff;border:2px solid #fbbf24;border-radius:10px;padding:18px 22px;margin:0 0 18px">
+<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#78350f;font-weight:700">Steps for you${sourceTag}${complexityChip}</div>
+<div style="margin-top:10px">${goalLine}${progressLine}${blockersLine}</div>
+<ol style="margin:10px 0 14px;padding-left:22px;line-height:1.55">${stepsHtml}</ol>
+<a href="cid:claudecodeprompt" style="display:inline-block;background:#1c1917;color:#fbbf24;padding:10px 18px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Copy Claude Code prompt &rarr;</a>
+<span style="font-size:11px;color:#475569;margin-left:10px;font-style:italic">opens the prompt attachment — select all + copy + paste into Claude Code</span>
+</div>`;
+}
+
+function renderHtmlV2(analysis, framing, contextualSuggestion) {
   const today = new Date().toISOString().slice(0, 10);
   const fmtToday = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const totalOpen = analysis.openTodos.length;
@@ -526,7 +565,7 @@ ${recentRows ? `<div style="margin-top:14px;font-size:10px;color:#64748b;text-tr
 
 <tr><td style="background:#1c1917;color:white;padding:18px 32px"><div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">For Ali - big picture</div><div style="font-size:14px;margin-top:6px;line-height:1.55">${escape(framing.goal)}</div>${framing.nextStepImportance ? `<div style="font-size:13px;margin-top:8px;color:#fde68a"><strong>Why the next step matters:</strong> ${escape(framing.nextStepImportance)}</div>` : ''}</td></tr>
 
-<tr><td style="padding:24px 32px 0">${yourTurnBanner}<table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px"><tr><td style="text-align:center;padding:14px;background:#fef3c7;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#78350f">${totalHuman}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#78350f;font-weight:700">Human-needed</div></td><td style="width:1%"></td><td style="text-align:center;padding:14px;background:#dbeafe;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#1e3a8a">${totalAi}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a;font-weight:700">AI-doable</div></td><td style="width:1%"></td><td style="text-align:center;padding:14px;background:#fee2e2;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#7f1d1d">${overdue.length}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f1d1d;font-weight:700">Overdue</div></td></tr></table>
+<tr><td style="padding:24px 32px 0">${yourTurnBanner}${renderContextualBlock(contextualSuggestion, analysis.nextHuman)}<table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px"><tr><td style="text-align:center;padding:14px;background:#fef3c7;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#78350f">${totalHuman}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#78350f;font-weight:700">Human-needed</div></td><td style="width:1%"></td><td style="text-align:center;padding:14px;background:#dbeafe;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#1e3a8a">${totalAi}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a;font-weight:700">AI-doable</div></td><td style="width:1%"></td><td style="text-align:center;padding:14px;background:#fee2e2;border-radius:8px;width:32%"><div style="font-size:26px;font-weight:800;color:#7f1d1d">${overdue.length}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f1d1d;font-weight:700">Overdue</div></td></tr></table>
 
 <h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Feasibility per list (lowest first)</h2>${feasRows ? `<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px"><thead><tr style="background:#1a365d;color:white"><th align="left" style="padding:10px 12px;font-size:10px">LIST</th><th align="center" style="padding:10px 12px;font-size:10px">SCORE</th><th align="left" style="padding:10px 12px;font-size:10px">OPEN</th><th align="left" style="padding:10px 12px;font-size:10px">TIER MIX</th></tr></thead><tbody>${feasRows}</tbody></table>` : '<div style="background:#dcfce7;padding:14px 18px;border-radius:6px;color:#14532d;font-weight:600;margin-bottom:24px">No open work in this project.</div>'}
 
@@ -541,9 +580,9 @@ ${recentMsgRows ? `<h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;borde
 </td></tr></table></td></tr></table></body></html>`;
 }
 
-async function sendEmail(analysis, framing) {
+async function sendEmail(analysis, framing, contextualSuggestion) {
   if (DRY) { console.log(`[client-report] DRY skip email for ${analysis.projectName}`); return null; }
-  const html = normalizeAliName(stripEmDashes(renderHtmlV2(analysis, framing)));
+  const html = normalizeAliName(stripEmDashes(renderHtmlV2(analysis, framing, contextualSuggestion)));
   const text = normalizeAliName(renderText(analysis, framing));
   validateBeforeSend(html, text);
   const transport = nodemailer.createTransport({
@@ -554,12 +593,26 @@ async function sendEmail(analysis, framing) {
   const totalOpen = analysis.openTodos.length;
   const overdue = analysis.openTodos.filter((t) => t.due_on && t.due_on < new Date().toISOString().slice(0, 10)).length;
   const subj = `${subjPrefix}[Daily: ${analysis.shortName}] ${totalOpen} open${overdue > 0 ? `, ${overdue} overdue` : ''}${analysis.nextHuman ? ' - waiting on you' : (totalOpen === 0 ? ' - clear' : ' - AI handles next')}`;
+  // Attach the long Claude Code prompt as a .txt file (cid: claudecodeprompt
+  // referenced from renderContextualBlock). Operator clicks the attachment
+  // in their mail client, sees the prompt, copies it. Avoids inlining the
+  // 80-line prompt in the email body.
+  const attachments = [];
+  if (contextualSuggestion && contextualSuggestion.long_prompt && analysis.nextHuman) {
+    attachments.push({
+      filename: `claude-code-prompt-${analysis.nextHuman.id || 'next'}.txt`,
+      content: contextualSuggestion.long_prompt,
+      contentType: 'text/plain; charset=utf-8',
+      cid: 'claudecodeprompt',
+    });
+  }
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: RECIPIENT,
     cc: CC,
     subject: subj,
     text, html,
+    attachments,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': (analysis.nextHuman || overdue > 0) ? 'high' : 'normal' },
   });
   return r.messageId;
@@ -586,7 +639,50 @@ async function sendEmail(analysis, framing) {
         const analysis = await analyzeProject(p);
         console.log(`  open=${analysis.openTodos.length} human=${analysis.openTodos.filter((t) => t.tier === 'HUMAN').length}`);
         const framing = await generateProjectFraming(analysis);
-        const messageId = await sendEmail(analysis, framing);
+        // Optional: contextual v2 analysis on the YOUR TURN task only. Pulls
+        // the BC ticket context via the walker, runs GPT-4o-mini to extract
+        // {goal, progress, next_step, blockers, tools_needed} + basic steps
+        // + a long Claude Code prompt. Renders below the YOUR TURN banner.
+        let contextualSuggestion = null;
+        if (WITH_CONTEXTUAL && analysis.nextHuman && process.env.OPENAI_API_KEY) {
+          try {
+            const { buildContextualSuggestion } = require(path.resolve(__dirname, './lib/buildContextualSuggestionV2'));
+            // bcGet helper shared shape: takes BC API path or full URL.
+            const localBcGet = async (urlOrPath) => {
+              const tk = (process.env.BASECAMP_ACCESS_TOKEN || BASECAMP_TOKEN).replace(/^Bearer /, '');
+              const base = `https://3.basecampapi.com/${process.env.BASECAMP_ACCOUNT_ID || '3945211'}`;
+              const u = urlOrPath.startsWith('http') ? urlOrPath : `${base}${urlOrPath}`;
+              const rr = await fetch(u, { headers: { Authorization: `Bearer ${tk}`, 'User-Agent': 'CB client-report contextual', Accept: 'application/json' } });
+              if (!rr.ok) throw new Error(`BC ${u} -> ${rr.status}`);
+              return rr.json();
+            };
+            const nh = analysis.nextHuman;
+            console.log(`  running v2 on YOUR TURN task: ${(nh.content || '').slice(0, 60)}`);
+            contextualSuggestion = await buildContextualSuggestion({
+              todo: {
+                bc_id: String(nh.id),
+                project_id: String(p.id),
+                project_name: p.name,
+                todolist_name: nh.listName,
+                title: stripHtml(nh.content || '').slice(0, 240),
+                description: stripHtml(nh.description || ''),
+                bc_app_url: nh.app_url,
+                bc_updated_at: nh.updated_at || new Date().toISOString(),
+                due_on: nh.due_on || null,
+                urgency_score: null,
+                category: 'unscored',
+              },
+              bcGet: localBcGet,
+              bucketId: String(p.id),
+              openaiKey: process.env.OPENAI_API_KEY,
+            });
+            console.log(`  v2 done. source=${contextualSuggestion.source}, cost=$${(contextualSuggestion.cost_usd || 0).toFixed(5)}`);
+          } catch (err) {
+            console.warn(`  v2 contextual failed: ${err.message}; continuing without`);
+            contextualSuggestion = null;
+          }
+        }
+        const messageId = await sendEmail(analysis, framing, contextualSuggestion);
         if (messageId) { messageIds.push(messageId); recipientsSent.push(RECIPIENT, CC); }
         summary.push({ project: p.name, open: analysis.openTodos.length, nextHuman: analysis.nextHuman?.content || null, messageId });
         console.log(`  email sent: ${messageId}`);
