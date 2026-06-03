@@ -26,8 +26,16 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 
 const REPO = path.resolve(__dirname, '../../..');
 const PREVIEW_OUT = path.join(REPO, 'tmp/p4-retrospective-preview.html');
+const META_STATE_PATH = path.join(REPO, 'tmp/p4-meta-todo-id.json');
 const POST_BC = process.argv.includes('--post-bc');
 const OPEN_LOCAL = process.argv.includes('--open');
+
+// BC config for --post-bc mode
+const BC_TOKEN = process.env.BASECAMP_ACCESS_TOKEN || 'BAhbB0kiAbB7ImNsaWVudF9pZCI6IjNkMzNmMzFiNDQ3YjRmODg1YTA1NTQwNzBjZjNmMWQ1ODdlMjM5MzAiLCJleHBpcmVzX2F0IjoiMjAyNi0wNi0wOVQyMDoxNTowMloiLCJ1c2VyX2lkcyI6WzQ1MzIxNzUxXSwidmVyc2lvbiI6MSwiYXBpX2RlYWRib2x0IjoiNmQ5NDQ4OThkN2U4ZDdhMmU4YmExMjg4M2ViOWYyYWQifQY6BkVUSXU6CVRpbWUNNJUfwKrnIjwJOg1uYW5vX251bWk4Og1uYW5vX2RlbmkGOg1zdWJtaWNybyIHBRA6CXpvbmVJIghVVEMGOwBG--cb82294fd86132b92b6c954402af0b6bd46630da';
+const BC_H = { Authorization: 'Bearer ' + BC_TOKEN, 'User-Agent': 'Colaberry', Accept: 'application/json', 'Content-Type': 'application/json' };
+const BC_BASE = 'https://3.basecampapi.com/3945211/buckets/7463955';  // Ali Personal
+const AI_PRODUCTS_LIST_ID = 9939449052;
+const ALI_ID = 17454835;
 
 const URGENT_KEYWORDS = [
   'urgent', 'asap', 'deadline', 'emergency', 'immediate',
@@ -202,7 +210,36 @@ ${c.topDomains.map(d => `<div style="background:#f1f5f9;padding:8px 14px;border-
   }
 
   if (POST_BC) {
-    console.log('\n(--post-bc not yet implemented in v1. Ali must approve the preview first.)');
+    // Read or create meta tracking todo
+    let state = null;
+    if (fs.existsSync(META_STATE_PATH)) {
+      try { state = JSON.parse(fs.readFileSync(META_STATE_PATH, 'utf8')); } catch (_) {}
+    }
+    if (!state || !state.todoId) {
+      console.log('\nNo meta tracking todo on file. Creating one in Ali Personal -> AI Products...');
+      const r = await fetch(`${BC_BASE}/todolists/${AI_PRODUCTS_LIST_ID}/todos.json`, {
+        method: 'POST', headers: BC_H,
+        body: JSON.stringify({
+          content: '[Tracking] Daily 24h retrospective',
+          description: '<div><strong>What this todo is:</strong> the home for the P4 daily 24h retrospective. Every weekday at 6 PM CT a fresh comment lands here covering: VIP touches, decisions+blockers, questions awaiting, theme-of-day domains. Source: inbox_emails (Postgres) joined with inbox_vips. Spun out of notification-plan todo 9942071243 (closed 2026-06-03) per Ali greenlight on v1 preview.</div>',
+          assignee_ids: [ALI_ID],
+        }),
+      });
+      if (!r.ok) throw new Error(`Meta todo POST -> ${r.status} ${await r.text()}`);
+      const todo = await r.json();
+      state = { todoId: todo.id, todoUrl: todo.app_url, createdAt: new Date().toISOString() };
+      fs.mkdirSync(path.dirname(META_STATE_PATH), { recursive: true });
+      fs.writeFileSync(META_STATE_PATH, JSON.stringify(state, null, 2));
+      console.log(`  meta todo: ${todo.id} ${todo.app_url}`);
+    }
+    // Post the daily comment
+    const cr = await fetch(`${BC_BASE}/recordings/${state.todoId}/comments.json`, {
+      method: 'POST', headers: BC_H,
+      body: JSON.stringify({ content: html }),
+    });
+    if (!cr.ok) { console.error(`Comment POST failed: ${cr.status} ${await cr.text()}`); process.exit(1); }
+    const cmt = await cr.json();
+    console.log(`\nPosted daily retrospective comment: ${cmt.id} ${cmt.app_url}`);
   } else {
     console.log('\n--post-bc NOT set. No BC comment posted, no email sent. Dry-run complete.');
   }
