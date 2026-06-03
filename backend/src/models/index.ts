@@ -247,6 +247,7 @@ import OpsAiAssessment from './OpsAiAssessment';
 import OpsApprovalQueueItem from './OpsApprovalQueueItem';
 import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
+import OpsSkill from './OpsSkill';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1029,6 +1030,7 @@ export {
   OpsApprovalQueueItem,
   OpsMetricsDaily,
   OpsBcProject,
+  OpsSkill,
 };
 
 // --- AI Company Layer associations ---

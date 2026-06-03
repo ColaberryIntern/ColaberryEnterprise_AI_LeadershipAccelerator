@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/api';
 
 /**
@@ -182,6 +182,55 @@ interface MetricsTodayPayload {
   } | null;
 }
 
+interface StaleTodo {
+  bc_id: string;
+  project_id: string;
+  project_name: string;
+  todolist_name: string | null;
+  title: string;
+  bc_app_url: string | null;
+  due_on: string | null;
+  bc_updated_at: string;
+  urgency_score: number | null;
+  days_stale: number;
+}
+
+interface SkillRow {
+  id: string;
+  name: string;
+  action_kind: string;
+  captured_from_todo_bc_id: string | null;
+  captured_from_todo_title: string | null;
+  reasoning: string | null;
+  decision: string | null;
+  is_active: boolean;
+  use_count: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+interface AutomationRule {
+  id: string;
+  name: string;
+  description: string | null;
+  condition_jsonb: Record<string, any>;
+  action_jsonb: Record<string, any>;
+  is_active: boolean;
+  last_fired_at: string | null;
+  fire_count: number;
+  created_at: string;
+}
+
+interface AutomationRunSummary {
+  started_at: string;
+  finished_at: string;
+  rules_evaluated: number;
+  rules_fired: number;
+  fire_results: Array<{ rule_id: string; rule_name: string; rows_affected: number; error?: string }>;
+}
+
+type ViewMode = 'queue' | 'stale' | 'skills' | 'rules';
+
 const palette = {
   bg: '#0b1220',
   panel: '#111b2e',
@@ -258,6 +307,17 @@ const AiOpsCommandCenter: React.FC = () => {
   const [runMyDayTasks, setRunMyDayTasks] = useState<WorkspacePayload[]>([]);
   const [runMyDayError, setRunMyDayError] = useState<string | null>(null);
   const [metricsToday, setMetricsToday] = useState<MetricsTodayPayload['metrics']>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('queue');
+  const [staleTodos, setStaleTodos] = useState<StaleTodo[]>([]);
+  const [staleLoading, setStaleLoading] = useState(false);
+  const [staleSelected, setStaleSelected] = useState<Set<string>>(new Set());
+  const [skills, setSkills] = useState<SkillRow[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsFilter, setSkillsFilter] = useState<string>('all');
+  const [rules, setRules] = useState<AutomationRule[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [lastAutomationRun, setLastAutomationRun] = useState<AutomationRunSummary | null>(null);
+  const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -310,6 +370,123 @@ const AiOpsCommandCenter: React.FC = () => {
   const exitRunMyDay = () => {
     setRunMyDayOpen(false);
   };
+
+  const loadStale = useCallback(async () => {
+    setStaleLoading(true);
+    try {
+      const r = await api.get<{ todos: StaleTodo[] }>('/api/admin/ops/stale-todos?limit=300');
+      setStaleTodos(r.data.todos);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'failed to load stale todos');
+    } finally {
+      setStaleLoading(false);
+    }
+  }, []);
+
+  const dismissStaleSelected = async (undismiss = false) => {
+    if (staleSelected.size === 0) return;
+    try {
+      await api.post('/api/admin/ops/todos/dismiss', {
+        bc_ids: Array.from(staleSelected),
+        reason: 'archive',
+        undismiss,
+      });
+      setStaleSelected(new Set());
+      await loadStale();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'dismiss failed');
+    }
+  };
+
+  const loadSkills = useCallback(async () => {
+    setSkillsLoading(true);
+    try {
+      const r = await api.get<{ skills: SkillRow[] }>('/api/admin/ops/skills?include_inactive=true');
+      setSkills(r.data.skills);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'failed to load skills');
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, []);
+
+  const toggleSkill = async (id: string) => {
+    try {
+      await api.post(`/api/admin/ops/skills/${id}/toggle`);
+      await loadSkills();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'toggle failed');
+    }
+  };
+
+  const deleteSkill = async (id: string) => {
+    if (!window.confirm('Delete this skill?')) return;
+    try {
+      await api.delete(`/api/admin/ops/skills/${id}`);
+      await loadSkills();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'delete failed');
+    }
+  };
+
+  const loadRules = useCallback(async () => {
+    setRulesLoading(true);
+    try {
+      const r = await api.get<{ rules: AutomationRule[]; last_run: AutomationRunSummary | null }>(
+        '/api/admin/ops/automation-rules',
+      );
+      setRules(r.data.rules);
+      setLastAutomationRun(r.data.last_run);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'failed to load automation rules');
+    } finally {
+      setRulesLoading(false);
+    }
+  }, []);
+
+  const toggleRule = async (id: string) => {
+    try {
+      await api.post(`/api/admin/ops/automation-rules/${id}/toggle`);
+      await loadRules();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'toggle failed');
+    }
+  };
+
+  const runRulesNow = async () => {
+    try {
+      const r = await api.post<{ result: AutomationRunSummary }>('/api/admin/ops/automation-rules/run');
+      setLastAutomationRun(r.data.result);
+      await loadRules();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'rules run failed');
+    }
+  };
+
+  const saveProjectWeight = async (bcId: string, raw: string) => {
+    const weight = parseFloat(raw);
+    if (!Number.isFinite(weight)) return;
+    try {
+      await api.post(`/api/admin/ops/projects/${bcId}/weight`, { weight });
+      setWeightDrafts((p) => {
+        const next = { ...p };
+        delete next[bcId];
+        return next;
+      });
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'weight save failed');
+    }
+  };
+
+  // Load tab data when switched
+  useEffect(() => {
+    if (viewMode === 'stale' && staleTodos.length === 0) loadStale();
+    if (viewMode === 'skills' && skills.length === 0) loadSkills();
+    if (viewMode === 'rules' && rules.length === 0) loadRules();
+  }, [viewMode, staleTodos.length, skills.length, rules.length, loadStale, loadSkills, loadRules]);
+
+  // (Keyboard shortcuts effect declared after `decide` below.)
 
   const loadWorkspace = useCallback(async (bcId: string) => {
     if (workspaces[bcId]) return; // already loaded
@@ -432,6 +609,34 @@ const AiOpsCommandCenter: React.FC = () => {
       });
     }
   };
+
+  // Keyboard shortcuts in Run My Day mode. We route through a ref so the
+  // effect doesn't need to depend on `decide` (whose identity changes per
+  // render). Keeps the deps list complete + avoids the
+  // react-hooks/exhaustive-deps disable pattern that breaks prod builds.
+  const decideRef = useRef(decide);
+  decideRef.current = decide;
+  useEffect(() => {
+    if (!runMyDayOpen) return;
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName?.toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const firstOpenTask = runMyDayTasks.find(
+        (t) => !recentDecidedIds[t.todo.bc_id],
+      );
+      if (!firstOpenTask) return;
+      const bcId = firstOpenTask.todo.bc_id;
+      const key = e.key.toLowerCase();
+      const call = decideRef.current;
+      if (key === 'a') { e.preventDefault(); call(bcId, 'approve_and_continue'); }
+      else if (key === 's') { e.preventDefault(); call(bcId, 'approve_and_convert_to_skill'); }
+      else if (key === 'r') { e.preventDefault(); call(bcId, 'revise'); }
+      else if (key === 'x') { e.preventDefault(); call(bcId, 'reject'); }
+      else if (key === 'e') { e.preventDefault(); call(bcId, 'escalate'); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [runMyDayOpen, runMyDayTasks, recentDecidedIds]);
 
   useEffect(() => {
     refresh();
@@ -716,7 +921,328 @@ const AiOpsCommandCenter: React.FC = () => {
         </div>
       )}
 
-      {/* Project tab nav */}
+      {/* View mode tab strip */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        {(['queue', 'stale', 'skills', 'rules'] as ViewMode[]).map((vm) => (
+          <button
+            key={vm}
+            onClick={() => setViewMode(vm)}
+            style={{
+              background: viewMode === vm ? palette.text : 'transparent',
+              color: viewMode === vm ? palette.bg : palette.text,
+              border: `1px solid ${palette.border}`,
+              borderRadius: 6,
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+            }}
+          >
+            {vm === 'queue' ? 'My queue' : vm === 'stale' ? `Stale review${queue && queue.stale_hidden_count > 0 ? ` (${queue.stale_hidden_count})` : ''}` : vm === 'skills' ? 'Captured skills' : 'Automation rules'}
+          </button>
+        ))}
+      </div>
+
+      {/* Stale review panel */}
+      {viewMode === 'stale' && (
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Stale todos — no Basecamp activity in 90+ days</h2>
+              <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4 }}>
+                Bulk-select to dismiss (local mirror only — does not change Basecamp). Reversible.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={loadStale} style={ghostBtn(staleLoading)} disabled={staleLoading}>
+                {staleLoading ? 'Loading…' : 'Reload'}
+              </button>
+              <button
+                onClick={() => dismissStaleSelected(false)}
+                disabled={staleSelected.size === 0}
+                style={{
+                  background: staleSelected.size > 0 ? palette.err : 'transparent',
+                  color: staleSelected.size > 0 ? '#001225' : palette.textDim,
+                  border: `1px solid ${palette.err}`,
+                  borderRadius: 6,
+                  padding: '8px 14px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: staleSelected.size > 0 ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Dismiss {staleSelected.size > 0 ? `(${staleSelected.size})` : ''}
+              </button>
+            </div>
+          </div>
+          {!staleLoading && staleTodos.length === 0 && (
+            <div style={{ color: palette.textDim, padding: 16, textAlign: 'center' }}>
+              No stale todos right now. The hidden-zombies counter on your queue header is 0.
+            </div>
+          )}
+          {staleTodos.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 600, overflowY: 'auto' }}>
+              <div style={{ fontSize: 11, color: palette.textDim, marginBottom: 4 }}>
+                <label style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={staleSelected.size === staleTodos.length && staleTodos.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) setStaleSelected(new Set(staleTodos.map((t) => t.bc_id)));
+                      else setStaleSelected(new Set());
+                    }}
+                  />{' '}
+                  Select all {staleTodos.length}
+                </label>
+              </div>
+              {staleTodos.map((t) => {
+                const checked = staleSelected.has(t.bc_id);
+                return (
+                  <label
+                    key={t.bc_id}
+                    style={{
+                      background: '#0e1729',
+                      border: `1px solid ${checked ? palette.err : palette.border}`,
+                      borderRadius: 4,
+                      padding: 8,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      gap: 10,
+                      alignItems: 'flex-start',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        setStaleSelected((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(t.bc_id);
+                          else next.delete(t.bc_id);
+                          return next;
+                        });
+                      }}
+                      style={{ marginTop: 3 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>
+                        {t.bc_app_url ? (
+                          <a href={t.bc_app_url} target="_blank" rel="noopener noreferrer" style={{ color: palette.text, textDecoration: 'none' }}>
+                            {t.title}
+                          </a>
+                        ) : t.title}
+                      </div>
+                      <div style={{ fontSize: 11, color: palette.textDim, marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <span>{t.project_name}</span>
+                        <span>{t.todolist_name || '(unfiled)'}</span>
+                        <span style={{ color: palette.warn }}>{t.days_stale} days stale</span>
+                        {t.due_on && <span>due {t.due_on}</span>}
+                        <span>#{t.bc_id}</span>
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Captured Skills panel */}
+      {viewMode === 'skills' && (
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Captured skills</h2>
+              <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4 }}>
+                Decisions you marked "Approve + skill" become reusable patterns here.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select
+                value={skillsFilter}
+                onChange={(e) => setSkillsFilter(e.target.value)}
+                style={{
+                  background: '#0e1729',
+                  color: palette.text,
+                  border: `1px solid ${palette.border}`,
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                }}
+              >
+                <option value="all">All kinds</option>
+                <option value="reply">Reply</option>
+                <option value="decision">Decision</option>
+                <option value="meeting">Meeting</option>
+                <option value="research">Research</option>
+                <option value="default">Default</option>
+              </select>
+              <button onClick={loadSkills} style={ghostBtn(skillsLoading)} disabled={skillsLoading}>
+                {skillsLoading ? 'Loading…' : 'Reload'}
+              </button>
+            </div>
+          </div>
+          {!skillsLoading && skills.length === 0 && (
+            <div style={{ color: palette.textDim, padding: 16, textAlign: 'center' }}>
+              No skills captured yet. Click "Approve + skill" on a decision to add the first one.
+            </div>
+          )}
+          {skills.filter((s) => skillsFilter === 'all' || s.action_kind === skillsFilter).map((s) => (
+            <div
+              key={s.id}
+              style={{
+                background: '#0e1729',
+                border: `1px solid ${palette.border}`,
+                borderRadius: 6,
+                padding: 10,
+                marginBottom: 8,
+                opacity: s.is_active ? 1 : 0.5,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
+                  <div style={{ fontSize: 11, color: palette.textDim, marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{
+                      background: '#0d2b27',
+                      color: '#5cd9a3',
+                      padding: '1px 6px',
+                      borderRadius: 3,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      fontSize: 10,
+                    }}>{s.action_kind}</span>
+                    <span>used {s.use_count}×</span>
+                    <span>captured {new Date(s.created_at).toLocaleDateString()}</span>
+                    {s.created_by && <span>by {s.created_by}</span>}
+                  </div>
+                  {s.reasoning && (
+                    <div style={{ fontSize: 12, color: palette.text, marginTop: 6, lineHeight: 1.45 }}>
+                      {s.reasoning}
+                    </div>
+                  )}
+                  {s.captured_from_todo_title && (
+                    <div style={{ fontSize: 11, color: palette.textDim, marginTop: 4, fontStyle: 'italic' }}>
+                      from: {s.captured_from_todo_title}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => toggleSkill(s.id)} style={ghostBtn(false)}>
+                    {s.is_active ? 'Disable' : 'Enable'}
+                  </button>
+                  <button onClick={() => deleteSkill(s.id)} style={{
+                    background: 'transparent',
+                    color: palette.err,
+                    border: `1px solid ${palette.err}`,
+                    borderRadius: 4,
+                    padding: '4px 10px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}>Delete</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Automation rules panel */}
+      {viewMode === 'rules' && (
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Automation rules</h2>
+              <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4 }}>
+                Rule-based engine. Runs after each priority scoring pass (every 2 min).
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={loadRules} style={ghostBtn(rulesLoading)} disabled={rulesLoading}>
+                {rulesLoading ? 'Loading…' : 'Reload'}
+              </button>
+              <button onClick={runRulesNow} style={primaryBtn(false)}>
+                Run now
+              </button>
+            </div>
+          </div>
+          {lastAutomationRun && (
+            <div style={{
+              background: '#0e1729',
+              border: `1px solid ${palette.border}`,
+              borderRadius: 6,
+              padding: 10,
+              marginBottom: 14,
+              fontSize: 12,
+              color: palette.textDim,
+            }}>
+              <strong style={{ color: palette.text }}>Last run:</strong>{' '}
+              {new Date(lastAutomationRun.finished_at).toLocaleString()} ·
+              evaluated {lastAutomationRun.rules_evaluated} ·
+              fired <span style={{ color: palette.ok }}>{lastAutomationRun.rules_fired}</span>
+              {lastAutomationRun.fire_results.filter((f) => f.rows_affected > 0).length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  {lastAutomationRun.fire_results.filter((f) => f.rows_affected > 0).map((f) => (
+                    <div key={f.rule_id}>
+                      <span style={{ color: palette.text }}>{f.rule_name}</span>{' '}
+                      → <span style={{ color: palette.ok }}>{f.rows_affected} rows</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {rules.map((r) => (
+            <div
+              key={r.id}
+              style={{
+                background: '#0e1729',
+                border: `1px solid ${r.is_active ? palette.border : '#3a1d22'}`,
+                borderRadius: 6,
+                padding: 10,
+                marginBottom: 8,
+                opacity: r.is_active ? 1 : 0.5,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div>
+                  {r.description && (
+                    <div style={{ fontSize: 12, color: palette.textDim, marginTop: 4 }}>
+                      {r.description}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: palette.textDim, marginTop: 6, display: 'flex', gap: 12 }}>
+                    <span>fired {r.fire_count}×</span>
+                    {r.last_fired_at && <span>last {timeAgo(r.last_fired_at)}</span>}
+                  </div>
+                  <pre style={{
+                    background: '#0b1220',
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: 4,
+                    padding: 6,
+                    fontSize: 11,
+                    color: '#cbd5e1',
+                    marginTop: 8,
+                    overflow: 'auto',
+                  }}>
+{`if ${JSON.stringify(r.condition_jsonb)}\nthen ${JSON.stringify(r.action_jsonb)}`}
+                  </pre>
+                </div>
+                <button onClick={() => toggleRule(r.id)} style={ghostBtn(false)}>
+                  {r.is_active ? 'Disable' : 'Enable'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Project tab nav (queue mode only) */}
+      {viewMode === 'queue' && (
       <div
         style={{
           display: 'flex',
@@ -749,15 +1275,16 @@ const AiOpsCommandCenter: React.FC = () => {
           />
         ))}
       </div>
+      )}
 
-      {/* Queue body */}
-      {loading && <div style={{ color: palette.textDim }}>Loading your queue…</div>}
-      {!loading && queue && queue.projects.length === 0 && (
+      {/* Queue body (queue mode only) */}
+      {viewMode === 'queue' && loading && <div style={{ color: palette.textDim }}>Loading your queue…</div>}
+      {viewMode === 'queue' && !loading && queue && queue.projects.length === 0 && (
         <div style={{ ...sectionStyle, padding: 32, textAlign: 'center', color: palette.textDim }}>
           No open todos assigned to you in CB-managed projects right now.
         </div>
       )}
-      {!loading && queue && queue.projects.length > 0 && (
+      {viewMode === 'queue' && !loading && queue && queue.projects.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {queue.projects
             .map((proj) => ({
@@ -954,6 +1481,7 @@ const AiOpsCommandCenter: React.FC = () => {
         </button>
       </div>
       {opsPanelOpen && (
+        <>
         <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
           <div style={sectionStyle}>
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Today's Pulse</h2>
@@ -1068,6 +1596,51 @@ const AiOpsCommandCenter: React.FC = () => {
             )}
           </div>
         </div>
+        {/* Project weight knobs — tunes priority engine multiplier per project */}
+        <div style={{ ...sectionStyle, marginTop: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Project weights</h2>
+          <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4, marginBottom: 12 }}>
+            Multiplier 0.0–2.0 applied to the priority engine's urgency score per project. 1.0 = neutral. Drop noisy admin projects to 0.4; lift strategic ones to 1.4.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+            {projects.filter((p) => p.is_cb_managed).map((p) => {
+              const draft = weightDrafts[p.bc_id];
+              const display = draft !== undefined ? draft : String(p.weight);
+              return (
+                <React.Fragment key={p.bc_id}>
+                  <div style={{ fontSize: 12, color: palette.text, alignSelf: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {p.name}
+                  </div>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="2"
+                    value={display}
+                    onChange={(e) => setWeightDrafts((prev) => ({ ...prev, [p.bc_id]: e.target.value }))}
+                    onBlur={() => draft !== undefined && saveProjectWeight(p.bc_id, draft)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && draft !== undefined) {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
+                    style={{
+                      background: '#0e1729',
+                      color: palette.text,
+                      border: `1px solid ${draft !== undefined ? palette.warn : palette.border}`,
+                      borderRadius: 4,
+                      padding: '4px 8px',
+                      fontSize: 12,
+                      width: 80,
+                      textAlign: 'right',
+                    }}
+                  />
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+        </>
       )}
     </div>
   );

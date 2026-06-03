@@ -18,6 +18,12 @@
  */
 import OpsBcTodo from '../../models/OpsBcTodo';
 import OpsBcProject from '../../models/OpsBcProject';
+import { sequelize } from '../../config/database';
+
+// Projects with no BC activity (no todo updated, no project metadata
+// touched) in this many days get auto-demoted out of the CB-managed set
+// so they stop polluting the queue. Override via env if needed.
+const CB_DORMANT_DAYS = Math.max(1, Number(process.env.OPS_CB_DORMANT_DAYS) || 30);
 
 interface BcProject {
   id: number;
@@ -230,6 +236,32 @@ export async function runBcSync(): Promise<BcSyncResult> {
         }
       }
     }
+  }
+
+  // Auto-detect dormant projects: if a project has zero todos with
+  // bc_updated_at in the last CB_DORMANT_DAYS days, flip is_cb_managed=false.
+  // Revives any previously-dormant project that now has fresh activity.
+  try {
+    await sequelize.query(
+      `UPDATE ops_bc_projects p
+          SET is_cb_managed = sub.has_recent_activity,
+              updated_at = NOW()
+         FROM (
+           SELECT p.bc_id,
+                  EXISTS (
+                    SELECT 1 FROM ops_bc_todos t
+                     WHERE t.project_id = p.bc_id
+                       AND t.status = 'active'
+                       AND t.bc_updated_at >= NOW() - (:dormant_days || ' days')::interval
+                  ) AS has_recent_activity
+             FROM ops_bc_projects p
+         ) sub
+        WHERE p.bc_id = sub.bc_id
+          AND p.is_cb_managed <> sub.has_recent_activity`,
+      { replacements: { dormant_days: CB_DORMANT_DAYS } },
+    );
+  } catch (err: any) {
+    result.errors.push({ stage: 'cb_managed_autodetect', message: err.message });
   }
 
   result.finished_at = new Date();

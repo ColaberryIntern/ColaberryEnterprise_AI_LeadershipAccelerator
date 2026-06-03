@@ -189,6 +189,11 @@ async function ensureOpsCommandCenterSchema() {
 
     // Phase 1 additions
     `ALTER TABLE ops_bc_todos ADD COLUMN IF NOT EXISTS todolist_name TEXT`,
+    `ALTER TABLE ops_bc_todos ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE ops_bc_todos ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ`,
+    `ALTER TABLE ops_bc_todos ADD COLUMN IF NOT EXISTS dismissed_by VARCHAR(120)`,
+    `ALTER TABLE ops_bc_todos ADD COLUMN IF NOT EXISTS dismissed_reason VARCHAR(40)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_bc_todos_dismissed ON ops_bc_todos (is_dismissed)`,
     `CREATE TABLE IF NOT EXISTS ops_bc_projects (
        bc_id VARCHAR(50) PRIMARY KEY,
        name TEXT NOT NULL,
@@ -200,6 +205,39 @@ async function ensureOpsCommandCenterSchema() {
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE INDEX IF NOT EXISTS idx_ops_bc_projects_cb_managed ON ops_bc_projects (is_cb_managed)`,
+
+    // Phase 2-light: skill extraction
+    `CREATE TABLE IF NOT EXISTS ops_skills (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       name TEXT NOT NULL,
+       action_kind VARCHAR(40) NOT NULL DEFAULT 'default',
+       captured_from_todo_bc_id VARCHAR(50),
+       captured_from_todo_title TEXT,
+       reasoning TEXT,
+       decision VARCHAR(40),
+       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+       use_count INTEGER NOT NULL DEFAULT 0,
+       created_by VARCHAR(120),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_skills_action_kind ON ops_skills (action_kind)`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_skills_active ON ops_skills (is_active)`,
+
+    // Phase 4-light: automation rules
+    `CREATE TABLE IF NOT EXISTS ops_automation_rules (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       name TEXT NOT NULL,
+       description TEXT,
+       condition_jsonb JSONB NOT NULL DEFAULT '{}'::jsonb,
+       action_jsonb JSONB NOT NULL DEFAULT '{}'::jsonb,
+       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+       last_fired_at TIMESTAMPTZ,
+       fire_count INTEGER NOT NULL DEFAULT 0,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_automation_rules_active ON ops_automation_rules (is_active)`,
 
     `CREATE TABLE IF NOT EXISTS ops_metrics_daily (
        date DATE PRIMARY KEY,
@@ -387,6 +425,13 @@ async function start(): Promise<void> {
   // Ops Command Center schema — explicit creation because alter sync hits
   // pre-existing index conflicts elsewhere and never reaches the ops_* models.
   await ensureOpsCommandCenterSchema();
+  // Seed v0 automation rules (idempotent).
+  try {
+    const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');
+    await seedDefaultAutomationRules();
+  } catch (err: any) {
+    console.warn('[OpsAutomation] seed failed:', err?.message);
+  }
 
   try {
     await sequelize.sync({ alter: true });
@@ -473,6 +518,20 @@ async function start(): Promise<void> {
           `[OpsPriorityEngine] completed with ${scoreResult.errors.length} errors`,
           scoreResult.errors.slice(0, 3),
         );
+      }
+      // Run automation rules after scoring.
+      try {
+        const { runAutomationRules } = await import('./services/ops/automationRulesService');
+        const automationResult = await runAutomationRules();
+        opsRoutesMod.setLastAutomationRun(automationResult);
+        if (automationResult.rules_fired > 0) {
+          console.log(
+            `[OpsAutomation] fired ${automationResult.rules_fired} rule(s)`,
+            automationResult.fire_results.filter((f) => f.rows_affected > 0),
+          );
+        }
+      } catch (err: any) {
+        console.warn('[OpsAutomation] cron run failed:', err?.message);
       }
     } catch (err: any) {
       console.warn('[OpsBcSync/Priority] scheduled run failed:', err?.message);

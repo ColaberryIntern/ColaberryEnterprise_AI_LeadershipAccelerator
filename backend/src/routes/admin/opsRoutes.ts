@@ -29,6 +29,8 @@ import {
   getTodayDecisionStats,
 } from '../../services/ops/approvalService';
 import { rollupToday } from '../../services/ops/metricsDailyService';
+import { runAutomationRules, AutomationRunResult } from '../../services/ops/automationRulesService';
+import OpsSkill from '../../models/OpsSkill';
 
 // Ali's Basecamp user id. ali@colaberry.com / Managing Director / id 17454835.
 // Verified via the people.json lookup — owns 293 active todos. (45321751
@@ -65,6 +67,17 @@ export function setLastPriorityRun(result: PriorityEngineRunResult): void {
 
 export function getLastPriorityRun(): PriorityEngineRunResult | null {
   return lastPriorityRun;
+}
+
+let lastAutomationRun: AutomationRunResult | null = null;
+let automationInFlight = false;
+
+export function setLastAutomationRun(result: AutomationRunResult): void {
+  lastAutomationRun = result;
+}
+
+export function getLastAutomationRun(): AutomationRunResult | null {
+  return lastAutomationRun;
 }
 
 router.get('/api/admin/ops/health', requireAdmin, async (_req: Request, res: Response) => {
@@ -204,6 +217,7 @@ router.get('/api/admin/ops/projects', requireAdmin, async (_req: Request, res: R
             WHERE project_id = p.bc_id
               AND status = 'active'
               AND assignee_ids @> :ali_jsonb
+              AND is_dismissed = FALSE
               AND bc_updated_at >= NOW() - (:stale_days || ' days')::interval
          ) t ON true
         WHERE p.is_cb_managed = TRUE
@@ -242,6 +256,106 @@ router.get('/api/admin/ops/projects', requireAdmin, async (_req: Request, res: R
  *   - only in CB-managed projects (ops_bc_projects.is_cb_managed = TRUE)
  *   - optional further filter to a single project_id
  */
+/**
+ * GET /api/admin/ops/stale-todos?limit=50
+ *
+ * Surfaces the hidden zombies — todos with no BC activity in
+ * STALE_HIDE_DAYS days but still in active status. Lets Ali batch-archive
+ * them via the dismiss endpoint below.
+ */
+router.get('/api/admin/ops/stale-todos', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 500);
+    const rows = await sequelize.query<{
+      bc_id: string;
+      project_id: string;
+      project_name: string;
+      todolist_name: string | null;
+      title: string;
+      bc_app_url: string | null;
+      due_on: string | null;
+      bc_updated_at: string;
+      urgency_score: number | null;
+      days_stale: string;
+    }>(
+      `SELECT t.bc_id, t.project_id, p.name AS project_name, t.todolist_name,
+              t.title, t.bc_app_url, t.due_on, t.bc_updated_at, t.urgency_score,
+              FLOOR(EXTRACT(EPOCH FROM (NOW() - t.bc_updated_at)) / 86400)::text AS days_stale
+         FROM ops_bc_todos t
+         JOIN ops_bc_projects p ON p.bc_id = t.project_id
+        WHERE t.status = 'active'
+          AND t.is_dismissed = FALSE
+          AND p.is_cb_managed = TRUE
+          AND t.assignee_ids @> :ali_jsonb
+          AND t.bc_updated_at < NOW() - (:stale_days || ' days')::interval
+        ORDER BY t.bc_updated_at ASC
+        LIMIT :limit`,
+      {
+        type: QueryTypes.SELECT,
+        replacements: {
+          ali_jsonb: JSON.stringify([ALI_BC_USER_ID]),
+          stale_days: STALE_HIDE_DAYS,
+          limit,
+        },
+      },
+    );
+    res.json({
+      todos: rows.map((r) => ({ ...r, days_stale: parseInt(r.days_stale, 10) })),
+      total: rows.length,
+      stale_hide_days: STALE_HIDE_DAYS,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/ops/todos/dismiss
+ * Body: { bc_ids: string[], reason?: 'archive' | 'not_mine' | 'completed' | string }
+ *
+ * Marks one or many todos as dismissed in the local mirror. Does NOT touch
+ * the upstream BC ticket — this is a local "out of my view" flag, fully
+ * reversible. Future sync passes won't re-surface them since the queue
+ * queries filter on is_dismissed = FALSE.
+ */
+router.post(
+  '/api/admin/ops/todos/dismiss',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const bc_ids: string[] = Array.isArray(req.body?.bc_ids) ? req.body.bc_ids.map(String) : [];
+      const reason = String(req.body?.reason || 'archive').slice(0, 40);
+      const undismiss = req.body?.undismiss === true;
+      if (bc_ids.length === 0) {
+        res.status(400).json({ error: 'bc_ids (array) required' });
+        return;
+      }
+      const decidedBy = req.admin?.email || 'unknown';
+      const sql = undismiss
+        ? `UPDATE ops_bc_todos
+              SET is_dismissed = FALSE,
+                  dismissed_at = NULL,
+                  dismissed_by = NULL,
+                  dismissed_reason = NULL,
+                  updated_at = NOW()
+            WHERE bc_id = ANY(:bc_ids)`
+        : `UPDATE ops_bc_todos
+              SET is_dismissed = TRUE,
+                  dismissed_at = NOW(),
+                  dismissed_by = :decided_by,
+                  dismissed_reason = :reason,
+                  updated_at = NOW()
+            WHERE bc_id = ANY(:bc_ids)`;
+      const [, meta]: any = await sequelize.query(sql, {
+        replacements: { bc_ids, decided_by: decidedBy, reason },
+      });
+      res.json({ ok: true, count: bc_ids.length, undismiss, meta });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
 router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Response) => {
   try {
     const projectId = req.query.project_id ? String(req.query.project_id) : null;
@@ -272,6 +386,7 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
         WHERE t.status = 'active'
           AND p.is_cb_managed = TRUE
           AND t.assignee_ids @> :ali_jsonb
+          AND t.is_dismissed = FALSE
           AND t.bc_updated_at >= NOW() - (:stale_days || ' days')::interval
           ${projectId ? 'AND t.project_id = :project_id' : ''}
         ORDER BY p.name,
@@ -298,6 +413,7 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
         WHERE t.status = 'active'
           AND p.is_cb_managed = TRUE
           AND t.assignee_ids @> :ali_jsonb
+          AND t.is_dismissed = FALSE
           AND t.bc_updated_at < NOW() - (:stale_days || ' days')::interval
           ${projectId ? 'AND t.project_id = :project_id' : ''}`,
       {
@@ -426,6 +542,7 @@ router.get('/api/admin/ops/run-my-day', requireAdmin, async (req: Request, res: 
           AND p.is_cb_managed = TRUE
           AND t.assignee_ids @> :ali_jsonb
           AND t.urgency_score IS NOT NULL
+          AND t.is_dismissed = FALSE
           AND t.bc_updated_at >= NOW() - (:stale_days || ' days')::interval
           AND NOT EXISTS (
             SELECT 1 FROM ops_approval_queue q
@@ -655,6 +772,31 @@ router.post(
   },
 );
 
+router.post(
+  '/api/admin/ops/projects/:bc_id/weight',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const weight = Number(req.body?.weight);
+      if (!Number.isFinite(weight) || weight < 0 || weight > 2.0) {
+        res.status(400).json({ error: 'weight must be a number between 0.0 and 2.0' });
+        return;
+      }
+      const [count] = await OpsBcProject.update(
+        { weight },
+        { where: { bc_id: req.params.bc_id } },
+      );
+      if (count === 0) {
+        res.status(404).json({ error: 'project not found' });
+        return;
+      }
+      res.json({ ok: true, bc_id: req.params.bc_id, weight });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
 /**
  * GET /api/admin/ops/todos/:bc_id/comments
  *
@@ -734,6 +876,7 @@ router.post(
         queue_item_id: result.queue_item.id,
         bc_comment_url: result.bc_comment_url,
         bc_post_error: result.bc_post_error,
+        compliance_warnings: result.compliance_warnings,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -761,6 +904,94 @@ router.get(
     }
   },
 );
+
+/**
+ * Skills surface — captured patterns from "Approve + skill" decisions.
+ */
+router.get('/api/admin/ops/skills', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const includeInactive = req.query.include_inactive === 'true';
+    const skills = await OpsSkill.findAll({
+      where: includeInactive ? {} : { is_active: true },
+      order: [['created_at', 'DESC']],
+      limit: 200,
+    });
+    res.json({ skills });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/ops/skills/:id/toggle', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const skill = await OpsSkill.findByPk(String(req.params.id));
+    if (!skill) {
+      res.status(404).json({ error: 'skill not found' });
+      return;
+    }
+    await skill.update({ is_active: !skill.is_active });
+    res.json({ ok: true, id: skill.id, is_active: skill.is_active });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/api/admin/ops/skills/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const deleted = await OpsSkill.destroy({ where: { id: req.params.id } });
+    res.json({ ok: true, deleted });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Automation rules surface — list, manual fire, see last-run summary.
+ */
+router.get('/api/admin/ops/automation-rules', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const rules = await sequelize.query(
+      `SELECT id::text, name, description, condition_jsonb, action_jsonb,
+              is_active, last_fired_at, fire_count, created_at
+         FROM ops_automation_rules ORDER BY name`,
+      { type: QueryTypes.SELECT },
+    );
+    res.json({ rules, last_run: lastAutomationRun });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/ops/automation-rules/:id/toggle', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const [, meta]: any = await sequelize.query(
+      `UPDATE ops_automation_rules
+          SET is_active = NOT is_active, updated_at = NOW()
+        WHERE id = :id`,
+      { replacements: { id: req.params.id } },
+    );
+    res.json({ ok: true, id: req.params.id, meta });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/ops/automation-rules/run', requireAdmin, async (_req: Request, res: Response) => {
+  if (automationInFlight) {
+    res.status(409).json({ error: 'Automation already in flight' });
+    return;
+  }
+  automationInFlight = true;
+  try {
+    const result = await runAutomationRules();
+    lastAutomationRun = result;
+    res.json({ ok: true, result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    automationInFlight = false;
+  }
+});
 
 router.post('/api/admin/ops/score', requireAdmin, async (_req: Request, res: Response) => {
   if (priorityInFlight) {

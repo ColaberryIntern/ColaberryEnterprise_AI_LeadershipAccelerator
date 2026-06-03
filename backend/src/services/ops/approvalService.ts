@@ -14,7 +14,10 @@
  */
 import OpsApprovalQueueItem, { ApprovalDecision } from '../../models/OpsApprovalQueueItem';
 import OpsBcTodo from '../../models/OpsBcTodo';
+import OpsSkill from '../../models/OpsSkill';
 import { bcGet, bcPost } from './basecampClient';
+import { buildSuggestion } from './runMyDayPromptService';
+import { checkCompliance } from './brandComplianceService';
 
 interface DecisionInput {
   todo_bc_id: string;
@@ -28,6 +31,7 @@ interface DecisionResult {
   queue_item: OpsApprovalQueueItem;
   bc_comment_url: string | null;
   bc_post_error: string | null;
+  compliance_warnings: string[];
 }
 
 const DECISION_LABEL: Record<Exclude<ApprovalDecision, null>, { title: string; color: string; bgcolor: string; emoji: string }> = {
@@ -88,23 +92,70 @@ export async function recordDecision(input: DecisionInput): Promise<DecisionResu
     next_actions: null,
   } as any);
 
-  // 2) BC write-back (opt-in via post_to_bc; defaults true)
+  // 2) BC write-back (opt-in via post_to_bc; defaults true).
+  // Brand compliance preflight: blockers (secret leaks etc.) prevent post;
+  // warnings (style flags) surface in the response but don't block.
   let bc_comment_url: string | null = null;
   let bc_post_error: string | null = null;
+  let compliance_warnings: string[] = [];
   if (input.post_to_bc !== false) {
-    try {
-      const html = buildBcCommentHtml(input.decision, input.reasoning || null, input.decided_by, todo.title);
-      const comment = await bcPost<{ app_url: string }>(
-        `/buckets/${todo.project_id}/recordings/${todo.bc_id}/comments.json`,
-        { content: html },
-      );
-      bc_comment_url = comment.app_url || null;
-    } catch (err: any) {
-      bc_post_error = err.message || String(err);
+    const html = buildBcCommentHtml(input.decision, input.reasoning || null, input.decided_by, todo.title);
+    const check = checkCompliance(html, input.reasoning || null);
+    compliance_warnings = check.warnings;
+    if (!check.ok) {
+      bc_post_error = `Brand compliance blocked: ${check.blockers.join('; ')}`;
+    } else {
+      try {
+        const comment = await bcPost<{ app_url: string }>(
+          `/buckets/${todo.project_id}/recordings/${todo.bc_id}/comments.json`,
+          { content: html },
+        );
+        bc_comment_url = comment.app_url || null;
+      } catch (err: any) {
+        bc_post_error = err.message || String(err);
+      }
     }
   }
 
-  return { queue_item, bc_comment_url, bc_post_error };
+  // Phase 2-light: capture as skill when explicitly requested. The action_kind
+  // comes from buildSuggestion() so this skill is filed under the right
+  // taxonomy (reply / decision / meeting / research / default).
+  if (input.decision === 'approve_and_convert_to_skill') {
+    try {
+      const suggestion = buildSuggestion({
+        bc_id: todo.bc_id,
+        title: todo.title,
+        description: todo.description,
+        bc_app_url: todo.bc_app_url,
+        project_id: todo.project_id,
+        project_name: null,
+        todolist_name: todo.todolist_name,
+        due_on: todo.due_on,
+        bc_updated_at: todo.bc_updated_at,
+        urgency_score: todo.urgency_score,
+        category: todo.category,
+      });
+      const skillName = (input.reasoning && input.reasoning.split('\n')[0].slice(0, 120))
+        || `${suggestion.action_kind.charAt(0).toUpperCase() + suggestion.action_kind.slice(1)} pattern from ${todo.title.slice(0, 60)}`;
+      await OpsSkill.create({
+        name: skillName,
+        action_kind: suggestion.action_kind,
+        captured_from_todo_bc_id: todo.bc_id,
+        captured_from_todo_title: todo.title,
+        reasoning: input.reasoning || null,
+        decision: input.decision,
+        is_active: true,
+        use_count: 0,
+        created_by: input.decided_by,
+      } as any);
+    } catch (err: any) {
+      // skill capture failure is non-fatal — the decision + BC comment
+      // already landed
+      console.warn('[approvalService] skill capture failed:', err.message);
+    }
+  }
+
+  return { queue_item, bc_comment_url, bc_post_error, compliance_warnings };
 }
 
 export async function fetchTodoComments(todoBcId: string): Promise<{

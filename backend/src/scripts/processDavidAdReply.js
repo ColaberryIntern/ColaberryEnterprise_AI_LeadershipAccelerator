@@ -32,7 +32,15 @@ const M4_THUMB = path.join(REPO, 'tmp/mockup-thumb-4.png');
 const LOGO_PATH = path.join(REPO, 'docs/img/ad-mockups-2026-06-02/logo-colaberry-dark.png');
 const STATE_PATH = path.join(REPO, 'tmp/david-ad-trigger-state.json');
 const LOG_PATH = path.join(REPO, 'docs/coop-ad-trigger-log.md');
-const THREAD_ID = '19e89a52879d4a32';
+// Phase 1.4e fix (2026-06-02): the original watcher was pinned to a single
+// thread id, which silently missed David's reply when Gmail split his
+// "Covering by bases" message into a different thread. Now we search by
+// sender + subject substring so any new David reply on the ad conversation
+// is caught regardless of which Gmail thread it lands in. Original
+// THREAD_ID kept as the search seed.
+const SEED_THREAD_ID = '19e89a52879d4a32';
+const SUBJECT_HINTS = ['RE Magazine', 'Open for Advertising', 'Mockup'];
+const SEARCH_QUERY = `from:dlahme@colaberry.com newer_than:14d (subject:"RE Magazine" OR subject:"Open for Advertising" OR subject:"Mockup")`;
 const DAVID = 'dlahme@colaberry.com';
 const BC_TODO = 9955562788; // RE Magazine ad ticket on David Lahme list
 
@@ -81,24 +89,64 @@ function extractPlaintext(payload) {
   return txt.trim();
 }
 
-async function fetchThread(token) {
-  const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${THREAD_ID}?format=full`, {
+async function fetchThread(token, threadId) {
+  const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!r.ok) throw new Error(`thread fetch ${r.status}`);
   return r.json();
 }
 
-function findLatestDavidReply(thread, lastProcessed) {
-  const msgs = (thread.messages || [])
-    .filter((m) => {
-      const headers = m.payload?.headers || [];
-      const from = (headers.find((h) => h.name.toLowerCase() === 'from')?.value || '').toLowerCase();
-      return from.includes(DAVID);
-    })
-    .sort((a, b) => parseInt(a.internalDate) - parseInt(b.internalDate));
-  if (!msgs.length) return null;
-  const latest = msgs[msgs.length - 1];
+async function searchDavidMessages(token) {
+  const r = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(SEARCH_QUERY)}&maxResults=20`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!r.ok) throw new Error(`messages.list ${r.status}`);
+  const data = await r.json();
+  return data.messages || [];
+}
+
+async function findLatestDavidReply(token, lastProcessed) {
+  // Search Gmail across recent David replies on the ad conversation,
+  // regardless of which thread they landed in.
+  const hits = await searchDavidMessages(token);
+  if (hits.length === 0) {
+    // Fallback to the seed thread so we still process anything that
+    // lands there even if the search index lags.
+    const thread = await fetchThread(token, SEED_THREAD_ID);
+    const msgs = (thread.messages || [])
+      .filter((m) => {
+        const headers = m.payload?.headers || [];
+        const from = (headers.find((h) => h.name.toLowerCase() === 'from')?.value || '').toLowerCase();
+        return from.includes(DAVID);
+      })
+      .sort((a, b) => parseInt(a.internalDate) - parseInt(b.internalDate));
+    if (!msgs.length) return null;
+    const latest = msgs[msgs.length - 1];
+    if (!REPLAY && lastProcessed === latest.id) return null;
+    return latest;
+  }
+  // Fetch each message head, pick the most recent one matching the
+  // sender + subject hint, that we haven't processed.
+  const messages = [];
+  for (const h of hits) {
+    const r = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${h.id}?format=full`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!r.ok) continue;
+    const m = await r.json();
+    const headers = m.payload?.headers || [];
+    const from = (headers.find((x) => x.name.toLowerCase() === 'from')?.value || '').toLowerCase();
+    const subject = headers.find((x) => x.name.toLowerCase() === 'subject')?.value || '';
+    if (!from.includes(DAVID)) continue;
+    if (!SUBJECT_HINTS.some((hint) => subject.toLowerCase().includes(hint.toLowerCase()))) continue;
+    messages.push(m);
+  }
+  if (messages.length === 0) return null;
+  messages.sort((a, b) => parseInt(a.internalDate) - parseInt(b.internalDate));
+  const latest = messages[messages.length - 1];
   if (!REPLAY && lastProcessed === latest.id) return null;
   return latest;
 }
@@ -371,8 +419,7 @@ function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;'
   log(`state: lastProcessedMessageId=${state.lastProcessedMessageId} version=${state.version}`);
 
   const token = await gmailAccessToken();
-  const thread = await fetchThread(token);
-  const latest = findLatestDavidReply(thread, state.lastProcessedMessageId);
+  const latest = await findLatestDavidReply(token, state.lastProcessedMessageId);
   if (!latest) { log('no new David reply. exiting.'); return; }
   log(`new David message: ${latest.id} (${new Date(parseInt(latest.internalDate)).toISOString()})`);
 

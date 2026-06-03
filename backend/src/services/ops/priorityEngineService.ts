@@ -169,6 +169,7 @@ interface RawTodoRow {
   due_on: Date | string | null;
   bc_updated_at: Date | string;
   assignee_ids: string[] | string; // JSONB returns either depending on driver
+  project_weight: string | number | null;
 }
 
 const PAGE_SIZE = 200;
@@ -199,10 +200,13 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
   // UPDATE via CASE/IN -> batched INSERT into ops_ai_assessments.
   while (true) {
     const rows = await sequelize.query<RawTodoRow>(
-      `SELECT bc_id, project_id, title, description, due_on, bc_updated_at, assignee_ids
-         FROM ops_bc_todos
-        WHERE status = 'active'
-        ORDER BY bc_id
+      `SELECT t.bc_id, t.project_id, t.title, t.description, t.due_on,
+              t.bc_updated_at, t.assignee_ids,
+              COALESCE(p.weight, 1.0) AS project_weight
+         FROM ops_bc_todos t
+         LEFT JOIN ops_bc_projects p ON p.bc_id = t.project_id
+        WHERE t.status = 'active'
+        ORDER BY t.bc_id
         LIMIT :limit OFFSET :offset`,
       { type: QueryTypes.SELECT, replacements: { limit: PAGE_SIZE, offset } },
     );
@@ -227,6 +231,17 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
           project_id: r.project_id,
         });
 
+        // Apply per-project weight multiplier (0.0–2.0, default 1.0). Lets Ali
+        // down-weight noisy high-velocity admin projects without losing them
+        // from the queue. Final score capped 0–100.
+        const weight = typeof r.project_weight === 'string'
+          ? parseFloat(r.project_weight)
+          : (r.project_weight ?? 1.0);
+        const weightedScore = Math.max(0, Math.min(100, Math.round(scored.urgency_score * (Number.isFinite(weight) ? weight : 1.0))));
+        const weightedCategory = weightedScore >= 60 && scored.signals.has_assignees
+          ? 'human_required'
+          : scored.category;
+
         // Per-row UPDATE — no model instance, no association overhead.
         await sequelize.query(
           `UPDATE ops_bc_todos
@@ -236,8 +251,8 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
             WHERE bc_id = :bc_id`,
           {
             replacements: {
-              score: scored.urgency_score,
-              category: scored.category,
+              score: weightedScore,
+              category: weightedCategory,
               bc_id: r.bc_id,
             },
           },
@@ -247,11 +262,17 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
           todo_bc_id: r.bc_id,
           agent: AGENT_NAME,
           agent_version: AGENT_VERSION,
-          urgency_score: scored.urgency_score,
+          urgency_score: weightedScore,
           ai_opportunity_score: null,
           brand_score: null,
-          category: scored.category,
-          reasoning: { breakdown: scored.breakdown, signals: scored.signals },
+          category: weightedCategory,
+          reasoning: {
+            breakdown: scored.breakdown,
+            signals: scored.signals,
+            raw_score: scored.urgency_score,
+            project_weight: weight,
+            weighted_score: weightedScore,
+          },
           llm_model: null,
           llm_input_tokens: null,
           llm_output_tokens: null,
@@ -260,7 +281,7 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
         });
 
         result.todos_scored++;
-        result.category_counts[scored.category]++;
+        result.category_counts[weightedCategory]++;
       } catch (err: any) {
         result.errors.push({ todo_bc_id: r.bc_id, message: err.message });
         result.todos_skipped++;

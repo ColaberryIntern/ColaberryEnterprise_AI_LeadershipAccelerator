@@ -41,6 +41,10 @@ interface OpsBcTodoAttributes {
   downstream_blocked_count: number;
 
   // Bookkeeping
+  is_dismissed: boolean;
+  dismissed_at: Date | null;
+  dismissed_by: string | null;
+  dismissed_reason: string | null;
   bc_created_at: Date;
   bc_updated_at: Date;
   last_synced_at: Date;
@@ -66,6 +70,10 @@ class OpsBcTodo extends Model<OpsBcTodoAttributes> implements OpsBcTodoAttribute
   declare category: OpsTodoCategory;
   declare last_human_action_at: Date | null;
   declare downstream_blocked_count: number;
+  declare is_dismissed: boolean;
+  declare dismissed_at: Date | null;
+  declare dismissed_by: string | null;
+  declare dismissed_reason: string | null;
   declare bc_created_at: Date;
   declare bc_updated_at: Date;
   declare last_synced_at: Date;
@@ -94,6 +102,10 @@ OpsBcTodo.init(
     last_human_action_at: { type: DataTypes.DATE, allowNull: true },
     downstream_blocked_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
 
+    is_dismissed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    dismissed_at: { type: DataTypes.DATE, allowNull: true },
+    dismissed_by: { type: DataTypes.STRING(120), allowNull: true },
+    dismissed_reason: { type: DataTypes.STRING(40), allowNull: true },
     bc_created_at: { type: DataTypes.DATE, allowNull: false },
     bc_updated_at: { type: DataTypes.DATE, allowNull: false },
     last_synced_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
