@@ -23,6 +23,7 @@ interface OpsBcTodoAttributes {
   bc_id: string; // primary key; matches BC's todo id
   project_id: string;
   todolist_id: string | null;
+  todolist_name: string | null;
   title: string;
   description: string | null;
   status: string; // BC's own status: 'active' | 'completed' | 'trashed'
@@ -51,6 +52,7 @@ class OpsBcTodo extends Model<OpsBcTodoAttributes> implements OpsBcTodoAttribute
   declare bc_id: string;
   declare project_id: string;
   declare todolist_id: string | null;
+  declare todolist_name: string | null;
   declare title: string;
   declare description: string | null;
   declare status: string;
@@ -76,6 +78,7 @@ OpsBcTodo.init(
     bc_id: { type: DataTypes.STRING(50), primaryKey: true, allowNull: false },
     project_id: { type: DataTypes.STRING(50), allowNull: false },
     todolist_id: { type: DataTypes.STRING(50), allowNull: true },
+    todolist_name: { type: DataTypes.TEXT, allowNull: true },
     title: { type: DataTypes.TEXT, allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     status: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'active' },

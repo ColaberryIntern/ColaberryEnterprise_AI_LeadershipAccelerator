@@ -241,11 +241,12 @@ MayaConversationOutcome.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
 CampaignGovernanceConfig.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
-// AI Ops Command Center (Phase 0 schema)
+// AI Ops Command Center (Phase 0 schema + Phase 1 additions)
 import OpsBcTodo from './OpsBcTodo';
 import OpsAiAssessment from './OpsAiAssessment';
 import OpsApprovalQueueItem from './OpsApprovalQueueItem';
 import OpsMetricsDaily from './OpsMetricsDaily';
+import OpsBcProject from './OpsBcProject';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1027,6 +1028,7 @@ export {
   OpsAiAssessment,
   OpsApprovalQueueItem,
   OpsMetricsDaily,
+  OpsBcProject,
 };
 
 // --- AI Company Layer associations ---

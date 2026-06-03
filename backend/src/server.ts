@@ -187,6 +187,20 @@ async function ensureOpsCommandCenterSchema() {
     `CREATE INDEX IF NOT EXISTS idx_ops_approval_user_open ON ops_approval_queue (target_user_id, decided_at)`,
     `CREATE INDEX IF NOT EXISTS idx_ops_approval_todo ON ops_approval_queue (todo_bc_id)`,
 
+    // Phase 1 additions
+    `ALTER TABLE ops_bc_todos ADD COLUMN IF NOT EXISTS todolist_name TEXT`,
+    `CREATE TABLE IF NOT EXISTS ops_bc_projects (
+       bc_id VARCHAR(50) PRIMARY KEY,
+       name TEXT NOT NULL,
+       description TEXT,
+       is_cb_managed BOOLEAN NOT NULL DEFAULT TRUE,
+       weight DECIMAL(3,2) NOT NULL DEFAULT 1.0,
+       last_synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_bc_projects_cb_managed ON ops_bc_projects (is_cb_managed)`,
+
     `CREATE TABLE IF NOT EXISTS ops_metrics_daily (
        date DATE PRIMARY KEY,
        approvals_completed INTEGER NOT NULL DEFAULT 0,

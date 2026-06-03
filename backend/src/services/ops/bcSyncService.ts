@@ -17,10 +17,12 @@
  * `since` cursor (stored per project in an ops_sync_state table).
  */
 import OpsBcTodo from '../../models/OpsBcTodo';
+import OpsBcProject from '../../models/OpsBcProject';
 
 interface BcProject {
   id: number;
   name: string;
+  description?: string | null;
   status: string;
   dock: Array<{ name: string; enabled: boolean; id: number; url: string }>;
 }
@@ -146,6 +148,35 @@ export async function runBcSync(): Promise<BcSyncResult> {
   result.projects_seen = projects.length;
 
   for (const project of projects) {
+    // Upsert project metadata so the UI can show the name (and so the
+    // CB-managed filter has somewhere to live). is_cb_managed defaults to
+    // true on first insert; subsequent syncs do NOT overwrite the flag —
+    // Ali can toggle it manually later via a separate API.
+    try {
+      const existingProj = await OpsBcProject.findByPk(String(project.id));
+      if (existingProj) {
+        await existingProj.update({
+          name: project.name,
+          description: project.description || null,
+          last_synced_at: new Date(),
+        });
+      } else {
+        await OpsBcProject.create({
+          bc_id: String(project.id),
+          name: project.name,
+          description: project.description || null,
+          is_cb_managed: true,
+          weight: 1.0,
+          last_synced_at: new Date(),
+        } as any);
+      }
+    } catch (err: any) {
+      result.errors.push({
+        stage: `project_upsert:${project.id}`,
+        message: err.message,
+      });
+    }
+
     // Each project's "todoset" dock entry leads to its todolists.
     const todosetDock = project.dock?.find((d) => d.name === 'todoset' && d.enabled);
     if (!todosetDock) continue;
@@ -188,7 +219,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
 
       for (const todo of todos) {
         try {
-          const upsertResult = await upsertTodo(project.id, tl.id, todo);
+          const upsertResult = await upsertTodo(project.id, tl.id, tl.title, todo);
           if (upsertResult === 'inserted') result.todos_inserted++;
           else if (upsertResult === 'updated') result.todos_updated++;
         } catch (err: any) {
@@ -208,6 +239,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
 async function upsertTodo(
   projectId: number,
   todolistId: number,
+  todolistName: string,
   todo: BcTodo,
 ): Promise<'inserted' | 'updated' | 'noop'> {
   const assigneeIds = (todo.assignees || []).map((a) => String(a.id));
@@ -218,6 +250,7 @@ async function upsertTodo(
     bc_id: String(todo.id),
     project_id: String(projectId),
     todolist_id: String(todolistId),
+    todolist_name: todolistName,
     title: todo.title || '(untitled)',
     description: todo.description || todo.content || null,
     status,
