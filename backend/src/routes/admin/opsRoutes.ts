@@ -23,9 +23,12 @@ import { runBcSync, BcSyncResult } from '../../services/ops/bcSyncService';
 import { runPriorityEngine, PriorityEngineRunResult } from '../../services/ops/priorityEngineService';
 import { generatePrompt } from '../../services/ops/runMyDayPromptService';
 
-// Ali's Basecamp user id. Hardcoded for Phase 1; lift to env / system_settings
-// table when more than one operator uses the Command Center.
-const ALI_BC_USER_ID = process.env.ALI_BC_USER_ID || '45321751';
+// Ali's Basecamp user id. ali@colaberry.com / Managing Director / id 17454835.
+// Verified via the people.json lookup — owns 293 active todos. (45321751
+// from the token JWT payload was the bot service account "CB System" at
+// vishnu@colaberry.com, not Ali.) Hardcoded for Phase 1; lift to env /
+// system_settings table when more than one operator uses the Command Center.
+const ALI_BC_USER_ID = process.env.ALI_BC_USER_ID || '17454835';
 // Threshold above which we attach a Claude Code prompt block to a queue item.
 const PROMPT_THRESHOLD_URGENCY = 40;
 
