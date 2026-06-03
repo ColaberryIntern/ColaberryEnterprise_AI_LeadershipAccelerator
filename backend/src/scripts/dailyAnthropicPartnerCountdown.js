@@ -44,6 +44,13 @@ const COHORT_LIST_IDS = [
   { id: 9940690954, name: 'Sai Tejesh' },
   { id: 9940690926, name: 'Karun Swaroop' },
   { id: 9940690894, name: 'Kes Delele' },
+  // Added 2026-06-03 per Ram's BC asks on kickoff thread 9940691196 + Ali's discretionary Farhat add
+  { id: 9959894249, name: 'Amitav Sahoo' },
+  { id: 9959894322, name: 'Narendra Nadella' },
+  { id: 9959894402, name: 'David Lahme' },
+  { id: 9959894482, name: 'Nate Taylor' },
+  { id: 9959894562, name: 'John McBride' },
+  { id: 9959894638, name: 'Farhat' },
 ];
 
 async function bcGet(p) { const r = await fetch(p.startsWith('http') ? p : BASE + p, { headers: H }); if (!r.ok) throw new Error(`GET ${p} -> ${r.status}`); return r.json(); }
