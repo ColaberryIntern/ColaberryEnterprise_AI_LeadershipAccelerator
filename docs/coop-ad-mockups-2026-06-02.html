@@ -812,6 +812,84 @@
     font-weight: 800;
   }
 
+  /* ===== M4 V7 (David's 2026-06-03 "lastest edits") ===== */
+  /* T1: tile names locked to single vertical plane (40px reserves room for 2-line name on t4) */
+  .m4-v7 .m4-tile .name {
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.15;
+  }
+  .m4-v7 .m4-tile .name.name-2line {
+    line-height: 1.1;
+  }
+  /* T2: collapse white text closer to yellow rule — tighten desc/roi spacing + tile bottom padding */
+  .m4-v7 .m4-tile {
+    padding: 12px 8px 8px;
+  }
+  .m4-v7 .m4-tile .desc {
+    line-height: 1.25;
+    min-height: 48px;
+  }
+  .m4-v7 .m4-tile .roi {
+    margin-top: 4px;
+    padding-top: 4px;
+    line-height: 1.2;
+  }
+  /* T3: Crew Productivity tile gets 3-line clamp (other tiles stay at 2) */
+  .m4-v7 .m4-tile.t2 .desc {
+    -webkit-line-clamp: 3;
+    min-height: 60px;
+  }
+  /* T4: ROI strip flips to RED with white letters */
+  .m4-v7 .m4-roi-strip-v7 {
+    background: var(--red);
+    color: white;
+  }
+  /* T5: NRECA badge flips to BLACK (not red) */
+  .m4-v7 .m4-footer-v7 .nreca-v7 {
+    background: #000;
+    color: white;
+    box-shadow: 0 2px 0 #1a1a1a;
+  }
+  /* T6: SCAN label stacked under the inline QR, bold + centered */
+  .m4-v7 .m4-footer-v7 .col-colaberry .qr-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry .qr-stack .inline-qr {
+    width: 36px;
+    height: 36px;
+    display: block;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry .qr-stack .scan-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--navy-deep);
+    text-align: center;
+    line-height: 1;
+  }
+  /* T7: "Please contact:" right-justified above David Lahme line */
+  .m4-v7 .m4-footer-v7 .col-david {
+    text-align: right;
+  }
+  .m4-v7 .m4-footer-v7 .col-david .please-contact {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5px;
+    color: var(--navy-deep);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-align: right;
+    margin-bottom: 2px;
+    opacity: 0.85;
+  }
+
   .m4-tile.t1 { background-image: url('img/ad-mockups-2026-06-02/tile-1-scada.jpg'); }
   .m4-tile.t2 { background-image: url('img/ad-mockups-2026-06-02/tile-2-lineman-tablet.jpg'); }
   .m4-tile.t3 { background-image: url('img/ad-mockups-2026-06-02/tile-3-csr-headset.jpg'); }
@@ -1157,23 +1235,23 @@ TRUSTED<br>
 <div class="ad-mockup-shell">
 <div class="ad-mockup-meta">
 <div>
-<div class="label">Mockup 4 · V6 (David's 2026-06-03 edits applied)</div>
+<div class="label">Mockup 4 · V7 (David's 2026-06-03 "lastest edits" applied)</div>
 <div class="name">Five AI Automation Models — Built for Co-op Utilities</div>
 </div>
-<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>V5 CHANGES: Red headline at top reworded (V1 format) / Tile content aligned to same level + larger / Yellow ROI kept / "AUTOMATION ROI IN UNDER 90 DAYS" white +1 font / Footer reflowed: Colaberry left + URL under, QR between logos, NRECA centered, David right + email centered under</div>
+<div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>V7 CHANGES: Tile renames + content (Crew Productivity, Rate Case Automation, Regulatory Compliance) / ROI strip now RED with new copy "ROI for AI AUTOMATION in UNDER 90 DAYS" / NRECA badge now BLACK (centered) / SCAN label under QR / "Please contact:" right-justified above David / White text tightened to yellow rule / Tile names locked to one vertical plane</div>
 </div>
-<div class="ad-mockup m4 m4-v5">
+<div class="ad-mockup m4 m4-v5 m4-v7">
 <!-- David's V6 edit: red headline at TOP, V1 format -->
 <div class="m4-bar-v5">FIVE AI AUTOMATION MODELS &middot; BUILT SPECIFIC TO CO-OP UTILITIES</div>
 <div class="m4-tiles">
 <div class="m4-tile t1">
 <div class="name">Outage IQ</div>
-<div class="desc">Predictive RCA.<br>SCADA-aware.</div>
+<div class="desc">SCADA-Aware<br>Root Cause Analysis</div>
 <div class="roi">$180K per outage.<br>7-min RCA.</div>
 </div>
 <div class="m4-tile t2">
-<div class="name">Crew Capture</div>
-<div class="desc">Voice-dictated reports.<br>OSHA-NESC auto-drafted.</div>
+<div class="name">Crew Productivity</div>
+<div class="desc">Automated work plans<br>Capture tribal knowledge<br>Cover 15% more line</div>
 <div class="roi">38% faster journeyman ramp.<br>Tribal knowledge kept.</div>
 </div>
 <div class="m4-tile t3">
@@ -1182,31 +1260,35 @@ TRUSTED<br>
 <div class="roi">60% lower CSR wait.<br>Member NPS +12 pts.</div>
 </div>
 <div class="m4-tile t4">
-<div class="name">Rate Case IQ</div>
-<div class="desc">Filing prep + precedents.<br>Pairs w/ Compliance.</div>
+<div class="name name-2line">Rate Case<br>Automation</div>
+<div class="desc">PUC/FERC filings<br>80% time reduction</div>
 <div class="roi">3 weeks to 4 days.<br>Zero NERC violations.</div>
 </div>
 <div class="m4-tile t5">
-<div class="name">Compliance Companion</div>
+<div class="name">Regulatory Compliance</div>
 <div class="desc">NERC + NESC + OSHA tracker.<br>Audit-ready every day.</div>
 <div class="roi">$50K/yr penalty avoided.<br>Per pilot.</div>
 </div>
 </div>
-<!-- V5 edit: ROI strip - "AUTOMATION ROI IN UNDER 90 DAYS" white, +1 font -->
-<div class="m4-roi-strip-v5">AUTOMATION ROI IN UNDER 90 DAYS</div>
-<!-- David's V6 edit: QR inline with URL inside Colaberry column; email right-justified + bold -->
-<div class="m4-footer-v5 m4-footer-v6">
+<!-- V7 edit: ROI strip RED bg + new copy -->
+<div class="m4-roi-strip-v5 m4-roi-strip-v7">ROI for AI AUTOMATION in UNDER 90 DAYS</div>
+<!-- David's V7 edit: SCAN under QR, NRECA black centered, Please contact: above David -->
+<div class="m4-footer-v5 m4-footer-v6 m4-footer-v7">
 <div class="col col-colaberry">
 <img src="img/ad-mockups-2026-06-02/logo-colaberry.png" class="logo" alt="Colaberry">
 <div class="url-with-qr">
 <span class="url">enterprise.colaberry.ai/utility-ai</span>
+<div class="qr-stack">
 <img src="img/ad-mockups-2026-06-02/qr-utility-ai.png" class="inline-qr" alt="QR">
+<div class="scan-label">SCAN</div>
+</div>
 </div>
 </div>
 <div class="col col-nreca">
-<div class="nreca-badge">NRECA<span>SUPPORTING MEMBER</span></div>
+<div class="nreca-badge nreca-v7">NRECA<span>SUPPORTING MEMBER</span></div>
 </div>
 <div class="col col-david">
+<div class="please-contact">Please contact:</div>
 <div class="david-name">David Lahme &middot; 603-828-6265</div>
 <div class="david-email">dlahme@colaberry.com</div>
 </div>

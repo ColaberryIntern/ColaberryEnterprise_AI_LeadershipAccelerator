@@ -39,8 +39,16 @@ const LOG_PATH = path.join(REPO, 'docs/coop-ad-trigger-log.md');
 // is caught regardless of which Gmail thread it lands in. Original
 // THREAD_ID kept as the search seed.
 const SEED_THREAD_ID = '19e89a52879d4a32';
-const SUBJECT_HINTS = ['RE Magazine', 'Open for Advertising', 'Mockup'];
-const SEARCH_QUERY = `from:dlahme@colaberry.com newer_than:14d (subject:"RE Magazine" OR subject:"Open for Advertising" OR subject:"Mockup")`;
+// Phase 1.4f fix (2026-06-03): David's "lastest edits" reply landed with no
+// hint-matching subject and got missed by the search filter. Broaden:
+//   - search query: drop subject filter, look at ALL recent David emails
+//   - per-message filter: accept if subject hits a hint OR Gmail threadId
+//     matches the seed thread (catches free-form replies in the ad chain)
+const SUBJECT_HINTS = [
+  'RE Magazine', 'Open for Advertising', 'Mockup',
+  'edits', 'edit', 'lastest', 'version', 'ad', 'mock', 'caption',
+];
+const SEARCH_QUERY = `from:dlahme@colaberry.com newer_than:14d`;
 const DAVID = 'dlahme@colaberry.com';
 const BC_TODO = 9955562788; // RE Magazine ad ticket on David Lahme list
 
@@ -141,7 +149,9 @@ async function findLatestDavidReply(token, lastProcessed) {
     const from = (headers.find((x) => x.name.toLowerCase() === 'from')?.value || '').toLowerCase();
     const subject = headers.find((x) => x.name.toLowerCase() === 'subject')?.value || '';
     if (!from.includes(DAVID)) continue;
-    if (!SUBJECT_HINTS.some((hint) => subject.toLowerCase().includes(hint.toLowerCase()))) continue;
+    const subjectHits = SUBJECT_HINTS.some((hint) => subject.toLowerCase().includes(hint.toLowerCase()));
+    const inSeedThread = m.threadId === SEED_THREAD_ID;
+    if (!subjectHits && !inSeedThread) continue;
     messages.push(m);
   }
   if (messages.length === 0) return null;
