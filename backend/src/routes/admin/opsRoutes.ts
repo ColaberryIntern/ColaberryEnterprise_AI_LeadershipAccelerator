@@ -28,6 +28,7 @@ import {
   fetchDecisionsForTodo,
   getTodayDecisionStats,
 } from '../../services/ops/approvalService';
+import { rollupToday } from '../../services/ops/metricsDailyService';
 
 // Ali's Basecamp user id. ali@colaberry.com / Managing Director / id 17454835.
 // Verified via the people.json lookup — owns 293 active todos. (45321751
@@ -135,6 +136,19 @@ router.get(
         date: today,
         metrics: row || null,
       });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+router.post(
+  '/api/admin/ops/metrics/rollup',
+  requireAdmin,
+  async (_req: Request, res: Response) => {
+    try {
+      const result = await rollupToday();
+      res.json({ ok: true, result });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -333,6 +347,133 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
       assignee_bc_id: ALI_BC_USER_ID,
       project_filter: projectId,
       prompt_threshold_urgency: PROMPT_THRESHOLD_URGENCY,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/ops/run-my-day?limit=5
+ *
+ * Returns Ali's top N highest-urgency todos that he has NOT already
+ * decided today. Each task includes its full workspace bundle so the
+ * frontend can render the Run My Day walk without per-task fetches.
+ *
+ * Scope: same as /my-queue (active + CB-managed + assigned to Ali) +
+ * exclude todos already in ops_approval_queue with decided_at today
+ * by the current admin.
+ */
+router.get('/api/admin/ops/run-my-day', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 5, 1), 20);
+    const decidedBy = req.admin?.email || '';
+
+    const rows = await sequelize.query<{
+      bc_id: string;
+      project_id: string;
+      project_name: string;
+      todolist_id: string | null;
+      todolist_name: string | null;
+      title: string;
+      description: string | null;
+      bc_app_url: string | null;
+      due_on: string | null;
+      bc_updated_at: string;
+      urgency_score: number | null;
+      category: string;
+    }>(
+      `SELECT t.bc_id, t.project_id, p.name AS project_name,
+              t.todolist_id, t.todolist_name, t.title, t.description,
+              t.bc_app_url, t.due_on, t.bc_updated_at,
+              t.urgency_score, t.category
+         FROM ops_bc_todos t
+         JOIN ops_bc_projects p ON p.bc_id = t.project_id
+        WHERE t.status = 'active'
+          AND p.is_cb_managed = TRUE
+          AND t.assignee_ids @> :ali_jsonb
+          AND t.urgency_score IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM ops_approval_queue q
+             WHERE q.todo_bc_id = t.bc_id
+               AND q.decided_by = :decided_by
+               AND q.decided_at >= date_trunc('day', NOW())
+          )
+        ORDER BY t.urgency_score DESC NULLS LAST,
+                 t.due_on ASC NULLS LAST,
+                 t.bc_updated_at DESC
+        LIMIT :limit`,
+      {
+        type: QueryTypes.SELECT,
+        replacements: {
+          ali_jsonb: JSON.stringify([ALI_BC_USER_ID]),
+          decided_by: decidedBy,
+          limit,
+        },
+      },
+    );
+
+    // Build workspace bundles in parallel (BC comments are cheap on this small N)
+    const TIMEOUT_MS = 5000;
+    const timeoutPromise = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), TIMEOUT_MS)),
+      ]);
+
+    const bundles = await Promise.all(
+      rows.map(async (t) => {
+        const todoForPrompt = {
+          bc_id: t.bc_id,
+          title: t.title,
+          description: t.description,
+          bc_app_url: t.bc_app_url,
+          project_id: t.project_id,
+          project_name: t.project_name,
+          todolist_name: t.todolist_name,
+          due_on: t.due_on,
+          bc_updated_at: t.bc_updated_at,
+          urgency_score: t.urgency_score,
+          category: t.category as any,
+        };
+        const suggestion = buildSuggestion(todoForPrompt);
+        const prompt = generatePrompt(todoForPrompt);
+        const commentsResult = await timeoutPromise(
+          fetchTodoComments(t.bc_id).then((r) => ({ ok: true, ...r })).catch((err) => ({
+            ok: false,
+            comments: [] as any[],
+            error: err.message,
+          })),
+          { ok: false, comments: [] as any[], error: 'BC comments fetch timed out (5s)' },
+        );
+        return {
+          todo: {
+            bc_id: t.bc_id,
+            title: t.title,
+            description: t.description,
+            bc_app_url: t.bc_app_url,
+            project_id: t.project_id,
+            project_name: t.project_name,
+            todolist_id: t.todolist_id,
+            todolist_name: t.todolist_name,
+            due_on: t.due_on,
+            bc_updated_at: t.bc_updated_at,
+            urgency_score: t.urgency_score,
+            category: t.category,
+          },
+          suggestion,
+          prompt,
+          comments: (commentsResult as any).comments,
+          comments_error: (commentsResult as any).ok ? null : (commentsResult as any).error || null,
+          decisions: [] as any[],
+        };
+      }),
+    );
+
+    res.json({
+      tasks: bundles,
+      total: bundles.length,
+      decided_by: decidedBy,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

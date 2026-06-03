@@ -434,6 +434,18 @@ async function start(): Promise<void> {
     );
   });
 
+  // AI Ops Command Center metrics_daily rollup — runs on the 5-minute
+  // cadence so the Today's Pulse tile stays fresh during the day. The
+  // upsert is idempotent + cheap (one row per date).
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const { rollupToday } = await import('./services/ops/metricsDailyService');
+      await rollupToday();
+    } catch (err: any) {
+      console.warn('[OpsMetricsDaily] scheduled rollup failed:', err?.message);
+    }
+  });
+
   // AI Ops Command Center BC mirror — pulls all projects → todolists → todos
   // every 2 min so the Command Center reads from a fresh local mirror.
   // After each sync, runs the Priority Engine v0 over the mirror so the

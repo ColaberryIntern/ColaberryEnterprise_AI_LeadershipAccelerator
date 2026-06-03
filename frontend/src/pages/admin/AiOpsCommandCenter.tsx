@@ -163,6 +163,23 @@ interface TodayStats {
   by_decision: Record<string, number>;
 }
 
+interface RunMyDayPayload {
+  tasks: WorkspacePayload[];
+  total: number;
+  decided_by: string;
+}
+
+interface MetricsTodayPayload {
+  date: string;
+  metrics: {
+    date: string;
+    approvals_completed: number;
+    approvals_open_at_end: number;
+    approvals_avg_seconds: number | null;
+    hours_saved_estimated: string | number;
+  } | null;
+}
+
 const palette = {
   bg: '#0b1220',
   panel: '#111b2e',
@@ -233,21 +250,28 @@ const AiOpsCommandCenter: React.FC = () => {
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
   const [decisionInFlight, setDecisionInFlight] = useState<Set<string>>(new Set());
   const [recentDecidedIds, setRecentDecidedIds] = useState<Record<string, DecisionKind>>({});
+  const [runMyDayOpen, setRunMyDayOpen] = useState(false);
+  const [runMyDayLoading, setRunMyDayLoading] = useState(false);
+  const [runMyDayTasks, setRunMyDayTasks] = useState<WorkspacePayload[]>([]);
+  const [runMyDayError, setRunMyDayError] = useState<string | null>(null);
+  const [metricsToday, setMetricsToday] = useState<MetricsTodayPayload['metrics']>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [h, p, q, t] = await Promise.all([
+      const [h, p, q, t, m] = await Promise.all([
         api.get<HealthPayload>('/api/admin/ops/health'),
         api.get<{ projects: ProjectChip[] }>('/api/admin/ops/projects'),
         api.get<QueuePayload>(
           `/api/admin/ops/my-queue${selectedProject ? `?project_id=${selectedProject}` : ''}`,
         ),
         api.get<TodayStats>('/api/admin/ops/decisions/today?mine=true'),
+        api.get<MetricsTodayPayload>('/api/admin/ops/metrics/today'),
       ]);
       setHealth(h.data);
       setProjects(p.data.projects);
       setQueue(q.data);
       setTodayStats(t.data);
+      setMetricsToday(m.data.metrics);
       setError(null);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'failed to load');
@@ -255,6 +279,34 @@ const AiOpsCommandCenter: React.FC = () => {
       setLoading(false);
     }
   }, [selectedProject]);
+
+  const loadRunMyDay = useCallback(async () => {
+    setRunMyDayLoading(true);
+    setRunMyDayError(null);
+    try {
+      const r = await api.get<RunMyDayPayload>('/api/admin/ops/run-my-day?limit=5', { timeout: 15_000 });
+      setRunMyDayTasks(r.data.tasks);
+      // Hydrate workspaces cache so the Approval Workspace renders without a re-fetch
+      const newWorkspaces: Record<string, WorkspacePayload> = {};
+      for (const task of r.data.tasks) {
+        newWorkspaces[task.todo.bc_id] = task;
+      }
+      setWorkspaces((prev) => ({ ...prev, ...newWorkspaces }));
+    } catch (err: any) {
+      setRunMyDayError(err?.response?.data?.error || err?.message || 'failed to load run-my-day');
+    } finally {
+      setRunMyDayLoading(false);
+    }
+  }, []);
+
+  const enterRunMyDay = async () => {
+    setRunMyDayOpen(true);
+    await loadRunMyDay();
+  };
+
+  const exitRunMyDay = () => {
+    setRunMyDayOpen(false);
+  };
 
   const loadWorkspace = useCallback(async (bcId: string) => {
     if (workspaces[bcId]) return; // already loaded
@@ -460,6 +512,25 @@ const AiOpsCommandCenter: React.FC = () => {
               decision{todayStats.total_today === 1 ? '' : 's'} today
             </div>
           )}
+          {!runMyDayOpen && (
+            <button
+              onClick={enterRunMyDay}
+              disabled={runMyDayLoading}
+              style={{
+                background: palette.ok,
+                border: 'none',
+                color: '#001225',
+                padding: '8px 14px',
+                borderRadius: 6,
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: runMyDayLoading ? 'not-allowed' : 'pointer',
+                opacity: runMyDayLoading ? 0.6 : 1,
+              }}
+            >
+              {runMyDayLoading ? 'Loading…' : 'Run My Day'}
+            </button>
+          )}
           <button
             onClick={triggerScore}
             disabled={scoring || health?.priority_in_flight}
@@ -489,6 +560,130 @@ const AiOpsCommandCenter: React.FC = () => {
           }}
         >
           {error}
+        </div>
+      )}
+
+      {/* Run My Day focused panel */}
+      {runMyDayOpen && (
+        <div
+          style={{
+            ...sectionStyle,
+            marginBottom: 18,
+            border: `1px solid ${palette.ok}`,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: palette.ok, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
+                Run My Day
+              </div>
+              <h2 style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700 }}>
+                Top {runMyDayTasks.length} unresolved — work top to bottom
+              </h2>
+              <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4 }}>
+                {runMyDayTasks.filter((t) => recentDecidedIds[t.todo.bc_id]).length} of {runMyDayTasks.length} decided this session.
+                Tasks you already decided today are excluded.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={loadRunMyDay} style={ghostBtn(runMyDayLoading)} disabled={runMyDayLoading}>
+                {runMyDayLoading ? 'Reloading…' : 'Reload top 5'}
+              </button>
+              <button onClick={exitRunMyDay} style={ghostBtn(false)}>
+                Exit Run My Day
+              </button>
+            </div>
+          </div>
+          {runMyDayError && (
+            <div style={{ color: palette.err, fontSize: 13, marginBottom: 10 }}>{runMyDayError}</div>
+          )}
+          {!runMyDayLoading && runMyDayTasks.length === 0 && (
+            <div style={{ color: palette.textDim, padding: 16, textAlign: 'center' }}>
+              No unresolved high-priority tasks right now. You're caught up.
+            </div>
+          )}
+          {runMyDayTasks.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {runMyDayTasks.map((task, idx) => {
+                const t = task.todo;
+                const sc = scoreColor(t.urgency_score);
+                const cat = CATEGORY_STYLE[t.category as Category] || CATEGORY_STYLE.unscored;
+                const recentDecision = recentDecidedIds[t.bc_id];
+                return (
+                  <div
+                    key={t.bc_id}
+                    id={`task-${t.bc_id}`}
+                    style={{
+                      background: '#0e1729',
+                      border: `1px solid ${recentDecision ? palette.ok : palette.border}`,
+                      borderRadius: 6,
+                      padding: 12,
+                      opacity: recentDecision ? 0.7 : 1,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <div
+                        style={{
+                          flexShrink: 0,
+                          width: 36,
+                          height: 36,
+                          borderRadius: 6,
+                          background: '#0b1220',
+                          border: `1px solid ${sc}`,
+                          color: sc,
+                          fontSize: 14,
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {t.urgency_score}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: palette.textDim, marginBottom: 3 }}>
+                          {idx + 1} of {runMyDayTasks.length} · {t.project_name} · {t.todolist_name || '(unfiled)'}
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>
+                          {t.bc_app_url ? (
+                            <a href={t.bc_app_url} target="_blank" rel="noopener noreferrer" style={{ color: palette.text, textDecoration: 'none' }}>
+                              {t.title}
+                            </a>
+                          ) : t.title}
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: 12, color: palette.textDim, display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ background: cat.bg, color: cat.fg, fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 3 }}>
+                            {cat.label}
+                          </span>
+                          {t.due_on && <span>due {t.due_on}</span>}
+                          <span>upd {timeAgo(t.bc_updated_at)}</span>
+                          <span>#{t.bc_id}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <ApprovalWorkspace
+                      taskId={t.bc_id}
+                      workspace={workspaces[t.bc_id]}
+                      loading={workspaceLoading.has(t.bc_id)}
+                      loadError={workspaceError[t.bc_id]}
+                      reasoning={reasoning[t.bc_id] || ''}
+                      setReasoning={(v) => setReasoning((p) => ({ ...p, [t.bc_id]: v }))}
+                      postToBc={postToBc[t.bc_id] !== false}
+                      setPostToBc={(v) => setPostToBc((p) => ({ ...p, [t.bc_id]: v }))}
+                      inFlight={decisionInFlight.has(t.bc_id)}
+                      recentDecision={recentDecision}
+                      showPrompt={showPromptIds.has(t.bc_id)}
+                      togglePrompt={() => togglePromptCopy(t.bc_id)}
+                      copyPrompt={() => workspaces[t.bc_id]?.prompt && copyPrompt(t.bc_id, workspaces[t.bc_id].prompt)}
+                      promptCopied={copiedId === t.bc_id}
+                      onDecide={(kind) => decide(t.bc_id, kind)}
+                      onRetry={() => loadWorkspace(t.bc_id)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -717,7 +912,39 @@ const AiOpsCommandCenter: React.FC = () => {
         </button>
       </div>
       {opsPanelOpen && (
-        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+          <div style={sectionStyle}>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Today's Pulse</h2>
+            <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4, marginBottom: 12 }}>
+              Rollup of <code>ops_approval_queue</code> · refreshes every 5 min.
+            </div>
+            {metricsToday ? (
+              <div style={{ display: 'grid', gap: 10 }}>
+                <Row label="Decisions completed" value={String(metricsToday.approvals_completed)} />
+                <Row
+                  label="Avg time per decision"
+                  value={
+                    metricsToday.approvals_avg_seconds != null
+                      ? `${Math.round(metricsToday.approvals_avg_seconds)}s`
+                      : '—'
+                  }
+                />
+                <Row
+                  label="Hours saved (est)"
+                  value={`${Number(metricsToday.hours_saved_estimated || 0).toFixed(1)}h`}
+                  color={palette.ok}
+                />
+                <Row label="Approvals still open" value={String(metricsToday.approvals_open_at_end)} />
+                <div style={{ color: palette.textDim, fontSize: 11, marginTop: 8 }}>
+                  Hours-saved estimate: 0.25h per decision (conservative). Tuned in Phase 2 from real durations.
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: palette.textDim, padding: 16, textAlign: 'center' }}>
+                No decisions today yet. Make one to light this up.
+              </div>
+            )}
+          </div>
           <div style={sectionStyle}>
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Triage Breakdown</h2>
             <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4, marginBottom: 12 }}>
