@@ -57,12 +57,16 @@ function inlineImage(relPath) {
     return data ? `<img${pre}src="${data}"${post}>` : m;
   });
 
-  // Add a wrapper that lets it render full-width in a browser viewport
-  // (press-ready HTML was sized for 7.25in x 4.8in print; for browser we
-  // want responsive max-width with the aspect ratio preserved)
+  // V9 FIX (David 2026-06-03 4:06 PM): the previous wrapper used
+  //   aspect-ratio: 7.25 / 4.8
+  // which forced a fixed height. When the inner .ad-mockup's intrinsic
+  // content height exceeded that computed height the bottom ~1/3 got
+  // clipped in browser. David reported this 4-5 times. Fix: drop the
+  // aspect-ratio constraint entirely. Let the inner .ad-mockup self-size
+  // via its own aspect-ratio: 1.54/1. Wrapper just centers + pads.
   html = html.replace(
     /\.press-wrapper\s*\{[^}]*\}/,
-    '.press-wrapper { width: 100%; max-width: 1100px; aspect-ratio: 7.25 / 4.8; padding: 1.7%; box-sizing: border-box; background: white; margin: 24px auto; box-shadow: 0 8px 32px rgba(15,23,42,0.12); border-radius: 8px; }'
+    '.press-wrapper { width: 100%; max-width: 1100px; padding: 18px; box-sizing: border-box; background: white; margin: 24px auto; box-shadow: 0 8px 32px rgba(15,23,42,0.12); border-radius: 8px; }'
   );
   // Also drop the @page rule and replace body bg with a light gray so it doesn't look raw
   html = html.replace(/@page\s*\{[^}]*\}/, '@page { size: 7.25in 4.8in; margin: 0; }');

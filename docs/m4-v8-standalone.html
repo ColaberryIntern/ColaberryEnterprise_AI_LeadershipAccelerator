@@ -2,7 +2,7 @@
 <style>
   @page { size: 7.25in 4.8in; margin: 0; }
   body { margin: 0; padding: 0; font-family: Inter, Arial, sans-serif; background: #f1f5f9; }
-  .press-wrapper { width: 100%; max-width: 1100px; aspect-ratio: 7.25 / 4.8; padding: 1.7%; box-sizing: border-box; background: white; margin: 24px auto; box-shadow: 0 8px 32px rgba(15,23,42,0.12); border-radius: 8px; }
+  .press-wrapper { width: 100%; max-width: 1100px; padding: 18px; box-sizing: border-box; background: white; margin: 24px auto; box-shadow: 0 8px 32px rgba(15,23,42,0.12); border-radius: 8px; }
   .ad-mockup { box-shadow: none !important; border: 1px solid #ddd !important; }
 
   :root {
@@ -813,11 +813,14 @@
   }
 
   /* ===== M4 V7 (David's 2026-06-03 "lastest edits") ===== */
-  /* T1: tile names locked to single vertical plane (40px reserves room for 2-line name on t4) */
+  /* T1: tile names locked to single vertical plane (40px reserves room for 2-line name on t4)
+     V9 (David 2026-06-03 4:06 PM): align-items center was wrong - it centered the 2-line
+     RATE CASE / AUTOMATION block, which pushed its TOP LINE up above the single-line tiles.
+     David wants the TOP LINE level across all tiles. flex-start does this. */
   .m4-v7 .m4-tile .name {
     min-height: 32px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     text-align: center;
     line-height: 1.15;
@@ -848,8 +851,11 @@
     background: var(--red);
     color: white;
   }
-  /* T5: NRECA badge flips to BLACK (not red) */
-  .m4-v7 .m4-footer-v7 .nreca-v7 {
+  /* T5: NRECA badge flips to BLACK (not red)
+     V9 fix: V5 rule .m4-v5 .m4-footer-v5 .col-nreca .nreca-badge (4 classes)
+     was beating V7's 3-class rule on specificity, leaving NRECA red since
+     V7 actually never took effect. Bumping V7 to match 4-class specificity. */
+  .m4-v7 .m4-footer-v7 .col-nreca .nreca-badge.nreca-v7 {
     background: #000;
     color: white;
     box-shadow: 0 2px 0 #1a1a1a;
@@ -888,6 +894,19 @@
     text-align: right;
     margin-bottom: 2px;
     opacity: 0.85;
+  }
+
+  /* ===== M4 V9 (David's 2026-06-03 4:06 PM email) ===== */
+  /* Center + bold "Supporting Utilities for over 15 Years" directly under NRECA badge */
+  .m4-v7 .m4-footer-v7 .col-nreca .nreca-tagline-v9 {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    color: var(--navy-deep);
+    text-align: center;
+    margin-top: 4px;
+    line-height: 1.2;
   }
 
   /* ===== M4 V8 (David's 2026-06-03 "top portion restored from Jun 2 7:56 AM") ===== */
@@ -937,10 +956,12 @@
     margin: 0 0 8px;
     line-height: 1.22;
   }
+  /* V9 (David 2026-06-03 4:06 PM): bold the sub-line; darker text for readability */
   .m4-v8 .m4-headline-block-v8 .m4-subhead {
     font-family: 'Inter', sans-serif;
     font-size: 10.5px;
-    color: #64748b;
+    color: #1f2937;
+    font-weight: 700;
     margin: 0 auto;
     line-height: 1.45;
     max-width: 720px;
