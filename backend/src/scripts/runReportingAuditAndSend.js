@@ -10,11 +10,18 @@
  * Then send Ali a consolidated AUDIT email summarizing every report's status,
  * recipients, and any errors/warnings.
  *
- * Cron: replace the individual per-report cron entries with one entry for
- *   this orchestrator. Runs Mon-Fri 8am CDT (13:00 UTC).
+ * Cron: orchestrator fires hourly during business hours (8 AM - 3 PM CT =
+ *   13 - 20 UTC) every weekday. Each hour, only the reports whose
+ *   sendHourUTC matches the current UTC hour actually fire. This staggers
+ *   the 8 daily reports one per hour so Ali's inbox does not blast at 8 AM.
+ *
+ *   Crontab line: `0 13-20 * * 1-5 ... runReportingAuditAndSend.js`
  *
  * Run: node backend/src/scripts/runReportingAuditAndSend.js
  *      Add --audit-only to skip the actual sends (audit-only smoke test).
+ *      Add --all-hours to bypass the hour filter (fire every report whose
+ *        cadence matches, regardless of sendHourUTC — useful for manual
+ *        catch-up runs after an outage).
  *      Add --skip-launch-pmo / --skip-gov / --skip-clients / --skip-anthropic
  *        to control which reports execute.
  */
@@ -29,6 +36,7 @@ const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPr
 
 const AUDIT_ONLY = process.argv.includes('--audit-only');
 const FORCE_ALL = process.argv.includes('--force-all'); // Ignore cadence; fire every report once
+const ALL_HOURS = process.argv.includes('--all-hours') || FORCE_ALL; // Ignore sendHourUTC filter
 const REPO = path.resolve(__dirname, '../../..');
 
 // ---------------- Report registry (LEGACY inline copy - now driven by lib/reportingRegistry.js) ----------------
@@ -218,15 +226,29 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
 
   // Filter reports by:
   //   1. cadence (daily fires every weekday cron; weekly fires only on its dayOfWeek)
-  //   2. skip flags (manual override)
-  //   3. --force-all (ignore cadence)
+  //   2. sendHourUTC (only the reports for the CURRENT UTC hour fire — the
+  //      stagger mechanism). Bypassed by --all-hours / --force-all.
+  //   3. skip flags (manual override)
+  //   4. --force-all (ignore cadence too)
+  const currentHourUTC = now.getUTCHours();
   const active = REGISTRY
     .filter((r) => FORCE_ALL || shouldFireToday(r, now))
+    .filter((r) => ALL_HOURS || r.sendHourUTC === currentHourUTC || r.sendHourUTC === undefined)
     .filter((r) => !process.argv.includes(r.skipFlag));
   const skippedForCadence = REGISTRY.filter((r) => !FORCE_ALL && !shouldFireToday(r, now));
-  console.log(`[audit] active: ${active.map((r) => r.name).join(', ')}`);
+  const skippedForHour = REGISTRY.filter((r) => !ALL_HOURS && shouldFireToday(r, now) && r.sendHourUTC !== undefined && r.sendHourUTC !== currentHourUTC);
+  console.log(`[audit] current UTC hour=${currentHourUTC} (CT ~ ${(currentHourUTC - 5 + 24) % 24}:00 during CDT)`);
+  console.log(`[audit] active: ${active.map((r) => r.name).join(', ') || '(none — no reports scheduled for this hour)'}`);
   if (skippedForCadence.length) {
     console.log(`[audit] skipped (off-cadence today): ${skippedForCadence.map((r) => `${r.name} (${typeof r.cadence === 'object' ? `day=${r.cadence.dayOfWeek}` : r.cadence})`).join(', ')}`);
+  }
+  if (skippedForHour.length) {
+    console.log(`[audit] skipped (off-hour, sendHourUTC mismatch): ${skippedForHour.map((r) => `${r.name} (sendHourUTC=${r.sendHourUTC})`).join(', ')}`);
+  }
+  // Short-circuit if no reports for this hour — still send a tiny "no reports this hour" audit so failures are observable
+  if (active.length === 0) {
+    console.log('[audit] no reports active for this hour, exiting');
+    process.exit(0);
   }
 
   // 1. Preflight all

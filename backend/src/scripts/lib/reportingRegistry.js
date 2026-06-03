@@ -2,10 +2,18 @@
 //
 // Each entry declares: name, scriptPath, args, projectId, recipients,
 // cadence ("daily" or { day: 1-7 (Mon=1..Sun=7) }), CB runner state file
-// (if applicable), skipFlag for manual exclusion.
+// (if applicable), skipFlag for manual exclusion, sendHourUTC (which UTC
+// hour this report fires in — used by the orchestrator's hourly stagger).
 //
 // The audit orchestrator (runReportingAuditAndSend.js) iterates this list,
-// runs preflight + send per report whose cadence fires today.
+// runs preflight + send per report whose cadence fires today AND whose
+// sendHourUTC matches the current hour (unless --all-hours override).
+//
+// Stagger map (2026-06-02): the 8 daily reports used to all blast at
+// 13 UTC = 8 AM CT every weekday. Ali's inbox was overwhelmed. Spread
+// to one per hour, 8 AM CT (13 UTC) through 3 PM CT (20 UTC). VPS root
+// crontab updated to `0 13-20 * * 1-5 runReportingAuditAndSend.js` so
+// the orchestrator fires hourly and self-filters by sendHourUTC.
 
 const STANDARD_RECIPIENTS = { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'] };
 
@@ -21,6 +29,7 @@ const REPORTS = [
     cbRunnerState: 'tmp/launch-pmo-ai-runner-state.json',
     skipFlag: '--skip-launch-pmo',
     cadence: 'daily',
+    sendHourUTC: 15,  // 10 AM CT
     description: 'AI Systems Architect Accelerator launch project. YOUR TURN banner, per-area cards, AI completion log, blockers, escalations.',
   },
   {
@@ -33,6 +42,7 @@ const REPORTS = [
     cbRunnerState: null,
     skipFlag: '--skip-gov',
     cadence: 'daily',
+    sendHourUTC: 14,  // 9 AM CT
     description: 'Per-bid feasibility scorecard, NEXT HUMAN STEP per bid, recently-completed.',
   },
   {
@@ -45,6 +55,7 @@ const REPORTS = [
     cbRunnerState: 'tmp/cb-ai-runner-state-46697389.json',
     skipFlag: '--skip-clients',
     cadence: 'daily',
+    sendHourUTC: 18,  // 1 PM CT
     description: 'Client project. Per-list cards with DRAFTED BY CB pattern.',
   },
   {
@@ -57,6 +68,7 @@ const REPORTS = [
     cbRunnerState: 'tmp/cb-ai-runner-state-47126345.json',
     skipFlag: '--skip-clients',
     cadence: 'daily',
+    sendHourUTC: 19,  // 2 PM CT
     description: 'Client project. Per-list cards with DRAFTED BY CB pattern. Karun on CC (added 2026-06-01).',
   },
   {
@@ -69,6 +81,7 @@ const REPORTS = [
     cbRunnerState: 'tmp/cb-ai-runner-state-46699826.json',
     skipFlag: '--skip-clients',
     cadence: 'daily',
+    sendHourUTC: 20,  // 3 PM CT
     description: 'Client project. Per-list cards with DRAFTED BY CB pattern.',
   },
   {
@@ -81,6 +94,7 @@ const REPORTS = [
     cbRunnerState: null,
     skipFlag: '--skip-anthropic',
     cadence: 'daily',
+    sendHourUTC: 16,  // 11 AM CT
     description: 'Daily countdown + per-employee progress on the 4 Anthropic courses.',
   },
   // ---- Personal decisions report ----
@@ -94,6 +108,7 @@ const REPORTS = [
     cbRunnerState: null,
     skipFlag: '--skip-ali-personal',
     cadence: 'daily',
+    sendHourUTC: 13,  // 8 AM CT — first in the day, highest decisional priority
     description: 'Daily decisions-owed report for Ali Personal. Gov Contracts format: per-topic-group cards with NEXT HUMAN STEP, full task sequence, tier pills, recently-completed. Replaces the Mon/Wed/Fri sendAliDecisionsOwedDigest.js cadence.',
   },
   // ---- Intern reports ----
@@ -107,6 +122,7 @@ const REPORTS = [
     cbRunnerState: null,
     skipFlag: '--skip-intern-nudges',
     cadence: 'daily',
+    sendHourUTC: 17,  // 12 PM CT (lunch-break friendly)
     description: 'Daily intern nudge digest. BLACK = day 10+ exit cliff, RED 7-9d, ORANGE 4-6d, YELLOW 1-3d, GREEN today.',
   },
   {
@@ -119,6 +135,7 @@ const REPORTS = [
     cbRunnerState: null,
     skipFlag: '--skip-intern-weekly',
     cadence: { dayOfWeek: 6 }, // Saturday (matches existing cadence from "Week of May 23 - May 30" subject)
+    sendHourUTC: 13,  // 8 AM CT on Saturday (Saturday already has nothing else firing)
     description: 'Weekly intern activity report. STRONG (3+ updates), LIGHT (1-2), INACTIVE (0) buckets over last 10 days.',
   },
   // ---- Cohort training report ----
@@ -132,6 +149,7 @@ const REPORTS = [
     cbRunnerState: null,
     skipFlag: '--skip-cohort',
     cadence: { dayOfWeek: 3 }, // Wednesday (matches Taiwo's existing cadence)
+    sendHourUTC: 13,  // 8 AM CT on Wednesday — coexists with Ali Personal Decisions (different topics, fine in same hour)
     description: 'Active class cohorts performance + IPBC signups for completed cohorts. CCPP-driven, interactive HTML.',
   },
 ];
