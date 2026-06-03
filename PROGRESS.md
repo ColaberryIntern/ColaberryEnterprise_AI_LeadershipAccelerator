@@ -12,6 +12,15 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Ram Massachusetts OP digest: live OP API pull + sendWithBcAttach (2026-06-03)
+- Date: 2026-06-03
+- Session: CC-20260603-9m4q
+- What changed:
+  - `backend/src/scripts/sendRamMassachusettsOpDigest.js` (new): one-off send script that authenticates to Opportunity Pulse via `POST /api/v1/auth/login` (ali@colaberry.com admin), pulls live results from `GET /api/v1/opportunities?q=Massachusetts&limit=50`, groups by channel (Talent/Government/Research), renders a digest matching the existing `dailyGovContractsAnalysis.js` visual language (Bloomberg-blue header gradient, dark "For Ram" hero band, refine-keyword chip layout, per-channel breakdown cards with color-coded left borders, full cross-channel table with channel badges, Opportunity Pulse detail links, branded signature). Plain-text fallback included. Em-dashes stripped via sendWithBcAttach's auto-strip. Mandrill tracking off (Ram is internal). Attached to BC ticket 9959008215 (`[Tracking] Ram OP digests`) per the Ali Personal attach-to-ticket doctrine.
+  - BC ticket 9959008215 created in Ali Personal -> Sales/Outreach list 9939449105 as the home for future Ram OP digests.
+- Why: Ali asked to email Ram a Massachusetts-filtered OP digest matching the style/structure of the existing OP digest series Ram is replying on. Live API pull (not cached snapshot) so the data is current.
+- Verification: dry run printed 17 results; preview HTML rendered to `tmp/ma-opps/preview.html`; preflight passed (no em-dashes, no double signature). Real send returned Mandrill ID `<ed1b930c-e4dc-dbfd-bd4f-76dd55cc745e@colaberry.com>`; BC comment posted at https://app.basecamp.com/3945211/buckets/7463955/todos/9959008215#__recording_9959021547. Recipients: To ram@colaberry.com, Cc ali@colaberry.com + alimuwwakkil@gmail.com.
+
 ### CB systematic coverage: /projects.json fix + cb-coverage-check.js tool (2026-06-01)
 - Date: 2026-06-01
 - Session: CC-20260601-k7x2
