@@ -9,6 +9,24 @@ interface HardRuleResult {
   rule_id?: string;
   reason?: string;
   classified_by?: string;
+  forwarded_from_hotmail?: boolean;
+}
+
+/**
+ * Detects mail that arrived via the Hotmail->Gmail forward rule Ali set up
+ * 2026-06-03. The Microsoft forwarder preserves the original From; the only
+ * tell-tales are recipient-chain headers showing ali_muwwakkil@hotmail.com.
+ * We check Delivered-To, X-Original-To, and the To/Cc address list.
+ */
+function isForwardedFromHotmail(email: NormalizedEmail): boolean {
+  const hotmailAddr = 'ali_muwwakkil@hotmail.com';
+  const headers = email.headers || {};
+  const headerEntries = Object.entries(headers).map(([k, v]) => `${k.toLowerCase()}: ${String(v).toLowerCase()}`).join('\n');
+  if (headerEntries.includes(hotmailAddr)) return true;
+  const toAddrs = (email.to_addresses || []).map((a: any) => (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase());
+  const ccAddrs = (email.cc_addresses || []).map((a: any) => (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase());
+  if (toAddrs.includes(hotmailAddr) || ccAddrs.includes(hotmailAddr)) return true;
+  return false;
 }
 
 interface NormalizedEmail {
@@ -31,6 +49,8 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   const subjectLower = (email.subject || '').toLowerCase();
   const bodyLower = (email.body_text || '').toLowerCase();
   const headers = email.headers || {};
+  const forwardedFromHotmail = isForwardedFromHotmail(email);
+  const fwdSuffix = forwardedFromHotmail ? ' (forwarded from Hotmail)' : '';
 
   // --- 0a. Cory + Inbox COS system emails → INBOX (keep visible) ---
   // Cory's daily/weekly briefings and the Inbox COS decision digests are sent
@@ -52,14 +72,14 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   if (isColaberrySystemSender && isCorySubject) {
     const reason = 'Cory briefing / Inbox COS digest - keep in INBOX';
     console.log(`${LOG_PREFIX} Cory/InboxCOS report: ${reason}`);
-    return { matched: true, state: 'INBOX', reason, classified_by: 'hard_rule' };
+    return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 0b. System Alert Emails → AUTOMATION ---
   if (fromLower.includes('ali@colaberry.com') && /^\[alert\]/i.test(email.subject || '')) {
     const reason = 'System-generated alert email (self-sent [Alert])';
     console.log(`${LOG_PREFIX} System alert: ${reason}`);
-    return { matched: true, state: 'AUTOMATION', reason, classified_by: 'hard_rule' };
+    return { matched: true, state: 'AUTOMATION', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 1. VIP Check ---
@@ -74,7 +94,7 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     if (vip) {
       const reason = `VIP sender: ${vip.name || vip.email_address}`;
       console.log(`${LOG_PREFIX} VIP match: ${reason}`);
-      return { matched: true, state: 'INBOX', reason, classified_by: 'hard_rule' };
+      return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
     }
   } catch (error: any) {
     console.error(`${LOG_PREFIX} VIP lookup failed: ${error.message}`);
@@ -93,7 +113,7 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   if (!isAutoNotificationSender && namePattern.test(email.subject)) {
     const reason = 'Directly addressed to Ali Muwwakkil';
     console.log(`${LOG_PREFIX} Name match: ${reason}`);
-    return { matched: true, state: 'INBOX', reason, classified_by: 'hard_rule' };
+    return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 3. Keyword Check ---
@@ -107,8 +127,50 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     if (wordBoundaryRegex.test(email.subject) || wordBoundaryRegex.test(email.body_text || '')) {
       const reason = `Contains priority keyword: ${keyword}`;
       console.log(`${LOG_PREFIX} Keyword match: ${reason}`);
-      return { matched: true, state: 'INBOX', reason, classified_by: 'hard_rule' };
+      return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
     }
+  }
+
+  // --- 3.5. P3 Noise Sender Hard List (Inbox Manager v1 Phase 1) ---
+  // Hard-coded list per the section 3 plan on BC todo 9942229201.
+  // Deterministically archives the senders Ali confirmed as pure noise.
+  // Lives BEFORE the generic List-Unsubscribe rule so the audit log
+  // shows "P3 noise sender: <domain>" instead of the generic header
+  // reason — makes weekly stats + mistake auditing cleaner.
+  //
+  // The Skool sub-rule: noreply@skool.com is normally P3, but escalates
+  // to INBOX when a P1 sender's name appears in the body (Ali approved
+  // 2026-06-03). Implemented inline below.
+  const P3_NOISE_SENDERS = [
+    'deals.priceline.com', 'rs.email.nextdoor.com', 'is.email.nextdoor.com',
+    'marketing.lyftmail.com', 'vimeo.com',
+    'noreply.bizjournals.com', 'news.bizjournals.com',
+    'pipdecks.com', 'ifttt.com',
+    'theinformation.com', 'substack.com',
+    'notifications-economictimes.com', 'economictimesnews.com',
+    'redditmail.com', 'mail.instagram.com',
+    'skool.com',
+    'match.indeed.com', 'indeed.com',
+    'quora.com',
+  ];
+  const P1_NAMES_FOR_SKOOL_ESCALATION = [
+    'ram', 'karun', 'luda', 'lakeesha', 'sai tejesh', 'jackie',
+    'vivek', 'narendra', 'cora', 'sohail', 'aleem', 'swati', 'kes',
+  ];
+  const matchedP3Domain = P3_NOISE_SENDERS.find((d) => fromLower.endsWith('@' + d) || fromLower.endsWith('.' + d));
+  if (matchedP3Domain) {
+    // Skool escalation check: if a P1 sender's name is in the body, keep INBOX
+    if (matchedP3Domain === 'skool.com') {
+      const bodyMentionsP1 = P1_NAMES_FOR_SKOOL_ESCALATION.some((n) => bodyLower.includes(n));
+      if (bodyMentionsP1) {
+        const reason = `Skool email mentions a P1 sender in the body — keeping in INBOX`;
+        console.log(`${LOG_PREFIX} Skool escalation: ${reason}`);
+        return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+      }
+    }
+    const reason = `P3 noise sender: ${matchedP3Domain}`;
+    console.log(`${LOG_PREFIX} P3 archive: ${reason}`);
+    return { matched: true, state: 'AUTOMATION', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 4. Automation Header Check ---
@@ -119,14 +181,14 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   if (hasListUnsubscribe) {
     const reason = 'Has List-Unsubscribe header';
     console.log(`${LOG_PREFIX} Automation header: ${reason}`);
-    return { matched: true, state: 'AUTOMATION', reason, classified_by: 'hard_rule' };
+    return { matched: true, state: 'AUTOMATION', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 5. Noreply Check ---
   if (/no[-_.]?reply|do[-_.]?not[-_.]?reply/i.test(fromLower)) {
     const reason = 'Sent from noreply address';
     console.log(`${LOG_PREFIX} Noreply match: ${reason}`);
-    return { matched: true, state: 'AUTOMATION', reason, classified_by: 'hard_rule' };
+    return { matched: true, state: 'AUTOMATION', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 6. User-Defined Rules ---
@@ -151,8 +213,9 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
           matched: true,
           state: rule.target_state as 'INBOX' | 'AUTOMATION',
           rule_id: rule.id,
-          reason,
+          reason: reason + fwdSuffix,
           classified_by: 'hard_rule',
+          forwarded_from_hotmail: forwardedFromHotmail,
         };
       }
     }
@@ -162,8 +225,8 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   }
 
   // --- 7. No Match ---
-  console.log(`${LOG_PREFIX} No hard rule matched for email ${email.id}`);
-  return { matched: false };
+  console.log(`${LOG_PREFIX} No hard rule matched for email ${email.id}${fwdSuffix}`);
+  return { matched: false, forwarded_from_hotmail: forwardedFromHotmail };
 }
 
 /**
