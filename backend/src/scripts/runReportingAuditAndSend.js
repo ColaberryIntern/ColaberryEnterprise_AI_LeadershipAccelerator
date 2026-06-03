@@ -231,9 +231,17 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   //   3. skip flags (manual override)
   //   4. --force-all (ignore cadence too)
   const currentHourUTC = now.getUTCHours();
+  // Warn loudly on any report missing sendHourUTC (we treat undefined as
+  // "do not fire" — fail-safe against the original 8-reports-at-8-AM bug.
+  // A developer who forgets sendHourUTC will see this log every hour
+  // until they fix it, which is the point.)
+  const missingHour = REGISTRY.filter((r) => r.sendHourUTC === undefined && shouldFireToday(r, now));
+  if (missingHour.length && !ALL_HOURS) {
+    console.warn(`[audit] WARN: ${missingHour.length} report(s) missing sendHourUTC and will NOT fire: ${missingHour.map((r) => r.name).join(', ')}. Add sendHourUTC to reportingRegistry.js.`);
+  }
   const active = REGISTRY
     .filter((r) => FORCE_ALL || shouldFireToday(r, now))
-    .filter((r) => ALL_HOURS || r.sendHourUTC === currentHourUTC || r.sendHourUTC === undefined)
+    .filter((r) => ALL_HOURS || r.sendHourUTC === currentHourUTC)
     .filter((r) => !process.argv.includes(r.skipFlag));
   const skippedForCadence = REGISTRY.filter((r) => !FORCE_ALL && !shouldFireToday(r, now));
   const skippedForHour = REGISTRY.filter((r) => !ALL_HOURS && shouldFireToday(r, now) && r.sendHourUTC !== undefined && r.sendHourUTC !== currentHourUTC);
