@@ -22,6 +22,12 @@ import OpsApprovalQueueItem from '../../models/OpsApprovalQueueItem';
 import { runBcSync, BcSyncResult } from '../../services/ops/bcSyncService';
 import { runPriorityEngine, PriorityEngineRunResult } from '../../services/ops/priorityEngineService';
 import { generatePrompt } from '../../services/ops/runMyDayPromptService';
+import {
+  recordDecision,
+  fetchTodoComments,
+  fetchDecisionsForTodo,
+  getTodayDecisionStats,
+} from '../../services/ops/approvalService';
 
 // Ali's Basecamp user id. ali@colaberry.com / Managing Director / id 17454835.
 // Verified via the people.json lookup — owns 293 active todos. (45321751
@@ -371,6 +377,113 @@ router.post(
         return;
       }
       res.json({ ok: true, bc_id: req.params.bc_id, is_cb_managed });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+/**
+ * GET /api/admin/ops/todos/:bc_id/comments
+ *
+ * Read-through proxy: fetches the last 15 BC comments on a todo so the
+ * Approval Workspace can show context to the operator. Not stored.
+ */
+router.get(
+  '/api/admin/ops/todos/:bc_id/comments',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const result = await fetchTodoComments(String(req.params.bc_id));
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+/**
+ * GET /api/admin/ops/todos/:bc_id/decisions
+ *
+ * Returns the historical decision trail for a todo.
+ */
+router.get(
+  '/api/admin/ops/todos/:bc_id/decisions',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const decisions = await fetchDecisionsForTodo(String(req.params.bc_id));
+      res.json({ decisions });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+/**
+ * POST /api/admin/ops/decisions
+ * Body: { todo_bc_id, decision, reasoning?, post_to_bc? }
+ *
+ * Records a decision in ops_approval_queue + optionally posts a
+ * structured BC comment back on the originating todo.
+ */
+router.post(
+  '/api/admin/ops/decisions',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const { todo_bc_id, decision, reasoning, post_to_bc } = req.body || {};
+      if (!todo_bc_id || typeof todo_bc_id !== 'string') {
+        res.status(400).json({ error: 'todo_bc_id required' });
+        return;
+      }
+      const allowed = [
+        'approve',
+        'approve_and_continue',
+        'approve_and_convert_to_skill',
+        'revise',
+        'reject',
+        'escalate',
+      ];
+      if (!allowed.includes(decision)) {
+        res.status(400).json({ error: `decision must be one of ${allowed.join(', ')}` });
+        return;
+      }
+      const decidedBy = req.admin?.email || 'unknown';
+      const result = await recordDecision({
+        todo_bc_id,
+        decision,
+        reasoning: reasoning || null,
+        decided_by: decidedBy,
+        post_to_bc: post_to_bc !== false,
+      });
+      res.json({
+        ok: true,
+        queue_item_id: result.queue_item.id,
+        bc_comment_url: result.bc_comment_url,
+        bc_post_error: result.bc_post_error,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+/**
+ * GET /api/admin/ops/decisions/today
+ *
+ * Returns today's decision counts (overall + by decision). Drives the
+ * "Decisions today" header tile.
+ */
+router.get(
+  '/api/admin/ops/decisions/today',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const mineOnly = req.query.mine === 'true';
+      const decidedBy = mineOnly ? req.admin?.email : undefined;
+      const stats = await getTodayDecisionStats(decidedBy);
+      res.json(stats);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

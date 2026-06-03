@@ -97,6 +97,35 @@ interface QueuePayload {
   prompt_threshold_urgency: number;
 }
 
+interface BcComment {
+  id: number;
+  content: string;
+  creator: string;
+  created_at: string;
+  app_url: string;
+}
+
+type DecisionKind =
+  | 'approve'
+  | 'approve_and_continue'
+  | 'approve_and_convert_to_skill'
+  | 'revise'
+  | 'reject'
+  | 'escalate';
+
+interface DecisionRow {
+  id: string;
+  decision: DecisionKind;
+  decision_reasoning: string | null;
+  decided_at: string;
+  decided_by: string | null;
+}
+
+interface TodayStats {
+  total_today: number;
+  by_decision: Record<string, number>;
+}
+
 const palette = {
   bg: '#0b1220',
   panel: '#111b2e',
@@ -158,19 +187,29 @@ const AiOpsCommandCenter: React.FC = () => {
   const [opsPanelOpen, setOpsPanelOpen] = useState(false);
   const [expandedPromptIds, setExpandedPromptIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<Set<string>>(new Set());
+  const [comments, setComments] = useState<Record<string, BcComment[]>>({});
+  const [decisionsByTodo, setDecisionsByTodo] = useState<Record<string, DecisionRow[]>>({});
+  const [reasoning, setReasoning] = useState<Record<string, string>>({});
+  const [postToBc, setPostToBc] = useState<Record<string, boolean>>({});
+  const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
+  const [decisionInFlight, setDecisionInFlight] = useState<Set<string>>(new Set());
+  const [recentDecidedIds, setRecentDecidedIds] = useState<Record<string, DecisionKind>>({});
 
   const refresh = useCallback(async () => {
     try {
-      const [h, p, q] = await Promise.all([
+      const [h, p, q, t] = await Promise.all([
         api.get<HealthPayload>('/api/admin/ops/health'),
         api.get<{ projects: ProjectChip[] }>('/api/admin/ops/projects'),
         api.get<QueuePayload>(
           `/api/admin/ops/my-queue${selectedProject ? `?project_id=${selectedProject}` : ''}`,
         ),
+        api.get<TodayStats>('/api/admin/ops/decisions/today?mine=true'),
       ]);
       setHealth(h.data);
       setProjects(p.data.projects);
       setQueue(q.data);
+      setTodayStats(t.data);
       setError(null);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'failed to load');
@@ -178,6 +217,116 @@ const AiOpsCommandCenter: React.FC = () => {
       setLoading(false);
     }
   }, [selectedProject]);
+
+  const loadWorkspaceContext = useCallback(async (bcId: string) => {
+    try {
+      const [c, d] = await Promise.all([
+        api.get<{ comments: BcComment[] }>(`/api/admin/ops/todos/${bcId}/comments`),
+        api.get<{ decisions: DecisionRow[] }>(`/api/admin/ops/todos/${bcId}/decisions`),
+      ]);
+      setComments((prev) => ({ ...prev, [bcId]: c.data.comments }));
+      setDecisionsByTodo((prev) => ({ ...prev, [bcId]: d.data.decisions }));
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'failed to load workspace');
+    }
+  }, []);
+
+  const toggleWorkspace = (bcId: string) => {
+    setExpandedWorkspaceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(bcId)) {
+        next.delete(bcId);
+      } else {
+        next.add(bcId);
+        if (!comments[bcId]) loadWorkspaceContext(bcId);
+        if (postToBc[bcId] === undefined) {
+          setPostToBc((p) => ({ ...p, [bcId]: true }));
+        }
+      }
+      return next;
+    });
+  };
+
+  // Flatten queue into ordered list for "advance to next" behavior on
+  // Approve+Continue.
+  const flatTaskIds = (queue?.projects || []).flatMap((p) =>
+    p.todolists.flatMap((tl) => tl.tasks.map((t) => t.bc_id)),
+  );
+
+  const decide = async (bcId: string, decision: DecisionKind) => {
+    if (decisionInFlight.has(bcId)) return;
+    setDecisionInFlight((prev) => new Set(prev).add(bcId));
+    try {
+      const body = {
+        todo_bc_id: bcId,
+        decision,
+        reasoning: reasoning[bcId] || null,
+        post_to_bc: postToBc[bcId] !== false,
+      };
+      const r = await api.post<{ ok: boolean; bc_comment_url: string | null; bc_post_error: string | null }>(
+        '/api/admin/ops/decisions',
+        body,
+      );
+      if (r.data.bc_post_error) {
+        setError(`Decision saved but BC comment failed: ${r.data.bc_post_error}`);
+      }
+      setRecentDecidedIds((prev) => ({ ...prev, [bcId]: decision }));
+      // Refresh decisions trail for this todo
+      try {
+        const d = await api.get<{ decisions: DecisionRow[] }>(
+          `/api/admin/ops/todos/${bcId}/decisions`,
+        );
+        setDecisionsByTodo((prev) => ({ ...prev, [bcId]: d.data.decisions }));
+      } catch {
+        // non-fatal
+      }
+      // Refresh today's stats
+      try {
+        const t = await api.get<TodayStats>('/api/admin/ops/decisions/today?mine=true');
+        setTodayStats(t.data);
+      } catch {
+        // non-fatal
+      }
+      // Advance to next task on Approve+Continue
+      if (decision === 'approve_and_continue') {
+        const idx = flatTaskIds.indexOf(bcId);
+        const nextId = idx >= 0 && idx + 1 < flatTaskIds.length ? flatTaskIds[idx + 1] : null;
+        setExpandedWorkspaceIds((prev) => {
+          const next = new Set(prev);
+          next.delete(bcId);
+          if (nextId) {
+            next.add(nextId);
+            if (!comments[nextId]) loadWorkspaceContext(nextId);
+            if (postToBc[nextId] === undefined) {
+              setPostToBc((p) => ({ ...p, [nextId]: true }));
+            }
+          }
+          return next;
+        });
+        if (nextId) {
+          setTimeout(() => {
+            const el = document.getElementById(`task-${nextId}`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 50);
+        }
+      } else {
+        setExpandedWorkspaceIds((prev) => {
+          const next = new Set(prev);
+          next.delete(bcId);
+          return next;
+        });
+      }
+      setReasoning((prev) => ({ ...prev, [bcId]: '' }));
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'decision failed');
+    } finally {
+      setDecisionInFlight((prev) => {
+        const next = new Set(prev);
+        next.delete(bcId);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     refresh();
@@ -252,7 +401,24 @@ const AiOpsCommandCenter: React.FC = () => {
             Phase 1 · Your queue across CB-managed Basecamp projects · prompt for high-priority tasks
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {todayStats && (
+            <div
+              title={`Today's decisions: ${Object.entries(todayStats.by_decision).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'none yet'}`}
+              style={{
+                background: palette.panel,
+                border: `1px solid ${palette.border}`,
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 12,
+                color: palette.textDim,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span style={{ color: palette.ok, fontWeight: 700 }}>{todayStats.total_today}</span>{' '}
+              decision{todayStats.total_today === 1 ? '' : 's'} today
+            </div>
+          )}
           <button
             onClick={triggerScore}
             disabled={scoring || health?.priority_in_flight}
@@ -361,14 +527,18 @@ const AiOpsCommandCenter: React.FC = () => {
                       const sc = scoreColor(t.urgency_score);
                       const expanded = expandedPromptIds.has(t.bc_id);
                       const copied = copiedId === t.bc_id;
+                      const wsOpen = expandedWorkspaceIds.has(t.bc_id);
+                      const recentDecision = recentDecidedIds[t.bc_id];
                       return (
                         <div
+                          id={`task-${t.bc_id}`}
                           key={t.bc_id}
                           style={{
                             background: '#0e1729',
-                            border: `1px solid ${palette.border}`,
+                            border: `1px solid ${recentDecision ? palette.ok : palette.border}`,
                             borderRadius: 6,
                             padding: 12,
+                            opacity: recentDecision ? 0.7 : 1,
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -437,13 +607,31 @@ const AiOpsCommandCenter: React.FC = () => {
                                 <span style={{ color: palette.textDim }}>#{t.bc_id}</span>
                               </div>
                             </div>
-                            {t.recommended_prompt && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                              {t.recommended_prompt && (
+                                <button
+                                  onClick={() => togglePrompt(t.bc_id)}
+                                  style={{
+                                    background: expanded ? palette.accent : 'transparent',
+                                    color: expanded ? '#001225' : palette.accent,
+                                    border: `1px solid ${palette.accent}`,
+                                    borderRadius: 5,
+                                    padding: '6px 10px',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {expanded ? 'Hide prompt' : 'Run in Claude Code'}
+                                </button>
+                              )}
                               <button
-                                onClick={() => togglePrompt(t.bc_id)}
+                                onClick={() => toggleWorkspace(t.bc_id)}
                                 style={{
-                                  background: expanded ? palette.accent : 'transparent',
-                                  color: expanded ? '#001225' : palette.accent,
-                                  border: `1px solid ${palette.accent}`,
+                                  background: wsOpen ? palette.ok : 'transparent',
+                                  color: wsOpen ? '#001225' : palette.ok,
+                                  border: `1px solid ${palette.ok}`,
                                   borderRadius: 5,
                                   padding: '6px 10px',
                                   fontSize: 11,
@@ -452,10 +640,24 @@ const AiOpsCommandCenter: React.FC = () => {
                                   whiteSpace: 'nowrap',
                                 }}
                               >
-                                {expanded ? 'Hide prompt' : 'Run in Claude Code'}
+                                {wsOpen ? 'Hide decision' : 'Decide'}
                               </button>
-                            )}
+                            </div>
                           </div>
+                          {wsOpen && (
+                            <ApprovalWorkspace
+                              taskId={t.bc_id}
+                              comments={comments[t.bc_id]}
+                              decisions={decisionsByTodo[t.bc_id]}
+                              reasoning={reasoning[t.bc_id] || ''}
+                              setReasoning={(v) => setReasoning((p) => ({ ...p, [t.bc_id]: v }))}
+                              postToBc={postToBc[t.bc_id] !== false}
+                              setPostToBc={(v) => setPostToBc((p) => ({ ...p, [t.bc_id]: v }))}
+                              inFlight={decisionInFlight.has(t.bc_id)}
+                              recentDecision={recentDecision}
+                              onDecide={(kind) => decide(t.bc_id, kind)}
+                            />
+                          )}
                           {expanded && t.recommended_prompt && (
                             <div style={{ marginTop: 10 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -610,6 +812,261 @@ const AiOpsCommandCenter: React.FC = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+const DECISION_BUTTONS: Array<{
+  kind: DecisionKind;
+  label: string;
+  bg: string;
+  fg: string;
+}> = [
+  { kind: 'approve',                     label: 'Approve',              bg: '#0d2b27', fg: '#5cd9a3' },
+  { kind: 'approve_and_continue',        label: 'Approve + next',       bg: '#0d3b32', fg: '#5cd9a3' },
+  { kind: 'approve_and_convert_to_skill',label: 'Approve + skill',      bg: '#0d2b27', fg: '#5cd9a3' },
+  { kind: 'revise',                      label: 'Revise',               bg: '#2d2410', fg: '#ffb84d' },
+  { kind: 'reject',                      label: 'Reject',               bg: '#3a1d22', fg: '#ff6b6b' },
+  { kind: 'escalate',                    label: 'Escalate',             bg: '#0e1c4a', fg: '#a5b4fc' },
+];
+
+const DECISION_LABEL_MAP: Record<DecisionKind, string> = {
+  approve: 'Approved',
+  approve_and_continue: 'Approved + next',
+  approve_and_convert_to_skill: 'Approved + skill captured',
+  revise: 'Revise requested',
+  reject: 'Rejected',
+  escalate: 'Escalated',
+};
+
+function htmlToPlain(html: string): string {
+  // Cheap strip — these BC comments are auto-generated HTML; we just want
+  // a readable preview. (No XSS concern since we render the result as
+  // textContent, not innerHTML.)
+  return String(html || '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+const ApprovalWorkspace: React.FC<{
+  taskId: string;
+  comments: BcComment[] | undefined;
+  decisions: DecisionRow[] | undefined;
+  reasoning: string;
+  setReasoning: (v: string) => void;
+  postToBc: boolean;
+  setPostToBc: (v: boolean) => void;
+  inFlight: boolean;
+  recentDecision: DecisionKind | undefined;
+  onDecide: (kind: DecisionKind) => void;
+}> = ({ taskId, comments, decisions, reasoning, setReasoning, postToBc, setPostToBc, inFlight, recentDecision, onDecide }) => {
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        background: '#0b1220',
+        border: `1px solid ${palette.border}`,
+        borderRadius: 6,
+        padding: 14,
+        display: 'grid',
+        gridTemplateColumns: '1.4fr 1fr',
+        gap: 14,
+      }}
+    >
+      {/* Left: BC thread + decision history */}
+      <div>
+        <div
+          style={{
+            fontSize: 11,
+            color: palette.textDim,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          Recent Basecamp comments
+        </div>
+        {comments === undefined && (
+          <div style={{ color: palette.textDim, fontSize: 12 }}>Loading…</div>
+        )}
+        {comments && comments.length === 0 && (
+          <div style={{ color: palette.textDim, fontSize: 12 }}>No comments yet on this todo.</div>
+        )}
+        {comments && comments.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+            {comments.slice().reverse().slice(0, 6).map((c) => (
+              <div
+                key={c.id}
+                style={{
+                  background: '#0e1729',
+                  border: `1px solid ${palette.border}`,
+                  borderRadius: 4,
+                  padding: 8,
+                  fontSize: 12,
+                  color: palette.text,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    color: palette.textDim,
+                    fontSize: 11,
+                    marginBottom: 4,
+                  }}
+                >
+                  <span>{c.creator}</span>
+                  <span>{new Date(c.created_at).toLocaleString()}</span>
+                </div>
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.45 }}>
+                  {htmlToPlain(c.content).slice(0, 600)}
+                  {htmlToPlain(c.content).length > 600 ? '…' : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {decisions && decisions.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: palette.textDim,
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                marginBottom: 6,
+              }}
+            >
+              Decision history
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {decisions.slice(0, 5).map((d) => (
+                <div
+                  key={d.id}
+                  style={{
+                    background: '#0e1729',
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: 4,
+                    padding: 6,
+                    fontSize: 11,
+                    color: palette.textDim,
+                  }}
+                >
+                  <span style={{ color: palette.text, fontWeight: 700 }}>{DECISION_LABEL_MAP[d.decision] || d.decision}</span>
+                  {' · '}
+                  {new Date(d.decided_at).toLocaleString()}
+                  {d.decided_by ? ` · ${d.decided_by}` : ''}
+                  {d.decision_reasoning ? (
+                    <div style={{ marginTop: 3, color: palette.text }}>{d.decision_reasoning}</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right: decision form */}
+      <div>
+        <div
+          style={{
+            fontSize: 11,
+            color: palette.textDim,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          Your decision
+        </div>
+        <textarea
+          value={reasoning}
+          onChange={(e) => setReasoning(e.target.value)}
+          placeholder="Optional reasoning. Posted on BC + saved in audit trail."
+          rows={4}
+          style={{
+            width: '100%',
+            background: '#0e1729',
+            color: palette.text,
+            border: `1px solid ${palette.border}`,
+            borderRadius: 4,
+            padding: 8,
+            fontSize: 12,
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            marginBottom: 8,
+            boxSizing: 'border-box',
+          }}
+        />
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 12,
+            color: palette.textDim,
+            marginBottom: 10,
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={postToBc}
+            onChange={(e) => setPostToBc(e.target.checked)}
+          />
+          Post decision to Basecamp as a comment
+        </label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {DECISION_BUTTONS.map((b) => (
+            <button
+              key={b.kind}
+              onClick={() => onDecide(b.kind)}
+              disabled={inFlight}
+              style={{
+                background: b.bg,
+                color: b.fg,
+                border: `1px solid ${b.fg}`,
+                borderRadius: 4,
+                padding: '8px 10px',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: inFlight ? 'not-allowed' : 'pointer',
+                opacity: inFlight ? 0.5 : 1,
+              }}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+        {recentDecision && (
+          <div
+            style={{
+              marginTop: 10,
+              fontSize: 12,
+              color: palette.ok,
+              fontWeight: 700,
+            }}
+          >
+            {DECISION_LABEL_MAP[recentDecision]}. Logged + posted.
+          </div>
+        )}
+        <div style={{ marginTop: 8, fontSize: 11, color: palette.textDim }}>
+          BC todo: <code>#{taskId}</code>
+        </div>
+      </div>
     </div>
   );
 };
