@@ -132,6 +132,8 @@ interface QueuePayload {
   assignee_bc_id: string;
   project_filter: string | null;
   prompt_threshold_urgency: number;
+  stale_hide_days: number;
+  stale_hidden_count: number;
 }
 
 interface BcComment {
@@ -492,6 +494,11 @@ const AiOpsCommandCenter: React.FC = () => {
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>AI Ops Command Center</h1>
           <div style={{ color: palette.textDim, fontSize: 13, marginTop: 4 }}>
             Phase 1 · Your queue across CB-managed Basecamp projects · prompt for high-priority tasks
+            {queue && queue.stale_hidden_count > 0 && (
+              <span style={{ marginLeft: 10 }}>
+                · {queue.stale_hidden_count} stale todo{queue.stale_hidden_count === 1 ? '' : 's'} hidden (no BC activity in {queue.stale_hide_days}d)
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

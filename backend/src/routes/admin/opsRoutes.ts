@@ -38,6 +38,11 @@ import { rollupToday } from '../../services/ops/metricsDailyService';
 const ALI_BC_USER_ID = process.env.ALI_BC_USER_ID || '17454835';
 // Threshold above which we attach a Claude Code prompt block to a queue item.
 const PROMPT_THRESHOLD_URGENCY = 40;
+// Freshness filter: hide todos with no BC activity in this window. Ancient
+// zombie tickets (2018-era "Proof of Education for Instructors" etc.) keep
+// scoring high because the priority engine rewards staleness — they belong
+// closed or archived, not in Ali's daily queue. Override via env if needed.
+const STALE_HIDE_DAYS = Math.max(1, Number(process.env.OPS_STALE_HIDE_DAYS) || 90);
 
 const router = Router();
 
@@ -199,12 +204,13 @@ router.get('/api/admin/ops/projects', requireAdmin, async (_req: Request, res: R
             WHERE project_id = p.bc_id
               AND status = 'active'
               AND assignee_ids @> :ali_jsonb
+              AND bc_updated_at >= NOW() - (:stale_days || ' days')::interval
          ) t ON true
         WHERE p.is_cb_managed = TRUE
         ORDER BY ali_open_count DESC NULLS LAST, p.name`,
       {
         type: QueryTypes.SELECT,
-        replacements: { ali_jsonb: JSON.stringify([ALI_BC_USER_ID]) },
+        replacements: { ali_jsonb: JSON.stringify([ALI_BC_USER_ID]), stale_days: STALE_HIDE_DAYS },
       },
     );
     res.json({
@@ -216,6 +222,7 @@ router.get('/api/admin/ops/projects', requireAdmin, async (_req: Request, res: R
         ali_open_count: parseInt(r.ali_open_count, 10),
         ali_red_count: parseInt(r.ali_red_count, 10),
       })),
+      stale_hide_days: STALE_HIDE_DAYS,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -265,6 +272,7 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
         WHERE t.status = 'active'
           AND p.is_cb_managed = TRUE
           AND t.assignee_ids @> :ali_jsonb
+          AND t.bc_updated_at >= NOW() - (:stale_days || ' days')::interval
           ${projectId ? 'AND t.project_id = :project_id' : ''}
         ORDER BY p.name,
                  t.todolist_name NULLS LAST,
@@ -275,10 +283,33 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
         type: QueryTypes.SELECT,
         replacements: {
           ali_jsonb: JSON.stringify([ALI_BC_USER_ID]),
+          stale_days: STALE_HIDE_DAYS,
           ...(projectId ? { project_id: projectId } : {}),
         },
       },
     );
+
+    // Count how many we're hiding so the UI can surface "X stale tasks
+    // excluded" instead of pretending the queue is small.
+    const staleCountRow = await sequelize.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+         FROM ops_bc_todos t
+         JOIN ops_bc_projects p ON p.bc_id = t.project_id
+        WHERE t.status = 'active'
+          AND p.is_cb_managed = TRUE
+          AND t.assignee_ids @> :ali_jsonb
+          AND t.bc_updated_at < NOW() - (:stale_days || ' days')::interval
+          ${projectId ? 'AND t.project_id = :project_id' : ''}`,
+      {
+        type: QueryTypes.SELECT,
+        replacements: {
+          ali_jsonb: JSON.stringify([ALI_BC_USER_ID]),
+          stale_days: STALE_HIDE_DAYS,
+          ...(projectId ? { project_id: projectId } : {}),
+        },
+      },
+    );
+    const staleHiddenCount = parseInt(staleCountRow[0]?.count || '0', 10);
 
     type Task = {
       bc_id: string;
@@ -347,6 +378,8 @@ router.get('/api/admin/ops/my-queue', requireAdmin, async (req: Request, res: Re
       assignee_bc_id: ALI_BC_USER_ID,
       project_filter: projectId,
       prompt_threshold_urgency: PROMPT_THRESHOLD_URGENCY,
+      stale_hide_days: STALE_HIDE_DAYS,
+      stale_hidden_count: staleHiddenCount,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -393,6 +426,7 @@ router.get('/api/admin/ops/run-my-day', requireAdmin, async (req: Request, res: 
           AND p.is_cb_managed = TRUE
           AND t.assignee_ids @> :ali_jsonb
           AND t.urgency_score IS NOT NULL
+          AND t.bc_updated_at >= NOW() - (:stale_days || ' days')::interval
           AND NOT EXISTS (
             SELECT 1 FROM ops_approval_queue q
              WHERE q.todo_bc_id = t.bc_id
@@ -408,6 +442,7 @@ router.get('/api/admin/ops/run-my-day', requireAdmin, async (req: Request, res: 
         replacements: {
           ali_jsonb: JSON.stringify([ALI_BC_USER_ID]),
           decided_by: decidedBy,
+          stale_days: STALE_HIDE_DAYS,
           limit,
         },
       },
