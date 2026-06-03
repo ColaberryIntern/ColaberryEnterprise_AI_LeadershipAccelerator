@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 // Anthropic Partner Network countdown report.
-// - Daily mode (default): emails Ali only (and CC alimuwwakkil@gmail.com)
-// - Weekly mode (--post-message-board): also posts to the project's Message Board
-//   which auto-emails all 13 participants. Triggered Mon 9am CT.
+// - Daily mode (default): emails Ali (+ CC alimuwwakkil@gmail.com + ram@colaberry.com)
+//   AND posts a comment to the persistent Message Board thread so every project
+//   participant gets it via Basecamp at the same time the email fires.
+// - --no-email: skip email (used for manual MB-only catch-up runs).
+// - --no-mb: skip Message Board post (escape hatch).
+// - First run auto-creates the parent thread; subsequent runs comment on it.
+//   Parent thread ID lives in tmp/anthropic-mb-thread-id.json (per CLAUDE.md
+//   /tmp is gitignored, so prod has its own state; the file is recreated on
+//   first run if missing — script then creates a new parent. To migrate state
+//   between hosts, copy the JSON file.).
 //
 // Calculation: 10-person cohort, 4 courses each = 40 total. % = completed / 40.
 // Goal is hard-coded to 10 cohort members. Ali's own track is excluded.
 
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
@@ -17,7 +25,13 @@ const BUCKET = 47477101;
 const BASE = `https://3.basecampapi.com/3945211/buckets/${BUCKET}`;
 const H = { Authorization: 'Bearer ' + BC_TOKEN, 'User-Agent': 'Colaberry', Accept: 'application/json', 'Content-Type': 'application/json' };
 const DEADLINE = new Date('2026-06-12T23:59:59-05:00');
-const POST_MESSAGE_BOARD = process.argv.includes('--post-message-board');
+const REPO = path.resolve(__dirname, '../../..');
+const MB_STATE_PATH = path.join(REPO, 'tmp/anthropic-mb-thread-id.json');
+const NO_EMAIL = process.argv.includes('--no-email');
+const NO_MB = process.argv.includes('--no-mb');
+// Legacy flag retained for back-compat with any caller still passing it; the
+// persistent-thread path now runs by default unless --no-mb is set.
+const POST_MESSAGE_BOARD = !NO_MB;
 
 const COHORT_LIST_IDS = [
   { id: 9942692753, name: 'Angela Mezo' },
@@ -191,38 +205,75 @@ Auto-fires daily until 40/40 reached, then shuts off. Weekly recap posts Mondays
   }
 
   // --- EMAIL TO ALI ---
-  if (!process.env.MANDRILL_API_KEY) { console.error('MANDRILL_API_KEY required'); process.exit(1); }
-  validateBeforeSend(html, text);
-  const transport = nodemailer.createTransport({
-    host: 'smtp.mandrillapp.com', port: 587,
-    auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
-  });
-  const r = await transport.sendMail({
-    from: '"Ali Muwwakkil" <ali@colaberry.com>',
-    to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
-    subject: `[Daily Report] 🚀 Anthropic Partner Network: ${pctComplete}% (${totalCompleted}/40) · ${daysLeft} days left`,
-    text,
-    html,
-    headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': 'high', 'X-Priority': '1' },
-  });
-  console.log('Sent email:', r.messageId);
+  if (!NO_EMAIL) {
+    if (!process.env.MANDRILL_API_KEY) { console.error('MANDRILL_API_KEY required'); process.exit(1); }
+    validateBeforeSend(html, text);
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    const r = await transport.sendMail({
+      from: '"Ali Muwwakkil" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+      subject: `[Daily Report] 🚀 Anthropic Partner Network: ${pctComplete}% (${totalCompleted}/40) · ${daysLeft} days left`,
+      text,
+      html,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': 'high', 'X-Priority': '1' },
+    });
+    console.log('Sent email:', r.messageId);
+  } else {
+    console.log('--no-email: skipped email send');
+  }
 
-  // --- WEEKLY MESSAGE BOARD POST (Mon only or --post-message-board flag) ---
+  // --- MESSAGE BOARD POST (persistent thread, daily comment) ---
   if (POST_MESSAGE_BOARD) {
-    // Get project's message board
+    // Resolve message board ID once
     const proj = await bcGet('.json');
     const mb = proj.dock.find(d => d.name === 'message_board');
-    const subject = `Anthropic Partner Network Countdown - Week of ${new Date().toLocaleDateString()} - ${pctComplete}% (${totalCompleted}/40)`;
-    const r2 = await fetch(`${BASE}/message_boards/${mb.id}/messages.json`, {
-      method: 'POST', headers: H,
-      body: JSON.stringify({ subject, content: html, status: 'active' })
-    });
-    if (r2.ok) {
-      const msg = await r2.json();
-      console.log('Posted to Message Board:', msg.id, msg.app_url);
-    } else {
-      console.error('Message Board POST failed:', r2.status, await r2.text());
+    if (!mb) { console.error('No message_board in project dock'); return; }
+
+    // Read or create parent thread
+    let state = null;
+    if (fs.existsSync(MB_STATE_PATH)) {
+      try { state = JSON.parse(fs.readFileSync(MB_STATE_PATH, 'utf8')); } catch (e) { state = null; }
     }
+
+    if (!state || !state.threadId) {
+      // First run: create the parent thread with an intro (no daily data — that lands in comments)
+      const introHtml = `<div>
+<p><strong>What this thread is:</strong> Colaberry's Anthropic Partner Network application requires <strong>10 team members</strong> to complete the <strong>4-course Anthropic Academy track</strong> (Agent Skills, Claude API, MCP intro, Claude Code in Action). 40 completions total unlocks partner status.</p>
+<p>Every weekday at ~11 AM CT a fresh countdown will land as a comment on this thread: progress %, days left, pace required, recent wins, who's crossed the finish line, and who hasn't started yet. Same content Ali gets via email.</p>
+<p><strong>Deadline:</strong> 2026-06-12 &middot; <strong>Goal:</strong> 40/40 course completions &middot; <strong>Shut-off:</strong> auto-stops once we hit 40/40.</p>
+<p>Open your own course list to check off completions: <a href="https://app.basecamp.com/3945211/projects/47477101">Anthropic Partner Network project</a>.</p>
+</div>`;
+      const subject = '📊 Anthropic Partner Network — Daily Countdown (one thread, daily comments)';
+      const cr = await fetch(`${BASE}/message_boards/${mb.id}/messages.json`, {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ subject, content: introHtml, status: 'active' })
+      });
+      if (!cr.ok) { console.error('Parent thread create failed:', cr.status, await cr.text()); return; }
+      const parent = await cr.json();
+      state = { threadId: parent.id, threadUrl: parent.app_url, createdAt: new Date().toISOString() };
+      try { fs.mkdirSync(path.dirname(MB_STATE_PATH), { recursive: true }); } catch (e) {}
+      fs.writeFileSync(MB_STATE_PATH, JSON.stringify(state, null, 2));
+      console.log('Created parent thread:', parent.id, parent.app_url);
+    }
+
+    // Post today's countdown as a comment on the parent thread
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const commentHtml = `<div><div><strong>${today} &middot; ${pctComplete}% (${totalCompleted}/40) &middot; ${daysLeft} days left &middot; need ${pace}/day</strong></div></div>${html}`;
+    const ccr = await fetch(`${BASE}/recordings/${state.threadId}/comments.json`, {
+      method: 'POST', headers: H,
+      body: JSON.stringify({ content: commentHtml })
+    });
+    if (ccr.ok) {
+      const cmt = await ccr.json();
+      console.log('Posted daily comment:', cmt.id, cmt.app_url);
+    } else {
+      console.error('Comment POST failed:', ccr.status, await ccr.text());
+    }
+  } else {
+    console.log('--no-mb: skipped Message Board post');
   }
 })().catch(e => { console.error('FATAL:', e.message); process.exit(1); });
