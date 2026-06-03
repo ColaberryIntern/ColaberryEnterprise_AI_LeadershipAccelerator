@@ -252,6 +252,7 @@ const AiOpsCommandCenter: React.FC = () => {
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
   const [decisionInFlight, setDecisionInFlight] = useState<Set<string>>(new Set());
   const [recentDecidedIds, setRecentDecidedIds] = useState<Record<string, DecisionKind>>({});
+  const [hideDecided, setHideDecided] = useState(false);
   const [runMyDayOpen, setRunMyDayOpen] = useState(false);
   const [runMyDayLoading, setRunMyDayLoading] = useState(false);
   const [runMyDayTasks, setRunMyDayTasks] = useState<WorkspacePayload[]>([]);
@@ -519,6 +520,27 @@ const AiOpsCommandCenter: React.FC = () => {
               decision{todayStats.total_today === 1 ? '' : 's'} today
             </div>
           )}
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              color: palette.textDim,
+              cursor: 'pointer',
+              userSelect: 'none',
+              padding: '6px 10px',
+              border: `1px solid ${palette.border}`,
+              borderRadius: 6,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={hideDecided}
+              onChange={(e) => setHideDecided(e.target.checked)}
+            />
+            Hide decided
+          </label>
           {!runMyDayOpen && (
             <button
               onClick={enterRunMyDay}
@@ -611,7 +633,7 @@ const AiOpsCommandCenter: React.FC = () => {
           )}
           {runMyDayTasks.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {runMyDayTasks.map((task, idx) => {
+              {(hideDecided ? runMyDayTasks.filter((t) => !recentDecidedIds[t.todo.bc_id]) : runMyDayTasks).map((task, idx) => {
                 const t = task.todo;
                 const sc = scoreColor(t.urgency_score);
                 const cat = CATEGORY_STYLE[t.category as Category] || CATEGORY_STYLE.unscored;
@@ -737,7 +759,20 @@ const AiOpsCommandCenter: React.FC = () => {
       )}
       {!loading && queue && queue.projects.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {queue.projects.map((proj) => (
+          {queue.projects
+            .map((proj) => ({
+              ...proj,
+              todolists: proj.todolists
+                .map((tl) => ({
+                  ...tl,
+                  tasks: hideDecided
+                    ? tl.tasks.filter((t) => !recentDecidedIds[t.bc_id])
+                    : tl.tasks,
+                }))
+                .filter((tl) => tl.tasks.length > 0),
+            }))
+            .filter((proj) => proj.todolists.length > 0)
+            .map((proj) => (
             <div key={proj.project_id} style={sectionStyle}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{proj.project_name}</h2>
