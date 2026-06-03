@@ -244,14 +244,14 @@ function bumpVersion(html, fromV, toV) {
 }
 
 function rerender() {
-  log('rendering PDF + capturing thumbs + inlining standalone...');
-  const tmpPdf = path.join(REPO, 'tmp/render-ad-mockups-pdf.js');
-  const tmpThumb = path.join(REPO, 'tmp/capture-mockup-thumbs.js');
+  log('rendering PDF + capturing M4 thumb + inlining standalone...');
+  // Fix 2026-06-03: the original path looked for session-scratch files
+  // (tmp/render-ad-mockups-pdf.js, tmp/capture-mockup-thumbs.js) that
+  // were never committed. Now points at the permanent renderer.
+  const renderer = path.join(REPO, 'backend/src/scripts/renderCoopAdV5.js');
   const inline = path.join(REPO, 'tmp/inline-html-images.js');
-  for (const s of [tmpPdf, tmpThumb]) {
-    const r = spawnSync(process.execPath, [s], { cwd: REPO, encoding: 'utf8' });
-    if (r.status !== 0) throw new Error(`render step failed: ${s} :: ${(r.stderr||'').slice(0,300)}`);
-  }
+  const r = spawnSync(process.execPath, [renderer], { cwd: REPO, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`render step failed: ${renderer} :: ${(r.stderr||'').slice(0,300)}`);
   const r2 = spawnSync(process.execPath, [inline, HTML_SRC, HTML_STANDALONE], { cwd: REPO, encoding: 'utf8' });
   if (r2.status !== 0) throw new Error(`inline step failed :: ${(r2.stderr||'').slice(0,300)}`);
   log('  render done.');

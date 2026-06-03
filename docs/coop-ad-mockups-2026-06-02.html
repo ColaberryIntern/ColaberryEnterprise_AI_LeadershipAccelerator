@@ -774,6 +774,44 @@
     text-align: center;
   }
 
+  /* ===== M4 V6 (David's 2026-06-03 edits) ===== */
+  /* 1. Tile descs + ROI forced to exactly 2 lines, ellipsis if over */
+  .m4-v5 .m4-tile .desc, .m4-v5 .m4-tile .roi {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* 2. Footer: QR inline next to URL inside Colaberry column;
+        col-qr column removed; grid drops to 3 columns */
+  .m4-v5 .m4-footer-v6 {
+    grid-template-columns: 1.6fr auto 1fr;
+  }
+  .m4-v5 .m4-footer-v6 .col-colaberry .url-with-qr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .m4-v5 .m4-footer-v6 .col-colaberry .url-with-qr .url {
+    font-family: 'Inter', sans-serif;
+    font-size: 10.5px;
+    color: var(--navy-deep);
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .m4-v5 .m4-footer-v6 .col-colaberry .url-with-qr .inline-qr {
+    width: 36px;
+    height: 36px;
+    display: block;
+  }
+  /* 3. dlahme@ right-justified + bold */
+  .m4-v5 .m4-footer-v6 .col-david .david-email {
+    text-align: right;
+    font-weight: 800;
+  }
+
   .m4-tile.t1 { background-image: url('img/ad-mockups-2026-06-02/tile-1-scada.jpg'); }
   .m4-tile.t2 { background-image: url('img/ad-mockups-2026-06-02/tile-2-lineman-tablet.jpg'); }
   .m4-tile.t3 { background-image: url('img/ad-mockups-2026-06-02/tile-3-csr-headset.jpg'); }
@@ -1119,51 +1157,51 @@ TRUSTED<br>
 <div class="ad-mockup-shell">
 <div class="ad-mockup-meta">
 <div>
-<div class="label">Mockup 4 · V5 (David's 2026-06-02 edits applied)</div>
+<div class="label">Mockup 4 · V6 (David's 2026-06-03 edits applied)</div>
 <div class="name">Five AI Automation Models — Built for Co-op Utilities</div>
 </div>
 <div class="placement">SUGGESTED: RHP opp. Co-op Forum<br>V5 CHANGES: Red headline at top reworded (V1 format) / Tile content aligned to same level + larger / Yellow ROI kept / "AUTOMATION ROI IN UNDER 90 DAYS" white +1 font / Footer reflowed: Colaberry left + URL under, QR between logos, NRECA centered, David right + email centered under</div>
 </div>
 <div class="ad-mockup m4 m4-v5">
-<!-- David's V5 edit: red headline at TOP, V1 format, reworded -->
+<!-- David's V6 edit: red headline at TOP, V1 format -->
 <div class="m4-bar-v5">FIVE AI AUTOMATION MODELS &middot; BUILT SPECIFIC TO CO-OP UTILITIES</div>
 <div class="m4-tiles">
 <div class="m4-tile t1">
 <div class="name">Outage IQ</div>
-<div class="desc">Predictive plus post-event root-cause analyst.<br>SCADA-aware.</div>
-<div class="roi">$180K saved per major outage.<br>7-min RCA.</div>
+<div class="desc">Predictive RCA.<br>SCADA-aware.</div>
+<div class="roi">$180K per outage.<br>7-min RCA.</div>
 </div>
 <div class="m4-tile t2">
 <div class="name">Crew Capture</div>
-<div class="desc">Voice-dictated outage reports.<br>OSHA + NESC auto-drafted.</div>
-<div class="roi">38% faster journeyman ramp.<br>Tribal knowledge preserved.</div>
+<div class="desc">Voice-dictated reports.<br>OSHA-NESC auto-drafted.</div>
+<div class="roi">38% faster journeyman ramp.<br>Tribal knowledge kept.</div>
 </div>
 <div class="m4-tile t3">
 <div class="name">Member Voice</div>
-<div class="desc">Inbound triage + storm-aware FAQ.<br>Auto plus human handoff.</div>
+<div class="desc">Storm-aware FAQ triage.<br>Auto + human handoff.</div>
 <div class="roi">60% lower CSR wait.<br>Member NPS +12 pts.</div>
 </div>
 <div class="m4-tile t4">
 <div class="name">Rate Case IQ</div>
-<div class="desc">Filing prep + precedent scan.<br>Combines with Compliance.</div>
+<div class="desc">Filing prep + precedents.<br>Pairs w/ Compliance.</div>
 <div class="roi">3 weeks to 4 days.<br>Zero NERC violations.</div>
 </div>
 <div class="m4-tile t5">
 <div class="name">Compliance Companion</div>
 <div class="desc">NERC + NESC + OSHA tracker.<br>Audit-ready every day.</div>
-<div class="roi">$50K/yr penalty avoidance per pilot.</div>
+<div class="roi">$50K/yr penalty avoided.<br>Per pilot.</div>
 </div>
 </div>
-<!-- David's V5 edit: ROI strip - "AUTOMATION ROI IN UNDER 90 DAYS" white, +1 font -->
+<!-- V5 edit: ROI strip - "AUTOMATION ROI IN UNDER 90 DAYS" white, +1 font -->
 <div class="m4-roi-strip-v5">AUTOMATION ROI IN UNDER 90 DAYS</div>
-<!-- David's V5 edit: footer reflow - 4 columns -->
-<div class="m4-footer-v5">
+<!-- David's V6 edit: QR inline with URL inside Colaberry column; email right-justified + bold -->
+<div class="m4-footer-v5 m4-footer-v6">
 <div class="col col-colaberry">
 <img src="img/ad-mockups-2026-06-02/logo-colaberry.png" class="logo" alt="Colaberry">
-<div class="url">enterprise.colaberry.ai/utility-ai</div>
+<div class="url-with-qr">
+<span class="url">enterprise.colaberry.ai/utility-ai</span>
+<img src="img/ad-mockups-2026-06-02/qr-utility-ai.png" class="inline-qr" alt="QR">
 </div>
-<div class="col col-qr">
-<img src="img/ad-mockups-2026-06-02/qr-utility-ai.png" alt="QR to enterprise.colaberry.ai/utility-ai">
 </div>
 <div class="col col-nreca">
 <div class="nreca-badge">NRECA<span>SUPPORTING MEMBER</span></div>
