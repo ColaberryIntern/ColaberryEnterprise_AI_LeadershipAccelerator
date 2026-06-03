@@ -48,7 +48,7 @@ const REPORTS = [
   {
     name: 'AI Pathway',
     scriptPath: 'backend/src/scripts/dailyClientProjectsReport.js',
-    args: ['--only=AI Pathway'],
+    args: ['--only=AI Pathway', '--with-contextual'],
     projectId: 46697389,
     needsOpenai: true,
     recipients: STANDARD_RECIPIENTS,
@@ -61,7 +61,7 @@ const REPORTS = [
   {
     name: 'ShipCES (Autonomous Brokerage)',
     scriptPath: 'backend/src/scripts/dailyClientProjectsReport.js',
-    args: ['--only=ShipCES', '--cc-add=karun@colaberry.com'],
+    args: ['--only=ShipCES', '--cc-add=karun@colaberry.com', '--with-contextual'],
     projectId: 47126345,
     needsOpenai: true,
     recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com', 'karun@colaberry.com'] },
@@ -74,7 +74,7 @@ const REPORTS = [
   {
     name: 'LandJet',
     scriptPath: 'backend/src/scripts/dailyClientProjectsReport.js',
-    args: ['--only=LandJet'],
+    args: ['--only=LandJet', '--with-contextual'],
     projectId: 46699826,
     needsOpenai: true,
     recipients: STANDARD_RECIPIENTS,

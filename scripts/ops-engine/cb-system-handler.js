@@ -635,7 +635,6 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
 
   async function suggest_prompt() {
     try {
-      const { buildSuggestion, generatePrompt } = require(path.resolve(REPO, 'backend/src/scripts/lib/buildOpsSuggestionLite'));
       // Pull the current todo's metadata via BC. recId is the todo id.
       const todo = await bcGet(`/buckets/${bucketId}/todos/${recId}.json`);
       const todoForPrompt = {
@@ -651,8 +650,42 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
         urgency_score: null,
         category: 'unscored',
       };
-      const suggestion = buildSuggestion(todoForPrompt);
-      const prompt = generatePrompt(todoForPrompt);
+      // Try contextual v2 first (walker + LLM extraction). Falls back to
+      // the lite template internally on any error or missing OPENAI key.
+      let suggestion;
+      let prompt;
+      let analysisBlock = '';
+      try {
+        const { buildContextualSuggestion } = require(path.resolve(REPO, 'backend/src/scripts/lib/buildContextualSuggestionV2'));
+        const result = await buildContextualSuggestion({
+          todo: todoForPrompt,
+          bcGet,
+          bucketId,
+          openaiKey: process.env.OPENAI_API_KEY,
+        });
+        prompt = result.long_prompt;
+        // Build a suggestion-like shape from the v2 analysis for the comment renderer
+        const a = result.analysis || {};
+        suggestion = {
+          action_kind: a.action_kind || (a.next_step ? 'next-step' : 'default'),
+          one_line: a.next_step || a.goal || 'See steps below.',
+          steps: result.basic_steps || [],
+          resources: (a.tools_needed || []).map((t) => ({
+            kind: t.exists === false ? 'create' : (t.kind || 'tool'),
+            name: t.name,
+            why: t.why,
+          })),
+          stop_conditions: a.blockers || [],
+        };
+        if (result.source === 'contextual_v2') {
+          analysisBlock = `<div style="margin-top:10px;padding:10px 14px;background:#f8fafc;border-left:4px solid #1a365d;border-radius:0 6px 6px 0;font-size:12.5px;color:#1f2937">${a.goal ? `<div><strong>Goal:</strong> ${stripEmDashes(a.goal)}</div>` : ''}${a.progress_so_far ? `<div style="margin-top:4px"><strong>Progress so far:</strong> ${stripEmDashes(a.progress_so_far)}</div>` : ''}${a.last_action ? `<div style="margin-top:4px"><strong>Last action:</strong> ${stripEmDashes(a.last_action)}</div>` : ''}${a.complexity ? `<div style="margin-top:6px;font-size:11px;color:#475569"><strong>${a.complexity}</strong> · ~${a.estimated_minutes || '?'}min · v2 $${(result.cost_usd || 0).toFixed(5)}</div>` : ''}</div>`;
+        }
+      } catch (e2) {
+        // Hard fallback to lite template
+        const { buildSuggestion, generatePrompt } = require(path.resolve(REPO, 'backend/src/scripts/lib/buildOpsSuggestionLite'));
+        suggestion = buildSuggestion(todoForPrompt);
+        prompt = generatePrompt(todoForPrompt);
+      }
 
       // Format the BC comment with a structured suggestion block + the
       // copy-paste-ready prompt in a pre tag so the operator can grab it.
@@ -672,8 +705,9 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
 
       const commentHtml = `<div style="background:linear-gradient(135deg,#14532d 0%,#1a365d 100%);color:white;padding:18px 22px;border-radius:8px">
 <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">@CB suggested prompt</div>
-<div style="font-size:15px;font-weight:700;margin-top:6px">Action: ${suggestion.action_kind.toUpperCase()} - ${stripEmDashes(suggestion.one_line)}</div>
+<div style="font-size:15px;font-weight:700;margin-top:6px">${stripEmDashes(suggestion.one_line)}</div>
 </div>
+${analysisBlock}
 <div style="margin-top:14px"><strong>Suggested steps</strong></div>
 <ol style="padding-left:22px;line-height:1.6">${stepsHtml}</ol>
 <div style="margin-top:12px"><strong>Tools / Skills / Agents / Workflows you have access to</strong></div>

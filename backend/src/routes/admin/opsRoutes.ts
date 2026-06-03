@@ -695,8 +695,54 @@ router.get(
         category: t.category as any,
       };
 
-      const suggestion = buildSuggestion(todoForPrompt);
-      const prompt = generatePrompt(todoForPrompt);
+      // Try contextual v2 first (walker + LLM). Falls back to the lite
+      // template internally on any error or missing OPENAI key. The v2
+      // returns { basic_steps, long_prompt, analysis, source } where
+      // analysis is { goal, progress_so_far, last_action, next_step,
+      // blockers, tools_needed[], complexity, estimated_minutes }.
+      // The frontend Approval Workspace already renders an `analysis`
+      // payload when present; this is a strict superset.
+      let suggestion: any;
+      let prompt: string;
+      let v2Source: string | null = null;
+      let v2Cost = 0;
+      let v2Analysis: any = null;
+      try {
+        const { buildContextualSuggestion } = require('../../scripts/lib/buildContextualSuggestionV2');
+        // bcGet shim for the workspace fetch — uses the same shared client
+        // the sync worker uses, no extra setup needed.
+        const { bcGet } = await import('../../services/ops/basecampClient');
+        const result = await buildContextualSuggestion({
+          todo: todoForPrompt,
+          bcGet,
+          bucketId: todoForPrompt.project_id,
+          openaiKey: process.env.OPENAI_API_KEY,
+        });
+        v2Source = result.source;
+        v2Cost = result.cost_usd || 0;
+        v2Analysis = result.analysis || null;
+        // Build a frontend-compatible suggestion shape from v2 output. The
+        // existing render expects { action_kind, one_line, steps, resources,
+        // stop_conditions, urgency_summary }.
+        const a = v2Analysis || {};
+        suggestion = {
+          action_kind: a.action_kind || 'next-step',
+          one_line: a.next_step || a.goal || 'See steps below.',
+          steps: result.basic_steps || [],
+          resources: (a.tools_needed || []).map((t: any) => ({
+            kind: t.exists === false ? 'create' : (t.kind || 'tool'),
+            name: t.name,
+            why: t.why,
+          })),
+          stop_conditions: a.blockers || [],
+          urgency_summary: a.complexity ? `${a.complexity} · ~${a.estimated_minutes || '?'}min` : '',
+        };
+        prompt = result.long_prompt;
+      } catch (err: any) {
+        console.warn('[workspace] v2 unavailable, falling back to template:', err.message);
+        suggestion = buildSuggestion(todoForPrompt);
+        prompt = generatePrompt(todoForPrompt);
+      }
 
       // BC comments + decisions in parallel, both with a hard timeout.
       const TIMEOUT_MS = 5000;
@@ -735,6 +781,14 @@ router.get(
         },
         suggestion,
         prompt,
+        // v2 fields surfaced for the frontend to optionally render. When
+        // v2 is unavailable these come through as nulls and the frontend
+        // falls back to the template suggestion display.
+        contextual: v2Source === 'contextual_v2' ? {
+          source: v2Source,
+          cost_usd: v2Cost,
+          analysis: v2Analysis,
+        } : null,
         comments: (commentsResult as any).comments,
         comments_error: (commentsResult as any).ok ? null : (commentsResult as any).error || null,
         decisions,
