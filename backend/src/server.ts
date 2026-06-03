@@ -422,21 +422,35 @@ async function start(): Promise<void> {
 
   // AI Ops Command Center BC mirror — pulls all projects → todolists → todos
   // every 2 min so the Command Center reads from a fresh local mirror.
-  cron.schedule('*/2 * * * *', () => {
-    import('./services/ops/bcSyncService')
-      .then(({ runBcSync }) => runBcSync())
-      .then((result) => {
-        import('./routes/admin/opsRoutes')
-          .then((mod) => mod.setLastSync(result))
-          .catch(() => {});
-        if (result.errors.length > 0) {
-          console.warn(
-            `[OpsBcSync] completed with ${result.errors.length} errors`,
-            result.errors.slice(0, 3),
-          );
-        }
-      })
-      .catch((err) => console.warn('[OpsBcSync] scheduled run failed:', err?.message));
+  // After each sync, runs the Priority Engine v0 over the mirror so the
+  // Waiting on Human queue surface is sorted by a meaningful urgency score.
+  cron.schedule('*/2 * * * *', async () => {
+    try {
+      const [{ runBcSync }, { runPriorityEngine }, opsRoutesMod] = await Promise.all([
+        import('./services/ops/bcSyncService'),
+        import('./services/ops/priorityEngineService'),
+        import('./routes/admin/opsRoutes'),
+      ]);
+      const syncResult = await runBcSync();
+      opsRoutesMod.setLastSync(syncResult);
+      if (syncResult.errors.length > 0) {
+        console.warn(
+          `[OpsBcSync] completed with ${syncResult.errors.length} errors`,
+          syncResult.errors.slice(0, 3),
+        );
+      }
+      // Score every active todo after the mirror is fresh.
+      const scoreResult = await runPriorityEngine();
+      opsRoutesMod.setLastPriorityRun(scoreResult);
+      if (scoreResult.errors.length > 0) {
+        console.warn(
+          `[OpsPriorityEngine] completed with ${scoreResult.errors.length} errors`,
+          scoreResult.errors.slice(0, 3),
+        );
+      }
+    } catch (err: any) {
+      console.warn('[OpsBcSync/Priority] scheduled run failed:', err?.message);
+    }
   });
 
   // Server-side Architect build retrieval: pull + build out completed Architect

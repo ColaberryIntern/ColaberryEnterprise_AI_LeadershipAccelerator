@@ -13,12 +13,22 @@ import api from '../../utils/api';
  * Approval workspace, Run My Day mode.
  */
 
+type Category =
+  | 'human_required'
+  | 'ai_can_finish'
+  | 'ai_can_prepare'
+  | 'can_eliminate'
+  | 'waiting_dependency'
+  | 'completed'
+  | 'unscored';
+
 interface HealthPayload {
   status: string;
   timestamp: string;
   todos_mirrored: number;
   open_approvals: number;
   sync_in_flight: boolean;
+  priority_in_flight: boolean;
   last_sync: {
     started_at: string;
     finished_at: string;
@@ -27,6 +37,15 @@ interface HealthPayload {
     todos_seen: number;
     todos_inserted: number;
     todos_updated: number;
+    error_count: number;
+  } | null;
+  last_priority_run: {
+    started_at: string;
+    finished_at: string;
+    duration_ms: number;
+    todos_scored: number;
+    audit_rows_written: number;
+    category_counts: Record<Category, number>;
     error_count: number;
   } | null;
 }
@@ -38,9 +57,26 @@ interface OpsTodo {
   status: string;
   due_on: string | null;
   urgency_score: number | null;
-  category: string;
+  category: Category;
   bc_app_url: string | null;
   bc_updated_at: string;
+}
+
+const CATEGORY_STYLE: Record<Category, { label: string; bg: string; fg: string }> = {
+  human_required:     { label: 'Human required',     bg: '#3a1d22', fg: '#ff6b6b' },
+  ai_can_finish:      { label: 'AI can finish',      bg: '#0d2b27', fg: '#5cd9a3' },
+  ai_can_prepare:     { label: 'AI can prepare',     bg: '#0d2b27', fg: '#5cd9a3' },
+  can_eliminate:      { label: 'Can eliminate',      bg: '#1f2937', fg: '#9ca3af' },
+  waiting_dependency: { label: 'Waiting',            bg: '#2d2410', fg: '#ffb84d' },
+  completed:          { label: 'Completed',          bg: '#0e1729', fg: '#8a99b8' },
+  unscored:           { label: 'Unscored',           bg: '#0e1729', fg: '#8a99b8' },
+};
+
+function scoreColor(score: number | null): string {
+  if (score == null) return '#8a99b8';
+  if (score >= 70) return '#ff6b6b';
+  if (score >= 40) return '#ffb84d';
+  return '#8a99b8';
 }
 
 const palette = {
@@ -82,6 +118,7 @@ const AiOpsCommandCenter: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [scoring, setScoring] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -117,6 +154,18 @@ const AiOpsCommandCenter: React.FC = () => {
     }
   };
 
+  const triggerScore = async () => {
+    setScoring(true);
+    try {
+      await api.post('/api/admin/ops/score');
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'score failed');
+    } finally {
+      setScoring(false);
+    }
+  };
+
   const kpis = [
     { label: 'Todos mirrored', value: health?.todos_mirrored ?? '—' },
     { label: 'Open approvals', value: health?.open_approvals ?? '—' },
@@ -130,7 +179,7 @@ const AiOpsCommandCenter: React.FC = () => {
         <div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>AI Ops Command Center</h1>
           <div style={{ color: palette.textDim, fontSize: 13, marginTop: 4 }}>
-            Phase 0 · Basecamp mirror live · Priority Engine pending
+            Phase 1 · Basecamp mirror + Priority Engine v0 (rule-based, no LLM)
           </div>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
@@ -146,6 +195,21 @@ const AiOpsCommandCenter: React.FC = () => {
             }}
           >
             Refresh
+          </button>
+          <button
+            onClick={triggerScore}
+            disabled={scoring || health?.priority_in_flight}
+            style={{
+              background: 'transparent',
+              border: `1px solid ${palette.border}`,
+              color: palette.text,
+              padding: '8px 14px',
+              borderRadius: 6,
+              cursor: scoring ? 'not-allowed' : 'pointer',
+              opacity: scoring || health?.priority_in_flight ? 0.6 : 1,
+            }}
+          >
+            {scoring || health?.priority_in_flight ? 'Scoring…' : 'Re-score'}
           </button>
           <button
             onClick={triggerSync}
@@ -213,44 +277,129 @@ const AiOpsCommandCenter: React.FC = () => {
             <div style={{ color: palette.textDim, padding: 16 }}>No active todos.</div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 600, overflowY: 'auto' }}>
-            {todos.map((t) => (
-              <a
-                key={t.bc_id}
-                href={t.bc_app_url || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  background: '#0e1729',
-                  border: `1px solid ${palette.border}`,
-                  borderRadius: 6,
-                  padding: 12,
-                  textDecoration: 'none',
-                  color: palette.text,
-                  display: 'block',
-                }}
-              >
-                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{t.title}</div>
-                <div style={{ color: palette.textDim, fontSize: 12, display: 'flex', gap: 12 }}>
-                  <span>proj {t.project_id}</span>
-                  {t.due_on && <span>due {t.due_on}</span>}
-                  <span>upd {timeAgo(t.bc_updated_at)}</span>
-                  {t.urgency_score != null && <span style={{ color: palette.warn }}>U {t.urgency_score}</span>}
-                </div>
-              </a>
-            ))}
+            {todos.map((t) => {
+              const cat = CATEGORY_STYLE[t.category] || CATEGORY_STYLE.unscored;
+              const sc = scoreColor(t.urgency_score);
+              return (
+                <a
+                  key={t.bc_id}
+                  href={t.bc_app_url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    background: '#0e1729',
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: 6,
+                    padding: 12,
+                    textDecoration: 'none',
+                    color: palette.text,
+                    display: 'block',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
+                    {t.urgency_score != null && (
+                      <div
+                        style={{
+                          flexShrink: 0,
+                          width: 36,
+                          height: 36,
+                          borderRadius: 6,
+                          background: '#0b1220',
+                          border: `1px solid ${sc}`,
+                          color: sc,
+                          fontSize: 14,
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        title={`Urgency ${t.urgency_score}/100`}
+                      >
+                        {t.urgency_score}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{t.title}</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            background: cat.bg,
+                            color: cat.fg,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            textTransform: 'uppercase',
+                            padding: '2px 8px',
+                            borderRadius: 3,
+                          }}
+                        >
+                          {cat.label}
+                        </span>
+                        <span style={{ color: palette.textDim, fontSize: 12 }}>proj {t.project_id}</span>
+                        {t.due_on && <span style={{ color: palette.textDim, fontSize: 12 }}>due {t.due_on}</span>}
+                        <span style={{ color: palette.textDim, fontSize: 12 }}>upd {timeAgo(t.bc_updated_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
           </div>
         </div>
 
-        {/* Today's pulse (placeholder for metrics tile) */}
+        {/* Triage breakdown - live from Priority Engine v0 */}
         <div style={sectionStyle}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Today's Pulse</h2>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Triage Breakdown</h2>
           <div style={{ color: palette.textDim, fontSize: 12, marginTop: 4, marginBottom: 12 }}>
-            Approvals completed, hours saved, revenue protected. Lands in Phase 1.
+            Rule-based Priority Engine v0 · no LLM yet.
           </div>
-          <div style={{ color: palette.textDim, padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 14, marginBottom: 8 }}>Metrics aggregation arrives with Priority Engine.</div>
-            <div style={{ fontSize: 12 }}>Target ship: 2026-06-16</div>
-          </div>
+          {health?.last_priority_run ? (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {(Object.entries(health.last_priority_run.category_counts) as Array<[Category, number]>)
+                .filter(([, n]) => n > 0)
+                .sort((a, b) => b[1] - a[1])
+                .map(([cat, n]) => {
+                  const style = CATEGORY_STYLE[cat];
+                  return (
+                    <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span
+                        style={{
+                          background: style.bg,
+                          color: style.fg,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 0.5,
+                          textTransform: 'uppercase',
+                          padding: '3px 10px',
+                          borderRadius: 3,
+                        }}
+                      >
+                        {style.label}
+                      </span>
+                      <span style={{ color: palette.text, fontWeight: 700, fontSize: 16 }}>{n}</span>
+                    </div>
+                  );
+                })}
+              <div style={{ borderTop: `1px solid ${palette.border}`, paddingTop: 10, marginTop: 4 }}>
+                <Row
+                  label="Last scored"
+                  value={timeAgo(health.last_priority_run.finished_at)}
+                />
+                <Row label="Duration" value={`${Math.round(health.last_priority_run.duration_ms / 1000)}s`} />
+                <Row label="Scored" value={String(health.last_priority_run.todos_scored)} />
+                <Row
+                  label="Errors"
+                  value={String(health.last_priority_run.error_count)}
+                  color={health.last_priority_run.error_count > 0 ? palette.err : palette.ok}
+                />
+              </div>
+            </div>
+          ) : (
+            <div style={{ color: palette.textDim, padding: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 14, marginBottom: 8 }}>Priority engine has not run yet.</div>
+              <div style={{ fontSize: 12 }}>Runs after each BC sync (every 2 min).</div>
+            </div>
+          )}
         </div>
 
         {/* System health */}

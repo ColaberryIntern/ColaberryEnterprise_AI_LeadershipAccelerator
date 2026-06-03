@@ -18,11 +18,14 @@ import OpsBcTodo from '../../models/OpsBcTodo';
 import OpsMetricsDaily from '../../models/OpsMetricsDaily';
 import OpsApprovalQueueItem from '../../models/OpsApprovalQueueItem';
 import { runBcSync, BcSyncResult } from '../../services/ops/bcSyncService';
+import { runPriorityEngine, PriorityEngineRunResult } from '../../services/ops/priorityEngineService';
 
 const router = Router();
 
 let lastSync: BcSyncResult | null = null;
 let syncInFlight = false;
+let lastPriorityRun: PriorityEngineRunResult | null = null;
+let priorityInFlight = false;
 
 export function setLastSync(result: BcSyncResult): void {
   lastSync = result;
@@ -30,6 +33,14 @@ export function setLastSync(result: BcSyncResult): void {
 
 export function getLastSync(): BcSyncResult | null {
   return lastSync;
+}
+
+export function setLastPriorityRun(result: PriorityEngineRunResult): void {
+  lastPriorityRun = result;
+}
+
+export function getLastPriorityRun(): PriorityEngineRunResult | null {
+  return lastPriorityRun;
 }
 
 router.get('/api/admin/ops/health', requireAdmin, async (_req: Request, res: Response) => {
@@ -57,6 +68,19 @@ router.get('/api/admin/ops/health', requireAdmin, async (_req: Request, res: Res
           }
         : null,
       sync_in_flight: syncInFlight,
+      last_priority_run: lastPriorityRun
+        ? {
+            started_at: lastPriorityRun.started_at,
+            finished_at: lastPriorityRun.finished_at,
+            duration_ms:
+              lastPriorityRun.finished_at.getTime() - lastPriorityRun.started_at.getTime(),
+            todos_scored: lastPriorityRun.todos_scored,
+            audit_rows_written: lastPriorityRun.audit_rows_written,
+            category_counts: lastPriorityRun.category_counts,
+            error_count: lastPriorityRun.errors.length,
+          }
+        : null,
+      priority_in_flight: priorityInFlight,
     });
   } catch (err: any) {
     res.status(500).json({ status: 'error', error: err.message });
@@ -113,6 +137,23 @@ router.post('/api/admin/ops/sync', requireAdmin, async (_req: Request, res: Resp
     res.status(500).json({ error: err.message });
   } finally {
     syncInFlight = false;
+  }
+});
+
+router.post('/api/admin/ops/score', requireAdmin, async (_req: Request, res: Response) => {
+  if (priorityInFlight) {
+    res.status(409).json({ error: 'Priority engine already in flight' });
+    return;
+  }
+  priorityInFlight = true;
+  try {
+    const result = await runPriorityEngine();
+    lastPriorityRun = result;
+    res.json({ ok: true, result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    priorityInFlight = false;
   }
 });
 
