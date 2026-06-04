@@ -5,10 +5,11 @@ node_modules/
 dist/
 build/
 
-# Environment
+# Environment - never commit real secret values.
+# .env.example is the only env file allowed in the repo.
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -35,3 +36,6 @@ scripts/.*_jwt.txt
 scripts/.demo_portal_token.txt
 scripts/.demo_onboarding_runs.json
 scripts/.demo_login_urls.txt
+
+# Personal finance documents - NEVER COMMIT (sensitive PII: SSNs, tax returns, account numbers)
+docs/personal-finance/
