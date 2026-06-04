@@ -16,6 +16,9 @@ declare global {
   }
 }
 
+const ADMIN_ROLES = new Set(['admin', 'super_admin']);
+const SALES_OR_ADMIN_ROLES = new Set(['sales', 'admin', 'super_admin']);
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -26,6 +29,35 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
   const token = authHeader.split(' ')[1];
   try {
     const payload = jwt.verify(token, env.jwtSecret) as AuthPayload;
+    if (!ADMIN_ROLES.has(payload.role)) {
+      res.status(403).json({ error: 'Admin access required' });
+      return;
+    }
+    req.admin = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// Sales reps + admins. Used on lead-list, lead-detail, stage-update,
+// activities, appointments, temperature. Sales role explicitly does NOT
+// reach PII export, delete, batch update, manual create, CSV import, or
+// any sequence/campaign management — those keep requireAdmin.
+export function requireSalesOrAdmin(req: Request, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as AuthPayload;
+    if (!SALES_OR_ADMIN_ROLES.has(payload.role)) {
+      res.status(403).json({ error: 'Sales or admin access required' });
+      return;
+    }
     req.admin = payload;
     next();
   } catch {

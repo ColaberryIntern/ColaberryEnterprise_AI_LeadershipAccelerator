@@ -12,6 +12,18 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Sales role + 3 rep provisioning + scoped lead routes (2026-06-04)
+- Date: 2026-06-04
+- Session: CC-20260604-s4ls
+- What changed:
+  - `backend/src/middlewares/authMiddleware.ts`: hardened `requireAdmin` to explicit allowlist `[admin, super_admin]` (previously JWT-only, so a future `sales` JWT would have passed silently). Added `requireSalesOrAdmin` middleware allowing `[sales, admin, super_admin]`.
+  - `backend/src/routes/admin/leadRoutes.ts`: 16 routes downgraded to `requireSalesOrAdmin` (list/get/stage/temperature/activities/appointments/engagement/journey/strategy-prep/sequence-status/pipeline-stats/scheduled-email-content). PII export, manual create, batch update, delete, sequence read/write, enroll/cancel, CSV import all kept `requireAdmin`.
+  - `backend/src/scripts/provisionSalesReps20260604.js` (new): idempotent provisioning for John McBride, David Lahme, Nate Taylor with `role=sales`. Generates 12-char base32 temp passwords (no 0/O/1/I/L confusion), bcrypts with salt rounds 12 to match adminService. Skips already-existing emails.
+  - `backend/src/scripts/sendSalesRepWelcomeEmails20260604.js` (new): Mandrill welcome email per provisioned rep. Reads RESULT_JSON from provisioning via stdin. Em-dash gate. BCC ali for audit. Transparent about scope (what you can/cannot do) + temp-password-rotation flow.
+  - `backend/src/scripts/sendRamSalesQueueShippedReply20260604.js` (new): reply to Ram on Gmail thread 19dd440a87c57f1a (cc Sai). Pulls Message-ID via Gmail OAuth for In-Reply-To threading.
+- Why: 27-day-late delivery on the 2026-05-08 commitment from the "Action needed - wire colaberry.ai forms" thread. Ram had given 3 rep names + chosen shared-queue model on 5/8; never shipped. 9 leads sitting cold since April.
+- Verification: `npx tsc --noEmit` passes clean. Existing 6 admin + 1 super_admin user roles match the new allowlist (no production lockout). Idempotency verified in script logic (LOWER(email) lookup before INSERT).
+
 ### Ram Massachusetts OP digest: live OP API pull + sendWithBcAttach (2026-06-03)
 - Date: 2026-06-03
 - Session: CC-20260603-9m4q

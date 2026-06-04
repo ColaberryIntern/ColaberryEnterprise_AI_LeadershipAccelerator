@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdmin } from '../../middlewares/authMiddleware';
+import { requireAdmin, requireSalesOrAdmin } from '../../middlewares/authMiddleware';
 import {
   handleAdminListLeads,
   handleAdminGetLeadStats,
@@ -46,23 +46,24 @@ import { sequelize } from '../../config/database';
 
 const router = Router();
 
-// Leads
-router.get('/api/admin/leads/stats', requireAdmin, handleAdminGetLeadStats);
+// Leads — sales reps can read + update stage/temperature; PII export, create,
+// batch, and delete stay admin-only.
+router.get('/api/admin/leads/stats', requireSalesOrAdmin, handleAdminGetLeadStats);
 router.get('/api/admin/leads/export', requireAdmin, handleAdminExportLeads);
-router.get('/api/admin/leads', requireAdmin, handleAdminListLeads);
+router.get('/api/admin/leads', requireSalesOrAdmin, handleAdminListLeads);
 router.post('/api/admin/leads', requireAdmin, handleAdminCreateLead);
 router.patch('/api/admin/leads/batch', requireAdmin, handleAdminBatchUpdate);
-router.get('/api/admin/leads/:id', requireAdmin, handleAdminGetLead);
-router.patch('/api/admin/leads/:id', requireAdmin, handleAdminUpdateLead);
+router.get('/api/admin/leads/:id', requireSalesOrAdmin, handleAdminGetLead);
+router.patch('/api/admin/leads/:id', requireSalesOrAdmin, handleAdminUpdateLead);
 router.delete('/api/admin/leads/:id', requireAdmin, handleDeleteLead);
-router.patch('/api/admin/leads/:id/pipeline', requireAdmin, handleAdminUpdatePipelineStage);
-router.get('/api/admin/leads/:id/temperature-history', requireAdmin, handleGetTemperatureHistory);
-router.patch('/api/admin/leads/:id/temperature', requireAdmin, handleUpdateTemperature);
-router.get('/api/admin/leads/:id/strategy-prep', requireAdmin, handleGetLeadStrategyPrep);
-router.get('/api/admin/leads/:id/journey', requireAdmin, handleGetLeadJourney);
+router.patch('/api/admin/leads/:id/pipeline', requireSalesOrAdmin, handleAdminUpdatePipelineStage);
+router.get('/api/admin/leads/:id/temperature-history', requireSalesOrAdmin, handleGetTemperatureHistory);
+router.patch('/api/admin/leads/:id/temperature', requireSalesOrAdmin, handleUpdateTemperature);
+router.get('/api/admin/leads/:id/strategy-prep', requireSalesOrAdmin, handleGetLeadStrategyPrep);
+router.get('/api/admin/leads/:id/journey', requireSalesOrAdmin, handleGetLeadJourney);
 
 // Fetch scheduled email content for email preview popup
-router.get('/api/admin/scheduled-emails/:id/content', requireAdmin, async (req, res) => {
+router.get('/api/admin/scheduled-emails/:id/content', requireSalesOrAdmin, async (req, res) => {
   try {
     const { ScheduledEmail } = require('../../models');
     const email = await ScheduledEmail.findByPk(req.params.id, {
@@ -79,7 +80,7 @@ router.get('/api/admin/scheduled-emails/:id/content', requireAdmin, async (req, 
 });
 
 // Lead engagement data (opens, clicks, calls, campaign status)
-router.get('/api/admin/leads/:id/engagement', requireAdmin, async (req, res) => {
+router.get('/api/admin/leads/:id/engagement', requireSalesOrAdmin, async (req, res) => {
   try {
     const leadId = parseInt(req.params.id as string, 10);
     const [outcomes, calls, campaign] = await Promise.all([
@@ -132,19 +133,20 @@ router.get('/api/admin/leads/:id/engagement', requireAdmin, async (req, res) => 
 });
 
 // Pipeline
-router.get('/api/admin/pipeline/stats', requireAdmin, handleAdminGetPipelineStats);
+router.get('/api/admin/pipeline/stats', requireSalesOrAdmin, handleAdminGetPipelineStats);
 
-// Activities
-router.get('/api/admin/leads/:id/activities', requireAdmin, handleListActivities);
-router.post('/api/admin/leads/:id/activities', requireAdmin, handleCreateActivity);
+// Activities — sales reps log calls/notes/touchpoints
+router.get('/api/admin/leads/:id/activities', requireSalesOrAdmin, handleListActivities);
+router.post('/api/admin/leads/:id/activities', requireSalesOrAdmin, handleCreateActivity);
 
-// Appointments
-router.get('/api/admin/appointments/upcoming', requireAdmin, handleGetUpcomingAppointments);
-router.get('/api/admin/appointments', requireAdmin, handleListAppointments);
-router.post('/api/admin/appointments', requireAdmin, handleCreateAppointment);
-router.patch('/api/admin/appointments/:id', requireAdmin, handleUpdateAppointment);
+// Appointments — sales reps book and reschedule
+router.get('/api/admin/appointments/upcoming', requireSalesOrAdmin, handleGetUpcomingAppointments);
+router.get('/api/admin/appointments', requireSalesOrAdmin, handleListAppointments);
+router.post('/api/admin/appointments', requireSalesOrAdmin, handleCreateAppointment);
+router.patch('/api/admin/appointments/:id', requireSalesOrAdmin, handleUpdateAppointment);
 
-// Follow-Up Sequences
+// Follow-Up Sequences — campaign management stays admin-only; sales sees
+// per-lead enrollment status (read-only) so they know what's already in flight.
 router.get('/api/admin/sequences', requireAdmin, handleListSequences);
 router.get('/api/admin/sequences/:id', requireAdmin, handleGetSequence);
 router.post('/api/admin/sequences', requireAdmin, handleCreateSequence);
@@ -152,7 +154,7 @@ router.patch('/api/admin/sequences/:id', requireAdmin, handleUpdateSequence);
 router.delete('/api/admin/sequences/:id', requireAdmin, handleDeleteSequence);
 router.post('/api/admin/leads/:id/enroll-sequence', requireAdmin, handleEnrollLeadInSequence);
 router.delete('/api/admin/leads/:id/cancel-sequence', requireAdmin, handleCancelLeadSequence);
-router.get('/api/admin/leads/:id/sequence-status', requireAdmin, handleGetLeadSequenceStatus);
+router.get('/api/admin/leads/:id/sequence-status', requireSalesOrAdmin, handleGetLeadSequenceStatus);
 
 // CSV Import
 router.get('/api/admin/leads/import/template', requireAdmin, handleGetImportTemplate);
