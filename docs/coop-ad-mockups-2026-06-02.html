@@ -967,6 +967,65 @@
     max-width: 720px;
   }
 
+  /* ===== M4 V11 (David's 2026-06-03 8:51 PM email) =====
+     1. Restructure col-colaberry: logo + QR centered above, URL line below.
+        Gives NRECA black logo room to be more centered.
+     2. Elongate the tile photos within the layout constraint.
+     3. Bleed-out look (no border on the ad) handled in the press render
+        scripts, not here. */
+  .m4-v7 .m4-footer-v7 .col-colaberry-v11 {
+    text-align: center !important;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry-v11 .logo-qr-row-v11 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry-v11 .logo-qr-row-v11 img.logo {
+    height: 28px;
+    width: auto;
+    display: block;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry-v11 .logo-qr-row-v11 .qr-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry-v11 .logo-qr-row-v11 .qr-stack .inline-qr {
+    width: 32px;
+    height: 32px;
+    display: block;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry-v11 .logo-qr-row-v11 .qr-stack .scan-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--navy-deep);
+    line-height: 1;
+  }
+  .m4-v7 .m4-footer-v7 .col-colaberry-v11 .url-line-v11 {
+    margin-top: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 10.5px;
+    color: var(--navy-deep);
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    text-align: center;
+  }
+  /* Give NRECA more breathing room now that the colaberry column re-centered */
+  .m4-v7 .m4-footer-v7 .col-nreca {
+    text-align: center;
+    padding: 0 8px;
+  }
+  /* Elongate the tile photos: bump tile min-height + reduce internal text density */
+  .m4-v7 .m4-tile {
+    min-height: 152px;
+  }
+
   .m4-tile.t1 { background-image: url('img/ad-mockups-2026-06-02/tile-1-scada.jpg'); }
   .m4-tile.t2 { background-image: url('img/ad-mockups-2026-06-02/tile-2-lineman-tablet.jpg'); }
   .m4-tile.t3 { background-image: url('img/ad-mockups-2026-06-02/tile-3-csr-headset.jpg'); }
@@ -1361,15 +1420,15 @@ TRUSTED<br>
 <div class="m4-roi-strip-v5 m4-roi-strip-v7">ROI for AI AUTOMATION in UNDER 90 DAYS</div>
 <!-- David's V7 edit: SCAN under QR, NRECA black centered, Please contact: above David -->
 <div class="m4-footer-v5 m4-footer-v6 m4-footer-v7">
-<div class="col col-colaberry">
+<div class="col col-colaberry col-colaberry-v11">
+<div class="logo-qr-row-v11">
 <img src="img/ad-mockups-2026-06-02/logo-colaberry.png" class="logo" alt="Colaberry">
-<div class="url-with-qr">
-<span class="url">enterprise.colaberry.ai/utility-ai</span>
 <div class="qr-stack">
 <img src="img/ad-mockups-2026-06-02/qr-utility-ai.png" class="inline-qr" alt="QR">
 <div class="scan-label">SCAN</div>
 </div>
 </div>
+<div class="url-line-v11">enterprise.colaberry.ai/utility-ai</div>
 </div>
 <div class="col col-nreca">
 <div class="nreca-badge nreca-v7">NRECA<span>SUPPORTING MEMBER</span></div>

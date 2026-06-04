@@ -23,11 +23,11 @@ const REPO = path.resolve(__dirname, '../../..');
 const HTML_IN = path.join(REPO, 'docs/coop-ad-mockups-2026-06-02.html');
 const M4_PNG = path.join(REPO, 'tmp/m4-v10-source.png');
 
-// Default trim variants when no args passed
+// V11: David won't pick. Lock to canonical NRECA RE Magazine half-page
+// horizontal: 7" x 4.5" trim with 0.125" bleed each side -> 7.25" x 4.75"
+// page. Bleed-out (no border, ad extends to page edge).
 const DEFAULT_VARIANTS = [
-  { w: 7, h: 4.5, bleed: 0.125, out: 'docs/m4-v10-7x4.5-canonical.pdf', label: 'canonical' },
-  { w: 7, h: 4.625, bleed: 0.125, out: 'docs/m4-v10-7x4.625-alt.pdf', label: 'alt' },
-  { w: 7, h: 4.55, bleed: 0.125, out: 'docs/m4-v10-7x4.55-current.pdf', label: 'current' },
+  { w: 7, h: 4.5, bleed: 0.125, out: 'docs/m4-v11-press-ready.pdf', label: 'canonical-bleed-out' },
 ];
 
 async function renderM4Source(browser) {
@@ -45,13 +45,14 @@ async function renderM4Source(browser) {
       aspect-ratio: auto !important;
       overflow: visible !important;
       height: auto !important;
-      width: 1300px !important;
-      max-width: 1300px !important;
-      border: 1px solid #ddd !important;
+      width: 900px !important;
+      max-width: 900px !important;
+      border: 0 !important;
       box-shadow: none !important;
+      border-radius: 0 !important;
     }
     .ad-mockup-shell:has(> .ad-mockup.m4) {
-      max-width: 1300px !important;
+      max-width: 900px !important;
       aspect-ratio: auto !important;
     }
   ` });
@@ -71,13 +72,15 @@ async function renderPdfWithEmbeddedPng(browser, variant) {
   const pageH = h + 2 * bleed;
   const pngB64 = fs.readFileSync(M4_PNG).toString('base64');
 
-  // Embedded PNG sized to fill the entire page (bleed-to-bleed)
+  // V11: ad bleeds edge-to-edge (no border, no inset). object-fit: cover lets
+  // the embedded PNG fill the full page including bleed; critical content is
+  // designed to stay inside the trim area.
   const pageHtml = `<!doctype html><html><head><meta charset="utf-8">
 <style>
   @page { size: ${pageW}in ${pageH}in; margin: 0; }
   html, body { margin: 0; padding: 0; background: white; }
-  .page { width: ${pageW}in; height: ${pageH}in; display: flex; align-items: stretch; justify-content: stretch; }
-  .page img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .page { width: ${pageW}in; height: ${pageH}in; display: block; }
+  .page img { width: 100%; height: 100%; object-fit: cover; display: block; }
 </style>
 </head><body>
 <div class="page"><img src="data:image/png;base64,${pngB64}" alt="M4"></div>
