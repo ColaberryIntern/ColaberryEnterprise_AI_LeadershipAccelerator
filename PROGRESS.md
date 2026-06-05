@@ -12,6 +12,23 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts intern sprint: 4 interns x 2 proposals, Monday 6/9 start (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/scripts/assignGovBidsToInterns.js` (new): one-shot intern assignment for the 2-week sprint. Pulled 8 picks from Opportunity Pulse `bonfire_opportunities` (top fit_score in 6/9-6/23 close window). Balanced round-robin so each intern got 1 Week 1 close + 1 Week 2 close. Repurposed the 5 [NEW SLOT] placeholders + kept Detroit Muni-code (already live) + created 2 new lists (Harris County Election + Detroit CRIO Cannabis). For each of 8 lists: renamed + described with opportunity UUID/fit/value/source URL, reassigned all 14 standard template todos to the designated intern, compressed due dates to the new sprint window (`compressDates(2026-06-09, close_date-1)` linear distribution).
+  - Posted kickoff message on Gov Contracts message board (id 9967017711) with per-intern assignment grid + how-this-works instructions.
+  - Created tracking BC todo on Ali Personal (9967017720) due 2026-06-23.
+  - Emailed Ali the matrix via `sendWithBcAttach` (Mandrill, attached to tracking todo).
+- Assignment matrix:
+  - Akiwam (33056069): Southlake AI Platform (6/12, $1M) + SLCC CMMS (6/22)
+  - OBI, ANAMELECHI KINGSLEY (42266313): Detroit Muni-code (6/12) + U3P Prof Licensing (6/23, $1M)
+  - Omolola Makinde (49487826): TxDOT MD30 (6/12) + Harris County Election (6/22, $1M)
+  - samrawit mekonen (20684153): TDCJ Records (6/15) + Detroit CRIO Cannabis (6/19)
+- Why: Ali invited 4 interns to Gov Contracts and asked for 2 proposals each (round-robin), starting Monday 6/9, target submit in less than 2 weeks. The existing BC project had only 6 lists (1 live + 5 placeholders); needed 8 total. Opportunity Pulse had 15+ qualifying opportunities; picked top 8 by fit_score within the timeline.
+- Verification: 112 todo PUTs completed (8 lists x 14 todos) + 2 new lists created with full template seeded. Kickoff message visible at https://app.basecamp.com/3945211/buckets/47346103/messages/9967017711. Email sent.
+- Notes: Ali can swap any pick by replying to the matrix email — script is idempotent enough to re-run with edits.
+
 ### Inbox COS tone-down v2 (Ali approved): 5 high-impact alert cuts (2026-06-05)
 - Date: 2026-06-05
 - Session: CC-20260603-v7da
