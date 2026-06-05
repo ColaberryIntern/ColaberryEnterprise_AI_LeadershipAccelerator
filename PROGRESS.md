@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts intern sprint v2: 4 interns x 1 RFP each, end-to-end OP+BC build (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/scripts/sendActiveContractsAssessmentV2.js`, `sendGovBidCandidates14Day.js`, `sendRfpFitEvaluation.js`: three rounds of correction emails after Ali called out (a) need to use logged-in OP admin assessment not raw DB, (b) "active contracts" = pursuit_status='pursuing' set, not catalog, (c) 14-day-runway floor from 6/8 kickoff.
+  - Read all 14 RFP zips Ali downloaded; caught 3 stale OP DB dates (TDCJ-OIG Records actually closes 2026-11-01 not 6/15; Detroit CRIO Cannabis closed 5/27 not 6/19; SLCC Enterprise Analytics closed 6/1 = strongest fit, missed).
+  - `backend/src/scripts/rebuildGovBidSprintFinal.js` (final): end-to-end pipeline. (1) Trashed 8 prior-round BC lists. (2) For each of the 4 final picks: uploaded all RFP files to OP `/attachments` (one at a time to dodge nginx 10MB body limit; 9+9+2+18 = 38 files saved), marked `/pursue`, triggered `/tailor-requirements` (OpenAI gpt-4o-mini), pulled `/readiness` checklist. (3) Built 4 fresh BC lists in Gov Contracts project, one per intern, with per-RFP AI-tailored checklist items + standard process milestones (read RFP, bid/no-bid, requirements matrix, narrative draft, internal review, submit). (4) Due dates compressed to actual close date (work window cap 21 days when runway > 28d). (5) Posted kickoff message on Gov Contracts message board. (6) Emailed Ali matrix attached to tracking todo.
+- Final assignment matrix (1 RFP per intern):
+  - Akiwam (33056069) -> TDHCA Multifamily ($750K, 6/29, 24d runway) - BC list 9967405074
+  - OBI (42266313) -> TDCJ-OIG Records ($500K, 11/1 verified, 146d) - BC list 9967406450
+  - Omolola (49487826) -> UTD Community Dev Software ($500K, 6/30, 22d, TX-RAMP/SOC2 gate) - BC list 9967407307
+  - samrawit (20684153) -> Harris Agenda Meeting Mgmt ($300K, 6/22, 14d) - BC list 9967409301
+- Why: Ali's iterative refinements landed at "4 best-fit RFPs, 1 per intern, use OP for actual requirement extraction not generic template, no history from prior rounds". Prior rounds used catalog top-fit-score (wrong - need pursuit_status). Then he downloaded all 14 candidate zips and asked for evaluation. After ranking, he picked top 4 from the assessment.
+- Verification: All 4 BC lists exist with todos. OP states all 4 at `tailored`. Kickoff message 9967409521 visible. Email sent to Ali via Mandrill, attached to tracking todo.
+- Notes: nginx in front of op-frontend has ~10MB body limit; the multi-file form upload from the script hit 413 on TDHCA's 12MB batch. Worked around by uploading one file at a time. Two files in the Harris Agenda zip exceeded 8MB - skipped them. OP scraper's `bonfire_opportunities.close_date` is unreliable; always verify against the actual RFP PDF when picking opportunities.
+
 ### Gov Contracts intern sprint: 4 interns x 2 proposals, Monday 6/9 start (2026-06-05)
 - Date: 2026-06-05
 - Session: CC-20260603-v7da
