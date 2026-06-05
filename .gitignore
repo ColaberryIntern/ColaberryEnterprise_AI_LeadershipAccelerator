@@ -39,3 +39,5 @@ scripts/.demo_login_urls.txt
 
 # Personal finance documents - NEVER COMMIT (sensitive PII: SSNs, tax returns, account numbers)
 docs/personal-finance/
+
+kes-tasks/
