@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import AnthropicContentRegistry from '../../models/AnthropicContentRegistry';
+import AnthropicChangeEvent from '../../models/AnthropicChangeEvent';
 import { runContentWatcher } from '../../services/anthropicContentWatcher';
+import { runChangeDetector } from '../../services/anthropicChangeDetector';
 
 const router = Router();
 
@@ -31,6 +33,42 @@ router.get('/api/admin/anthropic/registry', requireAdmin, async (_req: Request, 
     res.json({ ok: true, count: rows.length, rows });
   } catch (err: any) {
     console.error('[anthropicRoutes] registry fetch failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// L2: manually trigger the change detector
+router.post('/api/admin/sync/anthropic-detect', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const result = await runChangeDetector();
+    res.json({
+      ok: true,
+      processed: result.processed,
+      skipped: result.skipped,
+      errors: result.errors,
+      events: result.events,
+    });
+  } catch (err: any) {
+    console.error('[anthropicRoutes] manual detect failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// L2: list change events, newest first. Optional ?content_type= and ?limit= filters.
+router.get('/api/admin/anthropic/change-events', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const where: Record<string, unknown> = {};
+    if (req.query.content_type) where.content_type = req.query.content_type;
+
+    const rows = await AnthropicChangeEvent.findAll({
+      where,
+      order: [['processed_at', 'DESC']],
+      limit,
+    });
+    res.json({ ok: true, count: rows.length, rows });
+  } catch (err: any) {
+    console.error('[anthropicRoutes] change-events fetch failed:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

@@ -2490,6 +2490,20 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Anthropic content watcher: nightly at 02:00 UTC');
+
+  // Anthropic change detector (L2) — nightly at 02:30 UTC.
+  // Reads rows flagged by L1 (change_detected=true), writes to anthropic_change_events,
+  // then clears the flag so the next L1 run starts clean.
+  cron.schedule('30 2 * * *', () => {
+    instrumentCronJob('AnthropicChangeDetector', async () => {
+      const { runChangeDetector } = require('./anthropicChangeDetector');
+      const result = await runChangeDetector();
+      console.log(`[Scheduler] AnthropicChangeDetector: processed=${result.processed} skipped=${result.skipped} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic change detector error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic change detector: nightly at 02:30 UTC');
 }
 
 // ---------------------------------------------------------------------------
