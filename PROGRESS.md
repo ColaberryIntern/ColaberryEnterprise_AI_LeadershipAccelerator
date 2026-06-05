@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Inbox COS tone-down v2 (Ali approved): 5 high-impact alert cuts (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/seeds/seedInboxAlertLog.ts` (new): idempotent `inbox_alert_log(id, alert_kind, dedup_key, sent_at)` table backing the new DB-persisted dedupe. Survives container restarts.
+  - `backend/src/services/inbox/smsAlertService.ts`: (1) narrowed URGENT keyword list 12 -> 4 (asap, deadline, emergency, action required); dropped "urgent" (74/wk of false positives on promo bodies) + 7 other noisy words. (2) `detectUrgentKeywords` now matches subject ONLY (body removed). (3) `alertUrgentEmail` checks `inbox_alert_log` for 24h dedupe per `(sender, keyword)` before sending. (4) `alertSyncFailure` replaced in-process Map throttle with DB-backed 7-day dedupe per `(provider, kind)` so container restarts stop re-firing the same auth-expired notice.
+  - `backend/src/services/inbox/inboxScheduler.ts`: deleted Timer 5 (ASK_USER SMS-alert path) - duplicated Timer 3's digest content with same 4h cadence. Down from 7 timers to 6.
+  - `backend/src/services/aiOpsScheduler.ts`: removed `ExecutiveAwarenessMorningDigest` cron entry - fired at `45 6 * * *`, same minute as `DailyExecutiveBriefing`. Ali was getting two copies of the morning brief.
+  - `backend/src/scripts/runReportingAuditAndSend.js`: audit email now only sends when `totalFail > 0`. Healthy days log to stdout (cron pipes to `/var/log/reporting-audit.log`). The 5/wk "an email was sent" meta-noise emails stop.
+- Why: Ali audited his 3 mailboxes and found ~1,035 automated emails/wk. Approved the v2 plan with one modification ("keep the gmail cc's because I need those when i'm away from my computer"). Volume projected to drop from ~1,035/wk to ~171/wk (~17% of current) once all 9 changes ship. This commit ships 5 of 9.
+- Verification: `npx tsc --noEmit` passes clean. Migration seeded on prod. Mandrill webhook reproducer returns 200 on valid event (was intermittently 500 in prior week — note in BC update). Webhook proxy was deployed earlier in session via the QR work.
+- Notes:
+  - **Deferred:** Change 4 (consolidate 8 daily project dashboards into one "Daily Ops" email) requires per-script refactor across 8 lib files to separate HTML generation from email send. Scoped as a follow-up PR with adequate test coverage rather than rushing it mid-week. Each individual report still sends today; Ali still gets the CC to Gmail (per his modification to the plan).
+  - **Deferred:** Change 1 (systemHealth `(critical_id, date)` idempotency). Source is a Python script outside the colaberry-accelerator repo - couldn't locate it on /opt with grep. The "[Alert] N critical" emails are already auto-archived to AUTOMATION state by `hardRuleEngine.ts` rule 0b (line 79-83), so they don't trigger Inbox COS alerts to Ali. Volume in `inbox_emails` table stays high but invisible.
+  - **Ali action:** Change 9/10 - mute the Mandrill account alarm (techadmin@colaberry.com 200+/wk webhook-failing alerts) at https://mandrillapp.com/settings/alerts. Mute Twilio error alarm at the Twilio console. These are external account-level alarms, not in our code.
+
 ### QR code scan tracking (RE Magazine M4 V12) (2026-06-05)
 - Date: 2026-06-05
 - Session: CC-20260603-v7da
