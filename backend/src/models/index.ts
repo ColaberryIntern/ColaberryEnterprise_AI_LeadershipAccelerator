@@ -192,6 +192,9 @@ import FormDefinition from './FormDefinition';
 import RoutingRule from './RoutingRule';
 import RawLeadPayload from './RawLeadPayload';
 
+// Anthropic Intelligence Layer (L1)
+import AnthropicContentRegistry from './AnthropicContentRegistry';
+
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
 import InboxClassification from './InboxClassification';
@@ -1031,6 +1034,8 @@ export {
   OpsMetricsDaily,
   OpsBcProject,
   OpsSkill,
+  // Anthropic Intelligence Layer (L1)
+  AnthropicContentRegistry,
 };
 
 // --- AI Company Layer associations ---

@@ -2476,6 +2476,20 @@ export function startScheduler(): void {
       }
     })();
   });
+
+  // Anthropic content watcher — nightly at 02:00 UTC.
+  // Fetches all anthropic_content_registry rows, content-hashes each URL,
+  // and flags changed rows for L2 Change Detection Engine (Week 3).
+  cron.schedule('0 2 * * *', () => {
+    instrumentCronJob('AnthropicContentWatcher', async () => {
+      const { runContentWatcher } = require('./anthropicContentWatcher');
+      const result = await runContentWatcher();
+      console.log(`[Scheduler] AnthropicContentWatcher: checked=${result.checked} changed=${result.changed} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic content watcher error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic content watcher: nightly at 02:00 UTC');
 }
 
 // ---------------------------------------------------------------------------
