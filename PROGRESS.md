@@ -12,6 +12,23 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### QR code scan tracking (RE Magazine M4 V12) (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/seeds/seedQrTracking.ts` (new): idempotent CREATE TABLE for `qr_codes` (slug, destination_url, label, active) + `qr_scan_events` (id, slug, scanned_at, ip_hash, user_agent, referrer). Seeds row for slug `re-magazine-2026-07` -> `enterprise.colaberry.ai/utility-ai?utm_source=re-magazine&utm_medium=qr&utm_campaign=2026-07-directory`.
+  - `backend/src/routes/qrRedirectRoutes.ts` (new): public GET `/qr/:slug`. Validates slug regex `[a-zA-Z0-9_-]+`. Looks up active row, fire-and-forget INSERT to qr_scan_events (SHA-256 IP hash for privacy, captures UA + referrer), 302 redirect to destination URL. Unknown/inactive slug -> 404.
+  - `backend/src/routes/admin/qrAnalyticsRoutes.ts` (new): GET `/api/admin/qr-codes` (list + rollup: total, 24h, 7d, 30d, unique_ips); GET `/api/admin/qr-codes/:slug` (detail + 200 recent scans).
+  - `backend/src/server.ts`: mount qrRedirectRoutes.
+  - `backend/src/routes/adminRoutes.ts`: mount qrAnalyticsRoutes.
+  - `backend/package.json`: added `qrcode@^1.5.4` + `@types/qrcode@^1.5.6`.
+  - `backend/src/scripts/generateReMagazineQr.js` (new): regenerates `docs/img/ad-mockups-2026-06-02/qr-utility-ai.png` encoding the tracking URL. Error correction H, 600px, margin 1.
+  - `backend/src/scripts/sendDavidM4V12.js` (new): V12 reply to David with regenerated PDF + standalone HTML + thumb. sendWithBcAttach -> ticket 9955562788. cc Ram, bcc ali + alimuwwakkil.
+  - `docs/m4-v12-press-ready.pdf`, `docs/m4-v12-standalone.html`: V12 outputs (same V11 art with new tracking QR).
+- Why: David asked if the scanner tracker tool could count QR scans on the RE Magazine ad. RE Magazine Directory issue sits on co-op CEO desks for ~12 months; measuring full-shelf-life scan engagement requires routing the QR through Colaberry infra rather than direct-linking to the landing page. Built our own tracker (vs Bitly) so all data lives in our DB and we control the redirect.
+- Verification: `npx tsc --noEmit` passes clean. QR regenerated (4.8 KB PNG encoding the tracker URL). V12 PDF rendered (265 KB) + standalone HTML (332 KB). Mandrill ID `4dc6ab25-1ddd-a842-af31-b64b37a90e35`, BC comment `recording_9966809707`.
+- Notes: **Deploy required before any subscriber scan.** RE Magazine July Directory mails late June; the prod `/qr/re-magazine-2026-07` route must be live + seed run before then or scans 404. Deploy command in commit body. After-hours rule respected; not auto-deploying.
+
 ### Sales role + 3 rep provisioning + scoped lead routes (2026-06-04)
 - Date: 2026-06-04
 - Session: CC-20260604-s4ls

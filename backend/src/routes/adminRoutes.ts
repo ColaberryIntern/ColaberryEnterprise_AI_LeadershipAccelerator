@@ -63,6 +63,7 @@ import generatorRoutes from './admin/generatorRoutes';
 import autonomousIngestRoutes from './admin/autonomousRoutes';
 import automatedReportsRoutes from './admin/automatedReportsRoutes';
 import opsRoutes from './admin/opsRoutes';
+import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
 
 const router = Router();
 
@@ -130,5 +131,6 @@ router.use(generatorRoutes);
 router.use(autonomousIngestRoutes);
 router.use(automatedReportsRoutes);
 router.use(opsRoutes);
+router.use(qrAnalyticsRoutes);
 
 export default router;
