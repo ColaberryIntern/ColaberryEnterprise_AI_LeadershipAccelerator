@@ -1,7 +1,6 @@
-# Harris County Agenda + Meeting Management System — Requirements
+# harris-agenda-meeting - Requirements (AI Project Architect, Professional mode)
 
-> This file is replaced once the AI Project Architect spec finishes generating.
-> Job is running at: https://advisor.colaberry.ai/api/v1/generate/harris-agenda-meeting-colaberry-build/status
->
-> Run `node backend/src/scripts/pollArchitectSpecs.js` from the parent repo
-> to download the completed spec into this folder.
+The full spec is in [`requirements.docx`](./requirements.docx). Open it in Word or Google Docs.
+
+Generated: 2026-06-05T14:50:56.436Z
+Job: harris-county-agenda-meeting-management-colaberry-build
