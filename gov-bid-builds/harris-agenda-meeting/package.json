@@ -1,0 +1,18 @@
+{
+  "name": "harris-agenda-meeting",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agenda construction, live voting, minutes generation, action item tracking, public portal aligned to Harris County USRA.",
+  "scripts": {
+    "dev": "echo 'TODO: boot dev server' && exit 0",
+    "build": "echo 'TODO: build' && exit 0",
+    "seed": "node seeds/index.js",
+    "db:migrate": "echo 'TODO: db migrate' && exit 0",
+    "db:rollback": "echo 'TODO: db rollback' && exit 0",
+    "lint": "echo 'TODO: lint' && exit 0",
+    "test": "echo 'TODO: tests' && exit 0",
+    "deploy": "echo \"TODO: deploy\" && exit 0"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

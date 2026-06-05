@@ -262,18 +262,11 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     },
     label: 'Executive weekly briefing',
   },
-  {
-    agentName: 'ExecutiveAwarenessMorningDigest',
-    hardcodedSchedule: '45 6 * * *',
-    dynamicImport: () => {
-      import('./executiveBriefingService').then(({ generateExecutiveDigest }) => {
-        generateExecutiveDigest('morning').catch((err) => {
-          console.error('[AI Ops] Executive morning digest cron error:', err);
-        });
-      });
-    },
-    label: 'Executive awareness morning digest',
-  },
+  // REMOVED 2026-06-05 (CC-20260603-v7da, Ali approved): this morning
+  // digest fires at 45 6 * * * — the same minute as DailyExecutiveBriefing
+  // above. Ali was getting two copies of the morning brief. Keeping the
+  // evening digest (different schedule) and DailyExecutiveBriefing.
+  // To restore, re-add the entry below the WeeklyStrategicBriefing block.
   {
     agentName: 'ExecutiveAwarenessEveningDigest',
     hardcodedSchedule: '0 18 * * *',

@@ -298,17 +298,27 @@ ${auditResults.map((r, i) => `- ${r.name}: ${r.overall}${sendResults[i] ? `, sen
 Recipients on every regular report: ali@colaberry.com (to) + alimuwwakkil@gmail.com + ram@colaberry.com (cc).`;
 
   validateBeforeSend(html, text);
-  const transport = nodemailer.createTransport({
-    host: 'smtp.mandrillapp.com', port: 587,
-    auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
-  });
-  const sentAudit = await transport.sendMail({
-    from: '"CB System" <ali@colaberry.com>',
-    to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
-    subject, text, html,
-    headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
-  });
-  console.log(`[audit] audit email sent: ${sentAudit.messageId}`);
-  console.log(`[audit] summary: ${sentCount}/${active.length} reports sent, ${totalFail} preflight failures`);
+  // CHANGED 2026-06-05 (CC-20260603-v7da, Ali approved): only email the
+  // audit on real failure. Healthy days log to stdout (cron pipes to
+  // /var/log/reporting-audit.log) and the per-report dashboards already
+  // reach Ali's inbox. Sending an email that says "1/1 sent (1 warn)"
+  // every weekday is meta-noise — the email-about-the-email pattern.
+  const auditEmailNeeded = totalFail > 0;
+  if (auditEmailNeeded) {
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    const sentAudit = await transport.sendMail({
+      from: '"CB System" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+      subject, text, html,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.log(`[audit] audit email sent (FAIL detected): ${sentAudit.messageId}`);
+  } else {
+    console.log(`[audit] healthy run - audit email suppressed (${sentCount}/${active.length} sent, ${totalWarn} warn). Log to /var/log/reporting-audit.log.`);
+  }
+  console.log(`[audit] summary: ${sentCount}/${active.length} reports sent, ${totalFail} preflight failures, ${totalWarn} warnings`);
 })().catch((e) => { console.error('[audit] FATAL:', e.stack || e.message); process.exit(1); });
