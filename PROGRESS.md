@@ -12,6 +12,41 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Anthropic Intelligence Layer L1 + L2 deployed to prod (2026-06-06)
+- Date: 2026-06-06
+- Session: CC-20260605-9b3e
+- What changed:
+  - `backend/src/scripts/completeAnthropicProdDeployTodo.js` (new): one-shot script that posts the rich-HTML completion comment on BC todo 9946499448 (bucket 47502609) and marks the todo complete via `POST /buckets/.../todos/.../completion.json`.
+  - Prod backend rebuilt from main on the VPS via `git pull origin main && docker compose -f docker-compose.production.yml up -d --build backend`. `accelerator-backend` healthy (port 3001 internal-only — not host-published; nginx proxies it).
+  - 3 seeds run in order against `accelerator_prod` inside the prod backend container (compiled `dist/` JS, not ts-node):
+    1. `node /app/dist/seeds/createAnthropicContentRegistry.js` — ENUM + table + idempotent ADD COLUMN guards.
+    2. `node /app/dist/seeds/createAnthropicChangeEvents.js` — L2 audit table with `UNIQUE (registry_id, detected_at)`.
+    3. `node /app/dist/seeds/seedAnthropicContentRegistry.js` — 7 rows upserted (4 Skilljar courses + docs + news + 1 PLACEHOLDER partner-portal row pending 2026-06-12 confirmation).
+- Why: Cory's 5:01 PM email yesterday (BC todo 9946499448) said dev2 baseline ran clean, prod was ready, same playbook minus the dev2 suffix. Ali green-lit twice. After-hours rule satisfied. L1 + L2 are Kes's PR (commit dd816098 — merge of `kes/anthropic-intelligence-layer-l1`).
+- Verification:
+  - psql against `accelerator_prod`: `SELECT content_type, count(*) FROM anthropic_content_registry GROUP BY content_type` → 4 course / 1 document / 1 news / 1 partner-portal = **7 total**. `anthropic_change_events` table present.
+  - BC completion comment posted: https://app.basecamp.com/3945211/buckets/47502609/todos/9946499448#__recording_9969812148
+  - Todo marked complete: BC API returned 204.
+- Notes:
+  - **Diagnostic note for future-me:** Yesterday's deploy went fine, but my health-check probe ran `curl http://localhost:3001/health` on the VPS host — port 3001 is NOT host-published in production (only nginx 80/443 is exposed). The probe needs to run *inside* the container: `docker exec accelerator-backend curl http://localhost:3001/health`. Burned ~hours of background polling chasing a non-issue. Should encode this in memory.
+  - The partner-portal placeholder row will throw an error against `https://partners.anthropic.com/PLACEHOLDER` each night until 2026-06-12 when the real URL lands. Expected. Update the `url` column in that row after confirmation.
+  - Cron verification (02:00 UTC L1 watcher, 02:30 UTC L2 detector) lands tonight. Tomorrow morning: `SELECT url, last_checked, content_hash IS NOT NULL FROM anthropic_content_registry` should show 6/7 hashed (placeholder won't be).
+
+### Milad Gerami interview-prep feedback round 2: reviewed his own prep file + responded with hard salary callout (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260605-9b3e
+- What changed:
+  - `backend/src/scripts/sendMiladInterviewPrepFeedback.js` (new): single-purpose script that finds the existing Milad prep BC todo (9968842721 on Ali Personal > AI Products) and replies to his 6/5 4:42 PM email with genuine feedback on his self-built `InnoActive_HM_Interview_Prep.md`. Uses `sendWithBcAttach` helper (attach-to-ticket enforced). HTML + plain text bodies, branded signature, no em-dashes per style rule.
+- Context: Milad sent back his own 10KB prep file built on top of Ali's earlier framework (commit cc04a4fc / sendMiladInterviewPrep.js). Strong additions on his side (9-row Key Design Decisions defense table, memorized numbers section, tighter 6-step walkthrough). One real problem: he wrote he'd confirm $115-125K with the HM if asked, despite Ali's earlier "floor at $160K for Bay Area senior BI". That's a $35-65K decision.
+- Feedback delivered:
+  1. Wins called out: Key Design Decisions table (senior move not in Ali's email), numbers-memorized list, 6-step walkthrough timing, two real STAR-format behavioral stories (Auto Market + Finance revenue).
+  2. Hard fix: salary. Provided reframe script to walk back the Mert screener anchor with the HM without re-confirming the low number ("Mert and I had an early conversation around $115-125K. Since then I've seen more of the scope... what's the band you're working with?"). Reiterated Bay Area senior data/BI consultant is $150-220K base, $180-280K total; floor at $160K if pushed.
+  3. Sharpens: (a) add a third behavioral story on mentoring/unblocking (Colaberry interns counts) since he only loaded messy-data and pushback; (b) his risk-classification observation ("classification may need recalibration") is strong framing but he needs a defended hypothesis ready — gave him 3 options to pick from.
+  4. Small: pick PRJ019 or PRJ020 NOW for the Page 2 walkthrough drill; print TMAY V7 and read aloud Sunday.
+- Why: Ali asked me to read what Milad built and give genuine feedback. Tone: direct, specific, no fluff. Hard push on salary per Ali's explicit instruction (user picked "Push hard as drafted").
+- Verification: Script ran clean. BC todo found (id 9968842721). Mandrill sent: `<ce31bb8f-9fbf-14fc-49d6-9039824f45b5@colaberry.com>`. BC comment attached: https://app.basecamp.com/3945211/buckets/7463955/todos/9968842721#__recording_9969325840
+- Notes: Pivoted mid-stream from the prod-deploy task on todo 9946499448 (Anthropic ContentRegistry to prod). Deploy is paused, not abandoned; awaiting Ali's signal to resume.
+
 ### Gov Contracts intern sprint v2: 4 interns x 1 RFP each, end-to-end OP+BC build (2026-06-05)
 - Date: 2026-06-05
 - Session: CC-20260603-v7da
