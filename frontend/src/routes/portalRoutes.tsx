@@ -26,6 +26,7 @@ import WalkCapsPage from '../pages/portal/WalkCapsPage';
 import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
 import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
+import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ExecutionLane from '../pages/project/ExecutionLane';
 import SystemView from '../pages/project/SystemView';
 
@@ -36,6 +37,7 @@ const portalRoutes = (
     <Route element={<PortalProtectedRoute />}>
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
+        <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
         {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
         <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
