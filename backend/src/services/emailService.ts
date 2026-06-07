@@ -1654,3 +1654,96 @@ function buildPortalMagicLinkHtml(data: PortalMagicLinkData, magicLink: string):
 </html>
   `.trim();
 }
+
+// ─── Curriculum Impact Digest ─────────────────────────────────────────────
+
+interface CurriculumImpactItem {
+  url: string;
+  content_type: string;
+  score: number;
+  severity: string;
+  rationale: string;
+}
+
+export async function sendCurriculumImpactDigest(
+  to: string,
+  items: CurriculumImpactItem[],
+): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping curriculum impact digest to:', to);
+    return;
+  }
+
+  const severityColor: Record<string, string> = {
+    critical: '#e53e3e',
+    high: '#dd6b20',
+    medium: '#d69e2e',
+    low: '#38a169',
+  };
+
+  const rows = items
+    .map(
+      e => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#2d3748;word-break:break-all;">${e.url}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#4a5568;">${e.content_type}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">
+        <span style="background:${severityColor[e.severity] || '#718096'};color:#fff;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;">${e.score}/10</span>
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#718096;">${e.rationale}</td>
+    </tr>`,
+    )
+    .join('');
+
+  const subject = `[Anthropic Intelligence] ${items.length} high-impact content change${items.length > 1 ? 's' : ''} detected`;
+  const r = await resolveEmailRecipient(to, subject);
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Segoe UI',system-ui,sans-serif;color:#2d3748;max-width:680px;margin:0 auto;padding:24px;">
+  <div style="background:#0f1729;padding:20px 24px;border-radius:8px 8px 0 0;">
+    <p style="margin:0;color:#94a3b8;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">Anthropic Intelligence Layer &middot; L3</p>
+    <h1 style="margin:6px 0 0;color:#fff;font-size:20px;font-weight:700;">Curriculum Impact Alert</h1>
+  </div>
+  <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:24px;">
+    <p style="margin:0 0 20px;font-size:14px;">
+      <strong>${items.length}</strong> Anthropic content change${items.length > 1 ? 's' : ''} scored <strong>7 or above</strong> &mdash; review for curriculum updates.
+    </p>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f7fafc;">
+          <th style="padding:10px 12px;text-align:left;font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0;">URL</th>
+          <th style="padding:10px 12px;text-align:left;font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0;">Type</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0;">Score</th>
+          <th style="padding:10px 12px;text-align:left;font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0;">Rationale</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="margin:20px 0 0;font-size:13px;color:#718096;">
+      Review full change log at
+      <a href="https://enterprise.colaberry.ai/admin/anthropic/change-events" style="color:#2b6cb0;">enterprise.colaberry.ai/admin/anthropic/change-events</a>
+    </p>
+  </div>
+  <div style="margin-top:20px;font-size:12px;color:#a0aec0;text-align:center;">
+    Colaberry Enterprise AI &middot; Anthropic Intelligence Layer &middot; automated nightly at 03:00 UTC
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const info = await transporter.sendMail({
+    from: `"Cory - AI Operations" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('curriculum-impact-alert'),
+  });
+
+  console.log(
+    `[Email] Curriculum impact digest sent to: ${r.to} | items: ${items.length} | msgId: ${info.messageId}`,
+  );
+}
