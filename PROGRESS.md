@@ -23,10 +23,11 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
     - BLACK auto-exit: added belt-and-suspenders `!r.isNewIntern` guard so even if the tracker cap ever regressed, a new intern still can't be auto-exited.
     - Ali digest: added `NEW` bucket so grace-period interns appear in a separate "NEW - grace period (< 30 days since first assignment)" section in the digest instead of being lumped into YELLOW. Subject line and plaintext fallback updated to include NEW count.
 - Why: Today's PREVIEW digest showed Meghana Chowdary in BLACK with "null days dark" — she had just joined and had no activity history yet. If the system had been live, she would have been auto-exited on her first day. Ali asked for: (a) 30-day grace period for new interns so they can't be in BLACK during onboarding, (b) Basecamp tags for all tiers, escalation to email for "more serious" tiers, (c) turn on the system after the grace-period fix lands.
-- Verification (pending — to land in the next entry):
-  - Push code to origin, git pull on VPS
-  - Dry-run on VPS: `node backend/src/scripts/dailyInternNudges.js --dry` — confirm Meghana now appears in NEW bucket, not BLACK; confirm other genuine BLACK cases (interns 30+ days in with no activity) still classify as BLACK
-  - Show Ali the dry-run output (who would be auto-exited if flipped to live) and confirm before flipping mode to `live`
+- Verification:
+  - Pushed code (commit 4a51bd83), git pull on VPS — clean
+  - Force dry-run on VPS confirmed: Meghana Chowdary (7d joined, null days dark) → bucketed as NEW (was BLACK in noon preview run); Meera Hussain (26d joined) → NEW; Adaora Nwogbo (25d joined) → NEW. Other 6 genuine BLACK candidates (Mamoud Kamara 150d, Osarumwense Aghimien 118d, Tyra Forbes 117d, Arebe Gobena 114d, Aisha Hobbs 76d, Yama Touray 1126d) remain in BLACK as expected.
+  - Mode flipped to `live` via `writeMode('live', { changedBy: 'ali via Claude Code session CC-20260608-4qm2', reason: '...' })`. Audit log entry appended to `tmp/ops-engine/intern-nudge-mode-log.jsonl`. Readback confirms `live`.
+  - Next cron fire: 22:00 UTC tonight (Mon 2026-06-08). Ali will get the digest. Auto-exits only fire for interns whose email matches a CCPP active intern record exactly — the safety belt prevents auto-exiting people whose BC assignment is stale (Yama Touray at 1126 days joined is a likely safety-belt skip).
 - Notes:
   - GRACE_PERIOD_DAYS is a constant in the tracker. If we ever want to override at runtime (e.g., for a stricter cohort), expose it as `INTERN_GRACE_PERIOD_DAYS` env var.
   - `earliestAssignmentAt` is a proxy, not a true start date. If an intern was assigned to a project months ago but had their access removed and re-added, the tracker would still consider them "old" because the original todo's created_at is unchanged. Acceptable for the current use case but worth noting if we add re-enrollment workflows.
