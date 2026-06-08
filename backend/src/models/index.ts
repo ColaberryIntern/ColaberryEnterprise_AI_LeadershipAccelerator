@@ -248,6 +248,7 @@ import OpsApprovalQueueItem from './OpsApprovalQueueItem';
 import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
+import ProjectDna from './ProjectDna';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1031,6 +1032,11 @@ export {
   OpsMetricsDaily,
   OpsBcProject,
   OpsSkill,
+  // Anthropic Intelligence Layer (L1 + L2)
+  AnthropicContentRegistry,
+  AnthropicChangeEvent,
+  // AI Systems Architect Accelerator
+  ProjectDna,
 };
 
 // --- AI Company Layer associations ---

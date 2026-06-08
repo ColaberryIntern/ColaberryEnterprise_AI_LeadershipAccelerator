@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { strategyPrepUpload } from '../config/upload';
 import {
@@ -127,6 +128,45 @@ router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requir
     });
 
     res.json({ summary, file_name: file.originalname });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Project DNA endpoints
+const projectDnaSchema = z.object({
+  businessProblem: z.string().trim().min(5, 'businessProblem must be at least 5 characters'),
+  targetUser:      z.string().trim().min(2, 'targetUser is required'),
+  industry:        z.string().trim().min(1, 'industry is required'),
+  orientation:     z.enum(['internal', 'external']),
+  focus:           z.enum(['revenue', 'operational']),
+  projectTypes:    z.array(z.string()).min(1, 'At least one project type is required'),
+  dataSources:     z.array(z.string()).default([]),
+  aiComponents:    z.array(z.string()).min(1, 'At least one AI component is required'),
+  industryTrack:   z.string().trim().min(1, 'industryTrack is required'),
+});
+
+router.post('/api/portal/project-dna', requireParticipant, async (req, res) => {
+  const parse = projectDnaSchema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0]?.message ?? 'Invalid input' });
+    return;
+  }
+  try {
+    const { saveProjectDna } = await import('../services/projectDnaService');
+    const record = await saveProjectDna(req.participant!.sub, parse.data);
+    res.status(201).json(record);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
+  try {
+    const { getProjectDna } = await import('../services/projectDnaService');
+    const record = await getProjectDna(req.participant!.sub);
+    if (!record) { res.status(404).json({ error: 'No Project DNA found' }); return; }
+    res.json(record);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

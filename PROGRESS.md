@@ -12,6 +12,86 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### projectDnaService backend: project_dna table + upsert API (2026-06-08)
+- [x] Backend for ProjectDnaWizard UI (PR #3 Week 2 scope)
+  - Date: 2026-06-08
+  - Session: CC-20260608-p7dx
+  - What changed:
+    - `backend/src/seeds/seedProjectDna.ts` (new): idempotent CREATE TABLE for `project_dna`. Unique constraint on `enrollment_id` is the idempotency key. Indexes enrollment_id. Safe to run repeatedly.
+    - `backend/src/models/ProjectDna.ts` (new): Sequelize model for `project_dna` table. Typed declare fields matching DB schema.
+    - `backend/src/services/projectDnaService.ts` (new): `saveProjectDna(enrollmentId, input)` — upserts via raw `ON CONFLICT (enrollment_id) DO UPDATE SET`. `getProjectDna(enrollmentId)` — returns row or null.
+    - `backend/src/routes/participantRoutes.ts`: added `POST /api/portal/project-dna` (Zod-validated, requireParticipant) and `GET /api/portal/project-dna` (requireParticipant). These are the two endpoints the wizard UI already calls.
+    - `backend/src/models/index.ts`: imported and exported `ProjectDna`.
+    - `backend/src/services/__tests__/projectDnaService.test.ts` (new): unit tests — happy path upsert, row-not-found-after-upsert throw, idempotency (two calls succeed), getProjectDna returns row, getProjectDna returns null.
+  - Verification: tsc --noEmit: no new errors in our files. Pre-existing axios/playwright missing-type errors are unrelated and existed before this session.
+  - Notes: PR #3 (frontend wizard) is open; this backend must be deployed before it can be merged. Deploy sequence: run seed (`ts-node backend/src/seeds/seedProjectDna.ts`), then `docker compose up -d --build backend`.
+
+### Gov Contracts intern sprint v2: 4 interns x 1 RFP each, end-to-end OP+BC build (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/scripts/sendActiveContractsAssessmentV2.js`, `sendGovBidCandidates14Day.js`, `sendRfpFitEvaluation.js`: three rounds of correction emails after Ali called out (a) need to use logged-in OP admin assessment not raw DB, (b) "active contracts" = pursuit_status='pursuing' set, not catalog, (c) 14-day-runway floor from 6/8 kickoff.
+  - Read all 14 RFP zips Ali downloaded; caught 3 stale OP DB dates (TDCJ-OIG Records actually closes 2026-11-01 not 6/15; Detroit CRIO Cannabis closed 5/27 not 6/19; SLCC Enterprise Analytics closed 6/1 = strongest fit, missed).
+  - `backend/src/scripts/rebuildGovBidSprintFinal.js` (final): end-to-end pipeline. (1) Trashed 8 prior-round BC lists. (2) For each of the 4 final picks: uploaded all RFP files to OP `/attachments` (one at a time to dodge nginx 10MB body limit; 9+9+2+18 = 38 files saved), marked `/pursue`, triggered `/tailor-requirements` (OpenAI gpt-4o-mini), pulled `/readiness` checklist. (3) Built 4 fresh BC lists in Gov Contracts project, one per intern, with per-RFP AI-tailored checklist items + standard process milestones (read RFP, bid/no-bid, requirements matrix, narrative draft, internal review, submit). (4) Due dates compressed to actual close date (work window cap 21 days when runway > 28d). (5) Posted kickoff message on Gov Contracts message board. (6) Emailed Ali matrix attached to tracking todo.
+- Final assignment matrix (1 RFP per intern):
+  - Akiwam (33056069) -> TDHCA Multifamily ($750K, 6/29, 24d runway) - BC list 9967405074
+  - OBI (42266313) -> TDCJ-OIG Records ($500K, 11/1 verified, 146d) - BC list 9967406450
+  - Omolola (49487826) -> UTD Community Dev Software ($500K, 6/30, 22d, TX-RAMP/SOC2 gate) - BC list 9967407307
+  - samrawit (20684153) -> Harris Agenda Meeting Mgmt ($300K, 6/22, 14d) - BC list 9967409301
+- Why: Ali's iterative refinements landed at "4 best-fit RFPs, 1 per intern, use OP for actual requirement extraction not generic template, no history from prior rounds". Prior rounds used catalog top-fit-score (wrong - need pursuit_status). Then he downloaded all 14 candidate zips and asked for evaluation. After ranking, he picked top 4 from the assessment.
+- Verification: All 4 BC lists exist with todos. OP states all 4 at `tailored`. Kickoff message 9967409521 visible. Email sent to Ali via Mandrill, attached to tracking todo.
+- Notes: nginx in front of op-frontend has ~10MB body limit; the multi-file form upload from the script hit 413 on TDHCA's 12MB batch. Worked around by uploading one file at a time. Two files in the Harris Agenda zip exceeded 8MB - skipped them. OP scraper's `bonfire_opportunities.close_date` is unreliable; always verify against the actual RFP PDF when picking opportunities.
+
+### Gov Contracts intern sprint: 4 interns x 2 proposals, Monday 6/9 start (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/scripts/assignGovBidsToInterns.js` (new): one-shot intern assignment for the 2-week sprint. Pulled 8 picks from Opportunity Pulse `bonfire_opportunities` (top fit_score in 6/9-6/23 close window). Balanced round-robin so each intern got 1 Week 1 close + 1 Week 2 close. Repurposed the 5 [NEW SLOT] placeholders + kept Detroit Muni-code (already live) + created 2 new lists (Harris County Election + Detroit CRIO Cannabis). For each of 8 lists: renamed + described with opportunity UUID/fit/value/source URL, reassigned all 14 standard template todos to the designated intern, compressed due dates to the new sprint window (`compressDates(2026-06-09, close_date-1)` linear distribution).
+  - Posted kickoff message on Gov Contracts message board (id 9967017711) with per-intern assignment grid + how-this-works instructions.
+  - Created tracking BC todo on Ali Personal (9967017720) due 2026-06-23.
+  - Emailed Ali the matrix via `sendWithBcAttach` (Mandrill, attached to tracking todo).
+- Assignment matrix:
+  - Akiwam (33056069): Southlake AI Platform (6/12, $1M) + SLCC CMMS (6/22)
+  - OBI, ANAMELECHI KINGSLEY (42266313): Detroit Muni-code (6/12) + U3P Prof Licensing (6/23, $1M)
+  - Omolola Makinde (49487826): TxDOT MD30 (6/12) + Harris County Election (6/22, $1M)
+  - samrawit mekonen (20684153): TDCJ Records (6/15) + Detroit CRIO Cannabis (6/19)
+- Why: Ali invited 4 interns to Gov Contracts and asked for 2 proposals each (round-robin), starting Monday 6/9, target submit in less than 2 weeks. The existing BC project had only 6 lists (1 live + 5 placeholders); needed 8 total. Opportunity Pulse had 15+ qualifying opportunities; picked top 8 by fit_score within the timeline.
+- Verification: 112 todo PUTs completed (8 lists x 14 todos) + 2 new lists created with full template seeded. Kickoff message visible at https://app.basecamp.com/3945211/buckets/47346103/messages/9967017711. Email sent.
+- Notes: Ali can swap any pick by replying to the matrix email — script is idempotent enough to re-run with edits.
+
+### Inbox COS tone-down v2 (Ali approved): 5 high-impact alert cuts (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/seeds/seedInboxAlertLog.ts` (new): idempotent `inbox_alert_log(id, alert_kind, dedup_key, sent_at)` table backing the new DB-persisted dedupe. Survives container restarts.
+  - `backend/src/services/inbox/smsAlertService.ts`: (1) narrowed URGENT keyword list 12 -> 4 (asap, deadline, emergency, action required); dropped "urgent" (74/wk of false positives on promo bodies) + 7 other noisy words. (2) `detectUrgentKeywords` now matches subject ONLY (body removed). (3) `alertUrgentEmail` checks `inbox_alert_log` for 24h dedupe per `(sender, keyword)` before sending. (4) `alertSyncFailure` replaced in-process Map throttle with DB-backed 7-day dedupe per `(provider, kind)` so container restarts stop re-firing the same auth-expired notice.
+  - `backend/src/services/inbox/inboxScheduler.ts`: deleted Timer 5 (ASK_USER SMS-alert path) - duplicated Timer 3's digest content with same 4h cadence. Down from 7 timers to 6.
+  - `backend/src/services/aiOpsScheduler.ts`: removed `ExecutiveAwarenessMorningDigest` cron entry - fired at `45 6 * * *`, same minute as `DailyExecutiveBriefing`. Ali was getting two copies of the morning brief.
+  - `backend/src/scripts/runReportingAuditAndSend.js`: audit email now only sends when `totalFail > 0`. Healthy days log to stdout (cron pipes to `/var/log/reporting-audit.log`). The 5/wk "an email was sent" meta-noise emails stop.
+- Why: Ali audited his 3 mailboxes and found ~1,035 automated emails/wk. Approved the v2 plan with one modification ("keep the gmail cc's because I need those when i'm away from my computer"). Volume projected to drop from ~1,035/wk to ~171/wk (~17% of current) once all 9 changes ship. This commit ships 5 of 9.
+- Verification: `npx tsc --noEmit` passes clean. Migration seeded on prod. Mandrill webhook reproducer returns 200 on valid event (was intermittently 500 in prior week — note in BC update). Webhook proxy was deployed earlier in session via the QR work.
+- Notes:
+  - **Deferred:** Change 4 (consolidate 8 daily project dashboards into one "Daily Ops" email) requires per-script refactor across 8 lib files to separate HTML generation from email send. Scoped as a follow-up PR with adequate test coverage rather than rushing it mid-week. Each individual report still sends today; Ali still gets the CC to Gmail (per his modification to the plan).
+  - **Deferred:** Change 1 (systemHealth `(critical_id, date)` idempotency). Source is a Python script outside the colaberry-accelerator repo - couldn't locate it on /opt with grep. The "[Alert] N critical" emails are already auto-archived to AUTOMATION state by `hardRuleEngine.ts` rule 0b (line 79-83), so they don't trigger Inbox COS alerts to Ali. Volume in `inbox_emails` table stays high but invisible.
+  - **Ali action:** Change 9/10 - mute the Mandrill account alarm (techadmin@colaberry.com 200+/wk webhook-failing alerts) at https://mandrillapp.com/settings/alerts. Mute Twilio error alarm at the Twilio console. These are external account-level alarms, not in our code.
+
+### QR code scan tracking (RE Magazine M4 V12) (2026-06-05)
+- Date: 2026-06-05
+- Session: CC-20260603-v7da
+- What changed:
+  - `backend/src/seeds/seedQrTracking.ts` (new): idempotent CREATE TABLE for `qr_codes` (slug, destination_url, label, active) + `qr_scan_events` (id, slug, scanned_at, ip_hash, user_agent, referrer). Seeds row for slug `re-magazine-2026-07` -> `enterprise.colaberry.ai/utility-ai?utm_source=re-magazine&utm_medium=qr&utm_campaign=2026-07-directory`.
+  - `backend/src/routes/qrRedirectRoutes.ts` (new): public GET `/qr/:slug`. Validates slug regex `[a-zA-Z0-9_-]+`. Looks up active row, fire-and-forget INSERT to qr_scan_events (SHA-256 IP hash for privacy, captures UA + referrer), 302 redirect to destination URL. Unknown/inactive slug -> 404.
+  - `backend/src/routes/admin/qrAnalyticsRoutes.ts` (new): GET `/api/admin/qr-codes` (list + rollup: total, 24h, 7d, 30d, unique_ips); GET `/api/admin/qr-codes/:slug` (detail + 200 recent scans).
+  - `backend/src/server.ts`: mount qrRedirectRoutes.
+  - `backend/src/routes/adminRoutes.ts`: mount qrAnalyticsRoutes.
+  - `backend/package.json`: added `qrcode@^1.5.4` + `@types/qrcode@^1.5.6`.
+  - `backend/src/scripts/generateReMagazineQr.js` (new): regenerates `docs/img/ad-mockups-2026-06-02/qr-utility-ai.png` encoding the tracking URL. Error correction H, 600px, margin 1.
+  - `backend/src/scripts/sendDavidM4V12.js` (new): V12 reply to David with regenerated PDF + standalone HTML + thumb. sendWithBcAttach -> ticket 9955562788. cc Ram, bcc ali + alimuwwakkil.
+  - `docs/m4-v12-press-ready.pdf`, `docs/m4-v12-standalone.html`: V12 outputs (same V11 art with new tracking QR).
+- Why: David asked if the scanner tracker tool could count QR scans on the RE Magazine ad. RE Magazine Directory issue sits on co-op CEO desks for ~12 months; measuring full-shelf-life scan engagement requires routing the QR through Colaberry infra rather than direct-linking to the landing page. Built our own tracker (vs Bitly) so all data lives in our DB and we control the redirect.
+- Verification: `npx tsc --noEmit` passes clean. QR regenerated (4.8 KB PNG encoding the tracker URL). V12 PDF rendered (265 KB) + standalone HTML (332 KB). Mandrill ID `4dc6ab25-1ddd-a842-af31-b64b37a90e35`, BC comment `recording_9966809707`.
+- Notes: **Deploy required before any subscriber scan.** RE Magazine July Directory mails late June; the prod `/qr/re-magazine-2026-07` route must be live + seed run before then or scans 404. Deploy command in commit body. After-hours rule respected; not auto-deploying.
+
 ### Sales role + 3 rep provisioning + scoped lead routes (2026-06-04)
 - Date: 2026-06-04
 - Session: CC-20260604-s4ls
