@@ -12,6 +12,21 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Akiwam onboarded to Colaberry Internship Build System workspace (2026-06-08)
+- Date: 2026-06-08
+- Session: CC-20260608-4qm2
+- What changed:
+  - `backend/src/scripts/createAkiwamInternshipBuildTodo.js` (new): single-purpose script that (1) grants Akiwam access to bucket 24865175 (Internship/Apprenticeship) via PUT `/projects/24865175/people/users.json`, (2) fetches Sarbjit's template todo 9759912573 for its description (reuses the 4 bc-attachment sgids verbatim — video, audio, image, PDF — no re-upload), (3) POSTs a new todo "Akiwam - Colaberry Internship Build" under list 9538503852 with the cloned description, assigned to Akiwam (33056069), due 2026-06-15, and (4) posts an sgid @-mention comment explaining the 6 onboarding steps and ground rules.
+- Why: Ali asked for a copy of Sarbjit's template, assigned and directed to Akiwam, then tagged with what she needs to do. Akiwam is the same intern who's running the TDHCA Multifamily RFP on Gov Contracts (BC list 9967405074, due 6/29); this Build System workspace is her parallel learning track.
+- Verification:
+  - Project-access PUT returned 200 (already member — no-op).
+  - Todo created: https://app.basecamp.com/3945211/buckets/24865175/todos/9973935267
+  - Comment with @-mention posted: https://app.basecamp.com/3945211/buckets/24865175/todos/9973935267#__recording_9973935372
+  - Due date set at creation (2026-06-15), per the "every todo must have due_on" rule.
+- Notes:
+  - The 4 attachments (Colaberry_Build_System.mp4, Why_AI_Autopilot_Is_Strictly_Prohibited.m4a, the build architecture image, and Pilot_Co-Pilot_Build_Architecture.pdf) are referenced by their existing sgids — no storage duplication. If those source files are ever deleted from BC, the sgid references on this todo would break.
+  - The 6 onboarding steps in the kickoff comment ask her for an explicit reply with (a) chosen dev path, (b) one surprise from the video/audio, (c) any setup questions — gives a concrete completion signal beyond just checking the box.
+
 ### Anthropic Intelligence Layer L1 + L2 deployed to prod (2026-06-06)
 - Date: 2026-06-06
 - Session: CC-20260605-9b3e
