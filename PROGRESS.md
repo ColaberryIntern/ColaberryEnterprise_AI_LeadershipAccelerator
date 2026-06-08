@@ -12,6 +12,22 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### HireRight education verification FINAL — sent to HireRight after Ali's corrections (2026-06-08)
+- Date: 2026-06-08
+- Session: CC-20260608-4qm2
+- What changed:
+  - `backend/src/scripts/sendKagoiyaEduVerificationFinal.js` (new): rewrite of the prior DRAFT script that (1) fixes 2 checkbox bugs caught by Ali after reviewing the draft PDF — Start Date "Incorrect" was being checked because the prior `checkCorrectAfter('May 2021')` markers landed on Year-of-Graduation header text (May 2021 appears 3x in the form), and Date Awarded "Correct" was empty entirely; the new script marks checkboxes scoped by the field-name `<b><span class="c11">FIELD_NAME</span></b>` marker so it cannot mis-target. (2) Updates "Your Information" per Ali's specs: Position "Manager" (not Managing Director), Phone 972-992-1024, Email support@colaberry.com (not admissions@colaberry.com). (3) Creates BC tracking todo 9974859454 in Ali Personal > AI Products, due 2026-06-15. (4) Sends the reply directly to HireRight via inline `sendAndAttach` helper (the canonical `sendWithBcAttach` lives at `backend/src/scripts/lib/` which isn't shipped in the prod container's `dist/`, so the script inlines the BC-comment + Mandrill-SMTP logic — ~30 lines). Attached to the BC todo per operating doctrine.
+- Why: Ali reviewed the prior DRAFT PDF (Mandrill `<ea298efa-...>`) in his inbox, caught the Start Date Incorrect bug, and gave the final field values + sender info. Wanted it sent directly to HireRight, no second draft. Reply-all preserves the original thread (To: documentation@hireright.com per form instruction + Cc: admissions@colaberry.com which was the original "via" relay).
+- Verification:
+  - PDF rendered: `/tmp/Ignesias_Kagoiya_Education_Verification.pdf` (48,843 bytes) inside container
+  - BC todo: https://app.basecamp.com/3945211/buckets/7463955/todos/9974859454
+  - Mandrill messageId `<47d92648-7c21-0acb-8eb2-59b0fada3410@colaberry.com>` delivered To documentation@hireright.com, Cc admissions@colaberry.com, Bcc ali + Gmail, Reply-To support@colaberry.com, Subject `Re: Education Verification Request - Request ID: AT-060426-2C5H3`
+  - BC comment attach: https://app.basecamp.com/3945211/buckets/7463955/todos/9974859454#__recording_9974859649
+- Notes:
+  - Final form state: Start Date / End Date / Type of Degree / Date Awarded / Major all marked Correct only; SSN row left empty with note in Additional Comments that Colaberry does not retain SSN data.
+  - Reply-To set to support@colaberry.com so HireRight follow-up on this verification routes to the support inbox, not Ali's personal inbox.
+  - The `sendAndAttach` inline helper duplicates the `lib/sendWithBcAttach.js` logic for the prod-container-only case. Long-term: ship the lib helper into the container image (add to `dist/` via tsconfig or copy step in Dockerfile) so future one-off scripts can require it instead of re-implementing.
+
 ### HireRight education verification DRAFT for Ignesias Kagoiya — sent to Ali for review (2026-06-08)
 - Date: 2026-06-08
 - Session: CC-20260608-4qm2
