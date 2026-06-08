@@ -12,6 +12,24 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### HireRight education verification DRAFT for Ignesias Kagoiya — sent to Ali for review (2026-06-08)
+- Date: 2026-06-08
+- Session: CC-20260608-4qm2
+- What changed:
+  - `backend/src/scripts/sendKagoiyaEduVerificationDraft.js` (new): container-side script that (1) reads the blank HireRight HTML form from /tmp/edu_blank.html, (2) marks the "Correct" checkbox on the 5 verifiable rows (Start Date, End Date, Type of Degree, Date Awarded, Major) leaving "Incorrect" empty, (3) fills the SSN row neither — Colaberry does not retain SSN per `[[ccpp-no-ssn-retention]]` — and notes it in Additional Comments, (4) prefills "Your Information" (Ali Muwwakkil / Managing Director / admissions@colaberry.com, phone+fax blank for Ali), (5) renders the filled HTML to PDF via playwright/chromium (49KB Letter), and (6) emails the PDF to ali@colaberry.com (BCC alimuwwakkil@gmail.com) via Mandrill SMTP with subject `[Edu Verification DRAFT] Ignesias Kagoiya — HireRight AT-060426-2C5H3 — needs your review`.
+- Why: HireRight (vendor Lino Murru) requested education verification for Ignesias Kagoiya (Request ID AT-060426-2C5H3). Ali wanted the form validated and filled, then PDF emailed to him for verification before anything goes back to HireRight. Per Ali's mid-task note: validate the dates HireRight provided as-is — do NOT substitute more-precise actual dates from CCPP.
+- Verification (CCPP — read-only):
+  - Hit: `vw_StudentOverview` UserID 34640 / StudentID 8208 / email ignesiaskkagoiya@gmail.com
+  - TWC master record: ProgramStartDate 2021-01-16, FirstAttendanceDate 2021-01-23, LastAttendanceDate 2021-05-04, GraduationDate 2021-05-25, Status "Grad", PercentageCompleted 100, Program "Data Analytics", ClassName "Data Analytics Bootcamp - Jan 16 2021 (ONLINE)", DOB 07/13/1995 (matches claim exactly)
+  - All claimed fields validated as CORRECT; SSN cannot be verified (Colaberry does not retain).
+- Verification (delivery):
+  - PDF rendered: `/tmp/Ignesias_Kagoiya_Education_Verification_DRAFT.pdf` (49,274 bytes) inside container
+  - Mandrill messageId `<ea298efa-7a12-9ff7-d416-e9e6fd637e5f@colaberry.com>` delivered to Ali (cc Gmail)
+- Notes:
+  - Script is hard-coded to Kagoiya. If similar HireRight verifications become routine, parameterize candidate name + CCPP UserID + claim set and lift the form-filling helpers out.
+  - Saved memory `[[ccpp-no-ssn-retention]]` so the next education verification doesn't waste time looking for SSN columns that are always empty.
+  - PDF was NOT attached to a BC ticket — this is internal-to-Ali review, no originating ticket exists. If Ali approves and we send back to HireRight, we'll create a BC todo at that point and attach the outbound to it.
+
 ### Ram added to Anthropic Partner Network onboarding cohort (2026-06-08)
 - Date: 2026-06-08
 - Session: CC-20260608-4qm2
