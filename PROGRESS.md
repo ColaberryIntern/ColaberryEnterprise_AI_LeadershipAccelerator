@@ -12,6 +12,21 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Ram added to Anthropic Partner Network onboarding cohort (2026-06-08)
+- Date: 2026-06-08
+- Session: CC-20260608-4qm2
+- What changed:
+  - `backend/src/scripts/createRamAnthropicOnboarding.js` (new): script that creates Ram Katamaraja's personal cohort lane in bucket 47477101 ("Anthropic Partner Network - 10-Person Onboarding"). Steps: (1) idempotent PUT grant on `/projects/47477101/people/users.json` (no-op, already member), (2) POST new todolist "Anthropic onboarding - Ram Katamaraja" under todoset 9940690816, (3) POST 4 course todos with descriptions copied verbatim from John McBride's most recent cohort lane (Skilljar sign-in + course URL + "drop completion certificate as comment" evidence pattern), (4) POST sgid @-mention kickoff comment on the new list with deadline framing and the day-by-day schedule.
+- Why: Ali asked to add Ram to the training and give him the same 4 tasks every other cohort member has. The cohort deadline is **2026-06-12 (this Friday)** — only 4 days out. Ram was the only project leader who hadn't been formally enrolled in the onboarding pattern (all 14 other cohort members have personal lists with 4 course todos).
+- Verification:
+  - List created: https://app.basecamp.com/3945211/buckets/47477101/todolists/9974485185
+  - 4 todos created with due dates 6/9, 6/10, 6/11, 6/12 (matches every other cohort lane): 9974485198, 9974485215, 9974485238, 9974485263
+  - Kickoff @-mention comment posted on the list: https://app.basecamp.com/3945211/buckets/47477101/todolists/9974485185#__recording_9974485278
+  - All todos have due_on set at creation (per the "every todo must have due_on" rule).
+- Notes:
+  - Comment is posted on the **todolist** (not the first todo) so Ram gets one notification with the full picture, then individual todo notifications from the assignment itself.
+  - Schedule is aggressive (4 days for 4 courses) — same as Farhat / John / Nate / David who were also added late in the cycle. Ram is the cohort owner so he set the deadline himself; no need to soften the framing.
+
 ### Akiwam onboarded to Colaberry Internship Build System workspace (2026-06-08)
 - Date: 2026-06-08
 - Session: CC-20260608-4qm2
