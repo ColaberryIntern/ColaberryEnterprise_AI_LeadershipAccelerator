@@ -12,6 +12,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Intern nudge system: 30-day grace period for new interns + tier-gated email + LIVE mode flip (2026-06-08)
+- Date: 2026-06-08
+- Session: CC-20260608-4qm2
+- What changed:
+  - `backend/src/scripts/lib/internActivityTracker.js`: Added `GRACE_PERIOD_DAYS = 30` constant. Each todo now carries its `created_at`. For each intern, the tracker computes `earliestAssignmentAt` (min created_at across all assigned todos — used as a proxy for "when intern joined the program", since BC `Person.created_at` is account-creation date which is useless here). Derives `daysSinceJoined` and `isNewIntern` (true if `daysSinceJoined < 30`). After computing level, caps at YELLOW for new interns regardless of computed days-dark — so the null-days-dark = BLACK pathology that almost auto-exited Meghana Chowdary can't recur.
+  - `backend/src/scripts/dailyInternNudges.js`:
+    - `nudgeFor()`: new welcome-style branch at the top — if `row.isNewIntern`, returns a non-punitive "Welcome aboard, post your first update when ready" BC comment and explicitly sets `emailSubject/Html/Text = null` so no email goes out during the grace period.
+    - Email escalation: replaced the unconditional `if (r.email && !NO_EMAIL)` with a tier gate. `TIER_SENDS_EMAIL = { YELLOW: false, ORANGE: true, RED: true, BLACK: true }`. YELLOW is now BC-comment-only; ORANGE+ continues to BC + email. Matches the 2026-06-08 directive: "nudge tags should be tagged on Basecamp - if it is more serious the messaging to email."
+    - BLACK auto-exit: added belt-and-suspenders `!r.isNewIntern` guard so even if the tracker cap ever regressed, a new intern still can't be auto-exited.
+    - Ali digest: added `NEW` bucket so grace-period interns appear in a separate "NEW - grace period (< 30 days since first assignment)" section in the digest instead of being lumped into YELLOW. Subject line and plaintext fallback updated to include NEW count.
+- Why: Today's PREVIEW digest showed Meghana Chowdary in BLACK with "null days dark" — she had just joined and had no activity history yet. If the system had been live, she would have been auto-exited on her first day. Ali asked for: (a) 30-day grace period for new interns so they can't be in BLACK during onboarding, (b) Basecamp tags for all tiers, escalation to email for "more serious" tiers, (c) turn on the system after the grace-period fix lands.
+- Verification (pending — to land in the next entry):
+  - Push code to origin, git pull on VPS
+  - Dry-run on VPS: `node backend/src/scripts/dailyInternNudges.js --dry` — confirm Meghana now appears in NEW bucket, not BLACK; confirm other genuine BLACK cases (interns 30+ days in with no activity) still classify as BLACK
+  - Show Ali the dry-run output (who would be auto-exited if flipped to live) and confirm before flipping mode to `live`
+- Notes:
+  - GRACE_PERIOD_DAYS is a constant in the tracker. If we ever want to override at runtime (e.g., for a stricter cohort), expose it as `INTERN_GRACE_PERIOD_DAYS` env var.
+  - `earliestAssignmentAt` is a proxy, not a true start date. If an intern was assigned to a project months ago but had their access removed and re-added, the tracker would still consider them "old" because the original todo's created_at is unchanged. Acceptable for the current use case but worth noting if we add re-enrollment workflows.
+
 ### HireRight education verification FINAL — sent to HireRight after Ali's corrections (2026-06-08)
 - Date: 2026-06-08
 - Session: CC-20260608-4qm2
