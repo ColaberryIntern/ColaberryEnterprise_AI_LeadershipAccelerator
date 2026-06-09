@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { strategyPrepUpload } from '../config/upload';
+import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import {
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
@@ -129,6 +132,47 @@ router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requir
     res.json({ summary, file_name: file.originalname });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Project DNA endpoints
+const projectDnaSchema = z.object({
+  businessProblem: z.string().trim().min(5, 'businessProblem must be at least 5 characters'),
+  targetUser:      z.string().trim().min(2, 'targetUser is required'),
+  industry:        z.string().trim().min(1, 'industry is required'),
+  orientation:     z.enum(['internal', 'external']),
+  focus:           z.enum(['revenue', 'operational']),
+  projectTypes:    z.array(z.string()).min(1, 'At least one project type is required'),
+  dataSources:     z.array(z.string()).default([]),
+  aiComponents:    z.array(z.string()).min(1, 'At least one AI component is required'),
+  industryTrack:   z.string().trim().min(1, 'industryTrack is required'),
+});
+
+router.post('/api/portal/project-dna', requireParticipant, async (req, res) => {
+  const parse = projectDnaSchema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0]?.message ?? 'Invalid input' });
+    return;
+  }
+  try {
+    const record = await saveProjectDna(req.participant!.sub, parse.data);
+    res.status(201).json(record);
+  } catch (err: any) {
+    const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+    console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'project_dna_save_failed', correlation_id: correlationId, outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'Failed to save Project DNA' });
+  }
+});
+
+router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
+  try {
+    const record = await getProjectDna(req.participant!.sub);
+    if (!record) { res.status(404).json({ error: 'No Project DNA found' }); return; }
+    res.json(record);
+  } catch (err: any) {
+    const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+    console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'project_dna_get_failed', correlation_id: correlationId, outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'Failed to retrieve Project DNA' });
   }
 });
 
