@@ -272,7 +272,7 @@ function ProjectDnaWizard() {
                       aria-checked={form.orientation === v}
                       tabIndex={0}
                       onClick={() => setField('orientation', v)}
-                      onKeyDown={(e) => e.key === 'Enter' && setField('orientation', v)}
+                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setField('orientation', v)}
                     >
                       <i
                         className={`bi ${form.orientation === v ? 'bi-record-circle-fill' : 'bi-circle'}`}
@@ -306,7 +306,7 @@ function ProjectDnaWizard() {
                       aria-checked={form.focus === v}
                       tabIndex={0}
                       onClick={() => setField('focus', v)}
-                      onKeyDown={(e) => e.key === 'Enter' && setField('focus', v)}
+                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setField('focus', v)}
                     >
                       <i
                         className={`bi ${form.focus === v ? 'bi-record-circle-fill' : 'bi-circle'}`}
@@ -352,7 +352,7 @@ function ProjectDnaWizard() {
                           aria-checked={sel}
                           tabIndex={0}
                           onClick={() => toggle('projectTypes', value)}
-                          onKeyDown={(e) => e.key === 'Enter' && toggle('projectTypes', value)}
+                          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('projectTypes', value)}
                         >
                           <i className={`bi ${icon}`} style={{ fontSize: 18, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
                           <span className="small fw-medium" style={{ color: sel ? '#1e293b' : 'var(--color-text-light)' }}>{label}</span>
@@ -383,7 +383,7 @@ function ProjectDnaWizard() {
                           aria-checked={sel}
                           tabIndex={0}
                           onClick={() => toggle('dataSources', value)}
-                          onKeyDown={(e) => e.key === 'Enter' && toggle('dataSources', value)}
+                          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('dataSources', value)}
                         >
                           <i className={`bi ${sel ? 'bi-check-square-fill' : 'bi-square'}`}
                             style={{ fontSize: 14, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
@@ -423,7 +423,7 @@ function ProjectDnaWizard() {
                         aria-checked={sel}
                         tabIndex={0}
                         onClick={() => toggle('aiComponents', value)}
-                        onKeyDown={(e) => e.key === 'Enter' && toggle('aiComponents', value)}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('aiComponents', value)}
                       >
                         <i
                           className={`bi ${sel ? 'bi-check-circle-fill' : 'bi-circle'}`}

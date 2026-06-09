@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { strategyPrepUpload } from '../config/upload';
+import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import {
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
@@ -153,22 +155,24 @@ router.post('/api/portal/project-dna', requireParticipant, async (req, res) => {
     return;
   }
   try {
-    const { saveProjectDna } = await import('../services/projectDnaService');
     const record = await saveProjectDna(req.participant!.sub, parse.data);
     res.status(201).json(record);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+    console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'project_dna_save_failed', correlation_id: correlationId, outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'Failed to save Project DNA' });
   }
 });
 
 router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
   try {
-    const { getProjectDna } = await import('../services/projectDnaService');
     const record = await getProjectDna(req.participant!.sub);
     if (!record) { res.status(404).json({ error: 'No Project DNA found' }); return; }
     res.json(record);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+    console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'project_dna_get_failed', correlation_id: correlationId, outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'Failed to retrieve Project DNA' });
   }
 });
 

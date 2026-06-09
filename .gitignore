@@ -29,6 +29,9 @@ coverage/
 # Docker volumes
 pgdata/
 
+# Local task/brief scratch dirs (not part of codebase)
+kes-tasks/
+
 # Tooling JWT for screenshot capture scripts — never commit (CLAUDE.md screenshot protocol)
 scripts/.ali_jwt.txt
 scripts/.*_jwt.txt

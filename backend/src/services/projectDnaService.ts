@@ -1,6 +1,19 @@
 import { QueryTypes } from 'sequelize';
+import { randomUUID } from 'crypto';
 import { sequelize } from '../config/database';
 import ProjectDna from '../models/ProjectDna';
+
+function log(level: 'info' | 'error', event: string, enrollmentId: string, extra?: Record<string, unknown>) {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    service: 'backend',
+    event,
+    correlation_id: randomUUID(),
+    outcome: level === 'error' ? 'failure' : 'success',
+    context: { enrollment_id: enrollmentId, ...extra },
+  }));
+}
 
 export interface ProjectDnaInput {
   businessProblem: string;
@@ -36,6 +49,7 @@ export async function saveProjectDna(
   enrollmentId: string,
   input: ProjectDnaInput
 ): Promise<ProjectDnaRecord> {
+  const start = Date.now();
   await sequelize.query(
     `INSERT INTO project_dna
        (enrollment_id, business_problem, target_user, industry, orientation, focus,
@@ -73,10 +87,12 @@ export async function saveProjectDna(
 
   const record = await ProjectDna.findOne({ where: { enrollment_id: enrollmentId } });
   if (!record) throw new Error('ProjectDna upsert succeeded but row not found');
+  log('info', 'project_dna_saved', enrollmentId, { duration_ms: Date.now() - start });
   return record as unknown as ProjectDnaRecord;
 }
 
 export async function getProjectDna(enrollmentId: string): Promise<ProjectDnaRecord | null> {
   const record = await ProjectDna.findOne({ where: { enrollment_id: enrollmentId } });
+  log('info', 'project_dna_fetched', enrollmentId, { found: !!record });
   return record as unknown as ProjectDnaRecord | null;
 }
