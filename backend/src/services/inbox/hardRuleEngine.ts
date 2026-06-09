@@ -1,5 +1,6 @@
 import InboxVip from '../../models/InboxVip';
 import InboxRule from '../../models/InboxRule';
+import { countPriorEmailsFromSender } from './senderHistory';
 
 const LOG_PREFIX = '[InboxCOS][HardRule]';
 
@@ -106,14 +107,24 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   // recipient lists, assignment summaries — not because someone is addressing him.
   // Skip the name check for these domains. Also restrict the check to subject only,
   // since body matches over-fire on project-management noise.
+  //
+  // Cold-outreach platforms inject "Ali Muwwakkil" into subjects to bypass spam
+  // filters (e.g. "Re: Ali Muwwakkil, Opportunity for Private Funding" from a
+  // private-funding scam, 2026-06-09). Require the sender to have prior history
+  // — known correspondents keep the legacy behavior, first-time senders fall
+  // through to the LLM (which has its own first-time-sender penalty).
   const AUTO_NOTIFICATION_SENDERS =
     /@(3\.basecamp\.com|tc\.rocketmortgage\.com|zoom\.us|dart\.org|opentable\.com|substack\.com|lyftmail\.com|nextdoor\.com|otter\.ai|mailchimp\.com|sendgrid\.net|amazonses\.com)$/i;
   const isAutoNotificationSender = AUTO_NOTIFICATION_SENDERS.test(email.from_address);
   const namePattern = /ali\s+muwwakkil/i;
   if (!isAutoNotificationSender && namePattern.test(email.subject)) {
-    const reason = 'Directly addressed to Ali Muwwakkil';
-    console.log(`${LOG_PREFIX} Name match: ${reason}`);
-    return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+    const priorCount = await countPriorEmailsFromSender(email.from_address, email.id);
+    if (priorCount > 0) {
+      const reason = `Directly addressed to Ali Muwwakkil (sender has ${priorCount} prior emails)`;
+      console.log(`${LOG_PREFIX} Name match: ${reason}`);
+      return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+    }
+    console.log(`${LOG_PREFIX} Name match skipped — first-time sender, deferring to LLM`);
   }
 
   // --- 3. Keyword Check ---
@@ -141,8 +152,12 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   // The Skool sub-rule: noreply@skool.com is normally P3, but escalates
   // to INBOX when a P1 sender's name appears in the body (Ali approved
   // 2026-06-03). Implemented inline below.
+  // Each entry matches "@<entry>" exactly OR "*.<entry>" (any subdomain).
+  // Use the bare email-distribution domain (e.g. `email.nextdoor.com`) so all
+  // sender subdomains (`rs.`, `is.`, `ss.`, future `xx.`) are covered without
+  // having to enumerate each one.
   const P3_NOISE_SENDERS = [
-    'deals.priceline.com', 'rs.email.nextdoor.com', 'is.email.nextdoor.com',
+    'deals.priceline.com', 'email.nextdoor.com',
     'marketing.lyftmail.com', 'vimeo.com',
     'noreply.bizjournals.com', 'news.bizjournals.com',
     'pipdecks.com', 'ifttt.com',

@@ -10,18 +10,36 @@
  * Gmail's mobile push notification is the alert (same UX as the VIP
  * system). Subject line is engineered for lock-screen preview.
  *
- * Same callers, same alert content - just a different delivery rail.
+ * TONE-DOWN 2026-06-05 (per Ali approval, CC-20260603-v7da):
+ *   - Dropped the noisiest keyword "urgent" (was 74/wk of false positives
+ *     on promo email bodies). 4 keywords now, all narrow.
+ *   - URGENT classifier now matches subject ONLY (not body). Cuts promo
+ *     emails like "last chance: 30% off" from tripping the alert.
+ *   - 24h dedupe per (sender, keyword) backed by inbox_alert_log DB table.
+ *   - alertSyncFailure() moved from in-process Map throttle to DB-backed
+ *     dedupe so container restarts don't re-fire the same auth failure.
  */
 import nodemailer from 'nodemailer';
+import { sequelize } from '../../config/database';
+import { QueryTypes } from 'sequelize';
 
 const LOG_PREFIX = '[InboxCOS][Alert]';
 const ALERT_TO = process.env.INBOX_COS_ALERT_GMAIL || 'alimuwwakkil@gmail.com';
 
+// Narrowed 2026-06-05 from 12 to 4. Dropped "urgent" (74/wk noise from
+// promo bodies), "immediate" (14/wk - vague), "time-sensitive", "critical",
+// "overdue", "past due", "final notice", "last chance" - all of those
+// trip on routine marketing emails. The 4 remaining are subject-only
+// signals that strongly indicate the sender expects a response.
 const URGENT_KEYWORDS = [
-  'urgent', 'asap', 'deadline', 'emergency', 'immediate',
-  'time-sensitive', 'critical', 'action required', 'past due',
-  'overdue', 'final notice', 'last chance',
+  'asap', 'deadline', 'emergency', 'action required',
 ];
+
+// 24h dedupe window for URGENT alerts. Backed by inbox_alert_log.
+const URGENT_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+// 7d dedupe window for auth-expired notices. Once we tell Ali the gmail
+// token died, don't tell him again until 7 days later or he resolves it.
+const AUTH_FAILURE_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function sendSms(message: string): Promise<boolean> {
   if (!process.env.MANDRILL_API_KEY) {
@@ -57,6 +75,38 @@ async function sendSms(message: string): Promise<boolean> {
 }
 
 /**
+ * DB-backed dedupe check. Returns true if a matching alert was sent within
+ * the window; the caller should suppress the new alert. Returns false (no
+ * matching recent alert) on lookup error so we err on the side of sending.
+ */
+async function wasRecentlySent(alertKind: string, dedupKey: string, windowMs: number): Promise<boolean> {
+  try {
+    const [rows] = await sequelize.query(
+      `SELECT 1 FROM inbox_alert_log
+       WHERE alert_kind = :kind AND dedup_key = :key
+         AND sent_at > NOW() - (:ms || ' milliseconds')::interval
+       LIMIT 1`,
+      { type: QueryTypes.RAW, replacements: { kind: alertKind, key: dedupKey, ms: String(windowMs) } }
+    ) as [any[], unknown];
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (err: any) {
+    console.error(`${LOG_PREFIX} dedupe lookup failed: ${err.message} - allowing send`);
+    return false;
+  }
+}
+
+async function recordSent(alertKind: string, dedupKey: string): Promise<void> {
+  try {
+    await sequelize.query(
+      `INSERT INTO inbox_alert_log (alert_kind, dedup_key) VALUES (:kind, :key)`,
+      { type: QueryTypes.INSERT, replacements: { kind: alertKind, key: dedupKey } }
+    );
+  } catch (err: any) {
+    console.error(`${LOG_PREFIX} dedupe write failed: ${err.message}`);
+  }
+}
+
+/**
  * Alert when a VIP emails any inbox.
  */
 export async function alertVipEmail(vipName: string, subject: string, provider: string): Promise<void> {
@@ -70,17 +120,28 @@ export async function alertVipEmail(vipName: string, subject: string, provider: 
 }
 
 /**
- * Alert when an email contains urgent keywords.
+ * Alert when an email contains urgent keywords. Per-sender per-keyword
+ * 24h dedupe so a chatty sender doesn't trip the same alert repeatedly.
  */
 export async function alertUrgentEmail(from: string, subject: string, matchedKeyword: string): Promise<void> {
-  await sendSms(`URGENT: "${matchedKeyword}" detected\nFrom: ${from}\n${subject.slice(0, 60)}`);
+  const dedupKey = `${from.toLowerCase()}|${matchedKeyword.toLowerCase()}`;
+  if (await wasRecentlySent('urgent_keyword', dedupKey, URGENT_DEDUP_WINDOW_MS)) {
+    console.log(`${LOG_PREFIX} URGENT suppressed (24h dedupe): ${dedupKey}`);
+    return;
+  }
+  const sent = await sendSms(`URGENT: "${matchedKeyword}" detected\nFrom: ${from}\n${subject.slice(0, 60)}`);
+  if (sent) await recordSent('urgent_keyword', dedupKey);
 }
 
 /**
- * Check if an email body/subject contains urgent keywords.
+ * Check if an email subject contains urgent keywords.
+ *
+ * CHANGED 2026-06-05: subject-only match (body removed). Body matches
+ * were hitting promo emails ("last chance" coupons, "final notice"
+ * billing pings). The signal we want lives in the subject.
  */
-export function detectUrgentKeywords(subject: string, bodyText: string | null): string | null {
-  const text = `${subject} ${bodyText || ''}`.toLowerCase();
+export function detectUrgentKeywords(subject: string, _bodyText: string | null): string | null {
+  const text = subject.toLowerCase();
   for (const kw of URGENT_KEYWORDS) {
     if (text.includes(kw)) return kw;
   }
@@ -119,23 +180,25 @@ export async function sendDailySummary(stats: {
 
 /**
  * Alert when an InboxCOS sync or archive operation fails authentication.
- * Throttled to once per day per provider+kind so a stuck token doesn't
- * spam SMS every minute.
+ *
+ * CHANGED 2026-06-05: persisted dedupe via inbox_alert_log so container
+ * restarts (frequent during deploys) don't wipe the throttle. 7-day
+ * window per (provider, kind) so the same auth-expired notice doesn't
+ * fire on every cron tick after a deploy.
  */
-const lastAuthAlertAt = new Map<string, number>();
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
 export async function alertSyncFailure(
   provider: string,
   kind: 'sync' | 'archive',
   errorMessage: string
 ): Promise<void> {
-  const key = `${provider}:${kind}`;
-  const last = lastAuthAlertAt.get(key) || 0;
-  if (Date.now() - last < ONE_DAY_MS) return; // throttled
-
   const isAuthError = /invalid_grant|invalid_credentials|unauthorized|expired/i.test(errorMessage);
   if (!isAuthError && kind === 'sync') return; // only alert on auth-class sync errors; non-auth sync errors are usually transient
+
+  const dedupKey = `${provider}|${kind}`;
+  if (await wasRecentlySent('auth_failure', dedupKey, AUTH_FAILURE_DEDUP_WINDOW_MS)) {
+    console.log(`${LOG_PREFIX} auth-failure suppressed (7d dedupe): ${dedupKey}`);
+    return;
+  }
 
   const providerLabel: Record<string, string> = {
     gmail_colaberry: 'Colaberry Gmail',
@@ -149,7 +212,7 @@ export async function alertSyncFailure(
   const sent = await sendSms(
     `Inbox COS ${action} failed (${inbox}): ${reason}. Re-run scripts/inbox-auth-helper.js.`
   );
-  if (sent) lastAuthAlertAt.set(key, Date.now());
+  if (sent) await recordSent('auth_failure', dedupKey);
 }
 
 export { sendSms };

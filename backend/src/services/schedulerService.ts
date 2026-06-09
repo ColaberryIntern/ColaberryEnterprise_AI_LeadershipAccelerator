@@ -2476,6 +2476,59 @@ export function startScheduler(): void {
       }
     })();
   });
+
+  // Anthropic content watcher — nightly at 02:00 UTC.
+  // Fetches all anthropic_content_registry rows, content-hashes each URL,
+  // and flags changed rows for L2 Change Detection Engine (Week 3).
+  cron.schedule('0 2 * * *', () => {
+    instrumentCronJob('AnthropicContentWatcher', async () => {
+      const { runContentWatcher } = require('./anthropicContentWatcher');
+      const result = await runContentWatcher();
+      console.log(`[Scheduler] AnthropicContentWatcher: checked=${result.checked} changed=${result.changed} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic content watcher error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic content watcher: nightly at 02:00 UTC');
+
+  // Anthropic change detector (L2) — nightly at 02:30 UTC.
+  // Reads rows flagged by L1 (change_detected=true), writes to anthropic_change_events,
+  // then clears the flag so the next L1 run starts clean.
+  cron.schedule('30 2 * * *', () => {
+    instrumentCronJob('AnthropicChangeDetector', async () => {
+      const { runChangeDetector } = require('./anthropicChangeDetector');
+      const result = await runChangeDetector();
+      console.log(`[Scheduler] AnthropicChangeDetector: processed=${result.processed} skipped=${result.skipped} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic change detector error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic change detector: nightly at 02:30 UTC');
+
+  // Anthropic curriculum impact agent (L3) — nightly at 03:00 UTC.
+  // Scores unscored change events via gpt-4o-mini, updates severity column,
+  // and emails Ali for any events scoring 7+.
+  cron.schedule('0 3 * * *', () => {
+    instrumentCronJob('AnthropicCurriculumImpactAgent', async () => {
+      const { runCurriculumImpactAgent } = require('./anthropicCurriculumImpactAgent');
+      const result = await runCurriculumImpactAgent();
+      console.log(`[Scheduler] AnthropicCurriculumImpactAgent: scored=${result.scored} alerted=${result.alerted} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic curriculum impact agent error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic curriculum impact agent: nightly at 03:00 UTC');
+
+  // Family Command Center daily + weekly: moved to host crontab on the VPS using
+  // /opt/colaberry-accelerator/scripts/cron-env-wrapper.sh (CC-20260609-em4f).
+  // Rationale: the raw .js script files in backend/src/scripts/ are NOT copied
+  // into the runtime container image by the Dockerfile, so the prior in-container
+  // execFile() approach failed with ENOENT every time. The host crontab pattern
+  // (already used by ~20 other recurring jobs) sees the .js files directly,
+  // probes the BC token live against CCPP via the wrapper, and survives container
+  // rebuilds. Crontab entries to register on the VPS:
+  //   0 11 * * * (every day, 6 AM CT)        -> sendFamilyCommandCenterDaily.js
+  //   0 13 * * 1 (Monday, 8 AM CT)           -> sendFamilyCommandCenterDaily.js --weekly
 }
 
 // ---------------------------------------------------------------------------

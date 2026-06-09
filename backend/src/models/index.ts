@@ -192,6 +192,10 @@ import FormDefinition from './FormDefinition';
 import RoutingRule from './RoutingRule';
 import RawLeadPayload from './RawLeadPayload';
 
+// Anthropic Intelligence Layer (L1 + L2)
+import AnthropicContentRegistry from './AnthropicContentRegistry';
+import AnthropicChangeEvent from './AnthropicChangeEvent';
+
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
 import InboxClassification from './InboxClassification';

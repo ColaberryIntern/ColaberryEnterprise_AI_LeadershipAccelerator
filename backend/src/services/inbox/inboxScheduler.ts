@@ -74,28 +74,10 @@ export function startInboxScheduler(): void {
     }, LEARNING_INTERVAL)
   );
 
-  // Timer 5: ASK_USER SMS alert (alongside digest, every 4 hours)
-  intervalIds.push(
-    setInterval(async () => {
-      try {
-        const { sequelize } = await import('../../config/database');
-        const [pending] = await sequelize.query(
-          "SELECT ie.from_name, ie.from_address, ie.subject FROM inbox_emails ie " +
-          "JOIN inbox_classifications ic ON ie.id = ic.email_id " +
-          "WHERE ic.state = 'ASK_USER' ORDER BY ie.received_at DESC LIMIT 5"
-        ) as [any[], unknown];
-        if (pending.length > 0) {
-          const { alertAskUserPending } = await import('./smsAlertService');
-          await alertAskUserPending(pending.length, pending.map((p: any) => ({
-            from: p.from_name || p.from_address,
-            subject: p.subject,
-          })));
-        }
-      } catch (error: any) {
-        console.error(`${LOG_PREFIX} ASK_USER SMS alert error: ${error.message}`);
-      }
-    }, DIGEST_INTERVAL)
-  );
+  // Timer 5 (REMOVED 2026-06-05, CC-20260603-v7da): the ASK_USER SMS-alert
+  // path duplicated Timer 3's digest content (same data, same 4h cadence)
+  // and was adding 18+/wk redundant emails to alimuwwakkil@gmail.com.
+  // Timer 3 (askUserDigestService.sendPendingDigests) covers it.
 
   // Timer 6: Daily morning summary (check hourly, send at 7 AM CDT)
   intervalIds.push(
@@ -161,7 +143,7 @@ export function startInboxScheduler(): void {
   );
 
   isRunning = true;
-  console.log(`${LOG_PREFIX} Started with 7 timers (sync, process, digest, learning, sms-alerts, daily-summary, meeting-prep)`);
+  console.log(`${LOG_PREFIX} Started with 6 timers (sync, process, digest, learning, daily-summary, meeting-prep)`);
 }
 
 /**

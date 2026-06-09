@@ -1,6 +1,24 @@
 import OpenAI from 'openai';
+import { countPriorEmailsFromSender } from './senderHistory';
 
 const LOG_PREFIX = '[InboxCOS][LLM]';
+
+// Subject/body fragments that almost exclusively appear in cold outreach.
+// Each match contributes a deterministic penalty regardless of LLM verdict —
+// the LLM was scoring podcast/MRR/consulting pitches at 85-90 because they
+// look like business communications. These signals catch the pattern.
+const COLD_OUTREACH_PATTERNS: RegExp[] = [
+  /\b(more|grow|boost|scale|10x|2x)\s+(your\s+)?(mrr|revenue|sales|pipeline|leads|business)\b/i,
+  /\b(open\s+(for|to)|interested\s+in)\s+(advertising|partnership|sponsoring|guest|podcast|collaboration)\b/i,
+  /\b(guest|feature\s+you)\s+on\s+(your|the)\s+(podcast|show|newsletter)\b/i,
+  /\b(quick|brief|short)\s+(call|chat|intro|coffee)\b/i,
+  /\b(15|20|30)[\s-]?min(ute)?s?\b.*\b(call|chat|demo|intro)\b/i,
+  /\bworth\s+a\s+(quick\s+)?(call|chat|conversation)\b/i,
+  /\bwould\s+you\s+be\s+(open\s+to|interested\s+in|down\s+for)\b/i,
+  /\b(follow[- ]?up|following\s+up|circling\s+back|bumping\s+this)\b/i,
+  /\bbundling\s+your\b/i,
+  /\bbeating\s+(goliath|giants)\b/i,
+];
 
 interface NormalizedEmail {
   id: string;
@@ -28,9 +46,21 @@ Classify this email on a confidence scale of 0-100 for how likely it requires Al
 
 Context:
 - Ali runs Colaberry (enterprise AI training), has school-age children
-- He cares about: direct business communications, family/school matters, investor relations, partnership requests, personal messages from known contacts
-- He does NOT need to see: newsletters, marketing, automated notifications, receipts, social media alerts, bulk sends
-- User preference: bias toward filtering OUT — only surface what truly matters
+- He cares about: direct business communications from known contacts, family/school matters, investor relations, partnership requests from existing relationships, personal messages
+- He does NOT need to see: newsletters, marketing, automated notifications, receipts, social media alerts, bulk sends, AND cold outreach (see below)
+
+COLD OUTREACH — DO NOT SURFACE (score 30 or lower, category "marketing"):
+Cold outreach is the largest source of false positives in this inbox. It commonly:
+- Pitches podcast appearances or guest spots ("would love to feature you", "guest on your podcast", "from contact-center data to AI")
+- Pitches consulting, advertising, or partnerships from senders Ali has never replied to ("bundling your consulting", "open for advertising", "potential collaboration")
+- Uses growth-hook hype ("more MRR", "scale your business", "10x your pipeline", "beating Goliath with AI")
+- Asks for a "quick 15-min call" or "brief intro chat"
+- Drops Ali's name into the subject ("Re: Ali Muwwakkil, Opportunity for X") to look personalized
+- Comes from never-seen-before senders with no thread history
+
+These look like business communications but they are NOT — they are unsolicited pitches. Default to filtering them out. A real business contact will have prior email history with Ali or will be CC'd alongside a known Colaberry address.
+
+User preference: bias HARD toward filtering OUT — only surface what truly matters. When in doubt, score lower.
 
 Respond in JSON only:
 {
@@ -111,6 +141,23 @@ export async function classifyWithLLM(email: NormalizedEmail): Promise<Classific
     }
     if ((email.body_text || '').length < 50) {
       adjusted -= 10;
+    }
+
+    // Cold-outreach signal: pitch keywords in subject or first 500 chars of body.
+    // Single penalty regardless of match count — multiple hits don't compound.
+    const pitchHaystack = `${email.subject || ''}\n${(email.body_text || '').slice(0, 500)}`;
+    if (COLD_OUTREACH_PATTERNS.some((rx) => rx.test(pitchHaystack))) {
+      adjusted -= 25;
+    }
+
+    // First-time-sender signal: zero prior emails from this address is the
+    // strongest cold-outreach predictor. Skip the DB query if the sender is
+    // already a no-reply/list-unsub (other signals already cover those).
+    if (!hasListUnsubscribe && !/no[-_.]?reply/i.test(email.from_address)) {
+      const priorCount = await countPriorEmailsFromSender(email.from_address, email.id);
+      if (priorCount === 0) {
+        adjusted -= 20;
+      }
     }
 
     // Positive signals
