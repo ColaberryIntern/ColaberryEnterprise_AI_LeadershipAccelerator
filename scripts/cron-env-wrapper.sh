@@ -22,9 +22,10 @@ ENV_VARS=$(docker compose -f docker-compose.production.yml exec -T backend env 2
 
 eval "$ENV_VARS"
 
-# Token health probe: if BASECAMP_ACCESS_TOKEN is missing OR returns 401 on a
-# real BC API call, refetch from CCPP. /authorization.json is the canonical
-# lightweight probe — 200 means token has at least account-read scope.
+# Token health probe: if BASECAMP_ACCESS_TOKEN is missing OR returns non-200 on
+# a real BC API call, refetch from CCPP. /3945211/projects.json is the canonical
+# lightweight probe — any token with account access returns 200; stale/rotated
+# tokens return 401. (BC3 has no /authorization.json endpoint.)
 probe_bc_token() {
   if [ -z "$BASECAMP_ACCESS_TOKEN" ]; then
     return 1
@@ -34,7 +35,7 @@ probe_bc_token() {
     -H "Authorization: Bearer $BASECAMP_ACCESS_TOKEN" \
     -H "User-Agent: Colaberry CronEnvProbe" \
     --max-time 10 \
-    https://3.basecampapi.com/authorization.json 2>/dev/null)
+    https://3.basecampapi.com/3945211/projects.json 2>/dev/null)
   [ "$code" = "200" ]
 }
 
