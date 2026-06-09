@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Family Command Center — Morning Briefing · Tue Jun 9, 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --navy:#1a365d; --navy-deep:#0f2540; --gold:#c9a55c;
+    --bg:#f6f7fb; --card:#ffffff; --line:#e2e8f0; --line-soft:#eef2f7;
+    --ink:#0f172a; --ink2:#475569; --muted:#94a3b8;
+    --creed:#2563eb; --creed-soft:#dbeafe;
+    --addison:#9333ea; --addison-soft:#f3e8ff;
+    --parents:#ea580c; --parents-soft:#ffedd5;
+    --travel:#0891b2; --travel-soft:#cffafe;
+    --action:#dc2626; --action-soft:#fee2e2;
+    --ok:#15803d; --ok-soft:#dcfce7;
+    --info:#0e7490; --info-soft:#cffafe;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:880px;margin:0 auto;padding:24px 16px 80px}
+  /* HERO */
+  .hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-deep) 100%);color:#fff;border-radius:18px;padding:28px 28px 24px;box-shadow:0 10px 30px rgba(15,37,64,.15);position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(201,165,92,.25) 0%,transparent 70%);pointer-events:none}
+  .hero .tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);background:rgba(201,165,92,.12);padding:5px 10px;border-radius:999px;border:1px solid rgba(201,165,92,.4)}
+  .hero h1{margin:14px 0 6px;font-size:28px;font-weight:700;letter-spacing:-.02em}
+  .hero .date{font-size:14px;color:#cbd5e1;margin-bottom:18px}
+  .hero .greet{font-size:17px;line-height:1.55;color:#e2e8f0;margin:0 0 14px}
+  .hero .greet strong{color:#fff;font-weight:600}
+  .pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .pill{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--gold)}
+  .pill.action{background:rgba(220,38,38,.2);border-color:rgba(252,165,165,.5)}
+  .pill.action .dot{background:#fca5a5}
+  .pill.travel{background:rgba(8,145,178,.22);border-color:rgba(103,232,249,.4)}
+  .pill.travel .dot{background:#67e8f9}
+  /* SECTION */
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 22px 20px;margin-top:18px;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+  section h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink2);margin:0 0 4px;font-weight:700}
+  section .h-title{font-size:20px;font-weight:700;color:var(--ink);margin:0 0 14px;letter-spacing:-.01em}
+  section .h-sub{font-size:13px;color:var(--ink2);margin:-10px 0 16px}
+  /* TIMELINE */
+  .timeline{position:relative;padding-left:6px}
+  .t-row{display:grid;grid-template-columns:74px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line-soft);transition:background .15s}
+  .t-row:last-child{border-bottom:none}
+  a.t-row{display:grid;color:inherit}
+  a.t-row:hover{background:#fafbff;border-radius:8px}
+  .t-time{font-size:13px;font-weight:600;color:var(--ink2);padding-top:2px;font-variant-numeric:tabular-nums}
+  .t-time .ampm{font-size:10px;color:var(--muted);font-weight:500;text-transform:uppercase;margin-left:2px}
+  .t-event{position:relative;padding-left:18px}
+  .t-event::before{content:"";position:absolute;left:0;top:7px;width:9px;height:9px;border-radius:50%;background:var(--ink2);border:2px solid #fff;box-shadow:0 0 0 1.5px var(--ink2)}
+  .t-event.creed::before{background:var(--creed);box-shadow:0 0 0 1.5px var(--creed)}
+  .t-event.addison::before{background:var(--addison);box-shadow:0 0 0 1.5px var(--addison)}
+  .t-event.parents::before{background:var(--parents);box-shadow:0 0 0 1.5px var(--parents)}
+  .t-event.travel::before{background:var(--travel);box-shadow:0 0 0 1.5px var(--travel)}
+  .t-event.conflict::before{background:var(--action);box-shadow:0 0 0 1.5px var(--action),0 0 0 5px var(--action-soft)}
+  .t-title{font-size:14.5px;font-weight:600;color:var(--ink);margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .t-title .arr{margin-left:auto;color:var(--muted);font-size:13px;opacity:0;transition:opacity .15s}
+  a.t-row:hover .t-title .arr{opacity:1}
+  .t-meta{font-size:12.5px;color:var(--ink2);margin-top:2px}
+  .t-chip{display:inline-block;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:4px;vertical-align:1px}
+  .chip-creed{background:var(--creed-soft);color:var(--creed)}
+  .chip-addison{background:var(--addison-soft);color:var(--addison)}
+  .chip-parents{background:var(--parents-soft);color:var(--parents)}
+  .chip-travel{background:var(--travel-soft);color:var(--travel)}
+  .chip-action{background:var(--action-soft);color:var(--action)}
+  .chip-work{background:#e2e8f0;color:#475569}
+  /* WEEK CALENDAR */
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:6px}
+  .day{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 8px 10px;min-height:140px;display:flex;flex-direction:column}
+  .day.today{border-color:var(--navy);box-shadow:0 0 0 2px rgba(26,54,93,.15)}
+  .day .dow{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);font-weight:700}
+  .day .dnum{font-size:18px;font-weight:700;color:var(--ink);line-height:1.1;margin-bottom:6px}
+  .day.today .dnum{color:var(--navy)}
+  .day .empty{font-size:10.5px;color:var(--muted);margin-top:6px;font-style:italic}
+  .ev{font-size:10.5px;font-weight:600;padding:4px 6px;border-radius:5px;margin-top:4px;line-height:1.25;display:block;border:1px solid transparent;transition:transform .1s}
+  .ev:hover{transform:translateX(1px)}
+  .ev.creed{background:var(--creed-soft);color:var(--creed)}
+  .ev.addison{background:var(--addison-soft);color:var(--addison)}
+  .ev.parents{background:var(--parents-soft);color:var(--parents)}
+  .ev.travel{background:var(--travel-soft);color:var(--travel)}
+  .ev.action{background:var(--action-soft);color:var(--action)}
+  /* ACTION ITEMS */
+  .actions{display:flex;flex-direction:column;gap:10px}
+  .act{display:grid;grid-template-columns:36px 1fr auto;gap:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);align-items:center}
+  .act.urgent{background:#fff5f5;border-color:#fecaca}
+  .act.upcoming{background:#fffbeb;border-color:#fde68a}
+  .act.info{background:#f0f9ff;border-color:#bae6fd}
+  .act .ico{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:#fff;border:1px solid var(--line)}
+  .act.urgent .ico{background:var(--action);color:#fff;border-color:var(--action)}
+  .act.upcoming .ico{background:#f59e0b;color:#fff;border-color:#f59e0b}
+  .act.info .ico{background:var(--info);color:#fff;border-color:var(--info)}
+  .act .body .title{font-size:14.5px;font-weight:600;color:var(--ink);margin:0 0 2px}
+  .act .body .sub{font-size:12.5px;color:var(--ink2)}
+  .act .due{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--ink2);text-align:right;white-space:nowrap}
+  /* CHANGES */
+  .changes{display:flex;flex-direction:column;gap:10px}
+  .chg{display:grid;grid-template-columns:88px 1fr;gap:14px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:#fafbff}
+  .chg .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:4px 8px;border-radius:4px;text-align:center;height:fit-content}
+  .lbl-new{background:var(--ok-soft);color:var(--ok)}
+  .chg .body .title{font-size:14px;font-weight:600;color:var(--ink);margin:0 0 2px}
+  .chg .body .src{font-size:12px;color:var(--ink2)}
+  .chg .body .quote{font-size:12.5px;color:#334155;border-left:3px solid var(--line);padding:4px 0 4px 10px;margin-top:8px;background:#fff;border-radius:0 6px 6px 0}
+  /* TRAVEL CARD */
+  .travel-card{background:linear-gradient(135deg,#ecfeff 0%,#f0f9ff 100%);border:1px solid var(--travel-soft);border-radius:12px;padding:16px 18px;display:grid;grid-template-columns:48px 1fr auto;gap:14px;align-items:center}
+  .travel-card .badge{width:48px;height:48px;border-radius:12px;background:var(--travel);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center}
+  .travel-card .title{font-size:16px;font-weight:700;color:var(--ink);margin:0 0 2px}
+  .travel-card .meta{font-size:13px;color:var(--ink2)}
+  .travel-card .when{font-size:13px;font-weight:700;color:var(--travel);text-align:right;font-variant-numeric:tabular-nums}
+  .travel-card .when small{display:block;font-weight:500;color:var(--ink2);font-size:11px;margin-top:2px}
+  /* FLASHBACK */
+  .flashback{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .fb{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .fb .img{aspect-ratio:4/3;background:linear-gradient(135deg,#e0e7ff,#fce7f3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:34px;position:relative}
+  .fb.creed .img{background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#1d4ed8}
+  .fb.addison .img{background:linear-gradient(135deg,#f3e8ff,#e9d5ff);color:#7e22ce}
+  .fb.travel .img{background:linear-gradient(135deg,#cffafe,#a5f3fc);color:#0e7490}
+  .fb.parents .img{background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#c2410c}
+  .fb .ago{position:absolute;top:8px;right:8px;background:rgba(15,23,42,.78);color:#fff;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:999px;letter-spacing:.04em}
+  .fb .meta{padding:10px 12px 12px}
+  .fb .meta .date{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);font-weight:700}
+  .fb .meta .what{font-size:13.5px;font-weight:600;color:var(--ink);margin-top:2px;line-height:1.35}
+  .flashback-note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 14px;margin-top:14px;font-size:13px;color:#78350f;line-height:1.55}
+  /* COSTS */
+  table.costs{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.costs th{text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);border-bottom:2px solid var(--line);font-weight:700}
+  table.costs td{padding:10px;border-bottom:1px solid var(--line-soft)}
+  table.costs tr:last-child td{border-bottom:none}
+  table.costs td.amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .cost-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .total-card{background:#fafbff;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .total-card .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);font-weight:700}
+  .total-card .val{font-size:22px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:4px}
+  /* RISK */
+  .risks{display:flex;flex-direction:column;gap:10px}
+  .risk{display:grid;grid-template-columns:36px 1fr;gap:12px;padding:14px;border-radius:10px;border:1px solid #fecaca;background:#fff5f5}
+  .risk.warn{border-color:#fde68a;background:#fffbeb}
+  .risk .ico{font-size:22px;text-align:center;line-height:1}
+  .risk .title{font-size:14.5px;font-weight:600;color:var(--ink);margin:0 0 2px}
+  .risk .sub{font-size:12.5px;color:var(--ink2)}
+  /* LEGEND */
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11.5px;color:var(--ink2)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px}
+  /* RECAP */
+  .narr{font-size:14px;color:var(--ink2);line-height:1.6;background:#fafbff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  /* MERMAID */
+  .mermaid-wrap{background:#fafbff;border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto}
+  /* FOOTER */
+  .foot{text-align:center;color:var(--muted);font-size:11px;margin-top:32px;padding-top:18px;border-top:1px solid var(--line)}
+  .foot strong{color:var(--ink2)}
+  /* RESPONSIVE */
+  @media (max-width:640px){
+    .wrap{padding:14px 10px 60px}
+    .hero{padding:22px 18px}
+    .hero h1{font-size:23px}
+    section{padding:18px 16px}
+    .week{grid-template-columns:repeat(4,1fr)}
+    .flashback{grid-template-columns:repeat(2,1fr)}
+    .cost-totals{grid-template-columns:1fr}
+    .t-row{grid-template-columns:60px 1fr;gap:10px}
+    .travel-card{grid-template-columns:42px 1fr;gap:10px}
+    .travel-card .when{grid-column:1/-1;text-align:left}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <span class="tag">Family Command Center · Morning Briefing</span>
+    <h1>Good morning, Ali &amp; Addie ☀️</h1>
+    <div class="date">Tuesday, June 9, 2026 · Wylie, TX</div>
+    <p class="greet">
+      Big week. Today: <strong>Addison's orthodontist at 3:00 PM</strong> (collides with your AegisFX call).
+      <strong>Tomorrow you leave for Nashville</strong> — back Saturday — so the kids' Thursday school day
+      (Jersey Day for FIFA Opening + Kona Ice) will be Addie's call.
+      Corpus Christi family trip is also still on the horizon for Jul 26–29.
+    </p>
+    <div class="pill-row">
+      <span class="pill action"><span class="dot"></span>1 conflict at 3 PM today</span>
+      <span class="pill travel"><span class="dot"></span>Leave for Nashville tomorrow</span>
+      <span class="pill"><span class="dot"></span>3 new since yesterday</span>
+      <span class="pill travel"><span class="dot"></span>Corpus Christi in 47 days</span>
+    </div>
+  </div>
+
+  <!-- SECTION 1: TODAY'S SNAPSHOT (family-only + conflicts) -->
+  <section>
+    <h2>Section 1 · Today's Snapshot</h2>
+    <div class="h-title">Tuesday — what affects the family</div>
+    <div class="h-sub">Work calendar is hidden unless it conflicts with a family event. Click any row to open the event.</div>
+    <div class="timeline">
+
+      <a class="t-row" href="https://www.google.com/calendar/event?eid=MnFib2l2aG00Nmhvamc2MzV2dWJmcnBpcHRfMjAyNjA2MDlUMTEwMDAwWiBhbGlAY29sYWJlcnJ5LmNvbQ" target="_blank">
+        <div class="t-time">6:00<span class="ampm">am</span></div>
+        <div class="t-event parents">
+          <div class="t-title"><span class="t-chip chip-parents">Parents</span>Get kids to school<span class="arr">→</span></div>
+          <div class="t-meta">Recurring · 30 min</div>
+        </div>
+      </a>
+
+      <a class="t-row" href="https://www.google.com/calendar/u/0/r/day/2026/6/9" target="_blank">
+        <div class="t-time">3:00<span class="ampm">pm</span></div>
+        <div class="t-event addison conflict">
+          <div class="t-title"><span class="t-chip chip-addison">Addison</span><span class="t-chip chip-action">⚠ Conflict</span>Orthodontist — Dr. Robertson<span class="arr">→</span></div>
+          <div class="t-meta">3:00–4:00 PM · Family calendar · overlaps with AegisFX call below</div>
+        </div>
+      </a>
+
+      <a class="t-row" href="https://www.google.com/calendar/event?eid=OGZnYm5nYXZpODVxZzhjbGw3NjZyMWZ2aG8gYWxpQGNvbGFiZXJyeS5jb20" target="_blank">
+        <div class="t-time">3:00<span class="ampm">pm</span></div>
+        <div class="t-event conflict">
+          <div class="t-title"><span class="t-chip chip-work">Work (conflict only)</span>AegisFX Autonomous Trading System<span class="arr">→</span></div>
+          <div class="t-meta">3:00–3:30 PM · same window as Addison's appointment</div>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- SECTION 2+3: UPCOMING WEEK (moved up) -->
+  <section>
+    <h2>Section 2 · Upcoming Week</h2>
+    <div class="h-title">Jun 9 – Jun 15 family calendar</div>
+    <div class="legend">
+      <span><i style="background:var(--creed)"></i> Creed</span>
+      <span><i style="background:var(--addison)"></i> Addison</span>
+      <span><i style="background:var(--parents)"></i> Parents</span>
+      <span><i style="background:var(--travel)"></i> Travel</span>
+      <span><i style="background:var(--action)"></i> Action required</span>
+    </div>
+    <div class="week" style="margin-top:14px">
+      <div class="day today">
+        <div class="dow">Tue</div><div class="dnum">9</div>
+        <a class="ev addison" href="https://www.google.com/calendar/u/0/r/day/2026/6/9" target="_blank">3p Addison ortho</a>
+        <a class="ev action" href="https://www.google.com/calendar/event?eid=OGZnYm5nYXZpODVxZzhjbGw3NjZyMWZ2aG8gYWxpQGNvbGFiZXJyeS5jb20" target="_blank">⚠ 3p conflict</a>
+      </div>
+      <div class="day">
+        <div class="dow">Wed</div><div class="dnum">10</div>
+        <a class="ev travel" href="https://www.google.com/calendar/event?eid=OTFmcDAwMGt2OTY3aThnMDU5OXRxZHViZjAgYWxpQGNvbGFiZXJyeS5jb20" target="_blank">✈️ DFW → BNA</a>
+        <a class="ev travel" href="https://www.google.com/calendar/event?eid=OTFmcDAwMGt2OTY3aThnMDU5OXRxZHViZjAgYWxpQGNvbGFiZXJyeS5jb20" target="_blank">Nashville</a>
+      </div>
+      <div class="day">
+        <div class="dow">Thu</div><div class="dnum">11</div>
+        <a class="ev travel" href="https://www.google.com/calendar/event?eid=OTFmcDAwMGt2OTY3aThnMDU5OXRxZHViZjAgYWxpQGNvbGFiZXJyeS5jb20" target="_blank">🏨 Nashville</a>
+        <a class="ev creed" href="https://mail.google.com/mail/u/0/#search/from%3Aprocare" target="_blank">👕 Jersey Day</a>
+        <a class="ev creed" href="https://mail.google.com/mail/u/0/#search/from%3Aprocare" target="_blank">🍧 Kona Ice</a>
+      </div>
+      <div class="day">
+        <div class="dow">Fri</div><div class="dnum">12</div>
+        <a class="ev travel" href="https://www.google.com/calendar/event?eid=OTFmcDAwMGt2OTY3aThnMDU5OXRxZHViZjAgYWxpQGNvbGFiZXJyeS5jb20" target="_blank">🏨 Nashville</a>
+      </div>
+      <div class="day">
+        <div class="dow">Sat</div><div class="dnum">13</div>
+        <a class="ev travel" href="https://www.google.com/calendar/event?eid=OTFmcDAwMGt2OTY3aThnMDU5OXRxZHViZjAgYWxpQGNvbGFiZXJyeS5jb20" target="_blank">✈️ BNA → DFW</a>
+      </div>
+      <div class="day">
+        <div class="dow">Sun</div><div class="dnum">14</div>
+        <span class="empty">No family events</span>
+      </div>
+      <div class="day">
+        <div class="dow">Mon</div><div class="dnum">15</div>
+        <a class="ev creed" href="https://mail.google.com/mail/u/0/#search/from%3Aprocare" target="_blank">👋 Ms. Brenda back</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRAVEL ON THE HORIZON -->
+  <section>
+    <h2>Section 3 · Travel on the Horizon</h2>
+    <div class="h-title">Trips ahead</div>
+    <a href="https://www.google.com/calendar/event?eid=OTFmcDAwMGt2OTY3aThnMDU5OXRxZHViZjAgYWxpQGNvbGFiZXJyeS5jb20" target="_blank" style="display:block;margin-bottom:10px">
+      <div class="travel-card" style="background:linear-gradient(135deg,#fff7ed 0%,#fef3c7 100%);border-color:#fcd34d">
+        <div class="badge" style="background:#ea580c">✈️</div>
+        <div>
+          <div class="title">Nashville — work trip (ShipCES, likely)</div>
+          <div class="meta">DFW → BNA outbound · BNA → DFW return · Coach · <strong>just added to calendar</strong> · Addie acknowledged 1:50 AM today</div>
+        </div>
+        <div class="when" style="color:#c2410c">Jun 10 → Jun 13<small>tomorrow · 4 days · back Sat</small></div>
+      </div>
+    </a>
+    <a href="https://www.google.com/calendar/event?eid=c2ZlNzZia2dvbDVpY21lMGRnaGpjdm1nMTQgYWxpQGNvbGFiZXJyeS5jb20" target="_blank" style="display:block">
+      <div class="travel-card">
+        <div class="badge">🏖️</div>
+        <div>
+          <div class="title">Corpus Christi — Fairfield Inn &amp; Suites Central</div>
+          <div class="meta">522 South Padre Island Dr · 2 rooms (joining/adjacent) · Conf <strong>TGKQN2NM9</strong></div>
+        </div>
+        <div class="when">Jul 26 → Jul 29<small>in 47 days · 3 nights</small></div>
+      </div>
+    </a>
+    <div class="flashback-note" style="margin-top:12px">
+      ⚠️ <strong>Duplicate detected on your calendar:</strong> this trip is on Ali's calendar twice — once as the manual entry from Apr 30 (the one linked above), and again as a Gmail-auto-generated event from May 29. Recommend removing the auto-generated one to avoid noise.
+    </div>
+  </section>
+
+  <!-- SECTION 4: FAMILY ACTION ITEMS -->
+  <section>
+    <h2>Section 4 · Family Action Items</h2>
+    <div class="h-title">What needs your attention</div>
+    <div class="actions">
+      <div class="act urgent">
+        <div class="ico">⚠️</div>
+        <div class="body">
+          <div class="title">Resolve 3:00 PM conflict — Addison ortho vs AegisFX call</div>
+          <div class="sub">Either reschedule AegisFX (Sunday Dadag — likely flexible) or confirm Addie covers ortho. Decide before noon.</div>
+        </div>
+        <div class="due">Today<br>by 12:00pm</div>
+      </div>
+      <div class="act urgent">
+        <div class="ico">✈️</div>
+        <div class="body">
+          <div class="title">Nashville prep — leaving tomorrow (Wed Jun 10)</div>
+          <div class="sub">Confirm flight times (Expedia booking was at SEATS step — verify it completed). Pack. Brief Addie on Creed's Thursday Jersey Day + Kona Ice so she has it covered.</div>
+        </div>
+        <div class="due">Tonight</div>
+      </div>
+      <div class="act upcoming">
+        <div class="ico">⚽</div>
+        <div class="body">
+          <div class="title">Thursday: Creed wears a jersey for FIFA Opening Day</div>
+          <div class="sub">Procare announcement from Ms. Brenda's class. You'll be in Nashville — flag this to Addie when packing tonight.</div>
+        </div>
+        <div class="due">Thu Jun 11</div>
+      </div>
+      <div class="act upcoming">
+        <div class="ico">🍧</div>
+        <div class="body">
+          <div class="title">Heads up: Kona Ice Thursday (replaces ice cream party)</div>
+          <div class="sub">Tell Creed so he isn't expecting the ice cream party. No money required — included.</div>
+        </div>
+        <div class="due">Thu Jun 11</div>
+      </div>
+      <div class="act info">
+        <div class="ico">👋</div>
+        <div class="body">
+          <div class="title">Ms. Brenda out this week — returns Monday Jun 15</div>
+          <div class="sub">If you have a question/request for Creed's class, route to the office or wait until Monday.</div>
+        </div>
+        <div class="due">Through Sun</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: NEW SINCE YESTERDAY -->
+  <section>
+    <h2>Section 5 · New Since Yesterday</h2>
+    <div class="h-title">What changed in the last 24 hours</div>
+    <div class="changes">
+      <div class="chg">
+        <div class="lbl lbl-new">New</div>
+        <div class="body">
+          <div class="title">Procare Office Chat — Ms. Brenda's class announcement (3 items)</div>
+          <div class="src">Procare · 2:32 PM yesterday · re: Creed Muwwakkil at Liberty Private School</div>
+          <div class="quote">"Ms. Brenda will be on vacation and will return on Monday. There will be Kona Ice on Thursday for the schoolers instead of an Ice Cream Party. Thursday is Jersey Day in celebration of FIFA Opening Day!"</div>
+        </div>
+      </div>
+      <div class="chg">
+        <div class="lbl lbl-new">New</div>
+        <div class="body">
+          <div class="title">Addison orthodontist invite — Dr. Robertson · today 3–4 PM</div>
+          <div class="src">Google Calendar invite (Family) · received yesterday 2:50 PM</div>
+        </div>
+      </div>
+      <div class="chg">
+        <div class="lbl lbl-new">New</div>
+        <div class="body">
+          <div class="title">Nashville trip Jun 10–12 — added to calendar just now</div>
+          <div class="src">Source: Expedia booking link you shared · attendees: Addie + alimuwwakkil@gmail.com</div>
+          <div class="quote">From Addie 1:50 AM today: "Thank you for informing me of your travel plans. For future purposes, I would like more notice for days you'll be out of town. It gives me the opportunity to adjust my schedule accordingly."</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: WEEKLY RECAP -->
+  <section>
+    <h2>Section 6 · Weekly Recap</h2>
+    <div class="h-title">Last 7 days (Jun 2 – Jun 8)</div>
+    <div class="narr">
+      Addison had <strong>Sand Volleyball at Los Rios</strong> both Sunday (Jun 7) and Monday (Jun 8) evening, 6–8 PM. Creed's classroom posted a midweek Office Chat with three announcements (teacher vacation, Kona Ice, Jersey Day). No school payments cleared this week — the last Procare charges were in mid-May. A quiet week on the family front.
+    </div>
+  </section>
+
+  <!-- SECTION 7: FLASHBACK with real Creed photos -->
+  <section>
+    <h2>Section 7 · Flashback</h2>
+    <div class="h-title">🎓 Creed's Primrose Graduation Pictures</div>
+    <div class="h-sub">From Karla Estrada (Primrose Wylie asst. director) · 3 emails sent <strong>Apr 30, 2026 — 40 days ago</strong> · 15 photos total. Click any photo to open it in Drive.</div>
+    <style>
+      .photos{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px}
+      .photos a{display:block;aspect-ratio:1;background:#f1f5f9;border-radius:8px;overflow:hidden;position:relative;border:1px solid var(--line);transition:transform .12s,box-shadow .12s}
+      .photos a:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(15,23,42,.12)}
+      .photos img{width:100%;height:100%;object-fit:cover;display:block;background:linear-gradient(135deg,#dbeafe,#fce7f3)}
+      .photos .nm{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(0deg,rgba(15,23,42,.78) 0%,transparent 100%);color:#fff;font-size:10px;font-weight:600;padding:14px 6px 5px;letter-spacing:.04em}
+      @media (max-width:640px){.photos{grid-template-columns:repeat(3,1fr)}}
+    </style>
+    <div class="photos">
+      <a href="https://drive.google.com/file/d/1Om6cz3ZrjufjTWuADcqBG2HJ9CQiOiqC/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1Om6cz3ZrjufjTWuADcqBG2HJ9CQiOiqC&sz=w400" alt="IMG_7057"><span class="nm">7057</span></a>
+      <a href="https://drive.google.com/file/d/12SfzRBL2uKh8PNxQ-_DScMGezDexj7DU/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=12SfzRBL2uKh8PNxQ-_DScMGezDexj7DU&sz=w400" alt="IMG_7057b"><span class="nm">7057·b</span></a>
+      <a href="https://drive.google.com/file/d/1jaEtLAkyq-EXbiupPbm_FVAGNGCV8Cxx/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1jaEtLAkyq-EXbiupPbm_FVAGNGCV8Cxx&sz=w400" alt="IMG_7058"><span class="nm">7058</span></a>
+      <a href="https://drive.google.com/file/d/1IFyt4AerB5AKzcdI1KmX0xfItLLpauxN/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1IFyt4AerB5AKzcdI1KmX0xfItLLpauxN&sz=w400" alt="IMG_7059"><span class="nm">7059</span></a>
+      <a href="https://drive.google.com/file/d/1Li9_oPKa3nqc2MBM1hZkbxVW7LeqfPZr/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1Li9_oPKa3nqc2MBM1hZkbxVW7LeqfPZr&sz=w400" alt="IMG_7060"><span class="nm">7060</span></a>
+      <a href="https://drive.google.com/file/d/1SGDxIwG0NCbUdEgOBgaQrrwok95URadw/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1SGDxIwG0NCbUdEgOBgaQrrwok95URadw&sz=w400" alt="IMG_7061"><span class="nm">7061</span></a>
+      <a href="https://drive.google.com/file/d/1nLuGCx98dXiQV3uR3P0nlge09hFbWb7B/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1nLuGCx98dXiQV3uR3P0nlge09hFbWb7B&sz=w400" alt="IMG_7062"><span class="nm">7062</span></a>
+      <a href="https://drive.google.com/file/d/1jFjhZ9RanwTBorSGQcCM3mPebkkEYwnz/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1jFjhZ9RanwTBorSGQcCM3mPebkkEYwnz&sz=w400" alt="IMG_7063"><span class="nm">7063</span></a>
+      <a href="https://drive.google.com/file/d/15twc93BlMiW8pXHKQJfC0I-sQ_20DawG/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=15twc93BlMiW8pXHKQJfC0I-sQ_20DawG&sz=w400" alt="IMG_7064"><span class="nm">7064</span></a>
+      <a href="https://drive.google.com/file/d/1kE8RIrv1X4zLuwEaplFZLnrgkVoxSeKH/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1kE8RIrv1X4zLuwEaplFZLnrgkVoxSeKH&sz=w400" alt="IMG_7065"><span class="nm">7065</span></a>
+      <a href="https://drive.google.com/file/d/1dy4vw6Cr7feUpQigYZX9zbdW5LJD248m/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1dy4vw6Cr7feUpQigYZX9zbdW5LJD248m&sz=w400" alt="IMG_7066"><span class="nm">7066</span></a>
+      <a href="https://drive.google.com/file/d/1fHA3Dn9iqsm4HSa8AaQFYr83TLrolta5/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1fHA3Dn9iqsm4HSa8AaQFYr83TLrolta5&sz=w400" alt="IMG_7067"><span class="nm">7067</span></a>
+      <a href="https://drive.google.com/file/d/1RHq7gEnY0TOV1C2hZuL7PG6050_eFi8E/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1RHq7gEnY0TOV1C2hZuL7PG6050_eFi8E&sz=w400" alt="IMG_7068"><span class="nm">7068</span></a>
+      <a href="https://drive.google.com/file/d/1f72uJlp0evPPX8e9aeD5-4uiDwG3BezA/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1f72uJlp0evPPX8e9aeD5-4uiDwG3BezA&sz=w400" alt="IMG_7204"><span class="nm">7204</span></a>
+      <a href="https://drive.google.com/file/d/1Q0IFOp60YsB-35uoOYypyXiCvIAx43ar/view" target="_blank"><img src="https://drive.google.com/thumbnail?id=1Q0IFOp60YsB-35uoOYypyXiCvIAx43ar&sz=w400" alt="IMG_7205"><span class="nm">7205</span></a>
+    </div>
+
+    <div style="margin-top:22px"></div>
+    <div class="h-title" style="font-size:16px">Other moments — last 60 days</div>
+    <div class="flashback">
+
+      <div class="fb addison">
+        <div class="img">🏐<span class="ago">2 days ago</span></div>
+        <div class="meta"><div class="date">Mon · Jun 8</div><div class="what">Addison · Sand Volleyball at Los Rios</div></div>
+      </div>
+
+      <div class="fb addison">
+        <div class="img">🏐<span class="ago">3 days ago</span></div>
+        <div class="meta"><div class="date">Sun · Jun 7</div><div class="what">Addison · Sand Volleyball at Los Rios</div></div>
+      </div>
+
+      <div class="fb travel">
+        <div class="img">🏨<span class="ago">17 days ago</span></div>
+        <div class="meta"><div class="date">Fri · May 22</div><div class="what">Family stay · Country Inn &amp; Suites, Texarkana</div></div>
+      </div>
+
+      <div class="fb creed">
+        <div class="img">📚<span class="ago">40 days ago</span></div>
+        <div class="meta"><div class="date">Thu · Apr 30</div><div class="what">Creed · last Office Chat at Primrose Wylie before switching to Liberty</div></div>
+      </div>
+
+      <div class="fb travel">
+        <div class="img">🌆<span class="ago">41 days ago</span></div>
+        <div class="meta"><div class="date">Wed · Apr 29</div><div class="what">Family stay · DoubleTree, San Antonio Downtown</div></div>
+      </div>
+
+      <div class="fb creed">
+        <div class="img">🏫<span class="ago">43 days ago</span></div>
+        <div class="meta"><div class="date">Mon · Apr 27</div><div class="what">Creed · registered for Liberty Private School Summer Camp</div></div>
+      </div>
+
+    </div>
+
+    <div class="flashback-note">
+      📭 <strong>Why only Apr 30 photos and nothing older?</strong> The 15 photos above are real — Karla Estrada at Primrose Wylie sent them by Gmail to your <code>ali_muwwakkil@hotmail.com</code> on Apr 30, and you forwarded them to Addie's Gmail (which is how this report can see them). Going back further than that in Gmail, school photos hit a wall: <strong>your old school comms all lived in Hotmail</strong>, and the Hotmail → Gmail forward rule only started <strong>Jun 3, 2026</strong> (5 weeks ago). Liberty (current school) and Procare (both schools) never send photos by email — those live in the Procare Parent Portal app. Once you wire in Google Photos, the rest of Creed's history will surface here automatically.
+    </div>
+  </section>
+
+  <!-- SECTION 8: UPCOMING COSTS -->
+  <section>
+    <h2>Section 8 · Upcoming Costs</h2>
+    <div class="h-title">Nothing due this week</div>
+    <div class="h-sub">May Procare charges totaled $660. Next charge expected mid-June based on prior pattern.</div>
+    <table class="costs">
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>For</th><th class="amt">Amount</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>~Jun 15 (proj)</td><td>Procare monthly charge</td><td>Creed (Liberty)</td><td class="amt">$330</td></tr>
+        <tr><td>~Jun 16 (proj)</td><td>Procare secondary charge</td><td>Creed (Liberty)</td><td class="amt">$330</td></tr>
+        <tr><td style="color:var(--muted)">May 16</td><td style="color:var(--muted)">Procare (cleared)</td><td style="color:var(--muted)">Creed</td><td class="amt" style="color:var(--muted)">$330</td></tr>
+        <tr><td style="color:var(--muted)">May 15</td><td style="color:var(--muted)">Procare (cleared)</td><td style="color:var(--muted)">Creed</td><td class="amt" style="color:var(--muted)">$330</td></tr>
+      </tbody>
+    </table>
+    <div class="cost-totals">
+      <div class="total-card"><div class="lab">Due this week</div><div class="val">$0</div></div>
+      <div class="total-card"><div class="lab">Projected this month</div><div class="val">$660</div></div>
+      <div class="total-card"><div class="lab">May actual</div><div class="val">$660</div></div>
+    </div>
+  </section>
+
+  <!-- SECTION 9: PARENT RISK & BLOCKERS -->
+  <section>
+    <h2>Section 9 · Parent Risk &amp; Blockers</h2>
+    <div class="h-title">AI-flagged issues</div>
+    <div class="risks">
+      <div class="risk">
+        <div class="ico">⚠️</div>
+        <div>
+          <div class="title">Schedule collision — 3:00 PM</div>
+          <div class="sub">Addison's orthodontist appointment (3:00–4:00 PM) overlaps with the AegisFX call (3:00–3:30 PM). One parent needs to cover the ortho, or AegisFX needs to move. Sunday Dadag is the only attendee — moving is likely low-friction.</div>
+        </div>
+      </div>
+      <div class="risk warn">
+        <div class="ico">🗓️</div>
+        <div>
+          <div class="title">Duplicate trip on calendar — Corpus Christi Jul 26–29</div>
+          <div class="sub">Manual entry (Apr 30) and Gmail-auto-generated event (May 29) both exist. Two reminders, two listings. Delete the auto-generated one for cleanliness.</div>
+        </div>
+      </div>
+      <div class="risk warn">
+        <div class="ico">📭</div>
+        <div>
+          <div class="title">Hotmail PST export came up empty</div>
+          <div class="sub">The file <code>Ali_Muwwakkil@hotmail.com.pst</code> in Downloads is only 271 KB — that's the size of an empty Outlook data file. The actual mail-export step (Outlook → File → Import/Export → Export to .pst → pick Inbox/folders) didn't run, OR the file is still locked open by Outlook. Until that's redone, older school history stays out of reach.</div>
+        </div>
+      </div>
+      <div class="risk warn">
+        <div class="ico">🤝</div>
+        <div>
+          <div class="title">Addie wants more advance notice on travel</div>
+          <div class="sub">Her 1:50 AM reply today made this explicit. For future trips, add to the family calendar AND give Addie a heads-up before booking — not after.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MERMAID DIAGRAM -->
+  <section>
+    <h2>Family Operations Pipeline</h2>
+    <div class="h-title">How this briefing was assembled</div>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart LR
+  P[Procare<br/>Office Chat + Receipts] --> H[Hotmail → Gmail<br/>forward rule]
+  G[Gmail<br/>school + travel + family] --> H
+  H --> D[Event Detection<br/>+ LLM classify]
+  C[Google Calendar<br/>ali@colaberry + family] --> D
+  GP[Google Photos<br/>future] -.-> D
+  D --> T[Family Timeline]
+  T --> B1[Daily 6 AM Briefing]
+  T --> B2[Weekly Sunday Report]
+  T --> CU[Auto Calendar Events]
+  CU --> A1[Ali]
+  CU --> A2[Addie]
+  T --> BK[Basecamp Project 33392153<br/>archive + flashback]
+  classDef src fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef proc fill:#fef3c7,stroke:#b45309,color:#78350f;
+  classDef out fill:#dcfce7,stroke:#15803d,color:#14532d;
+  classDef future fill:#f3e8ff,stroke:#9333ea,color:#581c87,stroke-dasharray:4 3;
+  class P,G,C src;
+  class H,D,T proc;
+  class B1,B2,CU,A1,A2,BK out;
+  class GP future;
+</pre>
+    </div>
+  </section>
+
+  <div class="foot">
+    <strong>Family Command Center · Prototype Briefing v2</strong><br/>
+    Generated Tue Jun 9, 2026 · Sources: Procare (via Hotmail forward), Gmail OAuth (travel + school), Google Calendar (ali@colaberry.com + Family).<br/>
+    Live HTML preview — not yet sent to inbox. Photos to follow when Google Photos is connected.
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad:true, theme:'default', flowchart:{ curve:'basis', htmlLabels:true } });
+</script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import AnthropicContentRegistry from '../../models/AnthropicContentRegistry';
 import AnthropicChangeEvent from '../../models/AnthropicChangeEvent';
 import { runContentWatcher } from '../../services/anthropicContentWatcher';
 import { runChangeDetector } from '../../services/anthropicChangeDetector';
+import { runCurriculumImpactAgent } from '../../services/anthropicCurriculumImpactAgent';
 
 const router = Router();
 
@@ -70,6 +71,23 @@ router.get('/api/admin/anthropic/change-events', requireAdmin, async (req: Reque
   } catch (err: any) {
     console.error('[anthropicRoutes] change-events fetch failed:', err.message);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// L3: manually trigger the curriculum impact agent
+router.post('/api/admin/sync/anthropic-impact', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const result = await runCurriculumImpactAgent();
+    res.json({
+      ok: true,
+      scored: result.scored,
+      alerted: result.alerted,
+      errors: result.errors,
+      events: result.events,
+    });
+  } catch (err: any) {
+    console.error('[anthropicRoutes] manual impact failed:', err.message);
+    res.status(500).json({ ok: false, error: 'Manual curriculum impact run failed' });
   }
 });
 

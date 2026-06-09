@@ -141,7 +141,7 @@ async function run() {
   console.log('─── 7. CLICKERS WHO DID NOT BOOK (last 7 days, top 10) ─────────────');
   const [nonBookers] = await sequelize.query(`
     SELECT
-      l.id, l.email, l.first_name, l.last_name, l.company,
+      l.id, l.email, l.name, l.company, l.title,
       COUNT(io.id) as click_count,
       MAX(io.created_at) as last_click
     FROM interaction_outcomes io
@@ -149,7 +149,7 @@ async function run() {
     WHERE io.outcome = 'clicked'
     AND io.created_at > NOW() - interval '7 days'
     AND io.lead_id NOT IN (SELECT lead_id FROM strategy_calls WHERE lead_id IS NOT NULL)
-    GROUP BY l.id, l.email, l.first_name, l.last_name, l.company
+    GROUP BY l.id, l.email, l.name, l.company, l.title
     ORDER BY click_count DESC
     LIMIT 10
   `);
@@ -157,7 +157,7 @@ async function run() {
     console.log('  All clickers have booked, or no clicks recorded.');
   } else {
     for (const row of nonBookers as any[]) {
-      console.log(`  ${row.first_name} ${row.last_name} (${row.email}) @ ${row.company || 'N/A'} — ${row.click_count} clicks, last: ${row.last_click}`);
+      console.log(`  ${row.name} (${row.email}) @ ${row.company || 'N/A'} [${row.title || ''}] — ${row.click_count} clicks, last: ${row.last_click}`);
     }
   }
   console.log();

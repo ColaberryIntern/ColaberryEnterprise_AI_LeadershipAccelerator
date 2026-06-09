@@ -31,6 +31,7 @@ const { spawn } = require('child_process');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const { auditAll } = require('./lib/reportingPreflight');
 const { REPORTS: REGISTRY, shouldFireToday } = require('./lib/reportingRegistry');
+const { getBasecampToken } = require('./lib/basecampToken');
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 
@@ -223,6 +224,17 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
 (async () => {
   const now = new Date();
   console.log(`[audit] start ${now.toISOString()}`);
+
+  // Resolve the live Basecamp token from CCPP (Basecamp_AuthInfo) once and set
+  // it on the env so every spawned report AND the preflight inherit it. All
+  // reports read process.env.BASECAMP_ACCESS_TOKEN first, so this keeps the
+  // whole suite off the old hardcoded token that rotates out every 2 weeks.
+  try {
+    process.env.BASECAMP_ACCESS_TOKEN = await getBasecampToken();
+    console.log('[audit] Basecamp token resolved and set for reports + preflight');
+  } catch (e) {
+    console.warn(`[audit] WARN: Basecamp token resolution failed (${e.message}); reports use existing BASECAMP_ACCESS_TOKEN if any.`);
+  }
 
   // Filter reports by:
   //   1. cadence (daily fires every weekday cron; weekly fires only on its dayOfWeek)

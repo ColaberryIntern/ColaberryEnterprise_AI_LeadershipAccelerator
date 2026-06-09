@@ -23,7 +23,7 @@ const recorder = require(path.resolve(__dirname, './lib/reportRunRecorder'));
 
 const BUCKET = parseInt(process.env.INTERN_REPORT_BUCKET || '24865175', 10);
 const MESSAGE_BOARD_ID = parseInt(process.env.INTERN_REPORT_MESSAGE_BOARD || '4450326153', 10);
-const BC_TOKEN = process.env.BASECAMP_ACCESS_TOKEN || 'BAhbB0kiAbB7ImNsaWVudF9pZCI6IjNkMzNmMzFiNDQ3YjRmODg1YTA1NTQwNzBjZjNmMWQ1ODdlMjM5MzAiLCJleHBpcmVzX2F0IjoiMjAyNi0wNi0wOVQyMDoxNTowMloiLCJ1c2VyX2lkcyI6WzQ1MzIxNzUxXSwidmVyc2lvbiI6MSwiYXBpX2RlYWRib2x0IjoiNmQ5NDQ4OThkN2U4ZDdhMmU4YmExMjg4M2ViOWYyYWQifQY6BkVUSXU6CVRpbWUNNJUfwKrnIjwJOg1uYW5vX251bWk4Og1uYW5vX2RlbmkGOg1zdWJtaWNybyIHBRA6CXpvbmVJIghVVEMGOwBG--cb82294fd86132b92b6c954402af0b6bd46630da';
+const BC_TOKEN = (process.env.BASECAMP_ACCESS_TOKEN || '').trim(); // set by runReportingAuditAndSend (CCPP Basecamp_AuthInfo)
 const BASE = `https://3.basecampapi.com/3945211/buckets/${BUCKET}`;
 const H = { Authorization: 'Bearer ' + BC_TOKEN, 'User-Agent': 'Colaberry', Accept: 'application/json', 'Content-Type': 'application/json' };
 

@@ -394,7 +394,7 @@ Ali`);
 
 // ===== BC COMMENT =====
 async function postBcComment({ davidText, plan, results, newVersion, sent }) {
-  const TOKEN = (process.env.BASECAMP_ACCESS_TOKEN || 'BAhbB0kiAbB7ImNsaWVudF9pZCI6IjNkMzNmMzFiNDQ3YjRmODg1YTA1NTQwNzBjZjNmMWQ1ODdlMjM5MzAiLCJleHBpcmVzX2F0IjoiMjAyNi0wNi0wOVQyMDoxNTowMloiLCJ1c2VyX2lkcyI6WzQ1MzIxNzUxXSwidmVyc2lvbiI6MSwiYXBpX2RlYWRib2x0IjoiNmQ5NDQ4OThkN2U4ZDdhMmU4YmExMjg4M2ViOWYyYWQifQY6BkVUSXU6CVRpbWUNNJUfwKrnIjwJOg1uYW5vX251bWk4Og1uYW5vX2RlbmkGOg1zdWJtaWNybyIHBRA6CXpvbmVJIghVVEMGOwBG--cb82294fd86132b92b6c954402af0b6bd46630da').replace(/^bearer\s+/i, '').trim();
+  const TOKEN = (process.env.BASECAMP_ACCESS_TOKEN || '').replace(/^bearer\s+/i, '').trim();
   const H = () => ({ Authorization: `Bearer ${TOKEN}`, 'User-Agent': 'AdTrigger', 'Content-Type': 'application/json', Accept: 'application/json' });
   const status = sent ? 'AUTO-APPLIED' : 'ESCALATED';
   const summary = plan?.summary || '(no summary)';
