@@ -95,6 +95,47 @@ export async function archiveEmail(email: ArchiveTarget): Promise<void> {
 
 // ─── Gmail Archive ──────────────────────────────────────────────────────────
 
+const GMAIL_MAX_ATTEMPTS = 3;
+const GMAIL_MAX_WAIT_MS = 30_000;
+
+/**
+ * Parses how long to wait before retrying a Gmail API error.
+ * Returns 0 if the error is not rate-limit-related.
+ *
+ * Gmail signals rate-limits as either HTTP 403 with reason
+ * `userRateLimitExceeded`/`rateLimitExceeded` or HTTP 429. The retry hint
+ * arrives in two formats: a `Retry-After` header (seconds), or embedded in
+ * the message string as `Retry after <ISO timestamp>`. We accept both.
+ */
+function parseGmailRetryAfterMs(error: any): number {
+  if (!error) return 0;
+  const code = error.code ?? error.response?.status;
+  const reason = error.errors?.[0]?.reason || '';
+  const isRateLimit =
+    code === 429 || code === '429' ||
+    ((code === 403 || code === '403') && /rateLimit/i.test(reason)) ||
+    /rate[- ]?limit/i.test(String(error.message || ''));
+  if (!isRateLimit) return 0;
+
+  const headerVal = error.response?.headers?.['retry-after'];
+  if (headerVal) {
+    const secs = parseInt(String(headerVal), 10);
+    if (!isNaN(secs) && secs > 0) return secs * 1000;
+  }
+
+  const isoMatch = String(error.message || '').match(/Retry after (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/);
+  if (isoMatch) {
+    const delta = new Date(isoMatch[1]).getTime() - Date.now();
+    if (delta > 0) return delta;
+  }
+
+  return 2_000;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function archiveGmail(
   providerMessageId: string,
   account: 'colaberry' | 'personal'
@@ -119,15 +160,27 @@ async function archiveGmail(
   oauth2Client.setCredentials({ refresh_token: refreshToken });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  await gmail.users.messages.modify({
-    userId: 'me',
-    id: providerMessageId,
-    requestBody: {
-      removeLabelIds: ['INBOX'],
-    },
-  });
-
-  console.log(`${LOG_PREFIX} Gmail (${account}) removed INBOX label from ${providerMessageId}`);
+  let lastError: any;
+  for (let attempt = 1; attempt <= GMAIL_MAX_ATTEMPTS; attempt++) {
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: providerMessageId,
+        requestBody: { removeLabelIds: ['INBOX'] },
+      });
+      const suffix = attempt > 1 ? ` (attempt ${attempt}/${GMAIL_MAX_ATTEMPTS})` : '';
+      console.log(`${LOG_PREFIX} Gmail (${account}) removed INBOX label from ${providerMessageId}${suffix}`);
+      return;
+    } catch (error: any) {
+      lastError = error;
+      const waitMs = parseGmailRetryAfterMs(error);
+      if (waitMs <= 0 || attempt === GMAIL_MAX_ATTEMPTS) break;
+      const cappedWait = Math.min(waitMs, GMAIL_MAX_WAIT_MS);
+      console.warn(`${LOG_PREFIX} Gmail (${account}) rate-limited on ${providerMessageId}; waiting ${cappedWait}ms before retry ${attempt + 1}/${GMAIL_MAX_ATTEMPTS}`);
+      await sleep(cappedWait);
+    }
+  }
+  throw lastError;
 }
 
 // ─── Hotmail Archive ────────────────────────────────────────────────────────
