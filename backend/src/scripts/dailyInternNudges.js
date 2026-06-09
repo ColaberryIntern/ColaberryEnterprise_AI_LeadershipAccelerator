@@ -350,8 +350,11 @@ async function sendAliDigest(allSent) {
   // Send Ali a digest of what fired today, regardless of NO_EMAIL/NO_COMMENT
   // flags (those gate INTERN-facing comms; Ali still needs visibility).
   if (NO_ALI_DIGEST || DRY) return;
-  const total = Object.values(allSent).reduce((s, arr) => s + arr.length, 0);
-  if (total === 0) return; // nothing to report
+  // Count only actually-nudged buckets toward `total` — UNKNOWN isn't a nudge,
+  // it's a "tracker can't measure them" flag.
+  const NUDGED_BUCKETS = ['NEW', 'YELLOW', 'ORANGE', 'RED', 'BLACK'];
+  const total = NUDGED_BUCKETS.reduce((s, k) => s + ((allSent[k] || []).length), 0);
+  if (total === 0 && (allSent.UNKNOWN || []).length === 0) return; // nothing to report
 
   const previewMode = PREVIEW_MODE;
   const black = allSent.BLACK.length;
@@ -419,6 +422,13 @@ ${exitedToday.map((r) => `<tr style="border-bottom:1px solid #fecaca">
 </div>`;
 
   const newSectionLabel = 'NEW - grace period (< 30 days since first assignment)';
+  const unknownList = allSent.UNKNOWN || [];
+  const unknownSectionHtml = unknownList.length === 0 ? '' : `
+<h3 style="font-size:14px;color:#6b7280;border-bottom:1px solid #6b7280;padding-bottom:6px;margin:18px 0 8px">UNKNOWN - tracker could not measure activity (${unknownList.length})</h3>
+<div style="font-size:12px;color:#475569;margin-bottom:8px">These interns are assigned to BC todos in the program but have <strong>zero comments under their BC account</strong> in the 14d lookback. The tracker skipped them (no nudge sent). They may be active off-Basecamp (meetings, Google Docs) or commenting under a different account — worth a manual check before assuming they're inactive.</div>
+<table cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:12px">
+${unknownList.map((r) => `<tr style="border-bottom:1px solid #e2e8f0"><td style="vertical-align:top;width:240px"><strong>${escape(r.name)}</strong><br><span style="color:#94a3b8">${escape(r.email || 'no email')}</span></td><td style="vertical-align:top">BC ${r.internId} &middot; ${r.projects.length} project${r.projects.length === 1 ? '' : 's'}: ${escape(r.projects.map((p) => p.title).join(', ').slice(0, 100))}</td></tr>`).join('')}
+</table>`;
   const html = `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55;max-width:720px">
 ${personalOpener}
 ${modeBadge}
@@ -428,6 +438,7 @@ ${renderSection('RED - 7-9 days dark, final warning', allSent.RED, '#991b1b')}
 ${renderSection('ORANGE - 4-6 days dark, warning', allSent.ORANGE, '#9a3412')}
 ${renderSection('YELLOW - 1-3 days dark, gentle reminder', allSent.YELLOW, '#854d0e')}
 ${renderSection(newSectionLabel, allSent.NEW || [], '#0369a1')}
+${unknownSectionHtml}
 ${interactionBlock}
 </div>`;
 
@@ -465,6 +476,15 @@ ${interactionBlock}
   const rows = await buildInternActivity({ lookbackDays: 14, includeCompleted: false });
   console.log(`[intern-nudges] tracked ${rows.length} interns`);
 
+  // UNKNOWN = tracker could not measure activity (lastActivityAt is null). Skip
+  // entirely — no email, no BC comment, no exit. Log a digest line so Ali knows
+  // who fell through. Prevents the Isaac/Harpreet/Kalkidan/Sarbjit false-BLACK
+  // pattern where a person with off-Basecamp activity gets exit-noticed.
+  const unknown = rows.filter((r) => r.level === 'UNKNOWN');
+  if (unknown.length) {
+    console.log(`[intern-nudges] UNKNOWN (no measurable activity, skipped): ${unknown.length}`);
+    for (const u of unknown) console.log(`  skip-unknown: ${u.name} (${u.email || 'no email'}) BC ${u.internId}`);
+  }
   const needNudge = rows.filter((r) => ['YELLOW', 'ORANGE', 'RED', 'BLACK'].includes(r.level));
   console.log(`[intern-nudges] candidates: ${needNudge.length}`);
 
@@ -586,6 +606,7 @@ ${interactionBlock}
   saveState(state);
 
   // Ali digest of all nudges fired today (or would have fired in preview mode)
+  sent.UNKNOWN = unknown;
   await sendAliDigest(sent);
 
   console.log(`[intern-nudges] done. sent=Y${sent.YELLOW.length}/O${sent.ORANGE.length}/R${sent.RED.length}/B${sent.BLACK.length}, skipped=${skipped.length}`);

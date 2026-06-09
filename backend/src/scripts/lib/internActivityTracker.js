@@ -189,7 +189,14 @@ async function buildInternActivity({ lookbackDays = 14, includeCompleted = false
       ? Math.max(0, Math.round((todayUtc - utcMidnight(entry.earliestAssignmentAt)) / 86400000))
       : null;
     const isNewIntern = daysSinceJoined != null && daysSinceJoined < GRACE_PERIOD_DAYS;
-    let level = levelFor(daysSinceLast === Infinity ? 999 : daysSinceLast);
+    // Null-days-dark guard (root cause of the 2026-06-08 Isaac/Harpreet/Kalkidan/Sarbjit
+    // misfires). When lastActivityAt is null, the tracker cannot measure activity for
+    // this assignee — usually because they comment under a different BC account, work
+    // off-Basecamp (meetings, Google Docs), or were assigned to a placeholder todo
+    // with no comments. Treat as UNKNOWN, NOT BLACK. dailyInternNudges skips UNKNOWN.
+    let level = entry.lastActivityAt
+      ? levelFor(daysSinceLast)
+      : 'UNKNOWN';
     if (isNewIntern && ['ORANGE', 'RED', 'BLACK'].includes(level)) level = 'YELLOW';
     rows.push({
       internId: entry.internId,
@@ -208,8 +215,8 @@ async function buildInternActivity({ lookbackDays = 14, includeCompleted = false
       dailySeries,
     });
   }
-  // Sort: BLACK first, then RED, ORANGE, YELLOW, GREEN
-  const order = { BLACK: 0, RED: 1, ORANGE: 2, YELLOW: 3, GREEN: 4 };
+  // Sort: BLACK first, then RED, ORANGE, YELLOW, GREEN, UNKNOWN last
+  const order = { BLACK: 0, RED: 1, ORANGE: 2, YELLOW: 3, GREEN: 4, UNKNOWN: 5 };
   rows.sort((a, b) => order[a.level] - order[b.level] || (b.daysSinceLast || 0) - (a.daysSinceLast || 0));
   // Drop staff unless explicitly requested
   if (!includeStaff) {
