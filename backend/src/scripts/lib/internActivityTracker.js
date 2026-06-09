@@ -88,6 +88,7 @@ async function collectInternProjects(includeCompleted = false) {
           assignees: t.assignees.map((a) => ({ id: a.id, name: a.name, email_address: a.email_address || null })),
           status: t.completed ? 'completed' : 'in_progress',
           appUrl: t.app_url || `https://app.basecamp.com/${BC_ACCOUNT}/buckets/${BC_BUCKET}/todos/${t.id}`,
+          createdAt: t.created_at || null,
         });
       }
     }
@@ -119,6 +120,13 @@ function isStaff(internEntry) {
   return false;
 }
 
+// Grace period (days) for new interns — they should never be classified BLACK
+// during their first GRACE_PERIOD_DAYS of being assigned work in the project.
+// Triggered by Ali 2026-06-08 after Meghana Chowdary (joined ~that day) appeared
+// in BLACK with null days dark, which would have auto-exited her if the system
+// had been in live mode.
+const GRACE_PERIOD_DAYS = 30;
+
 async function buildInternActivity({ lookbackDays = 14, includeCompleted = false, includeStaff = false } = {}) {
   const projects = await collectInternProjects(includeCompleted);
   // Map: internId -> { name, email, projects: [{todoId,title,url}], comments: [{todoId, createdAt}] }
@@ -127,12 +135,19 @@ async function buildInternActivity({ lookbackDays = 14, includeCompleted = false
     for (const a of proj.assignees) {
       // Pick first assignee per todo as the "owner" — matches Swati's table convention.
       // We still track for ALL assignees so we don't miss anyone who got nudged via shared todos.
-      if (!map.has(a.id)) map.set(a.id, { internId: a.id, name: a.name, email: a.email_address || null, projects: [], commentsByDay: {}, totalComments: 0, lastActivityAt: null });
+      if (!map.has(a.id)) map.set(a.id, { internId: a.id, name: a.name, email: a.email_address || null, projects: [], commentsByDay: {}, totalComments: 0, lastActivityAt: null, earliestAssignmentAt: null });
       const entry = map.get(a.id);
       if (!entry.projects.find((p) => p.todoId === proj.todoId)) {
         entry.projects.push({ todoId: proj.todoId, title: proj.title, todolistName: proj.todolistName, appUrl: proj.appUrl });
       }
       if (!entry.email && a.email_address) entry.email = a.email_address;
+      // Track the earliest todo-created date as a proxy for "when intern joined the program".
+      // BC Person.created_at is the BC account creation date (often years before they joined this project),
+      // so it's useless for grace-period detection. The earliest assigned todo is when work was first
+      // set up for them in this project — close enough to their start date for the 30-day rule.
+      if (proj.createdAt && (!entry.earliestAssignmentAt || proj.createdAt < entry.earliestAssignmentAt)) {
+        entry.earliestAssignmentAt = proj.createdAt;
+      }
     }
   }
   // Fetch comments for each todo, attribute by creator_id.
@@ -166,6 +181,16 @@ async function buildInternActivity({ lookbackDays = 14, includeCompleted = false
       dailySeries.push({ date: d, count: entry.commentsByDay[d] || 0 });
     }
     const todayCount = entry.commentsByDay[new Date(todayUtc).toISOString().slice(0, 10)] || 0;
+    // Grace-period guard: new interns (< GRACE_PERIOD_DAYS since first assignment)
+    // get capped at YELLOW. They show in the digest, get a welcome-style BC nudge,
+    // but never trigger email or auto-exit. The cap also protects against the
+    // null-days-dark = BLACK pathology when an intern has no activity history yet.
+    const daysSinceJoined = entry.earliestAssignmentAt
+      ? Math.max(0, Math.round((todayUtc - utcMidnight(entry.earliestAssignmentAt)) / 86400000))
+      : null;
+    const isNewIntern = daysSinceJoined != null && daysSinceJoined < GRACE_PERIOD_DAYS;
+    let level = levelFor(daysSinceLast === Infinity ? 999 : daysSinceLast);
+    if (isNewIntern && ['ORANGE', 'RED', 'BLACK'].includes(level)) level = 'YELLOW';
     rows.push({
       internId: entry.internId,
       name: entry.name,
@@ -174,7 +199,10 @@ async function buildInternActivity({ lookbackDays = 14, includeCompleted = false
       totalComments: entry.totalComments,
       lastActivityAt: entry.lastActivityAt,
       daysSinceLast: daysSinceLast === Infinity ? null : daysSinceLast,
-      level: levelFor(daysSinceLast === Infinity ? 999 : daysSinceLast),
+      earliestAssignmentAt: entry.earliestAssignmentAt,
+      daysSinceJoined,
+      isNewIntern,
+      level,
       todayCount,
       dailyTarget: 3,
       dailySeries,

@@ -86,6 +86,22 @@ function nudgeFor(row) {
   const days = row.daysSinceLast;
   const projects = row.projects.map((p) => p.title).join(', ');
   const todayShortfall = Math.max(0, row.dailyTarget - row.todayCount);
+  // New-intern welcome variant — they're inside the 30-day grace period
+  // (see GRACE_PERIOD_DAYS in lib/internActivityTracker.js). Use a non-punitive
+  // tone, no "days dark" framing (their daysSinceLast is usually null), no email.
+  if (row.isNewIntern) {
+    const sinceLine = row.daysSinceJoined != null
+      ? `You started ${row.daysSinceJoined} day${row.daysSinceJoined === 1 ? '' : 's'} ago. `
+      : '';
+    const bc = `<div>${fn} Welcome aboard. ${sinceLine}When you are ready, post your first Basecamp update on your project. The program standard is 3 substantive updates per week - looking forward to seeing your first one.</div>`;
+    return {
+      bcHtml: bc,
+      // Welcome nudges never email — the gentle BC comment is enough during onboarding.
+      emailSubject: null,
+      emailHtml: null,
+      emailText: null,
+    };
+  }
   if (row.level === 'YELLOW') {
     const bc = `<div>${fn} You have gone ${days} day${days === 1 ? '' : 's'} without Basecamp activity. The program standard is 3 substantive updates per week. Please post today to stay on pace.</div>`;
     const text = `${fn},\n\nYou have gone ${days} day${days === 1 ? '' : 's'} without Basecamp activity. The program standard is 3 substantive updates per week on your project. Please post today to stay on pace.\n\n--\nCB System\nAli Muwwakkil's executive agent\nColaberry Inc.`;
@@ -402,6 +418,7 @@ ${exitedToday.map((r) => `<tr style="border-bottom:1px solid #fecaca">
 </table>
 </div>`;
 
+  const newSectionLabel = 'NEW - grace period (< 30 days since first assignment)';
   const html = `<div style="font-family:arial,sans-serif;color:#1a202c;font-size:14px;line-height:1.55;max-width:720px">
 ${personalOpener}
 ${modeBadge}
@@ -410,18 +427,20 @@ ${renderSection('BLACK - day 10+ exit cliff', allSent.BLACK, '#0c0a09')}
 ${renderSection('RED - 7-9 days dark, final warning', allSent.RED, '#991b1b')}
 ${renderSection('ORANGE - 4-6 days dark, warning', allSent.ORANGE, '#9a3412')}
 ${renderSection('YELLOW - 1-3 days dark, gentle reminder', allSent.YELLOW, '#854d0e')}
+${renderSection(newSectionLabel, allSent.NEW || [], '#0369a1')}
 ${interactionBlock}
 </div>`;
 
   const blackTextLine = black > 0
     ? `${black} ${black === 1 ? 'person' : 'people'} hit the day-10 exit cliff today. ${previewMode ? 'They would have received exit notices.' : 'They received exit notices.'} Process them out today.`
     : 'No-one hit the day-10 exit cliff today.';
-  const text = `Ali, ${previewMode ? `today's nudge cycle is in PREVIEW mode (nothing went out). ${total} interns would have been emailed and BC-commented.` : `today's nudge cycle ran LIVE. ${total} interns were emailed and BC-commented.`} ${blackTextLine}\n\n${previewMode ? '[PREVIEW MODE - no intern-facing comms sent]\n' : '[LIVE MODE]\n'}\nBLACK (${allSent.BLACK.length}):\n${allSent.BLACK.map((r) => `  ${r.name} - ${r.daysSinceLast} days dark - ${r.email || 'no email'}`).join('\n')}\n\nRED (${allSent.RED.length}):\n${allSent.RED.map((r) => `  ${r.name} - ${r.daysSinceLast} days - ${r.email || 'no email'}`).join('\n')}\n\nORANGE (${allSent.ORANGE.length}):\n${allSent.ORANGE.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\nYELLOW (${allSent.YELLOW.length}):\n${allSent.YELLOW.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\n--- What you can do from here ---\n${previewMode ? 'Enable live nudges:' : 'Pause nudges:'}       tag @CB System set intern nudge mode ${previewMode ? 'live' : 'preview'}\nPreview an exit:           tag @CB System exit intern <name> reason=nochow\nProcess a BLACK exit:      run on VPS: node backend/src/scripts/confirmInternExit.js --intern-id N --reason nochow --confirmed-by ali\nAsk CB anything:           tag @CB System <anything>\n`;
+  const newList = allSent.NEW || [];
+  const text = `Ali, ${previewMode ? `today's nudge cycle is in PREVIEW mode (nothing went out). ${total} interns would have been emailed and BC-commented.` : `today's nudge cycle ran LIVE. ${total} interns were emailed and BC-commented.`} ${blackTextLine}\n\n${previewMode ? '[PREVIEW MODE - no intern-facing comms sent]\n' : '[LIVE MODE]\n'}\nBLACK (${allSent.BLACK.length}):\n${allSent.BLACK.map((r) => `  ${r.name} - ${r.daysSinceLast} days dark - ${r.email || 'no email'}`).join('\n')}\n\nRED (${allSent.RED.length}):\n${allSent.RED.map((r) => `  ${r.name} - ${r.daysSinceLast} days - ${r.email || 'no email'}`).join('\n')}\n\nORANGE (${allSent.ORANGE.length}):\n${allSent.ORANGE.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\nYELLOW (${allSent.YELLOW.length}):\n${allSent.YELLOW.map((r) => `  ${r.name} - ${r.daysSinceLast} days`).join('\n')}\n\nNEW - grace period (${newList.length}):\n${newList.map((r) => `  ${r.name} - ${r.daysSinceJoined == null ? '?' : r.daysSinceJoined}d since first assignment - welcome nudge only`).join('\n')}\n\n--- What you can do from here ---\n${previewMode ? 'Enable live nudges:' : 'Pause nudges:'}       tag @CB System set intern nudge mode ${previewMode ? 'live' : 'preview'}\nPreview an exit:           tag @CB System exit intern <name> reason=nochow\nProcess a BLACK exit:      run on VPS: node backend/src/scripts/confirmInternExit.js --intern-id N --reason nochow --confirmed-by ali\nAsk CB anything:           tag @CB System <anything>\n`;
   try {
     await sendEmail({
       to: 'ali@colaberry.com',
       cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com', DHEE_EMAIL],
-      subject: `[Intern Nudges]${previewMode ? ' [PREVIEW]' : ''} ${allSent.BLACK.length} BLACK${exitedToday.length ? ` (${exitedToday.length} auto-exited)` : ''}, ${allSent.RED.length} RED, ${allSent.ORANGE.length} ORANGE, ${allSent.YELLOW.length} YELLOW`,
+      subject: `[Intern Nudges]${previewMode ? ' [PREVIEW]' : ''} ${allSent.BLACK.length} BLACK${exitedToday.length ? ` (${exitedToday.length} auto-exited)` : ''}, ${allSent.RED.length} RED, ${allSent.ORANGE.length} ORANGE, ${allSent.YELLOW.length} YELLOW, ${(allSent.NEW || []).length} NEW`,
       html: stripEmDashes(html),
       text: stripEmDashes(text),
       bypassNoEmail: true,
@@ -449,7 +468,10 @@ ${interactionBlock}
   const needNudge = rows.filter((r) => ['YELLOW', 'ORANGE', 'RED', 'BLACK'].includes(r.level));
   console.log(`[intern-nudges] candidates: ${needNudge.length}`);
 
-  const sent = { YELLOW: [], ORANGE: [], RED: [], BLACK: [] };
+  // NEW = grace-period interns whose level was capped at YELLOW; tracked
+  // separately from regular YELLOW so the Ali digest can show "this person
+  // is brand new" rather than "this person is 1-3 days dark".
+  const sent = { NEW: [], YELLOW: [], ORANGE: [], RED: [], BLACK: [] };
   const skipped = [];
 
   for (const r of needNudge) {
@@ -477,7 +499,14 @@ ${interactionBlock}
     } catch (e) {
       console.error(`  ${r.level} ${r.name}: BC post failed: ${e.message}`);
     }
-    if (r.email && !NO_EMAIL) {
+    // Tier-gated email escalation: only ORANGE / RED / BLACK send email.
+    // YELLOW (and new-intern welcome) are BC-comment-only — the gentle nudge
+    // stays in the public BC trail without pinging the intern's inbox. This
+    // matches Ali's 2026-06-08 directive: "nudge tags should be tagged on
+    // Basecamp - if it is more serious the messaging to email."
+    const TIER_SENDS_EMAIL = { YELLOW: false, ORANGE: true, RED: true, BLACK: true };
+    const shouldEmail = r.email && !NO_EMAIL && !r.isNewIntern && TIER_SENDS_EMAIL[r.level] && nudge.emailSubject;
+    if (shouldEmail) {
       try {
         const er = await sendEmail({ to: r.email, subject: nudge.emailSubject, html: nudge.emailHtml, text: nudge.emailText });
         emailMessageId = er.messageId;
@@ -485,13 +514,20 @@ ${interactionBlock}
       } catch (e) {
         console.error(`  ${r.level} ${r.name}: email failed: ${e.message}`);
       }
+    } else if (r.email && !NO_EMAIL && (r.isNewIntern || !TIER_SENDS_EMAIL[r.level])) {
+      console.log(`  ${r.level} ${r.name}: skipping email (${r.isNewIntern ? 'new intern grace period' : 'tier is BC-only'})`);
     }
 
     // BLACK auto-exit per Ali 2026-06-01. Live mode only. Requires an email
     // to send the exit notice. CCPP lookup by name; falls back to email match
     // among the candidates. If the lookup ambiguates or fails, skip auto-exit
     // and log for manual cleanup - never auto-exit the wrong person.
-    if (r.level === 'BLACK' && !PREVIEW_MODE && !DRY && r.email) {
+    //
+    // Belt-and-suspenders: never auto-exit a new intern even if their level
+    // somehow reached BLACK. The level cap in internActivityTracker should
+    // already prevent this, but the extra guard is cheap insurance against
+    // a future tracker bug exiting someone in week 1.
+    if (r.level === 'BLACK' && !PREVIEW_MODE && !DRY && r.email && !r.isNewIntern) {
       try {
         const candidates = await findInternByQuery(r.name);
         // SAFETY: only auto-exit on an exact email match between the Basecamp
@@ -535,7 +571,8 @@ ${interactionBlock}
       }
     }
 
-    sent[r.level].push({ ...r, bcCommentCount, emailMessageId, autoExit });
+    const bucket = r.isNewIntern ? 'NEW' : r.level;
+    sent[bucket].push({ ...r, bcCommentCount, emailMessageId, autoExit });
     const eventEntry = { date: today, level: r.level, daysSinceLast: r.daysSinceLast, emailSent: !!emailMessageId, emailMessageId, bcCommentCount, autoExit };
     state[r.internId] = {
       last_nudge_date: today,

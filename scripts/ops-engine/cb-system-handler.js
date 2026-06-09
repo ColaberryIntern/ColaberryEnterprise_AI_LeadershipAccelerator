@@ -562,7 +562,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
       // Pass token + IDs so zip-aware mode can download from Basecamp Vault.
       // Token resolution mirrors govBidOps.js BASECAMP_TOKEN_FALLBACK pattern.
       let token = process.env.BASECAMP_ACCESS_TOKEN
-        || 'BAhbB0kiAbB7ImNsaWVudF9pZCI6IjNkMzNmMzFiNDQ3YjRmODg1YTA1NTQwNzBjZjNmMWQ1ODdlMjM5MzAiLCJleHBpcmVzX2F0IjoiMjAyNi0wNi0wOVQyMDoxNTowMloiLCJ1c2VyX2lkcyI6WzQ1MzIxNzUxXSwidmVyc2lvbiI6MSwiYXBpX2RlYWRib2x0IjoiNmQ5NDQ4OThkN2U4ZDdhMmU4YmExMjg4M2ViOWYyYWQifQY6BkVUSXU6CVRpbWUNNJUfwKrnIjwJOg1uYW5vX251bWk4Og1uYW5vX2RlbmkGOg1zdWJtaWNybyIHBRA6CXpvbmVJIghVVEMGOwBG--cb82294fd86132b92b6c954402af0b6bd46630da';
+        || '';
       if (token.toLowerCase().startsWith('bearer ')) token = token.slice(7).trim();
       const result = await finalizeBidsFromReply({
         replyBody: reply_body,

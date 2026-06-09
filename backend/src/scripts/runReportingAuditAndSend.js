@@ -31,6 +31,7 @@ const { spawn } = require('child_process');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const { auditAll } = require('./lib/reportingPreflight');
 const { REPORTS: REGISTRY, shouldFireToday } = require('./lib/reportingRegistry');
+const { getBasecampToken } = require('./lib/basecampToken');
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 
@@ -224,6 +225,17 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   const now = new Date();
   console.log(`[audit] start ${now.toISOString()}`);
 
+  // Resolve the live Basecamp token from CCPP (Basecamp_AuthInfo) once and set
+  // it on the env so every spawned report AND the preflight inherit it. All
+  // reports read process.env.BASECAMP_ACCESS_TOKEN first, so this keeps the
+  // whole suite off the old hardcoded token that rotates out every 2 weeks.
+  try {
+    process.env.BASECAMP_ACCESS_TOKEN = await getBasecampToken();
+    console.log('[audit] Basecamp token resolved and set for reports + preflight');
+  } catch (e) {
+    console.warn(`[audit] WARN: Basecamp token resolution failed (${e.message}); reports use existing BASECAMP_ACCESS_TOKEN if any.`);
+  }
+
   // Filter reports by:
   //   1. cadence (daily fires every weekday cron; weekly fires only on its dayOfWeek)
   //   2. sendHourUTC (only the reports for the CURRENT UTC hour fire — the
@@ -298,17 +310,27 @@ ${auditResults.map((r, i) => `- ${r.name}: ${r.overall}${sendResults[i] ? `, sen
 Recipients on every regular report: ali@colaberry.com (to) + alimuwwakkil@gmail.com + ram@colaberry.com (cc).`;
 
   validateBeforeSend(html, text);
-  const transport = nodemailer.createTransport({
-    host: 'smtp.mandrillapp.com', port: 587,
-    auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
-  });
-  const sentAudit = await transport.sendMail({
-    from: '"CB System" <ali@colaberry.com>',
-    to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
-    subject, text, html,
-    headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
-  });
-  console.log(`[audit] audit email sent: ${sentAudit.messageId}`);
-  console.log(`[audit] summary: ${sentCount}/${active.length} reports sent, ${totalFail} preflight failures`);
+  // CHANGED 2026-06-05 (CC-20260603-v7da, Ali approved): only email the
+  // audit on real failure. Healthy days log to stdout (cron pipes to
+  // /var/log/reporting-audit.log) and the per-report dashboards already
+  // reach Ali's inbox. Sending an email that says "1/1 sent (1 warn)"
+  // every weekday is meta-noise — the email-about-the-email pattern.
+  const auditEmailNeeded = totalFail > 0;
+  if (auditEmailNeeded) {
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    const sentAudit = await transport.sendMail({
+      from: '"CB System" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+      subject, text, html,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.log(`[audit] audit email sent (FAIL detected): ${sentAudit.messageId}`);
+  } else {
+    console.log(`[audit] healthy run - audit email suppressed (${sentCount}/${active.length} sent, ${totalWarn} warn). Log to /var/log/reporting-audit.log.`);
+  }
+  console.log(`[audit] summary: ${sentCount}/${active.length} reports sent, ${totalFail} preflight failures, ${totalWarn} warnings`);
 })().catch((e) => { console.error('[audit] FATAL:', e.stack || e.message); process.exit(1); });
