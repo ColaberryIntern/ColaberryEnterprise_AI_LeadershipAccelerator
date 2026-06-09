@@ -33,6 +33,19 @@ const REPORTS = [
     description: 'AI Systems Architect Accelerator launch project. YOUR TURN banner, per-area cards, AI completion log, blockers, escalations.',
   },
   {
+    name: 'Launch Readiness Dashboard (visual)',
+    scriptPath: 'backend/src/scripts/weeklyLaunchPmoDashboardPost.js',
+    args: [],
+    projectId: 47502609,
+    needsOpenai: false,
+    recipients: STANDARD_RECIPIENTS,
+    cbRunnerState: null,
+    skipFlag: '--skip-launch-dashboard',
+    cadence: 'daily',
+    sendHourUTC: 15,  // 10 AM CT - same slot as the Launch PMO text report
+    description: 'Polished Launch Readiness Dashboard PNG, posted daily Mon-Fri to the persistent project Message Board thread (message 9960535531). Renders LIVE state via lib/launchPmoDashboardHtml + renderLaunchPmoDashboardPng. Does not email; posts a BC comment. Idempotent on date.',
+  },
+  {
     name: 'Gov Contracts',
     scriptPath: 'backend/src/scripts/dailyGovContractsAnalysis.js',
     args: [],

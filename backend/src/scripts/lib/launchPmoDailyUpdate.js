@@ -957,4 +957,4 @@ async function runDailyUpdate({ force = false } = {}) {
   };
 }
 
-module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAiQueue, generateExecSummary };
+module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAiQueue, generateExecSummary, detectBlockedTasks };
