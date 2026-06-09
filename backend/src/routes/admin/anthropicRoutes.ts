@@ -87,7 +87,7 @@ router.post('/api/admin/sync/anthropic-impact', requireAdmin, async (_req: Reque
     });
   } catch (err: any) {
     console.error('[anthropicRoutes] manual impact failed:', err.message);
-    res.status(500).json({ ok: false, error: err.message });
+    res.status(500).json({ ok: false, error: 'Manual curriculum impact run failed' });
   }
 });
 

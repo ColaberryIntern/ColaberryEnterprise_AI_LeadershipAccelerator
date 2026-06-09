@@ -1709,7 +1709,7 @@ export async function sendCurriculumImpactDigest(
   </div>
   <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:24px;">
     <p style="margin:0 0 20px;font-size:14px;">
-      <strong>${items.length}</strong> Anthropic content change${items.length > 1 ? 's' : ''} scored <strong>7 or above</strong> &mdash; review for curriculum updates.
+      <strong>${items.length}</strong> Anthropic content change${items.length > 1 ? 's' : ''} scored <strong>7 or above</strong>. Review for curriculum updates.
     </p>
     <table style="width:100%;border-collapse:collapse;">
       <thead>
