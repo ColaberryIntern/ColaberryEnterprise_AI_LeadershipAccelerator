@@ -12,6 +12,20 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Deploy to prod + wrapper token hygiene (2026-06-09)
+- Date: 2026-06-09
+- Session: CC-20260608-9x4t
+- What changed:
+  - Deployed the session's work to prod: committed `b05f179e` (118 files), pushed to `origin/main`, fast-forwarded the VPS (`/opt/colaberry-accelerator`, branch `dev`) to it. No container rebuild needed - the reporting scripts run host-side via cron.
+  - Removed the redundant standalone Monday cron (`0 15 * * 1 ... weeklyLaunchPmoDashboardPost.js`); the Mon-Fri orchestrator cron (`0 13-20 * * 1-5 runReportingAuditAndSend.js`) now drives the dashboard via its registry entry.
+  - New `backend/src/scripts/lib/printBasecampToken.js`: tiny CLI that prints the live token from `getBasecampToken()` (CCPP `Basecamp_AuthInfo`).
+  - VPS `scripts/cron-env-wrapper.sh` (VPS-only, not in repo): replaced the hardcoded `BASECAMP_ACCESS_TOKEN` fallback with `node printBasecampToken.js` so it injects a live token with no secret on disk. Backed up to `scripts/cron-env-wrapper.sh.bak.<ts>`.
+- Verification:
+  - VPS HEAD == `b05f179e`; new files present; token gone from the reporting path.
+  - `--no-post` smoke on prod: CCPP token -> live state -> HTML (20.6KB) -> PNG (811KB), exit 0.
+  - First live post landed on the persistent thread (comment `9977260747`); state file `lastPostedDate=2026-06-09` so the scheduled run will not double-post.
+- Notes: an initial smoke hit a transient Basecamp 429 (rate limit), cleared on retry; the token was valid (authenticated, not 401). One stale untracked `reinstateIsaac.js` on the VPS was backed up to `/tmp` before the fast-forward.
+
 ### Repo-wide: strip the hardcoded Basecamp token from all 130 one-off scripts (2026-06-08)
 - Date: 2026-06-08
 - Session: CC-20260608-9x4t
