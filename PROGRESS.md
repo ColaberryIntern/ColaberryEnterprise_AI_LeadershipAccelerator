@@ -12,6 +12,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Harpreet Kaur + Kalkidan Bezabeh + Sarbjit Kaur reinstated after 2026-06-08 false-BLACK misfires (2026-06-09)
+- [x] **Three false-BLACK reinstatements run live via reinstateInternFalseBlack.js**
+  - Date: 2026-06-09
+  - Session: CC-20260609-h7m2
+  - What changed: Ran the parameterized recovery against each of the three Monday 2026-06-08 22:00 UTC false-BLACK victims. For each: trashed the bogus CB System BLACK template comment (PUT `/recordings/{id}/status/trashed.json` → 204), posted a correction comment on the anchor todo from CB System's account, sent an apologetic email FROM Ali via `sendWithBcAttach` (cc dhee@colaberry.com, bcc ali@colaberry.com) attached to the same anchor todo, and removed the BC person's entry from `tmp/ops-engine/intern-nudge-state.json`. No CCPP impact — all three were already protected by the `no-email-match-in-ccpp` auto-exit guard on Monday, and CCPP records were not touched here either.
+  - Verification:
+    - Harpreet Kaur (BC 48161826, harpreetbadwal6161@gmail.com): anchor todo 9711838104 (ToolSmith AI). Trashed bogus comment 9975368871 → 204. Correction comment `https://app.basecamp.com/3945211/buckets/24865175/todos/9711838104#__recording_9979786948`. Apology Mandrill `<39218fcc-086b-1d2f-0054-82c3d5d5d83c@colaberry.com>`; sendWithBcAttach receipt `https://app.basecamp.com/3945211/buckets/24865175/todos/9711838104#__recording_9979786980`. State entry removed (`last_level: BLACK, last_nudge: 2026-06-08, total: 9`).
+    - Kalkidan Bezabeh (BC 48969361, kalkidankin@gmail.com): anchor todo 9712452465 (PortfolioForge AI). Trashed bogus comment 9975368723 → 204. Correction comment `https://app.basecamp.com/3945211/buckets/24865175/todos/9712452465#__recording_9979789130`. Apology Mandrill `<3e4bf092-a90c-dc13-a95e-332632e9ac6b@colaberry.com>`; sendWithBcAttach receipt `https://app.basecamp.com/3945211/buckets/24865175/todos/9712452465#__recording_9979789170`. State entry removed (`last_level: YELLOW, last_nudge: 2026-06-09, total: 8` — the tracker had already reclassified him YELLOW today since he had recent activity).
+    - Sarbjit Kaur (BC 45430263, sarbjitsaini83@yahoo.com): anchor todo 9581112782 (Repo2Reputation). Trashed bogus comment 9975369325 → 204. Correction comment `https://app.basecamp.com/3945211/buckets/24865175/todos/9581112782#__recording_9979791114`. Apology Mandrill `<6400731b-8f0d-a06a-8d0b-5ef5805b3a51@colaberry.com>`; sendWithBcAttach receipt `https://app.basecamp.com/3945211/buckets/24865175/todos/9581112782#__recording_9979791156`. State entry removed (`last_level: YELLOW, last_nudge: 2026-06-09, total: 8`).
+  - Notes: Isaac Kpakpavi was already handled by yesterday's `reinstateIsaac.js` and his state file confirms he was reclassified YELLOW today (the tracker found a recent comment from him), so no re-apology is needed. Akiwam was the only Monday BLACK row whose auto-exit actually executed against CCPP, but that was idempotent (he was already `InternIsActive=0` from a prior exit), so no reinstatement needed there either. With the UNKNOWN guard shipped earlier this session, future LIVE cron runs will report null-days-dark interns in the UNKNOWN section of Ali's digest and never send them an exit notice.
+
 ### Intern nudge null-days-dark guard + token-health probe + parameterized reinstatement (2026-06-09)
 - [x] **Intern nudge null-days-dark guard + token-health probe + parameterized reinstatement**
   - Date: 2026-06-09
