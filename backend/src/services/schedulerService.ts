@@ -2519,47 +2519,16 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Anthropic curriculum impact agent: nightly at 03:00 UTC');
 
-  // Family Command Center daily briefing — 11:00 UTC Mon-Fri = 6:00 AM CT Mon-Fri.
-  // Sends the briefing email (docs/FAMILY_COMMAND_CENTER_PREVIEW.html, stripped of JS)
-  // to ali@colaberry.com with Addie on Cc, anchored to the Family Command Center
-  // operational-anchor todo in project 33392153. Same-day lock file prevents
-  // double-sends if the container restarts mid-day. Session: CC-20260609-fmly.
-  cron.schedule('0 11 * * 1-5', () => {
-    instrumentCronJob('FamilyCommandCenterDaily', async () => {
-      const { execFile } = require('child_process');
-      const scriptPath = require('path').resolve(__dirname, '../scripts/sendFamilyCommandCenterDaily.js');
-      await new Promise((resolve, reject) => {
-        execFile('node', [scriptPath], { timeout: 120000 }, (err: any, stdout: any, stderr: any) => {
-          if (stdout) console.log('[Family CC daily]', stdout.trim());
-          if (stderr) console.error('[Family CC daily]', stderr.trim());
-          err ? reject(err) : resolve(null);
-        });
-      });
-    }).catch((err: any) => {
-      console.error('[Scheduler] Family Command Center daily error:', err.message);
-    });
-  });
-  console.log('[Scheduler] Family Command Center daily briefing: Mon-Fri at 11:00 UTC (6 AM CT)');
-
-  // Family Command Center weekly comment — 13:00 UTC Monday = 8:00 AM CT Monday.
-  // Posts a weekly status comment to the Family Command Center Message Board post
-  // in project 33392153.
-  cron.schedule('0 13 * * 1', () => {
-    instrumentCronJob('FamilyCommandCenterWeekly', async () => {
-      const { execFile } = require('child_process');
-      const scriptPath = require('path').resolve(__dirname, '../scripts/sendFamilyCommandCenterDaily.js');
-      await new Promise((resolve, reject) => {
-        execFile('node', [scriptPath, '--weekly'], { timeout: 60000 }, (err: any, stdout: any, stderr: any) => {
-          if (stdout) console.log('[Family CC weekly]', stdout.trim());
-          if (stderr) console.error('[Family CC weekly]', stderr.trim());
-          err ? reject(err) : resolve(null);
-        });
-      });
-    }).catch((err: any) => {
-      console.error('[Scheduler] Family Command Center weekly error:', err.message);
-    });
-  });
-  console.log('[Scheduler] Family Command Center weekly comment: Mon at 13:00 UTC (8 AM CT)');
+  // Family Command Center daily + weekly: moved to host crontab on the VPS using
+  // /opt/colaberry-accelerator/scripts/cron-env-wrapper.sh (CC-20260609-em4f).
+  // Rationale: the raw .js script files in backend/src/scripts/ are NOT copied
+  // into the runtime container image by the Dockerfile, so the prior in-container
+  // execFile() approach failed with ENOENT every time. The host crontab pattern
+  // (already used by ~20 other recurring jobs) sees the .js files directly,
+  // probes the BC token live against CCPP via the wrapper, and survives container
+  // rebuilds. Crontab entries to register on the VPS:
+  //   0 11 * * * (every day, 6 AM CT)        -> sendFamilyCommandCenterDaily.js
+  //   0 13 * * 1 (Monday, 8 AM CT)           -> sendFamilyCommandCenterDaily.js --weekly
 }
 
 // ---------------------------------------------------------------------------
