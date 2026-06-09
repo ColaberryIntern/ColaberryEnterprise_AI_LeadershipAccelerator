@@ -18,15 +18,16 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 
 const { sendWithBcAttach } = require(path.resolve(__dirname, './lib/sendWithBcAttach'));
 const { getBasecampToken } = require(path.resolve(__dirname, './lib/basecampToken'));
+const { renderFamilyBriefingEmail } = require(path.resolve(__dirname, './lib/renderFamilyBriefingEmail'));
 
 const BUCKET_ID = 33392153;
 const BC_BASE = 'https://3.basecampapi.com/3945211';
-const HTML_PATH = path.resolve(__dirname, '../../../docs/FAMILY_COMMAND_CENTER_PREVIEW.html');
 const ANCHOR_TITLE_PATTERN = /family command center.*anchor/i;
 const MESSAGE_SUBJECT_PATTERN = /family command center.*daily briefing/i;
 
 const MODE = process.argv.includes('--weekly') ? 'weekly' : 'daily';
 const DRY_RUN = process.argv.includes('--dry-run');
+const TEST = process.argv.includes('--test');
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const LOCK_DIR = path.join(os.tmpdir(), 'family-command-center');
@@ -73,12 +74,12 @@ async function findMessagePost() {
   return msg;
 }
 
-function buildEmailHtml(staticHtml) {
-  return staticHtml
-    .replace(/<script\s+src="https:\/\/cdn\.jsdelivr\.net\/npm\/mermaid[^"]+"[^>]*><\/script>/g, '')
-    .replace(/<script>\s*mermaid\.initialize[\s\S]*?<\/script>/g, '')
-    .replace(/<pre class="mermaid">[\s\S]*?<\/pre>/g, '<div style="font-size:12px;color:#94a3b8;text-align:center;padding:14px">(Pipeline diagram available in the browser version)</div>')
-    .replace(/<body[^>]*>/, (m) => m + `<div style="background:#1a365d;color:#fff;text-align:center;font-size:11px;padding:8px 12px;letter-spacing:.06em">Family Command Center · daily briefing · ${new Date().toDateString()}</div>`);
+// Legacy path: previously the script dumped the browser-targeted HTML into the
+// email body, which Outlook stripped/collapsed. We now render an email-safe
+// table-based body via renderFamilyBriefingEmail() and ignore the static doc
+// for the email itself (it remains the source of truth for "view in browser").
+function buildEmailHtml() {
+  return renderFamilyBriefingEmail({ date: new Date() });
 }
 
 function buildEmailText() {
@@ -126,45 +127,57 @@ function buildWeeklyCommentHtml() {
 }
 
 async function runDaily() {
-  if (fs.existsSync(LOCK_FILE)) {
+  if (!TEST && fs.existsSync(LOCK_FILE)) {
     console.log(`[Family CC daily] Already sent today (${TODAY}), skipping.`);
     return;
   }
 
+  console.log(`[Family CC daily] Mode: ${TEST ? 'TEST (Ali only, no lock)' : 'PROD (Ali+Addie, lock)'}`);
   console.log('[Family CC daily] Looking up anchor todo...');
   const anchor = await findAnchorTodo();
   console.log(`[Family CC daily] Anchor todo: ${anchor.id}`);
 
-  if (!fs.existsSync(HTML_PATH)) {
-    throw new Error(`Briefing HTML not found at ${HTML_PATH}`);
-  }
-  const staticHtml = fs.readFileSync(HTML_PATH, 'utf-8');
-  const emailHtml = buildEmailHtml(staticHtml);
+  const emailHtml = buildEmailHtml();
   const emailText = buildEmailText();
   const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const subject = `Family Command Center — ${today} briefing`;
+  const subject = TEST
+    ? `[TEST v2 - new format] Family Command Center - ${today} briefing`
+    : `Family Command Center - ${today} briefing`;
 
   if (DRY_RUN) {
-    console.log(`[Family CC daily] DRY RUN - would send "${subject}" to ali + addie`);
+    console.log(`[Family CC daily] DRY RUN - would send "${subject}"`);
     return;
   }
+
+  const sendOpts = TEST
+    ? {
+        // TEST mode: Ali only, no Cc/Bcc to Addie. Ali approves the render
+        // before the next prod cron fires on Mon morning.
+        to: 'ali@colaberry.com',
+        bcSummary: `<p>[TEST v2] Family Command Center email-safe render. Recipients: Ali only.</p>`,
+      }
+    : {
+        to: 'ali@colaberry.com',
+        cc: ['addie.m.mack@gmail.com'],
+        bcc: ['alimuwwakkil@gmail.com'],
+        bcSummary: `<p>Daily Family Command Center briefing for ${today}. Recipients: Ali (To), Addie (Cc), alimuwwakkil@gmail.com (Bcc).</p>`,
+      };
 
   const r = await sendWithBcAttach({
     ticketId: anchor.id,
     bucketId: BUCKET_ID,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
-    to: 'ali@colaberry.com',
-    cc: ['addie.m.mack@gmail.com'],
-    bcc: ['alimuwwakkil@gmail.com'],
     replyTo: 'ali@colaberry.com',
     subject,
     html: emailHtml,
     text: emailText,
-    bcSummary: `<p>Daily Family Command Center briefing for ${today}. Recipients: Ali (To), Addie (Cc), alimuwwakkil@gmail.com (Bcc).</p>`,
+    ...sendOpts,
   });
   console.log(`[Family CC daily] Sent - Mandrill ${r.mandrillId}`);
 
-  fs.writeFileSync(LOCK_FILE, `${new Date().toISOString()}\n${r.mandrillId}\n`);
+  if (!TEST) {
+    fs.writeFileSync(LOCK_FILE, `${new Date().toISOString()}\n${r.mandrillId}\n`);
+  }
 }
 
 async function runWeekly() {
