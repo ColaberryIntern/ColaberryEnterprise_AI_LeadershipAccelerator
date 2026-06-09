@@ -59,6 +59,8 @@ interface LeadAttributes {
   advisory_report_url?: string | null;
   source_id?: string | null;
   entry_point_id?: string | null;
+  strapi_lead_id?: string | null;
+  strapi_attribution?: Record<string, any> | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -121,6 +123,8 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare advisory_report_url: string | null;
   declare source_id: string | null;
   declare entry_point_id: string | null;
+  declare strapi_lead_id: string | null;
+  declare strapi_attribution: Record<string, any> | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -366,6 +370,14 @@ Lead.init(
     },
     entry_point_id: {
       type: DataTypes.UUID,
+      allowNull: true,
+    },
+    strapi_lead_id: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    strapi_attribution: {
+      type: DataTypes.JSONB,
       allowNull: true,
     },
     created_at: {

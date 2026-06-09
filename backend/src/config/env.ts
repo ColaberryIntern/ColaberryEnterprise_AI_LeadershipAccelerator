@@ -82,6 +82,9 @@ export const env = {
   mssqlPass: process.env.MSSQL_PASS || '',
   mssqlDatabase: process.env.MSSQL_DATABASE || 'CCPP',
 
+  // Enterprise CRM service token (service-to-service auth for /api/v1/leads)
+  enterpriseCrmToken: process.env.ENTERPRISE_CRM_TOKEN || '',
+
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 
