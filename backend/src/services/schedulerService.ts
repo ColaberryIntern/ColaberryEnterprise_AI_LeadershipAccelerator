@@ -2504,6 +2504,20 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Anthropic change detector: nightly at 02:30 UTC');
+
+  // Anthropic curriculum impact agent (L3) — nightly at 03:00 UTC.
+  // Scores unscored change events via gpt-4o-mini, updates severity column,
+  // and emails Ali for any events scoring 7+.
+  cron.schedule('0 3 * * *', () => {
+    instrumentCronJob('AnthropicCurriculumImpactAgent', async () => {
+      const { runCurriculumImpactAgent } = require('./anthropicCurriculumImpactAgent');
+      const result = await runCurriculumImpactAgent();
+      console.log(`[Scheduler] AnthropicCurriculumImpactAgent: scored=${result.scored} alerted=${result.alerted} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic curriculum impact agent error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic curriculum impact agent: nightly at 03:00 UTC');
 }
 
 // ---------------------------------------------------------------------------
