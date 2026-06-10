@@ -10,7 +10,7 @@
 
 const assert = require('node:assert');
 const { _internals, hasFamilyData } = require('./compileFamilyBriefingData');
-const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, dedupeActions } = _internals;
+const { categorize, buildToday, buildWeek, ctDayBounds, ctDateISO, fmtCtTimeParts, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, validGridDate, itemsToActionsAndGrid, dedupeActions, conflictGrid } = _internals;
 
 let passed = 0;
 function test(name, fn) {
@@ -217,7 +217,7 @@ test('heuristicProcareItems: pulls announcement sentences, drops boilerplate', (
 // ---- toCreedAction shape ----
 test('toCreedAction: maps extracted item to action shape with tone clamp', () => {
   const a = toCreedAction({ title: 'Jersey Day', detail: 'wear a jersey', when: 'Thu Jun 11', tone: 'upcoming' });
-  assert.deepStrictEqual(a, { tone: 'upcoming', ico: 'CRD', title: 'Jersey Day', sub: 'wear a jersey', due: 'Thu Jun 11' });
+  assert.deepStrictEqual(a, { tone: 'upcoming', ico: 'CRD', colorKey: 'creed', title: 'Jersey Day', sub: 'wear a jersey', due: 'Thu Jun 11' });
   assert.strictEqual(toCreedAction({ title: 'x', tone: 'bogus' }).tone, 'info');
 });
 
@@ -235,6 +235,68 @@ test('dedupeActions: merges near-duplicate Procare titles', () => {
   assert.ok(out.some(i => /Brenda/.test(i.title)));
   assert.ok(out.some(i => /Kona/.test(i.title)));
   assert.ok(out.some(i => /Jersey/.test(i.title)));
+});
+
+// ---- buildWeek with dated extras (Procare/travel/conflicts on the grid) ----
+test('buildWeek: places dated extras on the matching day, extras before calendar', () => {
+  const now = new Date('2026-06-10T17:00:00Z'); // Wed Jun 10 CT
+  const thuISO = ctDateISO(ctDayBounds(now, 1).start); // Thu Jun 11
+  const week = buildWeek(now, [{ summary: 'Addison game', start: '2026-06-11T23:00:00Z' }], [
+    { dateISO: thuISO, colorKey: 'creed', label: 'Jersey Day' },
+    { dateISO: ctDateISO(now), colorKey: 'action', label: '! conflict' },
+  ]);
+  const thu = week.days[1]; // Thu Jun 11
+  assert.ok(thu.events.some(e => e.label === 'Jersey Day' && e.colorKey === 'creed'), 'Procare item on Thu');
+  assert.strictEqual(thu.events[0].label, 'Jersey Day', 'extra rendered before calendar event');
+  const wed = week.days.find(d => d.today);
+  assert.ok(wed.events.some(e => e.colorKey === 'action'), 'conflict marker on today');
+});
+
+// ---- validGridDate ----
+test('validGridDate: accepts near dates, rejects far/garbage', () => {
+  const now = new Date('2026-06-10T17:00:00Z');
+  assert.ok(validGridDate('2026-06-11', now));
+  assert.ok(!validGridDate('2026-08-01', now), 'too far out');
+  assert.ok(!validGridDate('not-a-date', now));
+  assert.ok(!validGridDate('', now));
+});
+
+// ---- itemsToActionsAndGrid ----
+test('itemsToActionsAndGrid: builds colored actions + dated grid, dedups', () => {
+  const now = new Date('2026-06-10T17:00:00Z');
+  const { actions, grid } = itemsToActionsAndGrid([
+    { title: 'Jersey Day Thursday', detail: 'wear a jersey', when: 'Thu Jun 11', dateISO: '2026-06-11', gridLabel: 'Jersey Day', tone: 'upcoming' },
+    { title: 'No-date info item', tone: 'info' },
+  ], now, { ico: 'CRD', colorKey: 'creed' });
+  assert.ok(actions.every(a => a.colorKey === 'creed' && a.ico === 'CRD'));
+  assert.strictEqual(grid.length, 1, 'only the dated item goes on the grid');
+  assert.strictEqual(grid[0].label, 'Jersey Day');
+});
+
+// ---- isPromoTravel ----
+test('isPromoTravel: drops marketing, keeps confirmations', () => {
+  assert.ok(isPromoTravel('Up to 40% off hotels and vacation rentals this summer'));
+  assert.ok(isPromoTravel('Prepare for your upcoming trip to'));
+  assert.ok(!isPromoTravel('Expedia flight purchase confirmation - DFW - Sat, Jun 13'));
+  assert.ok(!isPromoTravel("It's time to check in - NRWCUO"));
+});
+
+// ---- cleanBody: strips CSS/asterisk/dash junk ----
+test('cleanBody: strips CSS @import + asterisk/dash runs + Hello boilerplate', () => {
+  assert.strictEqual(cleanBody('* * American Airlines @import url(https://fonts.googleapis.com/css2?family=Roboto); display:swap;'), undefined, 'css junk -> no quote');
+  const ds = cleanBody('Procare ******** Hello Ali Muwwakkil! ******** Below are recent activities for Creed -------- Signed out at 5:29 PM.');
+  assert.ok(ds && /Signed out at 5:29/.test(ds), 'keeps the real line');
+  assert.ok(!/\*\*|----|Hello Ali/.test(ds), 'drops asterisks/dashes/greeting');
+});
+
+// ---- conflictGrid ----
+test('conflictGrid: one red marker per conflict on the conflict day', () => {
+  const now = new Date('2026-06-10T17:00:00Z');
+  const today = { conflicts: [{ family: { start: '2026-06-10T20:00:00Z', summary: 'x' }, work: { summary: 'y' } }] };
+  const g = conflictGrid(now, today);
+  assert.strictEqual(g.length, 1);
+  assert.strictEqual(g[0].colorKey, 'action');
+  assert.strictEqual(g[0].dateISO, ctDateISO(now));
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ', all green'}`);

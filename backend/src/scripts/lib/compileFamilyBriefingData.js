@@ -191,27 +191,35 @@ function buildToday(familyToday, workToday) {
   return { events, conflicts };
 }
 
-// Build the 7-day week grid from family events keyed by CT day.
-function buildWeek(now, familyWeek) {
+// CT calendar date (YYYY-MM-DD) for a UTC instant — used to place dated extras.
+function ctDateISO(date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
+// Build the 7-day week grid from family-calendar events PLUS dated "extras"
+// (Procare announcements, travel, conflict markers) placed on their day.
+// extras: [{ dateISO: 'YYYY-MM-DD', colorKey, label }].
+function buildWeek(now, familyWeek, extras = []) {
   const days = [];
   const todayBounds = ctDayBounds(now, 0);
   for (let i = 0; i < 7; i++) {
     const b = ctDayBounds(now, i);
     const parts = ctParts(b.start);
-    const dayEvents = familyWeek
-      .filter((ev) => {
-        const s = new Date(ev.start);
-        return s >= b.start && s < b.end;
-      })
-      .slice(0, 4)
+    const dayISO = ctDateISO(b.start);
+    const calEvents = familyWeek
+      .filter((ev) => { const s = new Date(ev.start); return s >= b.start && s < b.end; })
       .map((ev) => ({ colorKey: categorize(ev.summary).key, label: truncate(ev.summary, 22) }));
+    const extraEvents = (extras || [])
+      .filter((x) => x.dateISO === dayISO)
+      .map((x) => ({ colorKey: x.colorKey, label: truncate(x.label, 22) }));
+    // extras (conflicts/Procare/travel) first so they're visible, then calendar
     days.push({
       dow: parts.dow, dnum: parts.day,
       today: b.start.getTime() === todayBounds.start.getTime(),
-      events: dayEvents,
+      events: [...extraEvents, ...calEvents].slice(0, 5),
     });
   }
-  const first = ctParts(days.length ? ctDayBounds(now, 0).start : now);
+  const first = ctParts(ctDayBounds(now, 0).start);
   const last = ctParts(ctDayBounds(now, 6).start);
   return {
     rangeLabel: `${first.month} ${first.day} - ${last.month} ${last.day} family calendar`,
@@ -308,29 +316,49 @@ function cleanBody(bodyText, maxLen = 240) {
   if (m) b = m[1];
   b = b
     .replace(/^\s*Kinderlime\s*/i, '')
-    // Procare/Kinderlime stuff their bodies with inbox-preview padding — strip it:
-    .replace(/&(?:zwnj|zwj|nbsp|shy|#x?[0-9a-f]+);/gi, ' ')              // literal HTML entities
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')                           // css <style> blocks
+    .replace(/<[^>]+>/g, ' ')                                            // any html tags
+    .replace(/@import[^;]*;/gi, ' ')                                     // css @import
+    .replace(/url\([^)]*\)/gi, ' ')                                      // css url(...)
+    .replace(/\{[^}]*\}/g, ' ')                                          // css declaration blocks
+    .replace(/&(?:zwnj|zwj|nbsp|shy|amp|#x?[0-9a-f]+);/gi, ' ')          // html entities
     .replace(/[​‌‍⁠﻿­]/g, '')             // zero-width unicode
-    // drop the Procare app-download / settings boilerplate tail:
-    .replace(/You can reply in the Procare[\s\S]*$/i, '')
+    .replace(/You can reply in the Procare[\s\S]*$/i, '')               // procare app tail
     .replace(/If you want to adjust your email notifications[\s\S]*$/i, '')
+    .replace(/Hello\s+[^,.!]{1,40}[,.!]/i, '')                          // "Hello Ali Muwwakkil,"
+    .replace(/Below are recent activities for [^-.\n]*/i, '')           // daily-summary header (stop at dash/period)
+    .replace(/[*_=~]{2,}/g, ' ')                                        // ****  ====  ____ runs
+    .replace(/-{3,}/g, ' ')                                             // ---- separators
     .replace(/\s+/g, ' ')
     .trim();
-  // if nothing but padding/punctuation survives, show no quote rather than junk
+  // reject CSS/code leftovers and padding-only bodies
   if (!b || !/[A-Za-z]{3,}/.test(b)) return undefined;
+  if (/(display\s*:\s*swap|font-family|googleapis\.com|=EML\||PRODUCT_AWRN)/i.test(b)) return undefined;
   return truncate(b, maxLen);
 }
 
-// "New since yesterday" from inbox_emails rows.
+// Marketing/promotional travel email? (drop from New-Since — keep real itineraries.)
+function isPromoTravel(subject) {
+  const s = (subject || '').toLowerCase();
+  if (/%|\boff\b|\bsale\b|\bdeal\b|\bsave\b|\bdiscount\b|up to|earn|points|members?|prepare for your upcoming/i.test(s)) return true;
+  return false;
+}
+
+// "New since yesterday" from inbox_emails rows. Tags colored by category:
+// School -> Creed (blue), Travel -> travel (teal). Drops promo travel + junk-only bodies.
 function buildNewSince(rows) {
   const items = [];
   for (const r of (rows || [])) {
+    const label = r.label || 'New';
+    if (label === 'Travel' && isPromoTravel(r.subject)) continue;
     const from = (r.from_name || (r.from_address || '').replace(/<[^>]*>/, '')).trim();
     const when = r.received_at
       ? new Date(r.received_at).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
       : '';
+    const colorKey = label === 'School' ? 'creed' : label === 'Travel' ? 'travel' : 'neutral';
     items.push({
-      label: r.label || 'New',
+      label,
+      colorKey,
       title: r.subject || '(no subject)',
       src: `${from}${when ? ' . ' + when : ''}`,
       quote: cleanBody(r.body_text),
@@ -366,15 +394,38 @@ async function callOpenAI(messages, { timeoutMs = 15000, model = 'gpt-4o-mini' }
   }
 }
 
-// Map an extracted item to the Section-4 action shape.
-function toCreedAction(it) {
+// Map an extracted item to the Section-4 action shape (ico + colorKey supplied).
+function toAction(it, ico, colorKey) {
   const tone = it.tone === 'urgent' ? 'urgent' : it.tone === 'upcoming' ? 'upcoming' : 'info';
-  return {
-    tone, ico: 'CRD',
-    title: it.title,
-    sub: it.detail || undefined,
-    due: it.when || undefined,
-  };
+  return { tone, ico, colorKey, title: it.title, sub: it.detail || undefined, due: it.when || undefined };
+}
+// Back-compat alias used by tests.
+function toCreedAction(it) { return toAction(it, 'CRD', 'creed'); }
+
+// A YYYY-MM-DD string within the next ~14 days (so a hallucinated date won't land).
+function validGridDate(dateISO, now) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO || '')) return false;
+  const d = new Date(`${dateISO}T12:00:00Z`).getTime();
+  const lo = now.getTime() - 2 * 86400000;
+  const hi = now.getTime() + 14 * 86400000;
+  return d >= lo && d <= hi;
+}
+
+// Turn extracted LLM items into { actions, grid } with a category color.
+function itemsToActionsAndGrid(items, now, { ico, colorKey }) {
+  const valid = (items || []).filter((it) => it && it.title);
+  const actions = dedupeActions(valid.map((it) => toAction(it, ico, colorKey))).slice(0, 5);
+  const grid = [];
+  const seen = new Set();
+  for (const it of valid) {
+    if (!validGridDate(it.dateISO, now)) continue;
+    const label = String(it.gridLabel || it.title);
+    const key = `${it.dateISO}|${label.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    grid.push({ dateISO: it.dateISO, colorKey, label });
+  }
+  return { actions, grid: grid.slice(0, 8) };
 }
 
 // Collapse near-duplicate action titles (the same announcement re-sent across days
@@ -410,30 +461,64 @@ async function extractProcareItems(procareRows, now) {
     })
     .slice(0, 3);
   if (!rows.length) return [];
+  const todayISO = ctDateISO(now);
   const today = ctParts(now);
   const blocks = rows
     .map((r, i) => `EMAIL ${i + 1} [${r.subject}] (received ${new Date(r.received_at).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' })}):\n${cleanBody(r.body_text, 600)}`)
     .join('\n\n');
   const sys =
     `You extract parent-relevant items from a daycare/preschool (Procare) about a child named Creed. ` +
-    `Today is ${today.dow} ${today.month} ${today.day}. Return ONLY JSON of the form ` +
-    `{"items":[{"title":string,"detail":string,"when":string,"tone":"urgent|upcoming|info"}]}. ` +
+    `Today is ${today.dow} ${today.month} ${today.day} (${todayISO}). Return ONLY JSON of the form ` +
+    `{"items":[{"title":string,"detail":string,"when":string,"dateISO":string,"gridLabel":string,"tone":"urgent|upcoming|info"}]}. ` +
     `Include: teacher absences/returns, special/dress-up days (e.g. Jersey Day), what-to-bring, ` +
     `treats/events (e.g. Kona Ice), closures, payments due, schedule changes. ` +
     `title = short fact or task ("Ms. Brenda out, returns Monday"). detail = one short clarifying line. ` +
-    `when = a short day/date label if the item has timing ("Thu Jun 11", "Through Mon Jun 15"), else "". ` +
-    `tone = "urgent" if today/needs action now, "upcoming" if a future dated thing, else "info". ` +
-    `Ignore greetings, sign-offs, app-download links. CONSOLIDATE the same announcement ` +
-    `that appears across multiple emails into ONE item — never repeat it. Max 5 items. ` +
+    `when = short human timing label ("Thu Jun 11", "Through Mon"), else "". ` +
+    `dateISO = the single most relevant calendar date as YYYY-MM-DD computed from today (${todayISO}); ` +
+    `for a teacher returning Monday use that Monday's date; "" if no specific day. ` +
+    `gridLabel = a VERY short calendar-cell label (<=18 chars, e.g. "Jersey Day", "Kona Ice", "Ms. Brenda back"). ` +
+    `tone = "urgent" if today, "upcoming" if future-dated, else "info". ` +
+    `Ignore greetings, sign-offs, app-download links. CONSOLIDATE the same announcement across emails into ONE. Max 5. ` +
     `Nothing noteworthy => {"items":[]}.`;
   try {
     const out = await callOpenAI([{ role: 'system', content: sys }, { role: 'user', content: blocks }]);
     const parsed = JSON.parse(out);
     const items = Array.isArray(parsed.items) ? parsed.items : [];
-    return dedupeActions(items.filter((it) => it && it.title).map(toCreedAction)).slice(0, 5);
+    return itemsToActionsAndGrid(items, now, { ico: 'CRD', colorKey: 'creed' });
   } catch (err) {
     console.error('[compileFamily] procare LLM extract failed, using heuristic:', err.message);
-    return dedupeActions(heuristicProcareItems(rows)).slice(0, 5);
+    return { actions: dedupeActions(heuristicProcareItems(rows)).slice(0, 5), grid: [] };
+  }
+}
+
+// Travel: synthesize the actual upcoming trips/flights from itinerary/confirmation
+// emails (ignoring marketing, resolving cancellations) -> dated grid (teal) + tasks.
+async function extractTravelItems(travelRows, now) {
+  const rows = (travelRows || []).filter((r) => !isPromoTravel(r.subject)).slice(0, 6);
+  if (!rows.length) return { actions: [], grid: [] };
+  const todayISO = ctDateISO(now);
+  const today = ctParts(now);
+  const blocks = rows
+    .map((r, i) => `EMAIL ${i + 1} [${r.subject}] (received ${new Date(r.received_at).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' })}):\n${(cleanBody(r.body_text, 500) || r.subject)}`)
+    .join('\n\n');
+  const sys =
+    `You extract the family's ACTUAL upcoming travel from airline/booking emails. ` +
+    `Today is ${today.dow} ${today.month} ${today.day} (${todayISO}). Ignore marketing/promotions; ` +
+    `if a flight was cancelled, drop it. Return ONLY JSON ` +
+    `{"items":[{"title":string,"detail":string,"when":string,"dateISO":string,"gridLabel":string,"tone":"urgent|upcoming|info"}]}. ` +
+    `title = the trip/flight ("Flight DFW to BNA" or "Check in for AA flight"). detail = route/conf if known. ` +
+    `when = short timing ("Sat Jun 13"). dateISO = that flight's date YYYY-MM-DD (from today ${todayISO}), else "". ` +
+    `gridLabel = very short cell label (<=18 chars, e.g. "Flight DFW->BNA"). ` +
+    `tone = "urgent" if within 24h (e.g. check-in), "upcoming" otherwise. Max 4 items, consolidate duplicates. ` +
+    `Nothing real => {"items":[]}.`;
+  try {
+    const out = await callOpenAI([{ role: 'system', content: sys }, { role: 'user', content: blocks }]);
+    const parsed = JSON.parse(out);
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    return itemsToActionsAndGrid(items, now, { ico: 'TRIP', colorKey: 'travel' });
+  } catch (err) {
+    console.error('[compileFamily] travel extract failed:', err.message);
+    return { actions: [], grid: [] };
   }
 }
 
@@ -496,13 +581,22 @@ function buildActions(today) {
   const actions = [];
   for (const c of today.conflicts) {
     actions.push({
-      tone: 'urgent', ico: '!',
+      tone: 'urgent', ico: '!', colorKey: 'action',
       title: `Resolve conflict - ${truncate(c.family.summary, 40)} vs ${truncate(c.work.summary, 30)}`,
       sub: 'Decide who covers the family event or move the work item. Settle before it arrives.',
       due: 'Today',
     });
   }
   return actions;
+}
+
+// Conflict markers for the week grid (red chip on the conflicting day).
+function conflictGrid(now, today) {
+  return (today.conflicts || []).map((c) => ({
+    dateISO: ctDateISO(new Date(c.family.start)),
+    colorKey: 'action',
+    label: '! conflict',
+  }));
 }
 
 // --------------------------------------------------------------------------
@@ -636,11 +730,11 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
 
     todayBlock = buildToday(familyToday, workToday);
     data.today = { events: todayBlock.events };
-    data.week = buildWeek(now, familyWeek);
+    data._familyWeek = familyWeek; // week grid is built later, after extraction extras
     const travel = buildTravel(now, familyHorizon);
     if (travel.cards.length) data.travel = travel;
     data.risks = buildRisks(todayBlock);
-    data.actions = buildActions(todayBlock);
+    data.actions = buildActions(todayBlock); // conflict actions first
     data.recap = buildRecap(now, familyPast);
     data._pastEvents = familyPast; // used to enrich the flashback moments below
     sources.push('Google Calendar (Family)');
@@ -661,28 +755,43 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     sources.push('inbox_emails DB (school + travel)');
     data._newSinceCount = newSince.length;
 
-    // Procare extraction -> Creed action items (calendar conflicts stay first).
-    const procareRows = rows.filter((r) =>
+    // Stash rows for the async extraction step below.
+    data._procareRows = rows.filter((r) =>
       r.label === 'School' && /office chat|daily summary/i.test(r.subject || ''));
-    data._procareRows = procareRows;
+    data._travelRows = rows.filter((r) => r.label === 'Travel');
   } catch (err) {
     degraded.push('inbox mail');
     console.error('[compileFamily] inbox_emails source failed:', err.message);
   }
 
-  // ---- Procare -> Creed tasks (LLM extraction, async; appended to actions) ----
+  // ---- Extraction: Procare (Creed) + travel -> actions + dated grid extras ----
+  const gridExtras = conflictGrid(now, todayBlock);
   if (data._procareRows && data._procareRows.length) {
     try {
-      const creedItems = await extractProcareItems(data._procareRows, now);
-      if (creedItems.length) {
-        data.actions = [...(data.actions || []), ...creedItems];
-        sources.push('Procare extraction (Creed)');
-      }
+      const p = await extractProcareItems(data._procareRows, now);
+      if (p.actions.length) { data.actions = [...(data.actions || []), ...p.actions]; sources.push('Procare extraction (Creed)'); }
+      gridExtras.push(...p.grid);
     } catch (err) {
       console.error('[compileFamily] procare extraction failed:', err.message);
     }
   }
+  if (data._travelRows && data._travelRows.length) {
+    try {
+      const t = await extractTravelItems(data._travelRows, now);
+      if (t.actions.length) { data.actions = [...(data.actions || []), ...t.actions]; sources.push('Travel extraction'); }
+      gridExtras.push(...t.grid);
+    } catch (err) {
+      console.error('[compileFamily] travel extraction failed:', err.message);
+    }
+  }
   delete data._procareRows;
+  delete data._travelRows;
+
+  // ---- Week grid: family-calendar events + dated extras (Procare/travel/conflicts) ----
+  if (data._familyWeek) {
+    data.week = buildWeek(now, data._familyWeek, gridExtras);
+    delete data._familyWeek;
+  }
 
   // ---- Flashback (curated photos + live "other moments" from past calendar) ----
   const flashback = buildFlashback();
@@ -716,5 +825,5 @@ module.exports = {
   compileFamilyBriefingData,
   hasFamilyData,
   // exported for unit tests:
-  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, extractProcareItems, dedupeActions },
+  _internals: { tzOffsetMs, ctDayBounds, ctDateISO, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, toAction, validGridDate, itemsToActionsAndGrid, extractProcareItems, dedupeActions, conflictGrid },
 };

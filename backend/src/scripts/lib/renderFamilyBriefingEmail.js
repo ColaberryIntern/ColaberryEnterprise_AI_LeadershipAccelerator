@@ -323,17 +323,19 @@ function renderSection3Travel(d, data) {
 }
 
 // ----- SECTION 4: action items -----
-function actionItem({ tone, ico, title, sub, due }) {
+function actionItem({ tone, ico, title, sub, due, colorKey }) {
   const palette = {
     urgent: { bg: '#fff5f5', border: '#fecaca', icoBg: C.action },
     upcoming: { bg: '#fffbeb', border: '#fde68a', icoBg: '#f59e0b' },
     info: { bg: '#f0f9ff', border: '#bae6fd', icoBg: C.info },
   }[tone] || { bg: '#f0f9ff', border: '#bae6fd', icoBg: C.info };
+  // icon color follows the family-member/category color (matches Section 2 legend)
+  const icoBg = colorKey ? catColor(colorKey)[1] : palette.icoBg;
   return `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${palette.bg};border:1px solid ${palette.border};margin-bottom:10px">
   <tr>
     <td width="48" valign="top" style="padding:14px 0 14px 14px">
-      <div style="width:32px;height:32px;background:${palette.icoBg};color:#ffffff;font-size:14px;font-weight:700;text-align:center;line-height:32px;font-family:${FONT}">${esc(ico)}</div>
+      <div style="width:32px;height:32px;background:${icoBg};color:#ffffff;font-size:11px;font-weight:700;text-align:center;line-height:32px;font-family:${FONT}">${esc(ico)}</div>
     </td>
     <td valign="top" style="padding:14px 10px 14px 12px;font-family:${FONT}">
       <div style="font-size:14.5px;font-weight:600;color:${C.ink};margin:0 0 2px 0">${esc(title)}</div>
@@ -352,7 +354,7 @@ function renderSection4Actions(d, data) {
     out += emptyState('Nothing flagged for action right now.');
   } else {
     for (const a of actions) {
-      out += actionItem({ tone: a.tone, ico: a.ico, title: a.title, sub: a.sub, due: a.due });
+      out += actionItem({ tone: a.tone, ico: a.ico, title: a.title, sub: a.sub, due: a.due, colorKey: a.colorKey });
     }
   }
   out += sectionClose();
@@ -360,12 +362,13 @@ function renderSection4Actions(d, data) {
 }
 
 // ----- SECTION 5: new since yesterday -----
-function changeRow({ label, title, src, quote }) {
+function changeRow({ label, title, src, quote, colorKey }) {
+  const [tagBg, tagFg] = colorKey ? catColor(colorKey) : [C.okSoft, C.ok];
   return `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fafbff;border:1px solid ${C.line};margin-bottom:10px">
   <tr>
     <td width="88" valign="top" style="padding:14px 0 14px 14px">
-      <div style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:4px 8px;background:${C.okSoft};color:${C.ok};font-family:${FONT}">${esc(label)}</div>
+      <div style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:4px 8px;background:${tagBg};color:${tagFg};font-family:${FONT}">${esc(label)}</div>
     </td>
     <td valign="top" style="padding:14px 14px 14px 12px;font-family:${FONT}">
       <div style="font-size:14px;font-weight:600;color:${C.ink};margin:0 0 2px 0">${esc(title)}</div>
@@ -384,7 +387,7 @@ function renderSection5New(d, data) {
     out += emptyState('No new family-relevant email since yesterday.');
   } else {
     for (const it of items) {
-      out += changeRow({ label: it.label || 'New', title: it.title, src: it.src, quote: it.quote });
+      out += changeRow({ label: it.label || 'New', title: it.title, src: it.src, quote: it.quote, colorKey: it.colorKey });
     }
   }
   out += sectionClose();
