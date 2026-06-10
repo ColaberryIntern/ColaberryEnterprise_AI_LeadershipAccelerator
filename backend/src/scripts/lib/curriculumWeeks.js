@@ -20,9 +20,10 @@
 // Cohort 1 kickoff — first Mon/Thu class (Mon Architecture Day + Thu Build Day).
 const KICKOFF = '2026-07-13';
 
-// Build-deadline model (Ali, 2026-06-10): ALL 12 weeks of build content are due
-// before launch. 2026-07-10 is the Friday before the 7/13 kickoff.
-const LAUNCH_READY_DUE = '2026-07-10';
+// Build-deadline model (Ali, 2026-06-10): staggered build-ahead. Each week's
+// content is due the Friday BEFORE that week is taught (teaching Monday minus
+// BUILD_AHEAD_DAYS). Week 1 -> 2026-07-10 (before launch); Week 12 -> 2026-09-25.
+const BUILD_AHEAD_DAYS = 3;
 
 const SKILLJAR = 'https://anthropic.skilljar.com';
 const CCA_F = 'https://claudecertifications.com/claude-certified-architect/exam-guide';
@@ -117,9 +118,19 @@ const COMPONENTS = [
     key: 'signoff',
     content: 'Swati validation sign-off',
     owner: 'swati',
-    description: (w) =>
-      `<div><p><strong>Week ${w.week} validation gate.</strong> Swati confirms the Anthropic mapping, lab+artifact, assessment pack, and NotebookLM video for <em>${w.theme}</em> are complete, consistent, and ready to teach.</p>` +
-      `<p><strong>Done means:</strong> Swati has signed off the full week as launch-ready.</p></div>`,
+    // Intensive 1 (Weeks 1-3): Ali co-signs to set the standard. Weeks 4-12:
+    // Swati signs solo.
+    owners: (w) => (w.intensive === 1 ? ['swati', 'ali'] : ['swati']),
+    description: (w) => {
+      const aliCoSign = w.intensive === 1;
+      const who = aliCoSign ? 'Swati + Ali co-sign' : 'Swati confirms';
+      const note = aliCoSign
+        ? '<p><strong>Ali co-signs Intensive 1 (Weeks 1-3) to set the quality standard the rest of the program follows.</strong></p>'
+        : '';
+      return `<div><p><strong>Week ${w.week} validation gate.</strong> ${who} that the Anthropic mapping, lab+artifact, assessment pack, and NotebookLM video for <em>${w.theme}</em> are complete, consistent, and ready to teach.</p>` +
+        note +
+        `<p><strong>Done means:</strong> ${aliCoSign ? 'Swati and Ali have' : 'Swati has'} signed off the full week as launch-ready.</p></div>`;
+    },
   },
 ];
 
@@ -136,10 +147,9 @@ function weekTeachingMonday(week) {
   return isoAddDays(KICKOFF, (week - 1) * 7);
 }
 
-// Build deadline: ALL weeks due before launch (2026-07-10). Every week's
-// content must exist at kickoff — no building during delivery.
-function weekDueDate(_week) {
-  return LAUNCH_READY_DUE;
+// Build deadline (staggered): the Friday before the week is taught.
+function weekDueDate(week) {
+  return isoAddDays(KICKOFF, (week - 1) * 7 - BUILD_AHEAD_DAYS);
 }
 
 function groupName(w) {
@@ -149,7 +159,7 @@ function groupName(w) {
 
 module.exports = {
   KICKOFF,
-  LAUNCH_READY_DUE,
+  BUILD_AHEAD_DAYS,
   INTENSIVE_NAMES,
   ANTHROPIC_COURSES,
   WEEKS,

@@ -70,24 +70,51 @@ describe('component template', () => {
   });
 });
 
-describe('all-before-launch schedule', () => {
-  it('every week is due 2026-07-10 (the Friday before the 7/13 kickoff)', () => {
-    for (const w of cur.WEEKS) {
-      expect(cur.weekDueDate(w.week)).toBe('2026-07-10');
-    }
-    expect(cur.LAUNCH_READY_DUE).toBe('2026-07-10');
+describe('staggered build-ahead schedule', () => {
+  it('Week 1 is due 2026-07-10 and Week 12 is due 2026-09-25', () => {
+    expect(cur.weekDueDate(1)).toBe('2026-07-10');
+    expect(cur.weekDueDate(12)).toBe('2026-09-25');
   });
 
-  it('the due date is a weekday and strictly before kickoff', () => {
-    const due = cur.weekDueDate(1);
-    expect(utcDay(due)).toBe(5); // Friday
-    expect(due < cur.KICKOFF).toBe(true);
+  it('every due date is a Friday and lands before its teaching Monday', () => {
+    for (const w of cur.WEEKS) {
+      const due = cur.weekDueDate(w.week);
+      expect(utcDay(due)).toBe(5); // Friday
+      expect(due < cur.weekTeachingMonday(w.week)).toBe(true);
+    }
+  });
+
+  it('due dates stagger — strictly increasing across the 12 weeks', () => {
+    const dues = cur.WEEKS.map((w: any) => cur.weekDueDate(w.week));
+    for (let i = 1; i < dues.length; i++) {
+      expect(dues[i] > dues[i - 1]).toBe(true);
+    }
   });
 
   it('teaching Mondays start on the 2026-07-13 kickoff and step by 7 days', () => {
     expect(cur.weekTeachingMonday(1)).toBe('2026-07-13');
     expect(cur.weekTeachingMonday(12)).toBe('2026-09-28');
     expect(utcDay(cur.weekTeachingMonday(1))).toBe(1); // Monday
+  });
+});
+
+describe('sign-off ownership', () => {
+  const signoff = () => cur.COMPONENTS.find((c: any) => c.key === 'signoff');
+
+  it('Ali co-signs Intensive 1 (Weeks 1-3); Swati signs solo from Week 4', () => {
+    for (const w of cur.WEEKS) {
+      const owners = signoff().owners(w);
+      if (w.intensive === 1) {
+        expect(owners).toEqual(['swati', 'ali']);
+      } else {
+        expect(owners).toEqual(['swati']);
+      }
+    }
+  });
+
+  it("the sign-off description notes Ali co-signs only for Weeks 1-3", () => {
+    expect(signoff().description(cur.WEEKS[0])).toContain('Ali co-signs');
+    expect(signoff().description(cur.WEEKS[3])).not.toContain('Ali co-signs');
   });
 });
 

@@ -34,16 +34,27 @@ try { ({ getBasecampToken } = require('./lib/basecampToken')); } catch { /* opti
 const DRY = process.argv.includes('--dry-run');
 const CURRICULUM_LIST_ID = 9946468992;
 
-function ownerIds(handle) {
-  const p = getByHandle(handle);
-  if (!p || !p.basecampPersonId) return [];
-  return [p.basecampPersonId];
+// A component's owners can be a single handle (`owner`) or a per-week function
+// (`owners(w)` -> [handles]), e.g. Ali co-signs Intensive 1.
+function handlesFor(c, w) {
+  return typeof c.owners === 'function' ? c.owners(w) : [c.owner];
 }
 
-function ownerLabel(handle) {
-  const p = getByHandle(handle);
-  if (!p) return handle;
-  return p.basecampPersonId ? p.displayName : `${p.displayName} (UNPROVISIONED — will skip assignment)`;
+function idsForHandles(handles) {
+  return handles
+    .map((h) => getByHandle(h))
+    .filter((p) => p && p.basecampPersonId)
+    .map((p) => p.basecampPersonId);
+}
+
+function labelFor(handles) {
+  return handles
+    .map((h) => {
+      const p = getByHandle(h);
+      if (!p) return h;
+      return p.basecampPersonId ? p.displayName : `${p.displayName} (UNPROVISIONED — skipped)`;
+    })
+    .join(' + ');
 }
 
 function printPlan() {
@@ -54,7 +65,7 @@ function printPlan() {
     const due = cur.weekDueDate(w.week);
     console.log(`${cur.groupName(w)}   [due ${due}, teaches ${cur.weekTeachingMonday(w.week)}]`);
     for (const c of cur.COMPONENTS) {
-      console.log(`    - [${ownerLabel(c.owner)}] ${c.content}`);
+      console.log(`    - [${labelFor(handlesFor(c, w))}] ${c.content}`);
     }
   }
   console.log('');
@@ -151,9 +162,9 @@ async function main() {
     }
     for (const c of cur.COMPONENTS) {
       const description = typeof c.description === 'function' ? c.description(w) : c.description;
-      const assignee = ownerIds(c.owner);
+      const assignee = idsForHandles(handlesFor(c, w));
       if (DRY) {
-        console.log(`       todo: [${c.owner}] ${c.content}  (due ${due})`);
+        console.log(`       todo: [${handlesFor(c, w).join(' + ')}] ${c.content}  (due ${due})`);
         continue;
       }
       const match = byContent.get(c.content);
