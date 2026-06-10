@@ -231,31 +231,49 @@ async function compileCampaignMetrics(since: Date): Promise<CampaignMetrics> {
 // ─── Generate & Send Daily Briefing ─────────────────────────────────────────
 
 export async function generateDailyBriefing(): Promise<void> {
-  try {
-    const data = await compileExecutiveBriefing('daily');
-    const { sendBriefingEmail } = await import('./emailService');
-    const { SystemSetting } = await import('../models');
+  // Phase 23 — opt-in instrumentation. The briefing service registers
+  // itself with the bounded execution substrate so operators can see it
+  // in the unified visibility surface. The wrapper never throws.
+  const { runBoundedWorker } = await import('../intelligence/systemStateEngine/executionSubstrate/boundedExecutionWorker');
+  await runBoundedWorker({
+    kind: 'briefing_send',
+    organization_id: 'colaberry',
+    scope_summary: 'Daily executive briefing — compile + email to admin recipients',
+    bounded_envelope: {
+      max_duration_ms: 5 * 60_000,
+      max_attempts: 1,
+      allowed_namespaces: ['email_send', 'manifest_ingest'],
+      parent_depth_limit: 0,
+    },
+    run: async () => {
+      try {
+        const data = await compileExecutiveBriefing('daily');
+        const { sendBriefingEmail } = await import('./emailService');
+        const { SystemSetting } = await import('../models');
 
-    const setting = await SystemSetting.findOne({ where: { key: 'admin_notification_emails' } });
-    const recipients = setting?.getDataValue('value')
-      ? String(setting.getDataValue('value')).split(',').map((e: string) => e.trim()).filter(Boolean)
-      : [];
+        const setting = await SystemSetting.findOne({ where: { key: 'admin_notification_emails' } });
+        const recipients = setting?.getDataValue('value')
+          ? String(setting.getDataValue('value')).split(',').map((e: string) => e.trim()).filter(Boolean)
+          : [];
 
-    if (recipients.length === 0) {
-      console.log('[Briefing] No admin email recipients configured. Skipping.');
-      return;
-    }
+        if (recipients.length === 0) {
+          console.log('[Briefing] No admin email recipients configured. Skipping.');
+          return;
+        }
 
-    for (const to of recipients) {
-      await sendBriefingEmail(to, data).catch((err: any) => {
-        console.error(`[Briefing] Email to ${to} failed:`, err.message);
-      });
-    }
+        for (const to of recipients) {
+          await sendBriefingEmail(to, data).catch((err: any) => {
+            console.error(`[Briefing] Email to ${to} failed:`, err.message);
+          });
+        }
 
-    console.log(`[Briefing] Daily briefing sent to ${recipients.length} recipients`);
-  } catch (err: any) {
-    console.error('[Briefing] Failed to generate daily briefing:', err.message);
-  }
+        console.log(`[Briefing] Daily briefing sent to ${recipients.length} recipients`);
+      } catch (err: any) {
+        console.error('[Briefing] Failed to generate daily briefing:', err.message);
+        throw err;
+      }
+    },
+  });
 }
 
 // ─── Generate & Send Weekly Briefing ────────────────────────────────────────

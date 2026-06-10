@@ -25,7 +25,8 @@ const SEEDS: SeedSource[] = [
     slug: 'trustbeforeintelligence',
     name: 'Trust Before Intelligence',
     domain: 'trustbeforeintelligence.ai',
-    hmac_secret: 'TRUST_WEBHOOK_SECRET',
+    // HMAC disabled — TBI book modal is a public Vite bundle that can't safely hold a shared secret.
+    // Source is open ingestion; bot/abuse protection lives at the rate-limit and validation layer instead.
     entry_points: [
       {
         slug: 'get_book_modal',
@@ -101,6 +102,44 @@ const SEEDS: SeedSource[] = [
           email: 'email',
           idea_input: 'idea_input',
           maturity_score: 'metadata.maturity_score',
+        },
+        required_fields: ['email'],
+      },
+    ],
+  },
+  {
+    slug: 'worldoftaxonomy',
+    name: 'World of Taxonomy',
+    domain: 'worldoftaxonomy.com',
+    entry_points: [
+      {
+        slug: 'classify_lead',
+        name: 'Classify Lead',
+        page: '/classify',
+        form_name: 'classify-demo',
+        description: 'Lead capture from /classify taxonomy demo page',
+        field_map: {
+          email: 'email',
+          name: 'name',
+          company: 'company',
+          page_url: 'metadata.page_url',
+          countries: 'metadata.countries',
+          description: 'metadata.description',
+        },
+        required_fields: ['email'],
+      },
+      {
+        slug: 'developer_contact',
+        name: 'Developer Contact',
+        page: '/developers',
+        form_name: 'developer-contact',
+        description: 'Contact form on /developers page',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          message: 'metadata.message',
+          page_url: 'metadata.page_url',
         },
         required_fields: ['email'],
       },

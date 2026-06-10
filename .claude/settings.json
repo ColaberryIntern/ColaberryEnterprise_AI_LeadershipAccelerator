@@ -125,6 +125,15 @@
             "command": "bash .claude/hooks/check-emdash.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/open-html.sh"
+          }
+        ]
       }
     ],
     "Stop": [
