@@ -12,6 +12,13 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Launch date corrected to 2026-07-13 (Cohort 1 kickoff) (2026-06-09)
+- Date: 2026-06-09
+- Session: CC-20260608-9x4t
+- What changed: `backend/src/scripts/lib/launchPmoTeam.js` `LAUNCH.targetLaunchDate` 2026-07-11 -> 2026-07-13 (first Mon/Thurs class). Flows to days-to-launch and the target label across all reporting + dashboard output.
+- Why: the dashboard accuracy review (todo 9946497996) found the countdown target did not match the briefs; Ali set the canonical launch date to the 2026-07-13 Cohort 1 kickoff.
+- Verification: `node --check` passes; VPS `--no-post` render shows "target 2026-07-13" with recomputed days-to-launch; deployed via `git pull` on prod. Accuracy ticket closed on Ali's sign-off.
+
 ### projectDnaService backend: project_dna table + upsert API (2026-06-08)
 - [x] Backend for ProjectDnaWizard UI (PR #3 Week 2 scope)
   - Date: 2026-06-08
