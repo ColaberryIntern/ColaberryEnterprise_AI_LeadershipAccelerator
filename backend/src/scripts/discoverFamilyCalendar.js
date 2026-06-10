@@ -34,7 +34,9 @@ async function main() {
 
   const auth = new google.auth.JWT({
     email, key,
-    scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+    // Full 'calendar' scope — only this scope is authorized for the service account's
+    // domain-wide delegation (calendar.readonly is a different string, not allowlisted).
+    scopes: ['https://www.googleapis.com/auth/calendar'],
     subject,
   });
   const cal = google.calendar({ version: 'v3', auth });

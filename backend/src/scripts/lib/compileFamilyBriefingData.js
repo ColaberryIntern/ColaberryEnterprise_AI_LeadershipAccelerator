@@ -91,9 +91,12 @@ function getCalendarClient() {
   const subject = process.env.GOOGLE_CALENDAR_OWNER_EMAIL || 'ali@colaberry.com';
   if (!email || !key) throw new Error('Calendar service account not configured (GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_PRIVATE_KEY)');
   const google = gapi();
+  // Full 'calendar' scope (NOT calendar.readonly): domain-wide delegation matches
+  // scope strings exactly, and only the full scope is authorized in Workspace Admin
+  // for this service account (same scope the booking + inbox-COS services use).
   const auth = new google.auth.JWT({
     email, key,
-    scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+    scopes: ['https://www.googleapis.com/auth/calendar'],
     subject,
   });
   return google.calendar({ version: 'v3', auth });
