@@ -117,6 +117,29 @@ async function createTodolist({ projectId = LAUNCH.projectId, name, description 
 }
 
 // =============================================================================
+// Todolist groups (sub-sections within a list). A group IS a todolist, so
+// createTodo works against a group's id unchanged (listId = group.id).
+// =============================================================================
+async function listTodoGroups({ projectId = LAUNCH.projectId, listId }) {
+  return bcGetAll(`/buckets/${projectId}/todolists/${listId}/groups.json`);
+}
+
+async function createTodoGroup({ projectId = LAUNCH.projectId, listId, name }) {
+  const existing = await listTodoGroups({ projectId, listId });
+  const match = (existing || []).find((g) => g.name === name);
+  if (match) return match;
+  return bcPost(`/buckets/${projectId}/todolists/${listId}/groups.json`, { name });
+}
+
+// =============================================================================
+// Trash a recording (todo, group, etc). Basecamp returns 204 No Content.
+// Idempotent: re-trashing an already-trashed recording is a no-op upstream.
+// =============================================================================
+async function trashTodo({ projectId = LAUNCH.projectId, recordingId }) {
+  return bcPut(`/buckets/${projectId}/recordings/${recordingId}/status/trashed.json`, {});
+}
+
+// =============================================================================
 // Todos
 // =============================================================================
 async function createTodo({ projectId = LAUNCH.projectId, listId, content, description, assigneePersonIds, dueOn }) {
@@ -230,6 +253,7 @@ module.exports = {
   bcGet, bcGetAll, bcPost, bcPut,
   getDock,
   createTodolist, createTodo, postMessage,
+  listTodoGroups, createTodoGroup, trashTodo,
   addPeopleToProject, createScheduleEntry,
   uploadToVault, createVaultFolder, uploadAttachment,
   updateTodo,
