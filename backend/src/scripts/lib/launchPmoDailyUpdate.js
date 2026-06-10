@@ -12,6 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const ops = require('./launchPmoOps');
 const { TEAM, LAUNCH, provisioned, missing, getByPersonId } = require('./launchPmoTeam');
+const { approvalAwaitingDeliverable } = require('./approvalArtifactLink');
 
 const NURTURE_STATE_PATH = path.resolve(__dirname, '../../../../tmp/launch-pmo-nurture-state.json');
 
@@ -212,6 +213,9 @@ function buildEscalationList(state) {
   const escalations = [];
   for (const a of state.areas) {
     for (const t of a.overdue) {
+      // Plan Phase 1: never escalate an approval that has nothing to approve.
+      // An approval with no artifact wired is held until the deliverable lands.
+      if (approvalAwaitingDeliverable(t, a.listName)) continue;
       const cls = classifyEscalation(t.days_overdue);
       if (cls === 'NONE') continue;
       escalations.push({ area: a.listName, ...t, classification: cls });
@@ -233,11 +237,31 @@ function buildHumanActionQueue(state) {
       if (t.tier !== 'HUMAN' && t.tier !== 'EITHER') continue;
       if (!t.due_on) continue;
       if (t.cbDrafted) continue; // exclude already-drafted awaiting-review tasks
+      // Plan Phase 1: hold approvals whose artifact is not yet wired. They go
+      // to buildAwaitingDeliverableQueue() instead of the actionable queue, so
+      // the human is not asked to approve something that does not exist yet.
+      if (approvalAwaitingDeliverable(t, a.listName)) continue;
       queue.push({ area: a.listName, ...t });
     }
   }
   queue.sort((a, b) => a.due_on.localeCompare(b.due_on));
   return queue;
+}
+
+// Approval gates held back by the readiness gate: they are in the Approval
+// Queues list (or titled like an approval) but have no artifact-ready marker
+// yet. Surfaced separately (and logged) so a held approval is visible, just
+// not presented as actionable or escalated.
+function buildAwaitingDeliverableQueue(state) {
+  const q = [];
+  for (const a of state.areas) {
+    for (const t of a.openTodos) {
+      if (t.cbDrafted) continue;
+      if (approvalAwaitingDeliverable(t, a.listName)) q.push({ area: a.listName, ...t });
+    }
+  }
+  q.sort((a, b) => (a.due_on || '9999').localeCompare(b.due_on || '9999'));
+  return q;
 }
 
 function buildAiQueue(state) {
@@ -855,6 +879,23 @@ async function runDailyUpdate({ force = false, recipients } = {}) {
   }
   const state = await pullProjectState();
   const escalations = buildEscalationList(state);
+  // Plan Phase 1 visibility: approvals held back because no artifact is wired.
+  // These are excluded from the human queue + escalations above; surface them
+  // as a structured log line so a held approval is never silently dropped.
+  const awaitingDeliverable = buildAwaitingDeliverableQueue(state);
+  if (awaitingDeliverable.length) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'launch-pmo',
+      event: 'approval_artifacts_awaiting',
+      outcome: 'partial',
+      context: {
+        count: awaitingDeliverable.length,
+        todos: awaitingDeliverable.map((t) => ({ id: t.id, title: t.content, area: t.area, due_on: t.due_on, url: t.url })),
+      },
+    }));
+  }
   const blockerMap = detectBlockedTasks(state);
   // Partition human queue into unblocked + blocked
   const humanQueueAll = buildHumanActionQueue(state);
@@ -889,4 +930,4 @@ async function runDailyUpdate({ force = false, recipients } = {}) {
   };
 }
 
-module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAiQueue, generateExecSummary, detectBlockedTasks };
+module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAwaitingDeliverableQueue, buildAiQueue, generateExecSummary, detectBlockedTasks };
