@@ -8,6 +8,11 @@
  * - REQUIRES a ticketId. Throws if omitted. There is no opt-out for "this email
  *   doesn't really belong to a ticket" — if the email is doctrine-relevant, it
  *   has a ticket. If it isn't, use raw nodemailer.
+ * - Resolves the BC token via getBasecampToken() (CCPP-preferred when MSSQL_HOST
+ *   is set). Stale .env values are bypassed automatically.
+ * - BC preflight (GET /buckets/{bucketId}/recordings/{ticketId}.json) BEFORE the
+ *   Mandrill send. If the preflight fails, the email is NEVER sent — preventing
+ *   the duplicate-send-on-retry footgun of earlier versions.
  * - Sends the email via Mandrill SMTP.
  * - Uploads any produced documents (in `vaultAttachments`) to the project Vault
  *   under "CB Context Dossiers" so the walker can read them later.
@@ -48,14 +53,27 @@ const fs = require('fs');
 const path = require('path');
 const nodemailer = require(path.resolve(__dirname, '../../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require('./mandrillPreflight');
+const { getBasecampToken } = require('./basecampToken');
 
 const BC_ACCOUNT = '3945211';
 const BC_BASE = `https://3.basecampapi.com/${BC_ACCOUNT}`;
 const BC_BUCKET = 7463955; // Ali Personal default
 const VAULT_FOLDER_NAME = 'CB Context Dossiers';
 
+// Resolved per sendWithBcAttach() invocation by resolveBcToken(). Prefer-CCPP-over-env
+// flow: getBasecampToken() pulls live from CCPP when MSSQL_HOST is set, regardless of
+// whatever stale BASECAMP_ACCESS_TOKEN may be in the host shell's .env. bcAuthHeaders
+// reads this first so downstream bcGet/bcPost calls automatically use the fresh value.
+let _resolvedToken = null;
+
+async function resolveBcToken() {
+  _resolvedToken = await getBasecampToken();
+  return _resolvedToken;
+}
+
 function bcAuthHeaders(extra = {}) {
-  const token = (process.env.BASECAMP_ACCESS_TOKEN || '').replace(/^bearer\s+/i, '').trim();
+  const raw = _resolvedToken || process.env.BASECAMP_ACCESS_TOKEN || '';
+  const token = raw.replace(/^bearer\s+/i, '').trim();
   if (!token) throw new Error('BASECAMP_ACCESS_TOKEN not set (or expired — refresh from CCPP.Basecamp_AuthInfo)');
   return { Authorization: `Bearer ${token}`, 'User-Agent': 'Colaberry sendWithBcAttach', Accept: 'application/json', ...extra };
 }
@@ -140,8 +158,25 @@ async function sendWithBcAttach(opts = {}) {
   const cleanedHtml = html ? strip(html) : undefined;
   const cleanedText = text ? strip(text) : undefined;
 
-  // === Preflight ===
+  // === Mandrill body preflight ===
   validateBeforeSend(cleanedHtml || '', cleanedText || '');
+
+  // === BC preflight (token + bucket + ticket all valid) ===
+  // Resolve the live token (CCPP-preferred via getBasecampToken) THEN verify the
+  // target recording exists + token works. If this fails we throw BEFORE Mandrill
+  // so a stale BC token can't leave us with a sent email and no attached comment.
+  // This was the 2026-06-10 footgun: helper sent Mandrill, then 401'd on the
+  // comment post because the .env token was stale; re-running re-sent Mandrill.
+  await resolveBcToken();
+  try {
+    await bcGet(`/buckets/${bucketId}/recordings/${ticketId}.json`);
+  } catch (e) {
+    throw new Error(
+      `sendWithBcAttach BC preflight failed (Mandrill send aborted): ${e.message}. ` +
+      `This means the resolved BC token cannot read /buckets/${bucketId}/recordings/${ticketId}.json. ` +
+      `Verify the ticketId + bucketId are correct, then check CCPP.Basecamp_AuthInfo for an active token.`
+    );
+  }
 
   // === Send via Mandrill ===
   const transport = nodemailer.createTransport({
