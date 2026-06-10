@@ -37,6 +37,11 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
     - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-1-forms-for-reporting-incident-noise-lockout-etc-.png` (new): demo screenshot
   - Verification: `npm install` clean (node:sqlite built-in, no native modules); seed runs (`7 users, 13 reports`); server boots at localhost:3000; all 5 form types render; noise complaint POST with 23:00 time → status=escalated confirmed via curl; screenshot saved at the required path
   - Notes: Used Node 24 built-in `node:sqlite` instead of `better-sqlite3` (no VS C++ toolset on this machine). Multer 1.x security warning deferred — upgrade to 2.x is a follow-up. No deploy yet (Step 4 pending user confirmation).
+- [x] Auth bug fix + all screenshots captured — UTD Residential Life demo
+  - Date: 2026-06-10
+  - Session: CC-20260610-f7k2
+  - What changed: `app/routes/auth.js` — guard against undefined `user_id` from POST body (missing radio selection would pass `undefined` to node:sqlite, which throws "Provided value cannot be bound"); `app/middleware/auth.js` — coerce cookie string to `Number()` before sqlite query (consistent typing). `scripts/take-screenshot.js` — replaced flaky `waitForURL` after multipart form submit with direct navigation to seeded report + catch-and-fallback; all 4 screenshots now captured: dashboard, filled noise-complaint form (main required screenshot), escalated report detail, type-selector grid.
+  - Verification: All 4 PNGs present in `docs/screenshots/` (88,770 / 125,320 / 71,567 / 54,426 bytes); server returns 200 on login GET and 302 on reports POST (verified via curl with `user_id=1` cookie).
 
 ### projectDnaService backend: project_dna table + upsert API (2026-06-08)
 - [x] Backend for ProjectDnaWizard UI (PR #3 Week 2 scope)

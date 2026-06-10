@@ -44,16 +44,15 @@ fs.mkdirSync(path.dirname(OUT), { recursive: true });
   await page.screenshot({ path: OUT, fullPage: true });
   console.log('  ✓ form screenshot (main):', OUT);
 
-  // 5. Submit and screenshot the resulting report detail (escalated)
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/reports\/\d+/);
-  await page.waitForSelector('.badge.bg-danger');
+  // 5. Screenshot: escalated report detail (seeded report #1)
+  await page.goto('http://localhost:3000/reports/1', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.badge', { timeout: 10000 });
   await page.screenshot({ path: OUT.replace('.png', '-report-detail.png'), fullPage: true });
   console.log('  ✓ report detail screenshot (escalated)');
 
   // 6. Screenshot: type selector grid
-  await page.goto('http://localhost:3000/reports/new');
-  await page.waitForSelector('.type-card');
+  await page.goto('http://localhost:3000/reports/new', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.type-card', { timeout: 10000 });
   await page.screenshot({ path: OUT.replace('.png', '-type-selector.png'), fullPage: false });
   console.log('  ✓ type selector screenshot');
 

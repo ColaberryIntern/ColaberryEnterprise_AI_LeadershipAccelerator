@@ -12,8 +12,9 @@ router.get('/login', (req, res) => {
 });
 
 router.post('/login', (req, res) => {
-  const { user_id } = req.body;
-  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(user_id);
+  const rawId = req.body?.user_id;
+  if (!rawId) return res.redirect('/login');
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(rawId));
   if (!user) return res.redirect('/login');
   res.cookie('user_id', String(user.id), { httpOnly: true, maxAge: 86_400_000 });
   res.redirect('/');
