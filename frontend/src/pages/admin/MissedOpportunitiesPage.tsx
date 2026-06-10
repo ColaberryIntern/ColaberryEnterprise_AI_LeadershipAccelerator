@@ -127,6 +127,7 @@ export default function MissedOpportunitiesPage() {
         <>
           {/* Executive summary */}
           <div style={{ background: '#f8fafc', borderLeft: `4px solid ${NAVY}`, padding: '14px 18px', borderRadius: 6, fontSize: 14, marginBottom: 20 }}>
+            <span style={{ color: '#64748b', fontWeight: 600 }}>{date === todayCT() ? 'Last 24 hours: ' : `${date}: `}</span>
             <strong>{s.totalProcessed.toLocaleString()}</strong> emails processed · <strong>{s.totalHidden.toLocaleString()}</strong> routed away from your Inbox ·{' '}
             <strong style={{ color: BAND_COLOR.high }}>{s.potentiallyValuable}</strong> flagged as potentially valuable and not surfaced
             {s.mediumValue ? <> · <strong style={{ color: BAND_COLOR.medium }}>{s.mediumValue}</strong> worth a glance</> : null}.

@@ -99,13 +99,16 @@ interface ScoreJoinRow {
   received_at: string;
 }
 
-async function fetchScoredRows(reportDate: string): Promise<ScoreJoinRow[]> {
+// In rolling mode, also bound reads to the trailing 24h so the surfaced set is
+// exactly "the last 24 hours" even if earlier same-day runs scored older mail.
+async function fetchScoredRows(reportDate: string, rolling = false): Promise<ScoreJoinRow[]> {
+  const windowClause = rolling ? `AND e.received_at >= NOW() - INTERVAL '24 hours'` : '';
   return sequelize.query<ScoreJoinRow>(
     `SELECT s.email_id, s.score, s.band, s.confidence, s.reason_hidden, s.hidden_state,
             s.factors, s.topics, e.subject, e.from_name, e.from_address, e.received_at
        FROM inbox_opportunity_scores s
        JOIN inbox_emails e ON e.id = s.email_id
-      WHERE s.report_date = :reportDate
+      WHERE s.report_date = :reportDate ${windowClause}
       ORDER BY s.score DESC`,
     { type: QueryTypes.SELECT, replacements: { reportDate } },
   );
@@ -162,12 +165,18 @@ function buildHeatMap(rows: ScoreJoinRow[]): HeatMapWord[] {
 
 // ── Public: full report for a CT date (recomputes scores first) ──────────
 export async function getReport(reportDate?: string): Promise<MissedOpportunitiesReport> {
+  // No date, or today's date, => trailing-24h executive view. An explicit past
+  // date => that CT calendar day (historical browsing).
   const date = reportDate || reportDateCT();
-  await scoreHiddenEmailsForDate(date); // idempotent — keeps the view fresh
+  const rolling = !reportDate || reportDate === reportDateCT();
+  await scoreHiddenEmailsForDate(date, rolling); // idempotent — keeps the view fresh
 
-  const rows = await fetchScoredRows(date);
+  const rows = await fetchScoredRows(date, rolling);
 
-  // Day-wide counts (all classifications received that CT day).
+  // Window-wide counts (all classifications in the same window as the scores).
+  const countWindow = rolling
+    ? `e.received_at >= NOW() - INTERVAL '24 hours'`
+    : `(e.received_at AT TIME ZONE 'America/Chicago')::date = :reportDate`;
   const [counts] = await sequelize.query<{ total: string; hidden: string; inbox: string }>(
     `SELECT
         COUNT(*) AS total,
@@ -175,7 +184,7 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
         COUNT(*) FILTER (WHERE c.state = 'INBOX') AS inbox
        FROM inbox_emails e
        JOIN inbox_classifications c ON c.email_id = e.id
-      WHERE (e.received_at AT TIME ZONE 'America/Chicago')::date = :reportDate`,
+      WHERE ${countWindow}`,
     { type: QueryTypes.SELECT, replacements: { reportDate: date } },
   );
 
@@ -220,7 +229,8 @@ export interface TopicDrilldown {
 
 export async function getTopicDrilldown(topic: string, reportDate?: string): Promise<TopicDrilldown> {
   const date = reportDate || reportDateCT();
-  const rows = (await fetchScoredRows(date)).filter((r) =>
+  const rolling = !reportDate || reportDate === reportDateCT();
+  const rows = (await fetchScoredRows(date, rolling)).filter((r) =>
     (r.topics || []).some((t) => t.topic === topic.toLowerCase()),
   );
 
