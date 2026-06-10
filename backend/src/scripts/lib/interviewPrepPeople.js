@@ -29,7 +29,7 @@ async function resolveEmails(candidateIds) {
   const ids = Array.from(new Set((candidateIds || []).filter((n) => Number(n) > 0)));
   const map = {};
   if (!ids.length || !process.env.MSSQL_HOST) return map;
-  const sql = require(path.resolve(__dirname, '../../../node_modules/mssql'));
+  const sql = require(path.resolve(__dirname, '../../../../node_modules/mssql'));
   const cfg = {
     server: process.env.MSSQL_HOST, port: parseInt(process.env.MSSQL_PORT || '1433', 10),
     user: process.env.MSSQL_USER, password: process.env.MSSQL_PASS,
