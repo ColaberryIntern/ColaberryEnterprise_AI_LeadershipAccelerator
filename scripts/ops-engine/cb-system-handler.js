@@ -1022,6 +1022,12 @@ Decide and act. Always end with basecamp_reply, then finish.`;
     } catch (_e) {}
   }
 
+  // Suppress audit-log writes during regeneration/replay (cb-self-improve,
+  // cb-replay) so dry re-runs don't pollute the log with phantom invocations.
+  if (process.env.CB_SUPPRESS_HANDLER_LOG) {
+    return { ok: !lastError, summary: `invocation=${invocationId} (log-suppressed) tools=${toolsCalled.map((t) => t.name).join(',')}`, error: lastError };
+  }
+
   appendLog({
     invocationId,
     ts: new Date().toISOString(),

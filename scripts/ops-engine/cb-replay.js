@@ -133,6 +133,7 @@ async function liveDryRun({ bucketId, recId, sayText, asId }) {
   console.log(`Mention resolves to: ${comment.creator?.attachable_sgid ? comment.creator.name + ' (own sgid)' : 'FALLBACK Ali'}`);
   console.log(`Triggering comment: ${(comment.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)}\n`);
 
+  process.env.CB_SUPPRESS_HANDLER_LOG = '1'; // replay must not pollute the audit log
   const result = await handleOpenEnded({ bcGet, bcPost, mention, bucketId, recId, comment, aliId: ALI_ID });
 
   console.log('--- WOULD POST (no write happened) ---');

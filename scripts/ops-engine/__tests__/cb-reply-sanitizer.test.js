@@ -66,6 +66,23 @@ t('email_ali body_html leak is recovered', () => {
   assert.strictEqual(extractLeakedReply(leak), 'Summary attached.');
 });
 
+// The SECOND leak variant found live (todo 9946499609): a markdown ```json
+// block with a QUOTED key. The earlier `content_html\s*:` pattern missed it.
+const JSON_BLOCK_LEAK = 'Since the comment is a simple acknowledgment, I will confirm receipt. ```json\n{ "content_html": " Message received. No further action required from my side. " }\n```';
+t('detects the json-block quoted-key leak', () => {
+  assert.strictEqual(looksLikeToolCallLeak(JSON_BLOCK_LEAK), true);
+});
+t('extracts reply from a quoted-key json block', () => {
+  const inner = extractLeakedReply(JSON_BLOCK_LEAK);
+  assert.ok(/Message received\. No further action required/.test(inner), `got: ${inner}`);
+});
+t('sanitize cleans a json-block leak (no content_html / fences survive)', () => {
+  const { html, wasLeak } = sanitizeReplyHtml(JSON_BLOCK_LEAK);
+  assert.strictEqual(wasLeak, true);
+  assert.ok(!/content_html|```/.test(html), `survived: ${html}`);
+  assert.ok(/Message received/.test(html));
+});
+
 t('scaffolding-only leak (no content key) is stripped, not posted raw', () => {
   const leak = `Closing this out now.\nfunctions.finish();`;
   const { html, wasLeak } = sanitizeReplyHtml(leak);

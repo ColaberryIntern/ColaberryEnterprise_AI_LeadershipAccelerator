@@ -41,8 +41,9 @@ const TOOL_NAMES = [
 const LEAK_RE = new RegExp(
   '\\bfunctions?\\.\\w+\\s*\\(' +                       // functions.basecamp_reply(  /  functions.finish()
   '|\\b(?:' + TOOL_NAMES.join('|') + ')\\s*\\(' +       // basecamp_reply(  /  finish(
-  '|\\bcontent_html\\s*:' +                             // content_html:
-  '|\\bbody_html\\s*:',
+  '|["\'`]?\\bcontent_html\\b["\'`]?\\s*:' +            // content_html:  AND  "content_html":  (json-block form)
+  '|["\'`]?\\bbody_html\\b["\'`]?\\s*:' +
+  '|```\\s*json',                                       // ```json { ... } markdown code fence
   'i'
 );
 
@@ -80,7 +81,9 @@ function unescapeJsString(s) {
 function extractLeakedReply(text) {
   const t = String(text == null ? '' : text);
   if (!t) return null;
-  const km = t.match(/(?:content_html|body_html|content)\s*:\s*(["'`])/i);
+  // Key may be bare (content_html:) or quoted ("content_html":), the latter
+  // produced by the model dumping a ```json { "content_html": "..." }``` block.
+  const km = t.match(/["'`]?(?:content_html|body_html|content)["'`]?\s*:\s*(["'`])/i);
   if (!km) return null;
   const quote = km[1];
   const start = km.index + km[0].length; // first char of the string value
@@ -109,7 +112,8 @@ function stripToolCallScaffolding(text) {
     // functions.basecamp_reply({  /  functions.finish(  /  basecamp_reply({
     .replace(new RegExp('\\bfunctions?\\.(?:' + TOOL_NAMES.join('|') + ')\\s*\\(\\s*\\{?', 'gi'), '')
     .replace(new RegExp('\\b(?:' + TOOL_NAMES.join('|') + ')\\s*\\(\\s*\\{?', 'gi'), '')
-    .replace(/^\s*(?:content_html|body_html|content)\s*:\s*["'`]?/gim, '')
+    .replace(/```\s*json/gi, '').replace(/```/g, '')   // markdown code fences
+    .replace(/^\s*["'`]?(?:content_html|body_html|content)["'`]?\s*:\s*["'`]?/gim, '')
     .replace(/["'`]?\s*\}\s*\)\s*;?/g, '')   // "});  /  });
     .replace(/^\s*\)\s*;?\s*$/gm, '')         // lone );
     .replace(/^\s*\}\s*\)?\s*;?\s*$/gm, '')   // lone }  /  });
