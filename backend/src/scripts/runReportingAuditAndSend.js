@@ -250,7 +250,17 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   //   4. --force-all (ignore cadence too)
   const currentHourUTC = now.getUTCHours();
   const nowCTHHMM = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
-  if (CT_NOW) console.log(`[audit] --ct-now: current Central time ${nowCTHHMM}; firing reports with sendCT === '${nowCTHHMM}'`);
+  const [ctH, ctM] = nowCTHHMM.split(':').map(Number);
+  const nowCTMin = ctH * 60 + ctM;
+  // Match a report's sendCT within a 10-minute window AFTER its slot, so cron
+  // jitter (a run that lands at :31 instead of :30) still fires it exactly once.
+  const ctMatch = (sendCT) => {
+    if (!sendCT) return false;
+    const [h, m] = String(sendCT).split(':').map(Number);
+    const delta = nowCTMin - (h * 60 + m);
+    return delta >= 0 && delta <= 9;
+  };
+  if (CT_NOW) console.log(`[audit] --ct-now: current Central time ${nowCTHHMM}; firing reports whose sendCT is within the last 10 min`);
   // Warn loudly on any report missing BOTH sendHourUTC and sendCT (we treat that
   // as "do not fire" — fail-safe against the original 8-reports-at-8-AM bug).
   const missingHour = REGISTRY.filter((r) => r.sendHourUTC === undefined && !r.sendCT && shouldFireToday(r, now));
@@ -260,7 +270,7 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   const active = REGISTRY
     .filter((r) => FORCE_ALL || shouldFireToday(r, now))
     .filter((r) => {
-      if (CT_NOW) return r.sendCT === nowCTHHMM;        // minute-precise Central path
+      if (CT_NOW) return ctMatch(r.sendCT);              // minute-precise Central path (10-min jitter window)
       if (r.sendCT) return false;                        // CT-scheduled reports never fire on the hourly path
       return ALL_HOURS || r.sendHourUTC === currentHourUTC;
     })
