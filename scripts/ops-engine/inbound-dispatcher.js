@@ -32,6 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { handleOpenEnded } = require('./cb-system-handler');
+const { buildMention } = require('./cb-reply-sanitizer');
 
 const ACCOUNT = '3945211';
 const BASE = `https://3.basecampapi.com/${ACCOUNT}`;
@@ -54,7 +55,11 @@ function isCBMention(content) {
   return CB_PLAINTEXT_RE.test(stripped);
 }
 const TICK_TIMEOUT_MS = 3 * 60 * 1000;
-const LOOKBACK_HOURS = 2;
+// Default 2h (every 3-min cron only needs a small window). Override with
+// CB_LOOKBACK_HOURS for a one-time catch-up, e.g. CB_LOOKBACK_HOURS=24 to
+// reply to every unprocessed @CB mention from the past day. The processed-state
+// dedup means a wider window never double-replies to already-answered mentions.
+const LOOKBACK_HOURS = parseFloat(process.env.CB_LOOKBACK_HOURS) || 2;
 const DRY = process.argv.includes('--dry');
 
 // Fallback token: the cron-env-wrapper.sh used to not export BASECAMP_ACCESS_TOKEN
@@ -113,11 +118,40 @@ function loadState() {
   catch { return { last_tick: null, processed: {} }; }
 }
 function saveState(s) { fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2)); }
-const mention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
+
+// Hardcoded-Ali mention, kept ONLY as the last-resort fallback when we cannot
+// resolve the actual requester's sgid. The bug this replaced: every CB reply
+// @-mentioned Ali regardless of who asked (confirmed 2026-06-10 on todo
+// 9946499609 where Ram asked the question but the reply tagged Ali).
+const aliMention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
+
+// Basecamp Person objects carry attachable_sgid, but the comment/message
+// payloads do not always include it. Resolve + cache it from /people/{id}.json
+// so the @-mention points at the person who actually tagged CB.
+const sgidCache = new Map();
+async function ensurePersonSgid(person) {
+  if (!person || !person.id) return person;
+  if (person.attachable_sgid) return person;
+  if (sgidCache.has(person.id)) { person.attachable_sgid = sgidCache.get(person.id); return person; }
+  try {
+    const full = await bcGet(`/people/${person.id}.json`);
+    if (full && full.attachable_sgid) {
+      sgidCache.set(person.id, full.attachable_sgid);
+      person.attachable_sgid = full.attachable_sgid;
+    }
+  } catch (_e) { /* fall through to plain-name / Ali fallback in buildMention */ }
+  return person;
+}
+
+// Returns a mention() function bound to a specific requester. All recipe and
+// handler reply paths use this so the tag always matches who asked.
+function mentionFor(person) {
+  return () => buildMention(person, { fallbackSgid: ALI_SGID });
+}
 
 // --- Recipes ---------------------------------------------------------------
 
-function recipeHelp() {
+function recipeHelp(mention) {
   return `<div>${mention()} CB System dispatcher v1 - keyword recipes (LLM dispatcher not yet wired):</div>
 <ul>
   <li><code>@CBSystem grep:&lt;pattern&gt;</code> - ripgrep the codebase, return first 50 matches</li>
@@ -133,7 +167,7 @@ function runCmd(cmd, args, timeoutMs) {
   return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-function recipeGrep(pattern) {
+function recipeGrep(pattern, mention) {
   const r = runCmd('rg', ['--color', 'never', '-n', '--max-count', '50', pattern, '.'], 60000);
   const lines = (r.stdout || '').split('\n').filter(Boolean).slice(0, 50);
   return lines.length
@@ -141,7 +175,7 @@ function recipeGrep(pattern) {
     : `<div>${mention()} <code>grep:${pattern}</code> -> no matches.</div>`;
 }
 
-function recipeUnknown(raw) {
+function recipeUnknown(raw, mention) {
   // Friendlier "queued for next Ali session" acknowledgment instead of error-tone.
   // Per @CB System scope expansion doctrine 2026-05-30: for open-ended requests
   // (anything beyond v1 keyword recipes), CB System acknowledges within 3 min and
@@ -163,7 +197,7 @@ function recipeUnknown(raw) {
 // with the recipe-list reply when he sent real work. (Bug confirmed 2026-05-31
 // on comment 9946342528: PMO system-prompt spec sent to CB but routed to
 // help-recipe reply because "help" appeared in the body.)
-function classifyKeyword(text) {
+function classifyKeyword(text, mention) {
   // Strip HTML, strip the BC mention attachment, normalize whitespace.
   const stripped = text
     .replace(/<bc-attachment[^>]*content-type="application\/vnd\.basecamp\.mention"[^>]*>[\s\S]*?<\/bc-attachment>/gi, ' ')
@@ -179,14 +213,14 @@ function classifyKeyword(text) {
   if (m) {
     const kind = m[1].toLowerCase();
     const arg = (m[2] || '').trim();
-    if (kind === 'grep') return recipeGrep(arg);
+    if (kind === 'grep') return recipeGrep(arg, mention);
     if (kind === 'ccpp') return `<div>${mention()} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
     if (kind === 'gmail') return `<div>${mention()} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
   }
   // Help recipe: only when the message is JUST "help" (after stripping
   // mention + CB prefix), nothing more. Anything substantive falls through
   // to the LLM handler.
-  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp();
+  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp(mention);
   return null;
 }
 
@@ -368,7 +402,11 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
-      const html = classifyKeyword(m.comment.content);
+      // Resolve the actual requester's @-mention sgid so every reply tags the
+      // person who asked, not a hardcoded recipient.
+      await ensurePersonSgid(m.comment.creator);
+      const mention = mentionFor(m.comment.creator);
+      const html = classifyKeyword(m.comment.content, mention);
       if (html) {
         // Fixed keyword recipe matched -> single-shot reply.
         try {
@@ -391,9 +429,9 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
         } catch (e) {
           console.error(`  llm handler failed for ${m.comment.id}: ${e.message}`);
           state.processed[m.key] = { at: new Date().toISOString(), outcome: 'fail', error: e.message };
-          // Fallback: friendly ack so Ali knows we saw it
+          // Fallback: friendly ack so the requester knows we saw it
           try {
-            await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content) });
+            await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content, mention) });
           } catch (_e2) {}
         }
       }
