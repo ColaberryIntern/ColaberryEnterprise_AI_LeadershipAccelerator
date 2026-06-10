@@ -377,8 +377,38 @@ function toCreedAction(it) {
   };
 }
 
+// Collapse near-duplicate action titles (the same announcement re-sent across days
+// produces variants like "Ms. Brenda out, returns Monday" vs "Ms. Brenda will be on
+// vacation..."). Two items are dupes if their significant words overlap >= 50%.
+function dedupeActions(items) {
+  const kept = [];
+  const sigs = [];
+  for (const it of (items || [])) {
+    const words = new Set(String(it.title || '').toLowerCase().match(/[a-z]{4,}/g) || []);
+    if (!words.size) { kept.push(it); sigs.push(words); continue; }
+    const isDup = sigs.some((prev) => {
+      const inter = [...words].filter((w) => prev.has(w)).length;
+      // need >=2 shared significant words (so a single common word like "Thursday"
+      // doesn't merge "Jersey Day" into "Kona Ice"), plus >=50% overlap.
+      return inter >= 2 && inter / (Math.min(words.size, prev.size) || 1) >= 0.5;
+    });
+    if (!isDup) { kept.push(it); sigs.push(words); }
+  }
+  return kept;
+}
+
 async function extractProcareItems(procareRows, now) {
-  const rows = (procareRows || []).filter((r) => cleanBody(r.body_text, 600));
+  // Dedupe re-sent emails by cleaned-body prefix, keep the 3 most recent.
+  const seenBodies = new Set();
+  const rows = (procareRows || [])
+    .filter((r) => cleanBody(r.body_text, 600))
+    .filter((r) => {
+      const key = (cleanBody(r.body_text, 120) || '').toLowerCase();
+      if (seenBodies.has(key)) return false;
+      seenBodies.add(key);
+      return true;
+    })
+    .slice(0, 3);
   if (!rows.length) return [];
   const today = ctParts(now);
   const blocks = rows
@@ -393,15 +423,17 @@ async function extractProcareItems(procareRows, now) {
     `title = short fact or task ("Ms. Brenda out, returns Monday"). detail = one short clarifying line. ` +
     `when = a short day/date label if the item has timing ("Thu Jun 11", "Through Mon Jun 15"), else "". ` +
     `tone = "urgent" if today/needs action now, "upcoming" if a future dated thing, else "info". ` +
-    `Ignore greetings, sign-offs, app-download links. Max 6 items. Nothing noteworthy => {"items":[]}.`;
+    `Ignore greetings, sign-offs, app-download links. CONSOLIDATE the same announcement ` +
+    `that appears across multiple emails into ONE item — never repeat it. Max 5 items. ` +
+    `Nothing noteworthy => {"items":[]}.`;
   try {
     const out = await callOpenAI([{ role: 'system', content: sys }, { role: 'user', content: blocks }]);
     const parsed = JSON.parse(out);
     const items = Array.isArray(parsed.items) ? parsed.items : [];
-    return items.filter((it) => it && it.title).slice(0, 6).map(toCreedAction);
+    return dedupeActions(items.filter((it) => it && it.title).map(toCreedAction)).slice(0, 5);
   } catch (err) {
     console.error('[compileFamily] procare LLM extract failed, using heuristic:', err.message);
-    return heuristicProcareItems(rows);
+    return dedupeActions(heuristicProcareItems(rows)).slice(0, 5);
   }
 }
 
@@ -684,5 +716,5 @@ module.exports = {
   compileFamilyBriefingData,
   hasFamilyData,
   // exported for unit tests:
-  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, extractProcareItems },
+  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, extractProcareItems, dedupeActions },
 };

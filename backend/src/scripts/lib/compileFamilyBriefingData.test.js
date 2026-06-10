@@ -10,7 +10,7 @@
 
 const assert = require('node:assert');
 const { _internals, hasFamilyData } = require('./compileFamilyBriefingData');
-const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction } = _internals;
+const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, dedupeActions } = _internals;
 
 let passed = 0;
 function test(name, fn) {
@@ -219,6 +219,22 @@ test('toCreedAction: maps extracted item to action shape with tone clamp', () =>
   const a = toCreedAction({ title: 'Jersey Day', detail: 'wear a jersey', when: 'Thu Jun 11', tone: 'upcoming' });
   assert.deepStrictEqual(a, { tone: 'upcoming', ico: 'CRD', title: 'Jersey Day', sub: 'wear a jersey', due: 'Thu Jun 11' });
   assert.strictEqual(toCreedAction({ title: 'x', tone: 'bogus' }).tone, 'info');
+});
+
+// ---- dedupeActions: collapse the same announcement re-sent across days ----
+test('dedupeActions: merges near-duplicate Procare titles', () => {
+  const items = [
+    { title: 'Ms. Brenda out, returns Monday', ico: 'CRD' },
+    { title: 'Ms. Brenda will be on vacation and will return on Monday', ico: 'CRD' },
+    { title: 'Kona Ice on Thursday', ico: 'CRD' },
+    { title: 'Kona Ice on Thursday for the schoolers', ico: 'CRD' },
+    { title: 'Jersey Day on Thursday', ico: 'CRD' },
+  ];
+  const out = dedupeActions(items);
+  assert.strictEqual(out.length, 3, 'Brenda x2 -> 1, Kona x2 -> 1, Jersey -> 1');
+  assert.ok(out.some(i => /Brenda/.test(i.title)));
+  assert.ok(out.some(i => /Kona/.test(i.title)));
+  assert.ok(out.some(i => /Jersey/.test(i.title)));
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ', all green'}`);
