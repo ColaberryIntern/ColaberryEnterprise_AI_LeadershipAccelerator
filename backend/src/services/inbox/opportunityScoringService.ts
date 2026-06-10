@@ -15,6 +15,22 @@ import type { ScoreFactor, ScoreTopic, OpportunityBand } from '../../models/Inbo
 
 export const HIDDEN_STATES = ['AUTOMATION', 'SILENT_HOLD', 'ASK_USER'] as const;
 
+// Mail Ali sent himself or that the system generated on his behalf (Opportunity
+// Pulse digests, calendar-conflict alerts, [ALERT] notices, Inbox COS digests).
+// He can't have "missed" his own mail, so it's noise in this report. This SQL
+// fragment (assumes the email table is aliased `e`) is shared by every query
+// that defines the candidate universe — scoring, list read, and window counts —
+// so the three never drift. Override the address list via MISSED_OPP_SELF_SENDERS.
+export const SELF_SENDERS: string[] = (
+  process.env.MISSED_OPP_SELF_SENDERS
+    ? process.env.MISSED_OPP_SELF_SENDERS.split(',')
+    : ['ali@colaberry.com', 'alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com']
+).map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+export const SELF_INBOX_EXCLUSION_SQL = `LOWER(e.from_address) NOT IN (:selfSenders)
+        AND LOWER(COALESCE(e.subject, '')) NOT LIKE '%opportunity pulse%'
+        AND LOWER(COALESCE(e.subject, '')) NOT LIKE '%calendar conflict%'`;
+
 // ── Strategic keyword vocabulary (weight per category) ───────────────────
 // Presence in subject or body is a strong "Ali would care" signal.
 const KEYWORD_GROUPS: Array<{ label: string; points: number; terms: string[] }> = [
@@ -42,7 +58,7 @@ function bandFor(score: number): OpportunityBand {
 // ── Positive-signal corpus ───────────────────────────────────────────────
 // Senders/domains/topics Ali has historically engaged with. Emails resembling
 // these are far more likely to be false negatives worth surfacing.
-interface PositiveCorpus {
+export interface PositiveCorpus {
   vipSenders: Set<string>;
   repliedSenders: Set<string>;
   repliedDomains: Set<string>;
@@ -58,7 +74,7 @@ function domainOf(address: string): string {
   return at >= 0 ? address.toLowerCase().slice(at + 1) : '';
 }
 
-async function buildPositiveCorpus(): Promise<PositiveCorpus> {
+export async function buildPositiveCorpus(): Promise<PositiveCorpus> {
   const lc = (rows: Array<{ v: string | null }>) =>
     new Set(rows.map((r) => (r.v || '').toLowerCase()).filter(Boolean));
 
@@ -118,7 +134,7 @@ async function buildPositiveCorpus(): Promise<PositiveCorpus> {
 }
 
 // ── Candidate row shape (raw join) ───────────────────────────────────────
-interface CandidateRow {
+export interface CandidateRow {
   id: string;
   from_address: string;
   from_name: string | null;
@@ -275,8 +291,20 @@ export async function scoreHiddenEmailsForDate(reportDate: string, rolling = fal
        FROM inbox_emails e
        JOIN inbox_classifications c ON c.email_id = e.id
       WHERE c.state IN ('AUTOMATION', 'SILENT_HOLD', 'ASK_USER')
-        AND ${windowClause}`,
-    { type: QueryTypes.SELECT, replacements: { reportDate } },
+        AND ${windowClause}
+        AND ${SELF_INBOX_EXCLUSION_SQL}`,
+    { type: QueryTypes.SELECT, replacements: { reportDate, selfSenders: SELF_SENDERS } },
+  );
+
+  // Idempotent cleanup: drop any previously-scored self/system mail for this
+  // date so the exclusion takes effect immediately on re-run.
+  await sequelize.query(
+    `DELETE FROM inbox_opportunity_scores s USING inbox_emails e
+       WHERE s.email_id = e.id AND s.report_date = :reportDate
+         AND (LOWER(e.from_address) IN (:selfSenders)
+              OR LOWER(COALESCE(e.subject,'')) LIKE '%opportunity pulse%'
+              OR LOWER(COALESCE(e.subject,'')) LIKE '%calendar conflict%')`,
+    { replacements: { reportDate, selfSenders: SELF_SENDERS } },
   );
 
   let upserted = 0;

@@ -187,11 +187,46 @@ export default function MissedOpportunitiesPage() {
             </table>
           </div>
 
-          {/* Deleted but valuable (v1 placeholder) */}
+          {/* Deleted but valuable — Trash/Spam recovery */}
           <h2 style={{ fontSize: 18, borderBottom: '2px solid #e2e8f0', paddingBottom: 8, margin: '32px 0 14px' }}>Deleted But Potentially Valuable</h2>
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#92400e' }}>
-            Deleted &amp; Spam recovery activates once Trash/Spam ingestion is enabled. No deleted-email analysis in this edition.
-          </div>
+          {report.deletedButValuable.length === 0 ? (
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#166534' }}>
+              No deleted or spam emails resemble historically valuable mail. Nothing to recover.
+            </div>
+          ) : (
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead><tr style={{ background: '#7c2d12', color: 'white', textAlign: 'left' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>Score</th>
+                  <th style={{ padding: '10px 12px' }}>Subject &amp; recovery recommendation</th>
+                  <th style={{ padding: '10px 12px' }}>Sender</th>
+                  <th style={{ padding: '10px 12px' }}>Folder</th>
+                  <th style={{ padding: '10px 12px' }}>Actions</th>
+                </tr></thead>
+                <tbody>
+                  {report.deletedButValuable.map((r) => (
+                    <tr key={r.emailId} style={{ borderTop: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}><ScoreBadge score={r.score} band={r.band} /></td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ fontWeight: 700 }}>{r.subject}</div>
+                        <div style={{ fontSize: 12, color: '#92400e', marginTop: 2 }}>{r.explanation}</div>
+                      </td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <div>{r.fromName || r.fromAddress}</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8' }}>{r.fromAddress}</div>
+                      </td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{r.currentFolder}</span>
+                      </td>
+                      <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                        <button onClick={() => act(r, 'marked_important')} style={linkBtn} title="Flag as important — teaches the engine">Flag important</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Learning */}
           <h2 style={{ fontSize: 18, borderBottom: '2px solid #e2e8f0', paddingBottom: 8, margin: '32px 0 14px' }}>Learning Loop</h2>

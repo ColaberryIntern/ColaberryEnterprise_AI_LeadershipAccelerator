@@ -15,7 +15,8 @@ import {
   InboxEmail,
 } from '../../models';
 import type { ScoreFactor, ScoreTopic } from '../../models/InboxOpportunityScore';
-import { scoreHiddenEmailsForDate, reportDateCT } from './opportunityScoringService';
+import { scoreHiddenEmailsForDate, reportDateCT, SELF_INBOX_EXCLUSION_SQL, SELF_SENDERS } from './opportunityScoringService';
+import { getDeletedButValuable } from './deletedRecoveryService';
 import type { FalseNegativeAction, FalseNegativeSource } from '../../models/InboxFalseNegativeFeedback';
 import type { SurfacePatternType } from '../../models/InboxSurfacePreference';
 
@@ -109,8 +110,9 @@ async function fetchScoredRows(reportDate: string, rolling = false): Promise<Sco
        FROM inbox_opportunity_scores s
        JOIN inbox_emails e ON e.id = s.email_id
       WHERE s.report_date = :reportDate ${windowClause}
+        AND ${SELF_INBOX_EXCLUSION_SQL}
       ORDER BY s.score DESC`,
-    { type: QueryTypes.SELECT, replacements: { reportDate } },
+    { type: QueryTypes.SELECT, replacements: { reportDate, selfSenders: SELF_SENDERS } },
   );
 }
 
@@ -184,13 +186,22 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
         COUNT(*) FILTER (WHERE c.state = 'INBOX') AS inbox
        FROM inbox_emails e
        JOIN inbox_classifications c ON c.email_id = e.id
-      WHERE ${countWindow}`,
-    { type: QueryTypes.SELECT, replacements: { reportDate: date } },
+      WHERE ${countWindow}
+        AND ${SELF_INBOX_EXCLUSION_SQL}`,
+    { type: QueryTypes.SELECT, replacements: { reportDate: date, selfSenders: SELF_SENDERS } },
   );
 
   const heatMap = buildHeatMap(rows);
   const high = rows.filter((r) => r.score >= 65);
   const medium = rows.filter((r) => r.score >= 40 && r.score < 65);
+
+  // Deleted/Spam recovery (best-effort — never let it break the core report).
+  let deletedButValuable: MissedEmailRow[] = [];
+  try {
+    deletedButValuable = (await getDeletedButValuable(rolling)) as MissedEmailRow[];
+  } catch (err: any) {
+    console.warn('[MissedOpportunities] deleted recovery failed:', err.message);
+  }
 
   const summary: ExecutiveSummary = {
     reportDate: date,
@@ -199,7 +210,7 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
     surfacedToInbox: parseInt(counts?.inbox || '0', 10),
     potentiallyValuable: high.length,
     mediumValue: medium.length,
-    deletedFlagged: 0,
+    deletedFlagged: deletedButValuable.length,
     topThemes: heatMap.filter((w) => w.band !== 'low').slice(0, 6).map((w) => w.topic),
   };
 
@@ -209,7 +220,7 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
     summary,
     heatMap,
     topMissed: rows.slice(0, 25).map(toMissedRow),
-    deletedButValuable: [], // v1: Trash/Spam ingestion not yet wired
+    deletedButValuable,
     learning,
     generatedAt: new Date().toISOString(),
   };

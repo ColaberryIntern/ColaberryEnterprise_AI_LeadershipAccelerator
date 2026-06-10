@@ -454,6 +454,28 @@ async function ensureMissedOpportunitiesSchema() {
        ON inbox_surface_preferences(pattern_type, pattern_value)`,
     `CREATE INDEX IF NOT EXISTS idx_inbox_surface_pref_enabled
        ON inbox_surface_preferences(enabled)`,
+    `CREATE TABLE IF NOT EXISTS inbox_deleted_emails (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       provider VARCHAR(20) NOT NULL,
+       provider_message_id VARCHAR(255) NOT NULL,
+       folder VARCHAR(10) NOT NULL,
+       from_address VARCHAR(320) NOT NULL,
+       from_name VARCHAR(320),
+       to_addresses JSONB NOT NULL DEFAULT '[]'::jsonb,
+       subject TEXT NOT NULL,
+       body_text TEXT,
+       body_html TEXT,
+       headers JSONB,
+       received_at TIMESTAMPTZ NOT NULL,
+       discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       has_attachments BOOLEAN NOT NULL DEFAULT false
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_deleted_provider_msg
+       ON inbox_deleted_emails(provider, provider_message_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_deleted_received_at
+       ON inbox_deleted_emails(received_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_deleted_folder
+       ON inbox_deleted_emails(folder)`,
   ];
   for (const sql of statements) {
     try {
