@@ -151,6 +151,33 @@ const REPORTS = [
     sendHourUTC: 13,  // 8 AM CT on Saturday (Saturday already has nothing else firing)
     description: 'Weekly intern activity report. STRONG (3+ updates), LIGHT (1-2), INACTIVE (0) buckets over last 10 days.',
   },
+  // ---- IPBC interview preparation ----
+  {
+    name: 'Interview Prep — Priority & Readiness',
+    scriptPath: 'backend/src/scripts/interviewPrepReport.js',
+    args: [],
+    projectId: null, // CCPP-based (vw_ColaberryInterviewPreparation_UpcomingInterviews)
+    needsOpenai: false,
+    recipients: STANDARD_RECIPIENTS,
+    cbRunnerState: null,
+    skipFlag: '--skip-interview-prep',
+    cadence: 'daily',
+    sendHourUTC: 16,  // 11 AM CT — placement focus mid-morning
+    description: 'Ranks active IPBC interviews by urgency x preparation. Readiness scatter, prep heatmap, priority queue, post-interview survey-owed queue, mentor coaching load. CCPP-driven, email-safe HTML.',
+  },
+  {
+    name: 'Interview Prep Nudges (PREVIEW by default)',
+    scriptPath: 'backend/src/scripts/dailyInterviewPrepNudges.js',
+    args: [],
+    projectId: null, // CCPP-based
+    needsOpenai: false,
+    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com'] },
+    cbRunnerState: 'tmp/ops-engine/interview-prep-nudge-state.json',
+    skipFlag: '--skip-interview-nudges',
+    cadence: 'daily',
+    sendHourUTC: 16,  // same slot as the report; digest only in preview mode
+    description: 'Student-facing interview-prep nudges, preview-gated like the intern engine. Pushes each student to their next funnel step, congratulates +1 day post-interview, then chases the post-interview survey. PREVIEW = digest to Ali, no student emails. Mode file: tmp/ops-engine/interview-prep-nudge-mode.txt.',
+  },
   // ---- Cohort training report ----
   {
     name: 'Weekly Cohort Performance Report',
