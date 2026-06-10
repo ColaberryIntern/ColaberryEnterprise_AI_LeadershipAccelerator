@@ -49,6 +49,10 @@ const REASON_COLOR = {
   other: MUTE,
 };
 
+// All dates/times in the report render in US Central (CST/CDT) regardless of the
+// server timezone (the VPS runs UTC). Per Ali: always report on Central time.
+const TZ = 'America/Chicago';
+
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -59,7 +63,13 @@ function money(n) {
 }
 function shortDate(iso) {
   if (!iso) return '-';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: TZ });
+}
+function fullStamp(d) {
+  return new Date(d).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    timeZone: TZ, timeZoneName: 'short',
+  });
 }
 function fmtPhone(p) {
   const d = String(p || '').replace(/\D/g, '');
@@ -85,9 +95,9 @@ function pill(text, bg, fg) {
 function kpiCards(k) {
   const cards = [
     { label: 'Flagged (30d)', value: String(k.flagged), sub: `${k.thisWeekFlagged} this week`, color: NAVY },
-    { label: 'Payment Made', value: `${k.recoveredPct}%`, sub: `${k.recovered} of ${k.flagged} cleared`, color: GREEN },
-    { label: 'Still Outstanding', value: String(k.outstanding), sub: 'need a call', color: RED },
-    { label: 'Dollars At Risk', value: money(k.atRisk), sub: 'outstanding balance', color: GOLD },
+    { label: 'Payment Made', value: `${k.recoveredPct}%`, sub: `${k.recovered} cleared`, color: GREEN },
+    { label: 'Rescheduled', value: `${k.rescheduledPct}%`, sub: `${k.rescheduled} draft pending`, color: BLUE },
+    { label: 'Needs A Call', value: String(k.outstanding), sub: money(k.atRisk) + ' at risk', color: RED },
   ];
   const tds = cards.map((c) => `
     <td width="25%" valign="top" style="padding:6px;">
@@ -123,19 +133,22 @@ function barChart(title, items, opt = {}) {
   return panel(title, `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${rows}</table>`);
 }
 
-/* ---- recovery stacked bar ---- */
+/* ---- recovery stacked bar (3-way: paid / rescheduled / outstanding) ---- */
 function recoveryBar(k) {
   const total = Math.max(1, k.flagged);
   const recPct = Math.round((k.recovered / total) * 100);
-  const outPct = 100 - recPct;
+  const resPct = Math.round((k.rescheduled / total) * 100);
+  const outPct = Math.max(0, 100 - recPct - resPct);
+  const seg = (pct, bg) => pct > 0
+    ? `<td width="${Math.max(3, pct)}%" style="background:${bg};height:26px;color:#fff;font-size:12px;font-weight:700;text-align:center;vertical-align:middle;">${pct}%</td>`
+    : '';
   return panel('Recovery Status (rolling 30 days)', `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-      <td width="${Math.max(3, recPct)}%" style="background:${GREEN};height:26px;color:#fff;font-size:12px;font-weight:700;text-align:center;vertical-align:middle;">${recPct}%</td>
-      <td width="${Math.max(3, outPct)}%" style="background:${RED};height:26px;color:#fff;font-size:12px;font-weight:700;text-align:center;vertical-align:middle;">${outPct}%</td>
+      ${seg(recPct, GREEN)}${seg(resPct, BLUE)}${seg(outPct, RED)}
     </tr></table>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px;"><tr>
-      <td style="font-size:11px;color:${MUTE};">${pill('PAYMENT MADE', GREEN, '#fff')} &nbsp;${k.recovered} students</td>
-      <td align="right" style="font-size:11px;color:${MUTE};">${k.outstanding} students &nbsp;${pill('OUTSTANDING', RED, '#fff')}</td>
+      <td style="font-size:11px;color:${MUTE};">${pill('PAID', GREEN, '#fff')} ${k.recovered} &nbsp; ${pill('RESCHEDULED', BLUE, '#fff')} ${k.rescheduled} &nbsp; ${pill('NEEDS CALL', RED, '#fff')} ${k.outstanding}</td>
+      <td align="right" style="font-size:11px;color:${MUTE};">${money(k.atRisk)} at risk</td>
     </tr></table>`);
 }
 
@@ -152,14 +165,18 @@ function panel(title, inner) {
 /* ---- student row card (priority list) ---- */
 function studentCard(r, opts = {}) {
   const recovered = r.recovered;
+  const rescheduled = r.rescheduled;
   const statusPill = recovered
     ? pill('✓ PAYMENT MADE', GREEN, '#fff')
-    : pill('OUTSTANDING', RED, '#fff');
+    : rescheduled
+      ? pill('RESCHEDULED', BLUE, '#fff')
+      : pill('NEEDS A CALL', RED, '#fff');
+  const accent = recovered ? GREEN : rescheduled ? BLUE : (REASON_COLOR[r.reasonClass] || RED);
   const reasonPill = pill(r.reason, '#fff4e5', REASON_COLOR[r.reasonClass] || MUTE);
   const phone = r.phone ? `<a href="tel:${esc(String(r.phone).replace(/\D/g, ''))}" style="color:${BLUE};text-decoration:none;font-weight:700;">${esc(fmtPhone(r.phone))}</a>` : `<span style="color:${MUTE};">(in PaySimple)</span>`;
   const ageBg = r.daysSince <= 3 ? '#fee2e2' : '#f3f4f6';
   return `
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid ${LINE};border-left:4px solid ${recovered ? GREEN : (REASON_COLOR[r.reasonClass] || RED)};margin-bottom:8px;background:#ffffff;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid ${LINE};border-left:4px solid ${accent};margin-bottom:8px;background:#ffffff;">
     <tr><td style="padding:11px 13px;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
         <td valign="top">
@@ -179,7 +196,11 @@ function studentCard(r, opts = {}) {
           <td width="50%" valign="top" style="font-size:12px;color:${INK};line-height:1.7;">
             <div><b style="color:${RED};">${money(r.amount)}</b> &middot; ${esc((r.paymentType || 'ACH').toUpperCase())} &middot; ${reasonPill}</div>
             <div>Missed <b>${shortDate(r.lastFailISO)}</b> <span style="background:${ageBg};color:${INK};padding:1px 6px;font-size:11px;">${r.daysSince}d ago</span>${r.failCount > 1 ? ` &middot; ${r.failCount}× in window` : ''}</div>
-            <div style="color:${MUTE};">Next auto-attempt: <b style="color:${INK};">${shortDate(r.nextExpectedISO)}</b> (${r.daysOut >= 0 ? `in ${r.daysOut}d` : `${Math.abs(r.daysOut)}d overdue`})</div>
+            ${recovered
+              ? `<div style="color:${GREEN};">Cleared ${r.recoveredISO ? shortDate(r.recoveredISO) : ''} ✓</div>`
+              : rescheduled
+                ? `<div style="color:${BLUE};">Replacement draft submitted ${r.rescheduledISO ? shortDate(r.rescheduledISO) : ''} - awaiting settlement</div>`
+                : `<div style="color:${MUTE};">Next auto-attempt: <b style="color:${INK};">${shortDate(r.nextExpectedISO)}</b> (${r.daysOut >= 0 ? `in ${r.daysOut}d` : `${Math.abs(r.daysOut)}d overdue`})</div>`}
           </td>
         </tr>
       </table>
@@ -187,7 +208,7 @@ function studentCard(r, opts = {}) {
       <div style="margin-top:8px;padding-top:7px;border-top:1px dashed ${LINE};font-size:11px;color:${MUTE};">
         PaySimple: <a href="${psLink(r.customerId)}" style="color:${BLUE};text-decoration:none;font-weight:700;">Customer #${esc(r.customerId)}</a>
         &middot; Schedule ${esc(r.scheduleId || '-')} &middot; Account ${esc(r.accountId || '-')}
-        ${recovered ? '' : `&nbsp;&nbsp;${pill('ACTION: CALL + RESCHEDULE', NAVY, '#fff')}`}
+        ${(recovered || rescheduled) ? '' : `&nbsp;&nbsp;${pill('ACTION: CALL + RESCHEDULE', NAVY, '#fff')}`}
       </div>
     </td></tr>
   </table>`;
@@ -217,7 +238,8 @@ function gameplan(data) {
 
 function renderHtml(data) {
   const k = data.kpis;
-  const range = `${shortDate(new Date(data.runAt).getTime() - data.windowDays * 864e5)} – ${shortDate(data.runAt)}, ${new Date(data.runAt).getFullYear()}`;
+  const year = new Date(data.runAt).toLocaleDateString('en-US', { year: 'numeric', timeZone: TZ });
+  const range = `${shortDate(new Date(data.runAt).getTime() - data.windowDays * 864e5)} – ${shortDate(data.runAt)}, ${year}`;
 
   const thisWeekOpen = data.thisWeek.filter((r) => !r.recovered);
   const thisWeekDone = data.thisWeek.filter((r) => r.recovered);
@@ -294,7 +316,8 @@ function renderHtml(data) {
         <tr><td style="padding:14px 18px 26px;">
           <div style="border-top:1px solid ${LINE};padding-top:12px;font-size:11px;color:${MUTE};line-height:1.6;">
             <b style="color:${INK};">Definitions.</b> "Missed" = PaySimple <i>payment_failed</i> or <i>payment_returned</i> (NSF / stopped / closed account). "Payment made" = a settled payment after the failure. "This Week" buckets by most-recent failure within ${data.weekDays} days and keeps cleared names for the week per your rule; "Rolling Month" shows only still-outstanding flags 8–${data.windowDays} days old (recovered ones rolled off).<br/>
-            <b style="color:${INK};">Source.</b> CCPP <i>ADF_PaysimpleTrans</i> + <i>CB_PS_TXN_LOG</i> joined to student identity/contact. Generated ${esc(new Date(data.runAt).toLocaleString('en-US'))}. % rescheduled is pending the call-logging step (Gameplan #4).
+            <b style="color:${INK};">Status.</b> "Paid" = a payment settled after the failure. "Rescheduled" = a replacement draft was submitted after the failure but has not settled yet (inferred from the transaction log). Exact rescheduled <i>dates</i> and recurring-schedule next-run dates require the PaySimple API (credentials pending) - until then the report infers reschedule from post-failure draft activity.<br/>
+            <b style="color:${INK};">Source.</b> CCPP <i>ADF_PaysimpleTrans</i> + <i>CB_PS_TXN_LOG</i> joined to student identity/contact. All times US Central. Generated ${esc(fullStamp(data.runAt))}.
           </div>
         </td></tr>
 
@@ -307,7 +330,7 @@ function renderHtml(data) {
 
 function renderText(data) {
   const k = data.kpis;
-  const line = (r) => `  - ${r.name} | ${fmtPhone(r.phone) || 'phone in PaySimple'} | ${r.email} | ${money(r.amount)} | ${r.reason} | missed ${shortDate(r.lastFailISO)} (${r.daysSince}d) | PS Cust #${r.customerId}${r.recovered ? ' | PAID' : ''}`;
+  const line = (r) => `  - ${r.name} | ${fmtPhone(r.phone) || 'phone in PaySimple'} | ${r.email} | ${money(r.amount)} | ${r.reason} | missed ${shortDate(r.lastFailISO)} (${r.daysSince}d) | PS Cust #${r.customerId}${r.recovered ? ' | PAID' : r.rescheduled ? ' | RESCHEDULED' : ''}`;
   return [
     `PAYSIMPLE MISSED-PAYMENT REPORT  (rolling ${data.windowDays} days) — for ${data.recipientLabel}`,
     ``,

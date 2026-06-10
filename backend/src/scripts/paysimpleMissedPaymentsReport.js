@@ -31,6 +31,12 @@ const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodema
 const { renderHtml, renderText } = require('./lib/renderPaysimpleReport');
 
 const DRY = process.argv.includes('--dry');
+// True-noon-CT guard. The VPS runs UTC and Debian cron interprets schedules in
+// UTC (no CRON_TZ), so DST would drift a fixed UTC time off noon. Instead the
+// cron fires at BOTH 17:00 and 18:00 UTC and passes --only-if-noon-ct; this guard
+// lets exactly the noon-Central run proceed (17:00 UTC = noon CDT summer, 18:00
+// UTC = noon CST winter) and the other exit cleanly. Manual runs omit the flag.
+const ONLY_IF_NOON_CT = process.argv.includes('--only-if-noon-ct');
 const argTo = process.argv.find((a) => a.startsWith('--to='));
 const argCc = process.argv.find((a) => a.startsWith('--cc='));
 const RECIPIENTS = argTo ? argTo.slice('--to='.length).split(',').map((s) => s.trim()).filter(Boolean)
@@ -72,7 +78,9 @@ const MISSED_QUERY = `
     COALESCE(ph.PropertyValue, au.PhoneNumber) Phone,
     au.ClassName, au.Mentor, au.IPBC_CurrentlyDue,
     ps.RecurringScheduleId, ps.AccountId, rec.recoveredAt,
-    CASE WHEN rec.hit IS NOT NULL THEN 1 ELSE 0 END recovered
+    CASE WHEN rec.hit IS NOT NULL THEN 1 ELSE 0 END recovered,
+    res.reschedAt,
+    CASE WHEN rec.hit IS NULL AND res.hit IS NOT NULL THEN 1 ELSE 0 END rescheduled
   FROM fails f
   OUTER APPLY (SELECT TOP 1 Amount, PaymentType, FailureReason, ReturnReason FROM ADF_PaysimpleTrans
                WHERE CustomerID = f.CustomerID AND EventType IN ('payment_failed','payment_returned')
@@ -94,6 +102,14 @@ const MISSED_QUERY = `
   OUTER APPLY (SELECT TOP 1 1 AS hit, s.CreatedAt AS recoveredAt FROM ADF_PaysimpleTrans s
                WHERE s.CustomerID = f.CustomerID AND s.EventType = 'payment_settled'
                  AND s.CreatedAt > f.lastFail ORDER BY s.CreatedAt ASC) rec
+  -- rescheduled = a replacement draft was initiated (created/submitted) AFTER the
+  -- failure but has NOT settled yet. Future-dated schedules are not in this log
+  -- (it only records executed transactions), so this is the closest DB proxy;
+  -- exact reschedule dates need the PaySimple API.
+  OUTER APPLY (SELECT TOP 1 1 AS hit, r2.CreatedAt AS reschedAt FROM ADF_PaysimpleTrans r2
+               WHERE r2.CustomerID = f.CustomerID
+                 AND r2.EventType IN ('payment_created','payment_submitted_for_settlement')
+                 AND r2.CreatedAt > f.lastFail ORDER BY r2.CreatedAt ASC) res
   ORDER BY f.lastFail DESC`;
 
 async function loadData() {
@@ -142,7 +158,9 @@ async function loadData() {
         scheduleId: m.RecurringScheduleId || '',
         accountId: m.AccountId || '',
         recovered: !!m.recovered,
+        rescheduled: !!m.rescheduled,
         recoveredISO: m.recoveredAt ? new Date(m.recoveredAt).toISOString() : null,
+        rescheduledISO: m.reschedAt ? new Date(m.reschedAt).toISOString() : null,
         nextExpectedISO: next.toISOString(),
         daysOut,
       };
@@ -156,8 +174,9 @@ async function loadData() {
     // ---- KPIs ----
     const flagged = rows.length;
     const recovered = recoveredList.length;
-    const outstanding = rows.filter((r) => !r.recovered).length;
-    const atRisk = rows.filter((r) => !r.recovered).reduce((s, r) => s + r.amount, 0);
+    const rescheduled = rows.filter((r) => r.rescheduled).length;
+    const outstanding = rows.filter((r) => !r.recovered && !r.rescheduled).length; // truly needs a call
+    const atRisk = rows.filter((r) => !r.recovered).reduce((s, r) => s + r.amount, 0); // owed until settled
 
     // ---- reason breakdown (one per flagged student, latest reason) ----
     const rmap = {};
@@ -189,6 +208,7 @@ async function loadData() {
       recipientLabel: 'Taiwo & Ali',
       kpis: {
         flagged, recovered, recoveredPct: Math.round((recovered / Math.max(1, flagged)) * 100),
+        rescheduled, rescheduledPct: Math.round((rescheduled / Math.max(1, flagged)) * 100),
         outstanding, atRisk,
         settledCount: settled.n, settledAmt: Number(settled.amt) || 0,
         thisWeekFlagged: thisWeek.length,
@@ -206,9 +226,19 @@ async function loadData() {
 }
 
 async function main() {
+  if (ONLY_IF_NOON_CT) {
+    const hourCT = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago', hour: 'numeric', hour12: false,
+    }).format(new Date()), 10);
+    if (hourCT !== 12) {
+      console.log(`[PaySimpleReport] --only-if-noon-ct: current Central hour is ${hourCT}, not 12 — skipping this firing.`);
+      return;
+    }
+    console.log('[PaySimpleReport] --only-if-noon-ct: it is noon Central — proceeding.');
+  }
   console.log(`[PaySimpleReport] window=${WINDOW}d week=${WEEK}d dry=${DRY} to=${RECIPIENTS.join(',')} cc=${CC.join(',') || '(none)'}`);
   const data = await loadData();
-  console.log(`[PaySimpleReport] flagged=${data.kpis.flagged} recovered=${data.kpis.recovered} outstanding=${data.kpis.outstanding} atRisk=$${data.kpis.atRisk}`);
+  console.log(`[PaySimpleReport] flagged=${data.kpis.flagged} paid=${data.kpis.recovered} rescheduled=${data.kpis.rescheduled} needsCall=${data.kpis.outstanding} atRisk=$${data.kpis.atRisk}`);
 
   const html = renderHtml(data).replace(/—/g, '-').replace(/–/g, '-');
   const text = renderText(data).replace(/—/g, '-').replace(/–/g, '-');
