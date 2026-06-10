@@ -10,7 +10,7 @@
 
 const assert = require('node:assert');
 const { _internals, hasFamilyData } = require('./compileFamilyBriefingData');
-const { categorize, buildToday, buildWeek, ctDayBounds, ctDateISO, fmtCtTimeParts, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, validGridDate, itemsToActionsAndGrid, dedupeActions, conflictGrid } = _internals;
+const { categorize, buildToday, buildWeek, ctDayBounds, ctDateISO, parseDayToISO, shortLabel, fmtCtTimeParts, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, validGridDate, itemsToActionsAndGrid, dedupeActions, conflictGrid } = _internals;
 
 let passed = 0;
 function test(name, fn) {
@@ -204,14 +204,31 @@ test('heuristicProcareItems: pulls announcement sentences, drops boilerplate', (
     subject: '(New) Office Chat from Liberty Private School',
     body_text: "Hello Ali,\n\nYou've received a new Office Chat message (re: Creed Muwwakkil): \n\nGood Afternoon Parents! Ms. Brenda will be on vacation and will return on Monday. There will be Kona Ice on Thursday instead of an Ice Cream Party. Thursday is Jersey Day for FIFA Opening Day. You can reply in the Procare app.",
   }];
-  const items = heuristicProcareItems(rows);
-  assert.ok(items.length >= 2, 'extracts multiple items');
-  assert.ok(items.every(i => i.ico === 'CRD'), 'tagged to Creed');
-  const titles = items.map(i => i.title).join(' | ');
+  const now = new Date('2026-06-10T17:00:00Z');
+  const { actions, grid } = heuristicProcareItems(rows, now);
+  assert.ok(actions.length >= 2, 'extracts multiple items');
+  assert.ok(actions.every(i => i.ico === 'CRD' && i.colorKey === 'creed'), 'tagged to Creed');
+  const titles = actions.map(i => i.title).join(' | ');
   assert.ok(/Ms\. Brenda/.test(titles), 'keeps teacher-out announcement');
   assert.ok(/Jersey Day/.test(titles), 'keeps Jersey Day');
   assert.ok(!/reply in the Procare/i.test(titles), 'drops app boilerplate');
   assert.ok(!/Good Afternoon Parents/i.test(titles), 'drops greeting');
+  // heuristic also places dated items on the grid (Thursday -> Jun 11)
+  assert.ok(grid.some(g => g.dateISO === '2026-06-11' && /Jersey Day|Kona Ice/.test(g.label)), 'places Thursday item on grid');
+});
+
+// ---- parseDayToISO + shortLabel ----
+test('parseDayToISO: resolves weekday/today/tomorrow within the week', () => {
+  const now = new Date('2026-06-10T17:00:00Z'); // Wed Jun 10 CT
+  assert.strictEqual(parseDayToISO('Jersey Day on Thursday', now), '2026-06-11');
+  assert.strictEqual(parseDayToISO('returns Monday', now), '2026-06-15');
+  assert.strictEqual(parseDayToISO('Teddy Bear Day is tomorrow', now), '2026-06-11');
+  assert.strictEqual(parseDayToISO('no day mentioned here', now), null);
+});
+test('shortLabel: produces tidy calendar labels', () => {
+  assert.strictEqual(shortLabel('There will be Kona Ice on Thursday for the schoolers'), 'Kona Ice');
+  assert.strictEqual(shortLabel('Thursday is Jersey Day in celebration of FIFA Opening Day'), 'Jersey Day');
+  assert.strictEqual(shortLabel('Ms. Brenda will be on vacation and will return on Monday'), 'Ms. Brenda back');
 });
 
 // ---- toCreedAction shape ----

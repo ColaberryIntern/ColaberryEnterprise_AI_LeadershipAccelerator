@@ -196,6 +196,47 @@ function ctDateISO(date) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
+const DOW = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+function ctWeekdayNum(date) {
+  const w = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long' }).format(date).toLowerCase();
+  return DOW[w];
+}
+
+// Parse a day reference ("today"/"tomorrow"/"Thursday") out of free text into the
+// YYYY-MM-DD of its next occurrence within the coming week. Null if none found.
+function parseDayToISO(text, now) {
+  const t = (text || '').toLowerCase();
+  if (/\btoday\b/.test(t)) return ctDateISO(ctDayBounds(now, 0).start);
+  if (/\btomorrow\b/.test(t)) return ctDateISO(ctDayBounds(now, 1).start);
+  for (const [name, dow] of Object.entries(DOW)) {
+    if (new RegExp(`\\b${name}\\b`).test(t)) {
+      for (let i = 0; i < 7; i++) {
+        const b = ctDayBounds(now, i).start;
+        if (ctWeekdayNum(b) === dow) return ctDateISO(b);
+      }
+    }
+  }
+  return null;
+}
+
+// Short (<=18 char) calendar-cell label from a Procare sentence.
+function shortLabel(s) {
+  const x = String(s || '');
+  if (/brenda/i.test(x) && /(return|back|vacation|monday)/i.test(x)) return 'Ms. Brenda back';
+  if (/kona ice/i.test(x)) return 'Kona Ice';
+  if (/jersey day/i.test(x)) return 'Jersey Day';
+  if (/teddy bear/i.test(x)) return 'Teddy Bear Day';
+  if (/picture day/i.test(x)) return 'Picture Day';
+  if (/pajama|pj day/i.test(x)) return 'Pajama Day';
+  if (/water day/i.test(x)) return 'Water Day';
+  const trimmed = x
+    .replace(/\b(on |this |next )?(sun|mon|tues|wednes|thurs|fri|satur)day\b/gi, '')
+    .replace(/\b(for the schoolers|in celebration of.*|instead of.*|will be on.*)\b/gi, '')
+    .replace(/[^\w\s].*$/, '')
+    .replace(/\s+/g, ' ').trim();
+  return truncate(trimmed || x, 18);
+}
+
 // Build the 7-day week grid from family-calendar events PLUS dated "extras"
 // (Procare announcements, travel, conflict markers) placed on their day.
 // extras: [{ dateISO: 'YYYY-MM-DD', colorKey, label }].
@@ -374,7 +415,7 @@ function buildNewSince(rows) {
 // fallback so the briefing never hard-fails on an API hiccup.
 // --------------------------------------------------------------------------
 
-async function callOpenAI(messages, { timeoutMs = 15000, model = 'gpt-4o-mini' } = {}) {
+async function callOpenAIOnce(messages, { timeoutMs, model }) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY not set');
   const ctrl = new AbortController();
@@ -392,6 +433,20 @@ async function callOpenAI(messages, { timeoutMs = 15000, model = 'gpt-4o-mini' }
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Retry once on a transient failure (timeout/5xx/429/network) before falling back.
+async function callOpenAI(messages, { timeoutMs = 20000, model = 'gpt-4o-mini', retries = 1 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await callOpenAIOnce(messages, { timeoutMs, model });
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) await new Promise((res) => setTimeout(res, 1500));
+    }
+  }
+  throw lastErr;
 }
 
 // Map an extracted item to the Section-4 action shape (ico + colorKey supplied).
@@ -487,7 +542,7 @@ async function extractProcareItems(procareRows, now) {
     return itemsToActionsAndGrid(items, now, { ico: 'CRD', colorKey: 'creed' });
   } catch (err) {
     console.error('[compileFamily] procare LLM extract failed, using heuristic:', err.message);
-    return { actions: dedupeActions(heuristicProcareItems(rows)).slice(0, 5), grid: [] };
+    return heuristicProcareItems(rows, now);
   }
 }
 
@@ -522,24 +577,37 @@ async function extractTravelItems(travelRows, now) {
   }
 }
 
-// Fallback: split the cleaned body into sentences and keep the substantive ones.
-function heuristicProcareItems(rows) {
-  const items = [];
+// Fallback: split the cleaned body into sentences, clean each into a title, parse a
+// day for grid placement. Returns { actions, grid } just like the LLM path so Procare
+// items still land on the calendar even when the LLM is unavailable.
+function heuristicProcareItems(rows, now) {
+  const actions = [], grid = [];
+  const seen = new Set();
   for (const r of (rows || [])) {
     // protect abbreviation periods (Ms./Dr./...) so they don't split sentences
     const body = (cleanBody(r.body_text, 600) || '').replace(/\b(Mr|Mrs|Ms|Dr|St|Jr|Sr)\.\s/g, '$1<DOT> ');
     const sentences = body
       .split(/(?<=[.!?])\s+|\s*[••]\s*/)
-      .map((s) => s.replace(/<DOT>/g, '.').replace(/^[^\w$]+/, '').trim());
+      .map((s) => s
+        .replace(/<DOT>/g, '.')
+        .replace(/^[^\w]+/, '')                                         // leading emoji/symbols
+        .replace(/^(just a few announcements:?|there will be|please note( that)?:?|reminder:?|fyi:?|also,?)\s*/i, '')
+        .replace(/^[^\w]+/, '')
+        .trim());
     for (const s of sentences) {
-      if (s.length < 12) continue;
-      if (/reply in the procare|adjust your email|notification|download|app store|google play|thank you|good (after|even|morn)|^announcements|wonderful week|let us know/i.test(s)) continue;
-      items.push({ tone: 'info', ico: 'CRD', title: truncate(s, 100) });
-      if (items.length >= 5) break;
+      if (s.length < 10) continue;
+      if (/reply in the procare|adjust your email|notification|download|app store|google play|thank you|good (after|even|morn)|^announcements|wonderful week|let us know|questions|hope everyone/i.test(s)) continue;
+      const key = s.slice(0, 28).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const dateISO = parseDayToISO(s, now);
+      actions.push({ tone: dateISO ? 'upcoming' : 'info', ico: 'CRD', colorKey: 'creed', title: truncate(s, 100) });
+      if (dateISO) grid.push({ dateISO, colorKey: 'creed', label: shortLabel(s) });
+      if (actions.length >= 5) break;
     }
-    if (items.length >= 5) break;
+    if (actions.length >= 5) break;
   }
-  return items;
+  return { actions: dedupeActions(actions).slice(0, 5), grid: grid.slice(0, 6) };
 }
 
 // --------------------------------------------------------------------------
@@ -825,5 +893,5 @@ module.exports = {
   compileFamilyBriefingData,
   hasFamilyData,
   // exported for unit tests:
-  _internals: { tzOffsetMs, ctDayBounds, ctDateISO, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, toAction, validGridDate, itemsToActionsAndGrid, extractProcareItems, dedupeActions, conflictGrid },
+  _internals: { tzOffsetMs, ctDayBounds, ctDateISO, ctWeekdayNum, parseDayToISO, shortLabel, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, toAction, validGridDate, itemsToActionsAndGrid, extractProcareItems, dedupeActions, conflictGrid },
 };
