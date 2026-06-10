@@ -10,7 +10,7 @@
 
 const assert = require('node:assert');
 const { _internals, hasFamilyData } = require('./compileFamilyBriefingData');
-const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince } = _internals;
+const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts } = _internals;
 
 let passed = 0;
 function test(name, fn) {
@@ -153,6 +153,40 @@ test('buildNewSince: maps inbox_emails rows to label/title/src/quote', () => {
 test('buildNewSince: empty/undefined rows -> empty array', () => {
   assert.strictEqual(buildNewSince([]).length, 0);
   assert.strictEqual(buildNewSince(undefined).length, 0);
+});
+
+// ---- buildRecap / buildMoments from past calendar ----
+test('buildRecap: collapses repeats and labels the week range', () => {
+  const now = new Date('2026-06-10T17:00:00Z');
+  const past = [
+    { summary: 'Sand VB Addison', start: '2026-06-07T23:00:00Z' },
+    { summary: 'Sand VB Addison', start: '2026-06-08T23:00:00Z' },
+    { summary: 'Mom Dr appt.', start: '2026-06-09T15:00:00Z' },
+  ];
+  const r = buildRecap(now, past);
+  assert.ok(/Last 7 days/.test(r.rangeLabel));
+  assert.ok(/Sand VB Addison \(2x\)/.test(r.text), 'collapses repeats');
+  assert.ok(/Mom Dr appt/.test(r.text));
+});
+test('buildRecap: empty week -> quiet message', () => {
+  const r = buildRecap(new Date('2026-06-10T17:00:00Z'), []);
+  assert.ok(/quiet week/i.test(r.text));
+});
+test('buildMoments: most-recent-first, ago labels, capped at 8', () => {
+  const now = new Date('2026-06-10T17:00:00Z');
+  const past = Array.from({ length: 10 }, (_, i) => ({ summary: `Event ${i}`, start: new Date(now.getTime() - (i + 1) * 86400000).toISOString() }));
+  const m = buildMoments(now, past);
+  assert.strictEqual(m.length, 8);
+  assert.strictEqual(m[0][2], 'yesterday');
+  assert.ok(/days ago/.test(m[2][2]));
+});
+
+// ---- buildCosts ----
+test('buildCosts: returns labeled projection rows + summary', () => {
+  const c = buildCosts(new Date('2026-06-10T17:00:00Z'));
+  assert.ok(/projected/i.test(c.intro));
+  assert.strictEqual(c.rows.length, 2);
+  assert.ok(c.summary.some(s => s.label === 'Due this week' && s.value === '$0'));
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ', all green'}`);

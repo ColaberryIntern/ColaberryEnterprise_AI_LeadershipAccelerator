@@ -413,7 +413,66 @@ function buildFlashback() {
     heading: "Creed's Primrose Graduation Pictures",
     intro: 'From Karla Estrada (Primrose Wylie asst. director), sent Apr 30, 2026. 15 photos. Click any thumbnail to open it in Drive.',
     photos: FLASHBACK_PHOTOS,
-    note: 'These 15 are the photos currently reachable by email (forwarded from Hotmail). Once Google Photos is wired in, the rest of Creed’s history will surface here automatically.',
+    note: 'Why only these photos? They are the ones currently reachable by email — Karla Estrada at Primrose Wylie sent them to your Hotmail on Apr 30 and they forwarded to Gmail (how this report sees them). Older school comms lived in Hotmail and the Hotmail-to-Gmail forward only started Jun 3, 2026; Liberty and Procare send photos through the Procare Parent Portal app, not email. Once Google Photos is wired in, the rest of Creed’s history will surface here automatically.',
+  };
+}
+
+// --------------------------------------------------------------------------
+// Recap + moments (derived live from past family-calendar events)
+// --------------------------------------------------------------------------
+
+function agoLabel(now, d) {
+  const days = Math.max(0, Math.round((now.getTime() - d.getTime()) / 86400000));
+  return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+// One-paragraph recap of the last 7 days from family-calendar events.
+function buildRecap(now, pastEvents) {
+  const weekAgo = new Date(now.getTime() - 7 * 86400000);
+  const recent = (pastEvents || []).filter((e) => { const s = new Date(e.start); return s >= weekAgo && s < now; });
+  const start = ctParts(weekAgo), end = ctParts(new Date(now.getTime() - 86400000));
+  const rangeLabel = `Last 7 days (${start.month} ${start.day} - ${end.month} ${end.day})`;
+  if (!recent.length) return { rangeLabel, text: 'A quiet week on the family calendar — no logged events.' };
+  // collapse repeated titles (e.g. recurring volleyball) into "(Nx)"
+  const counts = {};
+  for (const e of recent) {
+    const k = String(e.summary || '').replace(/\s{2,}/g, ' ').trim();
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  const parts = Object.entries(counts).map(([k, c]) => (c > 1 ? `${k} (${c}x)` : k));
+  return { rangeLabel, text: `On the family calendar this week: ${parts.join(', ')}.` };
+}
+
+// Recent past events as flashback "moments" (most recent first).
+function buildMoments(now, pastEvents) {
+  return (pastEvents || [])
+    .filter((e) => new Date(e.start) < now)
+    .sort((a, b) => new Date(b.start) - new Date(a.start))
+    .slice(0, 8)
+    .map((e) => {
+      const d = new Date(e.start);
+      const p = ctParts(d);
+      return [`${p.dow} . ${p.month} ${p.day}`, e.summary, agoLabel(now, d)];
+    });
+}
+
+// --------------------------------------------------------------------------
+// Upcoming costs (curated projection from the known Procare billing pattern —
+// NOT live receipts; school charges are not reliably in email yet. Labeled as such.)
+// --------------------------------------------------------------------------
+
+function buildCosts(now) {
+  const mp = ctParts(now);
+  return {
+    intro: 'Procare tuition runs about $330 per charge (~$660/month). These are projected from the known billing pattern, not live receipts.',
+    rows: [
+      { date: `~mid-${mp.month} (proj)`, item: 'Procare monthly charge', for: 'Creed (Liberty)', amount: '$330' },
+      { date: `~mid-${mp.month} (proj)`, item: 'Procare secondary charge', for: 'Creed (Liberty)', amount: '$330' },
+    ],
+    summary: [
+      { label: 'Due this week', value: '$0' },
+      { label: 'Projected this month', value: '$660' },
+    ],
   };
 }
 
@@ -440,9 +499,12 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     const weekEnd = ctDayBounds(now, 7).start;
     const horizonEnd = new Date(now.getTime() + 75 * 86400000);
 
+    const pastStart = new Date(todayB.start.getTime() - 60 * 86400000);
+
     const familyToday = await listEvents(cal, familyCalId, todayB.start, todayB.end);
     const familyWeek = await listEvents(cal, familyCalId, todayB.start, weekEnd);
     const familyHorizon = await listEvents(cal, familyCalId, todayB.start, horizonEnd);
+    const familyPast = await listEvents(cal, familyCalId, pastStart, todayB.start);
 
     let workToday = [];
     if (workCalId) {
@@ -457,6 +519,8 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     if (travel.cards.length) data.travel = travel;
     data.risks = buildRisks(todayBlock);
     data.actions = buildActions(todayBlock);
+    data.recap = buildRecap(now, familyPast);
+    data._pastEvents = familyPast; // used to enrich the flashback moments below
     sources.push('Google Calendar (Family)');
   } catch (err) {
     degraded.push('family calendar');
@@ -476,8 +540,15 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     console.error('[compileFamily] inbox_emails source failed:', err.message);
   }
 
-  // ---- Flashback (curated static photos) ----
-  data.flashback = buildFlashback();
+  // ---- Flashback (curated photos + live "other moments" from past calendar) ----
+  const flashback = buildFlashback();
+  const moments = buildMoments(now, data._pastEvents || []);
+  if (moments.length) flashback.moments = moments;
+  data.flashback = flashback;
+  delete data._pastEvents;
+
+  // ---- Upcoming costs (curated Procare pattern, labeled as projection) ----
+  data.costs = buildCosts(now);
 
   // ---- Hero (derived) ----
   data.hero = buildHero(todayBlock, data.travel || { cards: [] }, data.newSince || []);
@@ -501,5 +572,5 @@ module.exports = {
   compileFamilyBriefingData,
   hasFamilyData,
   // exported for unit tests:
-  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince },
+  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts },
 };
