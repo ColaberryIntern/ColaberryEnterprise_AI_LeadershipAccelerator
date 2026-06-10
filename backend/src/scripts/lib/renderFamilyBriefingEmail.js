@@ -61,6 +61,7 @@ const C = {
   muted: '#94a3b8',
   creed: '#2563eb', creedSoft: '#dbeafe',
   addison: '#9333ea', addisonSoft: '#f3e8ff',
+  jayse: '#16a34a', jayseSoft: '#dcfce7',
   parents: '#ea580c', parentsSoft: '#ffedd5',
   travel: '#0891b2', travelSoft: '#cffafe',
   action: '#dc2626', actionSoft: '#fee2e2',
@@ -74,6 +75,7 @@ const C = {
 const CAT_COLORS = {
   creed: [C.creedSoft, C.creed],
   addison: [C.addisonSoft, C.addison],
+  jayse: [C.jayseSoft, C.jayse],
   parents: [C.parentsSoft, C.parents],
   travel: [C.travelSoft, C.travel],
   action: [C.actionSoft, C.action],
@@ -81,6 +83,25 @@ const CAT_COLORS = {
   neutral: [C.lineSoft, C.ink2],
 };
 function catColor(key) { return CAT_COLORS[key] || CAT_COLORS.neutral; }
+
+// Family-member legend shown under the week grid. Each entry: [colorKey, label].
+const FAMILY_LEGEND = [
+  ['creed', 'Creed'],
+  ['addison', 'Addison'],
+  ['jayse', 'Jayse'],
+  ['parents', 'Parents'],
+  ['travel', 'Travel'],
+  ['action', 'Conflict'],
+];
+function renderLegend() {
+  const swatch = ([key, label]) => {
+    const [bg, fg] = catColor(key);
+    return `<td style="padding:0 12px 0 0;white-space:nowrap;font-family:${FONT}">
+      <span style="display:inline-block;width:10px;height:10px;background:${fg};border-radius:2px;vertical-align:middle;margin-right:5px"></span><span style="font-size:11px;color:${C.ink2};vertical-align:middle">${esc(label)}</span>
+    </td>`;
+  };
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px 0"><tr>${FAMILY_LEGEND.map(swatch).join('')}</tr></table>`;
+}
 
 const BADGE_COLORS = {
   travel: C.travel,
@@ -243,6 +264,7 @@ function renderSection2Week(d, data) {
   if (!week || !Array.isArray(week.days) || !week.days.length) return '';
   let out = sectionOpen('Section 2 . Upcoming Week');
   out += hTitle(week.rangeLabel || 'Upcoming week');
+  out += renderLegend();
   out += `<table role="presentation" cellpadding="0" cellspacing="2" border="0" width="100%" style="border-collapse:separate"><tr>`;
   for (const day of week.days) {
     out += dayCell({ dow: day.dow, dnum: day.dnum, today: day.today, events: day.events });

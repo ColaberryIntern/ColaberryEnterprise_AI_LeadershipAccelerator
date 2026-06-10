@@ -139,6 +139,7 @@ function categorize(summary) {
   const s = (summary || '').toLowerCase();
   if (/\bcreed\b/.test(s)) return { key: 'creed', label: 'Creed' };
   if (/\baddison\b/.test(s)) return { key: 'addison', label: 'Addison' };
+  if (/\bjays?e\b/.test(s)) return { key: 'jayse', label: 'Jayse' };
   if (/\b(flight|trip|nashville|hotel|airbnb|depart|arrive|vacation)\b/.test(s)) return { key: 'travel', label: 'Travel' };
   if (/\b(school|drop ?off|pick ?up|carpool|kids)\b/.test(s)) return { key: 'parents', label: 'Parents' };
   return { key: 'neutral', label: 'Family' };
@@ -301,7 +302,7 @@ function queryInboxEmails(windowHours) {
 // Pull the meaningful message out of a Procare/Kinderlime Office Chat email body,
 // stripping the "Hello <name> ... You've received a new Office Chat message (...):"
 // boilerplate. For other mail, return a cleaned leading snippet.
-function cleanBody(bodyText) {
+function cleanBody(bodyText, maxLen = 240) {
   let b = String(bodyText || '');
   const m = b.match(/Office Chat message\s*\([^)]*\):\s*([\s\S]+)/i);
   if (m) b = m[1];
@@ -310,11 +311,14 @@ function cleanBody(bodyText) {
     // Procare/Kinderlime stuff their bodies with inbox-preview padding — strip it:
     .replace(/&(?:zwnj|zwj|nbsp|shy|#x?[0-9a-f]+);/gi, ' ')              // literal HTML entities
     .replace(/[​‌‍⁠﻿­]/g, '')             // zero-width unicode
+    // drop the Procare app-download / settings boilerplate tail:
+    .replace(/You can reply in the Procare[\s\S]*$/i, '')
+    .replace(/If you want to adjust your email notifications[\s\S]*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
   // if nothing but padding/punctuation survives, show no quote rather than junk
   if (!b || !/[A-Za-z]{3,}/.test(b)) return undefined;
-  return truncate(b, 240);
+  return truncate(b, maxLen);
 }
 
 // "New since yesterday" from inbox_emails rows.
@@ -331,6 +335,92 @@ function buildNewSince(rows) {
       src: `${from}${when ? ' . ' + when : ''}`,
       quote: cleanBody(r.body_text),
     });
+  }
+  return items;
+}
+
+// --------------------------------------------------------------------------
+// Procare extraction — Creed's school comms are ~1-paragraph emails whose
+// announcements/tasks must be pulled out (teacher out, dress-up days, what-to-bring,
+// closures). LLM (OpenAI) does the extraction; a deterministic heuristic is the
+// fallback so the briefing never hard-fails on an API hiccup.
+// --------------------------------------------------------------------------
+
+async function callOpenAI(messages, { timeoutMs = 15000, model = 'gpt-4o-mini' } = {}) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error('OPENAI_API_KEY not set');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, temperature: 0, response_format: { type: 'json_object' }, messages }),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const j = await r.json();
+    return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Map an extracted item to the Section-4 action shape.
+function toCreedAction(it) {
+  const tone = it.tone === 'urgent' ? 'urgent' : it.tone === 'upcoming' ? 'upcoming' : 'info';
+  return {
+    tone, ico: 'CRD',
+    title: it.title,
+    sub: it.detail || undefined,
+    due: it.when || undefined,
+  };
+}
+
+async function extractProcareItems(procareRows, now) {
+  const rows = (procareRows || []).filter((r) => cleanBody(r.body_text, 600));
+  if (!rows.length) return [];
+  const today = ctParts(now);
+  const blocks = rows
+    .map((r, i) => `EMAIL ${i + 1} [${r.subject}] (received ${new Date(r.received_at).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' })}):\n${cleanBody(r.body_text, 600)}`)
+    .join('\n\n');
+  const sys =
+    `You extract parent-relevant items from a daycare/preschool (Procare) about a child named Creed. ` +
+    `Today is ${today.dow} ${today.month} ${today.day}. Return ONLY JSON of the form ` +
+    `{"items":[{"title":string,"detail":string,"when":string,"tone":"urgent|upcoming|info"}]}. ` +
+    `Include: teacher absences/returns, special/dress-up days (e.g. Jersey Day), what-to-bring, ` +
+    `treats/events (e.g. Kona Ice), closures, payments due, schedule changes. ` +
+    `title = short fact or task ("Ms. Brenda out, returns Monday"). detail = one short clarifying line. ` +
+    `when = a short day/date label if the item has timing ("Thu Jun 11", "Through Mon Jun 15"), else "". ` +
+    `tone = "urgent" if today/needs action now, "upcoming" if a future dated thing, else "info". ` +
+    `Ignore greetings, sign-offs, app-download links. Max 6 items. Nothing noteworthy => {"items":[]}.`;
+  try {
+    const out = await callOpenAI([{ role: 'system', content: sys }, { role: 'user', content: blocks }]);
+    const parsed = JSON.parse(out);
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    return items.filter((it) => it && it.title).slice(0, 6).map(toCreedAction);
+  } catch (err) {
+    console.error('[compileFamily] procare LLM extract failed, using heuristic:', err.message);
+    return heuristicProcareItems(rows);
+  }
+}
+
+// Fallback: split the cleaned body into sentences and keep the substantive ones.
+function heuristicProcareItems(rows) {
+  const items = [];
+  for (const r of (rows || [])) {
+    // protect abbreviation periods (Ms./Dr./...) so they don't split sentences
+    const body = (cleanBody(r.body_text, 600) || '').replace(/\b(Mr|Mrs|Ms|Dr|St|Jr|Sr)\.\s/g, '$1<DOT> ');
+    const sentences = body
+      .split(/(?<=[.!?])\s+|\s*[••]\s*/)
+      .map((s) => s.replace(/<DOT>/g, '.').replace(/^[^\w$]+/, '').trim());
+    for (const s of sentences) {
+      if (s.length < 12) continue;
+      if (/reply in the procare|adjust your email|notification|download|app store|google play|thank you|good (after|even|morn)|^announcements|wonderful week|let us know/i.test(s)) continue;
+      items.push({ tone: 'info', ico: 'CRD', title: truncate(s, 100) });
+      if (items.length >= 5) break;
+    }
+    if (items.length >= 5) break;
   }
   return items;
 }
@@ -527,18 +617,40 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     console.error('[compileFamily] calendar source failed:', err.message);
   }
 
-  // ---- Inbox emails (new since yesterday): school/Procare + travel ----
+  // ---- Inbox emails: "new since yesterday" (30h) + Procare announcements (7d) ----
+  // One DB read over a 7-day window; new-since is the recent subset, while school
+  // announcements stay relevant all week (e.g. "Ms. Brenda out till Monday").
   try {
-    const windowHours = Number(process.env.FAMILY_NEWSINCE_HOURS || 30);
-    const rows = queryInboxEmails(windowHours);
-    const newSince = buildNewSince(rows);
+    const newSinceHours = Number(process.env.FAMILY_NEWSINCE_HOURS || 30);
+    const rows = queryInboxEmails(7 * 24);
+    const newSinceCutoff = now.getTime() - newSinceHours * 3600 * 1000;
+    const newSince = buildNewSince(rows.filter((r) => new Date(r.received_at).getTime() >= newSinceCutoff));
     if (newSince.length) data.newSince = newSince;
     sources.push('inbox_emails DB (school + travel)');
     data._newSinceCount = newSince.length;
+
+    // Procare extraction -> Creed action items (calendar conflicts stay first).
+    const procareRows = rows.filter((r) =>
+      r.label === 'School' && /office chat|daily summary/i.test(r.subject || ''));
+    data._procareRows = procareRows;
   } catch (err) {
     degraded.push('inbox mail');
     console.error('[compileFamily] inbox_emails source failed:', err.message);
   }
+
+  // ---- Procare -> Creed tasks (LLM extraction, async; appended to actions) ----
+  if (data._procareRows && data._procareRows.length) {
+    try {
+      const creedItems = await extractProcareItems(data._procareRows, now);
+      if (creedItems.length) {
+        data.actions = [...(data.actions || []), ...creedItems];
+        sources.push('Procare extraction (Creed)');
+      }
+    } catch (err) {
+      console.error('[compileFamily] procare extraction failed:', err.message);
+    }
+  }
+  delete data._procareRows;
 
   // ---- Flashback (curated photos + live "other moments" from past calendar) ----
   const flashback = buildFlashback();
@@ -572,5 +684,5 @@ module.exports = {
   compileFamilyBriefingData,
   hasFamilyData,
   // exported for unit tests:
-  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts },
+  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, extractProcareItems },
 };

@@ -10,7 +10,7 @@
 
 const assert = require('node:assert');
 const { _internals, hasFamilyData } = require('./compileFamilyBriefingData');
-const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts } = _internals;
+const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction } = _internals;
 
 let passed = 0;
 function test(name, fn) {
@@ -187,6 +187,38 @@ test('buildCosts: returns labeled projection rows + summary', () => {
   assert.ok(/projected/i.test(c.intro));
   assert.strictEqual(c.rows.length, 2);
   assert.ok(c.summary.some(s => s.label === 'Due this week' && s.value === '$0'));
+});
+
+// ---- categorize: Jayse (3rd child) ----
+test('categorize: Jayse maps to its own key', () => {
+  assert.strictEqual(categorize('Jayse swim lesson').key, 'jayse');
+  assert.strictEqual(categorize('JAYSE checkup').label, 'Jayse');
+  // still distinguishes the other two
+  assert.strictEqual(categorize('Creed nap').key, 'creed');
+  assert.strictEqual(categorize('Addison game').key, 'addison');
+});
+
+// ---- Procare heuristic fallback extraction ----
+test('heuristicProcareItems: pulls announcement sentences, drops boilerplate', () => {
+  const rows = [{
+    subject: '(New) Office Chat from Liberty Private School',
+    body_text: "Hello Ali,\n\nYou've received a new Office Chat message (re: Creed Muwwakkil): \n\nGood Afternoon Parents! Ms. Brenda will be on vacation and will return on Monday. There will be Kona Ice on Thursday instead of an Ice Cream Party. Thursday is Jersey Day for FIFA Opening Day. You can reply in the Procare app.",
+  }];
+  const items = heuristicProcareItems(rows);
+  assert.ok(items.length >= 2, 'extracts multiple items');
+  assert.ok(items.every(i => i.ico === 'CRD'), 'tagged to Creed');
+  const titles = items.map(i => i.title).join(' | ');
+  assert.ok(/Ms\. Brenda/.test(titles), 'keeps teacher-out announcement');
+  assert.ok(/Jersey Day/.test(titles), 'keeps Jersey Day');
+  assert.ok(!/reply in the Procare/i.test(titles), 'drops app boilerplate');
+  assert.ok(!/Good Afternoon Parents/i.test(titles), 'drops greeting');
+});
+
+// ---- toCreedAction shape ----
+test('toCreedAction: maps extracted item to action shape with tone clamp', () => {
+  const a = toCreedAction({ title: 'Jersey Day', detail: 'wear a jersey', when: 'Thu Jun 11', tone: 'upcoming' });
+  assert.deepStrictEqual(a, { tone: 'upcoming', ico: 'CRD', title: 'Jersey Day', sub: 'wear a jersey', due: 'Thu Jun 11' });
+  assert.strictEqual(toCreedAction({ title: 'x', tone: 'bogus' }).tone, 'info');
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ', all green'}`);
