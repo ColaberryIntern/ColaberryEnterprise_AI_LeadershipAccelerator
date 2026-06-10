@@ -7,8 +7,11 @@
 //   - Google Calendar (service account, impersonating ali@colaberry.com):
 //       * Family calendar  -> today's family events, upcoming-week grid, travel cards
 //       * Work calendar    -> only events that COLLIDE with a family event (conflicts)
-//   - Gmail (OAuth as ali@colaberry.com, which receives the Hotmail/Procare forwards):
-//       * "New since yesterday" -> forwarded school/Procare + travel confirmations
+//   - inbox_emails DB table (already synced from all 3 mailboxes by inboxSyncService):
+//       * "New since yesterday" -> Procare/school Office Chat + daily summaries +
+//         travel confirmations. Sourced from the DB (NOT the live Gmail API) because
+//         the Gmail OAuth creds are shared with the prod inbox-sync and get rate-
+//         limited; the DB already holds every forwarded Procare/Hotmail message.
 //
 // FAILURE-FIRST design (per root CLAUDE.md):
 //   - Each source is wrapped independently. If a source throws or is unconfigured,
@@ -16,8 +19,9 @@
 //     A stale day's data can never be shown because nothing is baked in.
 //   - hasFamilyData() lets the caller refuse to send a content-less briefing rather
 //     than emailing Addie an empty shell.
-//   - Gmail creds are SHARED with the prod inbox-sync. We stay gentle: small
-//     maxResults, a single 429 backoff-retry, and read-only metadata/snippets only.
+//   - The daily script runs HOST-SIDE where Postgres' port is not published, so the
+//     inbox query goes through `docker exec <container> psql` (cron runs as root).
+//     Locally (no container) it throws and the New-Since section degrades cleanly.
 //
 // Time handling: the family lives in America/Chicago; the prod container is UTC.
 // All day-bucketing is computed against CT wall-clock, not server local time.
@@ -29,6 +33,8 @@
 // than crashing the whole send script at require-time. The send script runs host-side
 // via cron-env-wrapper.sh, where googleapis may not be resolvable up the tree.
 function gapi() { return require('googleapis').google; }
+
+const { execFileSync } = require('child_process');
 
 const TZ = 'America/Chicago';
 
@@ -100,17 +106,6 @@ function getCalendarClient() {
     subject,
   });
   return google.calendar({ version: 'v3', auth });
-}
-
-function getGmailClient() {
-  const clientId = process.env.GMAIL_CLIENT_ID;
-  const clientSecret = process.env.GMAIL_CLIENT_SECRET;
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) throw new Error('Gmail OAuth not configured');
-  const google = gapi();
-  const o = new google.auth.OAuth2(clientId, clientSecret);
-  o.setCredentials({ refresh_token: refreshToken });
-  return google.gmail({ version: 'v1', auth: o });
 }
 
 // --------------------------------------------------------------------------
@@ -264,69 +259,70 @@ function truncate(s, n) {
 }
 
 // --------------------------------------------------------------------------
-// Gmail reads
+// Inbox DB reads ("new since yesterday")
 // --------------------------------------------------------------------------
 
-function headerMap(msg) {
-  const h = {};
-  for (const x of (msg.payload && msg.payload.headers) || []) h[(x.name || '').toLowerCase()] = x.value || '';
-  return h;
+// Query the synced inbox_emails table for recent school/Procare + travel mail.
+// Runs through `docker exec <container> psql` because the daily script runs on the
+// host where Postgres' port is not published. Returns parsed rows; throws if the
+// container/psql is unavailable (e.g. local dev), which the caller degrades.
+function queryInboxEmails(windowHours) {
+  const container = process.env.FAMILY_DB_CONTAINER || 'accelerator-db';
+  const dbUser = process.env.PROD_DB_USER || 'accelerator';
+  const dbName = process.env.PROD_DB_NAME || 'accelerator_prod';
+  const sql = `
+    select coalesce(json_agg(row_to_json(t)), '[]') from (
+      select from_name, from_address, subject, left(body_text, 800) as body_text, received_at,
+        case
+          when subject ilike '%office chat%' or subject ilike '%daily summary%'
+            or from_address ilike '%procare%' or from_address ilike '%kinderlime%'
+            or from_address ilike '%primrose%' or from_address ilike '%liberty%' then 'School'
+          else 'Travel'
+        end as label
+      from inbox_emails
+      where received_at > now() - interval '${Number(windowHours)} hours'
+        and (
+          subject ilike '%office chat%' or subject ilike '%daily summary%'
+          or from_address ilike '%expedia%' or from_address ilike '%booking%'
+          or from_address ilike '%united%' or from_address ilike '%delta%'
+          or from_address ilike '%southwest%' or from_address ilike '%aa.com%'
+          or subject ilike '%itinerary%' or subject ilike '%reservation%'
+          or subject ilike '%booking confirmation%'
+        )
+        and subject not ilike '%was signed in%'
+        and subject not ilike '%was signed out%'
+      order by received_at desc
+      limit 12
+    ) t;`.replace(/\s+/g, ' ').trim();
+  const out = execFileSync('docker', ['exec', container, 'psql', '-U', dbUser, '-d', dbName, '-t', '-A', '-c', sql], { encoding: 'utf8', timeout: 20000 });
+  return JSON.parse((out || '').trim() || '[]');
 }
 
-async function gmailSearchGentle(gmail, q, maxResults = 8) {
-  const attempt = async () => {
-    const list = await gmail.users.messages.list({ userId: 'me', q, maxResults });
-    const out = [];
-    for (const m of list.data.messages || []) {
-      if (!m.id) continue;
-      const full = await gmail.users.messages.get({
-        userId: 'me', id: m.id, format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date'],
-      });
-      out.push(full.data);
-    }
-    return out;
-  };
-  try {
-    return await attempt();
-  } catch (err) {
-    if (String(err && err.message).toLowerCase().includes('rate')) {
-      await new Promise((r) => setTimeout(r, 3000));
-      return attempt(); // single backoff-retry; lets the caller's try/catch handle a 2nd failure
-    }
-    throw err;
-  }
+// Pull the meaningful message out of a Procare/Kinderlime Office Chat email body,
+// stripping the "Hello <name> ... You've received a new Office Chat message (...):"
+// boilerplate. For other mail, return a cleaned leading snippet.
+function cleanBody(bodyText) {
+  let b = String(bodyText || '');
+  const m = b.match(/Office Chat message\s*\([^)]*\):\s*([\s\S]+)/i);
+  if (m) b = m[1];
+  b = b.replace(/^\s*Kinderlime\s*/i, '').replace(/\s+/g, ' ').trim();
+  return b ? truncate(b, 240) : undefined;
 }
 
-// "New since yesterday": forwarded school/Procare + travel confirmations.
-async function buildNewSince(gmail) {
-  const queries = [
-    {
-      label: 'School',
-      q: '(from:procare OR from:procaresoftware.com OR from:primrose OR from:primrosewylie OR from:liberty OR subject:"Office Chat") newer_than:2d',
-    },
-    {
-      label: 'Travel',
-      q: '(from:expedia OR from:booking.com OR from:united.com OR from:delta.com OR from:southwest.com OR from:aa.com OR subject:(itinerary OR "booking confirmation" OR reservation)) newer_than:2d',
-    },
-  ];
+// "New since yesterday" from inbox_emails rows.
+function buildNewSince(rows) {
   const items = [];
-  const seen = new Set();
-  for (const { label, q } of queries) {
-    const msgs = await gmailSearchGentle(gmail, q, 8);
-    for (const m of msgs) {
-      if (seen.has(m.id)) continue;
-      seen.add(m.id);
-      const h = headerMap(m);
-      const from = (h.from || '').replace(/<[^>]*>/, '').replace(/"/g, '').trim() || h.from;
-      const when = h.date ? new Date(h.date).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
-      items.push({
-        label,
-        title: h.subject || '(no subject)',
-        src: `${from}${when ? ' . ' + when : ''}`,
-        quote: m.snippet ? truncate(m.snippet, 200) : undefined,
-      });
-    }
+  for (const r of (rows || [])) {
+    const from = (r.from_name || (r.from_address || '').replace(/<[^>]*>/, '')).trim();
+    const when = r.received_at
+      ? new Date(r.received_at).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : '';
+    items.push({
+      label: r.label || 'New',
+      title: r.subject || '(no subject)',
+      src: `${from}${when ? ' . ' + when : ''}`,
+      quote: cleanBody(r.body_text),
+    });
   }
   return items;
 }
@@ -425,16 +421,17 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     console.error('[compileFamily] calendar source failed:', err.message);
   }
 
-  // ---- Gmail (new since yesterday) ----
+  // ---- Inbox emails (new since yesterday): school/Procare + travel ----
   try {
-    const gmail = getGmailClient();
-    const newSince = await buildNewSince(gmail);
+    const windowHours = Number(process.env.FAMILY_NEWSINCE_HOURS || 30);
+    const rows = queryInboxEmails(windowHours);
+    const newSince = buildNewSince(rows);
     if (newSince.length) data.newSince = newSince;
-    sources.push('Gmail (ali@colaberry.com)');
+    sources.push('inbox_emails DB (school + travel)');
     data._newSinceCount = newSince.length;
   } catch (err) {
-    degraded.push('gmail');
-    console.error('[compileFamily] gmail source failed:', err.message);
+    degraded.push('inbox mail');
+    console.error('[compileFamily] inbox_emails source failed:', err.message);
   }
 
   // ---- Hero (derived) ----
@@ -459,5 +456,5 @@ module.exports = {
   compileFamilyBriefingData,
   hasFamilyData,
   // exported for unit tests:
-  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate },
+  _internals: { tzOffsetMs, ctDayBounds, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince },
 };

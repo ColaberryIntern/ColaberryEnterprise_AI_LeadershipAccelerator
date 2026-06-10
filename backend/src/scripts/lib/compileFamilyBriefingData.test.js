@@ -10,7 +10,7 @@
 
 const assert = require('node:assert');
 const { _internals, hasFamilyData } = require('./compileFamilyBriefingData');
-const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate } = _internals;
+const { categorize, buildToday, buildWeek, ctDayBounds, fmtCtTimeParts, truncate, cleanBody, buildNewSince } = _internals;
 
 let passed = 0;
 function test(name, fn) {
@@ -109,6 +109,39 @@ test('hasFamilyData: false on empty, true with any content', () => {
   assert.strictEqual(hasFamilyData({ today: { events: [] }, week: { days: [] } }), false);
   assert.strictEqual(hasFamilyData({ newSince: [{ title: 'x' }] }), true);
   assert.strictEqual(hasFamilyData({ today: { events: [{ title: 'x' }] } }), true);
+});
+
+// ---- cleanBody: extract Office Chat message from Procare boilerplate ----
+test('cleanBody: strips Kinderlime/Office-Chat boilerplate to the message', () => {
+  const body = "Kinderlime\n\nHello Ali Muwwakkil,\n\nYou've received a new Office Chat message (re: Creed Muwwakkil): \n\nGood Afternoon Parents! Ms. Brenda will be on vacation. Kona Ice Thursday.";
+  const out = cleanBody(body);
+  assert.ok(/Good Afternoon Parents/.test(out), 'keeps the real message');
+  assert.ok(!/Kinderlime/.test(out) && !/You've received/.test(out), 'drops boilerplate');
+});
+test('cleanBody: non-office-chat returns cleaned snippet; empty -> undefined', () => {
+  assert.strictEqual(cleanBody(''), undefined);
+  assert.strictEqual(cleanBody('   '), undefined);
+  assert.ok(/Itinerary/.test(cleanBody('Your trip   Itinerary   confirmed')));
+});
+
+// ---- buildNewSince: shapes DB rows into change-rows ----
+test('buildNewSince: maps inbox_emails rows to label/title/src/quote', () => {
+  const rows = [{
+    from_name: 'Liberty Private School', from_address: 'connect-notification@online.procaresoftware.com',
+    subject: '(New) Office Chat from Liberty Private School',
+    body_text: "Hello Ali,\n\nYou've received a new Office Chat message (re: Creed): Jersey Day Thursday!",
+    received_at: '2026-06-09T19:31:00Z', label: 'School',
+  }];
+  const items = buildNewSince(rows);
+  assert.strictEqual(items.length, 1);
+  assert.strictEqual(items[0].label, 'School');
+  assert.ok(/Office Chat/.test(items[0].title));
+  assert.ok(/Jersey Day Thursday/.test(items[0].quote));
+  assert.ok(/Liberty Private School/.test(items[0].src));
+});
+test('buildNewSince: empty/undefined rows -> empty array', () => {
+  assert.strictEqual(buildNewSince([]).length, 0);
+  assert.strictEqual(buildNewSince(undefined).length, 0);
 });
 
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ', all green'}`);
