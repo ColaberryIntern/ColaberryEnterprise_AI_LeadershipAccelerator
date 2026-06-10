@@ -52,6 +52,20 @@ export default function MissedOpportunitiesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Deep-link from the email's heat-map words: /admin/missed-opportunities?topic=foo
+  // opens that topic's trailing-24h drilldown on arrival. Runs once on mount;
+  // references only stable setters + module-scope helpers (no eslint-disable —
+  // the production build's eslint config rejects those comments).
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('topic');
+    if (!t) return;
+    setDrillLoading(true);
+    missedOpportunitiesApi.getTopic(t, todayCT())
+      .then(setDrill)
+      .catch(() => {})
+      .finally(() => setDrillLoading(false));
+  }, []);
+
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
   const openTopic = (topic: string) => {

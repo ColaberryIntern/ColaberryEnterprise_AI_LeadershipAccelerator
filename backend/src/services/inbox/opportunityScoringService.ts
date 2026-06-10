@@ -15,6 +15,17 @@ import type { ScoreFactor, ScoreTopic, OpportunityBand } from '../../models/Inbo
 
 export const HIDDEN_STATES = ['AUTOMATION', 'SILENT_HOLD', 'ASK_USER'] as const;
 
+// Mail that ALWAYS reaches Ali's Inbox and therefore can never be "missed":
+// his own address (the Inbox COS notifier also sends as ali@colaberry.com) and
+// the self-generated "Opportunity Pulse" digests. Excluding them keeps the
+// report on its real target — external mail that LOOKS like spam but isn't.
+// Shared by every query that defines the report's candidate universe (scoring,
+// list read, and the window counts) so the three never drift. Assumes the
+// joined email table is aliased `e`.
+export const SELF_INBOX_EXCLUSION_SQL = `lower(e.from_address) <> 'ali@colaberry.com'
+        AND lower(coalesce(e.from_name, '')) NOT LIKE '%inbox cos%'
+        AND lower(coalesce(e.subject, '')) NOT LIKE '%opportunity pulse%'`;
+
 // ── Strategic keyword vocabulary (weight per category) ───────────────────
 // Presence in subject or body is a strong "Ali would care" signal.
 const KEYWORD_GROUPS: Array<{ label: string; points: number; terms: string[] }> = [
@@ -275,7 +286,8 @@ export async function scoreHiddenEmailsForDate(reportDate: string, rolling = fal
        FROM inbox_emails e
        JOIN inbox_classifications c ON c.email_id = e.id
       WHERE c.state IN ('AUTOMATION', 'SILENT_HOLD', 'ASK_USER')
-        AND ${windowClause}`,
+        AND ${windowClause}
+        AND ${SELF_INBOX_EXCLUSION_SQL}`,
     { type: QueryTypes.SELECT, replacements: { reportDate } },
   );
 

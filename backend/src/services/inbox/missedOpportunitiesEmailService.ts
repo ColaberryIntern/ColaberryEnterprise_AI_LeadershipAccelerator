@@ -44,18 +44,24 @@ function fmtDate(iso: string): string {
 }
 
 // Attention heat-map as colored word chips: size = frequency, color = band,
-// opacity = classification confidence. (Email clients can't run a JS canvas,
-// so the word cloud is rendered as inline-styled spans.)
-function heatMapHtml(words: HeatMapWord[]): string {
+// opacity = classification confidence. Each word is a link into the admin
+// page's topic drilldown (trailing-24h), so a click "searches" that topic's
+// hidden emails. (Email clients can't run a JS canvas, so the word cloud is
+// rendered as inline-styled anchors.)
+function heatMapHtml(words: HeatMapWord[], baseUrl: string): string {
   if (!words.length) return `<p style="color:#64748b;font-style:italic">No hidden topics today.</p>`;
+  const root = baseUrl.replace(/\/$/, '');
   const maxFreq = Math.max(...words.map((w) => w.frequency));
   const chips = words.slice(0, 24).map((w) => {
     const size = 13 + Math.round((w.frequency / maxFreq) * 15); // 13-28px
-    const opacity = Math.max(0.55, Math.min(1, w.avgConfidence / 100));
-    return `<span style="display:inline-block;margin:3px 6px;font-size:${size}px;font-weight:700;color:${BAND_COLOR[w.band]};opacity:${opacity.toFixed(2)}">${esc(w.topic)}</span>`;
+    // Floor raised to 0.82 so low-confidence words stay legibly colored on the
+    // dark panel (at 0.55 the green/amber washed toward gray).
+    const opacity = Math.max(0.82, Math.min(1, w.avgConfidence / 100));
+    const href = `${root}/admin/missed-opportunities?topic=${encodeURIComponent(w.topic)}`;
+    return `<a href="${href}" style="display:inline-block;margin:3px 6px;font-size:${size}px;font-weight:700;color:${BAND_COLOR[w.band]};opacity:${opacity.toFixed(2)};text-decoration:none">${esc(w.topic)}</a>`;
   }).join('');
   return `<div style="background:#0f172a;border-radius:10px;padding:18px 16px;text-align:center;line-height:1.9">${chips}</div>
-    <div style="font-size:11px;color:#64748b;margin-top:8px;text-align:center">Size = volume · Color = opportunity (green high, amber medium, gray low) · Opacity = filter confidence</div>`;
+    <div style="font-size:11px;color:#64748b;margin-top:8px;text-align:center">Size = volume · Color = opportunity (green high, amber medium, gray low) · Click a word to see those emails from the last 24 hours</div>`;
 }
 
 function missedRowsHtml(rows: MissedEmailRow[]): string {
@@ -115,7 +121,7 @@ export function buildReportHtml(report: MissedOpportunitiesReport, baseUrl: stri
     </div>
 
     <h2 style="font-size:17px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin:8px 0 12px">Attention Blind-Spot Heat Map</h2>
-    ${heatMapHtml(report.heatMap)}
+    ${heatMapHtml(report.heatMap, baseUrl)}
 
     <h2 style="font-size:17px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin:28px 0 6px">Top Hidden Themes</h2>
     <div style="margin:10px 0 4px">${themes}</div>

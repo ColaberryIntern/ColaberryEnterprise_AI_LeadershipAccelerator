@@ -15,7 +15,7 @@ import {
   InboxEmail,
 } from '../../models';
 import type { ScoreFactor, ScoreTopic } from '../../models/InboxOpportunityScore';
-import { scoreHiddenEmailsForDate, reportDateCT } from './opportunityScoringService';
+import { scoreHiddenEmailsForDate, reportDateCT, SELF_INBOX_EXCLUSION_SQL } from './opportunityScoringService';
 import type { FalseNegativeAction, FalseNegativeSource } from '../../models/InboxFalseNegativeFeedback';
 import type { SurfacePatternType } from '../../models/InboxSurfacePreference';
 
@@ -109,6 +109,7 @@ async function fetchScoredRows(reportDate: string, rolling = false): Promise<Sco
        FROM inbox_opportunity_scores s
        JOIN inbox_emails e ON e.id = s.email_id
       WHERE s.report_date = :reportDate ${windowClause}
+        AND ${SELF_INBOX_EXCLUSION_SQL}
       ORDER BY s.score DESC`,
     { type: QueryTypes.SELECT, replacements: { reportDate } },
   );
@@ -134,13 +135,14 @@ function toMissedRow(r: ScoreJoinRow): MissedEmailRow {
 
 function buildHeatMap(rows: ScoreJoinRow[]): HeatMapWord[] {
   const now = Date.now();
-  const acc = new Map<string, { freq: number; scoreSum: number; ageSum: number; confSum: number; n: number }>();
+  const acc = new Map<string, { freq: number; scoreSum: number; maxScore: number; ageSum: number; confSum: number; n: number }>();
   for (const r of rows) {
     const ageHours = Math.max(0, (now - new Date(r.received_at).getTime()) / 3_600_000);
     for (const t of r.topics || []) {
-      const cur = acc.get(t.topic) || { freq: 0, scoreSum: 0, ageSum: 0, confSum: 0, n: 0 };
+      const cur = acc.get(t.topic) || { freq: 0, scoreSum: 0, maxScore: 0, ageSum: 0, confSum: 0, n: 0 };
       cur.freq += t.weight;
       cur.scoreSum += r.score;
+      cur.maxScore = Math.max(cur.maxScore, r.score);
       cur.ageSum += ageHours;
       cur.confSum += r.confidence;
       cur.n += 1;
@@ -154,7 +156,11 @@ function buildHeatMap(rows: ScoreJoinRow[]): HeatMapWord[] {
         topic,
         frequency: a.freq,
         avgScore,
-        band: bandOf(avgScore),
+        // Color encodes the STRONGEST opportunity wearing this topic, not the
+        // average. A blind-spot heat map should light up green/amber wherever a
+        // high-value email is hiding; averaging across many low-score emails
+        // dragged every word into the gray "low" band (the bug Ali reported).
+        band: bandOf(a.maxScore),
         avgAgeHours: Math.round(a.ageSum / a.n),
         avgConfidence: Math.round(a.confSum / a.n),
       };
@@ -184,7 +190,8 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
         COUNT(*) FILTER (WHERE c.state = 'INBOX') AS inbox
        FROM inbox_emails e
        JOIN inbox_classifications c ON c.email_id = e.id
-      WHERE ${countWindow}`,
+      WHERE ${countWindow}
+        AND ${SELF_INBOX_EXCLUSION_SQL}`,
     { type: QueryTypes.SELECT, replacements: { reportDate: date } },
   );
 
