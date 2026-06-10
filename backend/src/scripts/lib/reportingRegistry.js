@@ -158,7 +158,7 @@ const REPORTS = [
     args: [],
     projectId: null, // CCPP-based (vw_ColaberryInterviewPreparation_UpcomingInterviews)
     needsOpenai: false,
-    recipients: STANDARD_RECIPIENTS,
+    recipients: { to: 'ali@colaberry.com', cc: [] }, // Ali only (per Ali 2026-06-10: "just me"); single address, no duplicate copies
     cbRunnerState: null,
     skipFlag: '--skip-interview-prep',
     cadence: 'daily',
@@ -176,7 +176,7 @@ const REPORTS = [
     skipFlag: '--skip-interview-nudges',
     cadence: 'daily',
     sendCT: '05:30',  // right after the report; NO-OP in preview (report carries the plan), sends students when mode=live
-    description: 'Student-facing interview-prep nudges. Sends ONE combined email per person (de-duplicated across all their interviews + IPBC accounts). PREVIEW (default) = sends nothing; the report shows the plan. Flip tmp/ops-engine/interview-prep-nudge-mode.txt to "live" to start emailing students. When live it also sends Ali a send-confirmation.',
+    description: 'Student-facing interview-prep nudges. Sends ONE combined email per person (de-duplicated across all their interviews + IPBC accounts). PREVIEW = sends nothing (the report shows the plan). LIVE (mode file = "live") = emails students only; no separate Ali confirmation (the report carries the plan; failures surface via the reporting audit). Mode: tmp/ops-engine/interview-prep-nudge-mode.txt.',
   },
   // ---- Cohort training report ----
   {

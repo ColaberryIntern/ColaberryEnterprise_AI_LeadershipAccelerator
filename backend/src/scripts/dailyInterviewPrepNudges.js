@@ -40,8 +40,6 @@ const FIXTURE = argFix ? argFix.slice('--fixture='.length) : null;
 
 const MODE_FILE = path.resolve(__dirname, '../../../tmp/ops-engine/interview-prep-nudge-mode.txt');
 const STATE_FILE = path.resolve(__dirname, '../../../tmp/ops-engine/interview-prep-nudge-state.json');
-const DIGEST_TO = ['ali@colaberry.com'];
-const DIGEST_CC = ['alimuwwakkil@gmail.com'];
 
 function readMode() {
   try { return fs.readFileSync(MODE_FILE, 'utf-8').trim().toLowerCase() === 'live' ? 'live' : 'preview'; }
@@ -134,8 +132,12 @@ async function main() {
     state[person.key] = { lastBeatSig: combined.beatSig, lastDate: today, sentTo: tos, name: person.name };
   }
   writeState(state);
-  if (sent.length) await sendConfirmation(sent, today);
-  console.log(`[InterviewPrepNudges] LIVE: sent ${sent.length} combined person email(s)`);
+  // No separate Ali confirmation email: the daily Interview Prep report already
+  // shows Ali the plan, and a second "we sent it" note would duplicate his inbox
+  // (per Ali's de-dup rule, 2026-06-10). Failures still surface via the reporting
+  // audit, which emails Ali on any non-zero exit from this script.
+  for (const s of sent) console.log(`[InterviewPrepNudges] LIVE sent -> ${s.name} (${s.to.join(', ')}) [${s.beats.join(',')}]`);
+  console.log(`[InterviewPrepNudges] LIVE: sent ${sent.length} combined person email(s); no Ali confirmation (report carries the plan)`);
 }
 
 async function sendStudent(tos, combined) {
@@ -146,28 +148,6 @@ async function sendStudent(tos, combined) {
     subject: combined.subject.replace(/—/g, '-'), html, text, headers: { 'X-MC-Track': 'opens,clicks' },
   });
   console.log(`[InterviewPrepNudges] sent -> ${tos.join(', ')} [${combined.beats.join(',')}] (${r.messageId})`);
-}
-
-async function sendConfirmation(sent, today) {
-  const rows = sent.map((s) => `<tr style="border-bottom:1px solid #e5e7eb;">
-    <td style="padding:6px 9px;font-size:13px;"><b>${esc(s.name)}</b></td>
-    <td style="padding:6px 9px;font-size:12px;">${esc(s.to.join(', '))}</td>
-    <td style="padding:6px 9px;font-size:12px;text-align:center;">${esc(s.beats.join(', '))}</td>
-    <td style="padding:6px 9px;font-size:12px;color:#374151;">${esc(s.subject)}</td></tr>`).join('');
-  const html = `<div style="font-family:Arial,sans-serif;color:#1f2937;max-width:760px;">
-    <h2 style="color:#0f1729;">Interview Prep Nudges - LIVE: ${sent.length} student email(s) sent ${today}</h2>
-    <p style="color:#6b7280;font-size:13px;">One combined email per student (de-duplicated across their interviews + accounts).</p>
-    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e5e7eb;border-collapse:collapse;">
-      <tr style="background:#f4f6fa;"><td style="padding:6px 9px;font-size:11px;font-weight:700;color:#6b7280;">Student</td>
-      <td style="padding:6px 9px;font-size:11px;font-weight:700;color:#6b7280;">Sent to</td>
-      <td style="padding:6px 9px;font-size:11px;font-weight:700;color:#6b7280;text-align:center;">Beats</td>
-      <td style="padding:6px 9px;font-size:11px;font-weight:700;color:#6b7280;">Subject</td></tr>${rows}</table></div>`.replace(/—/g, '-');
-  const r = await transport().sendMail({
-    from: '"Ali Muwwakkil" <ali@colaberry.com>', to: DIGEST_TO.join(', '), cc: DIGEST_CC.join(', '),
-    subject: `[Interview Prep Nudges] LIVE - ${sent.length} student email(s) sent`,
-    html, text: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), headers: { 'X-MC-Track': 'none' },
-  });
-  console.log(`[InterviewPrepNudges] confirmation -> Ali (${r.messageId})`);
 }
 
 // preview artifact (dry only) — shows what WOULD go out, de-duplicated

@@ -290,7 +290,7 @@ function nudgePlanBlock(plan, mode) {
     return panel('Today’s Student Nudges', `<div style="font-size:13px;color:${MUTE};">No student nudges due today.</div>`);
   }
   const modePill = mode === 'live'
-    ? pill('LIVE · students emailed', GREEN, '#fff')
+    ? pill('LIVE · sending to students', GREEN, '#fff')
     : pill('PREVIEW · not sent', AMBER, '#fff');
   const rows = plan.map((x) => {
     const p = x.person; const c = x.combined;
@@ -303,7 +303,7 @@ function nudgePlanBlock(plan, mode) {
   }).join('');
   return panel(`📣 Today’s Student Nudges — ${plan.length} combined email${plan.length === 1 ? '' : 's'} ${''}`, `
     <div style="font-size:13px;color:${INK};line-height:1.6;margin-bottom:10px;">
-      ${modePill} &nbsp;One email per student, de-duplicated across every interview and IPBC account they have (no student gets a separate message per interview). ${mode === 'live' ? 'These were emailed to students today.' : 'In preview nothing is sent; flip the nudge engine to live to start sending these.'}
+      ${modePill} &nbsp;One email per student, de-duplicated across every interview and IPBC account they have (no student gets a separate message per interview). ${mode === 'live' ? 'These go out to students this morning right after this report.' : 'In preview nothing is sent; flip the nudge engine to live to start sending these.'}
     </div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
       <tr style="background:${PANEL};">
