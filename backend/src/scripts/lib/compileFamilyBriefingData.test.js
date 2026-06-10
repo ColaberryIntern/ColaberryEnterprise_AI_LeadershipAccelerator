@@ -10,7 +10,7 @@
 
 const assert = require('node:assert');
 const { _internals, hasFamilyData } = require('./compileFamilyBriefingData');
-const { categorize, buildToday, buildWeek, ctDayBounds, ctDateISO, parseDayToISO, shortLabel, fmtCtTimeParts, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, validGridDate, itemsToActionsAndGrid, dedupeActions, conflictGrid } = _internals;
+const { categorize, detectCreedConflicts, buildTodaySnapshot, buildWeek, ctDayBounds, ctDateISO, parseDayToISO, shortLabel, fmtCtTimeParts, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, validGridDate, itemsToActionsAndGrid, dedupeActions, conflictGrid } = _internals;
 
 let passed = 0;
 function test(name, fn) {
@@ -34,37 +34,51 @@ test('categorize: unknown -> neutral/Family', () => {
   assert.strictEqual(c.label, 'Family');
 });
 
-// ---- buildToday: cross-calendar conflict detection ----
-test('buildToday: flags a family event overlapping a timed work event', () => {
-  const family = [{ summary: 'Addison ortho', start: '2026-06-10T20:00:00Z', end: '2026-06-10T21:00:00Z', allDay: false }];
+// ---- detectCreedConflicts: work conflicts only for Creed, never work rows ----
+test('detectCreedConflicts: flags a CREED event overlapping Ali work', () => {
+  const family = [{ summary: 'Creed pickup', start: '2026-06-10T20:00:00Z', end: '2026-06-10T21:00:00Z', allDay: false }];
   const work = [{ summary: 'AegisFX call', start: '2026-06-10T20:00:00Z', end: '2026-06-10T20:30:00Z', allDay: false }];
-  const { events, conflicts } = buildToday(family, work);
+  const conflicts = detectCreedConflicts(family, work);
   assert.strictEqual(conflicts.length, 1);
-  // family event flagged + a "work (conflict only)" row appended
-  assert.strictEqual(events.length, 2);
-  assert.strictEqual(events[0].conflict, true);
-  assert.strictEqual(events[1].categoryColorKey, 'work');
+  assert.strictEqual(conflicts[0].work.summary, 'AegisFX call');
 });
-test('buildToday: no conflict when work event does not overlap', () => {
+test('detectCreedConflicts: Addison/Jayse overlap with work is NOT a family conflict', () => {
+  const work = [{ summary: 'Colaberry.AI', start: '2026-06-10T20:00:00Z', end: '2026-06-10T21:00:00Z', allDay: false }];
+  assert.strictEqual(detectCreedConflicts([{ summary: 'Addison ortho appt', start: '2026-06-10T20:00:00Z', end: '2026-06-10T21:00:00Z', allDay: false }], work).length, 0);
+  assert.strictEqual(detectCreedConflicts([{ summary: 'Jayse swim', start: '2026-06-10T20:00:00Z', end: '2026-06-10T21:00:00Z', allDay: false }], work).length, 0);
+});
+test('detectCreedConflicts: no conflict when Creed event does not overlap', () => {
   const family = [{ summary: 'Creed soccer', start: '2026-06-10T22:00:00Z', end: '2026-06-10T23:00:00Z', allDay: false }];
   const work = [{ summary: 'Standup', start: '2026-06-10T14:00:00Z', end: '2026-06-10T14:30:00Z', allDay: false }];
-  const { events, conflicts } = buildToday(family, work);
-  assert.strictEqual(conflicts.length, 0);
+  assert.strictEqual(detectCreedConflicts(family, work).length, 0);
+});
+
+// ---- buildTodaySnapshot: time-sorted, Daily for no-time, no work rows ----
+test('buildTodaySnapshot: sorts by time, all-day first as Daily, includes extras', () => {
+  const now = new Date('2026-06-10T17:00:00Z');
+  const todayISO = ctDateISO(now);
+  const family = [
+    { summary: 'Sand VB Addison', start: '2026-06-10T23:00:00Z', end: '2026-06-11T00:00:00Z', allDay: false }, // 6pm CT
+    { summary: 'Addison ortho appt', start: '2026-06-10T17:30:00Z', end: '2026-06-10T18:30:00Z', allDay: false }, // 12:30pm CT
+  ];
+  const extras = [{ dateISO: todayISO, colorKey: 'creed', label: 'Kona Ice' }, { dateISO: todayISO, colorKey: 'action', label: '! conflict' }];
+  const { events } = buildTodaySnapshot(now, family, [], extras);
+  // Daily (Kona Ice) first, then ortho 12:30, then VB 6:00. Conflict marker excluded.
+  assert.strictEqual(events.length, 3, 'no work rows, conflict marker not a row');
+  assert.strictEqual(events[0].time, 'Daily');
+  assert.strictEqual(events[0].title, 'Kona Ice');
+  assert.strictEqual(events[1].title, 'Addison ortho appt');
+  assert.strictEqual(events[2].title, 'Sand VB Addison');
+  assert.ok(events.every(e => e.categoryColorKey !== 'work'), 'never a work row');
+});
+test('buildTodaySnapshot: Creed conflict adds a coverage note, not a separate row', () => {
+  const now = new Date('2026-06-10T17:00:00Z');
+  const family = [{ summary: 'Creed pickup', start: '2026-06-10T20:00:00Z', end: '2026-06-10T21:00:00Z', allDay: false }];
+  const conflicts = [{ family: family[0], work: { summary: 'AegisFX call' } }];
+  const { events } = buildTodaySnapshot(now, family, conflicts, []);
   assert.strictEqual(events.length, 1);
-  assert.strictEqual(events[0].conflict, false);
-});
-test('buildToday: all-day family events never conflict and render as All day', () => {
-  const family = [{ summary: 'Nashville trip', start: '2026-06-10', end: '2026-06-11', allDay: true }];
-  const work = [{ summary: 'Call', start: '2026-06-10T15:00:00Z', end: '2026-06-10T15:30:00Z', allDay: false }];
-  const { events, conflicts } = buildToday(family, work);
-  assert.strictEqual(conflicts.length, 0);
-  assert.strictEqual(events[0].time, 'All');
-  assert.strictEqual(events[0].ampm, 'day');
-});
-test('buildToday: empty family list -> empty events', () => {
-  const { events, conflicts } = buildToday([], [{ summary: 'x', start: '2026-06-10T15:00:00Z', end: '2026-06-10T16:00:00Z', allDay: false }]);
-  assert.strictEqual(events.length, 0);
-  assert.strictEqual(conflicts.length, 0);
+  assert.strictEqual(events[0].conflict, true);
+  assert.ok(/coverage/.test(events[0].meta));
 });
 
 // ---- ctDayBounds: 24h windows, ordered, day offset ----

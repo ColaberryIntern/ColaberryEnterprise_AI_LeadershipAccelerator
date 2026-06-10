@@ -149,46 +149,64 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && bStart < aEnd;
 }
 
-// Build today's snapshot from family events, flagging any that collide with a
-// timed work event. Returns { events, conflicts:[{family, work}] }.
-function buildToday(familyToday, workToday) {
-  const conflicts = [];
-  const timedWork = workToday.filter((w) => !w.allDay && w.start && w.end);
+const CHILD_LABELS = { creed: 'Creed', addison: 'Addison', jayse: 'Jayse', travel: 'Travel', parents: 'Parents' };
+function labelForKey(key) { return CHILD_LABELS[key] || 'Family'; }
 
-  const events = familyToday.map((ev) => {
-    const cat = categorize(ev.summary);
-    let conflict = null;
-    if (!ev.allDay && ev.start && ev.end) {
-      const fS = new Date(ev.start), fE = new Date(ev.end);
-      for (const w of timedWork) {
-        if (overlaps(fS, fE, new Date(w.start), new Date(w.end))) { conflict = w; break; }
-      }
+// Minutes-since-CT-midnight for sorting timed events; all-day -> -1 (sorts first).
+function ctMinutes(iso, allDay) {
+  if (allDay) return -1;
+  const s = new Date(iso).toLocaleTimeString('en-US', { timeZone: TZ, hour12: false, hour: '2-digit', minute: '2-digit' });
+  const [h, m] = s.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+// Work-schedule conflicts only matter for CREED (the young one Ali must cover).
+// Returns [{ family, work }] — pure work events are never surfaced as family rows.
+function detectCreedConflicts(familyToday, workToday) {
+  const timedWork = (workToday || []).filter((w) => !w.allDay && w.start && w.end);
+  const conflicts = [];
+  for (const ev of (familyToday || [])) {
+    if (categorize(ev.summary).key !== 'creed') continue;   // only Creed
+    if (ev.allDay || !ev.start || !ev.end) continue;
+    const fS = new Date(ev.start), fE = new Date(ev.end);
+    for (const w of timedWork) {
+      if (overlaps(fS, fE, new Date(w.start), new Date(w.end))) { conflicts.push({ family: ev, work: w }); break; }
     }
-    if (conflict) conflicts.push({ family: ev, work: conflict });
-    const t = ev.allDay ? { time: 'All', ampm: 'day' } : fmtCtTimeParts(ev.start);
-    return {
+  }
+  return conflicts;
+}
+
+// Section 1: every family item today (calendar events + Procare/travel for today),
+// sorted by time. All-day / no-time items render as "Daily". No work-only rows.
+function buildTodaySnapshot(now, familyToday, conflicts, todayExtras) {
+  const confFor = (ev) => conflicts.find((c) => c.family.summary === ev.summary && c.family.start === ev.start);
+  const rows = [];
+  for (const ev of (familyToday || [])) {
+    const cat = categorize(ev.summary);
+    const allDay = ev.allDay || !String(ev.start).includes('T');
+    const conf = confFor(ev);
+    const t = allDay ? { time: 'Daily', ampm: '' } : fmtCtTimeParts(ev.start);
+    rows.push({
+      sortMin: ctMinutes(ev.start, allDay),
       time: t.time, ampm: t.ampm,
       category: cat.label, categoryColorKey: cat.key,
       title: ev.summary,
-      meta: ev.location || undefined,
+      meta: conf ? `overlaps your work (${truncate(conf.work.summary, 28)}) — you'll need coverage` : (ev.location || undefined),
       href: ev.htmlLink || undefined,
-      conflict: !!conflict,
-    };
-  });
-
-  // Append the conflicting work events as muted "work (conflict only)" rows.
-  for (const c of conflicts) {
-    const t = fmtCtTimeParts(c.work.start);
-    events.push({
-      time: t.time, ampm: t.ampm,
-      category: 'Work (conflict only)', categoryColorKey: 'work',
-      title: c.work.summary,
-      meta: 'overlaps a family event above',
-      href: c.work.htmlLink || undefined,
-      conflict: true,
+      conflict: !!conf,
     });
   }
-  return { events, conflicts };
+  // Procare/travel items for today (no clock time) -> Daily events.
+  for (const x of (todayExtras || [])) {
+    if (x.colorKey === 'action') continue; // conflict markers are not their own row
+    rows.push({
+      sortMin: -1, time: 'Daily', ampm: '',
+      category: labelForKey(x.colorKey), categoryColorKey: x.colorKey,
+      title: x.label, conflict: false,
+    });
+  }
+  rows.sort((a, b) => a.sortMin - b.sortMin);
+  return { events: rows };
 }
 
 // CT calendar date (YYYY-MM-DD) for a UTC instant — used to place dated extras.
@@ -796,8 +814,9 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
       catch (e) { degraded.push('work calendar'); }
     }
 
-    todayBlock = buildToday(familyToday, workToday);
-    data.today = { events: todayBlock.events };
+    // Conflicts are Creed-only; Section 1 itself is built later (needs today's extras).
+    const conflicts = detectCreedConflicts(familyToday, workToday);
+    todayBlock = { events: [], conflicts, familyToday };
     data._familyWeek = familyWeek; // week grid is built later, after extraction extras
     const travel = buildTravel(now, familyHorizon);
     if (travel.cards.length) data.travel = travel;
@@ -861,6 +880,14 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     delete data._familyWeek;
   }
 
+  // ---- Section 1: today's snapshot (calendar + today's Procare/travel), time-sorted ----
+  if (todayBlock.familyToday) {
+    const todayISO = ctDateISO(now);
+    const todayExtras = gridExtras.filter((x) => x.dateISO === todayISO);
+    data.today = buildTodaySnapshot(now, todayBlock.familyToday, todayBlock.conflicts, todayExtras);
+    todayBlock.events = data.today.events;
+  }
+
   // ---- Flashback (curated photos + live "other moments" from past calendar) ----
   const flashback = buildFlashback();
   const moments = buildMoments(now, data._pastEvents || []);
@@ -893,5 +920,5 @@ module.exports = {
   compileFamilyBriefingData,
   hasFamilyData,
   // exported for unit tests:
-  _internals: { tzOffsetMs, ctDayBounds, ctDateISO, ctWeekdayNum, parseDayToISO, shortLabel, fmtCtTimeParts, categorize, buildToday, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, toAction, validGridDate, itemsToActionsAndGrid, extractProcareItems, dedupeActions, conflictGrid },
+  _internals: { tzOffsetMs, ctDayBounds, ctDateISO, ctWeekdayNum, ctMinutes, parseDayToISO, shortLabel, fmtCtTimeParts, categorize, detectCreedConflicts, buildTodaySnapshot, buildWeek, buildTravel, buildHero, truncate, cleanBody, buildNewSince, isPromoTravel, buildRecap, buildMoments, buildCosts, heuristicProcareItems, toCreedAction, toAction, validGridDate, itemsToActionsAndGrid, extractProcareItems, dedupeActions, conflictGrid },
 };

@@ -219,7 +219,7 @@ function timelineRow({ time, ampm, chips, title, meta, href, conflict }) {
 
 function renderSection1Today(d, data) {
   let out = sectionOpen("Section 1 . Today's Snapshot");
-  out += hTitle(`${d.dayName} - what affects the family`, 'Work calendar is hidden unless it conflicts with a family event. Click any row to open the event.');
+  out += hTitle(`${d.dayName} - what affects the family`, "Everything on the family calendar today, in time order. \"Daily\" = no set time. A conflict flags when your work overlaps something only Creed needs you for.");
   const events = (data.today && Array.isArray(data.today.events)) ? data.today.events : [];
   if (!events.length) {
     out += emptyState('No family events on the calendar for today.');
