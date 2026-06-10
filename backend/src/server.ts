@@ -401,6 +401,72 @@ async function ensureCampaignLinkColumns() {
   console.log('[DB] Campaign link registry columns ensured');
 }
 
+// Missed Opportunities Report schema — explicit idempotent creation because
+// alter sync is unreliable on prod (hits pre-existing index conflicts and
+// never reaches new models). Mirrors the Sequelize models in
+// InboxOpportunityScore / InboxFalseNegativeFeedback / InboxSurfacePreference.
+async function ensureMissedOpportunitiesSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS inbox_opportunity_scores (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       email_id UUID NOT NULL REFERENCES inbox_emails(id),
+       report_date DATE NOT NULL,
+       score INTEGER NOT NULL DEFAULT 0,
+       band VARCHAR(10) NOT NULL DEFAULT 'low',
+       confidence INTEGER NOT NULL DEFAULT 0,
+       reason_hidden TEXT,
+       hidden_state VARCHAR(20) NOT NULL,
+       factors JSONB NOT NULL DEFAULT '[]'::jsonb,
+       topics JSONB NOT NULL DEFAULT '[]'::jsonb,
+       computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_opp_scores_email_date
+       ON inbox_opportunity_scores(email_id, report_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_opp_scores_report_date
+       ON inbox_opportunity_scores(report_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_opp_scores_score
+       ON inbox_opportunity_scores(score)`,
+    `CREATE TABLE IF NOT EXISTS inbox_false_negative_feedback (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       email_id UUID NOT NULL REFERENCES inbox_emails(id),
+       action VARCHAR(30) NOT NULL,
+       source VARCHAR(20) NOT NULL DEFAULT 'report',
+       score_at_feedback INTEGER,
+       created_by VARCHAR(120),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_fn_feedback_email_id
+       ON inbox_false_negative_feedback(email_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_fn_feedback_action
+       ON inbox_false_negative_feedback(action)`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_fn_feedback_created_at
+       ON inbox_false_negative_feedback(created_at)`,
+    `CREATE TABLE IF NOT EXISTS inbox_surface_preferences (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       pattern_type VARCHAR(10) NOT NULL,
+       pattern_value VARCHAR(255) NOT NULL,
+       source_email_id UUID,
+       enabled BOOLEAN NOT NULL DEFAULT true,
+       created_by VARCHAR(120),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_surface_pref_pattern
+       ON inbox_surface_preferences(pattern_type, pattern_value)`,
+    `CREATE INDEX IF NOT EXISTS idx_inbox_surface_pref_enabled
+       ON inbox_surface_preferences(enabled)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure Missed Opportunities schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Missed Opportunities schema ensured');
+}
+
 async function start(): Promise<void> {
   // Ensure uploads directory exists
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -429,6 +495,8 @@ async function start(): Promise<void> {
   // Ops Command Center schema — explicit creation because alter sync hits
   // pre-existing index conflicts elsewhere and never reaches the ops_* models.
   await ensureOpsCommandCenterSchema();
+  // Missed Opportunities Report schema (idempotent, before alter sync).
+  await ensureMissedOpportunitiesSchema();
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');
@@ -449,6 +517,12 @@ async function start(): Promise<void> {
   }
   await ensureCampaignLinkColumns();
   await ensureCommunicationIndexes();
+  try {
+    const { seedMissedOpportunitiesReport } = await import('./seeds/seedMissedOpportunitiesReport');
+    await seedMissedOpportunitiesReport();
+  } catch (err: any) {
+    console.warn('[Seed] Missed Opportunities Report registration failed:', err?.message);
+  }
   await seedProgramCurriculum();
   await seedDepartments();
   await seedCurriculumTypeDefinitions();
