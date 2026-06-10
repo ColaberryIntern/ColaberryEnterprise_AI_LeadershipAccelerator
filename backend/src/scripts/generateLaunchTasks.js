@@ -76,7 +76,11 @@ const AREA_CONFIG = {
   'Open Houses & Events': { suggestedOwnerBrief: 'jackie-events', sections: ['3\\.10 Architect Expo'], extra: [] },
   'Sales & Admissions': { suggestedOwnerBrief: 'roselen-sales', sections: ['3\\.8 Project Marketplace', '3\\.11 Pricing'], extra: ['## 4. Team structure'] },
   'TWC Compliance': { suggestedOwnerBrief: 'swati-curriculum-twc', sections: ['3\\.12 TWC compliance'], extra: ['## 2. Curriculum structure'] },
-  'Approval Queues': { suggestedOwnerBrief: 'ali-decisions', sections: [], extra: ['## 6. Open decisions', '## 11. Decisions I made on Ali'] },
+  // NOTE: no 'Approval Queues' area. Oversight approvals are generated IN each
+  // functional area as a "Review and approve X" gate bound to its producing
+  // task (per the 2026-06-10 assessment). A separate approval area only produced
+  // a parallel list of orphaned/duplicate approvals; it was retired and must not
+  // be regenerated. Do not re-add this key.
   'Launch Readiness Dashboard': { suggestedOwnerBrief: 'cb-pmo-contract', sections: [], extra: ['## 5. The 41-day plan', '## 10. Risks'] },
 };
 
