@@ -40,6 +40,14 @@ scripts/.demo_portal_token.txt
 scripts/.demo_onboarding_runs.json
 scripts/.demo_login_urls.txt
 
+# OAuth / API token dumps written to the repo root by helper scripts — NEVER
+# COMMIT (live access/refresh tokens). These are one `git add .` from leaking.
+*_token.txt
+*_token.json
+colaberry_token.txt
+latest_token.txt
+hotmail_device_code.txt
+
 # Personal finance documents - NEVER COMMIT (sensitive PII: SSNs, tax returns, account numbers)
 docs/personal-finance/
 
