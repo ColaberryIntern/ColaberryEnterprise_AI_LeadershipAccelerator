@@ -206,6 +206,9 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+import InboxOpportunityScore from './InboxOpportunityScore';
+import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
+import InboxSurfacePreference from './InboxSurfacePreference';
 
 // --- Universal Lead Ingestion associations ---
 LeadSource.hasMany(EntryPoint, { foreignKey: 'source_id', as: 'entryPoints', onDelete: 'CASCADE' });
@@ -230,6 +233,11 @@ InboxEmail.hasMany(InboxReplyDraft, { foreignKey: 'email_id', as: 'drafts' });
 InboxReplyDraft.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
 InboxEmail.hasMany(InboxAuditLog, { foreignKey: 'email_id', as: 'auditLogs' });
 InboxAuditLog.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+// Missed Opportunities Report — false-negative safety net over hidden emails
+InboxEmail.hasMany(InboxOpportunityScore, { foreignKey: 'email_id', as: 'opportunityScores' });
+InboxOpportunityScore.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+InboxEmail.hasMany(InboxFalseNegativeFeedback, { foreignKey: 'email_id', as: 'falseNegativeFeedback' });
+InboxFalseNegativeFeedback.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
 
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
@@ -991,6 +999,9 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  InboxOpportunityScore,
+  InboxFalseNegativeFeedback,
+  InboxSurfacePreference,
   LeadSource,
   EntryPoint,
   FormDefinition,

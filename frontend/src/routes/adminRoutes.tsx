@@ -26,6 +26,7 @@ import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
 import IntelligenceOSPage from '../pages/admin/intelligence/IntelligenceOSPage';
 import IntelligenceDiscoveryPage from '../pages/admin/intelligence/IntelligenceDiscoveryPage';
 import IntelligenceSettingsPage from '../pages/admin/intelligence/IntelligenceSettingsPage';
+import MissedOpportunitiesPage from '../pages/admin/MissedOpportunitiesPage';
 import AgentOrphansPage from '../pages/admin/AgentOrphansPage';
 import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketingDashboardPage';
 import AdminCommunicationsPage from '../pages/admin/AdminCommunicationsPage';
@@ -74,6 +75,7 @@ const adminRoutes = (
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
         <Route path="/admin/ai-settings" element={<Navigate to="/admin/intelligence" replace />} />
         <Route path="/admin/intelligence" element={<IntelligenceOSPage />} />
+        <Route path="/admin/missed-opportunities" element={<MissedOpportunitiesPage />} />
         <Route path="/admin/intelligence/discovery" element={<IntelligenceDiscoveryPage />} />
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />

@@ -1911,6 +1911,20 @@ export function startScheduler(): void {
     console.error('[Scheduler] Inbox COS scheduler failed to start:', err.message);
   }
 
+  // -- Missed Opportunities Report — daily executive brief at 8:00 PM CT --
+  // Safety net against Inbox COS false negatives. The send is idempotent
+  // (one per CT date), so the timezone-pinned cron is safe to re-fire.
+  cron.schedule('0 20 * * *', () => {
+    instrumentCronJob('MissedOpportunitiesReport', async () => {
+      const { runMissedOpportunitiesReport } = require('./inbox/missedOpportunitiesEmailService');
+      const result = await runMissedOpportunitiesReport();
+      console.log(`[Scheduler] Missed Opportunities Report:`, JSON.stringify(result));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Missed Opportunities Report error:', err.message);
+    });
+  }, { timezone: 'America/Chicago' });
+  console.log('[Scheduler] Missed Opportunities Report: daily at 8:00 PM CT');
+
   // -- Accelerator Session Lifecycle --
 
   // Session reminders: check every 30 minutes (with dedup to prevent spam)
