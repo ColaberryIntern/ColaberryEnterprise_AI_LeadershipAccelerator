@@ -95,17 +95,42 @@ async function main() {
   const list = await resolveCurriculumList();
   console.log(`Resolved Curriculum list: "${list.name}" (id ${list.id})\n`);
 
-  // 1. Clean rebuild: trash legacy top-level (ungrouped) todos.
-  const legacy = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${list.id}/todos.json`);
-  console.log(`-- Legacy top-level todos to remove: ${legacy.length}`);
-  for (const t of legacy) {
+  const desiredNames = new Set(cur.WEEKS.map((w) => cur.groupName(w)));
+  const componentContents = new Set(cur.COMPONENTS.map((c) => c.content));
+  let trashed = 0;
+  const trash = async (recordingId, label) => {
     if (DRY) {
-      console.log(`   would trash: "${t.content}" (id ${t.id})`);
+      console.log(`   would trash: ${label}`);
     } else {
-      await ops.trashTodo({ recordingId: t.id });
-      console.log(`   trashed: "${t.content}"`);
+      await ops.trashTodo({ recordingId });
+      console.log(`   trashed: ${label}`);
+      trashed += 1;
+    }
+  };
+
+  // 1. Clean up old tasks. Three sources of legacy items:
+  //    (a) top-level (ungrouped) todos in the list,
+  //    (b) stale groups whose name is not one of our 12 weeks — trash their
+  //        todos then the group itself,
+  //    (c) inside a kept week-group, any todo whose content is not one of our
+  //        5 components (a stale item from an earlier structure).
+  console.log('-- Cleanup of old tasks');
+  const topTodos = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${list.id}/todos.json`);
+  for (const t of topTodos) await trash(t.id, `top-level todo "${t.content}"`);
+
+  const existingGroups = await ops.listTodoGroups({ projectId: LAUNCH.projectId, listId: list.id });
+  for (const g of existingGroups || []) {
+    const groupTodos = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${g.id}/todos.json`);
+    if (!desiredNames.has(g.name)) {
+      for (const t of groupTodos) await trash(t.id, `stale-group todo "${t.content}" (group "${g.name}")`);
+      await trash(g.id, `stale group "${g.name}"`);
+    } else {
+      for (const t of groupTodos) {
+        if (!componentContents.has(t.content)) await trash(t.id, `stale todo "${t.content}" in "${g.name}"`);
+      }
     }
   }
+  if (trashed === 0 && !DRY) console.log('   (nothing to trash — list already clean)');
 
   // 2. Build 12 week-groups, each with the 5-item checklist.
   console.log(`\n-- Building ${cur.WEEKS.length} week-groups`);
@@ -141,7 +166,7 @@ async function main() {
   if (DRY) {
     console.log('\n[dry-run] No changes written.');
   } else {
-    console.log(`\nDone. ${groupsTouched} groups reconciled, ${todosTouched} todos reconciled, ${legacy.length} legacy todos trashed.`);
+    console.log(`\nDone. ${groupsTouched} groups reconciled, ${todosTouched} todos reconciled, ${trashed} legacy items trashed.`);
   }
 }
 
