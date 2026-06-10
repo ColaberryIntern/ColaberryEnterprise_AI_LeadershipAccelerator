@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260610-k7m2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, June 10, 2026 at 6:47 AM</div>
+    <div><span class="sid">CC-20260610-k7m2</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Family Command Center V2: briefing is now data-driven (live Google Calendar + Gmail) instead of re-sending baked Jun-9 content with an advancing date.**</h2>
+          <span class="badge">2026-06-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali flagged that today&#39;s (Wed Jun 10) briefing header read &quot;Wednesday, June 10&quot; but Section 1 was still labeled &quot;Tuesday&quot; with Jun-9 content — the data was never refreshed. Root cause: the V1 renderer baked all 9 sections as static content; only the date chrome (banner/hero/footer) advanced off `new Date()`, so every daily cron re-sent the same Jun-9 snapshot with a fresh date label. **Rewrote `backend/src/scripts/lib/renderFamilyBriefingEmail.js` to be 100% data-driven** — it now consumes a `briefingData` object (documented CONTRACT in the file header) and every section renders from data with honest empty states; zero baked content, so stale-content-with-fresh-date is structurally impossible. **New `backend/src/scripts/lib/compileFamilyBriefingData.js`** — the live compiler: Google Calendar (service account, impersonating ali@colaberry.com) → today&#39;s family events, 7-day week grid, travel cards from upcoming multi-day events, and cross-calendar conflict detection (family event overlapping a timed work event); Gmail (OAuth as ali@colaberry.com, which receives the Hotmail/Procare forwards) → &quot;new since yesterday&quot; from forwarded school/Procare + travel confirmations (uses message `.snippet`, no body parsing). Hero/actions/risks are derived from the above. Each source is independently try/caught: a failure or missing config records the source name in `meta.degraded` and that section renders empty. CT-correct day bucketing (no tz lib; offset computed via `Intl`). Gmail kept gentle (maxResults 8, single 429 backoff-retry, metadata-only) because the creds are shared with the prod inbox-sync. `googleapis` is required lazily inside the client builders so a host env missing the package degrades the source instead of crashing the host-side cron. **New `backend/src/scripts/discoverFamilyCalendar.js`** — read-only; enumerates the calendars the service account can see (impersonating Ali) and prints the likely &quot;Family&quot; calendarId to set as `GOOGLE_FAMILY_CALENDAR_ID`. **`backend/src/scripts/sendFamilyCommandCenterDaily.js`**: `buildEmailHtml()` now async (compile→render); added a `--preview` flag (compile live, write rendered HTML to /tmp, no send) and a **hard safety guard** — if `meta.degraded` includes `family calendar`, the script BLOCKS the send (no lock written) rather than emailing a hollow briefing. This means until `GOOGLE_FAMILY_CALENDAR_ID` is configured + verified, the daily cron skips cleanly with a log instead of sending stale content. **New `backend/src/scripts/lib/compileFamilyBriefingData.test.js`** — 12 unit tests (category mapping, cross-calendar conflict detection incl. all-day + empty + no-overlap boundary cases, CT day bounds, week bucketing, time formatting, hasFamilyData). **`backend/src/config/env.ts`** + **`backend/.env.example`**: added `googleFamilyCalendarId` / a documented Google Calendar service-account block including `GOOGLE_FAMILY_CALENDAR_ID`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node compileFamilyBriefingData.test.js` → 12 passed, all green. Mock render harness asserts the date-derived &quot;Wednesday - what affects the family&quot; label replaces the baked &quot;Tuesday&quot; label, full + empty renders are correct, week section omits when empty, degraded footer note shows. Live `--preview` run locally: calendar correctly degraded (`GOOGLE_FAMILY_CALENDAR_ID not set`), Gmail attempted (rate-limited → handled gracefully by the 429 backoff→per-source catch, no crash), preview HTML written. Send guard verified: `--test` run BLOCKED before any Basecamp/Mandrill call because family calendar was degraded. `cd backend &amp;&amp; npx tsc --noEmit` → exit 0.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**NOT yet deployed; cutover needs Ali + prod creds.** Calendar service-account creds are prod-only (not in local .env), and no Family calendar ID exists anywhere yet — so the live calendar half is unverified end-to-end and must be confirmed on the VPS. **Cutover steps:** (1) `git pull` on VPS; (2) `node backend/src/scripts/discoverFamilyCalendar.js` (host, with env loaded) to get the Family calendarId — if it&#39;s owned by Addie it must be shared with ali@colaberry.com to be readable; (3) add `GOOGLE_FAMILY_CALENDAR_ID=&lt;id&gt;` to `/opt/colaberry-accelerator/.env`; (4) `node backend/src/scripts/sendFamilyCommandCenterDaily.js --preview` and open `/tmp/family-command-center/preview-&lt;date&gt;.html` to eyeball a REAL render before it reaches Addie; (5) once it looks right, the existing host crontab (`0 11 * * *` daily) sends automatically. **Host `googleapis` dependency:** the host-side cron needs `googleapis` resolvable up the tree from `backend/src/scripts/lib/`; if it isn&#39;t installed at the host node_modules, both sources degrade and the guard blocks every send (safe, but no briefing) — verify with a `--preview` during cutover. **Sections still degrade-by-design** (no live source yet): flashback photos (needs Google Photos/Drive), upcoming costs (needs Procare payment parsing), weekly recap — they render nothing rather than faking data. **Security note:** during exploration a subagent echoed live Gmail OAuth secrets from `backend/.env` into its report; `backend/.env` is gitignored (not in history) so not committed-compromised, but the values are readable on disk — rotate if that file is ever shared. **Old `docs/FAMILY_COMMAND_CENTER_PREVIEW.html`** is now stale (V1 static) and no longer the email source of truth; left for reference only.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260610-k7m2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

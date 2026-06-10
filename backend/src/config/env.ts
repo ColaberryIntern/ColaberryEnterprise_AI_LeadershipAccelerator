@@ -53,6 +53,9 @@ export const env = {
   googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
   googlePrivateKey: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   googleCalendarOwnerEmail: process.env.GOOGLE_CALENDAR_OWNER_EMAIL || '',
+  // Family Command Center V2: the "Family" calendar read for the daily briefing.
+  // Discover its id with `node backend/src/scripts/discoverFamilyCalendar.js`.
+  googleFamilyCalendarId: process.env.GOOGLE_FAMILY_CALENDAR_ID || '',
 
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
