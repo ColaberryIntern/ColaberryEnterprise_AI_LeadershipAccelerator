@@ -90,7 +90,7 @@ export function buildReportHtml(report: MissedOpportunitiesReport, baseUrl: stri
     ? s.topThemes.map((t) => `<span style="display:inline-block;background:#eef2ff;color:#3730a3;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;margin:2px 4px">${esc(t)}</span>`).join('')
     : '<span style="color:#64748b;font-style:italic">No high-signal themes today.</span>';
 
-  const narrative = `${s.totalProcessed.toLocaleString()} emails processed. ${s.totalHidden.toLocaleString()} routed away from your Inbox by Inbox COS. ` +
+  const narrative = `In the last 24 hours, ${s.totalProcessed.toLocaleString()} emails were processed. ${s.totalHidden.toLocaleString()} were routed away from your Inbox by Inbox COS. ` +
     `<strong>${s.potentiallyValuable}</strong> ${s.potentiallyValuable === 1 ? 'email was' : 'emails were'} flagged as potentially valuable and not surfaced` +
     `${s.mediumValue ? `, plus ${s.mediumValue} worth a glance` : ''}.`;
 
@@ -100,7 +100,7 @@ export function buildReportHtml(report: MissedOpportunitiesReport, baseUrl: stri
   <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);color:white;padding:30px 28px">
     <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#93c5fd;font-weight:700">Missed Opportunities Report</div>
     <div style="font-size:26px;font-weight:800;margin-top:6px">${dateLabel}</div>
-    <div style="font-size:13px;color:#cbd5e0;margin-top:4px">Executive visibility into filtered, hidden, archived & automated communications</div>
+    <div style="font-size:13px;color:#cbd5e0;margin-top:4px">Trailing 24 hours · Executive visibility into filtered, hidden, archived & automated communications</div>
   </div>
 
   <div style="padding:24px 28px">

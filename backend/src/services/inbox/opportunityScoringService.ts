@@ -258,8 +258,16 @@ export interface ScoringResult {
   upserted: number;
 }
 
-export async function scoreHiddenEmailsForDate(reportDate: string): Promise<ScoringResult> {
+// When `rolling` is true the candidate set is the trailing 24 hours ending now
+// (the executive report only cares about "what slipped past me today"); the row
+// is still stamped with `reportDate` (today CT) as the idempotency key. When
+// false it scores a specific CT calendar day (historical browsing).
+export async function scoreHiddenEmailsForDate(reportDate: string, rolling = false): Promise<ScoringResult> {
   const corpus = await buildPositiveCorpus();
+
+  const windowClause = rolling
+    ? `e.received_at >= NOW() - INTERVAL '24 hours'`
+    : `(e.received_at AT TIME ZONE 'America/Chicago')::date = :reportDate`;
 
   const candidates = await sequelize.query<CandidateRow>(
     `SELECT e.id, e.from_address, e.from_name, e.subject, e.body_text, e.headers,
@@ -267,7 +275,7 @@ export async function scoreHiddenEmailsForDate(reportDate: string): Promise<Scor
        FROM inbox_emails e
        JOIN inbox_classifications c ON c.email_id = e.id
       WHERE c.state IN ('AUTOMATION', 'SILENT_HOLD', 'ASK_USER')
-        AND (e.received_at AT TIME ZONE 'America/Chicago')::date = :reportDate`,
+        AND ${windowClause}`,
     { type: QueryTypes.SELECT, replacements: { reportDate } },
   );
 
