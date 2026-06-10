@@ -43,4 +43,7 @@ scripts/.demo_login_urls.txt
 # Personal finance documents - NEVER COMMIT (sensitive PII: SSNs, tax returns, account numbers)
 docs/personal-finance/
 
+# Generated operational reports - NEVER COMMIT (student PII: names, emails, payment-failure detail, balances)
+docs/reports/
+
 kes-tasks/
