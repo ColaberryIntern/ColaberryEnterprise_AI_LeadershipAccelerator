@@ -30,6 +30,8 @@ const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const { classify } = require('./lib/interviewPrepData');
 const { renderHtml, renderText } = require('./lib/renderInterviewPrepReport');
+const { resolveEmails, groupByPerson } = require('./lib/interviewPrepPeople');
+const { buildCombined } = require('./lib/interviewPrepNudges');
 
 const DRY = process.argv.includes('--dry');
 const argTo = process.argv.find((a) => a.startsWith('--to='));
@@ -138,7 +140,20 @@ async function main() {
   const k = data.kpis;
   console.log(`[InterviewPrepReport] active=${k.totalActive} today=${k.todayCount} critical=${k.criticalCount} surveyOwed=${k.surveyOwedCount} avgReadiness=${k.avgReadinessUpcoming}%`);
 
-  const html = renderHtml(data).replace(/—/g, '-').replace(/–/g, '-');
+  // De-duplicated nudge plan folded into THIS report so Ali gets one interview
+  // email, not a separate nudge digest. One combined entry per person.
+  const active = data.rows.filter((r) => r.stage !== 'COMPLETE');
+  const emailMap = await resolveEmails(active.map((r) => r.candidateId));
+  const nudgePlan = groupByPerson(active, emailMap)
+    .map((p) => ({ person: p, combined: buildCombined(p) }))
+    .filter((x) => x.combined);
+  const nudgeMode = (() => {
+    try { return fs.readFileSync(path.resolve(__dirname, '../../../tmp/ops-engine/interview-prep-nudge-mode.txt'), 'utf-8').trim().toLowerCase() === 'live' ? 'live' : 'preview'; }
+    catch { return 'preview'; }
+  })();
+  console.log(`[InterviewPrepReport] nudge plan: ${nudgePlan.length} person email(s) (mode=${nudgeMode})`);
+
+  const html = renderHtml(data, { nudgePlan, nudgeMode }).replace(/—/g, '-').replace(/–/g, '-');
   const text = renderText(data).replace(/—/g, '-').replace(/–/g, '-');
 
   const stamp = data.runAt.toISOString().slice(0, 10);

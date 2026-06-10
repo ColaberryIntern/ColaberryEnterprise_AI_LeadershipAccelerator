@@ -284,7 +284,38 @@ function surveyActionBlock(awaiting) {
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${lis}</table>`);
 }
 
-function renderHtml(data) {
+/* ---- combined nudge plan (folded in so Ali gets ONE interview email) ---- */
+function nudgePlanBlock(plan, mode) {
+  if (!plan || !plan.length) {
+    return panel('Today’s Student Nudges', `<div style="font-size:13px;color:${MUTE};">No student nudges due today.</div>`);
+  }
+  const modePill = mode === 'live'
+    ? pill('LIVE · students emailed', GREEN, '#fff')
+    : pill('PREVIEW · not sent', AMBER, '#fff');
+  const rows = plan.map((x) => {
+    const p = x.person; const c = x.combined;
+    const recips = p.emails.length ? p.emails.join(', ') : 'email unresolved';
+    return `<tr style="border-bottom:1px solid ${LINE};">
+      <td style="padding:7px 9px;font-size:13px;"><b style="color:${NAVY};">${esc(p.name)}</b><br><span style="color:${MUTE};font-size:11px;">${c.count} interview${c.count === 1 ? '' : 's'} combined into 1 email · ${esc(recips)}</span></td>
+      <td style="padding:7px 9px;font-size:11px;text-align:center;color:${INK};">${c.beats.map((b) => `<span style="display:inline-block;background:#eef2ff;color:${BLUE};padding:1px 6px;border-radius:3px;margin:1px;">${esc(b)}</span>`).join('')}</td>
+      <td style="padding:7px 9px;font-size:12px;color:${INK};">${esc(c.subject)}</td>
+    </tr>`;
+  }).join('');
+  return panel(`📣 Today’s Student Nudges — ${plan.length} combined email${plan.length === 1 ? '' : 's'} ${''}`, `
+    <div style="font-size:13px;color:${INK};line-height:1.6;margin-bottom:10px;">
+      ${modePill} &nbsp;One email per student, de-duplicated across every interview and IPBC account they have (no student gets a separate message per interview). ${mode === 'live' ? 'These were emailed to students today.' : 'In preview nothing is sent; flip the nudge engine to live to start sending these.'}
+    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+      <tr style="background:${PANEL};">
+        <td style="padding:6px 9px;font-size:11px;font-weight:700;color:${MUTE};">Student (combined)</td>
+        <td style="padding:6px 9px;font-size:11px;font-weight:700;color:${MUTE};text-align:center;">Steps pushed</td>
+        <td style="padding:6px 9px;font-size:11px;font-weight:700;color:${MUTE};">Email subject</td>
+      </tr>
+      ${rows}
+    </table>`);
+}
+
+function renderHtml(data, opts = {}) {
   const k = data.kpis;
   const priority = data.rows.filter((r) => r.stage !== 'COMPLETE');
   const topPriority = priority.slice(0, 12);
@@ -311,6 +342,7 @@ function renderHtml(data) {
               : `<div style="font-size:13px;color:${MUTE};">No active interviews in the pipeline right now.</div>`)}
 
           ${surveyActionBlock(data.awaitingSurvey)}
+          ${nudgePlanBlock(opts.nudgePlan, opts.nudgeMode)}
           ${mentorRollup(data.mentorRollup)}
         </td></tr>
 

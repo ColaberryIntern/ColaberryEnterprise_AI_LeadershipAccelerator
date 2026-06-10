@@ -162,8 +162,8 @@ const REPORTS = [
     cbRunnerState: null,
     skipFlag: '--skip-interview-prep',
     cadence: 'daily',
-    sendHourUTC: 16,  // 11 AM CT — placement focus mid-morning
-    description: 'Ranks active IPBC interviews by urgency x preparation. Readiness scatter, prep heatmap, priority queue, post-interview survey-owed queue, mentor coaching load. CCPP-driven, email-safe HTML.',
+    sendCT: '05:30',  // 5:30 AM Central, DST-correct (fired via --ct-now cron, not the hourly stagger)
+    description: 'Ranks active IPBC interviews by urgency x preparation. Readiness scatter, prep heatmap, priority queue, post-interview survey-owed queue, mentor coaching load, and the de-duplicated student-nudge plan (one combined email per student). CCPP-driven, email-safe HTML. This is Ali’s single daily interview email.',
   },
   {
     name: 'Interview Prep Nudges (PREVIEW by default)',
@@ -175,8 +175,8 @@ const REPORTS = [
     cbRunnerState: 'tmp/ops-engine/interview-prep-nudge-state.json',
     skipFlag: '--skip-interview-nudges',
     cadence: 'daily',
-    sendHourUTC: 16,  // same slot as the report; digest only in preview mode
-    description: 'Student-facing interview-prep nudges, preview-gated like the intern engine. Pushes each student to their next funnel step, congratulates +1 day post-interview, then chases the post-interview survey. PREVIEW = digest to Ali, no student emails. Mode file: tmp/ops-engine/interview-prep-nudge-mode.txt.',
+    sendCT: '05:30',  // right after the report; NO-OP in preview (report carries the plan), sends students when mode=live
+    description: 'Student-facing interview-prep nudges. Sends ONE combined email per person (de-duplicated across all their interviews + IPBC accounts). PREVIEW (default) = sends nothing; the report shows the plan. Flip tmp/ops-engine/interview-prep-nudge-mode.txt to "live" to start emailing students. When live it also sends Ali a send-confirmation.',
   },
   // ---- Cohort training report ----
   {

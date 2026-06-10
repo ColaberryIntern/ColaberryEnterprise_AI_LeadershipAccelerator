@@ -146,4 +146,66 @@ function build(row) {
   return { beat, congrats, subject, html, text };
 }
 
-module.exports = { build, pickBeat };
+/* ---- COMBINED per-person email --------------------------------------------
+ * One human, one email per run, covering ALL their active interviews. This is
+ * the de-dup Ali asked for: Sehrish (7 interviews) gets a single combined note,
+ * not seven. Each interview still names its own next step; the whole thing is
+ * ordered most-urgent first. Returns null if nothing is due for this person.
+ *
+ * person: { name, interviews:[classified rows] } (from interviewPrepPeople)
+ */
+function buildCombined(person) {
+  const items = [];
+  for (const r of person.interviews) {
+    const beat = pickBeat(r);
+    if (!beat) continue;
+    items.push({ row: r, beat });
+  }
+  if (!items.length) return null;
+
+  const who = (person.name || '').split(/\s+/)[0] || 'there';
+  const today = items.filter((i) => i.beat === 'day_of');
+  const congrats = items.filter((i) => i.beat === 'congrats_survey');
+  const surveys = items.filter((i) => i.beat === 'survey_reminder');
+  const prep = items.filter((i) => ['kickoff', 'practice', 'book_mentor', 'final_polish'].includes(i.beat));
+
+  // subject reflects the most important thing on their plate
+  let subject;
+  if (today.length) subject = today.length === 1
+    ? `Your ${today[0].row.company} interview is today - plus your prep checklist`
+    : `You have ${today.length} interviews today - here is your game plan`;
+  else if (congrats.length) subject = `Congratulations on your interview! A couple of quick next steps`;
+  else if (prep.length) subject = `Your interview prep checklist (${prep.length} coming up)`;
+  else subject = `Quick follow-up on your recent interview${surveys.length > 1 ? 's' : ''}`;
+
+  const block = (title, rows, render) => rows.length ? `
+    <div style="margin:16px 0 6px;font-size:13px;font-weight:800;color:#0f1729;text-transform:uppercase;letter-spacing:.5px;">${esc(title)}</div>
+    ${rows.map(render).join('')}` : '';
+
+  const line = (label, sub) => `<div style="border-left:3px solid #1d4ed8;padding:6px 0 6px 12px;margin:6px 0;">
+    <div style="font-weight:700;color:#1f2937;">${label}</div>${sub ? `<div style="font-size:13px;color:#374151;margin-top:2px;">${sub}</div>` : ''}</div>`;
+
+  const target = (r) => `${esc(r.company)} - ${esc(r.jobTitle)}`;
+
+  const html = wrap(`<div style="font-size:16px;font-weight:800;color:#0f1729;margin-bottom:8px;">Hi ${esc(who)},</div>
+    <p style="margin:10px 0;">Here is everything we are tracking for your interviews, most urgent first. Knock these out in order.</p>
+    ${block('Today', today, (i) => line(`${target(i.row)} - <span style="color:#7c3aed;">interview today</span>`, 'Lean on the answers you practiced. As soon as it wraps, log how it went with your post-interview survey.'))}
+    ${block('Congratulations - tell us how it went', congrats, (i) => line(`${target(i.row)}`, 'You got through it. Take 2 minutes for your post-interview survey so we can line up your next step.'))}
+    ${block('Coming up - your next step', prep, (i) => line(`${target(i.row)} - <span style="color:#1d4ed8;">in ${i.row.days} day${i.row.days === 1 ? '' : 's'}</span>`, esc(i.row.next.action) + '. ' + esc(i.row.next.detail)))}
+    ${block('Still owed - quick survey', surveys, (i) => line(`${target(i.row)}`, `Interviewed ${Math.abs(i.row.days)} days ago. Your 2-minute post-interview survey is the only thing between you and what is next.`))}
+    <div style="margin:18px 0;"><span style="display:inline-block;background:#1d4ed8;color:#fff;font-weight:700;padding:10px 18px;border-radius:6px;">Open IPBC to take action</span></div>
+    <p style="font-size:12px;color:#6b7280;">app.colaberry.com &rarr; My Roles &rarr; IPBC</p>`);
+
+  const textLines = [`Hi ${who},`, '', 'Everything we are tracking for your interviews, most urgent first:', ''];
+  const tline = (i, note) => textLines.push(`- ${i.row.company} - ${i.row.jobTitle}: ${note}`);
+  today.forEach((i) => tline(i, 'INTERVIEW TODAY - then log your post-interview survey'));
+  congrats.forEach((i) => tline(i, 'Congrats! Complete your 2-minute post-interview survey'));
+  prep.forEach((i) => tline(i, `in ${i.row.days}d - ${i.row.next.action}`));
+  surveys.forEach((i) => tline(i, `interviewed ${Math.abs(i.row.days)}d ago - complete your post-interview survey`));
+  textLines.push('', 'Open app.colaberry.com > My Roles > IPBC to take action.', signoffText().trim());
+
+  const beatSig = items.map((i) => `${i.row.id}:${i.beat}`).sort().join('|');
+  return { subject, html, text: textLines.join('\n'), beatSig, beats: items.map((i) => i.beat), count: items.length };
+}
+
+module.exports = { build, pickBeat, buildCombined };

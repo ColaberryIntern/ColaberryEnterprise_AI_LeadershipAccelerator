@@ -38,6 +38,12 @@ const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPr
 const AUDIT_ONLY = process.argv.includes('--audit-only');
 const FORCE_ALL = process.argv.includes('--force-all'); // Ignore cadence; fire every report once
 const ALL_HOURS = process.argv.includes('--all-hours') || FORCE_ALL; // Ignore sendHourUTC filter
+// --ct-now: minute-precise, DST-correct path. Fires ONLY reports whose registry
+// `sendCT` ("HH:MM" America/Chicago) equals the current Central time. Used by a
+// dedicated cron for off-the-hour / pre-business-hours slots (e.g. 5:30 AM CST)
+// that the integer-UTC-hour stagger cannot express. Reports with `sendCT` are
+// excluded from the normal hourly path so they fire exactly once.
+const CT_NOW = process.argv.includes('--ct-now');
 const REPO = path.resolve(__dirname, '../../..');
 
 // ---------------- Report registry (LEGACY inline copy - now driven by lib/reportingRegistry.js) ----------------
@@ -243,17 +249,21 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   //   3. skip flags (manual override)
   //   4. --force-all (ignore cadence too)
   const currentHourUTC = now.getUTCHours();
-  // Warn loudly on any report missing sendHourUTC (we treat undefined as
-  // "do not fire" — fail-safe against the original 8-reports-at-8-AM bug.
-  // A developer who forgets sendHourUTC will see this log every hour
-  // until they fix it, which is the point.)
-  const missingHour = REGISTRY.filter((r) => r.sendHourUTC === undefined && shouldFireToday(r, now));
-  if (missingHour.length && !ALL_HOURS) {
-    console.warn(`[audit] WARN: ${missingHour.length} report(s) missing sendHourUTC and will NOT fire: ${missingHour.map((r) => r.name).join(', ')}. Add sendHourUTC to reportingRegistry.js.`);
+  const nowCTHHMM = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+  if (CT_NOW) console.log(`[audit] --ct-now: current Central time ${nowCTHHMM}; firing reports with sendCT === '${nowCTHHMM}'`);
+  // Warn loudly on any report missing BOTH sendHourUTC and sendCT (we treat that
+  // as "do not fire" — fail-safe against the original 8-reports-at-8-AM bug).
+  const missingHour = REGISTRY.filter((r) => r.sendHourUTC === undefined && !r.sendCT && shouldFireToday(r, now));
+  if (missingHour.length && !ALL_HOURS && !CT_NOW) {
+    console.warn(`[audit] WARN: ${missingHour.length} report(s) missing sendHourUTC/sendCT and will NOT fire: ${missingHour.map((r) => r.name).join(', ')}. Add sendHourUTC to reportingRegistry.js.`);
   }
   const active = REGISTRY
     .filter((r) => FORCE_ALL || shouldFireToday(r, now))
-    .filter((r) => ALL_HOURS || r.sendHourUTC === currentHourUTC)
+    .filter((r) => {
+      if (CT_NOW) return r.sendCT === nowCTHHMM;        // minute-precise Central path
+      if (r.sendCT) return false;                        // CT-scheduled reports never fire on the hourly path
+      return ALL_HOURS || r.sendHourUTC === currentHourUTC;
+    })
     .filter((r) => !process.argv.includes(r.skipFlag));
   const skippedForCadence = REGISTRY.filter((r) => !FORCE_ALL && !shouldFireToday(r, now));
   const skippedForHour = REGISTRY.filter((r) => !ALL_HOURS && shouldFireToday(r, now) && r.sendHourUTC !== undefined && r.sendHourUTC !== currentHourUTC);
