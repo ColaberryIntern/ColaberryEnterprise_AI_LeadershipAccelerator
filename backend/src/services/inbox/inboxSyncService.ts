@@ -86,7 +86,7 @@ async function saveSyncState(): Promise<void> {
 
 // ─── Gmail Client Factory ───────────────────────────────────────────────────
 
-function getColaberryGmailClient(): gmail_v1.Gmail | null {
+export function getColaberryGmailClient(): gmail_v1.Gmail | null {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
@@ -100,7 +100,7 @@ function getColaberryGmailClient(): gmail_v1.Gmail | null {
   return google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
-function getPersonalGmailClient(): gmail_v1.Gmail | null {
+export function getPersonalGmailClient(): gmail_v1.Gmail | null {
   const clientId = process.env.GMAIL_PERSONAL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_PERSONAL_CLIENT_SECRET;
   const refreshToken = process.env.GMAIL_PERSONAL_REFRESH_TOKEN;
@@ -437,7 +437,7 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
 
 // ─── Parsing Helpers ────────────────────────────────────────────────────────
 
-function extractGmailHeaders(msg: gmail_v1.Schema$Message): Record<string, string> {
+export function extractGmailHeaders(msg: gmail_v1.Schema$Message): Record<string, string> {
   const headers: Record<string, string> = {};
   const parts = msg.payload?.headers || [];
   for (const header of parts) {
@@ -448,7 +448,7 @@ function extractGmailHeaders(msg: gmail_v1.Schema$Message): Record<string, strin
   return headers;
 }
 
-function parseFromHeader(from: string): { name: string | null; address: string } {
+export function parseFromHeader(from: string): { name: string | null; address: string } {
   // "John Doe <john@example.com>" or "john@example.com"
   const match = from.match(/^(.+?)\s*<(.+?)>$/);
   if (match) {
@@ -460,7 +460,7 @@ function parseFromHeader(from: string): { name: string | null; address: string }
   return { name: null, address: from.trim().toLowerCase() };
 }
 
-function parseAddressList(header: string): Array<{ address: string; name: string }> {
+export function parseAddressList(header: string): Array<{ address: string; name: string }> {
   if (!header) return [];
 
   return header.split(',').map((entry) => {
@@ -475,7 +475,7 @@ function parseAddressList(header: string): Array<{ address: string; name: string
   }).filter((a) => a.address);
 }
 
-function extractBodyText(payload: gmail_v1.Schema$MessagePart | undefined): string | null {
+export function extractBodyText(payload: gmail_v1.Schema$MessagePart | undefined): string | null {
   if (!payload) return null;
 
   // Direct text/plain body
@@ -500,7 +500,7 @@ function extractBodyText(payload: gmail_v1.Schema$MessagePart | undefined): stri
   return null;
 }
 
-function extractBodyHtml(payload: gmail_v1.Schema$MessagePart | undefined): string | null {
+export function extractBodyHtml(payload: gmail_v1.Schema$MessagePart | undefined): string | null {
   if (!payload) return null;
 
   if (payload.mimeType === 'text/html' && payload.body?.data) {

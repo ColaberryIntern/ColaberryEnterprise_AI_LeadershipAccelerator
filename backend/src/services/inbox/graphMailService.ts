@@ -69,6 +69,21 @@ export async function fetchInboxMessages(top: number = 100): Promise<GraphMessag
   return messages.slice(0, top);
 }
 
+// Fetch messages from a well-known mail folder (e.g. 'deleteditems', 'junkemail').
+// Used by the Missed Opportunities deleted-email recovery path.
+export async function fetchFolderMessages(folder: string, top: number = 100): Promise<GraphMessage[]> {
+  const token = await getAccessToken();
+  const messages: GraphMessage[] = [];
+  let url: string | null = `https://graph.microsoft.com/v1.0/me/mailFolders/${folder}/messages?$top=${Math.min(top, 50)}&$orderby=receivedDateTime desc&$select=id,conversationId,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders`;
+
+  while (url && messages.length < top) {
+    const res: any = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+    messages.push(...(res.data.value || []));
+    url = res.data['@odata.nextLink'] || null;
+  }
+  return messages.slice(0, top);
+}
+
 // Destination folder for AUTOMATION-classified mail. Ali's preference: "_Automation"
 // (leading underscore keeps it at the top of the folder list alphabetically).
 // Older deployments used "Archive". The folder name is configurable via env so it

@@ -139,9 +139,23 @@ export function buildReportHtml(report: MissedOpportunitiesReport, baseUrl: stri
     </table>
 
     <h2 style="font-size:17px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin:28px 0 12px">Deleted But Potentially Valuable</h2>
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400e">
-      Deleted &amp; Spam recovery activates once Trash/Spam ingestion is enabled. No deleted-email analysis in this edition.
-    </div>
+    ${report.deletedButValuable.length ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      <thead><tr style="background:#7c2d12;color:white">
+        <th align="center" style="padding:10px 12px">Score</th>
+        <th align="left" style="padding:10px 12px">Subject &amp; recovery recommendation</th>
+        <th align="left" style="padding:10px 12px">Sender</th>
+        <th align="left" style="padding:10px 12px">Folder</th>
+      </tr></thead>
+      <tbody>${report.deletedButValuable.slice(0, 8).map((r) => {
+        const color = BAND_COLOR[r.band] || '#94a3b8';
+        return `<tr style="border-bottom:1px solid #e2e8f0">
+          <td style="padding:10px 12px;text-align:center"><span style="display:inline-block;min-width:34px;background:${BAND_BG[r.band]};color:${color};font-weight:800;border-radius:6px;padding:4px 8px">${r.score}</span></td>
+          <td style="padding:10px 12px"><strong>${esc(r.subject)}</strong><div style="font-size:12px;color:#92400e;margin-top:2px">${esc(r.explanation)}</div></td>
+          <td style="padding:10px 12px;font-size:13px">${esc(r.fromName || r.fromAddress)}<div style="font-size:11px;color:#94a3b8">${esc(r.fromAddress)}</div></td>
+          <td style="padding:10px 12px"><span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${esc(r.currentFolder)}</span></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;font-size:13px;color:#166534">No deleted or spam emails in the last 24 hours resemble historically valuable mail. Nothing to recover.</div>`}
 
     <h2 style="font-size:17px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin:28px 0 12px">Learning Loop</h2>
     <div style="font-size:13px;color:#475569">
@@ -180,6 +194,15 @@ export async function runMissedOpportunitiesReport(
       console.log(`${LOG_PREFIX} Already sent for ${date}, skipping.`);
       return { sent: false, skipped: true, reportDate: date, reason: 'already_sent_today' };
     }
+  }
+
+  // Refresh deleted/spam ingestion before the report so recovery is current
+  // (best-effort — a provider hiccup must not block the email).
+  try {
+    const { syncDeletedAndSpam } = require('./inboxDeletedSyncService');
+    await syncDeletedAndSpam();
+  } catch (err: any) {
+    console.warn(`${LOG_PREFIX} deleted/spam sync before report failed: ${err.message}`);
   }
 
   const report = await getReport(date);

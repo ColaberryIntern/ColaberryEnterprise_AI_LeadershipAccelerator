@@ -1925,6 +1925,21 @@ export function startScheduler(): void {
   }, { timezone: 'America/Chicago' });
   console.log('[Scheduler] Missed Opportunities Report: daily at 8:00 PM CT');
 
+  // -- Deleted/Spam ingestion for Deleted-Email Recovery — hourly --
+  // Keeps inbox_deleted_emails fresh so the report's "Deleted But Potentially
+  // Valuable" section has data without putting external API calls in the
+  // request path. Idempotent (unique provider+message_id) and bounded.
+  cron.schedule('25 * * * *', () => {
+    instrumentCronJob('InboxDeletedSync', async () => {
+      const { syncDeletedAndSpam } = require('./inbox/inboxDeletedSyncService');
+      const result = await syncDeletedAndSpam();
+      if (result.created > 0) console.log(`[Scheduler] Deleted/spam sync: ${result.created} new of ${result.scanned} scanned`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Deleted/spam sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Deleted/spam ingestion: hourly at :25');
+
   // -- Accelerator Session Lifecycle --
 
   // Session reminders: check every 30 minutes (with dedup to prevent spam)

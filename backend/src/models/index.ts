@@ -209,6 +209,7 @@ import InboxAuditLog from './InboxAuditLog';
 import InboxOpportunityScore from './InboxOpportunityScore';
 import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
 import InboxSurfacePreference from './InboxSurfacePreference';
+import InboxDeletedEmail from './InboxDeletedEmail';
 
 // --- Universal Lead Ingestion associations ---
 LeadSource.hasMany(EntryPoint, { foreignKey: 'source_id', as: 'entryPoints', onDelete: 'CASCADE' });
@@ -1002,6 +1003,7 @@ export {
   InboxOpportunityScore,
   InboxFalseNegativeFeedback,
   InboxSurfacePreference,
+  InboxDeletedEmail,
   LeadSource,
   EntryPoint,
   FormDefinition,

@@ -16,6 +16,7 @@ import {
 } from '../../models';
 import type { ScoreFactor, ScoreTopic } from '../../models/InboxOpportunityScore';
 import { scoreHiddenEmailsForDate, reportDateCT, SELF_INBOX_EXCLUSION_SQL } from './opportunityScoringService';
+import { getDeletedButValuable } from './deletedRecoveryService';
 import type { FalseNegativeAction, FalseNegativeSource } from '../../models/InboxFalseNegativeFeedback';
 import type { SurfacePatternType } from '../../models/InboxSurfacePreference';
 
@@ -199,6 +200,14 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
   const high = rows.filter((r) => r.score >= 65);
   const medium = rows.filter((r) => r.score >= 40 && r.score < 65);
 
+  // Deleted/Spam recovery (best-effort — never let it break the core report).
+  let deletedButValuable: MissedEmailRow[] = [];
+  try {
+    deletedButValuable = (await getDeletedButValuable(rolling)) as MissedEmailRow[];
+  } catch (err: any) {
+    console.warn('[MissedOpportunities] deleted recovery failed:', err.message);
+  }
+
   const summary: ExecutiveSummary = {
     reportDate: date,
     totalProcessed: parseInt(counts?.total || '0', 10),
@@ -206,7 +215,7 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
     surfacedToInbox: parseInt(counts?.inbox || '0', 10),
     potentiallyValuable: high.length,
     mediumValue: medium.length,
-    deletedFlagged: 0,
+    deletedFlagged: deletedButValuable.length,
     topThemes: heatMap.filter((w) => w.band !== 'low').slice(0, 6).map((w) => w.topic),
   };
 
@@ -216,7 +225,7 @@ export async function getReport(reportDate?: string): Promise<MissedOpportunitie
     summary,
     heatMap,
     topMissed: rows.slice(0, 25).map(toMissedRow),
-    deletedButValuable: [], // v1: Trash/Spam ingestion not yet wired
+    deletedButValuable,
     learning,
     generatedAt: new Date().toISOString(),
   };

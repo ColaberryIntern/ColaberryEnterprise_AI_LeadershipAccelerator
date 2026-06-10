@@ -53,7 +53,7 @@ function bandFor(score: number): OpportunityBand {
 // ── Positive-signal corpus ───────────────────────────────────────────────
 // Senders/domains/topics Ali has historically engaged with. Emails resembling
 // these are far more likely to be false negatives worth surfacing.
-interface PositiveCorpus {
+export interface PositiveCorpus {
   vipSenders: Set<string>;
   repliedSenders: Set<string>;
   repliedDomains: Set<string>;
@@ -69,7 +69,7 @@ function domainOf(address: string): string {
   return at >= 0 ? address.toLowerCase().slice(at + 1) : '';
 }
 
-async function buildPositiveCorpus(): Promise<PositiveCorpus> {
+export async function buildPositiveCorpus(): Promise<PositiveCorpus> {
   const lc = (rows: Array<{ v: string | null }>) =>
     new Set(rows.map((r) => (r.v || '').toLowerCase()).filter(Boolean));
 
@@ -129,7 +129,7 @@ async function buildPositiveCorpus(): Promise<PositiveCorpus> {
 }
 
 // ── Candidate row shape (raw join) ───────────────────────────────────────
-interface CandidateRow {
+export interface CandidateRow {
   id: string;
   from_address: string;
   from_name: string | null;
