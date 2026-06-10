@@ -20,10 +20,16 @@
 // Cohort 1 kickoff — first Mon/Thu class (Mon Architecture Day + Thu Build Day).
 const KICKOFF = '2026-07-13';
 
-// Build-deadline model (Ali, 2026-06-10): staggered build-ahead. Each week's
-// content is due the Friday BEFORE that week is taught (teaching Monday minus
-// BUILD_AHEAD_DAYS). Week 1 -> 2026-07-10 (before launch); Week 12 -> 2026-09-25.
-const BUILD_AHEAD_DAYS = 3;
+// Build-deadline model (Ali, 2026-06-10): ALL content built BEFORE class starts
+// (kickoff 2026-07-13) AND staggered — one intensive due per week across the
+// pre-launch runway. Intensive 1 due first, Intensive 4 by the Friday before
+// launch. All four dates are Fridays and fall before kickoff.
+const INTENSIVE_DUE = {
+  1: '2026-06-19',
+  2: '2026-06-26',
+  3: '2026-07-03',
+  4: '2026-07-10',
+};
 
 const SKILLJAR = 'https://anthropic.skilljar.com';
 const CCA_F = 'https://claudecertifications.com/claude-certified-architect/exam-guide';
@@ -147,9 +153,10 @@ function weekTeachingMonday(week) {
   return isoAddDays(KICKOFF, (week - 1) * 7);
 }
 
-// Build deadline (staggered): the Friday before the week is taught.
+// Build deadline: staggered by intensive, all before the 7/13 kickoff.
+// W1-3 = Intensive 1 ... W10-12 = Intensive 4.
 function weekDueDate(week) {
-  return isoAddDays(KICKOFF, (week - 1) * 7 - BUILD_AHEAD_DAYS);
+  return INTENSIVE_DUE[Math.ceil(week / 3)];
 }
 
 function groupName(w) {
@@ -159,7 +166,7 @@ function groupName(w) {
 
 module.exports = {
   KICKOFF,
-  BUILD_AHEAD_DAYS,
+  INTENSIVE_DUE,
   INTENSIVE_NAMES,
   ANTHROPIC_COURSES,
   WEEKS,

@@ -70,31 +70,35 @@ describe('component template', () => {
   });
 });
 
-describe('staggered build-ahead schedule', () => {
-  it('Week 1 is due 2026-07-10 and Week 12 is due 2026-09-25', () => {
-    expect(cur.weekDueDate(1)).toBe('2026-07-10');
-    expect(cur.weekDueDate(12)).toBe('2026-09-25');
+describe('pre-launch staggered schedule', () => {
+  it('Intensive 1 due 2026-06-19 … Intensive 4 due 2026-07-10', () => {
+    expect(cur.weekDueDate(1)).toBe('2026-06-19');
+    expect(cur.weekDueDate(3)).toBe('2026-06-19');
+    expect(cur.weekDueDate(4)).toBe('2026-06-26');
+    expect(cur.weekDueDate(7)).toBe('2026-07-03');
+    expect(cur.weekDueDate(12)).toBe('2026-07-10');
   });
 
-  it('every due date is a Friday and lands before its teaching Monday', () => {
+  it('every week is built BEFORE the 2026-07-13 kickoff', () => {
     for (const w of cur.WEEKS) {
-      const due = cur.weekDueDate(w.week);
-      expect(utcDay(due)).toBe(5); // Friday
-      expect(due < cur.weekTeachingMonday(w.week)).toBe(true);
+      expect(cur.weekDueDate(w.week) < cur.KICKOFF).toBe(true);
     }
   });
 
-  it('due dates stagger — strictly increasing across the 12 weeks', () => {
-    const dues = cur.WEEKS.map((w: any) => cur.weekDueDate(w.week));
-    for (let i = 1; i < dues.length; i++) {
-      expect(dues[i] > dues[i - 1]).toBe(true);
-    }
+  it('staggered: each intensive later than the last; weeks in an intensive share a date', () => {
+    const [i1, i2, i3, i4] = [1, 4, 7, 10].map((n) => cur.weekDueDate(n));
+    expect(i1 < i2 && i2 < i3 && i3 < i4).toBe(true);
+    expect(cur.weekDueDate(1)).toBe(cur.weekDueDate(3)); // same intensive, same date
+    expect(cur.weekDueDate(3)).not.toBe(cur.weekDueDate(4)); // intensive boundary
   });
 
-  it('teaching Mondays start on the 2026-07-13 kickoff and step by 7 days', () => {
+  it('all deadlines are Fridays (weekdays)', () => {
+    for (const w of cur.WEEKS) expect(utcDay(cur.weekDueDate(w.week))).toBe(5);
+  });
+
+  it('teaching Mondays unchanged (delivery still 7/13 → 9/28)', () => {
     expect(cur.weekTeachingMonday(1)).toBe('2026-07-13');
     expect(cur.weekTeachingMonday(12)).toBe('2026-09-28');
-    expect(utcDay(cur.weekTeachingMonday(1))).toBe(1); // Monday
   });
 });
 
