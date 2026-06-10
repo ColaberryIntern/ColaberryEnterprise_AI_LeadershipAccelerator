@@ -70,10 +70,18 @@ describe('component template', () => {
   });
 });
 
-describe('build-ahead schedule', () => {
-  it('Week 1 is due 2026-07-10 and Week 12 is due 2026-09-25', () => {
-    expect(cur.weekDueDate(1)).toBe('2026-07-10');
-    expect(cur.weekDueDate(12)).toBe('2026-09-25');
+describe('all-before-launch schedule', () => {
+  it('every week is due 2026-07-10 (the Friday before the 7/13 kickoff)', () => {
+    for (const w of cur.WEEKS) {
+      expect(cur.weekDueDate(w.week)).toBe('2026-07-10');
+    }
+    expect(cur.LAUNCH_READY_DUE).toBe('2026-07-10');
+  });
+
+  it('the due date is a weekday and strictly before kickoff', () => {
+    const due = cur.weekDueDate(1);
+    expect(utcDay(due)).toBe(5); // Friday
+    expect(due < cur.KICKOFF).toBe(true);
   });
 
   it('teaching Mondays start on the 2026-07-13 kickoff and step by 7 days', () => {
@@ -81,20 +89,35 @@ describe('build-ahead schedule', () => {
     expect(cur.weekTeachingMonday(12)).toBe('2026-09-28');
     expect(utcDay(cur.weekTeachingMonday(1))).toBe(1); // Monday
   });
+});
 
-  it('every due date is a Friday (weekday) and lands before its teaching Monday', () => {
+describe('Anthropic Skilljar mapping', () => {
+  it('every week carries an anthropic course mapping', () => {
     for (const w of cur.WEEKS) {
-      const due = cur.weekDueDate(w.week);
-      expect(utcDay(due)).toBe(5); // Friday
-      expect(due < cur.weekTeachingMonday(w.week)).toBe(true);
+      expect(w.anthropic).toBeDefined();
+      expect(typeof w.anthropic.course).toBe('string');
+      expect(w.anthropic.course.length).toBeGreaterThan(0);
     }
   });
 
-  it('due dates are strictly increasing across the 12 weeks', () => {
-    const dues = cur.WEEKS.map((w: any) => cur.weekDueDate(w.week));
-    for (let i = 1; i < dues.length; i++) {
-      expect(dues[i] > dues[i - 1]).toBe(true);
+  it('weeks 4/9/10/11 are Colaberry-original (no Skilljar URL); the rest link out', () => {
+    const original = cur.WEEKS.filter((w: any) => w.anthropic.url === null).map((w: any) => w.week);
+    expect(original).toEqual([4, 9, 10, 11]);
+    const linked = cur.WEEKS.filter((w: any) => w.anthropic.url !== null);
+    for (const w of linked) {
+      expect(w.anthropic.url).toMatch(/^https:\/\//);
     }
+  });
+
+  it("the Anthropic component description names the week's specific course", () => {
+    const anthropic = cur.COMPONENTS.find((c: any) => c.key === 'anthropic');
+    const w1 = cur.WEEKS[0];
+    const html = anthropic.description(w1);
+    expect(html).toContain('Claude Code 101');
+    expect(html).toContain(w1.anthropic.url);
+    // Colaberry-original week renders without a link.
+    const w4 = cur.WEEKS[3];
+    expect(anthropic.description(w4)).toContain('Colaberry-original');
   });
 });
 

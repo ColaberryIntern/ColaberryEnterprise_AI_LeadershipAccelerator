@@ -140,26 +140,39 @@ async function main() {
     const name = cur.groupName(w);
     const due = cur.weekDueDate(w.week);
     let group = null;
+    let byContent = new Map();
     if (DRY) {
       console.log(`   group: "${name}"`);
     } else {
       group = await ops.createTodoGroup({ listId: list.id, name });
       groupsTouched += 1;
+      const inGroup = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todolists/${group.id}/todos.json`);
+      byContent = new Map((inGroup || []).map((t) => [t.content, t]));
     }
     for (const c of cur.COMPONENTS) {
       const description = typeof c.description === 'function' ? c.description(w) : c.description;
+      const assignee = ownerIds(c.owner);
       if (DRY) {
         console.log(`       todo: [${c.owner}] ${c.content}  (due ${due})`);
+        continue;
+      }
+      const match = byContent.get(c.content);
+      if (match) {
+        // Upsert: refresh description (Anthropic course mapping), due date, assignee.
+        await ops.updateTodo({
+          todoId: match.id,
+          patch: { description, due_on: due, assignee_ids: assignee },
+        });
       } else {
         await ops.createTodo({
           listId: group.id,
           content: c.content,
           description,
-          assigneePersonIds: ownerIds(c.owner),
+          assigneePersonIds: assignee,
           dueOn: due,
         });
-        todosTouched += 1;
       }
+      todosTouched += 1;
     }
   }
 

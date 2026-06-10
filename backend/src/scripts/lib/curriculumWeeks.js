@@ -1,19 +1,31 @@
 // Curriculum build-tracker data — the 12-week structure for the AI Systems
-// Architect Accelerator, plus the per-week build checklist and the build-ahead
-// schedule. Pure data + pure functions, NO I/O — so it unit-tests without
-// Basecamp and is the single source of truth for reconfigureCurriculumList.js.
+// Architect Accelerator, plus the per-week build checklist and schedule.
+// Pure data + pure functions, NO I/O — unit-tests without Basecamp and is the
+// single source of truth for reconfigureCurriculumList.js.
 //
 // Week themes are verbatim from docs/training-program-2026-q3/launch-briefs/
-// 11-swati-curriculum-twc.md (Track 1 table). Intensives map W1-3 / W4-6 /
-// W7-9 / W10-12 per the TWC 4-seminar frame.
+// 11-swati-curriculum-twc.md (Track 1). Intensives map W1-3 / W4-6 / W7-9 /
+// W10-12 per the TWC 4-seminar frame.
 //
-// "Lean 5-item per week" (Ali, 2026-06-10): Anthropic-section mapped /
-// Lab+artifact spec / Assessment pack (quiz+survey) / NotebookLM video /
-// Swati validation sign-off. Visual component dropped; social media is a
-// program-wide optional student assignment, not a per-week build task.
+// Each week is pre-mapped to its specific Anthropic Skilljar course (validated
+// against the live catalog at anthropic.skilljar.com, 2026-06-10). Weeks 4/9/
+// 10/11 have NO Anthropic course — they are Colaberry-original architecture
+// content (the "AI Systems Architect" differentiator).
+//
+// "Lean 5-item per week" (Ali, 2026-06-10): Anthropic course confirmed+wired /
+// Lab+artifact spec / Assessment pack (quiz+survey) / NotebookLM video / Swati
+// sign-off. Visual dropped; social media is a program-wide optional student
+// assignment, not a per-week build task.
 
 // Cohort 1 kickoff — first Mon/Thu class (Mon Architecture Day + Thu Build Day).
 const KICKOFF = '2026-07-13';
+
+// Build-deadline model (Ali, 2026-06-10): ALL 12 weeks of build content are due
+// before launch. 2026-07-10 is the Friday before the 7/13 kickoff.
+const LAUNCH_READY_DUE = '2026-07-10';
+
+const SKILLJAR = 'https://anthropic.skilljar.com';
+const CCA_F = 'https://claudecertifications.com/claude-certified-architect/exam-guide';
 
 const INTENSIVE_NAMES = {
   1: 'Build Your AI Foundation',
@@ -22,38 +34,59 @@ const INTENSIVE_NAMES = {
   4: 'Design AI That Scales',
 };
 
+// anthropic: { course, url } for a real Skilljar course, or { course, url:null }
+// when the week is Colaberry-original (no Anthropic course exists).
 const WEEKS = [
-  { week: 1, intensive: 1, theme: 'Claude Code Foundations + Architect Workspace setup' },
-  { week: 2, intensive: 1, theme: 'Agent Skills (3 project-specific skills)' },
-  { week: 3, intensive: 1, theme: 'Claude API + Business Workflow Assistant' },
-  { week: 4, intensive: 2, theme: 'Prompt Engineering + Enterprise Prompt Library' },
-  { week: 5, intensive: 2, theme: 'MCP Foundations + First MCP Server' },
-  { week: 6, intensive: 2, theme: 'Advanced MCP + Business System Integration' },
-  { week: 7, intensive: 3, theme: 'Subagents + Multi-Agent Team' },
-  { week: 8, intensive: 3, theme: 'Claude Code Workflows + Development Automation' },
-  { week: 9, intensive: 3, theme: 'Reliability Engineering + AI Quality Layer' },
-  { week: 10, intensive: 4, theme: 'Governance + AI Governance Engine' },
-  { week: 11, intensive: 4, theme: 'Systems Architecture + Solution Architecture Package' },
-  { week: 12, intensive: 4, theme: 'Capstone (production-readiness polish) + Architect Expo' },
+  { week: 1, intensive: 1, theme: 'Claude Code Foundations + Architect Workspace setup',
+    anthropic: { course: 'Claude Code 101 (+ Claude Code in Action)', url: `${SKILLJAR}/claude-code-101` } },
+  { week: 2, intensive: 1, theme: 'Agent Skills (3 project-specific skills)',
+    anthropic: { course: 'Introduction to agent skills', url: `${SKILLJAR}/introduction-to-agent-skills` } },
+  { week: 3, intensive: 1, theme: 'Claude API + Business Workflow Assistant',
+    anthropic: { course: 'Building with the Claude API', url: `${SKILLJAR}/claude-with-the-anthropic-api` } },
+  { week: 4, intensive: 2, theme: 'Prompt Engineering + Enterprise Prompt Library',
+    anthropic: { course: 'Colaberry-original (no dedicated Anthropic course; draw from Claude 101)', url: null } },
+  { week: 5, intensive: 2, theme: 'MCP Foundations + First MCP Server',
+    anthropic: { course: 'Introduction to Model Context Protocol', url: `${SKILLJAR}/introduction-to-model-context-protocol` } },
+  { week: 6, intensive: 2, theme: 'Advanced MCP + Business System Integration',
+    anthropic: { course: 'Model Context Protocol: Advanced Topics', url: `${SKILLJAR}/model-context-protocol-advanced-topics` } },
+  { week: 7, intensive: 3, theme: 'Subagents + Multi-Agent Team',
+    anthropic: { course: 'Introduction to subagents', url: `${SKILLJAR}/introduction-to-subagents` } },
+  { week: 8, intensive: 3, theme: 'Claude Code Workflows + Development Automation',
+    anthropic: { course: 'Claude Code in Action (workflows section)', url: `${SKILLJAR}/claude-code-in-action` } },
+  { week: 9, intensive: 3, theme: 'Reliability Engineering + AI Quality Layer',
+    anthropic: { course: 'Colaberry-original (no Anthropic course — architecture layer)', url: null } },
+  { week: 10, intensive: 4, theme: 'Governance + AI Governance Engine',
+    anthropic: { course: 'Colaberry-original (no Anthropic course — architecture layer)', url: null } },
+  { week: 11, intensive: 4, theme: 'Systems Architecture + Solution Architecture Package',
+    anthropic: { course: 'Colaberry-original (no Anthropic course — architecture layer)', url: null } },
+  { week: 12, intensive: 4, theme: 'Capstone (production-readiness polish) + Architect Expo',
+    anthropic: { course: 'Claude Certified Architect – Foundations (CCA-F exam)', url: CCA_F } },
 ];
 
-// The 5 priority Anthropic Skilljar courses (Appendix B, TRAINING_INTEGRATION_PLAN.md).
+// The 5 priority Anthropic Skilljar courses (reference, Appendix B).
 const ANTHROPIC_COURSES =
   'Claude 101 · Claude Code 101 · Intro to MCP · Intro to Subagents · Claude API';
 
 // Per-week build checklist. `owner` is a launchPmoTeam handle; the orchestrator
 // resolves it to a Basecamp person id (skips assignment if unprovisioned).
-// `content` is stable across weeks so createTodo dedups correctly within each
+// `content` is stable across weeks so the upsert keys correctly within each
 // week-group. `description(w)` produces the rich-HTML body for week `w`.
 const COMPONENTS = [
   {
     key: 'anthropic',
     content: 'Anthropic section mapped (enterprise.colaberry.com)',
     owner: 'kes',
-    description: (w) =>
-      `<div><p><strong>Map this week to the Anthropic course.</strong> Identify which Anthropic Skilljar course/section delivered on enterprise.colaberry.com covers <em>${w.theme}</em>, and record the section reference + URL.</p>` +
-      `<p>Priority courses: ${ANTHROPIC_COURSES}.</p>` +
-      `<p><strong>Done means:</strong> the exact Anthropic section for Week ${w.week} is named and linked in the LMS, and Kes has confirmed it is wired on enterprise.colaberry.com.</p></div>`,
+    description: (w) => {
+      const a = w.anthropic;
+      if (a.url) {
+        return `<div><p><strong>Confirm + wire the Anthropic course for this week.</strong> Week ${w.week} (<em>${w.theme}</em>) maps to <a href="${a.url}">${a.course}</a> on Anthropic Skilljar.</p>` +
+          `<p>Kes confirms the exact section and wires the link / SSO so it is delivered on enterprise.colaberry.com.</p>` +
+          `<p><strong>Done means:</strong> ${a.course} is linked for Week ${w.week} and confirmed live on enterprise.colaberry.com.</p></div>`;
+      }
+      return `<div><p><strong>Build the Colaberry-original module for this week.</strong> Week ${w.week} (<em>${w.theme}</em>) has <strong>no dedicated Anthropic Skilljar course</strong> — this is Colaberry's architecture-layer content (${a.course}).</p>` +
+        `<p>Define + source the teaching material; reference any Anthropic foundation course (e.g. Claude 101) as background.</p>` +
+        `<p><strong>Done means:</strong> the Colaberry-original module for Week ${w.week} is specced and ready on enterprise.colaberry.com.</p></div>`;
+    },
   },
   {
     key: 'lab',
@@ -90,7 +123,7 @@ const COMPONENTS = [
   },
 ];
 
-// --- Schedule (build-ahead) ----------------------------------------------
+// --- Schedule -------------------------------------------------------------
 // UTC-safe date math so it's deterministic regardless of host timezone.
 function isoAddDays(iso, days) {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -103,12 +136,10 @@ function weekTeachingMonday(week) {
   return isoAddDays(KICKOFF, (week - 1) * 7);
 }
 
-// Build tasks are due build-ahead: the Friday BEFORE that teaching week
-// (teaching Monday - 3 days). Week 1 -> 2026-07-10; Week 12 -> 2026-09-25.
-// BUILD_AHEAD_DAYS is the one-line tunable if you want a bigger buffer.
-const BUILD_AHEAD_DAYS = 3;
-function weekDueDate(week) {
-  return isoAddDays(KICKOFF, (week - 1) * 7 - BUILD_AHEAD_DAYS);
+// Build deadline: ALL weeks due before launch (2026-07-10). Every week's
+// content must exist at kickoff — no building during delivery.
+function weekDueDate(_week) {
+  return LAUNCH_READY_DUE;
 }
 
 function groupName(w) {
@@ -118,7 +149,7 @@ function groupName(w) {
 
 module.exports = {
   KICKOFF,
-  BUILD_AHEAD_DAYS,
+  LAUNCH_READY_DUE,
   INTENSIVE_NAMES,
   ANTHROPIC_COURSES,
   WEEKS,
