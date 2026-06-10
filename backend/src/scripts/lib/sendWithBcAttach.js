@@ -167,16 +167,23 @@ async function sendWithBcAttach(opts = {}) {
   // so a stale BC token can't leave us with a sent email and no attached comment.
   // This was the 2026-06-10 footgun: helper sent Mandrill, then 401'd on the
   // comment post because the .env token was stale; re-running re-sent Mandrill.
+  //
+  // We use a raw fetch (not bcGet) so we only check status and don't try to parse
+  // the response body. The /recordings/{id}.json endpoint returns 204 No Content
+  // for many todo types, and r.json() would crash on the empty body even though
+  // the recording IS accessible.
   await resolveBcToken();
-  try {
-    await bcGet(`/buckets/${bucketId}/recordings/${ticketId}.json`);
-  } catch (e) {
+  const preflightUrl = `${BC_BASE}/buckets/${bucketId}/recordings/${ticketId}.json`;
+  const preflightRes = await fetch(preflightUrl, { headers: bcAuthHeaders() });
+  if (!preflightRes.ok) {
+    const body = (await preflightRes.text()).slice(0, 200);
     throw new Error(
-      `sendWithBcAttach BC preflight failed (Mandrill send aborted): ${e.message}. ` +
-      `This means the resolved BC token cannot read /buckets/${bucketId}/recordings/${ticketId}.json. ` +
+      `sendWithBcAttach BC preflight failed (Mandrill send aborted): GET /buckets/${bucketId}/recordings/${ticketId}.json -> ${preflightRes.status}: ${body}. ` +
       `Verify the ticketId + bucketId are correct, then check CCPP.Basecamp_AuthInfo for an active token.`
     );
   }
+  // Drain body to release the socket cleanly (some Node fetch implementations leak otherwise).
+  await preflightRes.text();
 
   // === Send via Mandrill ===
   const transport = nodemailer.createTransport({
