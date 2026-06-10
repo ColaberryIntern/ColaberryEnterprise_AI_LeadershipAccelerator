@@ -475,7 +475,9 @@ ${recentRows ? `<div style="margin-top:14px;font-size:10px;color:#64748b;text-tr
 // ---------------------------------------------------------------------------
 // Email to Ali (Mandrill)
 // ---------------------------------------------------------------------------
-async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog }) {
+// recipients (optional): { to, cc } override. Defaults to Ali + standard CC.
+// Pass { to: 'ali@colaberry.com', cc: [] } for a private verification send.
+async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog, recipients }) {
   if (!process.env.MANDRILL_API_KEY) return { skipped: 'no MANDRILL_API_KEY' };
   const nodemailer = require(path.resolve(__dirname, '../../../../node_modules/nodemailer'));
   const { validateBeforeSend } = require(path.resolve(__dirname, './mandrillPreflight'));
@@ -667,10 +669,12 @@ Launch PMO for AI Systems Architect Accelerator`);
     host: 'smtp.mandrillapp.com', port: 587,
     auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
   });
+  const to = recipients?.to || 'ali@colaberry.com';
+  const cc = recipients?.cc !== undefined ? recipients.cc : ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
   const r = await transport.sendMail({
     from: '"CB System" <ali@colaberry.com>',
-    to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+    to,
+    cc,
     subject: `[Launch PMO] ${state.today} - ${state.overall}% ready, ${state.daysToLaunch}d to launch`,
     text: textClean,
     html: htmlClean,
@@ -845,7 +849,7 @@ async function runNurtureCycle(state, projectId) {
 // ---------------------------------------------------------------------------
 // Main entry
 // ---------------------------------------------------------------------------
-async function runDailyUpdate({ force = false } = {}) {
+async function runDailyUpdate({ force = false, recipients } = {}) {
   if (!force && !isWeekday()) {
     return { skipped: 'weekend - daily PMO heartbeat is Mon-Fri only' };
   }
@@ -864,7 +868,7 @@ async function runDailyUpdate({ force = false } = {}) {
   const aiSummary = await generateExecSummary(state, escalations, humanQueue, aiQueue);
   const aiLog = await buildAiCompletionLog(state);
   const nurturePosted = await runNurtureCycle(state, LAUNCH.projectId);
-  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog });
+  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog, recipients });
   // NOTE (2026-06-10): the daily HTML "Launch Readiness Dashboard - {date}" MB
   // post was removed. It created a fresh Message Board thread every weekday,
   // generating a redundant Basecamp notification that duplicated the polished
