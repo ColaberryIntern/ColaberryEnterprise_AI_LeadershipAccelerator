@@ -12,6 +12,32 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### UTD Residential Life — Feature 1/8: Forms for Reporting (2026-06-10)
+- [x] Build forms for reporting (incident, noise, lockout, etc.) — BC todo 9967513500
+  - Date: 2026-06-10
+  - Session: CC-20260610-f7k2
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/package.json`: replaced empty stubs with real deps (express, express-handlebars, multer, cookie-parser); scripts wired to `app/server.js`
+    - `gov-bid-builds/utd-residential-life/app/db.js` (new): Node 24 built-in `node:sqlite` schema — `users`, `incident_reports`, `notifications` tables; WAL + foreign keys; runs migrations on require
+    - `gov-bid-builds/utd-residential-life/app/server.js` (new): Express 4 server with express-handlebars, cookie-parser, multer (photo upload to `app/uploads/`), static serving, modular routes
+    - `gov-bid-builds/utd-residential-life/app/middleware/auth.js` (new): cookie-based session middleware
+    - `gov-bid-builds/utd-residential-life/app/routes/auth.js` (new): mock login/logout (seeded-user picker for demo)
+    - `gov-bid-builds/utd-residential-life/app/routes/dashboard.js` (new): counts (open/escalated/resolved/total), by-type breakdown, last-10 recent reports, unread notifications
+    - `gov-bid-builds/utd-residential-life/app/routes/reports.js` (new): GET/POST /reports (list + create), GET /reports/new (type selector), GET /reports/:id (detail), POST /reports/:id/status (update); escalation rule: noise complaint 22:00–08:00 → status=escalated + RD notification; lockout → CC notification
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs` (new): Bootstrap 5 layout with navy navbar, sidebar with all 5 form-type quick-links
+    - `gov-bid-builds/utd-residential-life/app/views/login.hbs` (new): seeded-user card picker
+    - `gov-bid-builds/utd-residential-life/app/views/dashboard.hbs` (new): stat cards, recent reports table, unread notification banners
+    - `gov-bid-builds/utd-residential-life/app/views/reports/new.hbs` (new): 5-card type selector grid + per-type form with common fields (building, room, time, description, photo) and type-specific fields; escalation rules sidebar
+    - `gov-bid-builds/utd-residential-life/app/views/reports/index.hbs` (new): filterable report list (by type + status)
+    - `gov-bid-builds/utd-residential-life/app/views/reports/show.hbs` (new): report detail with escalation alert, form data, photo, status updater
+    - `gov-bid-builds/utd-residential-life/app/public/style.css` (new): professional styles (dark navy nav, sidebar, stat cards, type-card hover)
+    - `gov-bid-builds/utd-residential-life/seeds/index.js` (updated): real seed — 7 users (1 RD, 2 CC, 4 SS) + 13 reports across all 5 types with seeded notifications
+    - `gov-bid-builds/utd-residential-life/.gitignore` (updated): added `data/` and `app/uploads/`
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot.js` (new): Playwright screenshot script
+    - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-1-forms-for-reporting-incident-noise-lockout-etc-.png` (new): demo screenshot
+  - Verification: `npm install` clean (node:sqlite built-in, no native modules); seed runs (`7 users, 13 reports`); server boots at localhost:3000; all 5 form types render; noise complaint POST with 23:00 time → status=escalated confirmed via curl; screenshot saved at the required path
+  - Notes: Used Node 24 built-in `node:sqlite` instead of `better-sqlite3` (no VS C++ toolset on this machine). Multer 1.x security warning deferred — upgrade to 2.x is a follow-up. No deploy yet (Step 4 pending user confirmation).
+
 ### projectDnaService backend: project_dna table + upsert API (2026-06-08)
 - [x] Backend for ProjectDnaWizard UI (PR #3 Week 2 scope)
   - Date: 2026-06-08
