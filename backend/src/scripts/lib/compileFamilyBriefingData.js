@@ -305,8 +305,16 @@ function cleanBody(bodyText) {
   let b = String(bodyText || '');
   const m = b.match(/Office Chat message\s*\([^)]*\):\s*([\s\S]+)/i);
   if (m) b = m[1];
-  b = b.replace(/^\s*Kinderlime\s*/i, '').replace(/\s+/g, ' ').trim();
-  return b ? truncate(b, 240) : undefined;
+  b = b
+    .replace(/^\s*Kinderlime\s*/i, '')
+    // Procare/Kinderlime stuff their bodies with inbox-preview padding — strip it:
+    .replace(/&(?:zwnj|zwj|nbsp|shy|#x?[0-9a-f]+);/gi, ' ')              // literal HTML entities
+    .replace(/[​‌‍⁠﻿­]/g, '')             // zero-width unicode
+    .replace(/\s+/g, ' ')
+    .trim();
+  // if nothing but padding/punctuation survives, show no quote rather than junk
+  if (!b || !/[A-Za-z]{3,}/.test(b)) return undefined;
+  return truncate(b, 240);
 }
 
 // "New since yesterday" from inbox_emails rows.
@@ -376,6 +384,40 @@ function buildActions(today) {
 }
 
 // --------------------------------------------------------------------------
+// Flashback (curated static photos until a Google Photos feed is wired)
+// --------------------------------------------------------------------------
+
+// Creed's Primrose graduation pictures — real Google Drive files Karla Estrada
+// (Primrose Wylie asst. director) shared Apr 30, 2026. Static curated asset; these
+// are genuine photos, not faked daily data. Replace/extend when Google Photos lands.
+const FLASHBACK_PHOTOS = [
+  ['1Om6cz3ZrjufjTWuADcqBG2HJ9CQiOiqC', '7057'],
+  ['12SfzRBL2uKh8PNxQ-_DScMGezDexj7DU', '7057b'],
+  ['1jaEtLAkyq-EXbiupPbm_FVAGNGCV8Cxx', '7058'],
+  ['1IFyt4AerB5AKzcdI1KmX0xfItLLpauxN', '7059'],
+  ['1Li9_oPKa3nqc2MBM1hZkbxVW7LeqfPZr', '7060'],
+  ['1SGDxIwG0NCbUdEgOBgaQrrwok95URadw', '7061'],
+  ['1nLuGCx98dXiQV3uR3P0nlge09hFbWb7B', '7062'],
+  ['1jFjhZ9RanwTBorSGQcCM3mPebkkEYwnz', '7063'],
+  ['15twc93BlMiW8pXHKQJfC0I-sQ_20DawG', '7064'],
+  ['1kE8RIrv1X4zLuwEaplFZLnrgkVoxSeKH', '7065'],
+  ['1dy4vw6Cr7feUpQigYZX9zbdW5LJD248m', '7066'],
+  ['1fHA3Dn9iqsm4HSa8AaQFYr83TLrolta5', '7067'],
+  ['1RHq7gEnY0TOV1C2hZuL7PG6050_eFi8E', '7068'],
+  ['1f72uJlp0evPPX8e9aeD5-4uiDwG3BezA', '7204'],
+  ['1Q0IFOp60YsB-35uoOYypyXiCvIAx43ar', '7205'],
+];
+
+function buildFlashback() {
+  return {
+    heading: "Creed's Primrose Graduation Pictures",
+    intro: 'From Karla Estrada (Primrose Wylie asst. director), sent Apr 30, 2026. 15 photos. Click any thumbnail to open it in Drive.',
+    photos: FLASHBACK_PHOTOS,
+    note: 'These 15 are the photos currently reachable by email (forwarded from Hotmail). Once Google Photos is wired in, the rest of Creed’s history will surface here automatically.',
+  };
+}
+
+// --------------------------------------------------------------------------
 // Main
 // --------------------------------------------------------------------------
 
@@ -433,6 +475,9 @@ async function compileFamilyBriefingData({ date = new Date() } = {}) {
     degraded.push('inbox mail');
     console.error('[compileFamily] inbox_emails source failed:', err.message);
   }
+
+  // ---- Flashback (curated static photos) ----
+  data.flashback = buildFlashback();
 
   // ---- Hero (derived) ----
   data.hero = buildHero(todayBlock, data.travel || { cards: [] }, data.newSince || []);

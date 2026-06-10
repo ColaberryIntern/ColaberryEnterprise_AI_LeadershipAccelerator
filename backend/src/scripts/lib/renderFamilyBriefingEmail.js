@@ -389,7 +389,7 @@ function renderSection7Flashback(d, data) {
   const photos = Array.isArray(fb.photos) ? fb.photos : [];
   const moments = Array.isArray(fb.moments) ? fb.moments : [];
   let out = sectionOpen('Section 7 . Flashback');
-  out += hTitle('Recent family moments', fb.intro);
+  out += hTitle(fb.heading || 'Recent family moments', fb.intro);
 
   if (photos.length) {
     out += `<table role="presentation" cellpadding="0" cellspacing="4" border="0" width="100%" style="border-collapse:separate">`;

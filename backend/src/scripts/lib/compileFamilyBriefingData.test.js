@@ -123,6 +123,17 @@ test('cleanBody: non-office-chat returns cleaned snippet; empty -> undefined', (
   assert.strictEqual(cleanBody('   '), undefined);
   assert.ok(/Itinerary/.test(cleanBody('Your trip   Itinerary   confirmed')));
 });
+test('cleanBody: strips literal &zwnj; padding + zero-width chars (Procare daily summary)', () => {
+  // Procare daily-summary bodies are padded with inbox-preview filler.
+  const padded = 'Daily summary &zwnj; &zwnj; &zwnj; &nbsp;‌‌‌ for Creed: 2 naps, ate well.';
+  const out = cleanBody(padded);
+  assert.ok(!/&zwnj;|&nbsp;/.test(out), 'no literal entity padding remains');
+  assert.ok(!/[​‌‍]/.test(out), 'no zero-width unicode remains');
+  assert.ok(/Daily summary for Creed/.test(out), 'real text preserved');
+});
+test('cleanBody: padding-only body yields no quote', () => {
+  assert.strictEqual(cleanBody('&zwnj; &zwnj; &zwnj; ‌‌'), undefined);
+});
 
 // ---- buildNewSince: shapes DB rows into change-rows ----
 test('buildNewSince: maps inbox_emails rows to label/title/src/quote', () => {
