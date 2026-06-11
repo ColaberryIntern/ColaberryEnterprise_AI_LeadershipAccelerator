@@ -1,4 +1,4 @@
-# Student Platform Strategy — AI Systems Architect Accelerator
+# Student Platform Strategy - AI Systems Architect Accelerator
 
 **Date:** 2026-06-10 · **Session:** CC-20260610-q4d7 · **Author:** Claude Code (for Ali)
 **Status:** Strategy locked, build sequencing proposed. Owners: Kes (platform), Swati (curriculum), Ali (approval).
@@ -8,8 +8,8 @@
 
 ## Executive summary
 
-The student-facing vision — an advisor-like project builder, per-student project/list/task workspace,
-GitHub sync, a portfolio of artifacts, and an interactive Skool-like community — is **~70% already built or
+The student-facing vision - an advisor-like project builder, per-student project/list/task workspace,
+GitHub sync, a portfolio of artifacts, and an interactive Skool-like community - is **~70% already built or
 specced**, spread across two repos and the training-program docs. The strategic problem is **convergence,
 not greenfield construction**: unify what exists into one synced student journey, build the student version of
 the CB-System operating model, and close ~3 real gaps before 2026-07-13.
@@ -57,7 +57,7 @@ advisor's *generation logic*, not its plumbing.
 
 ---
 
-## 2. Target architecture — one synced student journey
+## 2. Target architecture - one synced student journey
 
 ```
 Student starts program
@@ -70,7 +70,7 @@ Student starts program
    │     3. 10-question enhancement        ► profile/feature enhancement (PORT from advisor)
    │     4. Requirements document          ► requirementsGenerationService (EXISTS) + advisor writer
    │     5. Task list created (PORTAL)     ► RequirementsMap → student tasks (CB-System, native)
-   │     6. GitHub connected               ► githubService (EXISTS) — the "no-MCP" path
+   │     6. GitHub connected               ► githubService (EXISTS) - the "no-MCP" path
    │
    ├─ Build loop: student works in Claude Code locally → pushes to GitHub
    │     → portal ingests via githubService → requirement states flip to VERIFIED
@@ -78,7 +78,7 @@ Student starts program
    │
    ├─ Live preview at {slug}.preview.colaberry.ai (EXISTS)
    │
-   ├─ Portfolio auto-assembles artifacts (EXISTS; extend artifact slots — §4)
+   ├─ Portfolio auto-assembles artifacts (EXISTS; extend artifact slots - §4)
    │
    └─ Build-log engine drafts a weekly "building in public" post → student posts w/ #Colaberry (§5)
 ```
@@ -94,19 +94,19 @@ The student version reuses the operating model and swaps the work source from Ba
 
 | Employee piece | Student reuse | Effort |
 |---|---|---|
-| `priorityEngineService` (urgency 0-100, categories) | Reuse — scores any task record | ~2-3h |
-| Approval workspace UI (Approve/Revise/Reject/Escalate + Claude Code prompt) | Reuse — generic | ~4-6h |
-| Run My Day (keyboard walk, next-action sequencing) | Reuse — rank by same engine | ~3-4h |
+| `priorityEngineService` (urgency 0-100, categories) | Reuse - scores any task record | ~2-3h |
+| Approval workspace UI (Approve/Revise/Reject/Escalate + Claude Code prompt) | Reuse - generic | ~4-6h |
+| Run My Day (keyboard walk, next-action sequencing) | Reuse - rank by same engine | ~3-4h |
 | `OpsSkill` capture, `automationRulesService`, `metricsDailyService` | Reuse | ~3h |
-| `runMyDayPromptService` (Claude Code prompt per action kind) | Adapt — strip BC tools, add project/GitHub resources | ~6-8h |
-| `approvalService` (record + write-back) | Adapt — write to portal project, not BC comment | ~3-4h |
-| `bcSyncService`, `basecampClient` (pull from Basecamp) | **Discard** — students create tasks natively | — |
+| `runMyDayPromptService` (Claude Code prompt per action kind) | Adapt - strip BC tools, add project/GitHub resources | ~6-8h |
+| `approvalService` (record + write-back) | Adapt - write to portal project, not BC comment | ~3-4h |
+| `bcSyncService`, `basecampClient` (pull from Basecamp) | **Discard** - students create tasks natively | - |
 
 **Net:** ~20-26h for a working Phase-1 student CB-System. Student-side differences: work source = native task
 creation (Project + requirements + walk phases), assignee always the student, write-back = portal DB + progress
 post, resources = project GitHub + assignment docs + curriculum (not BC Vault/Gmail), relaxed brand compliance.
 
-`CoryHome.tsx` is the natural mount point — it already renders Today's One Priority + a top-5 queue.
+`CoryHome.tsx` is the natural mount point - it already renders Today's One Priority + a top-5 queue.
 
 **New backend surface:** `StudentTask` model + `routes/portal/studentOpsRoutes.ts` mirroring `opsRoutes.ts`
 (`/my-queue`, `/run-my-day`, `/decisions`, `/metrics/today`). **New frontend:** `StudentCommandCenter.tsx`
@@ -116,12 +116,12 @@ adapted from `AiOpsCommandCenter.tsx`, or embedded as a queue widget in `CoryHom
 
 ## 4. Artifact strategy ("structure, but flexible")
 
-Two tiers — this resolves the structure-vs-flexibility tension:
+Two tiers - this resolves the structure-vs-flexibility tension:
 
-- **Tier A — Build artifacts (structured, fixed by the 12-week Lego model).** Week 1 = Architect Workspace + repo;
+- **Tier A - Build artifacts (structured, fixed by the 12-week Lego model).** Week 1 = Architect Workspace + repo;
   Week 5 = first MCP server; Week 12 = production system. Non-negotiable slots → make portfolios comparable and
   gradeable. Already cataloged in TRAINING_PROGRAM_CRITIQUE.
-- **Tier B — Showcase artifacts (flexible, student-chosen per project).** Each project gets a fixed *set of slots*
+- **Tier B - Showcase artifacts (flexible, student-chosen per project).** Each project gets a fixed *set of slots*
   the system scaffolds; the student fills them with whatever fits: demo video, explainer (video **or** podcast),
   one-pager/infographic, PPT, architecture doc, live-preview link, social posts. AI drafts each (build-log engine).
 
@@ -146,7 +146,7 @@ Decision: build native, integrated with the portfolio/project system rather than
 - **v1 launch-min:** global build-log feed (auto-posted build logs from all students) + threaded comments on
   projects/artifacts + per-cohort discussion thread. Async first.
 - **v1.1:** real-time presence ("who's online"), peer chat, reactions, @-mentions, per-industry communities.
-  (Presence/real-time requires a websocket layer — none exists today; this is the heaviest greenfield piece and
+  (Presence/real-time requires a websocket layer - none exists today; this is the heaviest greenfield piece and
   is **deferred past launch** unless prioritized.)
 
 Risk to manage: native real-time presence is multi-week work competing with launch-critical build. The honest
@@ -154,19 +154,19 @@ phasing puts **async community at launch, real-time presence post-launch** (see 
 
 ---
 
-## 7. Curriculum build-tracker — lean 5-item per week
+## 7. Curriculum build-tracker - lean 5-item per week
 
 Applies to the **internal Curriculum build list**
-([todolist 9946468992](https://app.basecamp.com/3945211/buckets/47502609/todolists/9946468992)) — what the team
+([todolist 9946468992](https://app.basecamp.com/3945211/buckets/47502609/todolists/9946468992)) - what the team
 must produce, distinct from the student-facing system. Per Ali's refinements (drop visual; Anthropic = section
 mapping only; CB drafts test+survey w/ Swati approval; keep NotebookLM; social = program mechanic):
 
 Per week (12 week-groups, ~60 todos):
 
-1. **Anthropic section mapped** — which Skilljar course/section this week maps to (the 5 priority: Claude 101,
+1. **Anthropic section mapped** - which Skilljar course/section this week maps to (the 5 priority: Claude 101,
    Claude Code 101, Intro to MCP, Intro to Subagents, Claude API). *[Swati + Kes]*
-2. **Lab + artifact spec built** — what the student builds this week + which artifacts it produces. *[Swati / CB drafts]*
-3. **Assessment pack (quiz + survey)** — CB drafts, Swati approves. *[CB → Swati]*
+2. **Lab + artifact spec built** - what the student builds this week + which artifacts it produces. *[Swati / CB drafts]*
+3. **Assessment pack (quiz + survey)** - CB drafts, Swati approves. *[CB → Swati]*
 4. **NotebookLM video** produced. *[CB / Swati]*
 5. **Swati validation sign-off** (the gate). *[Swati]*
 
@@ -186,7 +186,7 @@ The **student-platform build work** is a separate workstream and should be track
 
 ## 8. Phased plan to 2026-07-13
 
-**P0 — Launch-critical (by 7/13)**
+**P0 - Launch-critical (by 7/13)**
 - Wire the end-to-end project-builder in the portal: ProjectDnaWizard → idea + 10-Q enhance → requirements →
   native student tasks → GitHub connect. (Port advisor brain; reuse existing portal pieces.)
 - Student CB-System Phase 1 (Run My Day + approval workspace + next-action prompt) on `CoryHome`.
@@ -194,11 +194,11 @@ The **student-platform build work** is a separate workstream and should be track
 - Portfolio Tier-A/B slots; build-log social drafter.
 - Community: **async feed + comments** only.
 
-**P1 — Weeks 1-6 (during cohort)**
+**P1 - Weeks 1-6 (during cohort)**
 - NotebookLM videos + assessment packs week-by-week; portfolio polish.
 - CB-System skill capture + automation rules for students.
 
-**P2 — Post-cohort / v1.1**
+**P2 - Post-cohort / v1.1**
 - Real-time presence ("who's online"), peer chat, reactions, per-industry communities.
 - Consider optional mirror of student tasks to a shared cohort Basecamp (no per-seat blowup) if desired.
 
@@ -207,11 +207,11 @@ The **student-platform build work** is a separate workstream and should be track
 ## 9. Open decisions / risks
 
 - **Real-time presence is the long pole.** No websocket layer exists. If "see who's online" is required *at*
-  launch, it displaces other P0 work — needs an explicit call.
+  launch, it displaces other P0 work - needs an explicit call.
 - **LLM provider for the ported advisor brain.** Advisor generation runs on OpenAI; the program standardizes on
-  Claude/Claude Code. Port should target Claude (latest Opus/Sonnet) — provider swap, not a lift.
+  Claude/Claude Code. Port should target Claude (latest Opus/Sonnet) - provider swap, not a lift.
 - **Grading + cohort scale persistence.** Student projects must be DB-backed and per-student-scoped (the
-  Accelerator already is; the advisor repo was not — another reason to build native).
+  Accelerator already is; the advisor repo was not - another reason to build native).
 - **Anthropic Partner course set** (4 courses for partner status) still unconfirmed (Ali has the playbook).
 
 ---
