@@ -78,12 +78,13 @@ function fmtPhone(p) {
   return p || '';
 }
 
-/* PaySimple deep-link. The exact admin URL format is pending Ali's confirmation;
- * until then we link to the app root and surface the Customer/Schedule/Account
- * IDs inline so Taiwo can search. Swap PS_BASE once the real pattern is known. */
+/* PaySimple deep-link. Confirmed admin customer-profile URL pattern (Taiwo,
+ * 2026-06-10): https://app.paysimple.com/#/customer/profile/{CustomerID}/overview
+ * Shared single login for the whole team (Ali's decision 2026-06-14: everyone uses
+ * the same username/password, no separate login for Taiwo). */
 const PS_BASE = 'https://app.paysimple.com';
 function psLink(customerId) {
-  return `${PS_BASE}/#/customers/${customerId}`;
+  return `${PS_BASE}/#/customer/profile/${customerId}/overview`;
 }
 
 function pill(text, bg, fg) {

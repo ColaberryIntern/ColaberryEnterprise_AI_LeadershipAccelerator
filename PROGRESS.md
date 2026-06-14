@@ -5780,3 +5780,10 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: Updated `setupStudentPlatformBacklog.js` per Ali: (1) all 45 todos re-staggered so every due date is on or before the 2026-07-13 start (decisions 06-15, design 06-19, design-approval 06-23, then builds staggered epic by epic 06-26 -> 07-09, sign-offs through 07-10; former P1/P2 items pulled before launch). (2) Every todo now carries a DETAILED description (What / Build notes with precise files to reuse-or-port / Done means / Reference / Rules). (3) The 3 source docs (BUILD_SPEC.md, BLUEPRINT.html, STRATEGY.md) are uploaded to the project Vault so Kes + Claude Code can open exactly what they are building; every task references them. (4) Added stale-todo cleanup (trash reworded orphans) so re-runs stay at 45.
   - Verification: Applied live; read-back confirms 45 todos, latest due 2026-07-10 (<= 7/13 start), detailed descriptions present (sample Epic 1 shows What/Build notes/Done means), 3 docs in Vault (ids 9985703950/986/4016). Orphaned reworded decision trashed on re-run.
   - Notes: Landed on main via clean worktree off origin/main. List 9985688621 in Basecamp project 47502609.
+
+- [x] **PaySimple collections report: wire confirmed customer-profile deep-link pattern.**
+  - Date: 2026-06-14
+  - Session: CC-20260610-q4d7
+  - What changed: `backend/src/scripts/lib/renderPaysimpleReport.js` psLink() now builds the confirmed PaySimple admin URL `https://app.paysimple.com/#/customer/profile/{CustomerID}/overview` (was a guessed `/#/customers/{id}`). Source: Taiwo's 2026-06-10 reply (logged on BC todo 9982196613). Each student "Customer #" link in the Mon/Wed/Fri noon-CT collections report now deep-links to their PaySimple profile. Login decision recorded (Ali, 2026-06-14): whole team shares one PaySimple login, no separate login for Taiwo.
+  - Verification: tsc/node --check OK; --dry render on VPS grep-confirms the new URL pattern in output HTML.
+  - Notes: Closes open item #2 from the PaySimple collections thread. Takes effect next report run (cron unchanged).
