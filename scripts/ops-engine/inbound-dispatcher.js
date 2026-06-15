@@ -285,12 +285,87 @@ async function getWatchedBuckets() {
   return WATCHED_BUCKETS_FALLBACK;
 }
 
+// PRIMARY scan: Basecamp's account-wide recordings feed. One paginated query
+// per type returns the most-recent recordings across ALL projects (newest
+// first), so a tick only looks at what was actually created in the lookback
+// window instead of re-walking all 64 project docks. This is what lets a tick
+// finish inside the 3-min budget. Replaced the per-project walk on 2026-06-15
+// (the walk survives as findNewMentionsByWalk, used only if the feed throws).
+async function bcRecordingsSince(type, cutoffMs, maxPages = 20) {
+  const out = [];
+  let next = `${BASE}/projects/recordings.json?type=${type}&sort=created_at&direction=desc`;
+  let pages = 0;
+  while (next && pages < maxPages) {
+    pages++;
+    const r = await fetch(next, { headers: H() });
+    if (!r.ok) throw new Error(`recordings ${type} -> ${r.status}`);
+    const items = await r.json();
+    if (!Array.isArray(items) || items.length === 0) break;
+    let anyFresh = false;
+    for (const it of items) {
+      if (new Date(it.created_at).getTime() >= cutoffMs) { out.push(it); anyFresh = true; }
+    }
+    // Feed is newest-first; once a whole page is older than the cutoff, stop.
+    if (!anyFresh) break;
+    const m = (r.headers.get('Link') || '').match(/<([^>]+)>;\s*rel="next"/);
+    next = m ? m[1] : null;
+  }
+  return out;
+}
+
+async function findNewMentionsByFeed(state, cutoffMs) {
+  const newMentions = [];
+  const seen = new Set();
+  const consider = (rec, recId, key) => {
+    if (seen.has(key) || state.processed[key]) return;
+    if (new Date(rec.created_at).getTime() < cutoffMs) return;
+    if (!ALLOWED_REQUESTER_IDS.has(rec.creator?.id)) return;
+    if (!isCBMention(rec.content || '')) return;
+    seen.add(key);
+    newMentions.push({
+      bucketId: rec.bucket.id,
+      recId,
+      comment: { id: rec.id, content: rec.content || '', creator: rec.creator, created_at: rec.created_at },
+      key,
+    });
+  };
+
+  // @CB mentions inside comments (on todos, messages, documents, anything).
+  const comments = await bcRecordingsSince('Comment', cutoffMs);
+  for (const c of comments) {
+    if (!c.bucket?.id || !c.parent?.id) continue;
+    consider(c, c.parent.id, `${c.bucket.id}-${c.id}`); // key matches the walk's comment key
+  }
+  // @CB mentions inside a message body itself.
+  const messages = await bcRecordingsSince('Message', cutoffMs);
+  for (const msg of messages) {
+    if (!msg.bucket?.id) continue;
+    consider(msg, msg.id, `${msg.bucket.id}-msg-${msg.id}`); // key matches the walk's message key
+  }
+  return newMentions;
+}
+
 async function findNewMentions(state) {
   const cutoffMs = Date.now() - LOOKBACK_HOURS * 3600 * 1000;
+  try {
+    const m = await findNewMentionsByFeed(state, cutoffMs);
+    console.log(`  scanned recordings feed (Comment+Message), ${m.length} new @CB mention(s)`);
+    return m;
+  } catch (e) {
+    console.warn(`  recordings feed failed (${e.message}); falling back to per-project walk`);
+    return findNewMentionsByWalk(state, cutoffMs);
+  }
+}
+
+// FALLBACK scan: walk every project's dock. Slow (re-fetches all 64 projects
+// each tick, which is why ticks were blowing the 3-min budget pre-2026-06-15),
+// but exhaustive. Only used when the recordings-feed scan throws, so we never
+// go blind if the feed endpoint has a bad day.
+async function findNewMentionsByWalk(state, cutoffMs) {
   const newMentions = [];
 
   const watchedBuckets = await getWatchedBuckets();
-  console.log(`  scanning ${watchedBuckets.length} project${watchedBuckets.length === 1 ? '' : 's'}`);
+  console.log(`  [fallback] walking ${watchedBuckets.length} project${watchedBuckets.length === 1 ? '' : 's'}`);
 
   for (const bucketId of watchedBuckets) {
     let project;
@@ -410,7 +485,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 }
 
 // Exported for unit tests. Guarded IIFE below only runs when executed directly.
-module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, classifyKeyword, MAX_REPLIES_PER_COMMENT };
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk };
 
 if (require.main !== module) return;
 
