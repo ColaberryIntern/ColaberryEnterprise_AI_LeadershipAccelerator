@@ -175,7 +175,6 @@ interface RawTodoRow {
   assignee_ids: string[] | string; // JSONB returns either depending on driver
   project_weight: string | number | null;
   prev_score: number | string | null; // current stored urgency_score, for dedup
-  prev_category: string | null; // current stored category, for dedup
 }
 
 const PAGE_SIZE = 200;
@@ -188,21 +187,29 @@ const ASSESS_INSERT_BATCH = 100;
 const ASSESS_RETENTION_DAYS = 90;
 
 /**
- * True when a freshly computed score/category differs from what's already stored
- * on the todo. Pure + exported so it can be unit-tested without a DB. A null
- * prev (never scored) always counts as changed. prev_score may arrive as a
- * string from the pg driver, so we normalize numerically.
+ * True when a freshly computed urgency_score differs from what's already stored
+ * on the todo. Pure + exported so it can be unit-tested without a DB. A null prev
+ * (never scored) always counts as changed. prev_score may arrive as a string from
+ * the pg driver, so we normalize numerically.
+ *
+ * Dedup is on urgency_score ONLY, deliberately NOT on category. ops_bc_todos.category
+ * is co-owned: the priority engine sets a baseline, but automationRulesService runs
+ * after the engine each cron cycle and overwrites category (e.g. to
+ * 'waiting_dependency'). Including category here made the engine see a "change" every
+ * single pass — the engine and automation ping-pong the column forever — so it wrote
+ * one audit row per todo per cycle even when the score never moved. That re-created
+ * the unbounded ops_ai_assessments growth that filled the prod disk on 2026-06-15.
+ * urgency_score is owned solely by this engine (automation never touches it), so it
+ * is the stable, authoritative dedup key.
  */
-export function assessmentChanged(
+export function scoreChanged(
   prevScore: number | string | null,
-  prevCategory: string | null,
   newScore: number,
-  newCategory: string,
 ): boolean {
-  if (prevScore == null || prevCategory == null) return true;
+  if (prevScore == null) return true;
   const prevNum = typeof prevScore === 'string' ? Number(prevScore) : prevScore;
   if (!Number.isFinite(prevNum)) return true;
-  return prevNum !== newScore || prevCategory !== newCategory;
+  return prevNum !== newScore;
 }
 
 // Single-flight guard. A full pass over all active todos can exceed the 2-min
@@ -251,7 +258,7 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
     const rows = await sequelize.query<RawTodoRow>(
       `SELECT t.bc_id, t.project_id, t.title, t.description, t.due_on,
               t.bc_updated_at, t.assignee_ids,
-              t.urgency_score AS prev_score, t.category AS prev_category,
+              t.urgency_score AS prev_score,
               COALESCE(p.weight, 1.0) AS project_weight
          FROM ops_bc_todos t
          LEFT JOIN ops_bc_projects p ON p.bc_id = t.project_id
@@ -295,12 +302,13 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
         result.todos_scored++;
         result.category_counts[weightedCategory]++;
 
-        // Dedup: only touch the DB when the score or category actually changed
-        // since the last pass. The engine runs every 2 min, so most todos are
-        // identical pass-to-pass; skipping the redundant UPDATE and (critically)
-        // the audit-row insert is what bounds ops_ai_assessments growth. The
-        // unconditional insert here is what filled the prod disk on 2026-06-15.
-        if (!assessmentChanged(r.prev_score, r.prev_category, weightedScore, weightedCategory)) {
+        // Dedup on urgency_score only (see scoreChanged): the engine runs every
+        // 2 min and most todos' scores are identical pass-to-pass, so skipping the
+        // redundant UPDATE and (critically) the audit-row insert is what bounds
+        // ops_ai_assessments growth. category is intentionally excluded because
+        // automationRulesService overwrites it after every pass, which would make
+        // every todo look "changed" forever.
+        if (!scoreChanged(r.prev_score, weightedScore)) {
           result.todos_unchanged++;
           continue;
         }
