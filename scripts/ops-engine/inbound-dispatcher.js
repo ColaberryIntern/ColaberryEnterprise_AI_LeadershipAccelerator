@@ -395,9 +395,23 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 
 (async () => {
   if (!acquireLock()) process.exit(0);
-  const timeout = setTimeout(() => { console.error('TICK TIMEOUT'); releaseLock(); process.exit(2); }, TICK_TIMEOUT_MS);
+  // State must be reachable from the timeout closure so a tick that blows the
+  // 3-min budget still persists whatever it finished. ROOT CAUSE of the
+  // 2026-06-15 duplicate-reply loop: saveState() ran ONLY at the end of the
+  // tick. Every tick was timing out (token refetch each tick + 64 projects to
+  // walk > 3 min) and process.exit(2)-ing before saveState, so processed
+  // mentions were never persisted and got re-replied every 3 min - some
+  // comments accrued 25 duplicate CB replies. Fix: persist incrementally after
+  // each mention AND on timeout.
+  let state = null;
+  const timeout = setTimeout(() => {
+    console.error('TICK TIMEOUT');
+    try { if (state && !DRY) saveState(state); } catch (_e) {}
+    releaseLock();
+    process.exit(2);
+  }, TICK_TIMEOUT_MS);
   try {
-    const state = loadState();
+    state = loadState();
     console.log(`tick ${new Date().toISOString()}, last=${state.last_tick}`);
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
@@ -435,6 +449,9 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
           } catch (_e2) {}
         }
       }
+      // Persist after EVERY mention. If the tick later times out, already-
+      // answered mentions stay marked processed and are never re-replied.
+      if (!DRY) saveState(state);
     }
     state.last_tick = new Date().toISOString();
     if (!DRY) saveState(state);
