@@ -216,9 +216,9 @@ async function trashTodoslist({ projectId, listId, listName }) {
       if (!dep) continue;
       const listUrl = dl.listUrlFromAppUrl(r.app_url, r.listId);
       const artifact = dep.completed ? dep.app_url : 'PENDING';
-      const block = dl.buildMarkersBlock({ dependsOnUrl: dep.app_url, artifact, listUrl });
-      const newDesc = dl.injectMarkers(r.descHtml, block);
-      if (newDesc === r.descHtml) continue;
+      const desired = { dependsOnUrl: dep.app_url, artifact, listUrl };
+      if (dl.markersAreCurrent(r.descHtml, desired)) continue;
+      const newDesc = dl.injectMarkers(r.descHtml, dl.buildMarkersBlock(desired));
       try {
         await ops.updateTodo({ todoId: r.id, patch: { description: newDesc } });
         linked++;
