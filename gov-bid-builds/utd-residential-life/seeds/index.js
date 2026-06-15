@@ -17,9 +17,9 @@ if (RESET) {
 }
 
 const existingCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
-if (existingCount > 0 && !RESET) {
-  console.log('[seed] Database already seeded. Use SEED_RESET=true to reseed.');
-  process.exit(0);
+const skipUsersReports = existingCount > 0 && !RESET;
+if (skipUsersReports) {
+  console.log('[seed] Users/reports already seeded — skipping to shifts check.');
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -52,6 +52,7 @@ const ss1Id = sss[1]?.id;
 const ss2Id = sss[2]?.id;
 const ss3Id = sss[3]?.id;
 
+if (!skipUsersReports) {
 // ── Reports ───────────────────────────────────────────────────────────────────
 const insertReport = db.prepare(`
   INSERT INTO incident_reports
@@ -236,5 +237,75 @@ for (const r of REPORTS) {
 }
 
 console.log(`[seed] ${USERS.length} users, ${REPORTS.length} reports seeded.`);
-console.log(`[seed] Sign in at http://localhost:3000/login`);
+} // end if (!skipUsersReports)
+
+// ── Shifts ────────────────────────────────────────────────────────────────────
+const shiftCount = db.prepare('SELECT COUNT(*) AS c FROM shifts').get().c;
+if (shiftCount === 0 || RESET) {
+  if (RESET) {
+    db.exec('DELETE FROM shift_swaps; DELETE FROM shifts;');
+    db.exec("DELETE FROM sqlite_sequence WHERE name IN ('shift_swaps','shifts');");
+  }
+
+  const insertShift = db.prepare(`
+    INSERT INTO shifts (shift_type, assigned_user_id, start_time, end_time, notes, status, created_by_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Week of 2026-06-15 (Mon) – 2026-06-21 (Sun), plus next Mon 6/22 and two completed from prior week
+  const SHIFTS = [
+    // Mon 6/15
+    { t: 'front_desk', u: ss0Id, s: '2026-06-15T08:00:00', e: '2026-06-15T16:00:00', n: 'Andrews Hall front desk', st: 'scheduled' },
+    { t: 'on_call',    u: ss1Id, s: '2026-06-15T22:00:00', e: '2026-06-16T06:00:00', n: 'Berkner Hall overnight', st: 'scheduled' },
+    // Tue 6/16
+    { t: 'front_desk', u: ss1Id, s: '2026-06-16T08:00:00', e: '2026-06-16T16:00:00', n: 'Andrews Hall front desk', st: 'scheduled' },
+    { t: 'on_call',    u: ss2Id, s: '2026-06-16T22:00:00', e: '2026-06-17T06:00:00', n: 'Hillhouse overnight', st: 'scheduled' },
+    // Wed 6/17
+    { t: 'front_desk', u: ss2Id, s: '2026-06-17T08:00:00', e: '2026-06-17T16:00:00', n: 'Andrews Hall front desk', st: 'scheduled' },
+    { t: 'on_call',    u: ss3Id, s: '2026-06-17T22:00:00', e: '2026-06-18T06:00:00', n: 'Caruth Hall overnight', st: 'scheduled' },
+    // Thu 6/18
+    { t: 'front_desk', u: ss3Id, s: '2026-06-18T08:00:00', e: '2026-06-18T16:00:00', n: 'Andrews Hall front desk', st: 'scheduled' },
+    { t: 'on_call',    u: ss0Id, s: '2026-06-18T22:00:00', e: '2026-06-19T06:00:00', n: 'Andrews Hall overnight', st: 'scheduled' },
+    // Fri 6/19 — Jake (ss0Id) has this front desk; seeded swap request references it (index 8)
+    { t: 'front_desk', u: ss0Id, s: '2026-06-19T08:00:00', e: '2026-06-19T16:00:00', n: 'Andrews Hall front desk', st: 'scheduled' },
+    { t: 'on_call',    u: ss1Id, s: '2026-06-19T22:00:00', e: '2026-06-20T06:00:00', n: 'Berkner Hall overnight', st: 'scheduled' },
+    // Sat 6/20
+    { t: 'ra_duty',    u: ccId,  s: '2026-06-20T10:00:00', e: '2026-06-20T22:00:00', n: 'Weekend CC coverage — all buildings', st: 'scheduled' },
+    { t: 'on_call',    u: ss2Id, s: '2026-06-20T22:00:00', e: '2026-06-21T06:00:00', n: 'Hillhouse overnight', st: 'scheduled' },
+    // Sun 6/21
+    { t: 'ra_duty',    u: cc2Id, s: '2026-06-21T10:00:00', e: '2026-06-21T22:00:00', n: 'Weekend CC coverage — all buildings', st: 'scheduled' },
+    { t: 'on_call',    u: ss3Id, s: '2026-06-21T22:00:00', e: '2026-06-22T06:00:00', n: 'Caruth Hall overnight', st: 'scheduled' },
+    // Next Mon 6/22
+    { t: 'front_desk', u: ss1Id, s: '2026-06-22T08:00:00', e: '2026-06-22T16:00:00', n: 'Andrews Hall front desk', st: 'scheduled' },
+    { t: 'on_call',    u: ss0Id, s: '2026-06-22T22:00:00', e: '2026-06-23T06:00:00', n: 'Andrews Hall overnight', st: 'scheduled' },
+    // Prior week — completed
+    { t: 'front_desk', u: ss3Id, s: '2026-06-13T08:00:00', e: '2026-06-13T16:00:00', n: 'Andrews Hall front desk', st: 'completed' },
+    { t: 'on_call',    u: ss0Id, s: '2026-06-13T22:00:00', e: '2026-06-14T06:00:00', n: 'Andrews Hall overnight', st: 'completed' },
+  ];
+
+  const shiftIds = SHIFTS.map(s =>
+    insertShift.run(s.t, s.u, s.s, s.e, s.n, s.st, rdId).lastInsertRowid
+  );
+
+  // Pending swap: Jake (ss0Id) wants to swap his Fri 6/19 front desk (index 8) with Aisha (ss1Id)
+  const swapShiftId = shiftIds[8];
+  db.prepare(`
+    INSERT INTO shift_swaps (shift_id, requester_id, swap_with_user_id, reason, status)
+    VALUES (?, ?, ?, ?, 'pending')
+  `).run(swapShiftId, ss0Id, ss1Id, 'Academic exam Friday morning — need front desk coverage');
+
+  // Notifications for the seeded swap
+  db.prepare('INSERT INTO notifications (user_id, message) VALUES (?, ?)').run(
+    ss1Id, 'Jake Thompson requested you cover their Front Desk shift on Fri, Jun 19 (8 AM – 4 PM)'
+  );
+  db.prepare('INSERT INTO notifications (user_id, message) VALUES (?, ?)').run(
+    ccId, "Swap request pending: Jake Thompson's Front Desk on Fri, Jun 19 needs your approval"
+  );
+
+  console.log(`[seed] ${SHIFTS.length} shifts seeded, 1 swap request seeded.`);
+} else {
+  console.log('[seed] Shifts already seeded, skipping.');
+}
+
+console.log('[seed] Done. Sign in at http://localhost:3000/login');
 process.exit(0);

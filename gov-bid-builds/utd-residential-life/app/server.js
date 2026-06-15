@@ -94,6 +94,7 @@ const upload = multer({
 app.use('/', require('./routes/auth'));
 app.use('/', require('./routes/dashboard'));
 app.use('/reports', require('./routes/reports')(upload));
+app.use('/schedule', require('./routes/schedule'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

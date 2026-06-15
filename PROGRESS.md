@@ -12,6 +12,13 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### UTD Residential Life — Feature 1/8: Verification pass (2026-06-15)
+- [x] Verification session for BC todo 9967513500 — confirmed all deliverables on main
+  - Date: 2026-06-15
+  - Session: CC-20260615-m3x9
+  - What changed: No code changes. Verified: server boots (200 on /login), screenshot at required path (88,770 bytes), commits c0b37f4a + 58740840 on main. BC MCP returned 520 (origin down); BC comment pasted manually by user.
+  - Verification: GET http://localhost:3000/login → 200 ✓; docs/screenshots/feature-1-forms-for-reporting-incident-noise-lockout-etc-.png present ✓
+
 ### UTD Residential Life — Feature 1/8: Forms for Reporting (2026-06-10)
 - [x] Build forms for reporting (incident, noise, lockout, etc.) — BC todo 9967513500
   - Date: 2026-06-10
@@ -5581,3 +5588,22 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: Kes pushed `5412f015` (`fix: PR #3 review — kes-tasks cleanup, error leakage, a11y Space key, structured logging`) after my earlier PR comment listing the unresolved blockers. Verified each item against the diff: (1) `git rm -r kes-tasks/` removed all 5 orphan files (832 line deletions) + added `kes-tasks/` to `.gitignore`; (2) FK question confirmed safe in code — `backend/src/services/participantService.ts:61` signs JWT with `sub: enrollment.id` so `req.participant!.sub` IS the enrollment id (no FK violation possible against `enrollment_id UUID NOT NULL REFERENCES enrollments(id)`); (3) dynamic `await import()` calls in both project-dna routes replaced with a single static `import { saveProjectDna, getProjectDna } from "../services/projectDnaService"` at top of `participantRoutes.ts`; (4) structured JSON logging added to `projectDnaService.ts` (`project_dna_saved` with `duration_ms`, `project_dna_fetched` with `found` flag, both with random correlation_id) and to both 500 catch blocks in `participantRoutes.ts` (`project_dna_save_failed` / `project_dna_get_failed` with correlation_id from X-Correlation-ID header or generated UUID, error_class, context — client now gets generic `Failed to save/retrieve Project DNA` string instead of raw `err.message`); (5) a11y bonus — all 5 `onKeyDown` handlers on `role=radio`/`role=checkbox` elements in `ProjectDnaWizard.tsx` now activate on Enter OR Space (was Enter-only, WCAG 2.1 AA §4.1.2 fix). Three merge conflicts resolved additively on `/tmp/pr3-merge` worktree: `PROGRESS.md` (kept both sides), `backend/src/models/index.ts` (kept the `ProjectDna` export from PR side), `.gitignore` (auto-merged). Pushed as `0fe217cd`, squash-merged to main as `b077e4bb`.
   - Verification: `gh pr view 3` confirms state MERGED, mergedAt 2026-06-09T23:34:58Z, mergeCommit `b077e4bb`. Kes's commit body claims `tsc --noEmit` exit 0 on both backend and frontend; not independently re-run from local Windows env. Local worktree at `/tmp/pr3-merge` removed cleanly.
   - Notes: **Not yet deployed.** Three remaining steps before Kes can do his FK live-verification submission (his screenshot ask): (1) deploy to dev — `ssh root@95.216.199.47 && cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.development.yml up -d --build backend`; (2) run seed against the dev DB — `docker exec <accelerator-dev{1|2}-backend> npx ts-node backend/src/seeds/seedProjectDna.ts` (idempotent CREATE TABLE IF NOT EXISTS); (3) Ali generates a participant magic link via admin panel and sends to Kes. Kes will then load `http://95.216.199.47:9999/portal/project-builder`, submit through all 4 steps, and confirm the success screen (FK check). If a 500 surfaces with FK violation, the service needs an extra lookup of `enrollment_id` from `participant_id` first — but that is unlikely given the participantService.ts:61 evidence. **Deploy + magic link paused for Ali's confirmation** — shared dev2 infra + admin-panel UI both warrant Ali's explicit go-ahead per CLAUDE.md shared-state rule.
+
+### UTD Residential Life — Feature 2/8: Staff Scheduling + On-Call Rotation (2026-06-15)
+- [x] Build staff scheduling + on-call rotation — BC todo 9967513515
+  - Date: 2026-06-15
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/db.js`: added `shifts` table (shift_type, assigned_user_id, start_time, end_time, notes, status, created_by_id) and `shift_swaps` table (shift_id, requester_id, swap_with_user_id, reason, status, resolved_by_id) after existing `notifications` table. Both with CHECK constraints and FK refs to users.
+    - `gov-bid-builds/utd-residential-life/app/routes/schedule.js` (new): full schedule module — GET / (weekly calendar + auto-reminder on shifts within 24h), GET /new (CC/RD only), POST / (create shift + notify assignee), GET /:id (shift detail + swaps), POST /:id/status (CC/RD status update), POST /:id/swap (staff swap request + supervisor notification), POST /swap/:id/respond (CC/RD approve/deny + reassign on approve). decorateShift() adds typeLabel/typeBadge/statusLabel/statusBadge/timeRange/dateLabel/isMyShift.
+    - `gov-bid-builds/utd-residential-life/app/views/schedule/index.hbs` (new): 7-day weekly calendar grid; today highlighted; my shifts highlighted in blue; shift type/on-call/RA-duty color badges; prev/next week navigation; Add Shift button (CC/RD only); legend.
+    - `gov-bid-builds/utd-residential-life/app/views/schedule/show.hbs` (new): shift detail with DL card, swap requests list (CC/RD approve/deny forms), request-swap form (assignee only), pending-swap alert, update-status form (CC/RD).
+    - `gov-bid-builds/utd-residential-life/app/views/schedule/new.hbs` (new): create shift form (type, assignee, start/end datetime-local, notes) + shift-type info sidebar.
+    - `gov-bid-builds/utd-residential-life/app/server.js`: added `app.use('/schedule', require('./routes/schedule'))`.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: added Schedule nav link to sidebar.
+    - `gov-bid-builds/utd-residential-life/seeds/index.js`: refactored to split users/reports guard from shifts guard (idempotent). Seeded 18 shifts (Mon Jun 15–Sun Jun 21 current week + Jun 22 next week + 2 completed prior week), 1 pending swap (Jake Thompson → Aisha Johnson, Fri Jun 19 Front Desk), 2 swap notifications.
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-f2.js` (new): Playwright capture script for Feature 2.
+    - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-2-staff-scheduling-on-call-rotation.png` (new): weekly calendar screenshot.
+    - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-2-staff-scheduling-on-call-rotation-shift-detail-swap.png` (new): shift detail with swap request.
+  - Verification: `node --check app/routes/schedule.js` → exit 0. Seed output: "18 shifts seeded, 1 swap request seeded." Server boots (302 on GET /). Playwright screenshot captured: weekly calendar renders with all 3 shift types, today-highlight, my-shift highlight, prev/next nav, CC/RD Add Shift button.
+  - Notes: Used same Node 24 node:sqlite stack as Feature 1. Route ordering: GET /new before GET /:id prevents "new" being treated as an ID. Auto-reminders are idempotent (LIKE '%shift #${id}%' guard before INSERT).

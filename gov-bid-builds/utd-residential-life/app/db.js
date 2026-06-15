@@ -49,6 +49,31 @@ db.exec(`
     read_flag  INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS shifts (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    shift_type       TEXT NOT NULL CHECK(shift_type IN ('front_desk','on_call','ra_duty')),
+    assigned_user_id INTEGER NOT NULL REFERENCES users(id),
+    start_time       TEXT NOT NULL,
+    end_time         TEXT NOT NULL,
+    notes            TEXT,
+    status           TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','completed','cancelled')),
+    created_by_id    INTEGER REFERENCES users(id),
+    created_at       TEXT DEFAULT (datetime('now')),
+    updated_at       TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS shift_swaps (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    shift_id          INTEGER NOT NULL REFERENCES shifts(id),
+    requester_id      INTEGER NOT NULL REFERENCES users(id),
+    swap_with_user_id INTEGER REFERENCES users(id),
+    reason            TEXT,
+    status            TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','denied')),
+    resolved_by_id    INTEGER REFERENCES users(id),
+    created_at        TEXT DEFAULT (datetime('now')),
+    updated_at        TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;
