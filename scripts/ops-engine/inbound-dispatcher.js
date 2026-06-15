@@ -69,8 +69,12 @@ function getToken() {
   if (t.toLowerCase().startsWith('bearer ')) t = t.slice(7).trim();
   return t;
 }
-const TOKEN = getToken();
-const H = () => ({ Authorization: `Bearer ${TOKEN}`, 'User-Agent': 'Colaberry Ops Inbound', Accept: 'application/json', 'Content-Type': 'application/json' });
+// Lazy so `require()`-ing this module (e.g. from a unit test of the pure
+// helpers) doesn't throw when BASECAMP_ACCESS_TOKEN is absent. The token is
+// only resolved on the first real Basecamp call inside a tick.
+let _token = null;
+function token() { if (_token == null) _token = getToken(); return _token; }
+const H = () => ({ Authorization: `Bearer ${token()}`, 'User-Agent': 'Colaberry Ops Inbound', Accept: 'application/json', 'Content-Type': 'application/json' });
 
 async function bcGet(p) {
   const r = await fetch(p.startsWith('http') ? p : BASE + p, { headers: H() });
@@ -109,11 +113,57 @@ function acquireLock() {
 }
 function releaseLock() { try { fs.unlinkSync(LOCK_PATH); } catch {} }
 function loadState() {
-  try { return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')); }
-  catch { return { last_tick: null, processed: {} }; }
+  try {
+    const s = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+    if (!s.replyCounts) s.replyCounts = {};
+    if (!s.alarmed) s.alarmed = {};
+    return s;
+  } catch { return { last_tick: null, processed: {}, replyCounts: {}, alarmed: {} }; }
 }
 function saveState(s) { fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2)); }
 const mention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
+
+// --- Duplicate-reply circuit breaker ---------------------------------------
+// Defense-in-depth backstop, independent of the processed-dedup. The 2026-06-15
+// loop posted ~25 replies to single comments because a bug let the same mention
+// re-reach the reply path every tick. This caps the blast radius of ANY such
+// bug: we count how many times CB has replied to each mention key (persisted in
+// state across ticks) and refuse to post once the count hits the cap, firing a
+// one-time alarm instead. In normal operation a mention is answered exactly
+// once, so the breaker never trips - it only fires when something is wrong.
+const MAX_REPLIES_PER_COMMENT = 2;
+function replyCountFor(state, key) { return (state.replyCounts && state.replyCounts[key]) || 0; }
+function shouldCircuitBreak(state, key, max = MAX_REPLIES_PER_COMMENT) { return replyCountFor(state, key) >= max; }
+function recordReply(state, key) {
+  if (!state.replyCounts) state.replyCounts = {};
+  state.replyCounts[key] = (state.replyCounts[key] || 0) + 1;
+}
+
+// Best-effort one-time alarm when the breaker trips for a key. Doubles as the
+// real-time "a comment got too many replies" alert. Never throws into the tick.
+async function alarmCircuitBreak(state, m, count) {
+  if (!state.alarmed) state.alarmed = {};
+  if (state.alarmed[m.key]) return;        // already alarmed for this key
+  state.alarmed[m.key] = new Date().toISOString();
+  if (DRY) { console.log(`[dry] would alarm circuit-break for ${m.key} (${count} replies)`); return; }
+  try {
+    if (!process.env.MANDRILL_API_KEY) { console.error('  circuit-break alarm: MANDRILL_API_KEY unset, logged only'); return; }
+    const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    const url = `https://3.basecamp.com/${ACCOUNT}/buckets/${m.bucketId}/recordings/${m.recId}`;
+    await transport.sendMail({
+      from: '"CB Dispatcher" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      subject: `[CB Circuit Breaker] comment ${m.comment.id} hit ${count} replies - posting halted`,
+      text: `The CB inbound-dispatcher circuit breaker tripped.\n\nComment ${m.comment.id} on recording ${m.recId} (bucket ${m.bucketId}) has already received ${count} CB replies, which is at or over the ${MAX_REPLIES_PER_COMMENT}-reply cap. Further replies to this comment are now SUPPRESSED to prevent a duplicate-reply loop.\n\nThis means something re-routed an already-answered mention back into the reply path. Investigate the dispatcher state (tmp/ops-engine/inbound-state.json) and cb-inbound.log.\n\nThread: ${url}`,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.error(`  circuit-break ALARM sent for ${m.key} (${count} replies)`);
+  } catch (e) { console.error(`  circuit-break alarm failed: ${e.message}`); }
+}
 
 // --- Recipes ---------------------------------------------------------------
 
@@ -359,6 +409,11 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
   }
 }
 
+// Exported for unit tests. Guarded IIFE below only runs when executed directly.
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, classifyKeyword, MAX_REPLIES_PER_COMMENT };
+
+if (require.main !== module) return;
+
 (async () => {
   if (!acquireLock()) process.exit(0);
   // State must be reachable from the timeout closure so a tick that blows the
@@ -382,11 +437,23 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
+      // CIRCUIT BREAKER: if we've already replied to this exact mention key the
+      // cap number of times, refuse to post again and alarm. Backstops any bug
+      // that re-routes an already-answered mention into the reply path.
+      if (shouldCircuitBreak(state, m.key)) {
+        const n = replyCountFor(state, m.key);
+        console.error(`  CIRCUIT BREAKER: ${n} prior replies to ${m.key} (comment ${m.comment.id}); suppressing + alarming`);
+        state.processed[m.key] = { at: new Date().toISOString(), outcome: 'circuit_broken', replies: n };
+        await alarmCircuitBreak(state, m, n);
+        if (!DRY) saveState(state);
+        continue;
+      }
       const html = classifyKeyword(m.comment.content);
       if (html) {
         // Fixed keyword recipe matched -> single-shot reply.
         try {
           await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: html });
+          recordReply(state, m.key);
           state.processed[m.key] = { at: new Date().toISOString(), outcome: 'replied:keyword' };
           console.log(`  keyword reply to comment ${m.comment.id} on recording ${m.recId}`);
         } catch (e) {
@@ -400,6 +467,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
             bcGet, bcPost, mention,
             bucketId: m.bucketId, recId: m.recId, comment: m.comment, aliId: ALI_ID,
           });
+          if (result.ok) recordReply(state, m.key);
           state.processed[m.key] = { at: new Date().toISOString(), outcome: result.ok ? 'replied:llm' : 'llm_error', summary: result.summary, error: result.error };
           console.log(`  llm handler for ${m.comment.id}: ${result.summary}`);
         } catch (e) {
@@ -408,6 +476,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
           // Fallback: friendly ack so Ali knows we saw it
           try {
             await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content) });
+            recordReply(state, m.key);
           } catch (_e2) {}
         }
       }
