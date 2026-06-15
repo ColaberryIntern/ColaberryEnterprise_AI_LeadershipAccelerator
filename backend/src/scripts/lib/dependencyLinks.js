@@ -137,11 +137,23 @@ function countMarkerBlocks(descHtml) {
  * check matches what actually gets parsed downstream. Returns null if absent. */
 function extractMarkers(descHtml) {
   const html = String(descHtml || '');
-  const dep = html.match(/Depends-on:\s*(?:<\/strong>)?\s*([^<\n]+?)\s*(?:<|$)/i);
-  if (!dep) return null;
-  const art = html.match(/Artifact:\s*(?:<\/strong>)?\s*([^<\n]+?)\s*(?:<|$)/i);
-  const lst = html.match(/List:\s*(?:<\/strong>)?\s*([^<\n]+?)\s*(?:<|$)/i);
-  return { dependsOn: dep[1], artifact: art ? art[1] : null, list: lst ? lst[1] : null };
+  // Basecamp autolinks bare URLs on save, so a STORED marker reads
+  //   "Depends-on: <a ... href="URL">URL</a>"
+  // not the bare "Depends-on: URL" we wrote. Read the href when the value is an
+  // anchor, else the bare value (Artifact: PENDING stays bare). The anchor
+  // alternative is tried first so a bare-value capture never swallows the
+  // leading "<" of an anchor (the 2026-06-15 idempotency bug).
+  const grab = (label) => {
+    const m = html.match(new RegExp(
+      `${label}:\\s*(?:</strong>)?\\s*(?:<a[^>]*href="([^"]+)"[^>]*>[^<]*</a>|([^<\\n]+?))\\s*(?:<|$)`,
+      'i'
+    ));
+    if (!m) return null;
+    return ((m[1] || m[2] || '').trim()) || null;
+  };
+  const dependsOn = grab('Depends-on');
+  if (!dependsOn) return null;
+  return { dependsOn, artifact: grab('Artifact'), list: grab('List') };
 }
 
 /**

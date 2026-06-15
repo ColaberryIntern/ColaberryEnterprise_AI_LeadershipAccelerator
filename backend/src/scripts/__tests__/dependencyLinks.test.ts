@@ -84,15 +84,23 @@ describe('buildMarkersBlock + consumer-regex contract', () => {
 
 describe('injectMarkers idempotency (through the Basecamp sanitizer)', () => {
   const base = '<div>\n<h3>Dependencies</h3>\n<p>Draft sales call script</p>\n<h3>Briefs</h3><ul></ul>\n</div>';
-  const desired = { dependsOnUrl: 'URL1', artifact: 'PENDING', listUrl: 'URL2' };
+  // Real URLs so the sanitizer's autolinker actually fires (it only wraps
+  // https?:// values) — that is the exact path that broke extractMarkers.
+  const DURL = 'https://app.basecamp.com/3945211/buckets/47502609/todos/9946498981';
+  const LURL = 'https://app.basecamp.com/3945211/buckets/47502609/todolists/9946469028';
+  const desired = { dependsOnUrl: DURL, artifact: 'PENDING', listUrl: LURL };
   const block = dl.buildMarkersBlock(desired);
 
-  // Basecamp's rich-text sanitizer drops custom attributes (data-cb-deplinks)
-  // and rewrites the style on save. THIS is what broke the original idempotency
-  // (the old strip keyed on data-cb-deplinks, which is gone after a round-trip,
-  // so a second write appended a duplicate block). Tests now go through it.
+  // Faithful model of Basecamp's rich-text sanitizer on save: it (1) drops
+  // custom attributes (data-cb-deplinks) and rewrites the style, AND (2)
+  // autolinks every bare URL into an <a href> anchor. Both bit us: (1) broke
+  // the strip (keyed on the dropped attribute), (2) broke extractMarkers (its
+  // [^<]+? capture dies at the "<" of the injected anchor). Tests go through
+  // the real thing now.
   const sanitize = (html: string) =>
-    html.replace(/<p[^>]*data-cb-deplinks="1"[^>]*>/gi, '<p style="color:#64748b">');
+    html
+      .replace(/<p[^>]*data-cb-deplinks="1"[^>]*>/gi, '<p style="color:#64748b">')
+      .replace(/([>\s])(https?:\/\/[^\s<]+)/g, '$1<a rel="noreferrer" class="autolinked" href="$2">$2</a>');
 
   test('inserts once after Dependencies', () => {
     const out = dl.injectMarkers(base, block);
@@ -121,14 +129,24 @@ describe('injectMarkers idempotency (through the Basecamp sanitizer)', () => {
     expect(dl.countMarkerBlocks(fixed)).toBe(1);
   });
 
+  test('extractMarkers reads the href out of the autolinked anchor', () => {
+    const stored = sanitize(dl.injectMarkers(base, block));
+    expect(stored).toContain('class="autolinked"'); // sanitizer really autolinked
+    const m = dl.extractMarkers(stored);
+    expect(m.dependsOn).toBe(DURL); // not '' — the bug was it captured nothing
+    expect(m.artifact).toBe('PENDING'); // bare value still read
+    expect(m.list).toBe(LURL);
+  });
+
   test('markersAreCurrent: true after sanitized round-trip with same values', () => {
     const stored = sanitize(dl.injectMarkers(base, block));
-    expect(dl.markersAreCurrent(stored, desired)).toBe(true); // -> writer SKIPS
+    expect(dl.markersAreCurrent(stored, desired)).toBe(true); // -> writer SKIPS (dry-run lands at 0)
   });
 
   test('markersAreCurrent: false when duplicated, or when a value changed', () => {
     expect(dl.markersAreCurrent(doubled, desired)).toBe(false); // -> writer rewrites (collapses)
     const stored = sanitize(dl.injectMarkers(base, block));
-    expect(dl.markersAreCurrent(stored, { ...desired, dependsOnUrl: 'URL1b' })).toBe(false); // link changed
+    const otherUrl = 'https://app.basecamp.com/3945211/buckets/47502609/todos/9999999999';
+    expect(dl.markersAreCurrent(stored, { ...desired, dependsOnUrl: otherUrl })).toBe(false); // link changed
   });
 });
