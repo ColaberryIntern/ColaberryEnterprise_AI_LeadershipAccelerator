@@ -205,6 +205,14 @@ export function assessmentChanged(
   return prevNum !== newScore || prevCategory !== newCategory;
 }
 
+// Single-flight guard. A full pass over all active todos can exceed the 2-min
+// cron interval, and node-cron does not prevent overlapping invocations. Without
+// this, stacked passes run concurrently and each reads a todo's score before a
+// peer's UPDATE commits, so they all see "changed" and all write an audit row —
+// defeating the dedup and recreating the unbounded ops_ai_assessments growth
+// that filled the prod disk on 2026-06-15. Module-level (one engine per process).
+let engineRunning = false;
+
 export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
   const result: PriorityEngineRunResult = {
     started_at: new Date(),
@@ -226,6 +234,15 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
     errors: [],
   };
 
+  // A tick that arrives while a pass is still in flight returns immediately
+  // (todos_scored stays 0), so passes never overlap.
+  if (engineRunning) {
+    result.finished_at = new Date();
+    return result;
+  }
+  engineRunning = true;
+
+  try {
   let offset = 0;
   // Process in pages so the working set stays small (memory-bound on prod backend).
   // Each page: raw SELECT (no model hydration) -> in-memory scoring -> batched
@@ -359,6 +376,11 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
     result.audit_rows_pruned = (meta as { rowCount?: number } | undefined)?.rowCount ?? 0;
   } catch (err: any) {
     result.errors.push({ todo_bc_id: 'retention_sweep', message: err.message });
+  }
+  } finally {
+    // Always release the single-flight guard, even if a page query threw, so a
+    // failed pass can never deadlock all future runs.
+    engineRunning = false;
   }
 
   result.finished_at = new Date();
