@@ -82,28 +82,53 @@ describe('buildMarkersBlock + consumer-regex contract', () => {
   });
 });
 
-describe('injectMarkers idempotency', () => {
+describe('injectMarkers idempotency (through the Basecamp sanitizer)', () => {
   const base = '<div>\n<h3>Dependencies</h3>\n<p>Draft sales call script</p>\n<h3>Briefs</h3><ul></ul>\n</div>';
-  const block = dl.buildMarkersBlock({ dependsOnUrl: 'URL1', artifact: 'PENDING', listUrl: 'URL2' });
+  const desired = { dependsOnUrl: 'URL1', artifact: 'PENDING', listUrl: 'URL2' };
+  const block = dl.buildMarkersBlock(desired);
+
+  // Basecamp's rich-text sanitizer drops custom attributes (data-cb-deplinks)
+  // and rewrites the style on save. THIS is what broke the original idempotency
+  // (the old strip keyed on data-cb-deplinks, which is gone after a round-trip,
+  // so a second write appended a duplicate block). Tests now go through it.
+  const sanitize = (html: string) =>
+    html.replace(/<p[^>]*data-cb-deplinks="1"[^>]*>/gi, '<p style="color:#64748b">');
 
   test('inserts once after Dependencies', () => {
     const out = dl.injectMarkers(base, block);
-    expect(dl.hasMarkers(out)).toBe(true);
+    expect(dl.countMarkerBlocks(out)).toBe(1);
     expect(out.indexOf('Depends-on:')).toBeGreaterThan(out.indexOf('<h3>Dependencies</h3>'));
   });
 
-  test('re-running replaces, never duplicates', () => {
-    const once = dl.injectMarkers(base, block);
-    const newBlock = dl.buildMarkersBlock({ dependsOnUrl: 'URL1b', artifact: 'PENDING', listUrl: 'URL2' });
-    const twice = dl.injectMarkers(once, newBlock);
-    expect((twice.match(/data-cb-deplinks="1"/g) || []).length).toBe(1);
-    expect(twice).toContain('URL1b');
-    expect(twice).not.toContain('URL1<');
+  test('re-running after a sanitizer round-trip does NOT duplicate (the bug)', () => {
+    const stored = sanitize(dl.injectMarkers(base, block)); // what BC gives back
+    expect(stored).not.toContain('data-cb-deplinks'); // attribute really gone
+    const rewritten = dl.injectMarkers(stored, block);
+    expect(dl.countMarkerBlocks(rewritten)).toBe(1); // not 2
   });
 
-  test('re-injecting the SAME block is byte-stable (no churn)', () => {
-    const once = dl.injectMarkers(base, block);
-    const again = dl.injectMarkers(once, block);
-    expect(again).toBe(once);
+  // The live damage the OLD code produced: two sanitized blocks in one
+  // description. The NEW injectMarkers strips before inserting, so it can't
+  // create this itself — build it by hand to prove the fix collapses it.
+  const sanitizedBlock = sanitize(block);
+  const doubled =
+    '<div>\n<h3>Dependencies</h3>\n<p>Draft sales call script</p>\n' +
+    sanitizedBlock + '\n' + sanitizedBlock + '\n</div>';
+
+  test('collapses an already-duplicated description back to one block', () => {
+    expect(dl.countMarkerBlocks(doubled)).toBe(2);
+    const fixed = dl.injectMarkers(doubled, block);
+    expect(dl.countMarkerBlocks(fixed)).toBe(1);
+  });
+
+  test('markersAreCurrent: true after sanitized round-trip with same values', () => {
+    const stored = sanitize(dl.injectMarkers(base, block));
+    expect(dl.markersAreCurrent(stored, desired)).toBe(true); // -> writer SKIPS
+  });
+
+  test('markersAreCurrent: false when duplicated, or when a value changed', () => {
+    expect(dl.markersAreCurrent(doubled, desired)).toBe(false); // -> writer rewrites (collapses)
+    const stored = sanitize(dl.injectMarkers(base, block));
+    expect(dl.markersAreCurrent(stored, { ...desired, dependsOnUrl: 'URL1b' })).toBe(false); // link changed
   });
 });

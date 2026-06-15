@@ -114,18 +114,61 @@ function buildMarkersBlock({ dependsOnUrl, artifact, listUrl }) {
   );
 }
 
-/** Insert (or replace, idempotently) the marker block in a description.
- * Placed right after the Dependencies block when present, else before the
- * closing </div>, else appended. Re-running replaces the prior block so links
- * stay fresh and never duplicate. */
+// Match our marker paragraph by CONTENT (the literal "Depends-on:" label), NOT
+// by attribute. Basecamp's rich-text sanitizer drops custom attributes
+// (data-cb-deplinks) and rewrites the style on save, so any attribute-based
+// match fails on the second run and a fresh block gets appended instead of
+// replaced — the duplication bug found 2026-06-15. The "Depends-on:" label is
+// unique to our block (the F5 brief-linking uses an <h3>Dependencies</h3>
+// heading, never "Depends-on:") and survives the sanitizer. Fresh regex per
+// call so the `g` flag's lastIndex never leaks between calls.
+function markerBlockRe() {
+  return /\n?\s*<p\b[^>]*>(?:(?!<\/p>)[\s\S])*?Depends-on:(?:(?!<\/p>)[\s\S])*?<\/p>/gi;
+}
+
+/** How many marker blocks the description currently carries (0, 1, or — after
+ * the duplication bug — more). */
+function countMarkerBlocks(descHtml) {
+  return (String(descHtml || '').match(markerBlockRe()) || []).length;
+}
+
+/** Parse the marker values (Depends-on / Artifact / List) from a description,
+ * using the same label regexes the AI_ProjectArchitect consumer uses, so the
+ * check matches what actually gets parsed downstream. Returns null if absent. */
+function extractMarkers(descHtml) {
+  const html = String(descHtml || '');
+  const dep = html.match(/Depends-on:\s*(?:<\/strong>)?\s*([^<\n]+?)\s*(?:<|$)/i);
+  if (!dep) return null;
+  const art = html.match(/Artifact:\s*(?:<\/strong>)?\s*([^<\n]+?)\s*(?:<|$)/i);
+  const lst = html.match(/List:\s*(?:<\/strong>)?\s*([^<\n]+?)\s*(?:<|$)/i);
+  return { dependsOn: dep[1], artifact: art ? art[1] : null, list: lst ? lst[1] : null };
+}
+
+/**
+ * The idempotency check the writers use INSTEAD of byte-equality. Basecamp
+ * mutates our HTML on save (strips attributes, rewrites style), so
+ * `newHtml === storedHtml` is never true and a string compare would rewrite
+ * every run. The parsed VALUES, however, are stable. Returns true only when the
+ * description has EXACTLY ONE marker block whose values equal the desired ones;
+ * false when there are zero, more than one (duplication to collapse), or any
+ * value differs (the link changed).
+ */
+function markersAreCurrent(descHtml, { dependsOnUrl, artifact, listUrl }) {
+  if (countMarkerBlocks(descHtml) !== 1) return false;
+  const m = extractMarkers(descHtml);
+  return !!m &&
+    m.dependsOn === (dependsOnUrl || 'PENDING') &&
+    m.artifact === (artifact || 'PENDING') &&
+    m.list === (listUrl || 'PENDING');
+}
+
+/** Insert the marker block, first stripping ALL prior marker blocks (so a
+ * description that picked up duplicates collapses back to exactly one). Placed
+ * right after the Dependencies block when present, else before the closing
+ * </div>, else appended. Callers should gate this with markersAreCurrent() so
+ * they only write when something actually changed. */
 function injectMarkers(descHtml, markersBlock) {
-  let html = String(descHtml || '');
-  // Strip any prior block we wrote, including the leading newline we add on
-  // insert, so re-running is byte-stable (no churn on repeated/daily runs).
-  html = html.replace(
-    new RegExp(`\\n?\\s*<p[^>]*${DEPLINKS_ATTR}="1"[^>]*>[\\s\\S]*?<\\/p>`, 'i'),
-    ''
-  );
+  let html = String(descHtml || '').replace(markerBlockRe(), '');
   const depBlock = html.match(/<h3>\s*Dependencies\s*<\/h3>\s*<p>[\s\S]*?<\/p>/i);
   if (depBlock) {
     const idx = html.indexOf(depBlock[0]) + depBlock[0].length;
@@ -138,9 +181,10 @@ function injectMarkers(descHtml, markersBlock) {
   return html + '\n' + markersBlock;
 }
 
-/** True if a description already carries our marker block. */
+/** True if a description already carries a marker block (content-based, so it
+ * survives Basecamp's attribute sanitizer). */
 function hasMarkers(descHtml) {
-  return new RegExp(`${DEPLINKS_ATTR}="1"`).test(String(descHtml || ''));
+  return /Depends-on:/i.test(String(descHtml || ''));
 }
 
 module.exports = {
@@ -152,5 +196,8 @@ module.exports = {
   listUrlFromIds,
   buildMarkersBlock,
   injectMarkers,
+  countMarkerBlocks,
+  extractMarkers,
+  markersAreCurrent,
   hasMarkers,
 };

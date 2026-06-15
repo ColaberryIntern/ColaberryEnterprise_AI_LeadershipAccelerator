@@ -68,9 +68,13 @@ async function main() {
     if (!dep) { unresolved.push({ t, depText }); continue; }
     const listUrl = dl.listUrlFromAppUrl(t.app_url, t.listId);
     const artifact = dep.completed ? dep.app_url : 'PENDING';
-    const block = dl.buildMarkersBlock({ dependsOnUrl: dep.app_url, artifact, listUrl });
-    const newDesc = dl.injectMarkers(t.description, block);
-    if (newDesc === t.description) continue; // already current — skip the write
+    const desired = { dependsOnUrl: dep.app_url, artifact, listUrl };
+    // Value-based idempotency: Basecamp mutates our HTML on save, so a string
+    // compare would rewrite every run. Skip only when exactly one block with
+    // the desired values is already present; otherwise inject (which strips any
+    // duplicates first, collapsing a doubled block back to one).
+    if (dl.markersAreCurrent(t.description, desired)) continue;
+    const newDesc = dl.injectMarkers(t.description, dl.buildMarkersBlock(desired));
     plan.push({ t, dep, artifact, newDesc });
   }
 
