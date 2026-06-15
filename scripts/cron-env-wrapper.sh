@@ -39,18 +39,43 @@ probe_bc_token() {
   [ "$code" = "200" ]
 }
 
+# Token resolution order, cheapest first:
+#   1. Container env token (from the eval above).
+#   2. File-cached last-known-good token (avoids a CCPP roundtrip every tick).
+#   3. Refetch from CCPP.Basecamp_AuthInfo, then re-cache.
+# The backend container's token is baked at deploy time and goes stale on the
+# 2-week BC rotation, so in steady state step 1 fails and step 2 serves every
+# tick with a single extra probe (no CCPP query). Before this cache the wrapper
+# hit CCPP ~480x/day. The probe is authoritative: a cached token that has since
+# rotated fails the probe and falls through to a single CCPP refetch + re-cache.
+BC_TOKEN_CACHE=/opt/colaberry-accelerator/tmp/ops-engine/bc-token.cache
+
 if ! probe_bc_token; then
-  echo "[cron-env-wrapper] BC token missing or stale (probe failed); refetching from CCPP" >&2
-  FRESH=$(node /opt/colaberry-accelerator/backend/src/scripts/lib/printBasecampToken.js 2>/dev/null)
-  if [ -n "$FRESH" ]; then
-    export BASECAMP_ACCESS_TOKEN="$FRESH"
-    if probe_bc_token; then
-      echo "[cron-env-wrapper] refreshed BC token verified ok" >&2
-    else
-      echo "[cron-env-wrapper] WARN: refreshed token still failing probe; downstream calls may 401" >&2
-    fi
+  # 2. Try the file cache.
+  if [ -f "$BC_TOKEN_CACHE" ]; then
+    CACHED=$(cat "$BC_TOKEN_CACHE" 2>/dev/null)
+    if [ -n "$CACHED" ]; then export BASECAMP_ACCESS_TOKEN="$CACHED"; fi
+  fi
+
+  if probe_bc_token; then
+    echo "[cron-env-wrapper] using cached BC token (container token stale)" >&2
   else
-    echo "[cron-env-wrapper] WARN: could not refetch BC token from CCPP; downstream calls will 401" >&2
+    # 3. Refetch from CCPP and re-cache atomically.
+    echo "[cron-env-wrapper] BC token stale (container+cache); refetching from CCPP" >&2
+    FRESH=$(node /opt/colaberry-accelerator/backend/src/scripts/lib/printBasecampToken.js 2>/dev/null)
+    if [ -n "$FRESH" ]; then
+      export BASECAMP_ACCESS_TOKEN="$FRESH"
+      if probe_bc_token; then
+        mkdir -p "$(dirname "$BC_TOKEN_CACHE")"
+        TMP_CACHE="${BC_TOKEN_CACHE}.$$"
+        printf '%s' "$FRESH" > "$TMP_CACHE" && chmod 600 "$TMP_CACHE" && mv -f "$TMP_CACHE" "$BC_TOKEN_CACHE"
+        echo "[cron-env-wrapper] refreshed BC token from CCPP, cached" >&2
+      else
+        echo "[cron-env-wrapper] WARN: refreshed token still failing probe; downstream calls may 401" >&2
+      fi
+    else
+      echo "[cron-env-wrapper] WARN: could not refetch BC token from CCPP; downstream calls will 401" >&2
+    fi
   fi
 fi
 
