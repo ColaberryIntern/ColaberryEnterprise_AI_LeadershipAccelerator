@@ -52,3 +52,6 @@ hotmail_device_code.txt
 docs/personal-finance/
 
 kes-tasks/
+
+# Cron-env-wrapper Basecamp token cache - SECRET, never commit (rotates every 2 weeks)
+tmp/ops-engine/bc-token.cache
