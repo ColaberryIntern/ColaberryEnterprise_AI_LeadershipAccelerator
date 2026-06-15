@@ -32,7 +32,6 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { handleOpenEnded } = require('./cb-system-handler');
-const { buildMention } = require('./cb-reply-sanitizer');
 
 const ACCOUNT = '3945211';
 const BASE = `https://3.basecampapi.com/${ACCOUNT}`;
@@ -55,11 +54,7 @@ function isCBMention(content) {
   return CB_PLAINTEXT_RE.test(stripped);
 }
 const TICK_TIMEOUT_MS = 3 * 60 * 1000;
-// Default 2h (every 3-min cron only needs a small window). Override with
-// CB_LOOKBACK_HOURS for a one-time catch-up, e.g. CB_LOOKBACK_HOURS=24 to
-// reply to every unprocessed @CB mention from the past day. The processed-state
-// dedup means a wider window never double-replies to already-answered mentions.
-const LOOKBACK_HOURS = parseFloat(process.env.CB_LOOKBACK_HOURS) || 2;
+const LOOKBACK_HOURS = 2;
 const DRY = process.argv.includes('--dry');
 
 // Fallback token: the cron-env-wrapper.sh used to not export BASECAMP_ACCESS_TOKEN
@@ -74,8 +69,12 @@ function getToken() {
   if (t.toLowerCase().startsWith('bearer ')) t = t.slice(7).trim();
   return t;
 }
-const TOKEN = getToken();
-const H = () => ({ Authorization: `Bearer ${TOKEN}`, 'User-Agent': 'Colaberry Ops Inbound', Accept: 'application/json', 'Content-Type': 'application/json' });
+// Lazy so `require()`-ing this module (e.g. from a unit test of the pure
+// helpers) doesn't throw when BASECAMP_ACCESS_TOKEN is absent. The token is
+// only resolved on the first real Basecamp call inside a tick.
+let _token = null;
+function token() { if (_token == null) _token = getToken(); return _token; }
+const H = () => ({ Authorization: `Bearer ${token()}`, 'User-Agent': 'Colaberry Ops Inbound', Accept: 'application/json', 'Content-Type': 'application/json' });
 
 async function bcGet(p) {
   const r = await fetch(p.startsWith('http') ? p : BASE + p, { headers: H() });
@@ -114,44 +113,61 @@ function acquireLock() {
 }
 function releaseLock() { try { fs.unlinkSync(LOCK_PATH); } catch {} }
 function loadState() {
-  try { return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')); }
-  catch { return { last_tick: null, processed: {} }; }
+  try {
+    const s = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+    if (!s.replyCounts) s.replyCounts = {};
+    if (!s.alarmed) s.alarmed = {};
+    return s;
+  } catch { return { last_tick: null, processed: {}, replyCounts: {}, alarmed: {} }; }
 }
 function saveState(s) { fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2)); }
+const mention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
 
-// Hardcoded-Ali mention, kept ONLY as the last-resort fallback when we cannot
-// resolve the actual requester's sgid. The bug this replaced: every CB reply
-// @-mentioned Ali regardless of who asked (confirmed 2026-06-10 on todo
-// 9946499609 where Ram asked the question but the reply tagged Ali).
-const aliMention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
-
-// Basecamp Person objects carry attachable_sgid, but the comment/message
-// payloads do not always include it. Resolve + cache it from /people/{id}.json
-// so the @-mention points at the person who actually tagged CB.
-const sgidCache = new Map();
-async function ensurePersonSgid(person) {
-  if (!person || !person.id) return person;
-  if (person.attachable_sgid) return person;
-  if (sgidCache.has(person.id)) { person.attachable_sgid = sgidCache.get(person.id); return person; }
-  try {
-    const full = await bcGet(`/people/${person.id}.json`);
-    if (full && full.attachable_sgid) {
-      sgidCache.set(person.id, full.attachable_sgid);
-      person.attachable_sgid = full.attachable_sgid;
-    }
-  } catch (_e) { /* fall through to plain-name / Ali fallback in buildMention */ }
-  return person;
+// --- Duplicate-reply circuit breaker ---------------------------------------
+// Defense-in-depth backstop, independent of the processed-dedup. The 2026-06-15
+// loop posted ~25 replies to single comments because a bug let the same mention
+// re-reach the reply path every tick. This caps the blast radius of ANY such
+// bug: we count how many times CB has replied to each mention key (persisted in
+// state across ticks) and refuse to post once the count hits the cap, firing a
+// one-time alarm instead. In normal operation a mention is answered exactly
+// once, so the breaker never trips - it only fires when something is wrong.
+const MAX_REPLIES_PER_COMMENT = 2;
+function replyCountFor(state, key) { return (state.replyCounts && state.replyCounts[key]) || 0; }
+function shouldCircuitBreak(state, key, max = MAX_REPLIES_PER_COMMENT) { return replyCountFor(state, key) >= max; }
+function recordReply(state, key) {
+  if (!state.replyCounts) state.replyCounts = {};
+  state.replyCounts[key] = (state.replyCounts[key] || 0) + 1;
 }
 
-// Returns a mention() function bound to a specific requester. All recipe and
-// handler reply paths use this so the tag always matches who asked.
-function mentionFor(person) {
-  return () => buildMention(person, { fallbackSgid: ALI_SGID });
+// Best-effort one-time alarm when the breaker trips for a key. Doubles as the
+// real-time "a comment got too many replies" alert. Never throws into the tick.
+async function alarmCircuitBreak(state, m, count) {
+  if (!state.alarmed) state.alarmed = {};
+  if (state.alarmed[m.key]) return;        // already alarmed for this key
+  state.alarmed[m.key] = new Date().toISOString();
+  if (DRY) { console.log(`[dry] would alarm circuit-break for ${m.key} (${count} replies)`); return; }
+  try {
+    if (!process.env.MANDRILL_API_KEY) { console.error('  circuit-break alarm: MANDRILL_API_KEY unset, logged only'); return; }
+    const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    const url = `https://3.basecamp.com/${ACCOUNT}/buckets/${m.bucketId}/recordings/${m.recId}`;
+    await transport.sendMail({
+      from: '"CB Dispatcher" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      subject: `[CB Circuit Breaker] comment ${m.comment.id} hit ${count} replies - posting halted`,
+      text: `The CB inbound-dispatcher circuit breaker tripped.\n\nComment ${m.comment.id} on recording ${m.recId} (bucket ${m.bucketId}) has already received ${count} CB replies, which is at or over the ${MAX_REPLIES_PER_COMMENT}-reply cap. Further replies to this comment are now SUPPRESSED to prevent a duplicate-reply loop.\n\nThis means something re-routed an already-answered mention back into the reply path. Investigate the dispatcher state (tmp/ops-engine/inbound-state.json) and cb-inbound.log.\n\nThread: ${url}`,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.error(`  circuit-break ALARM sent for ${m.key} (${count} replies)`);
+  } catch (e) { console.error(`  circuit-break alarm failed: ${e.message}`); }
 }
 
 // --- Recipes ---------------------------------------------------------------
 
-function recipeHelp(mention) {
+function recipeHelp() {
   return `<div>${mention()} CB System dispatcher v1 - keyword recipes (LLM dispatcher not yet wired):</div>
 <ul>
   <li><code>@CBSystem grep:&lt;pattern&gt;</code> - ripgrep the codebase, return first 50 matches</li>
@@ -167,7 +183,7 @@ function runCmd(cmd, args, timeoutMs) {
   return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-function recipeGrep(pattern, mention) {
+function recipeGrep(pattern) {
   const r = runCmd('rg', ['--color', 'never', '-n', '--max-count', '50', pattern, '.'], 60000);
   const lines = (r.stdout || '').split('\n').filter(Boolean).slice(0, 50);
   return lines.length
@@ -175,7 +191,7 @@ function recipeGrep(pattern, mention) {
     : `<div>${mention()} <code>grep:${pattern}</code> -> no matches.</div>`;
 }
 
-function recipeUnknown(raw, mention) {
+function recipeUnknown(raw) {
   // Friendlier "queued for next Ali session" acknowledgment instead of error-tone.
   // Per @CB System scope expansion doctrine 2026-05-30: for open-ended requests
   // (anything beyond v1 keyword recipes), CB System acknowledges within 3 min and
@@ -197,7 +213,7 @@ function recipeUnknown(raw, mention) {
 // with the recipe-list reply when he sent real work. (Bug confirmed 2026-05-31
 // on comment 9946342528: PMO system-prompt spec sent to CB but routed to
 // help-recipe reply because "help" appeared in the body.)
-function classifyKeyword(text, mention) {
+function classifyKeyword(text) {
   // Strip HTML, strip the BC mention attachment, normalize whitespace.
   const stripped = text
     .replace(/<bc-attachment[^>]*content-type="application\/vnd\.basecamp\.mention"[^>]*>[\s\S]*?<\/bc-attachment>/gi, ' ')
@@ -213,14 +229,14 @@ function classifyKeyword(text, mention) {
   if (m) {
     const kind = m[1].toLowerCase();
     const arg = (m[2] || '').trim();
-    if (kind === 'grep') return recipeGrep(arg, mention);
+    if (kind === 'grep') return recipeGrep(arg);
     if (kind === 'ccpp') return `<div>${mention()} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
     if (kind === 'gmail') return `<div>${mention()} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
   }
   // Help recipe: only when the message is JUST "help" (after stripping
   // mention + CB prefix), nothing more. Anything substantive falls through
   // to the LLM handler.
-  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp(mention);
+  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp();
   return null;
 }
 
@@ -393,6 +409,11 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
   }
 }
 
+// Exported for unit tests. Guarded IIFE below only runs when executed directly.
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, classifyKeyword, MAX_REPLIES_PER_COMMENT };
+
+if (require.main !== module) return;
+
 (async () => {
   if (!acquireLock()) process.exit(0);
   // State must be reachable from the timeout closure so a tick that blows the
@@ -416,15 +437,23 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
-      // Resolve the actual requester's @-mention sgid so every reply tags the
-      // person who asked, not a hardcoded recipient.
-      await ensurePersonSgid(m.comment.creator);
-      const mention = mentionFor(m.comment.creator);
-      const html = classifyKeyword(m.comment.content, mention);
+      // CIRCUIT BREAKER: if we've already replied to this exact mention key the
+      // cap number of times, refuse to post again and alarm. Backstops any bug
+      // that re-routes an already-answered mention into the reply path.
+      if (shouldCircuitBreak(state, m.key)) {
+        const n = replyCountFor(state, m.key);
+        console.error(`  CIRCUIT BREAKER: ${n} prior replies to ${m.key} (comment ${m.comment.id}); suppressing + alarming`);
+        state.processed[m.key] = { at: new Date().toISOString(), outcome: 'circuit_broken', replies: n };
+        await alarmCircuitBreak(state, m, n);
+        if (!DRY) saveState(state);
+        continue;
+      }
+      const html = classifyKeyword(m.comment.content);
       if (html) {
         // Fixed keyword recipe matched -> single-shot reply.
         try {
           await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: html });
+          recordReply(state, m.key);
           state.processed[m.key] = { at: new Date().toISOString(), outcome: 'replied:keyword' };
           console.log(`  keyword reply to comment ${m.comment.id} on recording ${m.recId}`);
         } catch (e) {
@@ -438,14 +467,16 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
             bcGet, bcPost, mention,
             bucketId: m.bucketId, recId: m.recId, comment: m.comment, aliId: ALI_ID,
           });
+          if (result.ok) recordReply(state, m.key);
           state.processed[m.key] = { at: new Date().toISOString(), outcome: result.ok ? 'replied:llm' : 'llm_error', summary: result.summary, error: result.error };
           console.log(`  llm handler for ${m.comment.id}: ${result.summary}`);
         } catch (e) {
           console.error(`  llm handler failed for ${m.comment.id}: ${e.message}`);
           state.processed[m.key] = { at: new Date().toISOString(), outcome: 'fail', error: e.message };
-          // Fallback: friendly ack so the requester knows we saw it
+          // Fallback: friendly ack so Ali knows we saw it
           try {
-            await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content, mention) });
+            await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content) });
+            recordReply(state, m.key);
           } catch (_e2) {}
         }
       }
