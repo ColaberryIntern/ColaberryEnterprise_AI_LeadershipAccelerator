@@ -151,12 +151,42 @@ export function scoreTodo(todo: {
   };
 }
 
+/**
+ * Apply a per-project weight multiplier (0.0–2.0, default 1.0) to a scored todo
+ * and re-derive BOTH the score and the category from the weighted result.
+ *
+ * Pure + exported for unit tests. Category is computed from the WEIGHTED score
+ * symmetrically: down-weighting a project below the human_required threshold
+ * removes its todos from that category (not just lowers their rank), and
+ * up-weighting can promote into it. Earlier code only promoted on the weighted
+ * score but fell back to the raw-score category, so down-weighting could never
+ * demote a todo out of human_required (fixed 2026-06-15).
+ */
+export function applyProjectWeight(
+  scored: Scored,
+  weight: number,
+): { weightedScore: number; weightedCategory: OpsTodoCategory } {
+  const w = Number.isFinite(weight) ? weight : 1.0;
+  const weightedScore = Math.max(0, Math.min(100, Math.round(scored.urgency_score * w)));
+  const weightedCategory = categorize(
+    weightedScore,
+    scored.signals.has_assignees,
+    scored.signals.days_stale,
+    scored.signals.days_until_due != null, // hasDue: daysUntil is null iff due_on was null
+  );
+  return { weightedScore, weightedCategory };
+}
+
 export interface PriorityEngineRunResult {
   started_at: Date;
   finished_at: Date;
   todos_scored: number;
   todos_skipped: number;
+  /** Todos whose score+category were identical to last pass — no UPDATE, no audit row. */
+  todos_unchanged: number;
   audit_rows_written: number;
+  /** Audit rows deleted by the retention sweep at the end of the run. */
+  audit_rows_pruned: number;
   category_counts: Record<OpsTodoCategory, number>;
   errors: Array<{ todo_bc_id: string; message: string }>;
 }
@@ -170,10 +200,36 @@ interface RawTodoRow {
   bc_updated_at: Date | string;
   assignee_ids: string[] | string; // JSONB returns either depending on driver
   project_weight: string | number | null;
+  prev_score: number | string | null; // current stored urgency_score, for dedup
+  prev_category: string | null; // current stored category, for dedup
 }
 
 const PAGE_SIZE = 200;
 const ASSESS_INSERT_BATCH = 100;
+// Audit-trail retention. ops_ai_assessments is an append-only history; without a
+// cap it grows by (active todos × passes) forever. The engine runs every 2 min
+// (720 passes/day), so an unbounded table filled the prod disk on 2026-06-15
+// (271M rows / 170GB). We keep ~90 days of history — enough to audit score drift
+// and detect agent regressions — and prune the rest each run.
+const ASSESS_RETENTION_DAYS = 90;
+
+/**
+ * True when a freshly computed score/category differs from what's already stored
+ * on the todo. Pure + exported so it can be unit-tested without a DB. A null
+ * prev (never scored) always counts as changed. prev_score may arrive as a
+ * string from the pg driver, so we normalize numerically.
+ */
+export function assessmentChanged(
+  prevScore: number | string | null,
+  prevCategory: string | null,
+  newScore: number,
+  newCategory: string,
+): boolean {
+  if (prevScore == null || prevCategory == null) return true;
+  const prevNum = typeof prevScore === 'string' ? Number(prevScore) : prevScore;
+  if (!Number.isFinite(prevNum)) return true;
+  return prevNum !== newScore || prevCategory !== newCategory;
+}
 
 export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
   const result: PriorityEngineRunResult = {
@@ -181,7 +237,9 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
     finished_at: new Date(),
     todos_scored: 0,
     todos_skipped: 0,
+    todos_unchanged: 0,
     audit_rows_written: 0,
+    audit_rows_pruned: 0,
     category_counts: {
       human_required: 0,
       ai_can_finish: 0,
@@ -196,12 +254,14 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
 
   let offset = 0;
   // Process in pages so the working set stays small (memory-bound on prod backend).
-  // Each page: raw SELECT (no model hydration) -> in-memory scoring -> batched
-  // UPDATE via CASE/IN -> batched INSERT into ops_ai_assessments.
+  // Each page: raw SELECT (no model hydration) -> in-memory scoring -> per-row
+  // UPDATE for only the todos whose score/category changed (dedup gate) ->
+  // batched INSERT of the matching audit rows into ops_ai_assessments.
   while (true) {
     const rows = await sequelize.query<RawTodoRow>(
       `SELECT t.bc_id, t.project_id, t.title, t.description, t.due_on,
               t.bc_updated_at, t.assignee_ids,
+              t.urgency_score AS prev_score, t.category AS prev_category,
               COALESCE(p.weight, 1.0) AS project_weight
          FROM ops_bc_todos t
          LEFT JOIN ops_bc_projects p ON p.bc_id = t.project_id
@@ -232,15 +292,26 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
         });
 
         // Apply per-project weight multiplier (0.0–2.0, default 1.0). Lets Ali
-        // down-weight noisy high-velocity admin projects without losing them
-        // from the queue. Final score capped 0–100.
+        // down-weight noisy high-velocity admin projects, which lowers both their
+        // rank AND their category (a down-weighted todo drops out of
+        // human_required). Score + category capped/derived in applyProjectWeight.
         const weight = typeof r.project_weight === 'string'
           ? parseFloat(r.project_weight)
           : (r.project_weight ?? 1.0);
-        const weightedScore = Math.max(0, Math.min(100, Math.round(scored.urgency_score * (Number.isFinite(weight) ? weight : 1.0))));
-        const weightedCategory = weightedScore >= 60 && scored.signals.has_assignees
-          ? 'human_required'
-          : scored.category;
+        const { weightedScore, weightedCategory } = applyProjectWeight(scored, weight);
+
+        result.todos_scored++;
+        result.category_counts[weightedCategory]++;
+
+        // Dedup: only touch the DB when the score or category actually changed
+        // since the last pass. The engine runs every 2 min, so most todos are
+        // identical pass-to-pass; skipping the redundant UPDATE and (critically)
+        // the audit-row insert is what bounds ops_ai_assessments growth. The
+        // unconditional insert here is what filled the prod disk on 2026-06-15.
+        if (!assessmentChanged(r.prev_score, r.prev_category, weightedScore, weightedCategory)) {
+          result.todos_unchanged++;
+          continue;
+        }
 
         // Per-row UPDATE — no model instance, no association overhead.
         await sequelize.query(
@@ -279,9 +350,6 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
           llm_cost_usd: null,
           computed_at: computedAt,
         });
-
-        result.todos_scored++;
-        result.category_counts[weightedCategory]++;
       } catch (err: any) {
         result.errors.push({ todo_bc_id: r.bc_id, message: err.message });
         result.todos_skipped++;
@@ -301,6 +369,21 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
 
     if (rows.length < PAGE_SIZE) break;
     offset += PAGE_SIZE;
+  }
+
+  // Retention sweep: prune audit rows past the retention window so the table
+  // stays bounded regardless of how long the engine has been running. Indexed
+  // on computed_at, so this is a cheap range delete. Failures here must not fail
+  // the scoring run — log and continue.
+  try {
+    const [, meta] = await sequelize.query(
+      `DELETE FROM ops_ai_assessments
+        WHERE computed_at < NOW() - (:days || ' days')::interval`,
+      { replacements: { days: ASSESS_RETENTION_DAYS } },
+    );
+    result.audit_rows_pruned = (meta as { rowCount?: number } | undefined)?.rowCount ?? 0;
+  } catch (err: any) {
+    result.errors.push({ todo_bc_id: 'retention_sweep', message: err.message });
   }
 
   result.finished_at = new Date();
