@@ -29,6 +29,7 @@ const ops = require('./lib/launchPmoOps');
 const { generateAreaTasks } = require('./lib/launchPmoTaskGenerator');
 const { LAUNCH, provisioned, getByHandle } = require('./lib/launchPmoTeam');
 const { buildDescription } = require('./lib/launchPmoDescription');
+const dl = require('./lib/dependencyLinks');
 
 const DRY = process.argv.includes('--dry-run');
 const KEEP = process.argv.includes('--keep-existing');
@@ -127,6 +128,10 @@ async function trashTodoslist({ projectId, listId, listName }) {
   console.log(`Generating launch tasks v2${DRY ? ' [DRY-RUN]' : ''} - today=${today}, target=${LAUNCH.targetLaunchDate}`);
   console.log(`${lists.length} lists in project, ${Object.keys(VAULT_MAP.briefs || {}).length} briefs in vault`);
 
+  // Collected across all areas so the post-creation link pass can resolve
+  // cross-area dependencies (e.g. an Approval that depends on a Draft).
+  const createdAll = [];
+
   for (const list of lists) {
     if (AREA_FILTER && list.name !== AREA_FILTER) continue;
     console.log(`\n=== ${list.name} ===`);
@@ -172,6 +177,16 @@ async function trashTodoslist({ projectId, listId, listName }) {
             dueOn: t.due_on,
           });
           console.log(`    + [${t.due_on}] ${t.owner_handle.padEnd(8)} ${t.tier.padEnd(5)} ${todo.id}: ${t.content.slice(0, 70)}`);
+          createdAll.push({
+            id: todo.id,
+            title: t.content,
+            app_url: todo.app_url,
+            completed: false,
+            listId: list.id,
+            listName: list.name,
+            dependencies: t.dependencies,
+            descHtml,
+          });
           await new Promise((r) => setTimeout(r, 200));
         } catch (e) {
           console.error(`    FAIL "${t.content.slice(0, 60)}": ${e.message}`);
@@ -180,6 +195,39 @@ async function trashTodoslist({ projectId, listId, listName }) {
     } catch (e) {
       console.error(`  area gen FAIL: ${e.message}`);
     }
+  }
+
+  // Pass 2: stamp dependency/artifact/list links now that every todo has a BC
+  // id + app_url. This is distinct from the F5 brief-linking in
+  // launchPmoDescription (which links dependency text to vault BRIEFS): here we
+  // resolve the dependency to the sibling DRAFTING TODO that produces the
+  // artifact and stamp the machine markers the My Day surface parses. Artifact
+  // is PENDING for every fresh generation (nothing drafted yet) so the runtime
+  // scorer keeps those gates out of the approver-delay band until the drafter
+  // completes. See AI_ProjectArchitect directives/approval-task-dependency-linking.md.
+  if (!DRY && createdAll.length) {
+    console.log(`\n=== Linking dependencies (${createdAll.length} todos) ===`);
+    const candidates = createdAll.map((r) => ({
+      id: r.id, title: r.title, app_url: r.app_url, completed: r.completed, listId: r.listId,
+    }));
+    let linked = 0;
+    for (const r of createdAll) {
+      const dep = dl.resolveDependency(r.dependencies, candidates, { selfId: r.id });
+      if (!dep) continue;
+      const listUrl = dl.listUrlFromAppUrl(r.app_url, r.listId);
+      const artifact = dep.completed ? dep.app_url : 'PENDING';
+      const block = dl.buildMarkersBlock({ dependsOnUrl: dep.app_url, artifact, listUrl });
+      const newDesc = dl.injectMarkers(r.descHtml, block);
+      if (newDesc === r.descHtml) continue;
+      try {
+        await ops.updateTodo({ todoId: r.id, patch: { description: newDesc } });
+        linked++;
+        await new Promise((res) => setTimeout(res, 150));
+      } catch (e) {
+        console.error(`  link FAIL ${r.id} (${r.title.slice(0, 50)}): ${e.message}`);
+      }
+    }
+    console.log(`  linked ${linked} task(s) to their dependency artifact`);
   }
 
   console.log('\n=== Done ===');
