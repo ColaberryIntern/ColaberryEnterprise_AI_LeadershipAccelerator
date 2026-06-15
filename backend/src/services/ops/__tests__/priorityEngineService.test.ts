@@ -1,44 +1,40 @@
 /**
- * Tests for assessmentChanged — the dedup gate that bounds ops_ai_assessments
- * growth (the unconditional audit insert filled the prod disk on 2026-06-15).
+ * Tests for scoreChanged — the urgency_score-only dedup gate that bounds
+ * ops_ai_assessments growth (the unconditional audit insert filled the prod disk
+ * on 2026-06-15). Category is intentionally NOT part of the dedup because
+ * automationRulesService overwrites it every cron cycle; see scoreChanged docs.
  *
  * Coverage:
  *   - never-scored todo (null prev) always counts as changed
- *   - identical score + category => unchanged (no audit row)
+ *   - identical score => unchanged (no audit row), regardless of category churn
  *   - score change => changed
- *   - category change => changed
  *   - pg driver string score normalizes numerically
  *   - non-numeric / malformed prev score => treated as changed (fail-safe)
  */
-import { assessmentChanged } from '../priorityEngineService';
+import { scoreChanged } from '../priorityEngineService';
 
-describe('assessmentChanged', () => {
+describe('scoreChanged', () => {
   it('treats a never-scored todo (null prev) as changed', () => {
-    expect(assessmentChanged(null, null, 50, 'human_required')).toBe(true);
-    expect(assessmentChanged(null, 'unscored', 50, 'human_required')).toBe(true);
-    expect(assessmentChanged(40, null, 50, 'human_required')).toBe(true);
+    expect(scoreChanged(null, 50)).toBe(true);
   });
 
-  it('returns false when score and category are identical', () => {
-    expect(assessmentChanged(50, 'human_required', 50, 'human_required')).toBe(false);
-    expect(assessmentChanged(0, 'unscored', 0, 'unscored')).toBe(false);
+  it('returns false when the score is identical (category is irrelevant)', () => {
+    expect(scoreChanged(50, 50)).toBe(false);
+    expect(scoreChanged(0, 0)).toBe(false);
   });
 
   it('returns true when the score changed', () => {
-    expect(assessmentChanged(50, 'human_required', 51, 'human_required')).toBe(true);
-  });
-
-  it('returns true when the category changed', () => {
-    expect(assessmentChanged(50, 'unscored', 50, 'human_required')).toBe(true);
+    expect(scoreChanged(50, 51)).toBe(true);
+    expect(scoreChanged(80, 0)).toBe(true);
   });
 
   it('normalizes a string prev score from the pg driver', () => {
-    expect(assessmentChanged('50', 'human_required', 50, 'human_required')).toBe(false);
-    expect(assessmentChanged('50', 'human_required', 51, 'human_required')).toBe(true);
+    expect(scoreChanged('50', 50)).toBe(false);
+    expect(scoreChanged('50', 51)).toBe(true);
   });
 
   it('treats a non-numeric prev score as changed (fail-safe)', () => {
-    expect(assessmentChanged('abc', 'unscored', 50, 'unscored')).toBe(true);
-    expect(assessmentChanged(NaN, 'unscored', 50, 'unscored')).toBe(true);
+    expect(scoreChanged('abc', 50)).toBe(true);
+    expect(scoreChanged(NaN, 50)).toBe(true);
   });
 });
