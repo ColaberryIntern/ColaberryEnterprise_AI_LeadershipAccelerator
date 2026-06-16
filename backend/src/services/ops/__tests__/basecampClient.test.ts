@@ -10,12 +10,19 @@ jest.mock('../basecampToken', () => {
     isAuthError: (s: number) => s === 401,
   };
 });
+// Keep the real backoff math/predicate, but make the waits instant in tests.
+jest.mock('../bcRetry', () => ({
+  ...jest.requireActual('../bcRetry'),
+  sleep: jest.fn(() => Promise.resolve()),
+  bcPace: jest.fn(() => Promise.resolve()),
+}));
 
 import { bcGet, bcPost } from '../basecampClient';
 import { refreshBcToken } from '../basecampToken';
 
-const okResp = (data: unknown) => ({ ok: true, status: 200, json: async () => data, text: async () => '' });
-const errResp = (status: number, body = '') => ({ ok: false, status, json: async () => ({}), text: async () => body });
+const headers = (retryAfter?: string) => ({ get: (k: string) => (k.toLowerCase() === 'retry-after' ? retryAfter ?? null : null) });
+const okResp = (data: unknown) => ({ ok: true, status: 200, headers: headers(), json: async () => data, text: async () => '' });
+const errResp = (status: number, body = '', retryAfter?: string) => ({ ok: false, status, headers: headers(retryAfter), json: async () => ({}), text: async () => body });
 
 beforeEach(() => {
   (refreshBcToken as jest.Mock).mockClear();
@@ -54,6 +61,24 @@ describe('bcGet', () => {
     (global as any).fetch = jest.fn().mockResolvedValueOnce(errResp(500, 'boom'));
     await expect(bcGet('/x.json')).rejects.toThrow(/-> 500/);
     expect(refreshBcToken).not.toHaveBeenCalled();
+  });
+
+  it('backs off and retries on a 429, then succeeds (no token refresh)', async () => {
+    (global as any).fetch = jest
+      .fn()
+      .mockResolvedValueOnce(errResp(429, 'rate limit', '1'))
+      .mockResolvedValueOnce(okResp({ id: 9 }));
+    const out = await bcGet<{ id: number }>('/projects.json');
+    expect(out).toEqual({ id: 9 });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(refreshBcToken).not.toHaveBeenCalled();
+  });
+
+  it('gives up after the retry cap on persistent 429s', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue(errResp(429, 'still limited'));
+    await expect(bcGet('/x.json')).rejects.toThrow(/-> 429/);
+    // initial try + 5 retries
+    expect(global.fetch).toHaveBeenCalledTimes(6);
   });
 });
 
