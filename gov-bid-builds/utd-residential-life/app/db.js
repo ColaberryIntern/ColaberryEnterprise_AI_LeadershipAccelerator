@@ -173,6 +173,22 @@ db.exec(`
     is_private  INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS concern_flags (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    resident_id      INTEGER NOT NULL REFERENCES residents(id),
+    flagged_by_id    INTEGER NOT NULL REFERENCES users(id),
+    concern_type     TEXT NOT NULL CHECK(concern_type IN ('academic','mental_health','safety','financial','behavioral','other')),
+    description      TEXT NOT NULL,
+    urgency          TEXT NOT NULL DEFAULT 'medium' CHECK(urgency IN ('low','medium','high','critical')),
+    status           TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','under_review','resolved','dismissed')),
+    assigned_to_id   INTEGER REFERENCES users(id),
+    resolution_notes TEXT,
+    resolved_by_id   INTEGER REFERENCES users(id),
+    resolved_at      TEXT,
+    created_at       TEXT DEFAULT (datetime('now')),
+    updated_at       TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;

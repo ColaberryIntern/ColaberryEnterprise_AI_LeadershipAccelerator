@@ -7,6 +7,11 @@
     <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
       <h2 class="mb-0">{{resident.name}}</h2>
       <span class="badge {{resident.yearBadge}}">{{resident.yearLabel}}</span>
+      {{#if activeFlagCount}}
+      <span class="badge bg-danger">
+        <i class="bi bi-flag-fill me-1"></i>{{activeFlagCount}} active concern{{#if (ne activeFlagCount 1)}}s{{/if}}
+      </span>
+      {{/if}}
       <span class="badge {{tierBadge}} ms-auto">
         <i class="bi bi-shield-check me-1"></i>{{tierLabel}}
       </span>
@@ -19,7 +24,27 @@
       {{#if resident.email}}&middot; <i class="bi bi-envelope me-1 ms-2"></i>{{resident.email}}{{/if}}
     </p>
   </div>
+  <a href="/concerns/new?resident_id={{resident.id}}" class="btn btn-danger btn-sm flex-shrink-0">
+    <i class="bi bi-flag-fill me-1"></i>Flag Concern
+  </a>
 </div>
+
+{{#if activeFlags.length}}
+<div class="alert alert-danger border-0 mb-4">
+  <div class="fw-semibold mb-1">
+    <i class="bi bi-exclamation-octagon me-2"></i>Active student-of-concern flags
+  </div>
+  {{#each activeFlags}}
+  <div class="d-flex justify-content-between align-items-center py-1 border-top border-danger border-opacity-25 mt-1">
+    <span class="small">
+      <span class="badge {{urgencyBadge}} me-1">{{urgencyLabel}}</span>
+      {{typeLabel}} — flagged by {{flagged_by_name}} on {{formattedDate}}
+    </span>
+    <a href="/concerns/{{id}}" class="btn btn-outline-danger btn-sm py-0">View</a>
+  </div>
+  {{/each}}
+</div>
+{{/if}}
 
 {{#if (eq flash "note_added")}}
 <div class="alert alert-success border-0 mb-4">
@@ -227,7 +252,7 @@
 
     {{else}}
     <!-- SS privacy notice -->
-    <div class="card border-0 shadow-sm border-start border-warning border-3">
+    <div class="card border-0 shadow-sm border-start border-warning border-3 mb-3">
       <div class="card-body small">
         <div class="fw-semibold mb-1">
           <i class="bi bi-lock me-2 text-warning"></i>Limited Access
@@ -239,6 +264,44 @@
       </div>
     </div>
     {{/if}}
+
+    <!-- Concern Flag History (all roles) -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small">
+          <i class="bi bi-flag-fill me-2 text-danger"></i>Concern Flags
+        </span>
+        <span class="badge bg-light text-dark border">{{concernFlags.length}}</span>
+      </div>
+      {{#if concernFlags.length}}
+      <div class="list-group list-group-flush">
+        {{#each concernFlags}}
+        <a href="/concerns/{{id}}" class="list-group-item list-group-item-action py-3">
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="small fw-semibold">{{typeLabel}}</span>
+            <span class="badge {{statusBadge}}" style="font-size:.68rem">{{statusLabel}}</span>
+          </div>
+          <div class="d-flex gap-1 mb-1">
+            <span class="badge {{urgencyBadge}}" style="font-size:.68rem">{{urgencyLabel}}</span>
+          </div>
+          <div class="text-muted" style="font-size:.75rem">
+            {{flagged_by_name}} · {{formattedDate}}
+          </div>
+        </a>
+        {{/each}}
+      </div>
+      {{else}}
+      <div class="card-body text-muted text-center py-3 small">
+        <i class="bi bi-shield-check d-block mb-1 fs-4 opacity-25 text-success"></i>
+        No concern flags on record.
+      </div>
+      {{/if}}
+      <div class="card-footer bg-transparent py-2">
+        <a href="/concerns/new?resident_id={{resident.id}}" class="btn btn-outline-danger btn-sm w-100">
+          <i class="bi bi-flag me-1"></i>Flag This Student
+        </a>
+      </div>
+    </div>
 
   </div>
 </div>

@@ -12,13 +12,14 @@ const RESET = process.env.SEED_RESET === 'true';
 
 if (RESET) {
   console.log('[seed] Resetting tables…');
+  db.exec('DELETE FROM concern_flags;');
   db.exec('DELETE FROM staff_notes; DELETE FROM residents;');
   db.exec('DELETE FROM survey_responses; DELETE FROM surveys; DELETE FROM broadcasts;');
   db.exec('DELETE FROM evaluations;');
   db.exec('DELETE FROM program_proposals; DELETE FROM curriculum_outcomes;');
   db.exec('DELETE FROM shift_swaps; DELETE FROM shifts;');
   db.exec('DELETE FROM notifications; DELETE FROM incident_reports; DELETE FROM users;');
-  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('staff_notes','residents','survey_responses','surveys','broadcasts','evaluations','program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
+  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('concern_flags','staff_notes','residents','survey_responses','surveys','broadcasts','evaluations','program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
 }
 
 const existingCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
@@ -735,6 +736,66 @@ if (residentCount === 0 || RESET) {
   console.log('[seed] 9 residents, 5 staff notes seeded.');
 } else {
   console.log('[seed] Residents already seeded, skipping.');
+}
+
+// ── Concern Flags ─────────────────────────────────────────────────────────────
+const concernCount = db.prepare('SELECT COUNT(*) AS c FROM concern_flags').get().c;
+if (concernCount === 0 || RESET) {
+  const allResidents = db.prepare('SELECT id, name, building FROM residents').all();
+  const residentByName = name => allResidents.find(r => r.name === name)?.id;
+
+  const alexKimId    = residentByName('Alex Kim');
+  const mayaRiveraId = residentByName('Maya Rivera');
+  const samTaylorId  = residentByName('Sam Taylor');
+
+  const insertFlag = db.prepare(`
+    INSERT INTO concern_flags
+      (resident_id, flagged_by_id, concern_type, description, urgency,
+       status, assigned_to_id, resolution_notes, resolved_by_id, resolved_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Flag 1: Safety / critical → open (Alex Kim, Andrews Hall — flagged by Jake SS)
+  insertFlag.run(
+    alexKimId, ss0Id, 'safety',
+    'Alex mentioned feeling overwhelmed and made an offhand comment about "not wanting to be here anymore." When I followed up he brushed it off, but the tone felt different from normal finals stress. His lights were off at 2 PM today and he didn\'t answer the door.',
+    'critical', 'open', ccId,
+    null, null, null,
+    '2026-06-14T14:30:00', '2026-06-14T14:30:00'
+  );
+  // Notify CC and RD
+  db.prepare('INSERT INTO notifications (user_id, message) VALUES (?, ?)').run(
+    ccId, '[Critical concern] Jake Thompson flagged Alex Kim (Andrews Hall Rm 320) — Safety'
+  );
+  db.prepare('INSERT INTO notifications (user_id, message) VALUES (?, ?)').run(
+    rdId, '[Critical concern] Jake Thompson flagged Alex Kim (Andrews Hall Rm 320) — Safety'
+  );
+
+  // Flag 2: Mental Health / high → under_review (Maya Rivera, Berkner — flagged by Aisha SS)
+  const f2 = insertFlag.run(
+    mayaRiveraId, ss1Id, 'mental_health',
+    'Maya has missed the last three hall events and seems to be spending most of her time in her room. Roommates said she\'s been crying frequently. She declined when I offered to connect her with counseling but seemed open to it if someone followed up in person.',
+    'high', 'under_review', ccId,
+    null, null, null,
+    '2026-06-12T10:15:00', '2026-06-13T09:00:00'
+  );
+  db.prepare('INSERT INTO notifications (user_id, message) VALUES (?, ?)').run(
+    ss1Id, 'Your concern flag for Maya Rivera has been updated to "Under Review" by Marcus Williams'
+  );
+
+  // Flag 3: Academic / medium → resolved (Sam Taylor, Hillhouse — flagged by Diego SS, resolved by CC Marcus)
+  insertFlag.run(
+    samTaylorId, ss2Id, 'academic',
+    'Sam told me he\'s failing two classes and hasn\'t been to lectures in three weeks. He said he\'s been struggling since his grandfather passed away in May. Asked me not to tell anyone but I think he needs support.',
+    'medium', 'resolved', ccId,
+    'Connected Sam with the Dean of Students office and the campus grief counseling program. He has an academic recovery plan in place and has resumed attending classes. Follow-up meeting scheduled for end of semester.',
+    rdId, '2026-06-13T16:00:00',
+    '2026-06-10T19:00:00', '2026-06-13T16:00:00'
+  );
+
+  console.log('[seed] 3 concern flags seeded.');
+} else {
+  console.log('[seed] Concern flags already seeded, skipping.');
 }
 
 console.log('[seed] Done. Sign in at http://localhost:3000/login');

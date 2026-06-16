@@ -104,6 +104,7 @@ app.use('/evaluations', require('./routes/evaluations'));
 app.use('/communications', require('./routes/communications'));
 app.use('/students', require('./routes/students'));
 app.use('/insights', require('./routes/insights'));
+app.use('/concerns', require('./routes/concerns'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

@@ -5742,3 +5742,23 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `node scripts/take-screenshot-f7.js` → all 5 screenshots captured without error. Server at http://localhost:3000/insights returns 200 with KPI cards and Chart.js charts rendered. Drill-down paths /insights/hall/Andrews%20Hall and /insights/hall/Andrews%20Hall/floor/3 both return 200. Floor 3 resident cards link to /students/1 (Alex Kim 360 profile). Floor extraction via CAST(SUBSTR(room_number,1,1) AS INTEGER) correctly maps rm320 → floor 3, rm214 → floor 2.
   - Notes: Chart.js data pre-serialized as JSON strings in route handlers and injected via triple-brace {{{...}}} to avoid Handlebars HTML escaping of brackets/quotes. `urlencode` helper (encodeURIComponent) required for building names with spaces in drill-down URLs. `requireAuth` imported as plain function (not destructured) per established pattern.
   - Notes: Feature 4 (communications.js + 4 views) was built by a prior session but logged as Not Started in the matrix. Same discovery pattern as Features 2 and 3.
+
+### UTD Residential Life — Feature 8/8: Student-of-Concern Flag + Workflow (2026-06-16)
+- [x] Build student-of-concern flag + workflow — BC todo 9967513624
+  - Date: 2026-06-16
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/db.js`: added `concern_flags` table (resident_id, flagged_by_id, concern_type CHECK, description, urgency CHECK, status CHECK open→under_review→resolved/dismissed, assigned_to_id, resolution_notes, resolved_by_id, resolved_at).
+    - `gov-bid-builds/utd-residential-life/app/routes/concerns.js` (new): GET / (list — RD sees all, CC sees building, SS sees own flags; active/all tab filter; urgency-sorted); GET /new?resident_id= (pre-fillable flag form); POST / (create flag + notify all CC/RD in building; critical urgency → RD notified); GET /:id (flag detail + audit trail; access-scoped); POST /:id/update (CC/RD: status transition, assign, resolution notes; notifies original flagger on status change).
+    - `gov-bid-builds/utd-residential-life/app/views/concerns/index.hbs` (new): active/all tab filter, urgency+type+status badges, flagged-by + timestamp meta, empty state.
+    - `gov-bid-builds/utd-residential-life/app/views/concerns/new.hbs` (new): student dropdown (pre-filled from query param), 6-type icon card selector, 4-level urgency toggle, description textarea, guidance sidebar (when to flag + what happens next).
+    - `gov-bid-builds/utd-residential-life/app/views/concerns/show.hbs` (new): observation panel, CC/RD workflow update form (status/assign/resolution notes), resolution card, audit trail sidebar (created → assigned → resolved events), quick links to 360 profile.
+    - `gov-bid-builds/utd-residential-life/app/routes/students.js`: added concern_flags query to 360 profile — all roles see flag count badge + history panel; active flags trigger alert banner; "Flag Concern" button in header for all roles.
+    - `gov-bid-builds/utd-residential-life/app/views/students/show.hbs`: active concern alert banner (links to each flag), "Flag Concern" header button, concern flags sidebar panel with full history (all roles), "Flag This Student" CTA in sidebar.
+    - `gov-bid-builds/utd-residential-life/app/server.js`: mounted `app.use('/concerns', require('./routes/concerns'))`.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: added Concerns nav link (bi-flag-fill, text-danger).
+    - `gov-bid-builds/utd-residential-life/seeds/index.js`: added concern_flags seed block (3 flags: critical/safety/open for Alex Kim, high/mental_health/under_review for Maya Rivera, medium/academic/resolved for Sam Taylor with resolution notes).
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-f8.js` (new): Playwright capture script (7 screenshots).
+    - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-8-*.png` (7 new screenshots).
+  - Verification: `node --check app/routes/concerns.js` → exit 0. `node seeds/index.js` → "3 concern flags seeded." All 7 Playwright screenshots captured without error. /concerns, /concerns/1, /concerns/new, /students/1 all return 200. Active concern alert banner visible on Alex Kim 360 profile. SS view (Jake) shows only own-created flags.
+  - Notes: No spec in requirements.md — AC derived from BC task description + residential life domain. `concern_flags` added to RESET block for SEED_RESET=true. Notifications sent to all CC/RD in building on flag creation; flagger notified on status change.

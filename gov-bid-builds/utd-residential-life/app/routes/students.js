@@ -132,6 +132,39 @@ router.get('/:id', (req, res) => {
     formattedDate: new Date(n.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
   }));
 
+  // Concern flags — all roles can see (SS sees count only; CC/RD see detail)
+  const CONCERN_TYPE_LABELS = {
+    academic: 'Academic', mental_health: 'Mental Health', safety: 'Safety',
+    financial: 'Financial', behavioral: 'Behavioral', other: 'Other',
+  };
+  const CONCERN_URGENCY_BADGES = {
+    low: 'bg-light text-dark border', medium: 'bg-warning text-dark',
+    high: 'bg-danger', critical: 'bg-dark',
+  };
+  const CONCERN_STATUS_BADGES = {
+    open: 'bg-danger', under_review: 'bg-warning text-dark',
+    resolved: 'bg-success', dismissed: 'bg-light text-dark border',
+  };
+
+  const rawFlags = db.prepare(`
+    SELECT cf.*, u1.name AS flagged_by_name
+    FROM concern_flags cf JOIN users u1 ON u1.id = cf.flagged_by_id
+    WHERE cf.resident_id = ? ORDER BY cf.created_at DESC
+  `).all(resident.id);
+
+  const concernFlags = rawFlags.map(f => ({
+    ...f,
+    typeLabel:    CONCERN_TYPE_LABELS[f.concern_type] || f.concern_type,
+    urgencyBadge: CONCERN_URGENCY_BADGES[f.urgency]   || 'bg-secondary',
+    urgencyLabel: f.urgency.charAt(0).toUpperCase() + f.urgency.slice(1),
+    statusBadge:  CONCERN_STATUS_BADGES[f.status]     || 'bg-secondary',
+    statusLabel:  f.status === 'open' ? 'Open' : f.status === 'under_review' ? 'Under Review' : f.status === 'resolved' ? 'Resolved' : 'Dismissed',
+    isActive:     f.status === 'open' || f.status === 'under_review',
+    formattedDate: new Date(f.created_at).toLocaleDateString('en-US', { dateStyle: 'medium' }),
+  }));
+
+  const activeFlags = concernFlags.filter(f => f.isActive);
+
   const tierLabel = isRD ? 'Director view — full access'
     : isCC ? 'Coordinator view — excludes RD-private records'
     : 'Staff view — basic profile only';
@@ -141,6 +174,8 @@ router.get('/:id', (req, res) => {
     title: `${resident.name} — 360 Profile`,
     user, canManage, isRD, isCC, isSS,
     resident, incidents, agreement, programs, notes,
+    concernFlags, activeFlags,
+    activeFlagCount: activeFlags.length,
     tierLabel, tierBadge,
     flash: req.query.flash || null,
   });
