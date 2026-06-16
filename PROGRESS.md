@@ -12,6 +12,29 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts — UTD Complete Electronic Proposal draft (2026-06-15)
+- [x] Draft Complete Electronic Proposal — BC todo 9967486093
+  - Date: 2026-06-15
+  - Session: CC-20260615-rfp1
+  - What changed: gov-bid-builds/utd-residential-life/docs/UTD20260428-TB-Proposal-Draft.md (new) — 11-section full proposal draft: cover letter, vendor info, executive summary, technical approach (F1–F3 live + F4–F8 roadmap), integration architecture (StarRez/Salesforce/SSO), implementation timeline, security/compliance (TX-RAMP/SOC2/HECVAT/FERPA/WCAG), team qualifications, pricing (placeholder), references (placeholder), certifications + submission checklist.
+  - Verification: File created at correct path. Human review + completion of ⚠️ sections (COI, HECVAT, pricing, references, bios, RFP appendices) required before Bonfire submission.
+  - Notes: Opportunity Pulse unreachable (ECONNREFUSED); gap items derived from RFP domain primer + standard TX higher-ed procurement practice. Features 1–3 accurately represented (code confirmed). Sections 9–11 are placeholders requiring human completion.
+
+### Gov Contracts — UTD RFP requirements matrix built (2026-06-15)
+- [x] Build requirements matrix (shall/must/required) — BC todo 9967486093
+  - Date: 2026-06-15
+  - Session: CC-20260615-rfp1
+  - What changed: Generated tmp/utd-req-matrix.csv — 60 requirements across 5 categories (Functional, Integration, Compliance, Security, NFR), 6 columns (req_id/section/text/our_response_summary/response_doc/status). User imported to Google Sheets and shared with Ali + Ram. BC comment 9999796500 posted with sheet link; todo 9967486093 closed.
+  - Verification: BC MCP → comment_id 9999796500 ✓; closed: true ✓ — https://app.basecamp.com/3945211/buckets/47346103/todos/9967486093#__recording_9999796500; Sheet: https://docs.google.com/spreadsheets/d/1v7IC_elFU_adllLdqQAagTYs39EOf36xxr2vL4-QTp4/edit?usp=sharing
+  - Notes: Opportunity Pulse unreachable (ECONNREFUSED); Bonfire 403-gated; RFP PDFs on Ali's laptop. Matrix sourced from BC domain primer + requirements.md. Human verification pass against 51-page PDF needed before proposal response use.
+
+### Gov Contracts — UTD RFP scope summary posted (2026-06-15)
+- [x] Read UTD RFP + write 1-paragraph scope summary — BC todo 9967486043
+  - Date: 2026-06-15
+  - Session: CC-20260615-rfp1
+  - What changed: No code. Synthesized RFP UTD20260428-TB scope from BC domain primer + gov-bid-builds/utd-residential-life/requirements.md (Bonfire URL 403-gated). Posted 1-paragraph plain-English summary as BC comment 9999752941; todo 9967486043 marked complete.
+  - Verification: BC MCP → comment_id 9999752941 ✓; closed: true ✓ — https://app.basecamp.com/3945211/buckets/47346103/todos/9967486043#__recording_9999752941
+
 ### UTD Residential Life — Feature 1/8: Verification pass (2026-06-15)
 - [x] Verification session for BC todo 9967513500 — confirmed all deliverables on main
   - Date: 2026-06-15
@@ -5588,6 +5611,24 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: Kes pushed `5412f015` (`fix: PR #3 review — kes-tasks cleanup, error leakage, a11y Space key, structured logging`) after my earlier PR comment listing the unresolved blockers. Verified each item against the diff: (1) `git rm -r kes-tasks/` removed all 5 orphan files (832 line deletions) + added `kes-tasks/` to `.gitignore`; (2) FK question confirmed safe in code — `backend/src/services/participantService.ts:61` signs JWT with `sub: enrollment.id` so `req.participant!.sub` IS the enrollment id (no FK violation possible against `enrollment_id UUID NOT NULL REFERENCES enrollments(id)`); (3) dynamic `await import()` calls in both project-dna routes replaced with a single static `import { saveProjectDna, getProjectDna } from "../services/projectDnaService"` at top of `participantRoutes.ts`; (4) structured JSON logging added to `projectDnaService.ts` (`project_dna_saved` with `duration_ms`, `project_dna_fetched` with `found` flag, both with random correlation_id) and to both 500 catch blocks in `participantRoutes.ts` (`project_dna_save_failed` / `project_dna_get_failed` with correlation_id from X-Correlation-ID header or generated UUID, error_class, context — client now gets generic `Failed to save/retrieve Project DNA` string instead of raw `err.message`); (5) a11y bonus — all 5 `onKeyDown` handlers on `role=radio`/`role=checkbox` elements in `ProjectDnaWizard.tsx` now activate on Enter OR Space (was Enter-only, WCAG 2.1 AA §4.1.2 fix). Three merge conflicts resolved additively on `/tmp/pr3-merge` worktree: `PROGRESS.md` (kept both sides), `backend/src/models/index.ts` (kept the `ProjectDna` export from PR side), `.gitignore` (auto-merged). Pushed as `0fe217cd`, squash-merged to main as `b077e4bb`.
   - Verification: `gh pr view 3` confirms state MERGED, mergedAt 2026-06-09T23:34:58Z, mergeCommit `b077e4bb`. Kes's commit body claims `tsc --noEmit` exit 0 on both backend and frontend; not independently re-run from local Windows env. Local worktree at `/tmp/pr3-merge` removed cleanly.
   - Notes: **Not yet deployed.** Three remaining steps before Kes can do his FK live-verification submission (his screenshot ask): (1) deploy to dev — `ssh root@95.216.199.47 && cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.development.yml up -d --build backend`; (2) run seed against the dev DB — `docker exec <accelerator-dev{1|2}-backend> npx ts-node backend/src/seeds/seedProjectDna.ts` (idempotent CREATE TABLE IF NOT EXISTS); (3) Ali generates a participant magic link via admin panel and sends to Kes. Kes will then load `http://95.216.199.47:9999/portal/project-builder`, submit through all 4 steps, and confirm the success screen (FK check). If a 500 surfaces with FK violation, the service needs an extra lookup of `enrollment_id` from `participant_id` first — but that is unlikely given the participantService.ts:61 evidence. **Deploy + magic link paused for Ali's confirmation** — shared dev2 infra + admin-panel UI both warrant Ali's explicit go-ahead per CLAUDE.md shared-state rule.
+
+### UTD Residential Life — Feature 3/8: Program Proposals + Curriculum Mapping (2026-06-15)
+- [x] Build program proposals + curriculum mapping — BC todo 9967513530
+  - Date: 2026-06-15
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/db.js`: added `curriculum_outcomes` table (code UNIQUE, title, description, category CHECK) and `program_proposals` table (title, description, target_audience, proposed_date, budget_estimate, expected_outcomes, outcome_id FK, submitter_id FK, status CHECK, reviewed_by_id FK, review_notes) after shift_swaps.
+    - `gov-bid-builds/utd-residential-life/app/routes/proposals.js` (new): GET / (list with status filter, pending alert, per-role scoping), GET /new (form + outcome sidebar), POST / (create with draft/pending action, RD notification), GET /:id (detail with review state), POST /:id/review (RD approve/reject + submitter notification). decorateProposal() adds statusLabel/statusBadge/statusText/catLabel/catBadge/budgetFmt.
+    - `gov-bid-builds/utd-residential-life/app/views/proposals/index.hbs` (new): filter tabs (All/Pending/Approved/Rejected/Drafts) with live counts, pending alert for CC/RD, list-group with status badge + outcome code badge, empty state CTA.
+    - `gov-bid-builds/utd-residential-life/app/views/proposals/new.hbs` (new): two-column form (fields left, curriculum outcomes sidebar right), dual submit buttons (Submit for Review / Save as Draft).
+    - `gov-bid-builds/utd-residential-life/app/views/proposals/show.hbs` (new): proposal detail (DL card with all fields + curriculum outcome), RD review form (approve/reject + notes), review result card, draft-submit card for owner, flash alerts for submitted/reviewed.
+    - `gov-bid-builds/utd-residential-life/app/server.js`: mounted `app.use('/proposals', require('./routes/proposals'))`, added `or` and `add` Handlebars helpers.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: added Proposals sidebar nav link.
+    - `gov-bid-builds/utd-residential-life/seeds/index.js`: fixed RESET block to delete proposals/outcomes/shifts/swaps before users (FK order). Seeded 5 curriculum outcomes (CB-01, AS-01, WL-01, DI-01, LD-01) and 6 program proposals across all 4 statuses (2 approved, 2 pending, 1 rejected, 1 draft).
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-f3.js` (new): Playwright capture script for Feature 3.
+    - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-3-program-proposals-curriculum-mapping*.png` (4 new screenshots).
+  - Verification: `node --check app/routes/proposals.js` → exit 0. Seed output: "5 curriculum outcomes seeded, 6 program proposals seeded." Playwright screenshots captured: list shows All-6/Pending-2/Approved-2/Rejected-1/Drafts-1 with correct status badges and outcome codes.
+  - Notes: `or`/`add` helpers added to server.js for count arithmetic in index.hbs. `{{this.statusLabel}}` required inside `{{#each proposals}}` to bypass global `statusLabel` Handlebars helper name conflict. FK-ordered DELETE on RESET: program_proposals → curriculum_outcomes → shift_swaps → shifts → notifications → incident_reports → users.
 
 ### UTD Residential Life — Feature 2/8: Staff Scheduling + On-Call Rotation (2026-06-15)
 - [x] Build staff scheduling + on-call rotation — BC todo 9967513515

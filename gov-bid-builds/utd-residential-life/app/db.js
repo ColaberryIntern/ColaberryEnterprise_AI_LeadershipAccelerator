@@ -74,6 +74,31 @@ db.exec(`
     created_at        TEXT DEFAULT (datetime('now')),
     updated_at        TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS curriculum_outcomes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT NOT NULL UNIQUE,
+    title       TEXT NOT NULL,
+    description TEXT,
+    category    TEXT NOT NULL CHECK(category IN ('community_building','academic_success','wellness','diversity_inclusion','leadership'))
+  );
+
+  CREATE TABLE IF NOT EXISTS program_proposals (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    title             TEXT NOT NULL,
+    description       TEXT NOT NULL,
+    target_audience   TEXT NOT NULL,
+    proposed_date     TEXT,
+    budget_estimate   REAL,
+    expected_outcomes TEXT NOT NULL,
+    outcome_id        INTEGER REFERENCES curriculum_outcomes(id),
+    submitter_id      INTEGER NOT NULL REFERENCES users(id),
+    status            TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('draft','pending','approved','rejected')),
+    reviewed_by_id    INTEGER REFERENCES users(id),
+    review_notes      TEXT,
+    created_at        TEXT DEFAULT (datetime('now')),
+    updated_at        TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;

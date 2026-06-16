@@ -25,6 +25,8 @@ const hbs = create({
   helpers: {
     eq: (a, b) => a === b,
     ne: (a, b) => a !== b,
+    or: (a, b) => a || b,
+    add: (a, b) => (Number(a) || 0) + (Number(b) || 0),
     formatDate(d) {
       if (!d) return '—';
       return new Date(d).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
@@ -95,6 +97,7 @@ app.use('/', require('./routes/auth'));
 app.use('/', require('./routes/dashboard'));
 app.use('/reports', require('./routes/reports')(upload));
 app.use('/schedule', require('./routes/schedule'));
+app.use('/proposals', require('./routes/proposals'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

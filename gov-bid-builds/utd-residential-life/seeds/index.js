@@ -12,8 +12,10 @@ const RESET = process.env.SEED_RESET === 'true';
 
 if (RESET) {
   console.log('[seed] Resetting tables…');
+  db.exec('DELETE FROM program_proposals; DELETE FROM curriculum_outcomes;');
+  db.exec('DELETE FROM shift_swaps; DELETE FROM shifts;');
   db.exec('DELETE FROM notifications; DELETE FROM incident_reports; DELETE FROM users;');
-  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('notifications','incident_reports','users');");
+  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
 }
 
 const existingCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
@@ -305,6 +307,140 @@ if (shiftCount === 0 || RESET) {
   console.log(`[seed] ${SHIFTS.length} shifts seeded, 1 swap request seeded.`);
 } else {
   console.log('[seed] Shifts already seeded, skipping.');
+}
+
+// ── Curriculum Outcomes ───────────────────────────────────────────────────────
+const outcomeCount = db.prepare('SELECT COUNT(*) AS c FROM curriculum_outcomes').get().c;
+if (outcomeCount === 0 || RESET) {
+  const insertOutcome = db.prepare(
+    'INSERT OR IGNORE INTO curriculum_outcomes (code, title, description, category) VALUES (?, ?, ?, ?)'
+  );
+  const OUTCOMES = [
+    ['CB-01', 'Community Connection',    'Residents build meaningful relationships with peers and staff through intentional programming and shared experiences.', 'community_building'],
+    ['AS-01', 'Academic Engagement',     'Residents access campus academic resources, develop study habits, and connect with faculty and tutoring support.', 'academic_success'],
+    ['WL-01', 'Personal Wellness',       'Residents practice self-care, stress management, and healthy lifestyle habits during their college years.', 'wellness'],
+    ['DI-01', 'Inclusive Community',     'Residents engage with diverse identities, perspectives, and cultures to create a welcoming living environment.', 'diversity_inclusion'],
+    ['LD-01', 'Leadership Development',  'Residents identify leadership strengths, contribute to community decision-making, and develop professional skills.', 'leadership'],
+  ];
+  for (const [code, title, desc, cat] of OUTCOMES) insertOutcome.run(code, title, desc, cat);
+  console.log(`[seed] ${OUTCOMES.length} curriculum outcomes seeded.`);
+}
+
+const outcomes = db.prepare('SELECT id, code FROM curriculum_outcomes').all();
+const outcomeId = code => outcomes.find(o => o.code === code)?.id;
+
+// ── Program Proposals ─────────────────────────────────────────────────────────
+const proposalCount = db.prepare('SELECT COUNT(*) AS c FROM program_proposals').get().c;
+if (proposalCount === 0 || RESET) {
+  const insertProposal = db.prepare(`
+    INSERT INTO program_proposals
+      (title, description, target_audience, proposed_date, budget_estimate,
+       expected_outcomes, outcome_id, submitter_id, status, reviewed_by_id, review_notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const PROPOSALS = [
+    {
+      title: 'Finals Week Survival Kit Night',
+      description: 'Pop-up event providing snacks, school supplies, and stress-relief activities during finals week. Includes a designated quiet study corner.',
+      target_audience: 'All Andrews Hall residents',
+      proposed_date: '2026-07-28',
+      budget: 180,
+      expected_outcomes: 'Residents feel supported during a high-stress period; 30+ attendees; positive feedback on community survey.',
+      outcome_code: 'WL-01',
+      submitter_id: ss0Id,
+      status: 'approved',
+      reviewed_by_id: rdId,
+      review_notes: 'Great idea — aligns well with our wellness pillar. Coordinate with Dining Services for donation.',
+      created_at: '2026-06-01T10:00:00',
+    },
+    {
+      title: 'Diversity Dinner: Around the World',
+      description: 'Residents bring or prepare a dish from their cultural background and share its significance. Short "story-behind-the-dish" cards displayed at each station.',
+      target_audience: 'All residents across buildings',
+      proposed_date: '2026-07-15',
+      budget: 250,
+      expected_outcomes: 'Cross-cultural dialogue; residents learn about at least 3 new cultural traditions; 20+ dishes represented.',
+      outcome_code: 'DI-01',
+      submitter_id: ccId,
+      status: 'approved',
+      reviewed_by_id: rdId,
+      review_notes: 'Approved — excellent cross-building collaboration opportunity. Request photos for our Instagram.',
+      created_at: '2026-06-03T11:30:00',
+    },
+    {
+      title: 'Resume + LinkedIn Headshot Workshop',
+      description: 'Partner with Career Services for a drop-in resume review session. Student photographer available for free professional headshots.',
+      target_audience: 'Sophomores and juniors in Caruth Hall',
+      proposed_date: '2026-07-22',
+      budget: 75,
+      expected_outcomes: 'Residents leave with an updated resume draft and LinkedIn headshot; 15+ participants expected.',
+      outcome_code: 'LD-01',
+      submitter_id: cc2Id,
+      status: 'pending',
+      reviewed_by_id: null,
+      review_notes: null,
+      created_at: '2026-06-08T09:15:00',
+    },
+    {
+      title: 'Mid-Semester Study Groups Launch',
+      description: 'Facilitate formation of peer study groups by matching residents based on shared courses. Provide snacks and dedicated study space.',
+      target_audience: 'First-year residents in all buildings',
+      proposed_date: '2026-07-10',
+      budget: 60,
+      expected_outcomes: 'At least 8 study groups formed; follow-up survey at finals shows improved academic confidence.',
+      outcome_code: 'AS-01',
+      submitter_id: ss2Id,
+      status: 'pending',
+      reviewed_by_id: null,
+      review_notes: null,
+      created_at: '2026-06-09T14:00:00',
+    },
+    {
+      title: 'Berkner Hall Game Night',
+      description: 'Informal board game and card game night in the Berkner common area. No structured activities — just time for residents to meet each other.',
+      target_audience: 'Berkner Hall residents',
+      proposed_date: '2026-07-05',
+      budget: 40,
+      expected_outcomes: 'New residents meet neighbors; low-pressure social event; 15+ attendees.',
+      outcome_code: 'CB-01',
+      submitter_id: ss1Id,
+      status: 'rejected',
+      reviewed_by_id: rdId,
+      review_notes: 'Hillhouse already has a community game night scheduled this month — combine efforts with Diego to avoid duplication.',
+      created_at: '2026-06-05T16:30:00',
+    },
+    {
+      title: 'Mindfulness & Meditation Morning',
+      description: 'Guided 30-minute morning meditation session in the courtyard. Partner with the Campus Recreation wellness team to lead.',
+      target_audience: 'All residents — optional drop-in',
+      proposed_date: null,
+      budget: 0,
+      expected_outcomes: 'Residents experience a structured mindfulness practice; open to all skill levels.',
+      outcome_code: 'WL-01',
+      submitter_id: ss3Id,
+      status: 'draft',
+      reviewed_by_id: null,
+      review_notes: null,
+      created_at: '2026-06-11T08:45:00',
+    },
+  ];
+
+  for (const p of PROPOSALS) {
+    insertProposal.run(
+      p.title, p.description, p.target_audience,
+      p.proposed_date || null,
+      p.budget ?? null,
+      p.expected_outcomes,
+      outcomeId(p.outcome_code) || null,
+      p.submitter_id,
+      p.status,
+      p.reviewed_by_id || null,
+      p.review_notes || null,
+      p.created_at,
+    );
+  }
+  console.log(`[seed] ${PROPOSALS.length} program proposals seeded.`);
 }
 
 console.log('[seed] Done. Sign in at http://localhost:3000/login');
