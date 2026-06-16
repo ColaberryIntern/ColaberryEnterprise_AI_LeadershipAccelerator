@@ -41,6 +41,7 @@ import SectionConfig from './SectionConfig';
 import ArtifactDefinition from './ArtifactDefinition';
 import VariableStore from './VariableStore';
 import GitHubConnection from './GitHubConnection';
+import StudentGithubActivity from './StudentGithubActivity';
 import SkillDefinition from './SkillDefinition';
 import ProgramBlueprint from './ProgramBlueprint';
 import MiniSection from './MiniSection';
@@ -492,6 +493,10 @@ VariableStore.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_id', as: 'ar
 // GitHubConnection associations
 Enrollment.hasOne(GitHubConnection, { foreignKey: 'enrollment_id', as: 'githubConnection' });
 GitHubConnection.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// StudentGithubActivity associations
+Enrollment.hasOne(StudentGithubActivity, { foreignKey: 'enrollment_id', as: 'githubActivity' });
+StudentGithubActivity.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // SessionGate -> ArtifactDefinition (bidirectional)
 SessionGate.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
@@ -1054,6 +1059,7 @@ export {
   AnthropicChangeEvent,
   // AI Systems Architect Accelerator
   ProjectDna,
+  StudentGithubActivity,
 };
 
 // --- AI Company Layer associations ---

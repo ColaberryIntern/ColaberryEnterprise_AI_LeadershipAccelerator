@@ -6,6 +6,28 @@ This file tracks all implementation work. Claude must read this at the start of 
 ---
 
 ## Current Focus
+GitHub API integration for Architect Dashboard — OAuth flow, activity sync, webhook receiver.
+
+---
+
+### GitHub Integration Service — OAuth + Activity Sync + Webhook (2026-06-15)
+- [x] GitHub API integration for Architect Dashboard (BC todo 9946499767)
+  - Date: 2026-06-15
+  - Session: CC-20260615-g1th
+  - What changed:
+    - `backend/src/models/StudentGithubActivity.ts` (new): Sequelize model for `student_github_activity` table. Enrollment-keyed (UNIQUE), stores commits_last_7d, open_prs, total_stars, contribution_graph_json, raw_repos_json.
+    - `backend/src/seeds/seedStudentGithubActivity.ts` (new): Idempotent CREATE TABLE + index. Run via `docker exec accelerator-backend node dist/seeds/seedStudentGithubActivity.js`.
+    - `backend/src/services/githubIntegrationService.ts` (new): `buildOAuthUrl`, `handleOAuthCallback`, `registerWebhook`, `syncStudentActivity`, `validateWebhookSignature`, `findEnrollmentByRepo`.
+    - `backend/src/routes/participantRoutes.ts` (modified): Added `GET /api/portal/github/oauth/start` + `GET /api/portal/github/oauth/callback`.
+    - `backend/src/routes/webhookRoutes.ts` (modified): Added `POST /api/webhook/github` with `express.raw()` body parsing + HMAC-SHA256 signature validation.
+    - `backend/src/models/index.ts` (modified): Added `StudentGithubActivity` import, Enrollment association, export.
+    - `backend/src/services/__tests__/githubIntegrationService.test.ts` (new): Unit tests for `buildOAuthUrl`, `validateWebhookSignature` (valid/invalid/no-secret/empty), `findEnrollmentByRepo` (found/not-found).
+  - Verification: `npx tsc --noEmit` exit 0 (backend clean).
+  - Notes: New env vars required before deploy — `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_URL`. Table must be seeded before routes are live. Aleem's wizard UI review still pending; Architect Dashboard (ArchitectDashboard.tsx) is Week 3.
+
+---
+
+## Current Focus
 System Blueprint UX overhaul — transforming the portal from dashboard-first to guided build experience.
 
 ---

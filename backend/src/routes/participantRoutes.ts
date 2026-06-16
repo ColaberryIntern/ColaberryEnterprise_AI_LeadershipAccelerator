@@ -183,6 +183,29 @@ router.use(projectRoutes);
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);
 router.get('/api/portal/mentor/history', requireParticipant, handleGetMentorHistory);
 
+// GitHub OAuth endpoints
+router.get('/api/portal/github/oauth/start', requireParticipant, async (req, res) => {
+  const { buildOAuthUrl } = await import('../services/githubIntegrationService');
+  res.redirect(buildOAuthUrl(req.participant!.sub));
+});
+
+// Callback from GitHub — no session cookie present, identity comes from state param
+router.get('/api/portal/github/oauth/callback', async (req, res) => {
+  const { code, state: enrollmentId } = req.query;
+  if (!code || !enrollmentId || typeof code !== 'string' || typeof enrollmentId !== 'string') {
+    res.status(400).json({ error: 'Missing code or state' });
+    return;
+  }
+  try {
+    const { handleOAuthCallback } = await import('../services/githubIntegrationService');
+    await handleOAuthCallback(code, enrollmentId);
+    res.redirect('/portal/home?github_connected=1');
+  } catch (err: any) {
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_oauth_callback_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'GitHub connection failed' });
+  }
+});
+
 // GitHub integration endpoints
 router.post('/api/portal/github/connect', requireParticipant, async (req, res) => {
   try {
