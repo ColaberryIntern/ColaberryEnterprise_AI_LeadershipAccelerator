@@ -4,7 +4,7 @@
 **Owner:** Ali Muwwakkil
 **Raised by:** Kes (CC-20260616-c0r4)
 
-**Remaining blockers before go-live:** #2 (refund policy) and the two deploy blockers in PR #24 (`GMAIL_COLABERRY_REFRESH_TOKEN` in prod env; turn off `CORA_DRY_RUN` only after verification). #4 is resolved by directing to a strategy call.
+**Remaining blockers before go-live:** #2 (refund policy — now in motion, assigned to Taiwo, BC todo [10003806235](https://app.basecamp.com/3945211/buckets/47502609/todos/10003806235), due 2026-06-19) and the two deploy blockers in PR #24 (`GMAIL_COLABERRY_REFRESH_TOKEN` in prod env; turn off `CORA_DRY_RUN` only after verification). #4 is resolved by directing to a strategy call.
 
 ---
 
@@ -17,9 +17,10 @@
 
 ---
 
-### 2. Refund and Cancellation Policy — ⛔ STILL OPEN
+### 2. Refund and Cancellation Policy — 🔄 IN MOTION (sourcing from Taiwo)
 **Gap:** Cora replies "contact us for our current terms" — a placeholder. The actual policy is not in the codebase anywhere. **Current behavior:** Cora escalates all refund/cancellation requests to Ali (does not attempt to resolve), which is safe but means it cannot answer policy questions.
-**Ali needs to provide:**
+**Status (2026-06-16):** Assigned to **Taiwo Oludimimu** (Admissions Operations) to upload the finalized refund/cancellation agreement — Basecamp todo [10003806235](https://app.basecamp.com/3945211/buckets/47502609/todos/10003806235) (Accelerator → Sales & Admissions, due 2026-06-19). Once the document lands, load its terms into `coraKnowledgeBase.ts` (refund Q&A) and flip this item to RESOLVED. Until then, Cora keeps escalating — do not ship a guessed policy.
+**Needed from the document:**
 - Notice period required for cancellation
 - Whether full/partial refunds are offered and under what conditions
 - Whether participants can defer to a future cohort instead of cancelling
