@@ -1,8 +1,9 @@
 /* UTD Residential Life — Demo App Styles */
 
 :root {
-  --navy: #1a2744;
-  --accent: #2563eb;
+  --navy: #00539B;          /* UT Dallas Comet Blue */
+  --accent: #E87722;        /* UT Dallas Comet Orange */
+  --accent-blue: #0066CC;   /* hover / link tint */
   --sidebar-w: 220px;
 }
 
@@ -17,6 +18,17 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
+  border-bottom: 3px solid var(--accent);
+}
+
+.app-nav .navbar-brand .brand-sub {
+  font-size: .65rem;
+  font-weight: 400;
+  opacity: .75;
+  display: block;
+  letter-spacing: .04em;
+  line-height: 1;
+  margin-top: 1px;
 }
 
 .app-body {
@@ -95,6 +107,18 @@ body {
   box-shadow: 0 .5rem 1.25rem rgba(0,0,0,.12) !important;
   border-color: var(--accent) !important;
 }
+
+/* ── Demo footer ─────────────────────────────────────────────────────────── */
+.demo-footer {
+  background: #f1f3f5;
+  border-top: 1px solid #dee2e6;
+  font-size: .75rem;
+  color: #6c757d;
+  padding: .55rem 1.5rem;
+  text-align: center;
+}
+.demo-footer strong { color: #495057; }
+.demo-footer .footer-divider { margin: 0 .5rem; opacity: .4; }
 
 /* ── Login page ──────────────────────────────────────────────────────────── */
 .login-card {

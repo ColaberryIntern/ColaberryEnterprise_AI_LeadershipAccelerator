@@ -5762,3 +5762,15 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
     - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-8-*.png` (7 new screenshots).
   - Verification: `node --check app/routes/concerns.js` → exit 0. `node seeds/index.js` → "3 concern flags seeded." All 7 Playwright screenshots captured without error. /concerns, /concerns/1, /concerns/new, /students/1 all return 200. Active concern alert banner visible on Alex Kim 360 profile. SS view (Jake) shows only own-created flags.
   - Notes: No spec in requirements.md — AC derived from BC task description + residential life domain. `concern_flags` added to RESET block for SEED_RESET=true. Notifications sent to all CC/RD in building on flag creation; flagger notified on status change.
+
+### UTD Residential Life — Agency-styled UI theme + branding (mock) (2026-06-16)
+- [x] Apply UTD Comet Blue theme + disclaimer footer — BC todo 9967513643
+  - Date: 2026-06-16
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/public/style.css`: swapped `--navy` from `#1a2744` to UT Dallas Comet Blue `#00539B`; added `--accent: #E87722` (Comet Orange); added 3px Comet Orange bottom border on navbar; added `.brand-sub` subheading style; added `.demo-footer` styles.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: replaced generic building icon navbar brand with `bi-mortarboard-fill` (orange) + "Residential Life" title + "The University of Texas at Dallas" sub-label; added `<footer class="demo-footer">` on every page — "Demo Application | Not affiliated with or endorsed by The University of Texas at Dallas | Built by Colaberry".
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-theme.js` (new): Playwright capture — dashboard, concerns list, login page.
+    - `gov-bid-builds/utd-residential-life/docs/screenshots/theme-utd-branding-*.png` (3 new screenshots).
+  - Verification: All 3 Playwright screenshots captured. Navbar shows Comet Blue + orange mortarboard + UTD sub-label. Footer disclaimer visible on dashboard, concerns, and login. No layout regressions.
+  - Notes: `theme.ts` deliverable in task description inapplicable to this Express/Handlebars stack — CSS custom properties used instead. No real UTD logos used — text-based placeholder only.
