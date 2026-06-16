@@ -5725,4 +5725,20 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Session: CC-20260615-rfp1
   - What changed: (1) tmp/utd-req-matrix.csv — REQ-F-011 (Staff Scheduling) and REQ-F-012 (Mass Communication) updated from "Not Started" to "Compliant" with accurate response summaries referencing the built routes. (2) gov-bid-builds/utd-residential-life/docs/UTD20260428-TB-Proposal-Draft.html — executive summary table updated; new Section 4.5 "Feature 4: Mass Communication & Surveys (Working Demo Available)" added with full broadcast/survey capability writeup; roadmap table trimmed to F5–F8; implementation timeline Phase 1 updated to "F1–F4"; Phase 2 trimmed to "F5 + integrations"; section numbering 4.6/4.7 → 4.7/4.8.
   - Verification: File edits applied cleanly; grep confirms F4 no longer shows "Phase 2" in the exec summary or timeline; CSV rows show "Compliant".
+
+### UTD Residential Life — Feature 7/8: Insight Dashboards + Drill-Down (2026-06-16)
+- [x] Build insight dashboards + macro/micro drill-down — BC todo 9967513614
+  - Date: 2026-06-16
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/routes/insights.js` (new): 3 routes — GET / (macro: KPI cards + Chart.js bar/doughnut + building grid + RA conversations + recent incidents); GET /hall/:building (hall drill-down: KPI cards + floor bar chart + floor grid cards + programs panel + staff panel); GET /hall/:building/floor/:floor (floor drill-down: resident cards linked to /students/:id + incident list). Pure aggregation of existing tables — no new DB tables.
+    - `gov-bid-builds/utd-residential-life/app/views/insights/macro.hbs` (new): community-level overview — 6 KPI cards, Chart.js stacked-bar (complaints per hall), Chart.js doughnut (programs by category), 4-up building drill-down cards with noise/lockout/escalated badges, RA conversations panel (notes per author), recent-incidents feed.
+    - `gov-bid-builds/utd-residential-life/app/views/insights/hall.hbs` (new): hall detail — breadcrumb, 4 KPI cards, floor-incidents bar chart (Chart.js), floor grid cards linking to floor drill-down, approved programs panel, hall staff panel.
+    - `gov-bid-builds/utd-residential-life/app/views/insights/floor.hbs` (new): floor detail — breadcrumb, resident cards (avatar, room, year, meal plan, link to 360 profile), incident list with type/status badges.
+    - `gov-bid-builds/utd-residential-life/app/server.js`: added `json` and `urlencode` Handlebars helpers; mounted `app.use('/insights', require('./routes/insights'))`.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: added Insights nav link (bi-bar-chart-line) between Student Profiles and All Reports.
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-f7.js` (new): Playwright capture script (5 screenshots: macro, Andrews Hall, Caruth Hall, Floor 3, Floor 2).
+    - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-7-insight-dashboards-*.png` (5 new screenshots).
+  - Verification: `node scripts/take-screenshot-f7.js` → all 5 screenshots captured without error. Server at http://localhost:3000/insights returns 200 with KPI cards and Chart.js charts rendered. Drill-down paths /insights/hall/Andrews%20Hall and /insights/hall/Andrews%20Hall/floor/3 both return 200. Floor 3 resident cards link to /students/1 (Alex Kim 360 profile). Floor extraction via CAST(SUBSTR(room_number,1,1) AS INTEGER) correctly maps rm320 → floor 3, rm214 → floor 2.
+  - Notes: Chart.js data pre-serialized as JSON strings in route handlers and injected via triple-brace {{{...}}} to avoid Handlebars HTML escaping of brackets/quotes. `urlencode` helper (encodeURIComponent) required for building names with spaces in drill-down URLs. `requireAuth` imported as plain function (not destructured) per established pattern.
   - Notes: Feature 4 (communications.js + 4 views) was built by a prior session but logged as Not Started in the matrix. Same discovery pattern as Features 2 and 3.

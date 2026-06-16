@@ -60,6 +60,8 @@ const hbs = create({
         admin: 'Admin',
       }[role] || role;
     },
+    json: (val) => JSON.stringify(val),
+    urlencode: (str) => encodeURIComponent(String(str || '')),
   },
 });
 
@@ -101,6 +103,7 @@ app.use('/proposals', require('./routes/proposals'));
 app.use('/evaluations', require('./routes/evaluations'));
 app.use('/communications', require('./routes/communications'));
 app.use('/students', require('./routes/students'));
+app.use('/insights', require('./routes/insights'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
