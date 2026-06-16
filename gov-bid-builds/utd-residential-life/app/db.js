@@ -119,6 +119,39 @@ db.exec(`
     created_at        TEXT DEFAULT (datetime('now')),
     updated_at        TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS broadcasts (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_id      INTEGER NOT NULL REFERENCES users(id),
+    subject        TEXT NOT NULL,
+    body           TEXT NOT NULL,
+    channel        TEXT NOT NULL DEFAULT 'inapp' CHECK(channel IN ('inapp','email','sms')),
+    audience_type  TEXT NOT NULL CHECK(audience_type IN ('all_staff','hall','individual')),
+    audience_value TEXT,
+    created_at     TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS surveys (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    creator_id     INTEGER NOT NULL REFERENCES users(id),
+    title          TEXT NOT NULL,
+    description    TEXT,
+    audience_type  TEXT NOT NULL CHECK(audience_type IN ('all_staff','hall','individual')),
+    audience_value TEXT,
+    questions_json TEXT NOT NULL DEFAULT '[]',
+    status         TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','active','closed')),
+    created_at     TEXT DEFAULT (datetime('now')),
+    updated_at     TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS survey_responses (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    survey_id     INTEGER NOT NULL REFERENCES surveys(id),
+    respondent_id INTEGER NOT NULL REFERENCES users(id),
+    answers_json  TEXT NOT NULL DEFAULT '{}',
+    submitted_at  TEXT DEFAULT (datetime('now')),
+    UNIQUE(survey_id, respondent_id)
+  );
 `);
 
 module.exports = db;

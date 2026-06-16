@@ -12,6 +12,21 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts — UTD Cost Proposal template drafted (2026-06-16)
+- [x] Draft Cost Proposal — BC todo 9967486125
+  - Date: 2026-06-16
+  - Session: CC-20260615-rfp1
+  - What changed: gov-bid-builds/utd-residential-life/docs/UTD20260428-TB-Cost-Proposal.html (new) — 6-section Cost Proposal template: pricing summary, detailed line items (8 categories), optional services, pricing assumptions, 5-year option table, certification block, completion checklist. All dollar amounts are placeholders requiring Ali + Ram.
+  - Verification: BC MCP → comment_id 9999916599 ✓; Drive link posted (comment 9999956402) ✓; closed ✓ — https://docs.google.com/document/d/1pKUoY--FMG3K1tXwoQh273115O9o7et9luktuqLBtuE/edit?usp=sharing
+  - Notes: Dollar amounts still placeholder — Ali + Ram must complete before Bonfire submission (June 30).
+
+### Gov Contracts — UTD Complete Electronic Proposal — Drive link posted (2026-06-16)
+- [x] Complete Electronic Proposal to Google Drive — BC todo 9967486112
+  - Date: 2026-06-16
+  - Session: CC-20260615-rfp1
+  - What changed: Drive link posted to BC; todo closed.
+  - Verification: BC MCP → comment_id 9999956378 ✓; closed ✓ — https://docs.google.com/document/d/1Zh4_iwewEXBDTaxQaN4D5uTkJsIISUErtYfII2wsABs/edit?usp=sharing
+
 ### Gov Contracts — UTD Complete Electronic Proposal draft (2026-06-15)
 - [x] Draft Complete Electronic Proposal — BC todo 9967486093
   - Date: 2026-06-15
@@ -5611,6 +5626,25 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: Kes pushed `5412f015` (`fix: PR #3 review — kes-tasks cleanup, error leakage, a11y Space key, structured logging`) after my earlier PR comment listing the unresolved blockers. Verified each item against the diff: (1) `git rm -r kes-tasks/` removed all 5 orphan files (832 line deletions) + added `kes-tasks/` to `.gitignore`; (2) FK question confirmed safe in code — `backend/src/services/participantService.ts:61` signs JWT with `sub: enrollment.id` so `req.participant!.sub` IS the enrollment id (no FK violation possible against `enrollment_id UUID NOT NULL REFERENCES enrollments(id)`); (3) dynamic `await import()` calls in both project-dna routes replaced with a single static `import { saveProjectDna, getProjectDna } from "../services/projectDnaService"` at top of `participantRoutes.ts`; (4) structured JSON logging added to `projectDnaService.ts` (`project_dna_saved` with `duration_ms`, `project_dna_fetched` with `found` flag, both with random correlation_id) and to both 500 catch blocks in `participantRoutes.ts` (`project_dna_save_failed` / `project_dna_get_failed` with correlation_id from X-Correlation-ID header or generated UUID, error_class, context — client now gets generic `Failed to save/retrieve Project DNA` string instead of raw `err.message`); (5) a11y bonus — all 5 `onKeyDown` handlers on `role=radio`/`role=checkbox` elements in `ProjectDnaWizard.tsx` now activate on Enter OR Space (was Enter-only, WCAG 2.1 AA §4.1.2 fix). Three merge conflicts resolved additively on `/tmp/pr3-merge` worktree: `PROGRESS.md` (kept both sides), `backend/src/models/index.ts` (kept the `ProjectDna` export from PR side), `.gitignore` (auto-merged). Pushed as `0fe217cd`, squash-merged to main as `b077e4bb`.
   - Verification: `gh pr view 3` confirms state MERGED, mergedAt 2026-06-09T23:34:58Z, mergeCommit `b077e4bb`. Kes's commit body claims `tsc --noEmit` exit 0 on both backend and frontend; not independently re-run from local Windows env. Local worktree at `/tmp/pr3-merge` removed cleanly.
   - Notes: **Not yet deployed.** Three remaining steps before Kes can do his FK live-verification submission (his screenshot ask): (1) deploy to dev — `ssh root@95.216.199.47 && cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.development.yml up -d --build backend`; (2) run seed against the dev DB — `docker exec <accelerator-dev{1|2}-backend> npx ts-node backend/src/seeds/seedProjectDna.ts` (idempotent CREATE TABLE IF NOT EXISTS); (3) Ali generates a participant magic link via admin panel and sends to Kes. Kes will then load `http://95.216.199.47:9999/portal/project-builder`, submit through all 4 steps, and confirm the success screen (FK check). If a 500 surfaces with FK violation, the service needs an extra lookup of `enrollment_id` from `participant_id` first — but that is unlikely given the participantService.ts:61 evidence. **Deploy + magic link paused for Ali's confirmation** — shared dev2 infra + admin-panel UI both warrant Ali's explicit go-ahead per CLAUDE.md shared-state rule.
+
+### UTD Residential Life — Feature 5/8: Mass Communications Hub (2026-06-16)
+- [x] Build mass communications hub — BC todo 9967513570
+  - Date: 2026-06-16
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/db.js`: added `broadcasts` table (sender_id FK, subject, body, channel CHECK(inapp/email/sms), audience_type CHECK(all_staff/hall/individual), audience_value) and `surveys` table (creator_id FK, title, description, audience_type, audience_value, questions_json TEXT, status CHECK(draft/active/closed)) and `survey_responses` table (survey_id FK, respondent_id FK, answers_json, UNIQUE(survey_id, respondent_id)).
+    - `gov-bid-builds/utd-residential-life/app/routes/communications.js` (new): GET / (hub: recent broadcasts + all surveys with hasResponded tag), GET /new (broadcast compose form), POST / (create broadcast + push in-app notifications to recipients), GET /surveys/new (survey builder), POST /surveys (create survey), GET /surveys/:id (detail with per-question result stats — avg for rating, yes/no counts + pct, free-text list), POST /surveys/:id/respond (submit response, UNIQUE guard), POST /surveys/:id/status (change draft/active/closed).
+    - `gov-bid-builds/utd-residential-life/app/views/communications/index.hbs` (new): two-column hub — broadcasts list (left) with channel badge + audience label, surveys list (right) with status badge + hasResponded pill. Pending-survey alert banner.
+    - `gov-bid-builds/utd-residential-life/app/views/communications/new.hbs` (new): broadcast compose form with dynamic audience selector (all_staff/hall/individual) using hidden input + JS; channel guide sidebar.
+    - `gov-bid-builds/utd-residential-life/app/views/communications/surveys/new.hbs` (new): dynamic survey builder — JS addQuestion() appends question rows (text/rating/yesno type select), renumberQuestions() keeps labels correct; Save as Draft vs Save & Activate dual submit.
+    - `gov-bid-builds/utd-residential-life/app/views/communications/surveys/show.hbs` (new): inline respond form (active surveys, unanswered), per-question result stats (progress bars for rating, yes/no pct bar, free-text quotes), individual responses table for CC/RD.
+    - `gov-bid-builds/utd-residential-life/app/server.js`: mounted `app.use('/communications', require('./routes/communications'))`.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: added Communications sidebar nav link.
+    - `gov-bid-builds/utd-residential-life/seeds/index.js`: RESET block updated; seeded 4 broadcasts (inapp all_staff, email Andrews Hall, sms Caruth Hall, inapp individual), 2 surveys (End-of-Year active all_staff, Andrews Programming closed), 3 survey responses.
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-f5.js` (new): Playwright capture for Feature 5.
+    - 4 screenshots in `docs/screenshots/feature-5-mass-communications-hub*.png`.
+  - Verification: Full reseed → "4 broadcasts, 2 surveys, 3 survey responses seeded." All 4 screenshots captured. Server starts clean on port 3000.
+  - Notes: requireAuth imported as default export (not destructured) to match auth.js module.exports pattern. audience_value for individual broadcasts stored as string user ID.
 
 ### UTD Residential Life — Feature 4/8: Student Staff Performance Evaluations (2026-06-16)
 - [x] Build student staff performance evaluations — BC todo 9967513544

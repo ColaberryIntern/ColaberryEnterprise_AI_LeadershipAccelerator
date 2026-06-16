@@ -12,11 +12,12 @@ const RESET = process.env.SEED_RESET === 'true';
 
 if (RESET) {
   console.log('[seed] Resetting tables…');
+  db.exec('DELETE FROM survey_responses; DELETE FROM surveys; DELETE FROM broadcasts;');
   db.exec('DELETE FROM evaluations;');
   db.exec('DELETE FROM program_proposals; DELETE FROM curriculum_outcomes;');
   db.exec('DELETE FROM shift_swaps; DELETE FROM shifts;');
   db.exec('DELETE FROM notifications; DELETE FROM incident_reports; DELETE FROM users;');
-  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('evaluations','program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
+  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('survey_responses','surveys','broadcasts','evaluations','program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
 }
 
 const existingCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
@@ -518,6 +519,128 @@ if (evalCount === 0 || RESET) {
   );
 
   console.log('[seed] 5 evaluations seeded (2 complete pairs + 1 self-only + 1 supervisor-only).');
+}
+
+// ── Broadcasts & Surveys ──────────────────────────────────────────────────────
+const broadcastCount = db.prepare('SELECT COUNT(*) AS c FROM broadcasts').get().c;
+if (broadcastCount === 0 || RESET) {
+  const insertBroadcast = db.prepare(`
+    INSERT INTO broadcasts (sender_id, subject, body, channel, audience_type, audience_value, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  insertBroadcast.run(
+    rdId,
+    'Summer 2026 Staff Protocols — Read Required',
+    'All ResLife staff: updated quiet-hours enforcement procedures and emergency escalation contacts are now in effect for summer 2026. Please review the attached protocols doc before your next shift. Questions? Reach out to your CC directly.',
+    'inapp', 'all_staff', null,
+    '2026-06-10T09:00:00'
+  );
+  insertBroadcast.run(
+    ccId,
+    'Andrews Hall Town Hall — Friday June 20',
+    'Residents and staff: please join us for a community town hall this Friday at 7 PM in the Andrews Hall common room. We\'ll be discussing summer programming, facilities updates, and taking Q&A.',
+    'email', 'hall', 'Andrews Hall',
+    '2026-06-11T14:30:00'
+  );
+  insertBroadcast.run(
+    cc2Id,
+    'Planned Water Shutdown — Caruth Hall, June 18',
+    'Heads-up: Facilities will shut off water to Caruth Hall on Wednesday June 18 from 10 AM to 2 PM for pipe maintenance. Please plan accordingly and fill water bottles beforehand.',
+    'sms', 'hall', 'Caruth Hall',
+    '2026-06-12T10:00:00'
+  );
+  insertBroadcast.run(
+    rdId,
+    'Staff Excellence Recognition — Jake Thompson',
+    'Jake — your outstanding crisis response during the June flooding incident has been noted and shared with ResLife leadership. Well done. You\'re on track for a CC recommendation.',
+    'inapp', 'individual', String(ss0Id),
+    '2026-06-13T16:00:00'
+  );
+
+  // Surveys
+  const insertSurvey = db.prepare(`
+    INSERT INTO surveys (creator_id, title, description, audience_type, audience_value, questions_json, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const EOY_QUESTIONS = JSON.stringify([
+    { text: 'Rate your overall experience as ResLife staff this year (1 = poor, 5 = excellent)', type: 'rating' },
+    { text: 'Do you feel well-supported by your supervisors?', type: 'yesno' },
+    { text: 'What was your biggest challenge this semester?', type: 'text' },
+    { text: 'What one change would most improve ResLife operations next year?', type: 'text' },
+  ]);
+
+  const eoyResult = insertSurvey.run(
+    rdId,
+    'End-of-Year Staff Experience Survey',
+    'Annual survey to help us improve the ResLife staff program. Responses are confidential and reviewed by the RD only.',
+    'all_staff', null,
+    EOY_QUESTIONS, 'active',
+    '2026-06-08T08:00:00'
+  );
+  const eoySurveyId = eoyResult.lastInsertRowid;
+
+  const ANDREWS_QUESTIONS = JSON.stringify([
+    { text: 'Rate the quality of hall programming this semester (1 = poor, 5 = excellent)', type: 'rating' },
+    { text: 'Would you attend more events if held on weekday evenings?', type: 'yesno' },
+    { text: 'What types of events would you like to see next semester?', type: 'text' },
+  ]);
+
+  const andrewsResult = insertSurvey.run(
+    ccId,
+    'Andrews Hall Spring Programming Feedback',
+    'Quick feedback on spring semester events. Responses inform our summer and fall programming calendar.',
+    'hall', 'Andrews Hall',
+    ANDREWS_QUESTIONS, 'closed',
+    '2026-05-20T11:00:00'
+  );
+  const andrewsSurveyId = andrewsResult.lastInsertRowid;
+
+  // Survey responses
+  const insertResponse = db.prepare(`
+    INSERT INTO survey_responses (survey_id, respondent_id, answers_json, submitted_at)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  // EOY survey — Emma Lee (ss3Id) responded
+  insertResponse.run(
+    eoySurveyId, ss3Id,
+    JSON.stringify({
+      q0: '5',
+      q1: 'yes',
+      q2: 'Balancing on-call overnight shifts with my academic schedule during midterms.',
+      q3: 'A dedicated quiet study lounge for ResLife staff in each building.',
+    }),
+    '2026-06-09T10:30:00'
+  );
+
+  // EOY survey — Diego Ramirez (ss2Id) responded
+  insertResponse.run(
+    eoySurveyId, ss2Id,
+    JSON.stringify({
+      q0: '4',
+      q1: 'yes',
+      q2: 'Last-minute schedule changes with little notice — hard to plan around.',
+      q3: 'Weekly all-staff check-in to keep everyone aligned across buildings.',
+    }),
+    '2026-06-10T14:00:00'
+  );
+
+  // Andrews closed survey — Jake Thompson (ss0Id) responded
+  insertResponse.run(
+    andrewsSurveyId, ss0Id,
+    JSON.stringify({
+      q0: '4',
+      q1: 'yes',
+      q2: 'More cross-hall collaborative events — it\'s fun to meet residents from other buildings.',
+    }),
+    '2026-05-28T09:15:00'
+  );
+
+  console.log('[seed] 4 broadcasts, 2 surveys, 3 survey responses seeded.');
+} else {
+  console.log('[seed] Broadcasts/surveys already seeded, skipping.');
 }
 
 console.log('[seed] Done. Sign in at http://localhost:3000/login');

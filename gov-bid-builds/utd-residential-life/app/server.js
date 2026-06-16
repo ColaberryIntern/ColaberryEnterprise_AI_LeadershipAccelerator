@@ -99,6 +99,7 @@ app.use('/reports', require('./routes/reports')(upload));
 app.use('/schedule', require('./routes/schedule'));
 app.use('/proposals', require('./routes/proposals'));
 app.use('/evaluations', require('./routes/evaluations'));
+app.use('/communications', require('./routes/communications'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
