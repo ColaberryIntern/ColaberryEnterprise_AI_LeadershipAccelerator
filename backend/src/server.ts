@@ -527,14 +527,24 @@ async function start(): Promise<void> {
     console.warn('[OpsAutomation] seed failed:', err?.message);
   }
 
-  try {
-    await sequelize.sync({ alter: true });
-  } catch (err: any) {
-    console.warn('[DB] sync({ alter: true }) failed, falling back to create-only sync:', err?.message);
+  // Schema is managed explicitly above (ensureOpsCommandCenterSchema, lead-ingestion,
+  // Missed Opportunities, etc.) because sequelize.sync({ alter: true }) is unreliable
+  // on this 215-model prod graph — see the comment on ensureOpsCommandCenterSchema.
+  // It is also SLOW: even when the alter pass fails, the fallback create-only sync runs
+  // a full per-table schema introspection across all 215 models (~6 min on prod) before
+  // erroring on a pre-existing enum drift (anthropic_content_registry.content_type), so
+  // every boot/deploy became a multi-minute API outage. Off by default; set
+  // DB_BOOT_SYNC=true only for a deliberate, supervised schema reconciliation.
+  if (process.env.DB_BOOT_SYNC === 'true') {
     try {
-      await sequelize.sync();
-    } catch (fallbackErr: any) {
-      console.warn('[DB] fallback sync also failed:', fallbackErr?.message);
+      await sequelize.sync({ alter: true });
+    } catch (err: any) {
+      console.warn('[DB] sync({ alter: true }) failed, falling back to create-only sync:', err?.message);
+      try {
+        await sequelize.sync();
+      } catch (fallbackErr: any) {
+        console.warn('[DB] fallback sync also failed:', fallbackErr?.message);
+      }
     }
   }
   await ensureCampaignLinkColumns();
