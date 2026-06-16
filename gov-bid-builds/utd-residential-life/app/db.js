@@ -152,6 +152,27 @@ db.exec(`
     submitted_at  TEXT DEFAULT (datetime('now')),
     UNIQUE(survey_id, respondent_id)
   );
+
+  CREATE TABLE IF NOT EXISTS residents (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    email      TEXT,
+    student_id TEXT,
+    building   TEXT NOT NULL,
+    room       TEXT NOT NULL,
+    year       TEXT NOT NULL CHECK(year IN ('freshman','sophomore','junior','senior')),
+    major      TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS staff_notes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    resident_id INTEGER NOT NULL REFERENCES residents(id),
+    author_id   INTEGER NOT NULL REFERENCES users(id),
+    body        TEXT NOT NULL,
+    is_private  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;

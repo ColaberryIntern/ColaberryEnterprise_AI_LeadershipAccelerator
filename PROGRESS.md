@@ -5627,6 +5627,23 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `gh pr view 3` confirms state MERGED, mergedAt 2026-06-09T23:34:58Z, mergeCommit `b077e4bb`. Kes's commit body claims `tsc --noEmit` exit 0 on both backend and frontend; not independently re-run from local Windows env. Local worktree at `/tmp/pr3-merge` removed cleanly.
   - Notes: **Not yet deployed.** Three remaining steps before Kes can do his FK live-verification submission (his screenshot ask): (1) deploy to dev — `ssh root@95.216.199.47 && cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.development.yml up -d --build backend`; (2) run seed against the dev DB — `docker exec <accelerator-dev{1|2}-backend> npx ts-node backend/src/seeds/seedProjectDna.ts` (idempotent CREATE TABLE IF NOT EXISTS); (3) Ali generates a participant magic link via admin panel and sends to Kes. Kes will then load `http://95.216.199.47:9999/portal/project-builder`, submit through all 4 steps, and confirm the success screen (FK check). If a 500 surfaces with FK violation, the service needs an extra lookup of `enrollment_id` from `participant_id` first — but that is unlikely given the participantService.ts:61 evidence. **Deploy + magic link paused for Ali's confirmation** — shared dev2 infra + admin-panel UI both warrant Ali's explicit go-ahead per CLAUDE.md shared-state rule.
 
+### UTD Residential Life — Feature 6/8: Student 360-Profile + Privacy Tiers (2026-06-16)
+- [x] Build student 360-profile with privacy tiers — BC todo 9967513588
+  - Date: 2026-06-16
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/db.js`: added `residents` table (name, email, student_id, building, room, year CHECK, major) and `staff_notes` table (resident_id FK, author_id FK, body, is_private INT 0/1).
+    - `gov-bid-builds/utd-residential-life/app/routes/students.js` (new): GET / (list grouped by building, filtered to own building for non-RD), GET /:id (360 profile with role-gated content — incidents matched by building+room, roommate agreement from incident_reports form_data, approved programs matching building, staff notes filtered by is_private), POST /:id/notes (add note, RD can mark private). Privacy tier label + badge passed to template.
+    - `gov-bid-builds/utd-residential-life/app/views/students/index.hbs` (new): building-grouped resident cards with year badge + student ID; privacy tier badge in header; building-scope alert for non-RD users.
+    - `gov-bid-builds/utd-residential-life/app/views/students/show.hbs` (new): 2-column layout — main (incident history linked to /reports, roommate agreement DL card, approved programs list) + sidebar (staff notes with RD-private badge, add-note form, or locked-access notice for SS). Privacy tier badge in header.
+    - `gov-bid-builds/utd-residential-life/app/server.js`: mounted `app.use('/students', require('./routes/students'))`.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: added Student Profiles sidebar nav link.
+    - `gov-bid-builds/utd-residential-life/seeds/index.js`: RESET block updated; seeded 9 residents across 4 buildings (Alex Kim, Jordan Park, Logan Carter / Andrews; Maya Rivera / Berkner; Briana Foster, Sam Taylor / Hillhouse; Theo Nguyen, Mia Torres, Priya Singh / Caruth) and 5 staff notes (2 public CC notes, 2 private RD notes, 1 public CC note).
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-f6.js` (new): Playwright capture showing all 3 privacy tiers.
+    - 4 screenshots in `docs/screenshots/feature-6-student-360-profile-privacy-tiers*.png`.
+  - Verification: Full reseed → "9 residents, 5 staff notes seeded." All 4 screenshots captured across RD/CC/SS logins — private RD note visible to RD only; CC sees 1 public note and add-note form; SS sees locked-access notice, no notes section. Server clean on port 3000.
+  - Notes: Incidents linked to residents by building+room_number match (no FK migration needed). Programs linked by LIKE match on target_audience. is_private stored as INTEGER 0/1; template checks `isPrivate` boolean decorated in route.
+
 ### UTD Residential Life — Feature 5/8: Mass Communications Hub (2026-06-16)
 - [x] Build mass communications hub — BC todo 9967513570
   - Date: 2026-06-16
@@ -5701,3 +5718,11 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
     - `gov-bid-builds/utd-residential-life/docs/screenshots/feature-2-staff-scheduling-on-call-rotation-shift-detail-swap.png` (new): shift detail with swap request.
   - Verification: `node --check app/routes/schedule.js` → exit 0. Seed output: "18 shifts seeded, 1 swap request seeded." Server boots (302 on GET /). Playwright screenshot captured: weekly calendar renders with all 3 shift types, today-highlight, my-shift highlight, prev/next nav, CC/RD Add Shift button.
   - Notes: Used same Node 24 node:sqlite stack as Feature 1. Route ordering: GET /new before GET /:id prevents "new" being treated as an ID. Auto-reminders are idempotent (LIKE '%shift #${id}%' guard before INSERT).
+
+### Gov Contracts — UTD proposal updated: F4 promoted to Working Demo (2026-06-16)
+- [x] Correct requirements matrix and proposal to reflect Feature 4 (Communications) as built
+  - Date: 2026-06-16
+  - Session: CC-20260615-rfp1
+  - What changed: (1) tmp/utd-req-matrix.csv — REQ-F-011 (Staff Scheduling) and REQ-F-012 (Mass Communication) updated from "Not Started" to "Compliant" with accurate response summaries referencing the built routes. (2) gov-bid-builds/utd-residential-life/docs/UTD20260428-TB-Proposal-Draft.html — executive summary table updated; new Section 4.5 "Feature 4: Mass Communication & Surveys (Working Demo Available)" added with full broadcast/survey capability writeup; roadmap table trimmed to F5–F8; implementation timeline Phase 1 updated to "F1–F4"; Phase 2 trimmed to "F5 + integrations"; section numbering 4.6/4.7 → 4.7/4.8.
+  - Verification: File edits applied cleanly; grep confirms F4 no longer shows "Phase 2" in the exec summary or timeline; CSV rows show "Compliant".
+  - Notes: Feature 4 (communications.js + 4 views) was built by a prior session but logged as Not Started in the matrix. Same discovery pattern as Features 2 and 3.

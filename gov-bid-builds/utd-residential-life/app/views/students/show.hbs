@@ -1,0 +1,244 @@
+<!-- back + header -->
+<div class="d-flex align-items-start gap-3 mb-4">
+  <a href="/students" class="btn btn-outline-secondary btn-sm mt-1">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div class="flex-grow-1">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+      <h2 class="mb-0">{{resident.name}}</h2>
+      <span class="badge {{resident.yearBadge}}">{{resident.yearLabel}}</span>
+      <span class="badge {{tierBadge}} ms-auto">
+        <i class="bi bi-shield-check me-1"></i>{{tierLabel}}
+      </span>
+    </div>
+    <p class="text-muted mb-0 small">
+      <i class="bi bi-building me-1"></i>{{resident.building}} &middot;
+      <i class="bi bi-door-closed me-1 ms-2"></i>Room {{resident.room}}
+      {{#if resident.major}}&middot; <i class="bi bi-mortarboard me-1 ms-2"></i>{{resident.major}}{{/if}}
+      {{#if resident.student_id}}&middot; <i class="bi bi-hash me-1 ms-2"></i>{{resident.student_id}}{{/if}}
+      {{#if resident.email}}&middot; <i class="bi bi-envelope me-1 ms-2"></i>{{resident.email}}{{/if}}
+    </p>
+  </div>
+</div>
+
+{{#if (eq flash "note_added")}}
+<div class="alert alert-success border-0 mb-4">
+  <i class="bi bi-check-circle me-2"></i>Staff note added successfully.
+</div>
+{{/if}}
+
+<div class="row g-4">
+
+  <!-- ── Main column: incidents, agreement, programs ── -->
+  <div class="col-lg-8">
+
+    <!-- Incident History -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small">
+          <i class="bi bi-exclamation-triangle me-2 text-warning"></i>Incident History
+        </span>
+        <span class="badge bg-light text-dark border">{{incidents.length}}</span>
+      </div>
+      {{#if incidents.length}}
+      <div class="list-group list-group-flush">
+        {{#each incidents}}
+        <a href="/reports/{{id}}" class="list-group-item list-group-item-action py-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="d-flex gap-2 align-items-start">
+              <i class="bi {{typeIcon}} mt-1 text-muted"></i>
+              <div>
+                <div class="fw-semibold small">{{typeLabel}}</div>
+                <div class="text-muted" style="font-size:.8rem">
+                  {{formattedDate}} &middot; reported by {{reporter_name}}
+                </div>
+                <p class="mb-0 small mt-1 text-truncate" style="max-width:380px">{{description}}</p>
+              </div>
+            </div>
+            <span class="badge {{statusBadge}} flex-shrink-0 ms-2">{{statusLabel}}</span>
+          </div>
+        </a>
+        {{/each}}
+      </div>
+      {{else}}
+      <div class="card-body text-muted text-center py-4 small">
+        <i class="bi bi-check-circle d-block mb-1 fs-4 opacity-25"></i>
+        No incidents on record for this room.
+      </div>
+      {{/if}}
+    </div>
+
+    <!-- Roommate Agreement -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-light py-2">
+        <span class="fw-semibold small">
+          <i class="bi bi-people me-2 text-primary"></i>Roommate Agreement
+        </span>
+      </div>
+      {{#if agreement}}
+      <div class="card-body">
+        <div class="row g-3">
+          {{#if agreement.roommate_names}}
+          <div class="col-sm-6">
+            <div class="text-muted small text-uppercase fw-semibold mb-1">Residents</div>
+            <div class="small">{{agreement.roommate_names}}</div>
+          </div>
+          {{/if}}
+          {{#if agreement.quiet_hours}}
+          <div class="col-sm-6">
+            <div class="text-muted small text-uppercase fw-semibold mb-1">Quiet Hours</div>
+            <div class="small">{{agreement.quiet_hours}}</div>
+          </div>
+          {{/if}}
+          {{#if agreement.guest_policy}}
+          <div class="col-12">
+            <div class="text-muted small text-uppercase fw-semibold mb-1">Guest Policy</div>
+            <div class="small">{{agreement.guest_policy}}</div>
+          </div>
+          {{/if}}
+          {{#if agreement.cleaning_schedule}}
+          <div class="col-12">
+            <div class="text-muted small text-uppercase fw-semibold mb-1">Cleaning Schedule</div>
+            <div class="small">{{agreement.cleaning_schedule}}</div>
+          </div>
+          {{/if}}
+          {{#if agreement.additional_agreements}}
+          <div class="col-12">
+            <div class="text-muted small text-uppercase fw-semibold mb-1">Additional Terms</div>
+            <div class="small">{{agreement.additional_agreements}}</div>
+          </div>
+          {{/if}}
+        </div>
+        <div class="text-muted small mt-3 pt-2 border-top">
+          Filed {{agreement.formattedDate}} by {{agreement.reporter_name}}
+        </div>
+      </div>
+      {{else}}
+      <div class="card-body text-muted text-center py-4 small">
+        <i class="bi bi-file-earmark d-block mb-1 fs-4 opacity-25"></i>
+        No roommate agreement on file for Room {{resident.room}}.
+      </div>
+      {{/if}}
+    </div>
+
+    <!-- Program History -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small">
+          <i class="bi bi-calendar-event me-2 text-success"></i>Program History
+        </span>
+        <span class="badge bg-light text-dark border">{{programs.length}}</span>
+      </div>
+      {{#if programs.length}}
+      <div class="list-group list-group-flush">
+        {{#each programs}}
+        <div class="list-group-item py-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold small">{{title}}</div>
+              <div class="text-muted" style="font-size:.8rem">
+                {{target_audience}}
+                {{#if proposed_date}}&middot; {{proposed_date}}{{/if}}
+              </div>
+            </div>
+            <span class="badge bg-success flex-shrink-0 ms-2">Approved</span>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+      {{else}}
+      <div class="card-body text-muted text-center py-4 small">
+        <i class="bi bi-calendar-x d-block mb-1 fs-4 opacity-25"></i>
+        No approved programs on record for this building.
+      </div>
+      {{/if}}
+    </div>
+
+  </div>
+
+  <!-- ── Sidebar: staff notes ── -->
+  <div class="col-lg-4">
+
+    {{#if canManage}}
+    <!-- Staff Notes -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small">
+          <i class="bi bi-chat-square-text me-2 text-info"></i>Staff Notes
+        </span>
+        <span class="badge bg-light text-dark border">{{notes.length}}</span>
+      </div>
+
+      {{#if notes.length}}
+      <div class="list-group list-group-flush">
+        {{#each notes}}
+        <div class="list-group-item py-3 {{#if isPrivate}}bg-light{{/if}}">
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="small fw-semibold">{{author_name}}</span>
+            {{#if isPrivate}}
+            <span class="badge bg-danger ms-1" style="font-size:.68rem">
+              <i class="bi bi-eye-slash me-1"></i>RD Private
+            </span>
+            {{else}}
+            <span class="badge bg-light text-muted border" style="font-size:.68rem">Staff</span>
+            {{/if}}
+          </div>
+          <p class="mb-1 small">{{body}}</p>
+          <div class="text-muted" style="font-size:.75rem">{{formattedDate}}</div>
+        </div>
+        {{/each}}
+      </div>
+      {{else}}
+      <div class="card-body text-muted text-center py-3 small">
+        <i class="bi bi-chat-square d-block mb-1 fs-4 opacity-25"></i>
+        No notes yet.
+      </div>
+      {{/if}}
+    </div>
+
+    <!-- Add Note Form -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light py-2">
+        <span class="fw-semibold small">
+          <i class="bi bi-plus-circle me-2 text-muted"></i>Add Note
+        </span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/students/{{resident.id}}/notes">
+          <div class="mb-3">
+            <textarea class="form-control form-control-sm" name="body" rows="3" required
+              placeholder="Log a conversation, observation, or follow-up…"></textarea>
+          </div>
+          {{#if isRD}}
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="is_private" id="isPrivate">
+            <label class="form-check-label small" for="isPrivate">
+              <span class="badge bg-danger me-1" style="font-size:.68rem">RD Private</span>
+              Visible to Residence Director only
+            </label>
+          </div>
+          {{/if}}
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-check2 me-1"></i>Save Note
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {{else}}
+    <!-- SS privacy notice -->
+    <div class="card border-0 shadow-sm border-start border-warning border-3">
+      <div class="card-body small">
+        <div class="fw-semibold mb-1">
+          <i class="bi bi-lock me-2 text-warning"></i>Limited Access
+        </div>
+        <p class="text-muted mb-0">
+          Staff notes and private conversation logs are only visible to Community Coordinators
+          and the Residence Director.
+        </p>
+      </div>
+    </div>
+    {{/if}}
+
+  </div>
+</div>

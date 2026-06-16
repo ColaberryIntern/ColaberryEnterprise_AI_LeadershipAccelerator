@@ -12,12 +12,13 @@ const RESET = process.env.SEED_RESET === 'true';
 
 if (RESET) {
   console.log('[seed] Resetting tables…');
+  db.exec('DELETE FROM staff_notes; DELETE FROM residents;');
   db.exec('DELETE FROM survey_responses; DELETE FROM surveys; DELETE FROM broadcasts;');
   db.exec('DELETE FROM evaluations;');
   db.exec('DELETE FROM program_proposals; DELETE FROM curriculum_outcomes;');
   db.exec('DELETE FROM shift_swaps; DELETE FROM shifts;');
   db.exec('DELETE FROM notifications; DELETE FROM incident_reports; DELETE FROM users;');
-  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('survey_responses','surveys','broadcasts','evaluations','program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
+  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('staff_notes','residents','survey_responses','surveys','broadcasts','evaluations','program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
 }
 
 const existingCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
@@ -641,6 +642,99 @@ if (broadcastCount === 0 || RESET) {
   console.log('[seed] 4 broadcasts, 2 surveys, 3 survey responses seeded.');
 } else {
   console.log('[seed] Broadcasts/surveys already seeded, skipping.');
+}
+
+// ── Residents & Staff Notes ───────────────────────────────────────────────────
+const residentCount = db.prepare('SELECT COUNT(*) AS c FROM residents').get().c;
+if (residentCount === 0 || RESET) {
+  const insertResident = db.prepare(`
+    INSERT INTO residents (name, email, student_id, building, room, year, major)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Andrews Hall
+  const alexId = insertResident.run(
+    'Alex Kim', 'alex.kim@utdallas.edu', 'UTD-2025-0892',
+    'Andrews Hall', '320', 'freshman', 'Computer Science'
+  ).lastInsertRowid;
+  const jordanId = insertResident.run(
+    'Jordan Park', 'jordan.park@utdallas.edu', 'UTD-2024-1048',
+    'Andrews Hall', '320', 'sophomore', 'Business Administration'
+  ).lastInsertRowid;
+  insertResident.run(
+    'Logan Carter', 'logan.carter@utdallas.edu', 'UTD-2025-1301',
+    'Andrews Hall', '214', 'freshman', 'Music'
+  );
+
+  // Berkner Hall
+  const mayaId = insertResident.run(
+    'Maya Rivera', 'maya.rivera@utdallas.edu', 'UTD-2025-0741',
+    'Berkner Hall', '301', 'freshman', 'Psychology'
+  ).lastInsertRowid;
+
+  // Hillhouse
+  const brianaId = insertResident.run(
+    'Briana Foster', 'briana.foster@utdallas.edu', 'UTD-2023-1133',
+    'Hillhouse', '205', 'junior', 'Mechanical Engineering'
+  ).lastInsertRowid;
+  insertResident.run(
+    'Sam Taylor', 'sam.taylor@utdallas.edu', 'UTD-2024-0910',
+    'Hillhouse', '410', 'sophomore', 'Music Technology'
+  );
+
+  // Caruth Hall
+  const theoId = insertResident.run(
+    'Theo Nguyen', 'theo.nguyen@utdallas.edu', 'UTD-2025-0044',
+    'Caruth Hall', '317', 'freshman', 'Computer Science'
+  ).lastInsertRowid;
+  const miaId = insertResident.run(
+    'Mia Torres', 'mia.torres@utdallas.edu', 'UTD-2024-0622',
+    'Caruth Hall', '215', 'sophomore', 'Biology'
+  ).lastInsertRowid;
+  insertResident.run(
+    'Priya Singh', 'priya.singh@utdallas.edu', 'UTD-2023-0887',
+    'Caruth Hall', '215', 'junior', 'Chemistry'
+  );
+
+  // Staff Notes
+  const insertNote = db.prepare(
+    'INSERT INTO staff_notes (resident_id, author_id, body, is_private) VALUES (?, ?, ?, ?)'
+  );
+
+  // CC Marcus → Alex Kim (public)
+  insertNote.run(
+    alexId, ccId,
+    'Follow-up from the June 8 lockout — Alex mentioned they\'ve been stressed about finals. Recommended a visit to the Counseling Center and shared the walk-in hours. Will check in next week.',
+    0
+  );
+  // RD Sarah → Alex Kim (private)
+  insertNote.run(
+    alexId, rdId,
+    'Per academic affairs file: academic integrity flag from Spring 2025 (plagiarism, resolved with warning). Advise CC to escalate any future disciplinary matters directly to RD level. Alex is unaware this is documented here.',
+    1
+  );
+  // CC Priya → Mia Torres (public)
+  insertNote.run(
+    miaId, cc2Id,
+    'Roommate mediation completed May 15. Both Mia and Priya agreed on revised quiet hours and cleaning rotation. Follow-up survey sent for end of semester. Situation appears stable.',
+    0
+  );
+  // RD Sarah → Maya Rivera (private)
+  insertNote.run(
+    mayaId, rdId,
+    'Parent inquiry received June 3 regarding study environment concerns and noise in the hall. Addressed with parents directly — they were satisfied. Maya is unaware of parent contact. Keep confidential per FERPA.',
+    1
+  );
+  // CC Marcus → Jordan Park (public)
+  insertNote.run(
+    jordanId, ccId,
+    'Jordan attended the Finals Week Survival Kit Night and gave positive feedback on the event. Expressed interest in volunteering for future programming. Flagged as potential student leader for fall.',
+    0
+  );
+
+  console.log('[seed] 9 residents, 5 staff notes seeded.');
+} else {
+  console.log('[seed] Residents already seeded, skipping.');
 }
 
 console.log('[seed] Done. Sign in at http://localhost:3000/login');
