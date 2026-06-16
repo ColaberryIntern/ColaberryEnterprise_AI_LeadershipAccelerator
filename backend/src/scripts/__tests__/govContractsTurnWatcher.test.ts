@@ -197,3 +197,5 @@ describe('renderTurnsEmail - one joint email', () => {
     expect(text).not.toContain('—');
   });
 });
+
+export {};
