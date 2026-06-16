@@ -132,6 +132,54 @@ export interface BcSyncResult {
   errors: Array<{ stage: string; message: string }>;
 }
 
+// A Todo as returned by the account-wide recordings feed: the todo fields plus
+// its project (bucket) and todolist (parent).
+interface BcTodoRecording extends BcTodo {
+  bucket: { id: number; name: string };
+  parent: { id: number; type: string; title: string };
+}
+
+// Re-fetch a small overlap before the cursor so a todo updated right at the
+// boundary (or under clock skew) is never missed; upserts are idempotent.
+const SYNC_OVERLAP_MS = 10 * 60 * 1000;
+// Safety cap on feed pages. Steady-state incremental stops far earlier (the
+// first all-older page); this only bounds a one-time backfill of an empty mirror
+// (a partial backfill just continues on the next run as the cursor advances).
+const FEED_MAX_PAGES = 1200;
+
+// High-water mark of what's already synced: max bc_updated_at in the mirror,
+// minus an overlap. null when the mirror is empty (=> full backfill).
+async function getSyncCursorMs(): Promise<number | null> {
+  const [rows] = (await sequelize.query(
+    'SELECT max(bc_updated_at) AS m FROM ops_bc_todos',
+  )) as [Array<{ m: string | Date | null }>, unknown];
+  const m = rows?.[0]?.m;
+  return m ? new Date(m).getTime() - SYNC_OVERLAP_MS : null;
+}
+
+// Sweep the Todo recordings feed newest-updated-first, returning todos updated
+// at/after sinceMs. Stops at the first page entirely older than the cursor (or
+// the first empty page); sinceMs=null backfills up to FEED_MAX_PAGES pages.
+export async function fetchUpdatedTodos(sinceMs: number | null): Promise<BcTodoRecording[]> {
+  const out: BcTodoRecording[] = [];
+  for (let page = 1; page <= FEED_MAX_PAGES; page++) {
+    const items = await bcGet<BcTodoRecording[]>(
+      `/projects/recordings.json?type=Todo&sort=updated_at&direction=desc&page=${page}`,
+    );
+    if (!Array.isArray(items) || items.length === 0) break;
+    let anyFresh = false;
+    for (const it of items) {
+      if (!it.bucket?.id || !it.parent?.id) continue; // defensive
+      if (sinceMs == null || new Date(it.updated_at).getTime() >= sinceMs) {
+        out.push(it);
+        anyFresh = true;
+      }
+    }
+    if (sinceMs != null && !anyFresh) break; // whole page older than cursor -> done
+  }
+  return out;
+}
+
 // Single-flight: a rate-limit-paced pass can exceed the 2-min cron interval.
 // Without this guard the cron stacks concurrent passes that fight for the same
 // rate-limit budget and never drain (observed 2026-06-16). A skipped tick is
@@ -226,59 +274,31 @@ async function runBcSyncInner(): Promise<BcSyncResult> {
       });
     }
 
-    // Each project's "todoset" dock entry leads to its todolists.
-    const todosetDock = project.dock?.find((d) => d.name === 'todoset' && d.enabled);
-    if (!todosetDock) continue;
+  }
 
-    let todoset: BcTodoset;
-    try {
-      todoset = await bcGet<BcTodoset>(todosetDock.url);
-    } catch (err: any) {
-      result.errors.push({
-        stage: `todoset:${project.id}`,
-        message: err.message,
-      });
-      continue;
-    }
-
-    let todolists: BcTodolist[];
-    try {
-      todolists = await bcGetAll<BcTodolist>(todoset.todolists_url);
-    } catch (err: any) {
-      result.errors.push({
-        stage: `todolists:${project.id}`,
-        message: err.message,
-      });
-      continue;
-    }
-    result.todolists_seen += todolists.length;
-
-    for (const tl of todolists) {
-      let todos: BcTodo[];
+  // Incremental todo sync. Re-walking every project -> todoset -> todolist ->
+  // todo is ~2500 BC calls for the ~30k-todo mirror, which at BC's ~5 req/s
+  // rate limit is ~20 min/pass. Instead we sweep Basecamp's account-wide Todo
+  // recordings feed (newest-updated first) and stop at the last-synced cursor,
+  // so a steady-state pass touches only the handful of todos changed since the
+  // last run (seconds). Each feed item carries its project (bucket) and todolist
+  // (parent), so it upserts exactly as the walk did. An empty mirror (null
+  // cursor) backfills everything once.
+  try {
+    const cursorMs = await getSyncCursorMs();
+    const todos = await fetchUpdatedTodos(cursorMs);
+    result.todos_seen += todos.length;
+    for (const t of todos) {
       try {
-        todos = await bcGetAll<BcTodo>(tl.todos_url);
+        const res = await upsertTodo(t.bucket.id, t.parent.id, t.parent.title, t);
+        if (res === 'inserted') result.todos_inserted++;
+        else if (res === 'updated') result.todos_updated++;
       } catch (err: any) {
-        result.errors.push({
-          stage: `todos:${project.id}:${tl.id}`,
-          message: err.message,
-        });
-        continue;
-      }
-      result.todos_seen += todos.length;
-
-      for (const todo of todos) {
-        try {
-          const upsertResult = await upsertTodo(project.id, tl.id, tl.title, todo);
-          if (upsertResult === 'inserted') result.todos_inserted++;
-          else if (upsertResult === 'updated') result.todos_updated++;
-        } catch (err: any) {
-          result.errors.push({
-            stage: `upsert:${todo.id}`,
-            message: err.message,
-          });
-        }
+        result.errors.push({ stage: `upsert:${t.id}`, message: err.message });
       }
     }
+  } catch (err: any) {
+    result.errors.push({ stage: 'recordings_todos', message: err.message });
   }
 
   // Auto-detect dormant projects: if a project has zero todos with
