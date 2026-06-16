@@ -31,6 +31,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const ops = require('./lib/launchPmoOps');
+const { alreadyDrafted } = require('./lib/cbDraftIdempotency');
 
 const projectArg = process.argv.find((a) => a.startsWith('--project='));
 const PROJECT_ID = projectArg ? Number(projectArg.split('=')[1]) : null;
@@ -182,10 +183,18 @@ function mdToHtml(md) {
 
     if (DRY) { console.log(`  [dry] would draft, reviewer=${reviewerName}`); continue; }
 
-    // Pull thread context
+    // Pull thread. The thread is the AUTHORITATIVE dedup (the state file +
+    // --force are not idempotent). If CB already drafted a deliverable here,
+    // skip — this is what prevents the duplicate pile-ups on re-runs.
     let threadComments = [];
     try {
       const cmts = await ops.bcGetAll(`/buckets/${PROJECT_ID}/recordings/${t.id}/comments.json`);
+      if (alreadyDrafted(cmts)) {
+        console.log('  already drafted in thread - skipping (idempotent)');
+        state.tasks[t.id] = state.tasks[t.id] || { at: new Date().toISOString(), skipped: 'already_drafted_in_thread' };
+        saveState(state);
+        continue;
+      }
       threadComments = (cmts || []).slice(-5);
     } catch (_e) {}
 

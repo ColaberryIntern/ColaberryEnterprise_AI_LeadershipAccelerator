@@ -25,6 +25,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const ops = require('./lib/launchPmoOps');
+const { alreadyDrafted } = require('./lib/cbDraftIdempotency');
 const { LAUNCH, provisioned, getByPersonId, getByHandle } = require('./lib/launchPmoTeam');
 
 const DRY = process.argv.includes('--dry-run');
@@ -212,6 +213,18 @@ function mdToHtml(md) {
       console.log(`  [dry] would draft with briefs: ${slugs.join(', ')}`);
       continue;
     }
+
+    // Idempotency: the thread is authoritative (state file + --force are not).
+    // Skip if CB already drafted a deliverable here, so re-runs never duplicate.
+    try {
+      const existing = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/recordings/${t.id}/comments.json`);
+      if (alreadyDrafted(existing)) {
+        console.log('  already drafted in thread - skipping (idempotent)');
+        state.tasks[t.id] = state.tasks[t.id] || { at: new Date().toISOString(), skipped: 'already_drafted_in_thread' };
+        saveState(state);
+        continue;
+      }
+    } catch (_e) {}
 
     // Step 1: post "CB starting now" comment
     try {
