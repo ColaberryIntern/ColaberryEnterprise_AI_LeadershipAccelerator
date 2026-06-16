@@ -8,8 +8,9 @@
  * during shadow testing to verify Cora quality before going live.
  */
 import OpenAI from 'openai';
-import { buildCoraSystemPrompt } from './coraKnowledgeBase';
+import { buildCoraSystemPrompt, CoraCohortContext } from './coraKnowledgeBase';
 import { logAuditEvent } from './inboxAuditService';
+import { listOpenCohorts } from '../cohortService';
 
 const LOG_PREFIX = '[InboxCOS][Cora]';
 
@@ -18,6 +19,27 @@ const DRY_RUN = process.env.CORA_DRY_RUN === 'true';
 export interface CoraReply {
   subject: string;
   body: string;
+}
+
+/**
+ * Read the next open cohort from the DB (the source of truth, managed at
+ * /admin/accelerator). Returns null on any failure so Cora degrades gracefully
+ * to "check the enrollment page" rather than failing the whole reply.
+ */
+async function getNextCohortForCora(): Promise<CoraCohortContext | null> {
+  try {
+    const cohorts = await listOpenCohorts(); // ordered by start_date ASC
+    const next = cohorts?.[0];
+    if (!next) return null;
+    return {
+      name: next.name,
+      start_date: next.start_date,
+      seats_remaining: Math.max(0, (next.max_seats ?? 0) - (next.seats_taken ?? 0)),
+    };
+  } catch (error: any) {
+    console.warn(`${LOG_PREFIX} Could not load next cohort: ${error.message}`);
+    return null;
+  }
 }
 
 // ─── Reply Generation ─────────────────────────────────────────────────────
@@ -29,6 +51,8 @@ export async function generateCoraReply(
 ): Promise<CoraReply> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+  const nextCohort = await getNextCohortForCora();
+
   const senderLine = fromName ? `From: ${fromName}` : '';
   const userMessage = `${senderLine}\nSubject: ${subject}\n\n${emailBody.substring(0, 3000)}`;
 
@@ -38,7 +62,7 @@ export async function generateCoraReply(
     temperature: 0.2,
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: buildCoraSystemPrompt() },
+      { role: 'system', content: buildCoraSystemPrompt(nextCohort) },
       { role: 'user', content: userMessage },
     ],
   });

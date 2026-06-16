@@ -55,6 +55,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Verification: `npx tsc --noEmit` passes on all modified/new files (pre-existing axios/playwright errors unrelated).
   - Notes: Deploy still blocked on `GMAIL_COLABERRY_REFRESH_TOKEN` in prod env + Ali confirming CORA_DRY_RUN can be disabled. Shadow test can run now with just `OPENAI_API_KEY`.
 
+- [x] **Cora KB — Ali inputs applied: dynamic cohort date, subscription pricing, P2 trim**
+  - Date: 2026-06-16
+  - Session: CC-20260616-k4m9
+  - What changed:
+    - `coraAgentService.ts`: new `getNextCohortForCora()` reads the earliest open cohort via `cohortService.listOpenCohorts()` at send time and passes it to `buildCoraSystemPrompt(nextCohort)`. Cora now answers "when does the next cohort start?" from the live DB (source of truth: `Cohort` model, managed at `/admin/accelerator`) instead of a static prompt. Fails soft to "check the enrollment page" if the DB read errors or no cohort is open.
+    - `coraKnowledgeBase.ts`: `buildCoraSystemPrompt()` now takes optional `CoraCohortContext` and injects a "Current cohort schedule" section; pricing switched to subscription-first ($149/mo annual, $199/mo month-to-month via training.colaberry.com) with $4,500 as the pay-in-full alternative (`CORA_PROGRAM`, `CORA_PRICING`, cost Q&A, new payment-plan Q&A, pricing rule #3); removed the "in-person available in select markets" claim (P2 — kept in codebase, out of Cora) from `format` and the format/remote Q&A; added "next cohort start" Q&A.
+    - `testCoraEmail.ts`: added shadow-test cases 6 (payment plan) and 7 (cohort date).
+    - `directives/cora-knowledge-base-gaps.md`: marked #1 cohort, #3 payment, #4 advisory, P2 (5–9), P3 #10 resolved/decided; #2 refund + #11 gov remain open.
+  - Verification: `tsc --noEmit` clean on all 4 changed files (full `npm ci` in an isolated worktree; the only remaining errors are the same pre-existing axios/playwright optional-dep errors the original Cora PR noted). Shadow test (cases 1–7) runnable with `OPENAI_API_KEY`.
+  - Notes: Decisions came from Ali directly (subscription is the new primary enroll path). DATA follow-up: a `start_date=2026-07-23, status=open` cohort must exist in prod DB via `/admin/accelerator` for Cora to surface 7/23. Refund policy (#2) still blocks full go-live.
+
 ---
 
 ### David ad trigger: approvals no longer escalate as broken; escalations made idempotent (2026-06-11)

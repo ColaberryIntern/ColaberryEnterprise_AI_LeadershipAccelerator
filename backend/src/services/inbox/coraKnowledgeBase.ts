@@ -20,14 +20,19 @@
 export const CORA_PROGRAM = {
   name: 'Executive AI Build Accelerator',
   altName: 'AI Leadership Accelerator',
-  price: '$4,500 per participant',
+  // Enrollment is now subscription-first via training.colaberry.com. Pay-in-full
+  // remains available. See CORA_PRICING for the full breakdown.
+  price: '$149/month on the annual plan, or $199/month month-to-month (pay-in-full $4,500 also available)',
+  subscriptionAnnual: '$149/month (annual plan)',
+  subscriptionMonthly: '$199/month (month-to-month)',
+  payInFull: '$4,500 one-time',
   sessions: 5,
   weeks: 3,
   hoursPerSession: 2,
   totalHours: 10,
   days: 'Tuesdays and Thursdays',
   cohortSize: 15,
-  format: 'Live virtual sessions (hybrid; in-person available in select markets)',
+  format: 'Live virtual sessions',
   instructor: {
     name: 'Ali Muwwakkil',
     title: 'Managing Director, Colaberry Enterprise AI',
@@ -168,7 +173,11 @@ export const CORA_EXPANSION_PATH =
 // Pricing tiers
 // ---------------------------------------------------------------------------
 export const CORA_PRICING = {
-  individual: '$4,500 per participant',
+  // Subscription is the primary enrollment path (billed via training.colaberry.com).
+  subscriptionAnnual: '$149/month, billed on an annual plan',
+  subscriptionMonthly: '$199/month, month-to-month',
+  payInFull: '$4,500 one-time per participant',
+  individual: '$149/month (annual) or $199/month (month-to-month); $4,500 pay-in-full also available',
   group: [
     { range: '2–4 participants', note: 'Custom group rate with shared cohort experience' },
     { range: '5–9 participants', note: 'Cohort pricing with dedicated support sessions' },
@@ -196,11 +205,19 @@ export const CORA_QA: Array<{ q: string; a: string }> = [
   },
   {
     q: 'How much does the program cost?',
-    a: `$4,500 per participant. Corporate group pricing is available for teams of 2 or more. Private cohort options exist for 10+ participants. Enterprise Sponsorship Pathways include ROI justification templates and internal approval guides. For group pricing details, reply to this email or visit the pricing page.`,
+    a: `Enrollment is offered as a subscription through training.colaberry.com: $149/month on the annual plan, or $199/month month-to-month. If you prefer to pay in full, the program is $4,500 per participant. Corporate group pricing is available for teams of 2 or more, and private cohort options exist for 10+ participants. For group pricing, reply to this email and we will follow up.`,
+  },
+  {
+    q: 'Do you offer a payment plan or a way to pay monthly?',
+    a: `Yes. Most participants enroll on a subscription through training.colaberry.com — $149/month on the annual plan, or $199/month if you prefer month-to-month with no annual commitment. Paying in full at $4,500 is also an option. You can start enrollment at training.colaberry.com/enroll, or reply here and we will walk you through it.`,
   },
   {
     q: 'What is the format and schedule?',
-    a: `5 live virtual sessions over 3 weeks, held on Tuesdays and Thursdays, 2 hours each — 10 total facilitated hours. Expect an additional 2–4 hours of applied work between sessions on your own AI initiative. In-person cohort options are available in select markets.`,
+    a: `5 live virtual sessions over 3 weeks, held on Tuesdays and Thursdays, 2 hours each — 10 total facilitated hours. Expect an additional 2–4 hours of applied work between sessions on your own AI initiative.`,
+  },
+  {
+    q: 'When does the next cohort start?',
+    a: `Use the start date in the "Current cohort schedule" section of your instructions when one is provided — that date is pulled live from our enrollment system. If no open cohort is listed there, do not guess a date; direct the sender to training.colaberry.com/enroll for the current schedule or offer to have the team follow up.`,
   },
   {
     q: 'What do participants walk away with?',
@@ -232,7 +249,7 @@ export const CORA_QA: Array<{ q: string; a: string }> = [
   },
   {
     q: 'Is the program available remotely?',
-    a: `Yes. All sessions are delivered live virtually. In-person cohort options are available in select markets. The program is designed for participants in any time zone.`,
+    a: `Yes. All sessions are delivered live virtually, and the program is designed for participants in any time zone.`,
   },
   {
     q: 'How do I enroll?',
@@ -265,10 +282,43 @@ Week 3 (Executive Readiness & Expansion): Day 5 — Executive Demonstrations: li
 ];
 
 // ---------------------------------------------------------------------------
-// System prompt — injected as the system message in every Cora API call
+// Live cohort schedule — the next open cohort, pulled from the DB at send time
+// so Cora never quotes a stale date. enterprise.colaberry.ai (the Cohort model,
+// managed at /admin/accelerator) is the source of truth; this is just the read.
 // ---------------------------------------------------------------------------
-export function buildCoraSystemPrompt(): string {
+export interface CoraCohortContext {
+  name: string;
+  start_date: string; // YYYY-MM-DD
+  seats_remaining?: number;
+}
+
+function buildCohortScheduleBlock(nextCohort?: CoraCohortContext | null): string {
+  if (!nextCohort?.start_date) {
+    return `## Current cohort schedule
+No open cohort is currently listed in the enrollment system. Do not state or guess a start date. Direct the sender to training.colaberry.com/enroll for the current schedule, or offer to have the team follow up with confirmed dates.`;
+  }
+
+  // Format YYYY-MM-DD as a human date without timezone drift (DATEONLY string).
+  const [y, m, d] = nextCohort.start_date.split('-').map((n) => parseInt(n, 10));
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const human = Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)
+    ? `${MONTHS[m - 1]} ${d}, ${y}`
+    : nextCohort.start_date;
+  const seatsLine = typeof nextCohort.seats_remaining === 'number'
+    ? ` Seats remaining: ${nextCohort.seats_remaining}.`
+    : '';
+
+  return `## Current cohort schedule
+The next open cohort ("${nextCohort.name}") starts on ${human}.${seatsLine} This date is pulled live from the enrollment system, so you may state it confidently. If the sender asks about cohorts beyond this one, direct them to training.colaberry.com/enroll.`;
+}
+
+// ---------------------------------------------------------------------------
+// System prompt — injected as the system message in every Cora API call.
+// Pass the live next cohort so Cora can answer "when does it start?" accurately.
+// ---------------------------------------------------------------------------
+export function buildCoraSystemPrompt(nextCohort?: CoraCohortContext | null): string {
   const qaBlock = CORA_QA.map(({ q, a }) => `Q: ${q}\nA: ${a}`).join('\n\n');
+  const cohortBlock = buildCohortScheduleBlock(nextCohort);
 
   return `You are Cora, the AI assistant for Colaberry Enterprise AI. You handle inquiries sent to support@colaberry.com about the Executive AI Build Accelerator — a 5-session, 3-week live virtual program for enterprise leaders.
 
@@ -281,10 +331,12 @@ export function buildCoraSystemPrompt(): string {
 ## What you know
 ${qaBlock}
 
+${cohortBlock}
+
 ## Response rules
 1. Answer the specific question asked. Do not repeat information the sender did not ask about.
 2. Keep responses concise — 3-5 sentences for simple questions, a short structured list for multi-part questions.
-3. Never quote prices above $4,500 per participant for individual enrollment. For group pricing, direct them to contact us.
+3. Pricing facts you may state: subscription enrollment at $149/month (annual plan) or $199/month (month-to-month) via training.colaberry.com, and pay-in-full at $4,500 per participant. Lead with the subscription when asked about cost or payment options. Never quote a price above $4,500 for individual enrollment. For group, team, or corporate pricing, do not quote a number — direct them to contact us.
 4. If the inquiry involves a complaint, refund request, or billing dispute, do not attempt to resolve it — escalate immediately: "I'll make sure Ali sees this directly. Expect a personal reply within one business day."
 5. If the inquiry is outside the program scope (e.g., a technical support issue unrelated to the Accelerator, a partnership proposal, media inquiry, or legal matter), acknowledge it and note that a team member will follow up.
 6. Close every reply with a clear next step: enroll at training.colaberry.com/enroll, book a strategy call, or reply to this email.
@@ -301,7 +353,7 @@ Subject rules:
 - Keep subjects under 60 characters
 
 ## What you do not do
-- Do not make commitments on cohort start dates, specific scheduling, or payment plans without confirming with the team first.
+- You may state the next cohort start date when it is given in the "Current cohort schedule" section above, and you may state the standard subscription and pay-in-full pricing. Do NOT invent cohort dates, custom scheduling, or bespoke discounts/payment arrangements — confirm those with the team first.
 - Do not promise outcomes beyond what the program explicitly delivers.
 - Do not mention competitors by name.
 - Do not discuss Colaberry's other training programs (data science, bootcamps, etc.) as part of this role — stay focused on the Enterprise AI Build Accelerator.
