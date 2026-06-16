@@ -19,6 +19,7 @@
 import OpsBcTodo from '../../models/OpsBcTodo';
 import OpsBcProject from '../../models/OpsBcProject';
 import { sequelize } from '../../config/database';
+import { getBcToken, refreshBcToken, isAuthError } from './basecampToken';
 
 // Projects with no BC activity (no todo updated, no project metadata
 // touched) in this many days get auto-demoted out of the CB-managed set
@@ -65,12 +66,6 @@ const BC_API = `https://3.basecampapi.com/${BC_ACCOUNT_ID}`;
 const BC_USER_AGENT =
   process.env.BASECAMP_USER_AGENT || 'Colaberry AI Ops Command Center (ali@colaberry.com)';
 
-function getBasecampToken(): string {
-  let t = process.env.BASECAMP_ACCESS_TOKEN;
-  if (!t) throw new Error('BASECAMP_ACCESS_TOKEN not set');
-  if (t.startsWith('Bearer ')) t = t.slice(7);
-  return t;
-}
 
 function bcHeaders(token: string): Record<string, string> {
   return {
@@ -80,9 +75,15 @@ function bcHeaders(token: string): Record<string, string> {
   };
 }
 
-async function bcGet<T>(token: string, url: string): Promise<T> {
+// Auto-refreshes the token from CCPP on a 401 and retries once, so a Basecamp
+// token rotation self-heals mid-run instead of failing the whole sync.
+async function bcGet<T>(url: string): Promise<T> {
   const u = url.startsWith('http') ? url : `${BC_API}${url}`;
-  const r = await fetch(u, { headers: bcHeaders(token) });
+  let r = await fetch(u, { headers: bcHeaders(getBcToken()) });
+  if (isAuthError(r.status)) {
+    await refreshBcToken();
+    r = await fetch(u, { headers: bcHeaders(getBcToken()) });
+  }
   if (!r.ok) {
     const body = await r.text().catch(() => '');
     throw new Error(`BC GET ${u} -> ${r.status} ${body.slice(0, 200)}`);
@@ -94,12 +95,12 @@ async function bcGet<T>(token: string, url: string): Promise<T> {
  * Pull every page of a BC list endpoint. BC paginates via Link: <next>; rel="next"
  * but the simpler approach in this codebase is to read `?page=N` until empty.
  */
-async function bcGetAll<T>(token: string, url: string): Promise<T[]> {
+async function bcGetAll<T>(url: string): Promise<T[]> {
   const acc: T[] = [];
   for (let page = 1; page < 50; page++) {
     const sep = url.includes('?') ? '&' : '?';
     const pageUrl = `${url}${sep}page=${page}`;
-    const data = await bcGet<T[]>(token, pageUrl);
+    const data = await bcGet<T[]>(pageUrl);
     if (!Array.isArray(data) || data.length === 0) break;
     acc.push(...data);
     if (data.length < 15) break; // BC's typical page size cutoff
@@ -134,9 +135,11 @@ export async function runBcSync(): Promise<BcSyncResult> {
     errors: [],
   };
 
-  let token: string;
+  // Token is resolved per-request inside bcGet (env token, with CCPP refresh +
+  // retry on a 401), so a rotation no longer fails the sync. Surface a clear
+  // auth error only if even the first resolve throws (no token anywhere).
   try {
-    token = getBasecampToken();
+    getBcToken();
   } catch (err: any) {
     result.errors.push({ stage: 'auth', message: err.message });
     result.finished_at = new Date();
@@ -145,7 +148,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
 
   let projects: BcProject[];
   try {
-    projects = await bcGetAll<BcProject>(token, '/projects.json');
+    projects = await bcGetAll<BcProject>('/projects.json');
   } catch (err: any) {
     result.errors.push({ stage: 'list_projects', message: err.message });
     result.finished_at = new Date();
@@ -189,7 +192,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
 
     let todoset: BcTodoset;
     try {
-      todoset = await bcGet<BcTodoset>(token, todosetDock.url);
+      todoset = await bcGet<BcTodoset>(todosetDock.url);
     } catch (err: any) {
       result.errors.push({
         stage: `todoset:${project.id}`,
@@ -200,7 +203,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
 
     let todolists: BcTodolist[];
     try {
-      todolists = await bcGetAll<BcTodolist>(token, todoset.todolists_url);
+      todolists = await bcGetAll<BcTodolist>(todoset.todolists_url);
     } catch (err: any) {
       result.errors.push({
         stage: `todolists:${project.id}`,
@@ -213,7 +216,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
     for (const tl of todolists) {
       let todos: BcTodo[];
       try {
-        todos = await bcGetAll<BcTodo>(token, tl.todos_url);
+        todos = await bcGetAll<BcTodo>(tl.todos_url);
       } catch (err: any) {
         result.errors.push({
           stage: `todos:${project.id}:${tl.id}`,
