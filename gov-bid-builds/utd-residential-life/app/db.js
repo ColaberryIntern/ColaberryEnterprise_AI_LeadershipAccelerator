@@ -75,6 +75,26 @@ db.exec(`
     updated_at        TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS evaluations (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    evaluatee_id              INTEGER NOT NULL REFERENCES users(id),
+    evaluator_id              INTEGER NOT NULL REFERENCES users(id),
+    eval_type                 TEXT NOT NULL CHECK(eval_type IN ('self','supervisor')),
+    period                    TEXT NOT NULL,
+    communication_rating      INTEGER CHECK(communication_rating BETWEEN 1 AND 5),
+    resident_engagement_rating INTEGER CHECK(resident_engagement_rating BETWEEN 1 AND 5),
+    program_planning_rating   INTEGER CHECK(program_planning_rating BETWEEN 1 AND 5),
+    crisis_response_rating    INTEGER CHECK(crisis_response_rating BETWEEN 1 AND 5),
+    documentation_rating      INTEGER CHECK(documentation_rating BETWEEN 1 AND 5),
+    strengths                 TEXT,
+    growth_areas              TEXT,
+    goals_next_semester       TEXT,
+    supervisor_notes          TEXT,
+    status                    TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','submitted')),
+    created_at                TEXT DEFAULT (datetime('now')),
+    updated_at                TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS curriculum_outcomes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     code        TEXT NOT NULL UNIQUE,

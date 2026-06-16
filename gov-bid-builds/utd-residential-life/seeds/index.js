@@ -12,10 +12,11 @@ const RESET = process.env.SEED_RESET === 'true';
 
 if (RESET) {
   console.log('[seed] Resetting tables…');
+  db.exec('DELETE FROM evaluations;');
   db.exec('DELETE FROM program_proposals; DELETE FROM curriculum_outcomes;');
   db.exec('DELETE FROM shift_swaps; DELETE FROM shifts;');
   db.exec('DELETE FROM notifications; DELETE FROM incident_reports; DELETE FROM users;');
-  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
+  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('evaluations','program_proposals','curriculum_outcomes','shift_swaps','shifts','notifications','incident_reports','users');");
 }
 
 const existingCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
@@ -441,6 +442,82 @@ if (proposalCount === 0 || RESET) {
     );
   }
   console.log(`[seed] ${PROPOSALS.length} program proposals seeded.`);
+}
+
+// ── Evaluations ───────────────────────────────────────────────────────────────
+const evalCount = db.prepare('SELECT COUNT(*) AS c FROM evaluations').get().c;
+if (evalCount === 0 || RESET) {
+  const insertEval = db.prepare(`
+    INSERT INTO evaluations
+      (evaluatee_id, evaluator_id, eval_type, period,
+       communication_rating, resident_engagement_rating,
+       program_planning_rating, crisis_response_rating, documentation_rating,
+       strengths, growth_areas, goals_next_semester, supervisor_notes, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const PERIOD = 'Spring 2026';
+
+  // Jake Thompson (ss0Id): self + supervisor (by Marcus Williams / ccId)
+  insertEval.run(
+    ss0Id, ss0Id, 'self', PERIOD,
+    4, 5, 4, 3, 3,
+    'I\'ve built strong connections with my floor residents and planned two successful community events this semester. My response time to noise complaints has improved.',
+    'I want to improve my incident report documentation — I\'ve filed a couple late this semester. Also want to get more comfortable with on-call crisis procedures.',
+    'Complete the incident report training module and shadow the CC on at least two on-call shifts.',
+    null, 'submitted', '2026-06-01T10:00:00'
+  );
+  insertEval.run(
+    ss0Id, ccId, 'supervisor', PERIOD,
+    4, 5, 5, 3, 3,
+    'Jake is one of our strongest programmers — his Finals Week event had the highest turnout of any SS event this semester. Residents consistently mention him positively in feedback surveys.',
+    'Documentation needs to be more consistent and timely. Two incident reports were filed 48+ hours after the event. Crisis response is satisfactory but Jake hesitates before escalating.',
+    'Complete incident report training by July 1. Practice escalation decision-making in the next two on-call debriefs.',
+    'Jake is on track for a CC recommendation if documentation improves. High potential.',
+    'submitted', '2026-06-05T14:00:00'
+  );
+
+  // Emma Lee (ss3Id): self + supervisor (by Priya Patel / cc2Id)
+  insertEval.run(
+    ss3Id, ss3Id, 'self', PERIOD,
+    5, 4, 4, 5, 5,
+    'I handled the February flooding incident well and residents trusted me during a stressful situation. My documentation has been consistent and timely all semester.',
+    'I could do more to proactively create community — most of my programming has been reactive to resident requests rather than proactive planning.',
+    'Lead at least one self-initiated program per month next semester and build a programming calendar in advance.',
+    null, 'submitted', '2026-06-02T09:00:00'
+  );
+  insertEval.run(
+    ss3Id, cc2Id, 'supervisor', PERIOD,
+    5, 5, 4, 5, 5,
+    'Emma\'s crisis response during the flooding incident was exemplary — she followed protocol exactly, kept residents calm, and filed a complete incident report within 2 hours. Her documentation record is the strongest on my team.',
+    'Program planning is good but could be more proactive. Emma often waits for resident suggestions rather than driving her own programming calendar.',
+    'Develop a self-driven programming calendar for Fall 2026. Consider nominating Emma for the ResLife Staff Excellence Award.',
+    'Top performer. Strong CC candidate for Fall 2027 cohort.',
+    'submitted', '2026-06-05T16:00:00'
+  );
+
+  // Aisha Johnson (ss1Id): self only — no supervisor yet (pending comparison)
+  insertEval.run(
+    ss1Id, ss1Id, 'self', PERIOD,
+    3, 4, 3, 4, 4,
+    'I\'m proud of how I\'ve managed on-call shifts this semester — always on time and thorough with my rounds. My residents know they can count on me.',
+    'I want to improve my community programming. I only ran one event this semester (the Game Night proposal) and it got rejected. I need to work on building better proposals.',
+    'Submit at least two approved program proposals next semester and attend the programming workshop in August.',
+    null, 'submitted', '2026-06-03T11:00:00'
+  );
+
+  // Diego Ramirez (ss2Id): supervisor only — no self-eval yet
+  insertEval.run(
+    ss2Id, ccId, 'supervisor', PERIOD,
+    3, 3, 4, 4, 3,
+    'Diego runs solid programming and his study group initiative showed real initiative. He\'s reliable on shift.',
+    'Communication with the CC team needs improvement — Diego sometimes handles situations independently without looping in supervision. Documentation is inconsistent.',
+    'Set up a weekly check-in with the CC to improve communication habits. Review incident report standards.',
+    'Remind Diego to submit his self-evaluation before the June 15 deadline.',
+    'submitted', '2026-06-04T13:00:00'
+  );
+
+  console.log('[seed] 5 evaluations seeded (2 complete pairs + 1 self-only + 1 supervisor-only).');
 }
 
 console.log('[seed] Done. Sign in at http://localhost:3000/login');

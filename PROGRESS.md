@@ -5612,6 +5612,25 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `gh pr view 3` confirms state MERGED, mergedAt 2026-06-09T23:34:58Z, mergeCommit `b077e4bb`. Kes's commit body claims `tsc --noEmit` exit 0 on both backend and frontend; not independently re-run from local Windows env. Local worktree at `/tmp/pr3-merge` removed cleanly.
   - Notes: **Not yet deployed.** Three remaining steps before Kes can do his FK live-verification submission (his screenshot ask): (1) deploy to dev — `ssh root@95.216.199.47 && cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.development.yml up -d --build backend`; (2) run seed against the dev DB — `docker exec <accelerator-dev{1|2}-backend> npx ts-node backend/src/seeds/seedProjectDna.ts` (idempotent CREATE TABLE IF NOT EXISTS); (3) Ali generates a participant magic link via admin panel and sends to Kes. Kes will then load `http://95.216.199.47:9999/portal/project-builder`, submit through all 4 steps, and confirm the success screen (FK check). If a 500 surfaces with FK violation, the service needs an extra lookup of `enrollment_id` from `participant_id` first — but that is unlikely given the participantService.ts:61 evidence. **Deploy + magic link paused for Ali's confirmation** — shared dev2 infra + admin-panel UI both warrant Ali's explicit go-ahead per CLAUDE.md shared-state rule.
 
+### UTD Residential Life — Feature 4/8: Student Staff Performance Evaluations (2026-06-16)
+- [x] Build student staff performance evaluations — BC todo 9967513544
+  - Date: 2026-06-16
+  - Session: CC-20260615-s4n1
+  - What changed:
+    - `gov-bid-builds/utd-residential-life/app/db.js`: added `evaluations` table (evaluatee_id FK, evaluator_id FK, eval_type CHECK(self/supervisor), period, 5 rating columns 1-5, strengths, growth_areas, goals_next_semester, supervisor_notes, status CHECK(draft/submitted)).
+    - `gov-bid-builds/utd-residential-life/app/routes/evaluations.js` (new): GET / (list grouped by evaluatee+period with self/supervisor state), GET /compare/:staffId (side-by-side comparison with per-dimension delta), GET /new (form with self/supervisor type), POST / (create + notifications), GET /:id (detail). decorateEval() adds dimRows, avg, avgBadge, typeLabel.
+    - `gov-bid-builds/utd-residential-life/app/views/evaluations/index.hbs` (new): grouped cards per evaluatee+period showing both eval states, Compare button when both exist, pending alert for CC/RD.
+    - `gov-bid-builds/utd-residential-life/app/views/evaluations/new.hbs` (new): 5 rating dimensions as Bootstrap button-group radio inputs (1-5 color coded), open-ended text fields differ by eval type (self/supervisor), draft/submit dual action.
+    - `gov-bid-builds/utd-residential-life/app/views/evaluations/show.hbs` (new): detail with progress bar per dimension, written responses, link to comparison view.
+    - `gov-bid-builds/utd-residential-life/app/views/evaluations/compare.hbs` (new): side-by-side table with self vs supervisor per dimension, delta column (+N/−N/=), written responses two-column layout, period selector dropdown.
+    - `gov-bid-builds/utd-residential-life/app/server.js`: mounted `app.use('/evaluations', require('./routes/evaluations'))`.
+    - `gov-bid-builds/utd-residential-life/app/views/layouts/main.hbs`: added Evaluations sidebar nav link.
+    - `gov-bid-builds/utd-residential-life/seeds/index.js`: RESET block updated to delete evaluations first. Seeded 5 evaluations: Jake Thompson (self + supervisor by Marcus), Emma Lee (self + supervisor by Priya), Aisha Johnson (self only — pending supervisor), Diego Ramirez (supervisor only — pending self).
+    - `gov-bid-builds/utd-residential-life/scripts/take-screenshot-f4.js` (new): Playwright capture for Feature 4.
+    - 4 screenshots in `docs/screenshots/feature-4-student-staff-performance-evals*.png`.
+  - Verification: `node --check app/routes/evaluations.js && node --check seeds/index.js` → exit 0. Seed: "5 evaluations seeded." Screenshots: list shows all 4 staff with correct self/supervisor state badges + pending alert; compare view shows 5-dimension table with Self/Supervisor/Delta columns and written responses side-by-side.
+  - Notes: Route ordering critical — GET /compare/:staffId before GET /:id to prevent 'compare' being treated as an ID. Stale `{{#each (range 1 5)}}` placeholder in new.hbs removed (no `range` helper defined). 5 rating columns stored as integers 1-5; `decorateEval()` computes badge color and pct for progress bar rendering.
+
 ### UTD Residential Life — Feature 3/8: Program Proposals + Curriculum Mapping (2026-06-15)
 - [x] Build program proposals + curriculum mapping — BC todo 9967513530
   - Date: 2026-06-15
