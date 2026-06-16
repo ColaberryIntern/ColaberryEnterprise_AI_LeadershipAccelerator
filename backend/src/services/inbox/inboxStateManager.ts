@@ -169,7 +169,7 @@ export async function processNewEmails(): Promise<ProcessResult> {
       } catch {}
 
       // Step 6: Dispatch by state
-      await dispatchByState(state, email, replyNeeded);
+      await dispatchByState(state, email, replyNeeded, ruleId);
 
       breakdown[state] = (breakdown[state] || 0) + 1;
       processed++;
@@ -196,7 +196,8 @@ export async function processNewEmails(): Promise<ProcessResult> {
 async function dispatchByState(
   state: ClassificationState,
   email: InboxEmail,
-  replyNeeded: boolean
+  replyNeeded: boolean,
+  ruleId: string | null = null
 ): Promise<void> {
   switch (state) {
     case 'INBOX':
@@ -213,6 +214,15 @@ async function dispatchByState(
       break;
 
     case 'AUTOMATION':
+      // Cora auto-replies to support@colaberry.com inquiries before archiving
+      if (ruleId === 'cora_0c') {
+        try {
+          const { handleCoraInquiry } = await import('./coraAgentService');
+          await handleCoraInquiry(email as any);
+        } catch (error: any) {
+          console.error(`${LOG_PREFIX} Cora reply failed for ${email.id}: ${error.message}`);
+        }
+      }
       try {
         await archiveEmail({
           id: email.id,

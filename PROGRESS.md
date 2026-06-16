@@ -34,6 +34,29 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Cora knowledge base — structured Q&A for inbox agent migration (2026-06-16)
+- [x] **`coraKnowledgeBase.ts` — ground-up knowledge base for Cora (Executive AI Build Accelerator)**
+  - Date: 2026-06-16
+  - Session: CC-20260616-c0r4
+  - What changed: `backend/src/services/inbox/coraKnowledgeBase.ts` (new) — program constants, full 5-session curriculum, deliverables, pricing tiers (individual/group/enterprise sponsorship), 18 structured Q&A pairs, and `buildCoraSystemPrompt()` that assembles the system message for every Claude API call. Knowledge base was built from PricingPage.tsx, ProgramPage.tsx, InstructorPage.tsx, and programSchedule.ts (ground-up; not ported from Relevance AI since Ali never shared the original config).
+  - Verification: `npx tsc --noEmit` passes on this file (pre-existing axios/playwright errors are unrelated).
+  - Notes: Replaces the Relevance AI URL-crawl approach with deterministic structured Q&A. Uses existing OPENAI_API_KEY (no new key needed). Wiring complete — see entries below.
+
+- [x] **Cora agent service + pipeline wiring (coraAgentService, hardRuleEngine 0c, dispatch)**
+  - Date: 2026-06-16
+  - Session: CC-20260616-c0r4
+  - What changed:
+    - `backend/src/services/inbox/coraAgentService.ts` (new): `generateCoraReply()` calls OpenAI with Cora system prompt (JSON response_format); `handleCoraInquiry()` sends via `GMAIL_COLABERRY_*` creds; set `CORA_DRY_RUN=true` to log-only for shadow testing.
+    - `backend/src/services/inbox/hardRuleEngine.ts` (modified): Rule 0b → 0c rename; new rule 0b detects `support@colaberry.com` in To/Cc/headers, returns `state: AUTOMATION, rule_id: cora_0c`.
+    - `backend/src/services/inbox/inboxStateManager.ts` (modified): `dispatchByState` accepts `ruleId`; AUTOMATION case calls `handleCoraInquiry` before archiving when `ruleId === 'cora_0c'`.
+    - `backend/src/services/inbox/replyDraftService.ts` (modified): Subject is now LLM-generated via `response_format: json_object`; falls back to `Re: <original>` on parse failure.
+    - `backend/src/scripts/testCoraEmail.ts` (new): Standalone shadow-test script — 5 inquiry types incl. escalation trigger; no DB, no email send; run with `OPENAI_API_KEY=sk-... npx ts-node src/scripts/testCoraEmail.ts`.
+    - `directives/cora-knowledge-base-gaps.md` (new): Full gap list for Ali — 11 items, prioritized P1/P2/P3.
+  - Verification: `npx tsc --noEmit` passes on all modified/new files (pre-existing axios/playwright errors unrelated).
+  - Notes: Deploy still blocked on `GMAIL_COLABERRY_REFRESH_TOKEN` in prod env + Ali confirming CORA_DRY_RUN can be disabled. Shadow test can run now with just `OPENAI_API_KEY`.
+
+---
+
 ### David ad trigger: approvals no longer escalate as broken; escalations made idempotent (2026-06-11)
 - [x] **Fixed `processDavidAdReply.js` false escalation on David's approval + per-poll escalation spam**
   - Date: 2026-06-11
