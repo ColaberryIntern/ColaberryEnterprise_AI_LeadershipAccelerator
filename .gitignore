@@ -1,46 +1,62 @@
-# Dependencies
+# ── Python ────────────────────────────────────────────────────────────────────
+venv/
+venv311/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
 node_modules/
-
-# Build output
-dist/
 build/
+dist/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Environment - never commit real secret values.
-# .env.example is the only env file allowed in the repo.
+# ── Environment & secrets ─────────────────────────────────────────────────────
+# Never commit real secret values. Only *.example template files belong in the repo.
 .env
 .env.*
 !.env.example
+!.env.*.example
 
-# IDE
+# ── IDE & editor ──────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 
-# OS
+# ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Logs
+# ── Logs & temp ───────────────────────────────────────────────────────────────
 *.log
-npm-debug.log*
+logs/
+tmp/
+temp/
 
-# Coverage
-coverage/
+# ── Local databases ───────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
 
-# Docker volumes
+# ── Docker volumes ────────────────────────────────────────────────────────────
 pgdata/
 
-# Local task/brief scratch dirs (not part of codebase)
+# ── Repo-specific scratch dirs ────────────────────────────────────────────────
 kes-tasks/
 
-# Tooling JWT for screenshot capture scripts — never commit (CLAUDE.md screenshot protocol)
+# ── Tooling tokens — never commit (CLAUDE.md screenshot + portal protocol) ───
 scripts/.ali_jwt.txt
 scripts/.*_jwt.txt
-# Local portal magic-link tokens for E2E driver — never commit (contain live tokens)
 scripts/.demo_portal_token.txt
 scripts/.demo_onboarding_runs.json
 scripts/.demo_login_urls.txt
 
-# Personal finance documents - NEVER COMMIT (sensitive PII: SSNs, tax returns, account numbers)
+# ── Personal finance documents — NEVER COMMIT (PII: SSNs, tax returns) ───────
 docs/personal-finance/
-
-kes-tasks/
