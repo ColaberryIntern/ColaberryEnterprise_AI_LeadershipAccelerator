@@ -106,7 +106,13 @@ PreparedRemediationPlan.init(
     indexes: [
       { fields: ['project_id'] },
       { fields: ['project_id', 'status'] },
-      { fields: ['project_id', 'capability_id', 'cluster_signature', 'status'] },
+      // Explicit name: the auto-generated name exceeds Postgres's 63-char limit
+      // and gets truncated on disk, so sync({ alter: true }) never finds it and
+      // re-CREATE fails every boot. Pinned to the existing 63-char index name.
+      {
+        name: 'prepared_remediation_plans_project_id_capability_id_cluster_sig',
+        fields: ['project_id', 'capability_id', 'cluster_signature', 'status'],
+      },
     ],
   }
 );
