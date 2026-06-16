@@ -20,6 +20,7 @@ import OpsBcTodo from '../../models/OpsBcTodo';
 import OpsBcProject from '../../models/OpsBcProject';
 import { sequelize } from '../../config/database';
 import { getBcToken, refreshBcToken, isAuthError } from './basecampToken';
+import { BC_RETRYABLE_STATUS, bcBackoffMs, bcPace, sleep } from './bcRetry';
 
 // Projects with no BC activity (no todo updated, no project metadata
 // touched) in this many days get auto-demoted out of the CB-managed set
@@ -75,20 +76,32 @@ function bcHeaders(token: string): Record<string, string> {
   };
 }
 
-// Auto-refreshes the token from CCPP on a 401 and retries once, so a Basecamp
-// token rotation self-heals mid-run instead of failing the whole sync.
+// Resilient BC GET: refreshes the token from CCPP on a 401 (token rotation),
+// and backs off + retries on a 429/503 (rate limit). Without the 429 handling
+// the sync dropped hundreds of todolists per cycle when Basecamp throttled the
+// burst, leaving the ops mirror incomplete.
+const BC_MAX_RETRIES = 5;
 async function bcGet<T>(url: string): Promise<T> {
   const u = url.startsWith('http') ? url : `${BC_API}${url}`;
-  let r = await fetch(u, { headers: bcHeaders(getBcToken()) });
-  if (isAuthError(r.status)) {
-    await refreshBcToken();
-    r = await fetch(u, { headers: bcHeaders(getBcToken()) });
+  let refreshed = false;
+  for (let attempt = 0; ; attempt++) {
+    await bcPace(); // stay under BC's rate limit so 429s rarely happen at all
+    const r = await fetch(u, { headers: bcHeaders(getBcToken()) });
+    if (isAuthError(r.status) && !refreshed) {
+      await refreshBcToken();
+      refreshed = true;
+      continue;
+    }
+    if (BC_RETRYABLE_STATUS.has(r.status) && attempt < BC_MAX_RETRIES) {
+      await sleep(bcBackoffMs(r.headers.get('Retry-After'), attempt));
+      continue;
+    }
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      throw new Error(`BC GET ${u} -> ${r.status} ${body.slice(0, 200)}`);
+    }
+    return (await r.json()) as T;
   }
-  if (!r.ok) {
-    const body = await r.text().catch(() => '');
-    throw new Error(`BC GET ${u} -> ${r.status} ${body.slice(0, 200)}`);
-  }
-  return (await r.json()) as T;
 }
 
 /**
@@ -119,11 +132,38 @@ export interface BcSyncResult {
   errors: Array<{ stage: string; message: string }>;
 }
 
+// Single-flight: a rate-limit-paced pass can exceed the 2-min cron interval.
+// Without this guard the cron stacks concurrent passes that fight for the same
+// rate-limit budget and never drain (observed 2026-06-16). A skipped tick is
+// harmless — the next one re-syncs (upserts are idempotent by bc_id).
+let bcSyncInFlight = false;
+
+export async function runBcSync(): Promise<BcSyncResult> {
+  if (bcSyncInFlight) {
+    return {
+      started_at: new Date(),
+      finished_at: new Date(),
+      projects_seen: 0,
+      todolists_seen: 0,
+      todos_seen: 0,
+      todos_inserted: 0,
+      todos_updated: 0,
+      errors: [{ stage: 'skipped', message: 'previous sync still in flight' }],
+    };
+  }
+  bcSyncInFlight = true;
+  try {
+    return await runBcSyncInner();
+  } finally {
+    bcSyncInFlight = false;
+  }
+}
+
 /**
  * Run one full sync pass. Safe to invoke concurrently — each upsert is
  * keyed on bc_id so duplicate writes converge to the same end state.
  */
-export async function runBcSync(): Promise<BcSyncResult> {
+async function runBcSyncInner(): Promise<BcSyncResult> {
   const result: BcSyncResult = {
     started_at: new Date(),
     finished_at: new Date(),
