@@ -61,7 +61,13 @@ RemediationTierTransition.init(
     indexes: [
       { fields: ['project_id'] },
       { fields: ['cluster_signature'] },
-      { fields: ['project_id', 'cluster_signature', 'recorded_at'] },
+      // Explicit name: the auto-generated name exceeds Postgres's 63-char limit
+      // and gets truncated on disk, so sync({ alter: true }) never finds it and
+      // re-CREATE fails every boot. Pinned to the existing 63-char index name.
+      {
+        name: 'remediation_tier_transitions_project_id_cluster_signature_recor',
+        fields: ['project_id', 'cluster_signature', 'recorded_at'],
+      },
     ],
   }
 );
