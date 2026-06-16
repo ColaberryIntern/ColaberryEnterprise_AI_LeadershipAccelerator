@@ -5,15 +5,23 @@
  * active rules after the priority engine runs and fires the matching
  * ones. Pure deterministic — no LLM.
  *
- * v0 condition language (single matcher per rule):
- *   { match: 'stale_days_gt', value: 180 }     -> all todos with > N days no activity
- *   { match: 'urgency_gte', value: 70, stale_days_gt: 14 } -> red + stale
+ * v0 condition language (matchers AND-combine within a single rule):
+ *   { stale_days_gt: 180 }                      -> all todos with > N days no activity
+ *   { urgency_gte: 70, stale_days_gt: 14 }      -> red + stale
  *   { match: 'category_eq', value: 'waiting_dependency' }
+ *   { overdue: true }                           -> past due date (due_on < today)
+ *   { overdue_days_gt: 7 }                      -> more than N days past due date
  *
  * v0 action language:
  *   { do: 'flag_for_archive' }      -> sets dismissed_reason='archive_suggested' (visible in Stale Review)
  *   { do: 'tag_category', value: 'waiting_dependency' } -> writes category
  *   { do: 'noop_for_metrics' }      -> just counts fires, no mutation (useful as alert)
+ *   { do: 'escalate' }              -> opens an approval-queue item (decided_at IS NULL) per
+ *                                      matching todo so it surfaces in the Command Center
+ *                                      "Waiting on Human" panel. Local-only; never mutates the
+ *                                      upstream BC ticket. Idempotent: a todo that already has an
+ *                                      open auto-escalation is skipped, so the 2-min cron cannot
+ *                                      create duplicates.
  */
 import { sequelize } from '../../config/database';
 import { QueryTypes } from 'sequelize';
@@ -42,6 +50,14 @@ function buildCondition(condition: any): { where: string; replacements: Record<s
   if (condition?.urgency_gte != null) {
     parts.push(`urgency_score >= :cond_urgency`);
     r.cond_urgency = Number(condition.urgency_gte);
+  }
+  if (condition?.overdue === true) {
+    // due_on is DATEONLY; compare against the server's current date.
+    parts.push(`due_on IS NOT NULL AND due_on < CURRENT_DATE`);
+  }
+  if (condition?.overdue_days_gt != null) {
+    parts.push(`due_on IS NOT NULL AND due_on < (CURRENT_DATE - (:cond_overdue || ' days')::interval)`);
+    r.cond_overdue = String(condition.overdue_days_gt);
   }
   if (condition?.match === 'category_eq' && condition?.value) {
     parts.push(`category = :cond_cat`);
@@ -85,6 +101,54 @@ async function applyAction(
             SET category = :tagval, updated_at = NOW()
           WHERE ${condWhere}`,
         { replacements: { ...condReplacements, tagval: String(action.value) } },
+      );
+      return { rule_id: ruleId, rule_name: ruleName, rows_affected: meta?.rowCount || 0 };
+    }
+    if (action.do === 'escalate') {
+      // Opens one approval-queue item (decided_at IS NULL) per matching todo
+      // so it lands in the Command Center "Waiting on Human" panel for the
+      // operator to action. Pure local write — never touches the upstream BC
+      // ticket. Idempotent via NOT EXISTS: a todo that already has an OPEN
+      // auto-escalation is skipped, so the 2-min cron never duplicates.
+      const [, meta]: any = await sequelize.query(
+        `INSERT INTO ops_approval_queue
+            (todo_bc_id, summary, recommended_decision, urgency_snapshot,
+             blocked_downstream_count, target_user_id, enqueued_at,
+             decision, decided_at, decision_reasoning, next_actions,
+             created_at, updated_at)
+         SELECT t.bc_id,
+                'Auto-escalated: ' || t.title
+                  || COALESCE(' (due ' || to_char(t.due_on, 'YYYY-MM-DD') || ')', ''),
+                'escalate',
+                t.urgency_score,
+                COALESCE(t.downstream_blocked_count, 0),
+                :esc_target,
+                NOW(),
+                NULL,
+                NULL,
+                :esc_reason,
+                jsonb_build_object('source', 'automation_rule', 'rule', :esc_rule),
+                NOW(), NOW()
+           FROM ops_bc_todos t
+          WHERE ${condWhere}
+            AND is_dismissed = FALSE
+            AND NOT EXISTS (
+              SELECT 1 FROM ops_approval_queue q
+               WHERE q.todo_bc_id = t.bc_id
+                 AND q.recommended_decision = 'escalate'
+                 AND q.decided_at IS NULL
+            )`,
+        {
+          replacements: {
+            ...condReplacements,
+            // Route escalations to Ali. Mirrors the hardcode + env override
+            // documented in routes/admin/opsRoutes.ts (ALI_BC_USER_ID); lift
+            // to a shared config when a second operator uses the queue.
+            esc_target: process.env.ALI_BC_USER_ID || '17454835',
+            esc_reason: `Auto-escalated by rule "${ruleName}".`,
+            esc_rule: ruleName,
+          },
+        },
       );
       return { rule_id: ruleId, rule_name: ruleName, rows_affected: meta?.rowCount || 0 };
     }
@@ -167,6 +231,18 @@ export async function seedDefaultAutomationRules(): Promise<void> {
       description: 'Re-tags todos with no due + >7d stale into waiting_dependency category for visibility in Triage Breakdown.',
       condition_jsonb: { stale_days_gt: 7 },
       action_jsonb: { do: 'tag_category', value: 'waiting_dependency' },
+    },
+    {
+      name: 'Escalate — overdue + red urgency (≥70)',
+      description: 'Opens an approval-queue item for any active todo that is past its due date and scoring 70+. Surfaces in the Waiting on Human panel for the operator to action. Idempotent; local-only (does not touch the BC ticket). Toggle off to silence.',
+      condition_jsonb: { overdue: true, urgency_gte: 70 },
+      action_jsonb: { do: 'escalate' },
+    },
+    {
+      name: 'Escalate — overdue > 7 days',
+      description: 'Opens an approval-queue item for any active todo more than 7 days past its due date, regardless of urgency score. Catches stalled commitments the urgency rule misses. Idempotent; local-only.',
+      condition_jsonb: { overdue_days_gt: 7 },
+      action_jsonb: { do: 'escalate' },
     },
   ];
   for (const d of defaults) {
