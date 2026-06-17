@@ -262,6 +262,7 @@ import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
+import CurriculumCourseLink from './CurriculumCourseLink';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1054,6 +1055,7 @@ export {
   AnthropicChangeEvent,
   // AI Systems Architect Accelerator
   ProjectDna,
+  CurriculumCourseLink,
 };
 
 // --- AI Company Layer associations ---
