@@ -26,7 +26,11 @@ jest.mock('../../models/MentorReviewItem', () => ({
   },
 }));
 
-import { estimateConfidence, processSubmissionForMentor } from '../mentorFeedbackService';
+import {
+  estimateConfidence,
+  processSubmissionForMentor,
+  getFeedbackForSubmission,
+} from '../mentorFeedbackService';
 import AssignmentSubmission from '../../models/AssignmentSubmission';
 import MentorReviewItem from '../../models/MentorReviewItem';
 
@@ -161,5 +165,58 @@ describe('processSubmissionForMentor', () => {
 
     expect(getCreateMock()).not.toHaveBeenCalled();
     expect(mockReviewItem.create).not.toHaveBeenCalled();
+  });
+});
+
+// ─── getFeedbackForSubmission (human-review gate) ─────────────────────────────
+
+describe('getFeedbackForSubmission', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('returns feedback for auto_approved items', async () => {
+    mockReviewItem.findOne.mockResolvedValue({
+      ai_feedback: 'Solid work.',
+      status: 'auto_approved',
+      reviewer_notes: null,
+    });
+    const res = await getFeedbackForSubmission('sub-1', 'enroll-1');
+    expect(res).toEqual({ ai_feedback: 'Solid work.', status: 'auto_approved', reviewer_notes: null });
+  });
+
+  it('returns feedback plus reviewer_notes for approved items', async () => {
+    mockReviewItem.findOne.mockResolvedValue({
+      ai_feedback: 'Reviewed feedback.',
+      status: 'approved',
+      reviewer_notes: 'Tightened the gaps section.',
+    });
+    const res = await getFeedbackForSubmission('sub-2', 'enroll-1');
+    expect(res).toEqual({
+      ai_feedback: 'Reviewed feedback.',
+      status: 'approved',
+      reviewer_notes: 'Tightened the gaps section.',
+    });
+  });
+
+  it('hides pending_review feedback from the student (returns null)', async () => {
+    mockReviewItem.findOne.mockResolvedValue({
+      ai_feedback: 'Unvetted low-confidence feedback.',
+      status: 'pending_review',
+      reviewer_notes: null,
+    });
+    expect(await getFeedbackForSubmission('sub-3', 'enroll-1')).toBeNull();
+  });
+
+  it('hides dismissed feedback from the student (returns null)', async () => {
+    mockReviewItem.findOne.mockResolvedValue({
+      ai_feedback: 'Feedback a human rejected.',
+      status: 'dismissed',
+      reviewer_notes: 'Off-base, not shown.',
+    });
+    expect(await getFeedbackForSubmission('sub-4', 'enroll-1')).toBeNull();
+  });
+
+  it('returns null when no review item exists', async () => {
+    mockReviewItem.findOne.mockResolvedValue(null);
+    expect(await getFeedbackForSubmission('sub-5', 'enroll-1')).toBeNull();
   });
 });

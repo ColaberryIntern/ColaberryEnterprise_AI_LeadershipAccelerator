@@ -183,6 +183,13 @@ export async function getFeedbackForSubmission(
   });
   if (!item) return null;
 
+  // Human-review gate: only feedback that cleared review reaches the student.
+  // pending_review = a human hasn't vetted the low-confidence feedback yet;
+  // dismissed = a human explicitly rejected it. Neither is shown — the route
+  // treats null as "no mentor feedback available yet" (404).
+  const RELEASED: MentorReviewStatus[] = ['auto_approved', 'approved'];
+  if (!RELEASED.includes(item.status)) return null;
+
   return {
     ai_feedback: item.ai_feedback,
     status: item.status,

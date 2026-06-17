@@ -27,6 +27,12 @@ GitHub API integration for Architect Dashboard — OAuth flow, activity sync, we
     - `backend/src/services/__tests__/mentorFeedbackService.test.ts` (new): 11 unit tests — `estimateConfidence` (6 cases: base, empty content, short content, upload-no-content, hedging, multi-deduction clamp) and `processSubmissionForMentor` (5 cases: auto_approved routing, pending_review routing, idempotency, OpenAI failure no-throw, submission-not-found no-op).
   - Verification: Jest 11/11 pass. tsc --noEmit: only pre-existing axios/playwright missing-type errors (unrelated to this change). New files introduce zero new TypeScript errors.
   - Notes: New env var `MENTOR_CONFIDENCE_THRESHOLD` (default 0.8) is configurable. Deploy sequence: run seed script, then `docker compose up -d --build backend`. No frontend UI shipped — admin queue is API-only; student feedback available via REST endpoint.
+- [x] Review fix — gate student feedback read behind human review
+  - Date: 2026-06-17
+  - Session: CC-20260617-r7k4
+  - What changed: `backend/src/services/mentorFeedbackService.ts` — `getFeedbackForSubmission()` now returns null unless `status ∈ {auto_approved, approved}`. Before this fix the endpoint surfaced `ai_feedback` for `pending_review` (low-confidence, not yet human-vetted) and `dismissed` (human-rejected) items, bypassing the human-review gate that is the whole point of the queue. Added 5 unit tests in `mentorFeedbackService.test.ts` covering auto_approved/approved release and pending_review/dismissed/not-found suppression.
+  - Verification: Docker build tsc gate (authoritative — local node_modules is a production-only partial install without jest/ts-node); live smoke test of the endpoint post-deploy. Change is type-safe by inspection (literal members of the MentorReviewStatus union).
+  - Notes: Found during pre-merge review of PR #34. Fix committed to the same PR branch before merge.
 
 ---
 
