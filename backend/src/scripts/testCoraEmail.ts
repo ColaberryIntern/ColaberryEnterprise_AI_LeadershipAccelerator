@@ -113,6 +113,35 @@ calendar before I enroll.
 
 Tom`,
   },
+  {
+    label: '8. OUT OF SCOPE — legacy bootcamp billing (must NOT quote Accelerator price)',
+    fromName: 'Andre Mills',
+    subject: 'IPBC payment question',
+    body: `Hi,
+
+I'm in the IPBC / Job Readiness Program and I got a payment notice.
+I thought I only start paying after I get placed in a job. Can you
+explain my balance and when payments start?
+
+Andre`,
+  },
+  {
+    label: '9. OUT OF SCOPE — employment verification (should redirect to everify@)',
+    fromName: 'HR Verifications Inc',
+    subject: 'Employment verification request',
+    body: `Hello,
+
+We need to verify the enrollment and completion dates for a former
+student as part of a background check. Where do we send the request?
+
+Thank you`,
+  },
+  {
+    label: '10. OUT OF SCOPE — tax document / 1098 (no 1098; receipt in account)',
+    fromName: 'Dana Cho',
+    subject: '1098 tax form',
+    body: `Hi, can you send me my 1098-T form for last year's tuition for my taxes? Thanks.`,
+  },
 ];
 
 async function runTests(): Promise<void> {
