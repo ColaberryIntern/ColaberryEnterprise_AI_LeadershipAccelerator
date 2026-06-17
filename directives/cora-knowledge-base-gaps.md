@@ -4,7 +4,21 @@
 **Owner:** Ali Muwwakkil
 **Raised by:** Kes (CC-20260616-c0r4)
 
-**Remaining blockers before go-live:** #2 (refund policy — now in motion, assigned to Taiwo, BC todo [10003806235](https://app.basecamp.com/3945211/buckets/47502609/todos/10003806235), due 2026-06-19) and the two deploy blockers in PR #24 (`GMAIL_COLABERRY_REFRESH_TOKEN` in prod env; turn off `CORA_DRY_RUN` only after verification). #4 is resolved by directing to a strategy call.
+**Remaining blockers before go-live:** #2 (refund policy — in motion, Taiwo, BC todo [10003806235](https://app.basecamp.com/3945211/buckets/47502609/todos/10003806235), due 2026-06-19), the Gmail send token (see "Gmail send token" below — the env var is misnamed, not missing), and the **dispatch-routing gap** for out-of-scope email (see "Scope decision" below). Keep `CORA_DRY_RUN=true` until these are resolved. #4 is resolved by directing to a strategy call.
+
+---
+
+## Scope decision (2026-06-17, Ali) — Accelerator-only + smart routing
+
+Cora's inbox (support@colaberry.com) receives mostly **legacy bootcamp** email (Data Analytics Bootcamp, IPBC/Job Readiness, Data Science internships, existing-student billing, course tech support, employment verification, tax), but the new KB is **Accelerator-only**. Decision: Cora answers ONLY Accelerator questions; for legacy topics it never quotes a price/date it doesn't have and gives the safe handoff/redirect (admissions follow-up; verification → everify@colaberry.com; tax → no 1098 + receipt in account, EIN 45-4223538 on request). **Go-live is gated on this.**
+
+- **Done (PR #25):** scope guard in the system prompt + escalation triggers; shadow cases 8–10 verify Cora does NOT quote the Accelerator price to a bootcamp student.
+- **Source rubric:** legacy Cora operating sheet (Google Sheet `1C69lDig4CoCnqqlAe_8_75eEg8PiPOaBAgjUWp9Yz_A`). Ali: "use it as a source… figure out how we deal with it." Routing owners kept: Taiwo (IPBC/billing), Shveta (DA admissions), everify@ (verification). All old prices/dates intentionally NOT carried over.
+- **⚠️ Open — dispatch-routing gap (coordinate with Kes / PR #24):** rule 0c sends ALL support@ mail to Cora's AUTOMATION path, which replies + archives. For out-of-scope mail where Cora says "the team will follow up," that promise is hollow if the archived email is never surfaced to a human. Proper fix: classify → out-of-scope mail goes to a human-review state instead of send-and-archive. This belongs to the #24 inbox pipeline.
+
+## Gmail send token (2026-06-17 finding)
+
+`GMAIL_COLABERRY_REFRESH_TOKEN` (what `coraAgentService` + `replyDraftService` require) is **not set in prod**. The closest existing var, `GMAIL_REFRESH_TOKEN`, resolves to **ali@colaberry.com** with `gmail.modify` scope (**can send**) and is what `inboxSyncService` already uses. Fix = small code change: fall back to `GMAIL_REFRESH_TOKEN` when the `GMAIL_COLABERRY_*` vars are absent. Confirm support@ is a verified "send-as" alias on ali@'s mailbox, or Cora will send as ali@.
 
 ---
 
