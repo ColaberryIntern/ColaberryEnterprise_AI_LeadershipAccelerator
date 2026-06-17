@@ -147,11 +147,18 @@ export async function createSubmission(data: {
   file_path?: string;
   file_name?: string;
 }) {
-  return AssignmentSubmission.create({
+  const submission = await AssignmentSubmission.create({
     ...data,
     status: 'submitted',
     submitted_at: new Date(),
   } as any);
+
+  // Non-blocking: failure here must never affect the submission response
+  import('./mentorFeedbackService').then(svc =>
+    svc.processSubmissionForMentor(submission.id)
+  ).catch(err => console.error('[Accelerator] Mentor feedback trigger failed:', err.message));
+
+  return submission;
 }
 
 export async function updateSubmission(submissionId: string, data: Partial<{

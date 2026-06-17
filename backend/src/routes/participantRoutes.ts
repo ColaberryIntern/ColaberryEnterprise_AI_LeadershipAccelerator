@@ -183,6 +183,22 @@ router.use(projectRoutes);
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);
 router.get('/api/portal/mentor/history', requireParticipant, handleGetMentorHistory);
 
+// Mentor feedback on submissions
+router.get('/api/portal/submissions/:submissionId/mentor-feedback', requireParticipant, async (req, res) => {
+  try {
+    const { getFeedbackForSubmission } = await import('../services/mentorFeedbackService');
+    const feedback = await getFeedbackForSubmission(
+      req.params.submissionId as string,
+      req.participant!.sub
+    );
+    if (!feedback) return res.status(404).json({ error: 'No mentor feedback available yet' });
+    res.json(feedback);
+  } catch (err: any) {
+    console.error('[ParticipantRoutes] mentor-feedback error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve mentor feedback' });
+  }
+});
+
 // GitHub OAuth endpoints
 router.get('/api/portal/github/oauth/start', requireParticipant, async (req, res) => {
   const { buildOAuthUrl } = await import('../services/githubIntegrationService');

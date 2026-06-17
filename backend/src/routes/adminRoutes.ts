@@ -67,6 +67,7 @@ import opsRoutes from './admin/opsRoutes';
 import cbSystemRoutes from './admin/cbSystemRoutes';
 import anthropicRoutes from './admin/anthropicRoutes';
 import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
+import mentorReviewRoutes from './admin/mentorReviewRoutes';
 
 const router = Router();
 
@@ -138,5 +139,6 @@ router.use(opsRoutes);
 router.use(cbSystemRoutes);
 router.use(anthropicRoutes);
 router.use(qrAnalyticsRoutes);
+router.use(mentorReviewRoutes);
 
 export default router;

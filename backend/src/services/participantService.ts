@@ -218,7 +218,7 @@ export async function createParticipantSubmission(enrollmentId: string, data: {
   title: string;
   content_json?: any;
 }) {
-  return AssignmentSubmission.create({
+  const submission = await AssignmentSubmission.create({
     enrollment_id: enrollmentId,
     session_id: data.session_id || null,
     assignment_type: data.assignment_type,
@@ -227,6 +227,13 @@ export async function createParticipantSubmission(enrollmentId: string, data: {
     status: 'submitted',
     submitted_at: new Date(),
   } as any);
+
+  // Non-blocking: failure here must never affect the submission response
+  import('./mentorFeedbackService').then(svc =>
+    svc.processSubmissionForMentor(submission.id)
+  ).catch(err => console.error('[Participant] Mentor feedback trigger failed:', err.message));
+
+  return submission;
 }
 
 export async function uploadParticipantSubmission(enrollmentId: string, submissionId: string, file: { path: string; originalname: string }) {
@@ -241,6 +248,12 @@ export async function uploadParticipantSubmission(enrollmentId: string, submissi
     status: 'submitted',
     submitted_at: new Date(),
   });
+
+  // Non-blocking: idempotent — will no-op if a review item already exists
+  import('./mentorFeedbackService').then(svc =>
+    svc.processSubmissionForMentor(submissionId)
+  ).catch(err => console.error('[Participant] Mentor feedback trigger (upload) failed:', err.message));
+
   return submission;
 }
 
