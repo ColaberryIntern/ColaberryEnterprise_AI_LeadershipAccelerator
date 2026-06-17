@@ -76,7 +76,40 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
-  // --- 0b. System Alert Emails → AUTOMATION ---
+  // --- 0b. Cora support inbox → route to Cora auto-reply agent ---
+  // Emails delivered to support@colaberry.com are forwarded to Ali's Gmail.
+  // We detect them by checking To/Cc/Delivered-To/X-Original-To headers.
+  // Classified AUTOMATION so they're archived after Cora sends the reply.
+  // The inboxStateManager dispatches to coraAgentService before archiving.
+  const coraSupportAddress = (process.env.CORA_SUPPORT_ADDRESS || 'support@colaberry.com').toLowerCase();
+  const toAddrs = (email.to_addresses || []).map((a: any) =>
+    (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase()
+  );
+  const ccAddrs2 = (email.cc_addresses || []).map((a: any) =>
+    (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase()
+  );
+  const headerBlock = Object.entries(headers)
+    .map(([k, v]) => `${k.toLowerCase()}: ${String(v).toLowerCase()}`)
+    .join('\n');
+  const isCoraInquiry =
+    toAddrs.includes(coraSupportAddress) ||
+    ccAddrs2.includes(coraSupportAddress) ||
+    headerBlock.includes(coraSupportAddress);
+
+  if (isCoraInquiry) {
+    const reason = `Cora support inquiry — recipient is ${coraSupportAddress}`;
+    console.log(`${LOG_PREFIX} Cora inquiry: ${reason}`);
+    return {
+      matched: true,
+      state: 'AUTOMATION',
+      rule_id: 'cora_0c',
+      reason: reason + fwdSuffix,
+      classified_by: 'hard_rule',
+      forwarded_from_hotmail: forwardedFromHotmail,
+    };
+  }
+
+  // --- 0c. System Alert Emails → AUTOMATION ---
   if (fromLower.includes('ali@colaberry.com') && /^\[alert\]/i.test(email.subject || '')) {
     const reason = 'System-generated alert email (self-sent [Alert])';
     console.log(`${LOG_PREFIX} System alert: ${reason}`);
