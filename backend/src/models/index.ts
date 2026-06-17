@@ -197,6 +197,9 @@ import RawLeadPayload from './RawLeadPayload';
 import AnthropicContentRegistry from './AnthropicContentRegistry';
 import AnthropicChangeEvent from './AnthropicChangeEvent';
 
+// Enrollment Tracking
+import EnrollmentLead from './EnrollmentLead';
+
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
 import InboxClassification from './InboxClassification';
@@ -1060,7 +1063,12 @@ export {
   // AI Systems Architect Accelerator
   ProjectDna,
   StudentGithubActivity,
+  EnrollmentLead,
 };
+
+// --- Enrollment Lead associations ---
+EnrollmentLead.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(EnrollmentLead, { foreignKey: 'enrollment_id', as: 'enrollmentLead' });
 
 // --- AI Company Layer associations ---
 AiCompany.hasMany(CompanyGoal, { foreignKey: 'company_id', as: 'goals' });
