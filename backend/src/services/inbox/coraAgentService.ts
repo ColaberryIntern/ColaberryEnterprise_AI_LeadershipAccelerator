@@ -176,15 +176,22 @@ async function sendCoraReplyViaGmail(
 ): Promise<void> {
   const { google } = await import('googleapis');
 
-  const refreshToken = process.env.GMAIL_COLABERRY_REFRESH_TOKEN;
-  const accessToken = process.env.GMAIL_COLABERRY_ACCESS_TOKEN;
+  // Prefer the Cora-specific creds if provisioned, but fall back to the shared
+  // GMAIL_* token that inboxSyncService already uses to read this same mailbox
+  // (ali@colaberry.com, gmail.modify scope — send-capable). The GMAIL_COLABERRY_*
+  // vars were never set in prod, so the fallback is what actually lets Cora send.
+  // Note: support@ is NOT a verified send-as alias on that mailbox (confirmed
+  // 2026-06-17), so replies currently go out as ali@colaberry.com until support@
+  // is added as a send-as alias.
+  const refreshToken = process.env.GMAIL_COLABERRY_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN;
+  const accessToken = process.env.GMAIL_COLABERRY_ACCESS_TOKEN || process.env.GMAIL_ACCESS_TOKEN;
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const fromAddress = process.env.CORA_SUPPORT_ADDRESS || 'support@colaberry.com';
 
   if (!refreshToken || !clientId || !clientSecret) {
     throw new Error(
-      'Gmail credentials not configured for Cora — need GMAIL_COLABERRY_REFRESH_TOKEN, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET'
+      'Gmail credentials not configured for Cora — need GMAIL_COLABERRY_REFRESH_TOKEN (or GMAIL_REFRESH_TOKEN), GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET'
     );
   }
 
