@@ -53,6 +53,46 @@ function isCBMention(content) {
   const stripped = content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
   return CB_PLAINTEXT_RE.test(stripped);
 }
+
+// --- Automated-agent card guard --------------------------------------------
+// Some threads (notably the launch "Launch Readiness Dashboard - daily
+// snapshots" thread, bucket 47502609 message 9997008325) are watched by
+// per-user Basecamp-connected agents. When the daily dashboard snapshot lands,
+// each of those agents posts a structured "CB System: automated response" card
+// on behalf of its user. Those cards:
+//   1. are authored by REAL team-member accounts (their connected agent posts
+//      as them), so the ALLOWED_REQUESTER_IDS creator filter does NOT drop
+//      them, and
+//   2. contain the literal text "@CB System" (a "Tag @CB System..." line),
+//      which trips isCBMention.
+// The dispatcher therefore treated each card as a genuine @CB request and
+// replied to all of them. Worse, every CB reply was fresh thread activity that
+// re-triggered the per-user agents, producing a runaway feedback loop on that
+// thread (19 comments 2026-06-15 -> 53 on 2026-06-17). The per-comment circuit
+// breaker can't stop it because every cycle creates NEW comment IDs.
+//
+// A dispatcher must never answer another automated agent's card. Detect those
+// cards by their stable signature and skip them before they reach the reply
+// path. Detection is intentionally narrow: the literal header these cards open
+// with, or the co-occurrence of the three structural labels they always carry
+// (so a human who merely types "anticipated goal" in prose is not suppressed).
+const AUTOMATED_CARD_HEADER_RE = /^\s*CB System\s*:\s*automated response/i;
+function isAutomatedAgentCard(content) {
+  if (!content) return false;
+  const stripped = content
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (AUTOMATED_CARD_HEADER_RE.test(stripped)) return true;
+  // Structural fallback: the card always pairs an "Anticipated goal" with a
+  // "Proposed plan" and a "Claude Code prompt" block. All three together is a
+  // machine-generated card; any one alone is too loose to suppress on.
+  const hasGoal = /\bAnticipated goal\s*:/i.test(stripped);
+  const hasPlan = /\bProposed plan\s*:/i.test(stripped);
+  const hasPrompt = /\bClaude Code prompt\b/i.test(stripped);
+  return hasGoal && hasPlan && hasPrompt;
+}
 const TICK_TIMEOUT_MS = 3 * 60 * 1000;
 const LOOKBACK_HOURS = 2;
 const DRY = process.argv.includes('--dry');
@@ -321,6 +361,7 @@ async function findNewMentionsByFeed(state, cutoffMs) {
     if (new Date(rec.created_at).getTime() < cutoffMs) return;
     if (!ALLOWED_REQUESTER_IDS.has(rec.creator?.id)) return;
     if (!isCBMention(rec.content || '')) return;
+    if (isAutomatedAgentCard(rec.content || '')) return; // never answer another agent's card
     seen.add(key);
     newMentions.push({
       bucketId: rec.bucket.id,
@@ -419,7 +460,8 @@ async function findNewMentionsByWalk(state, cutoffMs) {
             const created = new Date(fullMsg.created_at || msg.created_at).getTime();
             if (created >= cutoffMs
                 && ALLOWED_REQUESTER_IDS.has(fullMsg.creator?.id ?? msg.creator?.id)
-                && isCBMention(fullMsg.content || '')) {
+                && isCBMention(fullMsg.content || '')
+                && !isAutomatedAgentCard(fullMsg.content || '')) {
               const key = `${bucketId}-msg-${msg.id}`;
               if (!state.processed[key]) {
                 newMentions.push({
@@ -478,6 +520,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
     const ctime = new Date(c.created_at).getTime();
     if (ctime < cutoffMs) continue;
     if (!isCBMention(c.content)) continue;
+    if (isAutomatedAgentCard(c.content)) continue; // never answer another agent's card
     const key = `${bucketId}-${c.id}`;
     if (state.processed[key]) continue;
     newMentions.push({ bucketId, recId, comment: c, key });
@@ -485,7 +528,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 }
 
 // Exported for unit tests. Guarded IIFE below only runs when executed directly.
-module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk };
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk };
 
 if (require.main !== module) return;
 
