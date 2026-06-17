@@ -10,6 +10,32 @@ GitHub API integration for Architect Dashboard — OAuth flow, activity sync, we
 
 ---
 
+### Mentor Agent with Human-Review Queue (2026-06-17)
+- [x] Mentor feedback agent — AI-generated submission feedback + confidence-gated human-review queue
+  - Date: 2026-06-17
+  - Session: CC-20260617-m9b3
+  - What changed:
+    - `backend/src/models/MentorReviewItem.ts` (new): Sequelize model for `mentor_review_items` table. Unique constraint on `submission_id` (one review per submission). Columns: `ai_feedback`, `confidence_score`, `status` (pending_review / auto_approved / approved / dismissed), `reviewer_notes`, `reviewed_at`.
+    - `backend/src/seeds/seedMentorReviewItems.ts` (new): Idempotent CREATE TABLE + 3 indexes. Run via `docker exec accelerator-backend node dist/seeds/seedMentorReviewItems.js`.
+    - `backend/src/models/index.ts` (modified): Added `MentorReviewItem` import.
+    - `backend/src/services/mentorFeedbackService.ts` (new): `processSubmissionForMentor(submissionId)` — generates AI feedback via OpenAI gpt-4o-mini (400 tokens, rubric-based), runs `estimateConfidence()` heuristic (base 0.85; deducts for short content, prework_upload-no-content, AI hedging language), routes to `auto_approved` (≥0.8) or `pending_review` (<0.8). Idempotent — no-ops if review item already exists. OpenAI failure logged but never bubbles to submission response. Admin functions: `listPendingReviews`, `approveReview`, `dismissReview`. Student read: `getFeedbackForSubmission`.
+    - `backend/src/services/acceleratorService.ts` (modified): `createSubmission()` fires non-blocking `processSubmissionForMentor` after the submission saves.
+    - `backend/src/services/participantService.ts` (modified): `createParticipantSubmission()` and `uploadParticipantSubmission()` both fire non-blocking `processSubmissionForMentor` after save.
+    - `backend/src/routes/admin/mentorReviewRoutes.ts` (new): `GET /api/admin/mentor-reviews?status=`, `POST /api/admin/mentor-reviews/:id/approve`, `POST /api/admin/mentor-reviews/:id/dismiss`. Zod-validated, requireAdmin.
+    - `backend/src/routes/adminRoutes.ts` (modified): Registered `mentorReviewRoutes`.
+    - `backend/src/routes/participantRoutes.ts` (modified): Added `GET /api/portal/submissions/:submissionId/mentor-feedback` (requireParticipant). Returns `{ ai_feedback, status, reviewer_notes }` — reviewer_notes only surfaced when status=approved.
+    - `backend/src/services/__tests__/mentorFeedbackService.test.ts` (new): 11 unit tests — `estimateConfidence` (6 cases: base, empty content, short content, upload-no-content, hedging, multi-deduction clamp) and `processSubmissionForMentor` (5 cases: auto_approved routing, pending_review routing, idempotency, OpenAI failure no-throw, submission-not-found no-op).
+  - Verification: Jest 11/11 pass. tsc --noEmit: only pre-existing axios/playwright missing-type errors (unrelated to this change). New files introduce zero new TypeScript errors.
+  - Notes: New env var `MENTOR_CONFIDENCE_THRESHOLD` (default 0.8) is configurable. Deploy sequence: run seed script, then `docker compose up -d --build backend`. No frontend UI shipped — admin queue is API-only; student feedback available via REST endpoint.
+- [x] Review fix — gate student feedback read behind human review
+  - Date: 2026-06-17
+  - Session: CC-20260617-r7k4
+  - What changed: `backend/src/services/mentorFeedbackService.ts` — `getFeedbackForSubmission()` now returns null unless `status ∈ {auto_approved, approved}`. Before this fix the endpoint surfaced `ai_feedback` for `pending_review` (low-confidence, not yet human-vetted) and `dismissed` (human-rejected) items, bypassing the human-review gate that is the whole point of the queue. Added 5 unit tests in `mentorFeedbackService.test.ts` covering auto_approved/approved release and pending_review/dismissed/not-found suppression.
+  - Verification: Docker build tsc gate (authoritative — local node_modules is a production-only partial install without jest/ts-node); live smoke test of the endpoint post-deploy. Change is type-safe by inspection (literal members of the MentorReviewStatus union).
+  - Notes: Found during pre-merge review of PR #34. Fix committed to the same PR branch before merge.
+
+---
+
 ### GitHub Integration Service — OAuth + Activity Sync + Webhook (2026-06-15)
 - [x] GitHub API integration for Architect Dashboard (BC todo 9946499767)
   - Date: 2026-06-15

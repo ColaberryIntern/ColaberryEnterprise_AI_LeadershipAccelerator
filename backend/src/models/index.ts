@@ -152,6 +152,7 @@ import StrategicInitiative from './StrategicInitiative';
 import RequirementsGenerationJob from './RequirementsGenerationJob';
 import MayaConversationOutcome from './MayaConversationOutcome';
 import MentorIntervention from './MentorIntervention';
+import MentorReviewItem from './MentorReviewItem';
 import SectionExecutionLog from './SectionExecutionLog';
 import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
