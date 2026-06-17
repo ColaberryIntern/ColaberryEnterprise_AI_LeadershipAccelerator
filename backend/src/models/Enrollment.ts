@@ -13,6 +13,15 @@ export interface EnrollmentAttributes {
   paysimple_invoice_id?: string;
   paysimple_customer_id?: string;
   paysimple_external_id?: string;
+  // Stripe payment fields (training program)
+  stripe_session_id?: string;
+  stripe_payment_intent_id?: string;
+  stripe_charge_id?: string;
+  intensives?: string;
+  industry_track?: string;
+  referral_channel?: string;
+  amount_paid?: number;
+  enrolled_at?: Date;
   payment_status: 'paid' | 'pending' | 'pending_invoice' | 'failed';
   payment_method: 'credit_card' | 'ach' | 'invoice';
   payment_mode?: 'test' | 'live';
@@ -44,6 +53,14 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare paysimple_invoice_id: string;
   declare paysimple_customer_id: string;
   declare paysimple_external_id: string;
+  declare stripe_session_id: string;
+  declare stripe_payment_intent_id: string;
+  declare stripe_charge_id: string;
+  declare intensives: string;
+  declare industry_track: string;
+  declare referral_channel: string;
+  declare amount_paid: number;
+  declare enrolled_at: Date;
   declare payment_status: 'paid' | 'pending' | 'pending_invoice' | 'failed';
   declare payment_method: 'credit_card' | 'ach' | 'invoice';
   declare payment_mode: 'test' | 'live';
@@ -109,6 +126,41 @@ Enrollment.init(
     },
     paysimple_external_id: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    stripe_session_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      unique: true,
+    },
+    stripe_payment_intent_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      unique: true,
+    },
+    stripe_charge_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    intensives: {
+      // Comma-separated SKUs: AISA-BUNDLE | AISA-S1 | AISA-S2 | AISA-S3 | AISA-S4
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    industry_track: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    referral_channel: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    amount_paid: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    enrolled_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     payment_status: {
@@ -196,6 +248,7 @@ Enrollment.init(
       { fields: ['created_at'], name: 'idx_enrollments_created_at' },
       { fields: ['cohort_id'], name: 'idx_enrollments_cohort_id' },
       { fields: ['payment_status'], name: 'idx_enrollments_payment_status' },
+      { fields: ['stripe_payment_intent_id'], name: 'idx_enrollments_stripe_pi', where: { stripe_payment_intent_id: { [require('sequelize').Op.ne]: null } } },
     ],
   }
 );
