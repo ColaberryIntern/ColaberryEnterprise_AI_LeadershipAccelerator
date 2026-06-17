@@ -28,8 +28,12 @@ export interface CoraReply {
  */
 async function getNextCohortForCora(): Promise<CoraCohortContext | null> {
   try {
-    const cohorts = await listOpenCohorts(); // ordered by start_date ASC
-    const next = cohorts?.[0];
+    const cohorts = await listOpenCohorts(); // status='open', ordered by start_date ASC
+    // Only surface a cohort that hasn't started yet. 'open' cohorts can linger
+    // with past start dates in the DB, and the public enrollment page filters
+    // the same way (start_date >= today) — Cora must not quote a past cohort.
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (DATEONLY)
+    const next = (cohorts || []).find((c) => c.start_date >= today);
     if (!next) return null;
     return {
       name: next.name,
