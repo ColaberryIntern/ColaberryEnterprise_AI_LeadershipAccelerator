@@ -18,7 +18,9 @@ Cora's inbox (support@colaberry.com) receives mostly **legacy bootcamp** email (
 
 ## Gmail send token (2026-06-17 finding)
 
-`GMAIL_COLABERRY_REFRESH_TOKEN` (what `coraAgentService` + `replyDraftService` require) is **not set in prod**. The closest existing var, `GMAIL_REFRESH_TOKEN`, resolves to **ali@colaberry.com** with `gmail.modify` scope (**can send**) and is what `inboxSyncService` already uses. Fix = small code change: fall back to `GMAIL_REFRESH_TOKEN` when the `GMAIL_COLABERRY_*` vars are absent. Confirm support@ is a verified "send-as" alias on ali@'s mailbox, or Cora will send as ali@.
+`GMAIL_COLABERRY_REFRESH_TOKEN` (what `coraAgentService` + `replyDraftService` require) is **not set in prod**. The closest existing var, `GMAIL_REFRESH_TOKEN`, resolves to **ali@colaberry.com** with `gmail.modify` scope (**can send**) and is what `inboxSyncService` already uses. **Done (PR #25):** `sendCoraReplyViaGmail` now falls back to `GMAIL_REFRESH_TOKEN` when the `GMAIL_COLABERRY_*` vars are absent.
+
+**⚠️ Send-as finding (2026-06-17, verified via Gmail API):** the only authorized send-as identity on that mailbox is **ali@colaberry.com**. **support@colaberry.com is NOT a verified send-as alias** — support@ mail just forwards into ali@'s inbox. So as-is, Cora will send replies **as ali@colaberry.com**, not support@. To send as support@, add it as a verified "send-as" alias in that Gmail account (Settings → Accounts → "Send mail as"), or accept ali@ as the sender. Decision for Ali.
 
 ---
 
