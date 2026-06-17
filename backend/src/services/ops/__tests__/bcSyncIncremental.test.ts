@@ -110,6 +110,11 @@ describe('isExcludedProject', () => {
     expect(isExcludedProject('Data Science - Center of Excellence')).toBe(true);
   });
 
+  it('excludes RMG Mortgage Project (bulk data, not ops)', () => {
+    expect(isExcludedProject('RMG Mortgage Project')).toBe(true);
+    expect(isExcludedProject('rmg mortgage')).toBe(true);
+  });
+
   it('keeps real ops projects', () => {
     expect(isExcludedProject('Gov Contracts')).toBe(false);
     expect(isExcludedProject('AI Systems Architect Accelerator')).toBe(false);
