@@ -139,12 +139,12 @@ interface BcTodoRecording extends BcTodo {
   parent: { id: number; type: string; title: string };
 }
 
-// Projects excluded from the ops mirror. "Center of Excellence" is student
-// coursework (~26k todos / ~86% of the mirror) that does not belong in the
-// "waiting on human" ops queue and is what made the sync slow. Matched by NAME
-// so renamed/new CoE projects are auto-excluded; override the pattern via env.
+// Projects excluded from the ops mirror — high-volume data that doesn't belong
+// in the "waiting on human" ops queue: "Center of Excellence" is student
+// coursework (~26k todos) and "RMG Mortgage" is bulk project data (~2.4k todos).
+// Matched by NAME so renamed/new ones are auto-excluded; override via env.
 const EXCLUDE_PROJECT_NAME_RE = new RegExp(
-  process.env.OPS_SYNC_EXCLUDE_NAME_RE || 'center of excellence',
+  process.env.OPS_SYNC_EXCLUDE_NAME_RE || 'center of excellence|rmg mortgage',
   'i',
 );
 export function isExcludedProject(name?: string | null): boolean {
