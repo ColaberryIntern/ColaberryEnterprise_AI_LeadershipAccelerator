@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CB System — Architecture &amp; Management Overview</title>
+<style>
+  :root{
+    --navy:#0f172a; --navy2:#1a365d; --ink:#1a202c; --slate:#475569; --line:#e2e8f0;
+    --bg:#f1f5f9; --card:#ffffff; --gold:#fbbf24; --blue:#0369a1; --blueBg:#e0f2fe;
+    --green:#16a34a; --greenBg:#dcfce7; --amber:#b45309; --amberBg:#fef3c7;
+    --purple:#6d28d9; --purpleBg:#ede9fe; --red:#dc2626; --redBg:#fee2e2;
+    --teal:#0f766e; --tealBg:#ccfbf1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.55}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px 60px}
+  header{background:var(--navy);color:#fff;padding:30px 0 26px;margin-bottom:26px}
+  header .wrap{padding-top:0;padding-bottom:0}
+  .eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);font-weight:700}
+  h1{font-size:27px;margin:6px 0 6px;font-weight:700}
+  .sub{color:#cbd5e1;font-size:14px;max-width:760px}
+  h2{font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);font-weight:700;margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:7px}
+  p.lead{font-size:15px;color:var(--slate);max-width:880px}
+  .flow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+  .node{flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .node .t{font-weight:700;font-size:14px}
+  .node .d{font-size:12px;color:var(--slate);margin-top:3px}
+  .arrow{align-self:center;color:#94a3b8;font-size:22px;font-weight:700;flex:0 0 auto}
+  .tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:20px;vertical-align:middle}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:14px}
+  .layer{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:10px;padding:15px 17px}
+  .layer.input{border-left-color:var(--blue)} .layer.brain{border-left-color:var(--purple)}
+  .layer.work{border-left-color:var(--teal)} .layer.data{border-left-color:var(--green)}
+  .layer.comms{border-left-color:var(--gold)} .layer.health{border-left-color:var(--red)}
+  .layer h3{margin:0 0 3px;font-size:15px}
+  .layer .cad{font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .layer ul{margin:10px 0 0;padding-left:0;list-style:none}
+  .layer li{font-size:13px;padding:5px 0;border-top:1px dashed var(--line)}
+  .layer li:first-child{border-top:0}
+  .layer li b{font-weight:600}
+  .layer li span{color:var(--slate);font-size:12px}
+  code{background:#f1f5f9;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11.5px;font-family:'SF Mono',Consolas,monospace}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:780px){.two{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .panel h3{margin:0 0 8px;font-size:15px}
+  .gap{background:var(--amberBg);border:1px solid #fde68a;border-radius:10px;padding:16px 18px}
+  .gap h3{margin:0 0 6px;color:var(--amber);font-size:15px}
+  .ok{color:var(--green);font-weight:700}.no{color:var(--red);font-weight:700}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{background:#f8fafc;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--slate)}
+  .pane{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .pane .n{font-size:11px;color:#94a3b8;font-weight:700}
+  .pane h4{margin:2px 0 6px;font-size:14.5px}
+  .pane p{margin:0;font-size:12.5px;color:var(--slate)}
+  .pane .src{margin-top:8px;font-size:11px;color:var(--teal)}
+  .foot{margin-top:34px;color:#94a3b8;font-size:12px;text-align:center}
+  .legend{margin:2px 0 0;font-size:12px;color:var(--slate)}
+  .legend b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Colaberry · Internal Systems</div>
+    <h1>CB System — Architecture &amp; Management Overview</h1>
+    <div class="sub">One page to understand the autonomous agent that runs across Basecamp: every moving part, how the pieces connect, what data it produces, and where the management blind spot is today.</div>
+  </div>
+</header>
+<div class="wrap">
+
+  <p class="lead">
+    <b>CB System is the shared engine, not a product.</b> It is the autonomous worker that lives in Basecamp — it reads @-mentions, drafts deliverables, scores and tracks to-dos, and reports to Ali. It is what the advisor's <code>/my-day</code> is <em>built on</em>: <code>/my-day</code> is the product surface (kept in the advisor app); CB System is the engine (managed here, in the enterprise app). It connects the two projects.
+  </p>
+
+  <!-- TOP-LEVEL FLOW -->
+  <h2>The big picture — how it connects</h2>
+  <div class="flow">
+    <div class="node"><div class="t">Basecamp</div><div class="d">Account 3945211 · projects, to-dos, @CB mentions, comments. The system of record.</div></div>
+    <div class="arrow">⇄</div>
+    <div class="node" style="border-color:var(--purple);background:#faf5ff"><div class="t">CB System <span class="tag" style="background:var(--purpleBg);color:var(--purple)">the engine</span></div><div class="d">~20 components: dispatcher, GPT-4o handler, AI runners, BC mirror, scorer, workers, watchdog. Managed in <b>enterprise</b>.</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">advisor <code>/my-day</code> <span class="tag" style="background:var(--blueBg);color:var(--blue)">the product</span></div><div class="d">Multi-user queue surface that reads the engine's output. Stays in the <b>advisor</b> app.</div></div>
+  </div>
+  <p class="legend"><b>Why this matters:</b> the enterprise "Run My Day" port duplicates the advisor's product and is being retired. What enterprise should own instead is <b>managing CB System</b> — the engine above — which currently has no overview at all.</p>
+
+  <!-- LAYERS -->
+  <h2>The moving parts, by layer</h2>
+  <div class="grid">
+    <div class="layer input">
+      <h3>1 · Input <span class="cad">— senses Basecamp</span></h3>
+      <ul>
+        <li><b>Inbound dispatcher</b> <span>— polls every 3 min for new @CB mentions across all projects; dedups + routes them.</span></li>
+        <li><b>Context walker</b> <span>— 4-layer graph walk (todolist → todo → comments → linked docs/PDFs) to give the brain full context.</span></li>
+      </ul>
+    </div>
+    <div class="layer brain">
+      <h3>2 · Brain <span class="cad">— decides &amp; acts</span></h3>
+      <ul>
+        <li><b>CB handler (GPT-4o)</b> <span>— interprets the request, calls tools: reply in Basecamp, email Ali, queue a follow-up, complete a to-do, gov-bid actions.</span></li>
+        <li><b>Guardrails</b> <span>— drafts only; no external comms; circuit breaker caps duplicate replies; every call logged.</span></li>
+      </ul>
+    </div>
+    <div class="layer work">
+      <h3>3 · Proactive work <span class="cad">— works ahead</span></h3>
+      <ul>
+        <li><b>AI task runners</b> <span>— nightly: auto-draft first-pass deliverables for upcoming AI-tier to-dos (per project).</span></li>
+        <li><b>Autonomous worker</b> <span>— every 15 min: runs <code>#auto-*</code> recipe to-dos (grep / SQL / status), posts results.</span></li>
+      </ul>
+    </div>
+    <div class="layer data">
+      <h3>4 · Mirror &amp; scoring <span class="cad">— the data engine</span></h3>
+      <ul>
+        <li><b>BC sync</b> <span>— every 2 min: mirrors Basecamp to-dos into Postgres (now incremental + fast).</span></li>
+        <li><b>Priority engine</b> <span>— scores every to-do 0–100 + category (human-required / waiting / unscored).</span></li>
+        <li><b>Automation rules</b> <span>— deterministic actions: flag-for-archive, tag-category, count metrics.</span></li>
+      </ul>
+    </div>
+    <div class="layer comms">
+      <h3>5 · Comms <span class="cad">— reports out</span></h3>
+      <ul>
+        <li><b>Digests</b> <span>— morning &amp; evening email: overdue / due / waiting-on-Ali.</span></li>
+        <li><b>Reminders &amp; backlog enforcer</b> <span>— targeted nudges; flags backlog when it crosses thresholds.</span></li>
+        <li><b>Reports runner</b> <span>— fires scheduled reports from a config table.</span></li>
+      </ul>
+    </div>
+    <div class="layer health">
+      <h3>6 · Health &amp; quality <span class="cad">— watches itself</span></h3>
+      <ul>
+        <li><b>Watchdog</b> <span>— daily: parses tick logs, GREEN/YELLOW/RED, emails Ali.</span></li>
+        <li><b>Coverage check / self-improve</b> <span>— verifies no @CB miss; regenerates weak past answers.</span></li>
+        <li><b>Dup-cleanup &amp; locks</b> <span>— trashes duplicate replies; single-flight guards prevent overlap.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- DATA + GAP -->
+  <h2>What it produces · and the blind spot</h2>
+  <div class="two">
+    <div class="panel">
+      <h3>Data CB System already emits (the dashboard's fuel)</h3>
+      <table>
+        <tr><th>Source</th><th>What's in it</th></tr>
+        <tr><td><code>ops_bc_todos</code> (Postgres)</td><td>Every tracked to-do + score + category, refreshed 2 min</td></tr>
+        <tr><td><code>ops_ai_assessments</code></td><td>Score history, model, token cost per run</td></tr>
+        <tr><td><code>ops_metrics_daily</code></td><td>Approvals, automations fired, agent calls, $ cost</td></tr>
+        <tr><td><code>cb-handler-log.jsonl</code></td><td>Every @CB invocation: requester, tools used, outcome</td></tr>
+        <tr><td><code>/var/log/cb-inbound.log</code></td><td>Tick health, mentions caught, errors</td></tr>
+        <tr><td>state files</td><td>AI-runner / worker / reminder / circuit-breaker state</td></tr>
+      </table>
+    </div>
+    <div class="gap">
+      <h3>⚠ The management gap</h3>
+      <p style="margin:0 0 8px;font-size:13.5px">Today you can see CB System only by its <b>footprints</b>:</p>
+      <p style="margin:0 0 4px;font-size:13px"><span class="ok">✓</span> It <b>posts comments</b> in Basecamp (visible per-thread)</p>
+      <p style="margin:0 0 4px;font-size:13px"><span class="ok">✓</span> A <b>daily watchdog email</b> (one status snapshot)</p>
+      <p style="margin:0 0 4px;font-size:13px"><span class="ok">✓</span> <b>Digests</b> to your inbox</p>
+      <p style="margin:8px 0 4px;font-size:13px"><span class="no">✗</span> No single screen showing <b>is it healthy, what did it do, across which projects, at what cost, with what errors</b> — from a managing perspective.</p>
+      <p style="margin:8px 0 0;font-size:13px;color:var(--amber)"><b>That screen is what we build in enterprise.</b></p>
+    </div>
+  </div>
+
+  <!-- PROPOSED DASHBOARD -->
+  <h2>Proposed: CB System Command (the new enterprise screen)</h2>
+  <p class="lead">A single management pane fed entirely by data CB System <em>already</em> produces — no new instrumentation needed. Replaces the retired "Run My Day" port at <code>/admin/cb-system</code>.</p>
+  <div class="grid" style="margin-top:6px">
+    <div class="pane"><div class="n">PANE 1</div><h4>System health &amp; status</h4><p>GREEN/YELLOW/RED at a glance: last sync, dispatcher tick health (24h), error count, token state, sync duration, any tripped circuit breaker.</p><div class="src">← watchdog log · ops health API · inbound-state</div></div>
+    <div class="pane"><div class="n">PANE 2</div><h4>Activity feed (what CB did)</h4><p>Live stream of @CB invocations &amp; AI drafts: who asked, on which to-do/project, what tool fired, outcome (replied / queued / error). Click → open in Basecamp.</p><div class="src">← cb-handler-log.jsonl · runner state</div></div>
+    <div class="pane"><div class="n">PANE 3</div><h4>Per-project breakdown</h4><p>By project: open to-dos, how many CB is handling, mentions answered, deliverables drafted, error rate. See where CB is active vs idle.</p><div class="src">← ops_bc_todos · ops_bc_projects</div></div>
+    <div class="pane"><div class="n">PANE 4</div><h4>Throughput &amp; cost</h4><p>Trend lines: mentions handled/day, deliverables drafted, automations fired, agent calls &amp; $ spend. Is it working harder or stalling?</p><div class="src">← ops_metrics_daily · ops_ai_assessments</div></div>
+    <div class="pane"><div class="n">PANE 5</div><h4>Quality &amp; exceptions</h4><p>Errors by class, duplicate-reply trips, coverage gaps, self-improve corrections. The "what needs a human look" list.</p><div class="src">← handler log · watchdog · circuit breaker</div></div>
+    <div class="pane"><div class="n">PANE 6</div><h4>Controls</h4><p>Run-sync-now, pause/resume a component, re-run coverage check, view a component's last run — manage it, not just watch it.</p><div class="src">← ops admin API (extend)</div></div>
+  </div>
+
+  <div class="foot">CB System Overview · generated for Ali · enterprise.colaberry.ai · <span id="d"></span></div>
+</div>
+<script>document.getElementById('d').textContent=new Date().toISOString().slice(0,10);</script>
+</body>
+</html>

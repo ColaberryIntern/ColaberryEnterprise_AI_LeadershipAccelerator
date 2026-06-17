@@ -59,6 +59,10 @@ services:
       # the host. Accepted per directives/per-user-project-previews.md sign-off.
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/preview-stacks:/var/preview-stacks
+      # CB System Command dashboard reads the host-side dispatcher/handler state
+      # + logs (written by the cron scripts outside the container), read-only.
+      - /opt/colaberry-accelerator/tmp/ops-engine:/app/host-ops-engine:ro
+      - /var/log:/app/host-logs:ro
     expose:
       - "3001"
 

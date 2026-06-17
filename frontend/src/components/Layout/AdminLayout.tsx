@@ -38,6 +38,7 @@ const adminNavSections: NavSection[] = [
   ]},
   { label: 'Intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'rocket-takeoff' },
+    { path: '/admin/cb-system', label: 'CB System', icon: 'robot' },
     { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
     { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
     { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
