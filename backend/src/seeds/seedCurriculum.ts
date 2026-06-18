@@ -112,7 +112,8 @@ async function seed() {
         },
       ],
       materials_json: [
-        { title: 'Claude Code Setup Guide', type: 'reading', url: '' },
+        { title: 'Claude Code 101 (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-code-101' },
+        { title: 'Claude Code in Action (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-code-in-action' },
         { title: '3-Agent Architecture Reference', type: 'reading', url: '' },
         { title: 'Starter Repository (GitHub)', type: 'tool', url: '' },
         { title: 'Agent Prompt Templates', type: 'template', url: '' },

@@ -6158,6 +6158,16 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `npx tsc --noEmit` — no new errors on this file.
   - Notes: Required before Cora shadow test case 7 ("When is the next cohort?") returns a confident date rather than "check the enrollment page." No admin UI exists for cohort creation; seed script is the established pattern (cf. seedCohorts.ts).
 
+- [x] **Week 1 Anthropic Skilljar course links wired into enterprise.colaberry.com portal (BC todo 9984355385).**
+  - Date: 2026-06-18
+  - Session: CC-20260618-4k7q
+  - What changed:
+    - `backend/src/seeds/seedAnthropicContentRegistry.ts` — Added Claude Code 101 (`https://anthropic.skilljar.com/claude-code-101`) as the 5th confirmed Skilljar course; updated header comment to reflect all 5 URLs confirmed. Idempotent upsert on url unique constraint.
+    - `backend/src/seeds/seedCurriculum.ts` — Session 2 (Week 1 lab) materials_json updated: replaced empty "Claude Code Setup Guide" material with the two named Skilljar course entries so future cohort seeds include them from day one.
+    - `backend/src/scripts/wireWeek1AnthropicCourses.ts` (new) — Idempotent operational script that finds all existing `session_number=2` records across all cohorts and prepends the two Anthropic course materials if not already present. Deploy: `docker exec accelerator-backend node dist/scripts/wireWeek1AnthropicCourses.js`
+  - Verification: `npx tsc --noEmit` — exit 0, no new errors. Deploy + SSO confirmation pending (flagged to Ali on BC ticket).
+  - Notes: URL confirmed from BC ticket HTML link in description. SSO not in codebase; flagged to Ali — if Anthropic partner SSO is configured externally, direct link suffices; if not, separate architecture task required.
+
 - [x] **AI Membership landing pages reformatted to Garage Labs editorial design (BC todo 9946499609).**
   - Date: 2026-06-18
   - Session: CC-20260617-9f3a
