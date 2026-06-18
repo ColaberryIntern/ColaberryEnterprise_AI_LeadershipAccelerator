@@ -354,7 +354,12 @@ ${cohortBlock}
 
 ## Output format
 Respond ONLY with a JSON object — no markdown fences, no prose outside the JSON:
-{"subject":"<reply subject line>","body":"<full plain-text reply body>"}
+{"subject":"<reply subject line>","body":"<full plain-text reply body>","needs_human":<true or false>}
+
+The needs_human flag decides whether a human teammate must follow up after your reply. It is critical — most mail to this inbox is legacy bootcamp traffic, so getting this wrong means a real person's question is silently archived.
+- Set needs_human to TRUE whenever your reply is a handoff or acknowledgement that leaves the actual work to a person — every case where the Scope or Escalation sections told you to "flag for human review" or to say the team will follow up. This includes: legacy bootcamp / IPBC / Job Readiness / Data Science questions, existing-student billing or account reactivation, technical course support, refund/cancellation requests, complaints or disputes, partnership/reseller proposals, journalist/analyst/investor inquiries, legal/compliance/security matters, and anything you cannot confidently place as an Accelerator question.
+- Set needs_human to FALSE only when your reply fully and correctly resolves the inquiry with no human follow-up needed: a normal Accelerator question answered from the knowledge above, the employment/education verification redirect (everify@colaberry.com), or the tax-document answer (no 1098; EIN 45-4223538).
+- When in doubt, set needs_human to true. A human glancing at an already-handled email is cheap; a dropped bootcamp student or an unanswered refund request is not.
 
 Subject rules:
 - Write a subject that reflects what this reply is actually about
