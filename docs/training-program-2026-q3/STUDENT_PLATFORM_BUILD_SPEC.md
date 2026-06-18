@@ -358,7 +358,7 @@ Kes (build), Aleem (design), CB (drafts), Swati (curriculum content). Set due da
 2. **Skilljar delivery method** - deep-link vs SSO vs embed vs Partner content (Kes to scope; gates Epic 3).
 3. **Presence at launch?** - realtime "who's online" is the long pole; default is P2 (post-launch). Confirm if it must be in P0.
 4. **Gamification depth at launch** - points+levels in P1, or pull into P0 for day-one engagement?
-5. **Community: native vs interim Skool** - locked NATIVE (all synced); re-confirm given the timeline pressure.
+5. **Community: native vs interim Skool** - **RE-CONFIRMED native (launch-min) 2026-06-18 (Ali, BC#9985688801).** Launch-min = async build-log feed + threaded comments + categories + basic profiles + lite poll-based presence (reuses `Member.presence`); full websocket realtime presence + peer chat stay P2 (BC#9985688722). Interim Skool rejected: it breaks the one-synced-system thesis (build-log→feed, likes→points→readiness, never-leave-platform) and forces a throw-away migration of the 25-student Founding Cohort. Build-capacity sign-off pending from Kes (System Approval).
 
 ---
 
