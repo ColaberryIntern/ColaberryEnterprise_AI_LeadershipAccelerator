@@ -330,4 +330,48 @@ test('conflictGrid: one red marker per conflict on the conflict day', () => {
   assert.strictEqual(g[0].dateISO, ctDateISO(now));
 });
 
+// ---- Relative-date anchoring: "tomorrow" is relative to the email's SEND date,
+//      not the briefing date (regression for the Jun-18 ice-cream/menu-swap bug). ----
+test('parseDayToISO: relative words anchor to the provided reference (send) date', () => {
+  const wed = new Date('2026-06-17T22:22:00Z'); // Wed Jun 17, 5:22 PM CT
+  assert.strictEqual(parseDayToISO('ice cream party tomorrow', wed), '2026-06-18', '"tomorrow" from Wed -> Thu');
+  assert.strictEqual(parseDayToISO('menu switch today', wed), '2026-06-17', '"today" from Wed -> Wed');
+  assert.strictEqual(parseDayToISO('Donuts with Dad this Friday', wed), '2026-06-19', '"this Friday" from Wed -> Fri');
+});
+test('heuristicProcareItems: "tomorrow" in a Wed email is Thu even when the briefing runs Thu', () => {
+  // Reproduces the real bug: a Wed-Jun-17 Office Chat said "tomorrow ... Ice Cream Party";
+  // the briefing ran Thu Jun 18. Correct date is Thu Jun 18 (today), NOT Fri Jun 19.
+  const rows = [{
+    subject: '(New) Office Chat from Liberty Private School',
+    body_text: "Hello Ali,\n\nYou've received a new Office Chat message (re: Creed Muwwakkil): We are also excited to let everyone know that tomorrow we will be having an Ice Cream Party during snack time.",
+    received_at: '2026-06-17T22:22:00Z', // Wed Jun 17, 5:22 PM CT
+  }];
+  const now = new Date('2026-06-18T13:00:00Z'); // Thu Jun 18, 8:00 AM CT (briefing time)
+  const { grid, actions } = heuristicProcareItems(rows, now);
+  assert.ok(grid.some(g => g.dateISO === '2026-06-18'), 'Ice Cream Party lands on Thu Jun 18 (tomorrow-from-Wed)');
+  assert.ok(!grid.some(g => g.dateISO === '2026-06-19'), 'NOT pushed forward to Fri Jun 19');
+  assert.ok(actions.some(a => a.tone === 'urgent'), 'an item dated today is toned urgent');
+});
+test('heuristicProcareItems: "this Friday" in a Wed email still resolves to that Friday', () => {
+  // The sibling case that was already correct must stay correct: Donuts with Dad on Fri.
+  const rows = [{
+    subject: '(New) Office Chat from Liberty Private School',
+    body_text: "Hello Ali,\n\nYou've received a new Office Chat message (re: Creed): Just a reminder that Donuts with Dad is this Friday from 6:30 AM to 9:30 AM.",
+    received_at: '2026-06-17T18:18:00Z', // Wed Jun 17, 1:18 PM CT
+  }];
+  const now = new Date('2026-06-18T13:00:00Z'); // Thu Jun 18
+  const { grid } = heuristicProcareItems(rows, now);
+  assert.ok(grid.some(g => g.dateISO === '2026-06-19'), 'Donuts with Dad stays on Fri Jun 19');
+});
+test('heuristicProcareItems: missing received_at falls back to briefing date (no crash, prior behavior)', () => {
+  // The original test row carries no received_at; "Thursday" must still land on Thu Jun 11.
+  const rows = [{
+    subject: '(New) Office Chat',
+    body_text: "Hello Ali,\n\nYou've received a new Office Chat message (re: Creed): There will be Kona Ice on Thursday for the schoolers.",
+  }];
+  const now = new Date('2026-06-10T17:00:00Z'); // Wed Jun 10
+  const { grid } = heuristicProcareItems(rows, now);
+  assert.ok(grid.some(g => g.dateISO === '2026-06-11'), 'falls back to now-anchored Thursday');
+});
+
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ', all green'}`);
