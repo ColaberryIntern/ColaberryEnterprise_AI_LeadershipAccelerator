@@ -21,6 +21,9 @@ import PilotAITeamPage from '../pages/PilotAITeamPage';
 import PilotExclusivePage from '../pages/PilotExclusivePage';
 import AgencyPartnerPage from '../pages/AgencyPartnerPage';
 import AIWorkforceDesignerPage from '../pages/AIWorkforceDesignerPage';
+import WorkingProfessionalsPage from '../pages/membership/WorkingProfessionalsPage';
+import BeginnersPage from '../pages/membership/BeginnersPage';
+import BuildersPage from '../pages/membership/BuildersPage';
 
 const publicRoutes = (
   <>
@@ -44,6 +47,9 @@ const publicRoutes = (
     <Route path="/pilot/exclusive" element={<PilotExclusivePage />} />
     <Route path="/partners" element={<AgencyPartnerPage />} />
     <Route path="/ai-workforce-designer" element={<AIWorkforceDesignerPage />} />
+    <Route path="/membership/working-professionals" element={<WorkingProfessionalsPage />} />
+    <Route path="/membership/beginners" element={<BeginnersPage />} />
+    <Route path="/membership/builders" element={<BuildersPage />} />
     <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="*" element={<NotFoundPage />} />
   </>
