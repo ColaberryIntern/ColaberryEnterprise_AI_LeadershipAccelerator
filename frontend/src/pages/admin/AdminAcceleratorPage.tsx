@@ -132,9 +132,11 @@ function AdminAcceleratorPage() {
 
   useEffect(() => {
     api.get('/api/admin/cohorts').then((res) => {
-      setCohorts(res.data.cohorts || []);
-      if (res.data.cohorts?.length > 0) {
-        setSelectedCohortId(res.data.cohorts[0].id);
+      // Selector shows only open cohorts; completed/closed ones (e.g. April) remain as data but off the dropdown.
+      const openCohorts: Cohort[] = (res.data.cohorts || []).filter((c: Cohort) => c.status === 'open');
+      setCohorts(openCohorts);
+      if (openCohorts.length > 0) {
+        setSelectedCohortId(openCohorts[0].id);
       }
     }).catch(() => showToast('Failed to load cohorts', 'error'))
       .finally(() => setLoading(false));

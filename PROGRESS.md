@@ -10,6 +10,15 @@ GitHub API integration for Architect Dashboard — OAuth flow, activity sync, we
 
 ---
 
+### Accelerator cohort selector shows only open cohorts (2026-06-17)
+- [x] Filter `/admin/accelerator` cohort dropdown to `status='open'` (hide completed/closed)
+  - Date: 2026-06-17
+  - Session: CC-20260617-9c2e
+  - What changed: `frontend/src/pages/admin/AdminAcceleratorPage.tsx` — the `/api/admin/cohorts` load filters to `status === 'open'` before `setCohorts`, and defaults `selectedCohortId` to the first OPEN cohort (was `cohorts[0]`, which could select a completed cohort no longer in the dropdown). Single-point fix at the fetch; the array feeds only the selector.
+  - Why: only the open cohorts (July 2026 / November 2026) should appear in the selector; completed cohorts (April 2026, 13 real students) stay as data but off the dropdown.
+  - Verification: `npx tsc --noEmit` passes (exit 0) on the identical change in the primary working tree; deployed to prod via nginx image rebuild this session.
+  - Notes: Landed on `main` via an isolated worktree off `origin/main` because the primary working tree was on a stale feature branch (`feature/skilljar-courselink`, 46 behind main) carrying another session's uncommitted files — committed only my own paths per the concurrent-instance rule.
+
 ### Mentor Agent with Human-Review Queue (2026-06-17)
 - [x] Mentor feedback agent — AI-generated submission feedback + confidence-gated human-review queue
   - Date: 2026-06-17
