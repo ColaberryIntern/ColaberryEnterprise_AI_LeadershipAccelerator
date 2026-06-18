@@ -2,8 +2,8 @@
  * Seed the anthropic_content_registry table with the 6 confirmed URLs.
  *
  * Idempotent: upserts on url (unique constraint), so re-running never duplicates rows.
- * The 5th Skilljar course URL (Claude 101 / Intro to Subagents) and the partner portal
- * URL are left as PLACEHOLDER rows and will be updated once the URLs are confirmed.
+ * All 5 Skilljar course URLs confirmed as of 2026-06-18. Partner portal URL remains
+ * a PLACEHOLDER until Anthropic confirms the partner portal URL post 2026-06-12.
  *
  * Run: `npx ts-node backend/src/seeds/seedAnthropicContentRegistry.ts`
  *
@@ -24,7 +24,7 @@ interface SeedRow {
 }
 
 const ROWS: SeedRow[] = [
-  // 4 confirmed partner-required Skilljar courses
+  // 5 confirmed partner-required Skilljar courses
   {
     content_type: 'course',
     title: 'Introduction to Agent Skills',
@@ -44,6 +44,11 @@ const ROWS: SeedRow[] = [
     content_type: 'course',
     title: 'Claude Code in Action',
     url: 'https://anthropic.skilljar.com/claude-code-in-action',
+  },
+  {
+    content_type: 'course',
+    title: 'Claude Code 101',
+    url: 'https://anthropic.skilljar.com/claude-code-101',
   },
   // Public content hubs
   {
