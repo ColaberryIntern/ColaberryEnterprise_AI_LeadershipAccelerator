@@ -10,6 +10,7 @@ import { evaluateHardRules } from './hardRuleEngine';
 import { classifyWithLLM } from './llmClassificationService';
 import { logAuditEvent } from './inboxAuditService';
 import { archiveEmail } from './autoArchiveService';
+import { toPersistableRuleId } from './ruleIdPersistence';
 
 const LOG_PREFIX = '[InboxCOS][StateManager]';
 
@@ -89,13 +90,18 @@ export async function processNewEmails(): Promise<ProcessResult> {
         replyNeeded = llmResult.reply_needed;
       }
 
-      // Step 3: Create classification record
+      // Step 3: Create classification record.
+      // rule_id is a UUID column; hard rules use string ids (e.g. 'cora_0c'),
+      // so persist only a UUID (else null) to avoid a "invalid input syntax for
+      // type uuid" insert failure. The in-memory ruleId below still drives
+      // dispatch, and `reasoning` records which rule matched. (Widen the column
+      // to VARCHAR as the proper follow-up.)
       await InboxClassification.create({
         email_id: email.id,
         state,
         confidence,
         classified_by: classifiedBy,
-        rule_id: ruleId,
+        rule_id: toPersistableRuleId(ruleId),
         reasoning,
         reply_needed: replyNeeded,
         classified_at: new Date(),
