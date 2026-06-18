@@ -6413,3 +6413,14 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   | #1–#15, #17–#36, #38–#42, #44, #46–#47, #49–#56, #58–#69 | Various | OPEN/MERGED | — | ❌ Not yet | — |
 
   **PRs with locally-verified tests: 7 of 15 open PRs tested** — #70, #57, #43, #45, #48, #37, #16
+
+### Wire Week 2 Anthropic Skilljar course — Introduction to Agent Skills (2026-06-18)
+- [x] Wire "Introduction to Agent Skills" Skilljar link into Week 2 session materials
+  - Date: 2026-06-18
+  - Session: CC-20260618-w2sk
+  - What changed:
+    - `backend/src/scripts/wireWeek2AnthropicCourses.ts` (new): Idempotent backfill script — finds all `session_number=3` records across all cohorts and prepends "Introduction to Agent Skills (Anthropic Skilljar)" to `materials_json` if not already present. URL: https://anthropic.skilljar.com/introduction-to-agent-skills.
+    - `backend/src/seeds/seedCurriculum.ts`: Session 3 ("Guided POC Launch") now carries the Skilljar URL in `materials_json` so all future cohort seeds include it from day one.
+    - `seedAnthropicContentRegistry.ts`: no change — "Introduction to Agent Skills" was already registered (confirmed in current file state).
+  - Verification: `npx tsc --noEmit` — pending VPS deploy (same gate as PR #43). Script is structurally identical to `wireWeek1AnthropicCourses.ts` (pattern-validated). SSO confirmation from Anthropic is an open dependency (flagged in PR).
+  - Notes: BC ticket #9984355511. Course confirmed via https://anthropic.skilljar.com/introduction-to-agent-skills. SSO status unconfirmed — link goes live in portal regardless; if SSO is not active participants hit a Skilljar login wall (separate task to resolve with Anthropic partner team). Branch: ops/wire-week2-skilljar-courses.
