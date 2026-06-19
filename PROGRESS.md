@@ -6149,3 +6149,13 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
     - `backend/src/services/inbox/inboxStateManager.ts`: Step 3 insert now uses `rule_id: toPersistableRuleId(ruleId)`. The in-memory `ruleId` still drives `dispatchByState` (so `cora_0c` dispatch works) and `reasoning` records the matched rule, so no information is lost. `cora_0c` was the only offending string id (the other rule_id at hardRuleEngine:263 uses a real UUID).
   - Verification: `tsc --noEmit` clean (backend, exit 0). New unit suite `backend/src/services/inbox/__tests__/ruleIdPersistence.test.ts` — 8 tests (UUID accept incl. uppercase; reject `cora_0c`/empty/null/undefined/non-string; malformed-UUID boundary; UUID passthrough; idempotency). Post-deploy: the ~4 stuck support@ emails self-heal on the next poll (still unclassified, so reprocessed cleanly).
   - Notes: Chosen fix is code-only (Ali's call) — no schema change, no migration, reversible, lowest blast radius. **Follow-up (tracked):** widen `inbox_classifications.rule_id` to `VARCHAR` so it can store semantic rule names properly; then the sanitize guard becomes belt-and-suspenders. Branch `workstream/cora-ruleid-persist` off `origin/main` (post-#42) in an isolated worktree. This is what actually makes Cora — and the #42 out-of-scope routing — functional.
+
+### Wire Week 3 Anthropic Skilljar course — Building with the Claude API (2026-06-19)
+- [x] Wire "Building with the Claude API" Skilljar link into Week 3 session materials
+  - Date: 2026-06-19
+  - Session: CC-20260619-w3sk
+  - What changed:
+    - `backend/src/scripts/wireWeek3AnthropicCourses.ts` (new): Idempotent backfill script — finds all `session_number=4` records across all cohorts and prepends "Building with the Claude API (Anthropic Skilljar)" to `materials_json` if not already present. URL: https://anthropic.skilljar.com/claude-with-the-anthropic-api.
+    - `backend/src/seeds/seedCurriculum.ts`: Session 4 ("Refinement & Executive Positioning") now carries the Skilljar URL in `materials_json` so all future cohort seeds include it from day one.
+  - Verification: `npx tsc --noEmit` — pending (background); script structurally identical to wireWeek1/2AnthropicCourses.ts (pattern-validated). VPS deploy required post-merge.
+  - Notes: BC ticket #9984355649. Course confirmed live at https://anthropic.skilljar.com/claude-with-the-anthropic-api (11 modules, publicly accessible). SSO status unconfirmed — link ships regardless. Branch: ops/wire-week3-skilljar-courses.
