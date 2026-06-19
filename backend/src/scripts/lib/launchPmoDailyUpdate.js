@@ -13,6 +13,7 @@ const fs = require('fs');
 const ops = require('./launchPmoOps');
 const { TEAM, LAUNCH, provisioned, missing, getByPersonId } = require('./launchPmoTeam');
 const { approvalAwaitingDeliverable } = require('./approvalArtifactLink');
+const { computeOverallReadiness } = require('./launchReadiness');
 
 const NURTURE_STATE_PATH = path.resolve(__dirname, '../../../../tmp/launch-pmo-nurture-state.json');
 
@@ -190,12 +191,16 @@ async function pullProjectState() {
   }
   const totalAll = areas.reduce((s, a) => s + a.total, 0);
   const doneAll = areas.reduce((s, a) => s + a.done, 0);
-  const overall = totalAll > 0 ? Math.round((doneAll / totalAll) * 100) : 0;
+  // Headline Overall Readiness: pooled done/total across launch WORKSTREAMS only
+  // (PMO meta-lists excluded). See launchReadiness.js for the semantics, locked
+  // 2026-06-19. totalAll/doneAll stay full-pool raw counts for back-compat.
+  const overallReadiness = computeOverallReadiness(areas);
+  const overall = overallReadiness.pct;
   const totalHuman = areas.reduce((s, a) => s + a.humanCount, 0);
   const totalAi = areas.reduce((s, a) => s + a.aiCount, 0);
   const totalEither = areas.reduce((s, a) => s + a.eitherCount, 0);
   const totalOverdue = areas.reduce((s, a) => s + a.overdue.length, 0);
-  return { areas, totalAll, doneAll, overall, totalHuman, totalAi, totalEither, totalOverdue, daysToLaunch, today };
+  return { areas, totalAll, doneAll, overall, overallReadiness, totalHuman, totalAi, totalEither, totalOverdue, daysToLaunch, today };
 }
 
 // ---------------------------------------------------------------------------
