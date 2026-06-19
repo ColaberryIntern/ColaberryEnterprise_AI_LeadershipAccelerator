@@ -91,6 +91,11 @@ export const env = {
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 
+  // Open House landing/registration page (training.colaberry.com) — destination for the
+  // Accelerator Open House campaign email CTAs. The page is owned by the landing-page work
+  // (BC 9946499609); set the final URL via env once it is live. Default is a placeholder.
+  openHouseLandingUrl: process.env.OPEN_HOUSE_LANDING_URL || 'https://training.colaberry.com/events/open-house',
+
   // Campaign Test Safety
   campaignTestEmailDomain: process.env.CAMPAIGN_TEST_EMAIL_DOMAIN || '@colaberry-test.local',
 };

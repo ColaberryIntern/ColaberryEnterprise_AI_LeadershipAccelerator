@@ -197,7 +197,7 @@ This is the integration map. For each component: existing system or new build, f
 
 ### 3.10 Architect Expo platform
 
-- **Status:** New, but only needed at end of Week 12 — first cohort hits this ~2026-10-02 (12 weeks after 2026-07-10).
+- **Status:** New, but only needed at end of Week 12 — first cohort hits this ~2026-10-16 (12 weeks after 2026-07-10).
 - **Decision:** **Defer entirely to a v1.2 sprint in late September.** Not on the 41-day launch critical path.
 
 ### 3.11 Pricing / enrollment flow
@@ -262,7 +262,7 @@ Today = 2026-05-30 (Friday). Launch = 2026-07-10 (Friday, 6 weeks out).
 | **4** | Jun 28 – Jul 4 | 4 AI Agents (Mentor / Portfolio / Architect / SuccessCoach) shipped; Build Log auto-formatter shipped; Stripe + enrollment shipped; Community MVP shipped; Marketplace v1 shipped | All |
 | **5** | Jul 5 – Jul 10 | End-to-end QA on a test cohort of 3 Colaberry staff; marketing site goes live; first paid enrollment opens; Founding Cohort price ($1,497) launched | All |
 
-**Cohort start date:** Set for **Monday 2026-07-13** (Monday after the Friday launch). 12 weeks × Mon+Thu puts cohort finish around 2026-10-02 (Architect Expo).
+**Cohort start date:** Classes start **Mon 2026-07-27** (orientation Thu 2026-07-23). 12 weeks × Mon+Thu puts cohort finish around 2026-10-16 (Architect Expo).
 
 ---
 
@@ -381,7 +381,7 @@ Note: aggressive uses the $99/mo number from Ali's original pricing, not the $79
 4. **Project Marketplace = read-only at launch** — assignment governance is too messy to ship in 6 weeks.
 5. **Pricing reconciliation:** I used the $79/$149 graduate-membership split from the research's "final recommended" table. Ali's earlier number was $99/mo with Claude bundled. The research explicitly rejected the bundled model. **Confirm.**
 6. **SuccessCoachAgent target rate = 3 updates/week for paying students** (not the 3/day for unpaid interns). Different bar, different population.
-7. **Cohort kickoff Mon 2026-07-13.** First Architect Expo ~2026-10-02.
+7. **Cohort 1 classes start Mon 2026-07-27 (orientation Thu 2026-07-23).** First Architect Expo ~2026-10-16.
 
 ---
 
