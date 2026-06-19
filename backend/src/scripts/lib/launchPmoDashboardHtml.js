@@ -69,9 +69,10 @@ function computeCurriculumReadiness(state) {
   return { pct: Math.round((done / total) * 100), done, total, present: true, hasData: true };
 }
 
-// Generic per-list readiness, used for the Website (training) and Website
-// (enterprise) KPI tiles. Same units and the same divide-by-zero / missing-list
-// guard as computeCurriculumReadiness above; `matcher` is a RegExp tested
+// Generic per-list readiness, used for the Website (training), Website
+// (enterprise) and Marketing KPI tiles. Same units and the same divide-by-zero
+// / missing-list guard as computeCurriculumReadiness above; `matcher` is a
+// RegExp tested
 // against area.listName. Curriculum keeps its own dedicated fn so this change
 // adds no refactor to a tested code path; a follow-up can collapse it onto this
 // helper.
@@ -84,6 +85,28 @@ function computeListReadiness(state, matcher) {
   }
   return { pct: Math.round((done / total) * 100), done, total, present: true, hasData: true };
 }
+
+// Curated set of launch areas surfaced as readiness tiles, in narrative order.
+// Each entry maps a Basecamp todo list (via `matcher` on listName) to a display
+// `label` and a lowercase `noun` (used in the hover title + empty state), so the
+// exec dashboard shows clean names ("Website (training)") instead of raw list
+// names ("Website - training.colaberry.com"). Driven by THIS config rather than
+// state.areas, so a known-but-empty/absent list still renders a "no data" tile,
+// matching the per-tile behavior the Curriculum/Website/Marketing tiles shipped
+// with. The PMO meta-list ("Launch Readiness Dashboard") is intentionally
+// omitted: it is the dashboard's own backlog, not a launch workstream. Add a
+// list here (one line) to surface it.
+const AREA_TILES = [
+  { label: 'Curriculum', noun: 'curriculum', matcher: /^curriculum$/i },
+  { label: 'Website (training)', noun: 'website (training)', matcher: /training\.colaberry/i },
+  { label: 'Website (enterprise)', noun: 'website (enterprise)', matcher: /enterprise\.colaberry/i },
+  { label: 'Marketing', noun: 'marketing', matcher: /^marketing$/i },
+  { label: 'AI Systems', noun: 'AI Systems', matcher: /^ai systems$/i },
+  { label: 'Sales & Admissions', noun: 'sales & admissions', matcher: /sales/i },
+  { label: 'Open Houses & Events', noun: 'open houses & events', matcher: /open house/i },
+  { label: 'TWC Compliance', noun: 'TWC compliance', matcher: /twc/i },
+  { label: 'Student Platform', noun: 'student platform', matcher: /student platform/i },
+];
 
 const ESC_LABEL = {
   REMINDER: 'Reminder', ESCALATE_LEAD: 'Escalate', NOTIFY_ALI: 'Notify Ali', CRITICAL_RISK: 'Critical',
@@ -160,9 +183,19 @@ function buildView(state, extras = {}) {
     targetDate,
     daysToLaunch: state.daysToLaunch,
     overall: state.overall,
+    // Per-area readiness for every curated launch workstream (AREA_TILES),
+    // rendered as the "Launch readiness by area" tile grid. Same units +
+    // divide-by-zero/missing-list guard as the named fields below.
+    areaReadiness: AREA_TILES.map((t) => {
+      const r = computeListReadiness(state, t.matcher);
+      return { label: t.label, noun: t.noun, pct: r.pct, done: r.done, total: r.total, present: r.present, hasData: r.hasData };
+    }),
+    // Named fields retained for back-compat (existing unit tests + any external
+    // consumer). The rendered tiles now come from areaReadiness above.
     curriculum: computeCurriculumReadiness(state),
     websiteTraining: computeListReadiness(state, /training\.colaberry/i),
     websiteEnterprise: computeListReadiness(state, /enterprise\.colaberry/i),
+    marketing: computeListReadiness(state, /marketing/i),
     totalHuman: state.totalHuman,
     totalAi: state.totalAi,
     totalOverdue: state.totalOverdue,
@@ -195,7 +228,8 @@ const CSS = `
   .head .sub{margin-top:6px;font-size:13px;color:var(--muted)}
   .head .meta-block{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);line-height:1.7}
   .head .meta-block .dot{color:var(--green)}
-  .kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:32px;box-shadow:var(--shadow-sm)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:32px;box-shadow:var(--shadow-sm)}
+  .readiness-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm)}
   .kpi{background:var(--surface);padding:22px 24px 20px;display:flex;flex-direction:column;justify-content:space-between;min-height:124px}
   .kpi .label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600}
   .kpi .value{font-size:38px;font-weight:800;color:var(--ink);letter-spacing:-.025em;line-height:1;margin-top:14px}
@@ -258,7 +292,7 @@ const CSS = `
   .blocked-row .b-block strong{color:var(--amber);font-weight:600}
   .footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);line-height:1.7}
   .footer strong{color:var(--ink-2);font-weight:600}
-  @media (max-width:880px){.container{padding:20px 16px 48px}.kpis{grid-template-columns:repeat(2,1fr)}.area-grid{grid-template-columns:1fr}.feasibility-row,.blocked-row{grid-template-columns:1fr;gap:6px}.your-turn{flex-direction:column;align-items:flex-start}}
+  @media (max-width:880px){.container{padding:20px 16px 48px}.kpis,.readiness-grid{grid-template-columns:repeat(2,1fr)}.area-grid{grid-template-columns:1fr}.feasibility-row,.blocked-row{grid-template-columns:1fr;gap:6px}.your-turn{flex-direction:column;align-items:flex-start}}
 `;
 
 // ---------------------------------------------------------------------------
@@ -273,6 +307,11 @@ function renderDashboardHtml(view) {
 <div class="yt-meta"><span><strong>${clean(yt.area)}</strong></span><span>due ${clean(yt.dueLong)}</span><span>${clean(yt.owner)}</span></div>
 </div>${yt.url ? `<a class="yt-cta" href="${htmlEsc(yt.url)}">Open in Basecamp &rarr;</a>` : ''}</div>`
     : `<div class="your-turn"><div class="yt-text"><div class="yt-eyebrow">Your turn</div><div class="yt-task">You are clear. No human action queued for you right now.</div></div></div>`;
+
+  // One readiness tile per curated launch area (AREA_TILES). Same tile markup as
+  // the headline KPIs; "X / Y tasks ready" + progress bar when the list has
+  // todos, "no <area> data" when it is empty or absent.
+  const readinessHtml = view.areaReadiness.map((r) => `<div class="kpi"><div><div class="label">${clean(r.label)} Readiness</div><div class="value">${r.pct}<span class="unit">%</span></div></div>${r.hasData ? `<div class="delta" title="${r.done} of ${r.total} ${clean(r.noun)} tasks complete">${r.done} / ${r.total} tasks ready</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, r.pct))}%"></div></div>` : `<div class="delta">no ${clean(r.noun)} data</div>`}</div>`).join('\n');
 
   const areaHtml = view.areaCards.map((c) => `<div class="area-card tier-${c.tier}">
 <div class="area-row1"><div class="area-name">${clean(c.area)}</div><div class="pill ${c.pillCls}">${clean(c.pillLabel)}</div></div>
@@ -323,14 +362,18 @@ function renderDashboardHtml(view) {
 <div class="kpis">
   <div class="kpi"><div><div class="label">Days to Launch</div><div class="value">${view.daysToLaunch}<span class="unit">d</span></div></div><div class="delta">${view.targetDate ? `target ${htmlEsc(view.targetDate)}` : 'launch window'}</div></div>
   <div class="kpi"><div><div class="label">Overall Readiness</div><div class="value">${view.overall}<span class="unit">%</span></div></div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.overall))}%"></div></div></div>
-  <div class="kpi"><div><div class="label">Curriculum Readiness</div><div class="value">${view.curriculum.pct}<span class="unit">%</span></div></div>${view.curriculum.hasData ? `<div class="delta" title="${view.curriculum.done} of ${view.curriculum.total} curriculum tasks complete">${view.curriculum.done} / ${view.curriculum.total} tasks ready</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.curriculum.pct))}%"></div></div>` : `<div class="delta">no curriculum data</div>`}</div>
-  <div class="kpi"><div><div class="label">Website (training) Readiness</div><div class="value">${view.websiteTraining.pct}<span class="unit">%</span></div></div>${view.websiteTraining.hasData ? `<div class="delta" title="${view.websiteTraining.done} of ${view.websiteTraining.total} website (training) tasks complete">${view.websiteTraining.done} / ${view.websiteTraining.total} tasks ready</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.websiteTraining.pct))}%"></div></div>` : `<div class="delta">no website (training) data</div>`}</div>
-  <div class="kpi"><div><div class="label">Website (enterprise) Readiness</div><div class="value">${view.websiteEnterprise.pct}<span class="unit">%</span></div></div>${view.websiteEnterprise.hasData ? `<div class="delta" title="${view.websiteEnterprise.done} of ${view.websiteEnterprise.total} website (enterprise) tasks complete">${view.websiteEnterprise.done} / ${view.websiteEnterprise.total} tasks ready</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.websiteEnterprise.pct))}%"></div></div>` : `<div class="delta">no website (enterprise) data</div>`}</div>
   <div class="kpi"><div><div class="label">Open · Human / AI</div><div class="value">${view.totalHuman}<span class="unit">/${view.totalAi}</span></div></div><div class="delta">${view.openTotal} open todos &middot; ${view.humanPct}% human</div></div>
   <div class="kpi urgent"><div><div class="label">Overdue</div><div class="value">${view.totalOverdue}</div></div><div class="delta">${view.escalationRows.length} reminders escalating</div></div>
 </div>
 
 ${ytHtml}
+
+<div class="section">
+  <div class="section-head"><h2>Launch readiness by area</h2><div class="meta">${view.areaReadiness.length} areas &middot; % of Basecamp todos complete</div></div>
+  <div class="readiness-grid">
+${readinessHtml}
+  </div>
+</div>
 
 <div class="section">
   <div class="section-head"><h2>Next human step blocking each area</h2><div class="meta">${view.areaCards.length} areas &middot; sorted by urgency</div></div>
