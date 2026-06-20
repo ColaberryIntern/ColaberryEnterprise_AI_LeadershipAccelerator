@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI ROI Pilot — Landing Page Preview</title>
+<style>
+  :root{
+    --bg:#0f1219; --card:#1a1f2e; --line:#2d3748; --text:#e2e8f0; --muted:#a0aec0;
+    --accent:#90cdf4; --green:#68d391; --navy:#1a365d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.55}
+  .editbar{background:#142033;border-bottom:1px solid var(--line);color:var(--accent);font-size:13px;padding:9px 16px;text-align:center}
+  .editbar b{color:#fff}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  .narrow{max-width:820px} .mid{max-width:680px} .tight{max-width:620px}
+  section{padding:64px 0}
+  .alt{background:#111827}
+  h1{font-size:40px;font-weight:800;color:#fff;margin:0 0 14px}
+  h2{font-size:28px;font-weight:800;color:#fff;margin:0 0 8px;text-align:center}
+  .lead{font-size:20px;color:var(--muted);margin:0 0 22px}
+  .center{text-align:center}
+  .hero{position:relative;text-align:center;background:linear-gradient(135deg,#0f1219 0%,#1a2332 50%,#1a365d 100%)}
+  .brand{display:flex;gap:10px;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:22px;margin-bottom:18px}
+  .logo{width:34px;height:34px;border-radius:8px;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:900}
+  .btn{display:inline-block;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:8px;font-size:16px}
+  .btn-primary{background:var(--accent);color:var(--bg);border:none}
+  .btn-ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+  .row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)} .g4{grid-template-columns:repeat(4,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:820px){.g2,.g4,.g3{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px}
+  .card h3{margin:0 0 6px;color:#fff;font-size:17px}
+  .card p,.card .desc{margin:0;color:var(--muted);font-size:14px}
+  .pain{display:flex;gap:14px}.pain .ic{font-size:26px}
+  .week{font-size:13px;font-weight:800;color:var(--accent);margin-bottom:6px}
+  .pricebox{display:inline-block;background:rgba(104,211,145,.08);border:1px solid rgba(104,211,145,.25);border-radius:12px;padding:22px 26px;text-align:center}
+  .pricebox .amt{font-size:34px;font-weight:800;color:var(--green)}
+  .pricebox .amt span{color:var(--text);font-size:18px;font-weight:600;margin-left:8px}
+  .pricebox .fine{color:var(--muted);font-size:13px;margin-top:6px}
+  .proof{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px}
+  .proof p{font-size:17px;color:var(--text)}
+  form .f{margin-bottom:14px}
+  label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
+  input,select,textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:#0e1420;color:var(--text);font-size:15px}
+  .ck{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--muted)}
+  footer{text-align:center;padding:28px 0;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="editbar">PREVIEW &middot; <b>This is a static mirror of the /ai-pilot page.</b> Edit copy or colors here (or just mark it up) and I will port your changes into the React component before deploy.</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap narrow">
+    <div class="brand"><span class="logo">C</span> Colaberry AI</div>
+    <h1>You have the AI ideas. We build the first one that pays for itself.</h1>
+    <p class="lead">A done-with-you AI ROI Pilot for small-business CEOs. Six weeks. One real working system. <b style="color:#fff">$2,500, credited toward whatever we build next.</b></p>
+    <div class="row">
+      <a class="btn btn-primary" href="#start">Start your pilot</a>
+      <a class="btn btn-ghost" href="#how">See how it works</a>
+    </div>
+    <p style="color:var(--muted);font-size:14px;margin-top:16px">Built for owners of 5 to 50 person, operations-heavy companies.</p>
+  </div>
+</section>
+
+<!-- PAIN -->
+<section>
+  <div class="wrap">
+    <h2>If this sounds like you, keep reading</h2>
+    <p class="lead center" style="margin:0 auto 30px;max-width:640px">Most CEOs we work with are not short on ideas. They are short on a low-risk way to prove one.</p>
+    <div class="grid g2">
+      <div class="card pain"><div class="ic">&#128161;</div><div><h3>Ideas, no bandwidth</h3><p>You can see where AI would help, but your team is already maxed out running the business.</p></div></div>
+      <div class="card pain"><div class="ic">&#128184;</div><div><h3>Big quotes scare you off</h3><p>Every agency wants a five-figure retainer before they prove a single dollar of value.</p></div></div>
+      <div class="card pain"><div class="ic">&#9203;</div><div><h3>Stuck on legacy tools</h3><p>You are running on software that has not changed in years, and switching feels impossible.</p></div></div>
+      <div class="card pain"><div class="ic">&#128101;</div><div><h3>Short-staffed</h3><p>You need leverage, not another hire. The work is there; the hands are not.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PILOT -->
+<section class="alt" id="how">
+  <div class="wrap">
+    <h2>The 6-Week AI ROI Pilot</h2>
+    <p class="lead center" style="margin:0 auto 30px;max-width:680px">One flat fee. One real win. We start with the project most likely to return value, so you see what it is like to work with us before any bigger commitment.</p>
+    <div class="grid g4">
+      <div class="card"><div class="week">Week 1</div><h3>Discovery</h3><p>We map your operation and find the one workflow where AI returns the most money or time the fastest.</p></div>
+      <div class="card"><div class="week">Weeks 2-4</div><h3>Build</h3><p>We build a real, working system against that workflow. Not a slide deck. Production software you can use.</p></div>
+      <div class="card"><div class="week">Week 5</div><h3>Measure</h3><p>We put it in front of your team, measure the win against a baseline, and tune it.</p></div>
+      <div class="card"><div class="week">Week 6</div><h3>Roadmap</h3><p>You get a prioritized AI roadmap and a clear, flexible path to scale what works.</p></div>
+    </div>
+    <div class="center" style="margin-top:34px">
+      <div class="pricebox">
+        <div class="amt">$2,500<span>for the full 6-week pilot.</span></div>
+        <div class="fine">100% credited toward your first months if you continue. If we cannot find a worthwhile win, we tell you up front.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROOF -->
+<section>
+  <div class="wrap mid">
+    <h2>This is not theory</h2>
+    <div class="proof" style="margin-top:18px">
+      <p>For a multi-market ground-transportation company, we built a production AI growth and quoting system in three months. It finds and contacts executive prospects across email, phone, and LinkedIn, and it reads inbound booking requests around the clock and prepares priced quotes in seconds against the company's real pricing rules.</p>
+      <p style="color:var(--muted);margin-bottom:0">Same team. Same method. We start small, prove the value, and scale only what works.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CONTINUATION -->
+<section class="alt">
+  <div class="wrap">
+    <h2>After the pilot, you choose how to grow</h2>
+    <p class="lead center" style="margin:0 auto 30px;max-width:680px">No lock-in. We structure the next phase around how your business actually makes money. Pick one, or blend them.</p>
+    <div class="grid g3">
+      <div class="card center"><h3 style="color:var(--accent)">Monthly retainer</h3><p>A predictable monthly fee to keep building and running your systems. Best when you have a backlog of ideas.</p></div>
+      <div class="card center"><h3 style="color:var(--accent)">Revenue share</h3><p>A lower fixed fee plus a share of the revenue the system generates. We win when you win.</p></div>
+      <div class="card center"><h3 style="color:var(--accent)">Pay per outcome</h3><p>A set fee for each result the system produces, like each new booked client. Pure performance.</p></div>
+    </div>
+    <p class="center" style="color:var(--muted);font-style:italic;margin-top:22px">You only scale spend when the system is already producing.</p>
+  </div>
+</section>
+
+<!-- FORM -->
+<section id="start">
+  <div class="wrap tight">
+    <h2>Start your AI ROI Pilot</h2>
+    <p class="lead center" style="margin:0 auto 24px">Tell us a little about your business. We will set up a 20-minute fit call to find your first win.</p>
+    <form class="card" onsubmit="return false">
+      <div class="f"><label>Your name *</label><input type="text" placeholder="Jane Owner" /></div>
+      <div class="f"><label>Work email *</label><input type="email" placeholder="jane@company.com" /></div>
+      <div class="grid g2">
+        <div class="f"><label>Company</label><input type="text" /></div>
+        <div class="f"><label>Team size</label><select><option>Select</option><option>1-10</option><option>11-50</option><option>51-200</option><option>200+</option></select></div>
+      </div>
+      <div class="f"><label>What would you build first?</label><textarea rows="3" placeholder="The workflow, idea, or bottleneck you would point AI at."></textarea></div>
+      <div class="f ck"><input type="checkbox" style="width:auto;margin-top:3px" /> <span>I agree to be contacted by Colaberry about the AI ROI Pilot.</span></div>
+      <button class="btn btn-primary" style="width:100%;cursor:pointer">Request my fit call</button>
+    </form>
+  </div>
+</section>
+
+<footer>&copy; 2026 Colaberry Inc. All rights reserved. &middot; Preview of /ai-pilot</footer>
+</body>
+</html>
