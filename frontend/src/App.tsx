@@ -13,6 +13,7 @@ import UtilityCoopLandingPage from './pages/UtilityCoopLandingPage';
 import UtilityIOULandingPage from './pages/UtilityIOULandingPage';
 import FreightBrokerageLandingPage from './pages/FreightBrokerageLandingPage';
 import AIXceleratorLandingPage from './pages/AIXceleratorLandingPage';
+import AIPilotLandingPage from './pages/AIPilotLandingPage';
 import GlobalCoryWidget from './components/GlobalCoryWidget';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
         <Route path="/iou-demo" element={<UtilityIOULandingPage forcePresenter defaultRole="ceo" />} />
         <Route path="/freight-ai" element={<FreightBrokerageLandingPage />} />
         <Route path="/aixcelerator" element={<AIXceleratorLandingPage />} />
+        <Route path="/ai-pilot" element={<AIPilotLandingPage />} />
         {adminRoutes}
         {portalRoutes}
         {referralRoutes}
