@@ -8,10 +8,11 @@
  * Called during resync AFTER keyword matching, to catch what keywords missed.
  */
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'requirement_verify' });
   return _openai;
 }
 

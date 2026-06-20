@@ -66,6 +66,7 @@ import automatedReportsRoutes from './admin/automatedReportsRoutes';
 import opsRoutes from './admin/opsRoutes';
 import anthropicRoutes from './admin/anthropicRoutes';
 import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
+import trustRoutes from './admin/trustRoutes';
 
 const router = Router();
 
@@ -136,5 +137,6 @@ router.use(automatedReportsRoutes);
 router.use(opsRoutes);
 router.use(anthropicRoutes);
 router.use(qrAnalyticsRoutes);
+router.use(trustRoutes);
 
 export default router;

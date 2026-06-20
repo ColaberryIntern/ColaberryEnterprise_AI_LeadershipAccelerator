@@ -52,6 +52,7 @@ const adminNavSections: NavSection[] = [
     { path: '/admin/content-queue', label: 'Content Queue', icon: 'clipboard2-check' },
   ]},
   { label: 'System', links: [
+    { path: '/admin/trust', label: 'Trust Center', icon: 'shield-lock' },
     { path: '/admin/tickets', label: 'Tickets', icon: 'clipboard-check' },
     { path: '/admin/reports', label: 'Automated Reports', icon: 'envelope-open' },
     { path: '/admin/settings', label: 'Settings', icon: 'gear' },
