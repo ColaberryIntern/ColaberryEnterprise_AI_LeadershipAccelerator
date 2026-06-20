@@ -6142,3 +6142,26 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
     - `backend/src/services/inbox/inboxStateManager.ts`: Step 3 insert now uses `rule_id: toPersistableRuleId(ruleId)`. The in-memory `ruleId` still drives `dispatchByState` (so `cora_0c` dispatch works) and `reasoning` records the matched rule, so no information is lost. `cora_0c` was the only offending string id (the other rule_id at hardRuleEngine:263 uses a real UUID).
   - Verification: `tsc --noEmit` clean (backend, exit 0). New unit suite `backend/src/services/inbox/__tests__/ruleIdPersistence.test.ts` — 8 tests (UUID accept incl. uppercase; reject `cora_0c`/empty/null/undefined/non-string; malformed-UUID boundary; UUID passthrough; idempotency). Post-deploy: the ~4 stuck support@ emails self-heal on the next poll (still unclassified, so reprocessed cleanly).
   - Notes: Chosen fix is code-only (Ali's call) — no schema change, no migration, reversible, lowest blast radius. **Follow-up (tracked):** widen `inbox_classifications.rule_id` to `VARCHAR` so it can store semantic rule names properly; then the sanitize guard becomes belt-and-suspenders. Branch `workstream/cora-ruleid-persist` off `origin/main` (post-#42) in an isolated worktree. This is what actually makes Cora — and the #42 out-of-scope routing — functional.
+
+### AI ROI Pilot — SMB CEO Growth Engine GTM initiative (2026-06-20)
+- [x] **`/ai-pilot` CEO landing page + lead capture**
+  - Date: 2026-06-20
+  - Session: CC-20260620-r7x2
+  - What changed: New standalone landing page `frontend/src/pages/AIPilotLandingPage.tsx` (dark theme, mirrors AlumniChampionPage: SEOHead + initTracker/UTM/campaign capture). Sells the 6-Week AI ROI Pilot ($2,500, credited forward) to owner-led 5-50 person ops-heavy companies, with a flexible retainer/rev-share/per-outcome continuation. Form posts to existing `POST /api/leads` (source `ai-pilot`, form_type `ai_pilot`). Registered standalone route `/ai-pilot` in `frontend/src/App.tsx`.
+  - Verification: Built in an isolated worktree off `origin/main` (branch `workstream/ai-roi-pilot-gtm`). Type-safe state setter + optional-catch + unicode-escaped icons for the strict `react-scripts build`; the nginx multi-stage build (which runs `react-scripts build`) is the authoritative type/build gate at deploy.
+  - Notes: Deploy = `docker compose -f docker-compose.production.yml up -d --build nginx`.
+- [x] **Apollo ICP pull script (ran on prod)**
+  - Date: 2026-06-20
+  - Session: CC-20260620-r7x2
+  - What changed: New `backend/src/scripts/pullAiPilotLeads.js`. Self-contained (needs only `APOLLO_API_KEY`), mirrors apolloService search/enrich/backoff but writes a reviewable JSON+CSV instead of DB import. ICP: CEO/Founder/Owner/President/COO at ~1-50 employee US companies in ops-heavy verticals. DRY-RUN (search only) default; `--enrich` reveals verified emails.
+  - Verification: `node --check` clean on prod (Node 20). Ran live in the `accelerator-backend` container: dry-run returned a ~920k-candidate pool; `--enrich` produced 50 verified-email SMB-CEO leads (CSV saved). Idempotent (dedup by apollo_id).
+- [x] **Cold-email send script + 3-touch sequence copy**
+  - Date: 2026-06-20
+  - Session: CC-20260620-r7x2
+  - What changed: New `backend/src/scripts/sendAiPilotOutreach.js` (plain-text sequence from ali@colaberry.com via Mandrill, reads the reviewed list). Safety rails per doctrine: DRY-RUN default (`--send`), per-email sent-log idempotency, batch cap, em/en-dash guard, CAN-SPAM (refuses live until `ADDRESS` set), throttle, REPLIED skip-list. Copy in `docs/AI_ROI_PILOT_EMAIL_SEQUENCE.md`.
+  - Verification: `node --check` clean on prod. Not yet sent (gated: Ali approves the curated list + confirms mailing address; first send Monday 2026-06-22).
+- [x] **Basecamp plan-ticket script + strategy doc**
+  - Date: 2026-06-20
+  - Session: CC-20260620-r7x2
+  - What changed: New `backend/src/scripts/createAiPilotPlanTicket.js` (creates/reuses BC project "AI ROI Pilot Program" + plan message + sequenced Launch Sprint todolist, all due-dated, assigned to Ali; idempotent; `COMMIT=1` writes). Strategy doc `docs/AI_ROI_PILOT_GTM_STRATEGY.md`.
+  - Verification: `node --check` clean on prod; ran dry-run in `accelerator-backend`. BLOCKED at the Basecamp API by `401 OAuth token expired (rekeyed_identity)` (account-wide token rekey, both env + CCPP) — script is otherwise correct and creates everything in one `COMMIT=1` run once a valid token exists.
