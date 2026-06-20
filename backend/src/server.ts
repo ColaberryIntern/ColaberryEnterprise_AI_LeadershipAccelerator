@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { env } from './config/env';
 import { connectDatabase, sequelize } from './config/database';
 import { errorHandler } from './middlewares/errorHandler';
+import { traceMiddleware } from './middlewares/traceMiddleware';
 import healthRoutes from './routes/healthRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
@@ -37,6 +38,11 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors());
+
+// Trace middleware (TBI audit P1-4): assign/propagate an x-trace-id for every request
+// (including webhooks) and run the request inside an AsyncLocalStorage context so AI events
+// emitted deep in the call chain are correlated to the originating request.
+app.use(traceMiddleware);
 
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);

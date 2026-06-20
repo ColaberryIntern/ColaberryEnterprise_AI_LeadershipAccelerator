@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import { getSetting } from './settingsService';
 import {
@@ -25,7 +26,7 @@ function getClient(): OpenAI {
   if (!openaiClient) {
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = new OpenAI({ apiKey });
+    openaiClient = getInstrumentedOpenAI({ workflow_id: 'maya_chat' }, { apiKey });
   }
   return openaiClient;
 }

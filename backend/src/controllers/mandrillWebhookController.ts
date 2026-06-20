@@ -76,16 +76,23 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
       return;
     }
 
-    // Signature verification — log mismatch but don't block
-    // (Cloudflare/proxy can alter headers, causing false rejections)
+    // Signature verification — REJECT on mismatch when a webhook key is configured.
+    // (Inbound Mandrill events can trigger AI voice calls / automation, so a forged
+    // payload is an action-injection risk — accepting unsigned events is unsafe.)
+    // To avoid false rejections behind a proxy that rewrites Host/URL, set the exact
+    // public URL via MANDRILL_WEBHOOK_URL so the signed-data reconstruction is stable.
     const webhookKey = env.mandrillWebhookKey || '';
     if (webhookKey) {
       const signature = req.headers['x-mandrill-signature'] as string || '';
       const webhookUrl = env.mandrillWebhookUrl || `${req.protocol}://${req.get('host')}${req.originalUrl}`;
       const isValid = verifyMandrillSignature(webhookKey, webhookUrl, req.body, signature);
       if (!isValid) {
-        console.warn(`[MandrillWebhook] Signature mismatch (non-blocking) — url: ${webhookUrl}`);
-        // Continue processing — don't reject. Mandrill webhooks are critical for tracking.
+        console.warn(
+          `[MandrillWebhook] Signature mismatch — rejecting. url: ${webhookUrl}. ` +
+          `If this is a false rejection behind a proxy, set MANDRILL_WEBHOOK_URL to the exact public webhook URL.`
+        );
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
       }
     }
 
