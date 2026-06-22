@@ -21,6 +21,8 @@ const SIGNALS: LiveSignals = {
   toolEvents7d: 5,
   retrievalEvents7d: 8,
   vectorRetrievalEvents7d: 4,
+  valueUsd30d: 1200,
+  hoursSaved30d: 24,
 };
 
 describe('trustRubric', () => {
@@ -89,5 +91,14 @@ describe('trustRubric', () => {
 
   it('returns null for an unknown dimension key (whitelist)', () => {
     expect(evaluateDimension('not-a-dimension', SIGNALS)).toBeNull();
+  });
+
+  it('roi-attribution flips to partial-live once time-saved value exists', () => {
+    const roi = evaluateDimension('businessImpact', SIGNALS)!.criteria.find((c) => c.key === 'roi-attribution')!;
+    expect(roi.status).toBe('partial');
+    expect(roi.source).toBe('live');
+    expect(roi.evidence).toContain('$1200');
+    const none = evaluateDimension('businessImpact', { ...SIGNALS, valueUsd30d: 0 })!.criteria.find((c) => c.key === 'roi-attribution')!;
+    expect(none.status).toBe('open');
   });
 });

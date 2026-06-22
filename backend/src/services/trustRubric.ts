@@ -17,6 +17,7 @@ import { sequelize } from '../config/database';
 import AgentWriteAudit from '../models/AgentWriteAudit';
 import { isKillSwitchActive } from './launchSafety';
 import { isSafeModeActive } from './systemControlService';
+import { MINUTES_SAVED_SQL, valueUsd } from './aiValueService';
 
 export type CriterionStatus = 'met' | 'partial' | 'open';
 export type CriterionSource = 'live' | 'shipped' | 'open';
@@ -69,6 +70,8 @@ export interface LiveSignals {
   toolEvents7d: number;
   retrievalEvents7d: number;
   vectorRetrievalEvents7d: number;
+  valueUsd30d: number;
+  hoursSaved30d: number;
 }
 
 function band(score: number): 'red' | 'amber' | 'green' {
@@ -106,6 +109,8 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     toolEvents7d: 0,
     retrievalEvents7d: 0,
     vectorRetrievalEvents7d: 0,
+    valueUsd30d: 0,
+    hoursSaved30d: 0,
   };
   try {
     const rows = (await sequelize.query(
@@ -122,10 +127,11 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events24h,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'tool.call')::int AS tool7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval')::int AS retrieval7d,
-         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval' AND metadata->>'method' = 'vector')::int AS vec_retrieval7d
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval' AND metadata->>'method' = 'vector')::int AS vec_retrieval7d,
+         COALESCE(SUM(${MINUTES_SAVED_SQL}) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::int AS minutes30d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; minutes30d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -139,6 +145,9 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.toolEvents7d = Number(r.tool7d) || 0;
       s.retrievalEvents7d = Number(r.retrieval7d) || 0;
       s.vectorRetrievalEvents7d = Number(r.vec_retrieval7d) || 0;
+      const mins = Number(r.minutes30d) || 0;
+      s.hoursSaved30d = Math.round((mins / 60) * 10) / 10;
+      s.valueUsd30d = valueUsd(mins);
     }
   } catch (err) {
     logErr('live_signals_ai_events', err);
@@ -269,7 +278,15 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
       status: s.costUsd7d > 0 ? 'met' : 'partial', source: 'live', pct: s.costUsd7d > 0 ? 100 : 50,
       evidence: `AI spend is now measured ($${s.costUsd7d} in the last 7d) — was 0/null everywhere at audit.`,
       remediation: s.costUsd7d > 0 ? undefined : 'Confirm cost emission across call sites (P1-3).' })},
-    { key: 'roi-attribution', label: 'Revenue / time-saved attribution to AI', weight: 3, ev: open('No revenue or time-saved attribution to AI actions.', 'Attribute revenue + time-saved to AI workflows (extend KPISnapshot/OpsMetricsDaily).') },
+    { key: 'roi-attribution', label: 'Revenue / time-saved attribution to AI', weight: 3, ev: (s) => {
+      const has = s.valueUsd30d > 0;
+      // Partial: time-saved attribution is live (a v1 estimate); revenue attribution is still v2.
+      return { status: has ? 'partial' : 'open', source: 'live', pct: has ? 60 : 0,
+        evidence: has
+          ? `Time-saved value is live: ~${s.hoursSaved30d}h ≈ $${s.valueUsd30d} of human time over 30d (v1 estimate). Revenue attribution still pending (v2).`
+          : 'No revenue or time-saved attribution to AI actions.',
+        remediation: 'Tune the time-saved rates + add direct revenue attribution (v2).' };
+    }},
     { key: 'per-workflow-cost', label: 'Per-workflow / per-user cost analytics', weight: 1, ref: 'P3-4', ev: (s) => ({
       status: s.distinctWorkflows7d > 0 ? 'partial' : 'open', source: 'live', pct: s.distinctWorkflows7d > 0 ? 50 : 0,
       evidence: `Cost is grouped by workflow_id (${s.distinctWorkflows7d} workflows seen, 7d); per-user analytics not yet built.`,
