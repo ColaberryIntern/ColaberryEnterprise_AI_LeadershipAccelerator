@@ -157,10 +157,13 @@ function writeSent(obj) { const tmp = SENT_LOG + '.tmp'; fs.writeFileSync(tmp, J
     }
 
     const headers = {
-      'X-MC-Tags': 'ai-pilot-cold', 'X-MC-Subaccount': 'ai-pilot',
+      'X-MC-Tags': 'ai-pilot-cold',
       'List-Unsubscribe': `<mailto:${FROM}?subject=unsubscribe>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     };
+    // Subaccount is opt-in via env and MUST exist in Mandrill, or Mandrill silently
+    // rejects every message. Empty SUBACCOUNT = send from the main account.
+    if (process.env.SUBACCOUNT) headers['X-MC-Subaccount'] = process.env.SUBACCOUNT;
     if (at) headers['X-MC-SendAt'] = at;
     // Idempotency: record intent BEFORE the network call so a crash between accept
     // and log-write cannot duplicate on re-run (favors no-double-send over re-send).
