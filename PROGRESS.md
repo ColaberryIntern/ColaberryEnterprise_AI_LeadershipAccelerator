@@ -6110,6 +6110,15 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `npx tsc --noEmit` clean and `CI=false npm run build` (production CRA build, stricter eslint) succeeded ("build folder is ready to be deployed") in the primary tree on byte-identical files. Visual smoke + Playwright E2E deferred.
   - Notes: Landed on isolated branch `feature/membership-persona-landing` off `origin/main`. The active local branch `feature/skilljar-courselink` is 2 commits ahead of main with an unrelated 72-file backend refactor and an uncommitted preview auth bypass + cloudflared tunnel in its tree — none of that is in this branch. DRAFT COPY: Sohail's text is still "please review" on the BC todo (not signed off); Open House date unset (his earlier copy named 2026-06-21) so the modal copy is generic; pages not yet linked from nav/footer; backend routing of `open_house_*` leads unconfirmed. Membership-vs-$499-intensives business-model pivot approved by Ali in-session. BuildManifest telemetry deferred.
 
+- [x] **Portal session detail page — hooks violation + countdown NaN fix + local dev seed (bug fix on PR #43).**
+  - Date: 2026-06-22
+  - Session: CC-20260622-k7m9
+  - What changed:
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx` — moved all derived-state variables and the `useCountdown` hook call above the two early-return guards (`if (loading)` / `if (!session)`). React's rules of hooks require hooks to always be called in the same order on every render; the previous placement caused "Rendered more hooks than during the previous render" on every session detail page. Also fixed NaN countdown: `start_time` is stored as `"1:00 PM"` (12-hour format) which can't be naively concatenated into an ISO datetime — added an AM/PM → 24-hour converter inline.
+    - `backend/src/seeds/seedLocalDev.ts` (new) — one-shot local dev seed: creates "Cohort - June 2026" + 10 dummy executive enrollments with pre-set `portal_token` UUIDs, `portal_enabled=true`, `payment_status=paid`, `status=active`. Prints direct `/portal/verify?token=` login URLs so local testing bypasses the email flow. Idempotent via `findOrCreate` + email check. Run before first backend start: `npx ts-node backend/src/seeds/seedLocalDev.ts`.
+  - Verification: hooks error gone in local CRA dev server; countdown renders correctly; session detail page loads with Materials section showing Anthropic Skilljar links.
+  - Notes: hooks violation would crash every enrolled student's session detail page click in production. Fix is on PR #43 (`ops/wire-week1-skilljar-courses`) so it ships with the Week 1 course link deploy.
+
 - [x] **Week 1 Anthropic Skilljar course links wired into enterprise.colaberry.com portal (BC todo 9984355385).**
   - Date: 2026-06-18
   - Session: CC-20260618-4k7q
