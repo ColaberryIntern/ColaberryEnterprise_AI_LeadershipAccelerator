@@ -9,20 +9,33 @@ on:
     branches: [main]
 
 jobs:
-  typecheck:
-    name: Typecheck (backend + frontend)
+  backend-typecheck:
+    name: Backend typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Backend tsc --noEmit
-        working-directory: backend
+      # The backend imports some deps that live in the ROOT package.json (e.g. axios, playwright),
+      # so install root deps first, then backend's; tsc resolves across both node_modules.
+      - name: Install deps (root + backend)
         run: |
           npm install --no-audit --no-fund
-          npx tsc --noEmit
-      - name: Frontend tsc --noEmit
+          cd backend && npm install --no-audit --no-fund
+      - name: tsc --noEmit
+        working-directory: backend
+        run: npx tsc --noEmit
+
+  frontend-typecheck:
+    name: Frontend typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: tsc --noEmit
         working-directory: frontend
         run: |
           npm install --no-audit --no-fund
