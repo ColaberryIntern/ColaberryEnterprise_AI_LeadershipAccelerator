@@ -53,6 +53,15 @@ function redactSensitive(text) {
     });
 }
 
+// One trace_id per cron-script process run (P1-4), so all of this run's events correlate together.
+let _traceId = null;
+function processTraceId() {
+  if (_traceId === null) {
+    try { _traceId = require('crypto').randomUUID(); } catch { _traceId = false; }
+  }
+  return _traceId || null;
+}
+
 // Lazy, shared pg pool from DATABASE_URL (the cron scripts already run with DB access).
 let _pool = null;
 function getPool() {
@@ -74,8 +83,8 @@ async function emitAiEvent(ev) {
     await pool.query(
       `INSERT INTO ai_events
          (event_type, outcome, external_system, workflow_id, model,
-          prompt_tokens, completion_tokens, total_tokens, cost_usd, duration_ms, error_class, cache_hit, metadata)
-       VALUES ($1,$2,'openai',$3,$4,$5,$6,$7,$8,$9,$10,false,$11)`,
+          prompt_tokens, completion_tokens, total_tokens, cost_usd, duration_ms, error_class, cache_hit, metadata, trace_id)
+       VALUES ($1,$2,'openai',$3,$4,$5,$6,$7,$8,$9,$10,false,$11,$12)`,
       [
         ev.event_type || 'llm.call',
         ev.outcome || 'success',
@@ -88,6 +97,7 @@ async function emitAiEvent(ev) {
         ev.duration_ms ?? null,
         ev.error_class || null,
         ev.metadata ? JSON.stringify(ev.metadata) : null,
+        ev.trace_id || processTraceId(),
       ]
     );
   } catch {

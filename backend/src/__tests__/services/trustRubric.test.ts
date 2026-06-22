@@ -8,12 +8,16 @@ import {
 
 const SIGNALS: LiveSignals = {
   costUsd7d: 5,
-  distinctWorkflows7d: 12, // 12/15 ≈ 80% coverage
+  distinctWorkflows7d: 12,
   traceCoveragePct: 80,
   events24h: 100,
   blockedWrites24h: 2,
   killSwitchReady: true,
   safeModeReady: true,
+  events7d: 400,
+  p50Ms: 800,
+  p95Ms: 2000,
+  errorRatePct: 2,
 };
 
 describe('trustRubric', () => {
@@ -27,9 +31,18 @@ describe('trustRubric', () => {
 
   it('computes Observability live from the signals', () => {
     const d = evaluateDimension('observability', SIGNALS)!;
-    // unified(2,100)+coverage(3,85 shipped)+cost(1,100)+trace(2,80)+metrics(2,0)+tool(2,0) = 715 ; /12 ≈ 60
-    expect(d.score).toBe(60);
-    expect(d.state).toBe('live'); // cost + trace are live criteria
+    // unified(2,100)+coverage(3,85)+cost(1,100)+trace(2,80)+metrics(2,100)+tool(2,0) = 915 ; /12 ≈ 76
+    expect(d.score).toBe(76);
+    expect(d.state).toBe('live'); // cost + trace + metrics are live criteria
+  });
+
+  it('metrics criterion flips to met once events exist, with live latency evidence', () => {
+    const d = evaluateDimension('observability', SIGNALS)!;
+    const metrics = d.criteria.find((c) => c.key === 'metrics')!;
+    expect(metrics.status).toBe('met');
+    expect(metrics.evidence).toContain('p95 2000ms');
+    const noData = evaluateDimension('observability', { ...SIGNALS, events7d: 0 })!.criteria.find((c) => c.key === 'metrics')!;
+    expect(noData.status).toBe('open');
   });
 
   it('returns all dimensions with criteria', () => {

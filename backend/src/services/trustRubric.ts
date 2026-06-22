@@ -62,6 +62,10 @@ export interface LiveSignals {
   blockedWrites24h: number;
   killSwitchReady: boolean;
   safeModeReady: boolean;
+  events7d: number;
+  p50Ms: number;
+  p95Ms: number;
+  errorRatePct: number;
 }
 
 function band(score: number): 'red' | 'amber' | 'green' {
@@ -92,6 +96,10 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     blockedWrites24h: 0,
     killSwitchReady: false,
     safeModeReady: false,
+    events7d: 0,
+    p50Ms: 0,
+    p95Ms: 0,
+    errorRatePct: 0,
   };
   try {
     const rows = (await sequelize.query(
@@ -100,16 +108,25 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
          COUNT(DISTINCT workflow_id) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND workflow_id IS NOT NULL)::int AS workflows7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS total7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND trace_id IS NOT NULL)::int AS traced7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND outcome = 'failure')::int AS failures7d,
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)
+           FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND duration_ms IS NOT NULL) AS p50,
+         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms)
+           FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND duration_ms IS NOT NULL) AS p95,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events24h
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; events24h: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
       s.distinctWorkflows7d = Number(r.workflows7d) || 0;
       s.events24h = Number(r.events24h) || 0;
+      s.events7d = Number(r.total7d) || 0;
       s.traceCoveragePct = r.total7d > 0 ? Math.round((Number(r.traced7d) / Number(r.total7d)) * 100) : 0;
+      s.errorRatePct = r.total7d > 0 ? Math.round((Number(r.failures7d) / Number(r.total7d)) * 100) : 0;
+      s.p50Ms = Math.round(Number(r.p50) || 0);
+      s.p95Ms = Math.round(Number(r.p95) || 0);
     }
   } catch (err) {
     logErr('live_signals_ai_events', err);
@@ -177,7 +194,14 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
       status: s.traceCoveragePct >= 70 ? 'met' : s.traceCoveragePct >= 30 ? 'partial' : 'open', source: 'live', pct: s.traceCoveragePct,
       evidence: `${s.traceCoveragePct}% of events in the last 7d carry a trace_id (x-trace-id middleware, PR #50).`,
       remediation: s.traceCoveragePct >= 70 ? undefined : 'Propagate trace_id through job payloads + background paths (P1-4).' })},
-    { key: 'metrics', label: 'Metrics backend (p50/p95, error-rate)', weight: 2, ref: 'P1-5', ev: open('No derived latency/error-rate views or alerting.', 'Add p50/p95 + error-rate views over ai_events; optional OpenTelemetry/Langfuse (P1-5).') },
+    { key: 'metrics', label: 'Latency + error-rate metrics', weight: 2, ref: 'P1-5', ev: (s) => {
+      const has = s.events7d > 0;
+      return { status: has ? 'met' : 'open', source: 'live', pct: has ? 100 : 0,
+        evidence: has
+          ? `Live over ai_events (7d): p50 ${s.p50Ms}ms · p95 ${s.p95Ms}ms · error-rate ${s.errorRatePct}% across ${s.events7d} events.`
+          : 'No events in the last 7d to derive latency/error-rate.',
+        remediation: has ? undefined : 'Accumulate ai_events; p50/p95 + error-rate then compute automatically (P1-5).' };
+    }},
     { key: 'tool-retrieval', label: 'Tool-call + retrieval/citation capture', weight: 2, ref: 'P1-6', ev: open('Tool-call args/outcomes and retrieval citations not persisted.', 'Persist tool-call events + retrieved doc IDs/citations on the answer event (P1-6).') },
   ]},
   governance: { label: 'Governance', criteria: [
