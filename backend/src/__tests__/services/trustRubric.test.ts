@@ -27,9 +27,9 @@ describe('trustRubric', () => {
 
   it('computes Observability live from the signals', () => {
     const d = evaluateDimension('observability', SIGNALS)!;
-    // unified(2,100)+coverage(3,80)+cost(1,100)+trace(2,80)+metrics(2,0)+tool(2,0) = 700 ; /12 ≈ 58
-    expect(d.score).toBe(58);
-    expect(d.state).toBe('live');
+    // unified(2,100)+coverage(3,85 shipped)+cost(1,100)+trace(2,80)+metrics(2,0)+tool(2,0) = 715 ; /12 ≈ 60
+    expect(d.score).toBe(60);
+    expect(d.state).toBe('live'); // cost + trace are live criteria
   });
 
   it('returns all dimensions with criteria', () => {
