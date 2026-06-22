@@ -67,6 +67,8 @@ interface OpenAction {
 }
 interface CostRow { workflowId: string; calls: number; costUsd: number; totalTokens: number; }
 interface CostBreakdown { windowDays: number; totalUsd: number; rows: CostRow[]; }
+interface ValueRow { workflowId: string; events: number; minutes: number; valueUsd: number; }
+interface AiValue { windowDays: number; hourlyRateUsd: number; hoursSaved: number; valueUsd: number; costUsd: number; netUsd: number; roiMultiple: number | null; estimate: boolean; rows: ValueRow[]; }
 
 function barClass(score: number): string {
   if (score >= 80) return 'bg-success';
@@ -140,10 +142,11 @@ function Tile({ label, value, state, onClick }: { label: string; value: React.Re
   );
 }
 
-function DetailDrawer({ kind, detail, cost, loading, onClose, onOpenDimension }: {
-  kind: 'dimension' | 'cost' | null;
+function DetailDrawer({ kind, detail, cost, value, loading, onClose, onOpenDimension }: {
+  kind: 'dimension' | 'cost' | 'value' | null;
   detail: DimensionDetail | null;
   cost: CostBreakdown | null;
+  value: AiValue | null;
   loading: boolean;
   onClose: () => void;
   onOpenDimension: (key: string) => void;
@@ -156,7 +159,7 @@ function DetailDrawer({ kind, detail, cost, loading, onClose, onOpenDimension }:
         style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: 'min(480px, 94vw)', zIndex: 1046, overflowY: 'auto', borderRadius: 0 }}>
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-start mb-3">
-            <h2 className="h5 mb-0">{kind === 'cost' ? 'AI cost by workflow · 30 days' : detail ? `${detail.label} · breakdown` : 'Detail'}</h2>
+            <h2 className="h5 mb-0">{kind === 'cost' ? 'AI cost by workflow · 30 days' : kind === 'value' ? 'AI value by workflow · 30 days' : detail ? `${detail.label} · breakdown` : 'Detail'}</h2>
             <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
           </div>
 
@@ -205,6 +208,31 @@ function DetailDrawer({ kind, detail, cost, loading, onClose, onOpenDimension }:
             </>
           )}
 
+          {!loading && kind === 'value' && value && (
+            <>
+              <div className="row g-2 mb-2">
+                <div className="col"><div className="border rounded p-2"><div className="fs-5 fw-bold text-success">${value.valueUsd.toLocaleString()}</div><div className="small text-muted">value · {value.windowDays}d</div></div></div>
+                <div className="col"><div className="border rounded p-2"><div className="fs-5 fw-bold">{value.hoursSaved.toLocaleString()}h</div><div className="small text-muted">time saved</div></div></div>
+                <div className="col"><div className="border rounded p-2"><div className="fs-5 fw-bold text-primary">{value.roiMultiple === null ? '—' : value.roiMultiple + '×'}</div><div className="small text-muted">ROI vs ${value.costUsd}</div></div></div>
+              </div>
+              <p className="text-muted small">v1 estimate at ${value.hourlyRateUsd}/hr blended; minutes-saved per AI action (LLM call / tool / retrieval). Time-saved, not revenue.</p>
+              <table className="table table-sm small align-middle">
+                <thead><tr><th>Workflow</th><th className="text-end">Events</th><th className="text-end">Hours</th><th className="text-end">Value</th></tr></thead>
+                <tbody>
+                  {value.rows.length === 0 && <tr><td colSpan={4} className="text-muted">No events yet — value accrues as AI runs.</td></tr>}
+                  {value.rows.map((r) => (
+                    <tr key={r.workflowId}>
+                      <td>{r.workflowId}</td>
+                      <td className="text-end">{r.events}</td>
+                      <td className="text-end">{(r.minutes / 60).toFixed(1)}</td>
+                      <td className="text-end">${r.valueUsd.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
           {kind === 'dimension' && detail && (
             <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={() => onOpenDimension(detail.key)}>Refresh</button>
           )}
@@ -225,11 +253,12 @@ function AdminTrustCenterPage() {
   const [governance, setGovernance] = useState<Governance | null>(null);
   const [observability, setObservability] = useState<Observability | null>(null);
   const [actions, setActions] = useState<OpenAction[]>([]);
+  const [value, setValue] = useState<AiValue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Drill-down drawer state
-  const [drawerKind, setDrawerKind] = useState<'dimension' | 'cost' | null>(null);
+  const [drawerKind, setDrawerKind] = useState<'dimension' | 'cost' | 'value' | null>(null);
   const [detail, setDetail] = useState<DimensionDetail | null>(null);
   const [cost, setCost] = useState<CostBreakdown | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
@@ -238,12 +267,13 @@ function AdminTrustCenterPage() {
     let active = true;
     const load = async () => {
       try {
-        const [o, a, g, ob, ac] = await Promise.all([
+        const [o, a, g, ob, ac, val] = await Promise.all([
           api.get<Overview>('/api/admin/trust/overview'),
           api.get<Activity>('/api/admin/trust/activity'),
           api.get<Governance>('/api/admin/trust/governance'),
           api.get<Observability>('/api/admin/trust/observability'),
           api.get<{ actions: OpenAction[] }>('/api/admin/trust/actions'),
+          api.get<AiValue>('/api/admin/trust/value'),
         ]);
         if (!active) return;
         setOverview(o.data);
@@ -251,6 +281,7 @@ function AdminTrustCenterPage() {
         setGovernance(g.data);
         setObservability(ob.data);
         setActions(ac.data.actions || []);
+        setValue(val.data);
         setError(null);
       } catch {
         if (active) setError('Could not load trust metrics.');
@@ -290,6 +321,9 @@ function AdminTrustCenterPage() {
       setDrawerLoading(false);
     }
   };
+
+  // value is already loaded on mount; opening the drawer just shows its by-workflow breakdown.
+  const openValue = () => setDrawerKind('value');
 
   const closeDrawer = () => setDrawerKind(null);
 
@@ -364,12 +398,13 @@ function AdminTrustCenterPage() {
 
       {/* Row: live activity tiles */}
       {activity && (
-        <div className="row row-cols-2 row-cols-md-5 g-3 mb-3">
+        <div className="row row-cols-2 row-cols-md-6 g-3 mb-3">
           <Tile label="Conversations 24h" value={activity.conversations24h.value} state={activity.conversations24h.state} />
           <Tile label="Generations 24h" value={activity.generations24h.value} state={activity.generations24h.state} />
           <Tile label="Agent runs 24h" value={activity.agentRuns24h.value} state={activity.agentRuns24h.state} />
           <Tile label="Errors 24h" value={activity.errors24h.value} state={activity.errors24h.state} />
           <Tile label="AI cost 24h" value={activity.costUsd24h.value === null ? '—' : `$${activity.costUsd24h.value}`} state={activity.costUsd24h.state} onClick={openCost} />
+          <Tile label="AI value 30d" value={value ? `$${value.valueUsd.toLocaleString()}` : '—'} state="live" onClick={value ? openValue : undefined} />
         </div>
       )}
 
@@ -445,6 +480,7 @@ function AdminTrustCenterPage() {
         kind={drawerKind}
         detail={detail}
         cost={cost}
+        value={value}
         loading={drawerLoading}
         onClose={closeDrawer}
         onOpenDimension={openDimension}

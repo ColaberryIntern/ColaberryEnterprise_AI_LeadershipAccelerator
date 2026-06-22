@@ -12,6 +12,7 @@ import {
   handleGetDimension,
   handleGetActions,
   handleGetCostBreakdown,
+  handleGetValue,
 } from '../../controllers/trustController';
 
 const router = Router();
@@ -22,6 +23,7 @@ router.get('/api/admin/trust/governance', requireAdmin, handleGetGovernance);
 router.get('/api/admin/trust/observability', requireAdmin, handleGetObservability);
 router.get('/api/admin/trust/actions', requireAdmin, handleGetActions);
 router.get('/api/admin/trust/cost-breakdown', requireAdmin, handleGetCostBreakdown);
+router.get('/api/admin/trust/value', requireAdmin, handleGetValue);
 router.get('/api/admin/trust/dimension/:key', requireAdmin, handleGetDimension);
 
 export default router;

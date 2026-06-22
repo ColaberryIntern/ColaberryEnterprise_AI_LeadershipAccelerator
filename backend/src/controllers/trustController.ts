@@ -12,6 +12,7 @@ import {
   getTrustActions,
   getCostBreakdown,
 } from '../services/trustMetricsService';
+import { getAiValue } from '../services/aiValueService';
 
 function fail(res: Response, event: string, err: unknown): void {
   const errorClass = err instanceof Error ? err.constructor.name : 'UnknownError';
@@ -87,5 +88,13 @@ export async function handleGetCostBreakdown(_req: Request, res: Response): Prom
     res.json(await getCostBreakdown());
   } catch (err) {
     fail(res, 'trust_cost_breakdown', err);
+  }
+}
+
+export async function handleGetValue(_req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getAiValue());
+  } catch (err) {
+    fail(res, 'trust_value', err);
   }
 }
