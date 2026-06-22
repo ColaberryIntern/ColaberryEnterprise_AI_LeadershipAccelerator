@@ -61,7 +61,7 @@ const VARIANTS: Record<string, Variant> = {
       'Auto-follow-up on open bids so none go cold.',
       'Turn plan sets and emails into structured job info in seconds.',
     ],
-    proof: 'For a multi-market operations business we built a production AI system in three months that reads inbound requests around the clock and prepares priced quotes in seconds against the company real pricing rules, while finding and contacting new prospects across email and phone.',
+    proof: 'For a transportation company we built a production AI system in three months that prices inbound requests in seconds against their real rate rules and chases prospects across email and phone. For a construction or trades business the same engine would draft first-pass estimates from inbound RFQs and keep open bids from going cold.',
   },
   care: {
     slug: 'ai-pilot-care',
@@ -81,7 +81,7 @@ const VARIANTS: Record<string, Variant> = {
       'Answer the repetitive benefit, hours, and availability questions so staff focus on care.',
       'Make sure no inquiry or referral slips through.',
     ],
-    proof: 'For a service business that lives on inbound requests we built a production AI system in three months that reads incoming messages around the clock and prepares accurate, ready-to-send responses in seconds. The goal is to make your team faster, not to replace them. Your people still own every conversation.',
+    proof: 'For a transportation company we built a production AI system in three months that handles inbound requests around the clock and prepares accurate, ready-to-send responses in seconds. For a clinic or care provider the same engine would handle intake and scheduling so your team stays on care, not the phones. The goal is to make your team faster, not to replace them; your people still own every conversation.',
   },
 };
 

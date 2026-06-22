@@ -1,31 +1,29 @@
 // sendAiPilotOutreach.js — send the AI ROI Pilot 7-email cold campaign (plain text)
-// from ali@colaberry.com via Mandrill. Reads the reviewed list from
-// pullAiPilotLeads.js. Copy: docs/AI_ROI_PILOT_EMAIL_SEQUENCE.md.
+// from ali@colaberry.com via Mandrill. Reads the reviewed list from the finalized
+// leads file. Copy: docs/AI_ROI_PILOT_EMAIL_SEQUENCE.md.
 //
-// Batch of 100, STAGGERED across the business day via Mandrill scheduled sends
-// (X-MC-SendAt) so it never looks like a blast and protects deliverability:
-// all 100 are submitted quickly, each with its own delivery time spread across
-// the window. Touches 2-7 are sent on later runs (TOUCH=2..7); anyone who has
-// replied (ai-pilot-replied.json) is skipped.
+// Batch staggered across the business day via Mandrill scheduled sends
+// (X-MC-SendAt) so it never looks like a blast. Touches 2-7 on later runs.
 //
-// Hard safety rails (CLAUDE.md doctrine):
-//   - DRY-RUN by default (prints recipients + scheduled times). Pass --send to send.
-//   - Idempotent: per-email per-touch sent-log prevents re-sending the same touch.
-//   - Cap (LIMIT, default 100). Em/en-dash guard. CAN-SPAM (refuses live until ADDRESS set).
-//   - Touch N>1 only sends to addresses that already received touch 1.
+// LIABILITY CONTROLS (added after the pre-launch audit):
+//   - OPT-OUT / SUPPRESSION: skips anyone in ai-pilot-replied.json OR
+//     ai-pilot-suppression.json (opt-outs + bounces + complaints). Those files are
+//     refreshed before every touch by the mandatory inbox sweep (see the email
+//     sequence doc). The cold sender NEVER emails a suppressed address.
+//   - CAN-SPAM: refuses to send live unless ADDRESS is a real postal address (has a
+//     number); footer carries the address + opt-out; adds List-Unsubscribe headers.
+//   - Non-deceptive subjects (no fabricated "re:").
+//   - IDEMPOTENCY: the sent-log entry is written BEFORE the network send (atomic
+//     temp+rename) and rolled back only on a clean failure, so a crash can never
+//     re-send the same touch. Em/en-dash guard. DRY-RUN by default.
 //
-// Env: MANDRILL_API_KEY, ADDRESS (mailing address), TOUCH (1..7, default 1),
-//   LIMIT (default 100), SEND_DATE (YYYY-MM-DD; enables staggered scheduling),
-//   START_CT/END_CT (window hours CT, default 9/17), CT_OFFSET (default 5 = CDT),
-//   CALENDAR_LINK (for touch 6), LEADS_FILE, OUT_DIR (default ./tmp).
+// Env: MANDRILL_API_KEY, ADDRESS, TOUCH (1..7, default 1), LIMIT (default 100),
+//   SEND_DATE (YYYY-MM-DD; enables staggered scheduling), START_CT/END_CT (9/17),
+//   CT_OFFSET (5 = CDT), CALENDAR_LINK (touch 6), LEADS_FILE, OUT_DIR (./tmp).
 
 const fs = require('fs');
 const path = require('path');
-
-function req(name) {
-  try { return require(name); }
-  catch { return require(path.resolve(__dirname, '../../node_modules/' + name)); }
-}
+function req(name) { try { return require(name); } catch { return require(path.resolve(__dirname, '../../node_modules/' + name)); } }
 const nodemailer = req('nodemailer');
 
 const SEND = process.argv.includes('--send');
@@ -36,9 +34,9 @@ const FROM = 'ali@colaberry.com';
 const ADDRESS = process.env.ADDRESS || '';
 const CALENDAR_LINK = process.env.CALENDAR_LINK || '';
 const SENT_LOG = path.join(OUT_DIR, 'ai-pilot-sent.json');
-const REPLIED_FILE = path.join(OUT_DIR, 'ai-pilot-replied.json');
+const REPLIED_FILE = path.join(OUT_DIR, 'ai-pilot-replied.json');       // anyone who replied (incl. opt-outs)
+const SUPPRESS_FILE = path.join(OUT_DIR, 'ai-pilot-suppression.json');  // opt-outs + bounces + complaints
 
-// Staggered scheduling window (Central Time -> UTC via CT_OFFSET; June = CDT = UTC-5).
 const SEND_DATE = process.env.SEND_DATE || '';
 const START_CT = parseInt(process.env.START_CT || '9', 10);
 const END_CT = parseInt(process.env.END_CT || '17', 10);
@@ -52,7 +50,7 @@ const TEMPLATES = {
     'I run a small team that builds AI systems for owner-led companies, and {{company}} is exactly the kind of business we tend to help most.', '',
     'Most CEOs I talk to are not short on AI ideas. They are short on a low-risk way to prove one. So we do a 6-week AI ROI Pilot: $2,500 flat, and we build one real working system against the workflow most likely to return time or money for you. If you continue after that, the $2,500 is credited forward.', '',
     'Worth a 20-minute call to find your first win?'].join('\n') },
-  '2': { subject: 're: a quick AI idea for {{company}}', body: [
+  '2': { subject: 'one more AI idea for {{company}}', body: [
     'Hi {{first_name}},', '',
     'Quick proof this is real and not a pitch. For one transportation company we built a system that finds and contacts prospects across email and phone, and reads inbound requests around the clock to prepare priced quotes in seconds. Production software, in about three months.', '',
     'The same method would look different for {{company}}, which is the whole point of starting with a small pilot.', '',
@@ -82,21 +80,17 @@ const TEMPLATES = {
     'Either way, thanks for the time.'].join('\n') },
 };
 
-function firstName(row) {
-  if (row.first_name) return row.first_name.trim();
-  return (row.name || 'there').trim().split(/\s+/)[0];
-}
+function firstName(row) { return (row.first_name || (row.name || 'there').trim().split(/\s+/)[0]).trim(); }
 function render(tpl, row) {
   const fn = firstName(row);
   const co = (row.company || 'your company').trim();
   const calLine = CALENDAR_LINK ? `Grab whatever time works here: ${CALENDAR_LINK}\n\n` : '';
   const fill = (s) => s.replace(/\{\{first_name\}\}/g, fn).replace(/\{\{company\}\}/g, co).replace(/\{\{calendar_line\}\}/g, calLine);
-  const footer = `\n\nColaberry Inc. | Reply STOP or "unsubscribe" and I will remove you immediately.\n${ADDRESS || '[mailing address to be confirmed before send]'}`;
+  const footer = `\n\nColaberry Inc. | You can opt out any time: reply STOP or "unsubscribe" and you are removed immediately.\n${ADDRESS || '[mailing address to be confirmed before send]'}`;
   return { sub: fill(tpl.subject), body: fill(tpl.body) + SIGNATURE + footer };
 }
-function hasDash(s) { return /[—–]/.test(s); } // em / en dash
+function hasDash(s) { return /[—–]/.test(s); }
 
-// Mandrill scheduled-send time (UTC "YYYY-MM-DD HH:MM:SS") for the i-th of n, spread across the CT window.
 function sendAtFor(i, n) {
   if (!SEND_DATE) return null;
   const [y, m, d] = SEND_DATE.split('-').map(Number);
@@ -107,46 +101,44 @@ function sendAtFor(i, n) {
   const p = (x) => String(x).padStart(2, '0');
   return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())} ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}:${p(t.getUTCSeconds())}`;
 }
-
 function newestLeadsFile() {
   if (process.env.LEADS_FILE) return process.env.LEADS_FILE;
   if (!fs.existsSync(OUT_DIR)) return null;
-  const files = fs.readdirSync(OUT_DIR).filter((f) => /^ai-pilot-leads-.*\.json$/.test(f)).sort();
+  const files = fs.readdirSync(OUT_DIR).filter((f) => /^ai-pilot-(leads|final)-.*\.json$/.test(f)).sort();
   return files.length ? path.join(OUT_DIR, files[files.length - 1]) : null;
 }
 function loadJson(p, fallback) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fallback; } }
+function writeSent(obj) { const tmp = SENT_LOG + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(obj, null, 2)); fs.renameSync(tmp, SENT_LOG); } // atomic
 
 (async () => {
-  console.log(`MODE: ${SEND ? 'SEND (live)' : 'DRY-RUN (no email sent)'} | touch ${TOUCH} | cap ${LIMIT} | ${SEND_DATE ? `staggered ${SEND_DATE} ${START_CT}:00-${END_CT}:00 CT` : 'no schedule (immediate)'}`);
+  console.log(`MODE: ${SEND ? 'SEND (live)' : 'DRY-RUN (no email sent)'} | touch ${TOUCH} | cap ${LIMIT} | ${SEND_DATE ? `staggered ${SEND_DATE} ${START_CT}:00-${END_CT}:00 CT` : 'immediate'}`);
   const tpl = TEMPLATES[TOUCH];
   if (!tpl) { console.error(`FAILED: unknown TOUCH=${TOUCH} (use 1..7).`); process.exit(1); }
   if (TOUCH === '6' && !CALENDAR_LINK) console.warn('[warn] touch 6 with no CALENDAR_LINK — the calendar line is dropped.');
 
   const leadsFile = newestLeadsFile();
-  if (!leadsFile || !fs.existsSync(leadsFile)) { console.error('FAILED: no leads file. Run pullAiPilotLeads.js --enrich first.'); process.exit(1); }
+  if (!leadsFile || !fs.existsSync(leadsFile)) { console.error('FAILED: no leads file. Run the Apollo pull/finalizer first.'); process.exit(1); }
   const leads = loadJson(leadsFile, []).filter((r) => r.email && /@/.test(r.email));
   console.log(`[leads] ${leads.length} with email from ${leadsFile}`);
 
   const sent = loadJson(SENT_LOG, {});
-  const replied = new Set((loadJson(REPLIED_FILE, [])).map((e) => String(e).toLowerCase()));
+  // Suppression = everyone who replied/opted-out + everyone bounced/complained.
+  const optedOut = new Set([...loadJson(REPLIED_FILE, []), ...loadJson(SUPPRESS_FILE, [])].map((e) => String(e).toLowerCase()));
+  console.log(`[suppression] ${optedOut.size} addresses on the opt-out/bounce list (will be skipped)`);
 
   if (SEND) {
     if (!process.env.MANDRILL_API_KEY) { console.error('FAILED: MANDRILL_API_KEY not set.'); process.exit(1); }
-    if (!ADDRESS) { console.error('FAILED: set ADDRESS env to a real mailing address (CAN-SPAM) before live send.'); process.exit(1); }
+    if (!ADDRESS || !/\d/.test(ADDRESS)) { console.error('FAILED: set ADDRESS to a real physical mailing address (must contain a street/PO number) for CAN-SPAM.'); process.exit(1); }
   }
-  const transporter = SEND ? nodemailer.createTransport({
-    host: 'smtp.mandrillapp.com', port: 587, secure: false,
-    auth: { user: 'apikey', pass: process.env.MANDRILL_API_KEY },
-  }) : null;
+  const transporter = SEND ? nodemailer.createTransport({ host: 'smtp.mandrillapp.com', port: 587, secure: false, auth: { user: 'apikey', pass: process.env.MANDRILL_API_KEY } }) : null;
 
-  // Pre-select eligible recipients (so stagger denominator matches the real batch size).
   const eligible = [];
   for (const row of leads) {
     if (eligible.length >= LIMIT) break;
     const email = row.email.trim().toLowerCase();
-    if (replied.has(email)) continue;
-    if (sent[email] && sent[email][TOUCH]) continue;
-    if (TOUCH !== '1' && !(sent[email] && sent[email]['1'])) continue;
+    if (optedOut.has(email)) continue;                                   // opted out or bounced -> never send
+    if (sent[email] && sent[email][TOUCH]) continue;                     // already got this touch
+    if (TOUCH !== '1' && !(sent[email] && sent[email]['1'])) continue;   // never send a follow-up to someone who never got touch 1
     eligible.push({ row, email });
   }
   console.log(`[eligible] ${eligible.length} recipients for touch ${TOUCH}`);
@@ -163,21 +155,29 @@ function loadJson(p, fallback) { try { return JSON.parse(fs.readFileSync(p, 'utf
       else console.log(`[would send] ${email} | ${sub}${at ? ' | ' + at + ' UTC' : ''}`);
       continue;
     }
+
+    const headers = {
+      'X-MC-Tags': 'ai-pilot-cold', 'X-MC-Subaccount': 'ai-pilot',
+      'List-Unsubscribe': `<mailto:${FROM}?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    };
+    if (at) headers['X-MC-SendAt'] = at;
+    // Idempotency: record intent BEFORE the network call so a crash between accept
+    // and log-write cannot duplicate on re-run (favors no-double-send over re-send).
+    sent[email] = sent[email] || {};
+    sent[email][TOUCH] = new Date().toISOString();
+    writeSent(sent);
     try {
-      const headers = { 'X-MC-Tags': 'ai-pilot-cold', 'X-MC-Subaccount': 'ai-pilot' };
-      if (at) headers['X-MC-SendAt'] = at;
       await transporter.sendMail({ from: `"Ali Muwwakkil" <${FROM}>`, to: row.email, subject: sub, text: body, headers });
-      sent[email] = sent[email] || {};
-      sent[email][TOUCH] = new Date().toISOString();
-      fs.writeFileSync(SENT_LOG, JSON.stringify(sent, null, 2));
       console.log(`[queued] ${email} | ${sub}${at ? ' | deliver ' + at + ' UTC' : ''}`);
       done++;
       await new Promise((r) => setTimeout(r, 300));
     } catch (err) {
+      delete sent[email][TOUCH]; writeSent(sent);                        // clean failure -> roll back so a retry can resend
       console.error(`[error] ${email}: ${err.message}`);
     }
   }
 
-  console.log(`\nDONE. ${SEND ? `queued=${done}` : `would_send=${eligible.length - blocked}`} dash_blocked=${blocked} cap=${LIMIT}`);
-  if (!SEND) console.log('Re-run with --send (ADDRESS set, SEND_DATE for staggering) to send for real.');
+  console.log(`\nDONE. ${SEND ? `queued=${done}` : `would_send=${eligible.length - blocked}`} dash_blocked=${blocked} suppressed_total=${optedOut.size} cap=${LIMIT}`);
+  if (!SEND) console.log('Re-run with --send (ADDRESS set, SEND_DATE for staggering) to send for real. Run the opt-out/bounce inbox sweep before EVERY touch.');
 })().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });

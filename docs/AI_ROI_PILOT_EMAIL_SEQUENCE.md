@@ -26,7 +26,7 @@ Ali
 ```
 
 ## Touch 2 (Day 2) — Proof
-**Subject:** re: a quick AI idea for {{company}}
+**Subject:** one more AI idea for {{company}}
 ```
 Hi {{first_name}},
 
@@ -110,7 +110,22 @@ Ali
 
 ## Compliance footer (appended to every send)
 ```
-Colaberry Inc. | Reply STOP or "unsubscribe" and I will remove you immediately.
-[mailing address to be confirmed before send]
+Colaberry Inc. | You can opt out any time: reply STOP or "unsubscribe" and you are removed immediately.
+200 Chisholm Pl #200, Plano, TX 75075
 ```
-The send script refuses to run live until the address placeholder is replaced (ADDRESS env). Confirm `{{calendar_link}}` (Touch 6) before send, or it is dropped automatically.
+The send script refuses to run live unless `ADDRESS` is a real postal address (must contain a number), and it adds `List-Unsubscribe` headers. Confirm `{{calendar_link}}` (Touch 6) before send, or it is dropped automatically.
+
+---
+
+## MANDATORY: opt-out + bounce sweep before EVERY touch (CAN-SPAM enforcement)
+
+The cold sender skips any address in `tmp/ai-pilot-replied.json` or `tmp/ai-pilot-suppression.json`. **Those files must be refreshed before every touch run (2 through 7)**, or the promise "reply STOP and you are removed immediately" is not actually honored — which is the core CAN-SPAM liability.
+
+Before each `TOUCH=N --send` run:
+1. Sweep the ali@colaberry.com inbox for replies from campaign recipients. Add to `ai-pilot-suppression.json` (lowercased emails) anyone who:
+   - said **STOP / unsubscribe / remove me / take me off / not interested / no thanks** (opt-out — legally required to honor), or
+   - simply **replied at all** (they are now a conversation, not a sequence — add to `ai-pilot-replied.json`).
+2. Sweep for **bounces** (mailer-daemon / delivery-failure / "address not found") and add those addresses to `ai-pilot-suppression.json` (never re-send to a dead address — protects sender reputation).
+3. Then run the touch. The sender prints `[suppression] N addresses ... (will be skipped)` so you can confirm the list loaded.
+
+This sweep is run by the operator (Claude reads the inbox via the Gmail connector) immediately before each touch. It is not optional. A touch sent without a fresh sweep is a compliance defect.
