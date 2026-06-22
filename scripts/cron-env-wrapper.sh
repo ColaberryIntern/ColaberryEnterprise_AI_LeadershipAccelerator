@@ -22,6 +22,26 @@ ENV_VARS=$(docker compose -f docker-compose.production.yml exec -T backend env 2
 
 eval "$ENV_VARS"
 
+# Host-reachable DATABASE_URL. The backend container's DATABASE_URL points at the
+# in-network host `postgres`, which the HOST cannot resolve - so host-run scripts
+# that talk to Postgres (e.g. the TBI ai_events instrumentation in
+# backend/src/scripts/lib/openaiInstrumented.js) would fail to connect. Resolve the
+# accelerator-db container's bridge IP (reachable from the host) and swap it in.
+# Best-effort: on any failure DATABASE_URL is left unchanged - the instrumentation
+# is swallow-safe, so the worst case is simply that no event row is recorded, never
+# a broken cron job. The IP is resolved fresh each tick, so container recreation is
+# handled automatically. Scripts that don't use Postgres are unaffected either way.
+if [ -n "${DATABASE_URL:-}" ]; then
+  case "$DATABASE_URL" in
+    *@postgres:*)
+      DB_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' accelerator-db 2>/dev/null | awk '{print $1}') || true
+      if [ -n "$DB_IP" ]; then
+        export DATABASE_URL="${DATABASE_URL/@postgres:/@${DB_IP}:}"
+      fi
+      ;;
+  esac
+fi
+
 # Token health probe: if BASECAMP_ACCESS_TOKEN is missing OR returns non-200 on
 # a real BC API call, refetch from CCPP. /3945211/projects.json is the canonical
 # lightweight probe — any token with account access returns 200; stale/rotated
