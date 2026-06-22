@@ -563,6 +563,13 @@ async function start(): Promise<void> {
   await ensureMissedOpportunitiesSchema();
   // AI events telemetry table (TBI audit P1) — explicit because prod does not run sync.
   await ensureAiEventsSchema();
+  // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
+  try {
+    const { ensureConsentSchema } = await import('./services/consentService');
+    await ensureConsentSchema();
+  } catch (err: any) {
+    console.warn('[DB] consent_records schema ensure failed:', err?.message);
+  }
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');

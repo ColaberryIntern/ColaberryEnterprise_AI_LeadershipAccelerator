@@ -23,6 +23,8 @@ const SIGNALS: LiveSignals = {
   vectorRetrievalEvents7d: 4,
   valueUsd30d: 1200,
   hoursSaved30d: 24,
+  consentChecks7d: 30,
+  consentEnforcing: false,
 };
 
 describe('trustRubric', () => {
@@ -91,6 +93,23 @@ describe('trustRubric', () => {
 
   it('returns null for an unknown dimension key (whitelist)', () => {
     expect(evaluateDimension('not-a-dimension', SIGNALS)).toBeNull();
+  });
+
+  it('consent criterion is live: shadow→partial, enforcing→met, no-traffic→partial-low', () => {
+    // Shadow (default) with traffic → partial 65, live source
+    const shadow = evaluateDimension('privacy', SIGNALS)!.criteria.find((c) => c.key === 'consent')!;
+    expect(shadow.status).toBe('partial');
+    expect(shadow.source).toBe('live');
+    expect(shadow.pct).toBe(65);
+    expect(shadow.evidence).toContain('SHADOW');
+    // Enforcing + checks → met 100
+    const enforcing = evaluateDimension('privacy', { ...SIGNALS, consentEnforcing: true })!.criteria.find((c) => c.key === 'consent')!;
+    expect(enforcing.status).toBe('met');
+    expect(enforcing.pct).toBe(100);
+    // Shipped but no outbound in 7d → still live, partial-low (never 'open' again)
+    const idle = evaluateDimension('privacy', { ...SIGNALS, consentChecks7d: 0 })!.criteria.find((c) => c.key === 'consent')!;
+    expect(idle.status).toBe('partial');
+    expect(idle.pct).toBe(55);
   });
 
   it('roi-attribution flips to partial-live once time-saved value exists', () => {
