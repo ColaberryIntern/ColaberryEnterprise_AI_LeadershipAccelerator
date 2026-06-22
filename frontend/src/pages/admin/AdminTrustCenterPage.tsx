@@ -213,9 +213,9 @@ function DetailDrawer({ kind, detail, cost, value, loading, onClose, onOpenDimen
               <div className="row g-2 mb-2">
                 <div className="col"><div className="border rounded p-2"><div className="fs-5 fw-bold text-success">${value.valueUsd.toLocaleString()}</div><div className="small text-muted">value · {value.windowDays}d</div></div></div>
                 <div className="col"><div className="border rounded p-2"><div className="fs-5 fw-bold">{value.hoursSaved.toLocaleString()}h</div><div className="small text-muted">time saved</div></div></div>
-                <div className="col"><div className="border rounded p-2"><div className="fs-5 fw-bold text-primary">{value.roiMultiple === null ? '—' : value.roiMultiple + '×'}</div><div className="small text-muted">ROI vs ${value.costUsd}</div></div></div>
+                <div className="col"><div className="border rounded p-2"><div className="fs-5 fw-bold text-primary">${value.netUsd.toLocaleString()}</div><div className="small text-muted">net · ${value.costUsd} AI cost</div></div></div>
               </div>
-              <p className="text-muted small">v1 estimate at ${value.hourlyRateUsd}/hr blended; minutes-saved per AI action (LLM call / tool / retrieval). Time-saved, not revenue.</p>
+              <p className="text-muted small">v1 estimate at ${value.hourlyRateUsd}/hr blended; minutes-saved per AI action (LLM call / tool / retrieval). Time-saved, not revenue. (AI spend was just ${value.costUsd}.)</p>
               <table className="table table-sm small align-middle">
                 <thead><tr><th>Workflow</th><th className="text-end">Events</th><th className="text-end">Hours</th><th className="text-end">Value</th></tr></thead>
                 <tbody>
