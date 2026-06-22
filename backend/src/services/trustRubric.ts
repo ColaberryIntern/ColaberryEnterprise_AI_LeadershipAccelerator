@@ -68,6 +68,7 @@ export interface LiveSignals {
   errorRatePct: number;
   toolEvents7d: number;
   retrievalEvents7d: number;
+  vectorRetrievalEvents7d: number;
 }
 
 function band(score: number): 'red' | 'amber' | 'green' {
@@ -104,6 +105,7 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     errorRatePct: 0,
     toolEvents7d: 0,
     retrievalEvents7d: 0,
+    vectorRetrievalEvents7d: 0,
   };
   try {
     const rows = (await sequelize.query(
@@ -119,10 +121,11 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
            FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND duration_ms IS NOT NULL) AS p95,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events24h,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'tool.call')::int AS tool7d,
-         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval')::int AS retrieval7d
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval')::int AS retrieval7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval' AND metadata->>'method' = 'vector')::int AS vec_retrieval7d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -135,6 +138,7 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.p95Ms = Math.round(Number(r.p95) || 0);
       s.toolEvents7d = Number(r.tool7d) || 0;
       s.retrievalEvents7d = Number(r.retrieval7d) || 0;
+      s.vectorRetrievalEvents7d = Number(r.vec_retrieval7d) || 0;
     }
   } catch (err) {
     logErr('live_signals_ai_events', err);
@@ -241,12 +245,17 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
   explainability: { label: 'Explainability', criteria: [
     { key: 'decision-reasoning', label: 'Decision reasoning + confidence captured', weight: 2, ev: shipped('IntelligenceDecision persists reasoning + confidence for the autonomous engine.') },
     { key: 'citations', label: 'Citations / retrieval provenance persisted', weight: 3, ref: 'P1-6', ev: (s) => {
-      const has = s.retrievalEvents7d > 0;
-      return { status: has ? 'partial' : 'open', source: 'live', pct: has ? 70 : 0,
-        evidence: has
-          ? `${s.retrievalEvents7d} retrieval events (7d) persist their source IDs/titles on the answer (Maya knowledge). Cory vector-search provenance still partial.`
-          : 'Retrieved doc IDs / citations not persisted on the answer event.',
-        remediation: 'Persist retrieval provenance on the remaining agent paths (Cory vector search) (P1-6).' };
+      const vector = s.vectorRetrievalEvents7d > 0;
+      const any = s.retrievalEvents7d > 0;
+      // Both retrieval paths now persist source IDs/titles: Maya keyword + Cory vector. Capped at 90
+      // (IDs/titles are persisted; full doc text + relevance scores are not).
+      return { status: vector ? 'met' : any ? 'partial' : 'open', source: 'live', pct: vector ? 90 : any ? 70 : 0,
+        evidence: vector
+          ? `Retrieval provenance persisted on both paths — Maya keyword + Cory vector (${s.retrievalEvents7d} events, 7d). Source IDs/titles captured on the answer event.`
+          : any
+            ? `${s.retrievalEvents7d} keyword-retrieval events (7d) persist source IDs/titles (Maya). Cory vector-search provenance not seen yet.`
+            : 'Retrieved doc IDs / citations not persisted on the answer event.',
+        remediation: vector ? undefined : 'Persist retrieval provenance on the remaining agent paths (Cory vector search) (P1-6).' };
     }},
   ]},
   reliability: { label: 'Reliability', criteria: [

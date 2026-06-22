@@ -7,7 +7,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import DatasetRegistry from '../../models/DatasetRegistry';
-import { emitToolCall } from '../../services/aiEventService';
+import { emitToolCall, emitRetrieval } from '../../services/aiEventService';
 import {
   chatCompletionWithTools,
   type ChatCompletionMessageParam,
@@ -488,6 +488,14 @@ async function executeSearchKnowledge(query: string, topK?: number): Promise<any
     const results = await executeVectorSearch(['semantic_entity_search'], query);
     const successful = results.filter((r) => r.status === 'success');
     const items = successful.flatMap((r) => r.data).slice(0, topK || 3);
+    // Persist retrieval provenance (TBI P1-6) — vector source IDs/titles. Swallow-safe.
+    emitRetrieval({
+      method: 'vector',
+      count: items.length,
+      sources: items.map((it: any) => ({ id: it?.id ?? it?.entity_id, title: it?.title ?? it?.name ?? it?.label, category: it?.type ?? it?.category })),
+      workflowId: 'cory_search',
+      agentId: 'Cory',
+    }).catch(() => {});
     return { results: items, count: items.length };
   } catch {
     return { results: [], count: 0, note: 'Vector search unavailable' };
