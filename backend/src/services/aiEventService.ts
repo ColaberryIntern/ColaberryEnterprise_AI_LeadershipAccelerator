@@ -4,6 +4,8 @@ import type { AgentActivityResult } from '../models/AiAgentActivityLog';
 import AiEvent from '../models/AiEvent';
 import type { AiEventOutcome } from '../models/AiEvent';
 import { emitAlert } from './alertService';
+import { getTraceId } from '../utils/requestContext';
+import { redactSensitive } from '../utils/piiRedaction';
 
 /**
  * Log an AI system event (campaign scans, agent triggers, repairs, failures, etc.)
@@ -155,4 +157,68 @@ export async function emitAiEvent(params: {
   } catch (err: any) {
     console.error('[emitAiEvent] Failed to persist ai_event:', err?.message);
   }
+}
+
+/**
+ * Record a tool / function call as an ai_event (TBI audit P1-6, observability).
+ * PII-minimized: stores the tool name + ARG KEY NAMES only (never arg values) and a short,
+ * SSN/card-redacted result summary. Swallow-safe — telemetry never breaks the tool path.
+ */
+export async function emitToolCall(params: {
+  tool: string;
+  ok?: boolean;
+  durationMs?: number;
+  workflowId?: string;
+  agentId?: string;
+  args?: Record<string, any>;
+  argsJson?: string;
+  resultSummary?: string;
+}): Promise<void> {
+  let argKeys: string[] | undefined;
+  try {
+    const obj = params.args ?? (params.argsJson ? JSON.parse(params.argsJson) : undefined);
+    if (obj && typeof obj === 'object') argKeys = Object.keys(obj).slice(0, 20);
+  } catch {
+    /* unparseable args — record the call without keys */
+  }
+  await emitAiEvent({
+    event_type: 'tool.call',
+    outcome: params.ok === false ? 'failure' : 'success',
+    trace_id: getTraceId() ?? null,
+    workflow_id: params.workflowId ?? null,
+    agent_id: params.agentId ?? null,
+    external_system: 'internal',
+    duration_ms: params.durationMs ?? null,
+    metadata: {
+      tool: params.tool,
+      arg_keys: argKeys,
+      result: params.resultSummary ? redactSensitive(String(params.resultSummary)).slice(0, 240) : undefined,
+    },
+  });
+}
+
+/**
+ * Record a retrieval (RAG) step as an ai_event with its source provenance (P1-6 + Explainability).
+ * Stores the method, hit count, and source IDs/titles/categories (knowledge entries are non-PII).
+ */
+export async function emitRetrieval(params: {
+  method: 'keyword' | 'vector';
+  count: number;
+  sources?: Array<{ id?: string | number; title?: string; category?: string }>;
+  workflowId?: string;
+  agentId?: string;
+}): Promise<void> {
+  await emitAiEvent({
+    event_type: 'retrieval',
+    outcome: 'success',
+    trace_id: getTraceId() ?? null,
+    workflow_id: params.workflowId ?? null,
+    agent_id: params.agentId ?? null,
+    external_system: 'internal',
+    metadata: {
+      method: params.method,
+      count: params.count,
+      sources: (params.sources ?? []).slice(0, 10).map((s) => ({ id: s.id, title: s.title, category: s.category })),
+    },
+  });
 }

@@ -66,6 +66,8 @@ export interface LiveSignals {
   p50Ms: number;
   p95Ms: number;
   errorRatePct: number;
+  toolEvents7d: number;
+  retrievalEvents7d: number;
 }
 
 function band(score: number): 'red' | 'amber' | 'green' {
@@ -100,6 +102,8 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     p50Ms: 0,
     p95Ms: 0,
     errorRatePct: 0,
+    toolEvents7d: 0,
+    retrievalEvents7d: 0,
   };
   try {
     const rows = (await sequelize.query(
@@ -113,10 +117,12 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
            FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND duration_ms IS NOT NULL) AS p50,
          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms)
            FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND duration_ms IS NOT NULL) AS p95,
-         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events24h
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events24h,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'tool.call')::int AS tool7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval')::int AS retrieval7d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -127,6 +133,8 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.errorRatePct = r.total7d > 0 ? Math.round((Number(r.failures7d) / Number(r.total7d)) * 100) : 0;
       s.p50Ms = Math.round(Number(r.p50) || 0);
       s.p95Ms = Math.round(Number(r.p95) || 0);
+      s.toolEvents7d = Number(r.tool7d) || 0;
+      s.retrievalEvents7d = Number(r.retrieval7d) || 0;
     }
   } catch (err) {
     logErr('live_signals_ai_events', err);
@@ -202,7 +210,13 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
           : 'No events in the last 7d to derive latency/error-rate.',
         remediation: has ? undefined : 'Accumulate ai_events; p50/p95 + error-rate then compute automatically (P1-5).' };
     }},
-    { key: 'tool-retrieval', label: 'Tool-call + retrieval/citation capture', weight: 2, ref: 'P1-6', ev: open('Tool-call args/outcomes and retrieval citations not persisted.', 'Persist tool-call events + retrieved doc IDs/citations on the answer event (P1-6).') },
+    { key: 'tool-retrieval', label: 'Tool-call + retrieval observability', weight: 2, ref: 'P1-6', ev: (s) => {
+      const both = s.toolEvents7d > 0 && s.retrievalEvents7d > 0;
+      const any = s.toolEvents7d > 0 || s.retrievalEvents7d > 0;
+      return { status: both ? 'met' : any ? 'partial' : 'open', source: 'live', pct: both ? 100 : any ? 50 : 0,
+        evidence: `Last 7d: ${s.toolEvents7d} tool-call + ${s.retrievalEvents7d} retrieval events captured to ai_events (Maya + Cory paths).`,
+        remediation: both ? undefined : 'Capture tool-call + retrieval events across all agent paths (P1-6).' };
+    }},
   ]},
   governance: { label: 'Governance', criteria: [
     { key: 'kill-switch', label: 'Kill switch / safe mode gate actions', weight: 3, ref: 'P0-2', ev: (s) => ({
@@ -226,7 +240,14 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
   ]},
   explainability: { label: 'Explainability', criteria: [
     { key: 'decision-reasoning', label: 'Decision reasoning + confidence captured', weight: 2, ev: shipped('IntelligenceDecision persists reasoning + confidence for the autonomous engine.') },
-    { key: 'citations', label: 'Citations / retrieval provenance persisted', weight: 3, ref: 'P1-6', ev: open('"Sources" are table names; retrieved doc IDs/citations not persisted on answers.', 'Persist retrieved doc IDs + citations on the answer event (P1-6).') },
+    { key: 'citations', label: 'Citations / retrieval provenance persisted', weight: 3, ref: 'P1-6', ev: (s) => {
+      const has = s.retrievalEvents7d > 0;
+      return { status: has ? 'partial' : 'open', source: 'live', pct: has ? 70 : 0,
+        evidence: has
+          ? `${s.retrievalEvents7d} retrieval events (7d) persist their source IDs/titles on the answer (Maya knowledge). Cory vector-search provenance still partial.`
+          : 'Retrieved doc IDs / citations not persisted on the answer event.',
+        remediation: 'Persist retrieval provenance on the remaining agent paths (Cory vector search) (P1-6).' };
+    }},
   ]},
   reliability: { label: 'Reliability', criteria: [
     { key: 'retry-timeout', label: 'Retry / timeout / safe-mode on LLM calls', weight: 2, ev: shipped('Audit wrapper enforces retry, timeout, and safe-mode guards.') },
