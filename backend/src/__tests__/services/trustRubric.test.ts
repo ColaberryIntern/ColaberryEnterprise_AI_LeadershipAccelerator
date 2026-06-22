@@ -18,6 +18,8 @@ const SIGNALS: LiveSignals = {
   p50Ms: 800,
   p95Ms: 2000,
   errorRatePct: 2,
+  toolEvents7d: 5,
+  retrievalEvents7d: 8,
 };
 
 describe('trustRubric', () => {
@@ -31,9 +33,18 @@ describe('trustRubric', () => {
 
   it('computes Observability live from the signals', () => {
     const d = evaluateDimension('observability', SIGNALS)!;
-    // unified(2,100)+coverage(3,85)+cost(1,100)+trace(2,80)+metrics(2,100)+tool(2,0) = 915 ; /12 ≈ 76
-    expect(d.score).toBe(76);
-    expect(d.state).toBe('live'); // cost + trace + metrics are live criteria
+    // unified(2,100)+coverage(3,85)+cost(1,100)+trace(2,80)+metrics(2,100)+tool-retrieval(2,100) = 1115 ; /12 ≈ 93
+    expect(d.score).toBe(93);
+    expect(d.state).toBe('live'); // cost + trace + metrics + tool-retrieval are live criteria
+  });
+
+  it('tool-retrieval + citations criteria flip live once tool/retrieval events are captured', () => {
+    const obs = evaluateDimension('observability', SIGNALS)!.criteria.find((c) => c.key === 'tool-retrieval')!;
+    expect(obs.status).toBe('met'); // both tool + retrieval events present
+    const expl = evaluateDimension('explainability', SIGNALS)!.criteria.find((c) => c.key === 'citations')!;
+    expect(expl.status).toBe('partial'); // retrieval provenance persisted (Maya); Cory vector still partial
+    const none = evaluateDimension('observability', { ...SIGNALS, toolEvents7d: 0, retrievalEvents7d: 0 })!.criteria.find((c) => c.key === 'tool-retrieval')!;
+    expect(none.status).toBe('open');
   });
 
   it('metrics criterion flips to met once events exist, with live latency evidence', () => {

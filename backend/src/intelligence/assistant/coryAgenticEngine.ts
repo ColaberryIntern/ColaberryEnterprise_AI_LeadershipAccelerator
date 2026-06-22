@@ -7,6 +7,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import DatasetRegistry from '../../models/DatasetRegistry';
+import { emitToolCall } from '../../services/aiEventService';
 import {
   chatCompletionWithTools,
   type ChatCompletionMessageParam,
@@ -638,14 +639,24 @@ export async function runCoryAgenticLoop(
         const t0 = Date.now();
         const result = await executeToolCall(tc.fn.name, args, { sqlResults, charts, ticketsCreated });
         const duration = Date.now() - t0;
+        const resultSummary = summarizeResult(tc.fn.name, result);
 
         toolTrace.push({
           round: rounds,
           tool: tc.fn.name,
           args,
-          result_summary: summarizeResult(tc.fn.name, result),
+          result_summary: resultSummary,
           duration_ms: duration,
         });
+        // Observability (TBI P1-6): record the tool call (name + arg keys + redacted summary). Swallow-safe.
+        emitToolCall({
+          tool: tc.fn.name,
+          workflowId: 'cory_agentic',
+          agentId: 'Cory',
+          args,
+          resultSummary,
+          durationMs: duration,
+        }).catch(() => {});
 
         return {
           role: 'tool' as const,

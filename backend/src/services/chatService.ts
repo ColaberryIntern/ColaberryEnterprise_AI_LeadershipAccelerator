@@ -17,6 +17,7 @@ import { buildMayaSystemPrompt, generateMayaGreeting } from './admissionsMayaSer
 import { loadMemory, saveConversationToMemory, classifyVisitorType } from './admissionsMemoryService';
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
 import { executeMayaAction, MAYA_TOOLS, type MayaActionResult } from './mayaActionService';
+import { emitToolCall } from './aiEventService';
 import { addMayaInteractionTag } from './mayaCampaignRouter';
 import { recordConversationOutcome } from './mayaConversationIntelligenceService';
 
@@ -431,6 +432,16 @@ export async function sendMessage(
       }
 
       actionResults.push(result.summary);
+
+      // Observability (TBI P1-6): record the tool call (name + arg keys + redacted summary). Swallow-safe.
+      emitToolCall({
+        tool: fn.name,
+        ok: result.success,
+        workflowId: 'maya_chat',
+        agentId: 'Maya',
+        argsJson: fn.arguments,
+        resultSummary: result.summary,
+      }).catch(() => {});
 
       // Add tool result to messages
       messages.push({
