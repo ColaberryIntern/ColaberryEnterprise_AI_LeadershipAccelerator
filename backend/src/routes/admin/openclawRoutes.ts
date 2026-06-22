@@ -21,7 +21,13 @@ import {
   RevenueOpportunity,
 } from '../../models';
 
+import { requireAdmin } from '../../middlewares/authMiddleware';
+
 const router = Router();
+
+// SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
+// endpoints publicly callable. Require an authenticated admin for every route below.
+router.use(requireAdmin);
 const BASE = '/api/admin/openclaw';
 
 // ── Dashboard Aggregate Stats ─────────────────────────────────────
@@ -331,7 +337,9 @@ router.post(`${BASE}/responses/:id/approve`, async (req: Request, res: Response)
   try {
     const response = await OpenclawResponse.findByPk(req.params.id as string);
     if (!response) return res.status(404).json({ error: 'Response not found' });
-    if (response.post_status !== 'draft') {
+    // HITL (TBI audit P0-4): accept human approval for QA-passed items the quality gate
+    // routed to 'pending_review', as well as raw 'draft' items.
+    if (response.post_status !== 'draft' && response.post_status !== 'pending_review') {
       return res.status(400).json({ error: `Cannot approve response with status: ${response.post_status}` });
     }
 
