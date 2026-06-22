@@ -9,6 +9,9 @@ import {
   handleGetActivity,
   handleGetGovernance,
   handleGetObservability,
+  handleGetDimension,
+  handleGetActions,
+  handleGetCostBreakdown,
 } from '../../controllers/trustController';
 
 const router = Router();
@@ -17,5 +20,8 @@ router.get('/api/admin/trust/overview', requireAdmin, handleGetOverview);
 router.get('/api/admin/trust/activity', requireAdmin, handleGetActivity);
 router.get('/api/admin/trust/governance', requireAdmin, handleGetGovernance);
 router.get('/api/admin/trust/observability', requireAdmin, handleGetObservability);
+router.get('/api/admin/trust/actions', requireAdmin, handleGetActions);
+router.get('/api/admin/trust/cost-breakdown', requireAdmin, handleGetCostBreakdown);
+router.get('/api/admin/trust/dimension/:key', requireAdmin, handleGetDimension);
 
 export default router;
