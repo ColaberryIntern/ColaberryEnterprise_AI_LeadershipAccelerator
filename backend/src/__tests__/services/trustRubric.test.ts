@@ -24,11 +24,11 @@ const SIGNALS: LiveSignals = {
 };
 
 describe('trustRubric', () => {
-  it('rolls Security up to a deterministic 70 (no live criteria)', () => {
+  it('rolls Security up to a deterministic 80 (no live criteria)', () => {
     const d = evaluateDimension('security', SIGNALS)!;
-    // admin-auth(3)+jwt(1)+webhook(1)+transport(2) met = 700 ; abac(2)+ci(1) open = 0 ; /10 = 70
-    expect(d.score).toBe(70);
-    expect(d.band).toBe('amber');
+    // admin-auth(3)+jwt(1)+webhook(1)+transport(2)+ci-secrets(1) met = 800 ; abac(2) open = 0 ; /10 = 80
+    expect(d.score).toBe(80);
+    expect(d.band).toBe('green');
     expect(d.state).toBe('baseline'); // no live criterion in Security
   });
 

@@ -180,7 +180,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
     { key: 'webhook-sig', label: 'Inbound webhook signatures enforced', weight: 1, ref: 'P0-7', ev: shipped('Mandrill webhook rejects bad signatures (PR #50).') },
     { key: 'transport', label: 'Transport hardening (helmet/cors/rate-limit)', weight: 2, ev: shipped('helmet, cors allow-list, and rate limiting present (audit offset).') },
     { key: 'abac', label: 'ABAC / least-privilege on AI actions', weight: 2, ref: 'P2-1', ev: open('RBAC scaffold present but unapplied to AI data/action access.', 'Apply ABAC "Five W\'s" on AI data + action access (P2-1).') },
-    { key: 'ci-secrets', label: 'CI secret-scan + route-auth lint', weight: 1, ref: 'P3-1', ev: open('No CI pipeline; route-auth regressions not caught automatically.', 'Add GitHub Actions: typecheck + tests + secret scan + route-auth lint (P3-1).') },
+    { key: 'ci-secrets', label: 'CI secret-scan + route-auth lint', weight: 1, ref: 'P3-1', ev: shipped('GitHub Actions CI runs a secret-scan + admin route-auth lint on every PR (.github/workflows/ci.yml).') },
   ]},
   privacy: { label: 'Privacy', criteria: [
     { key: 'pii-redaction', label: 'PII redacted before LLM/voice', weight: 3, ref: 'P0-3', ev: shipped('SSN/payment-card redacted at the LLM boundary on TS + cron paths (PR #50/#54).') },
@@ -262,7 +262,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
     { key: 'retry-timeout', label: 'Retry / timeout / safe-mode on LLM calls', weight: 2, ev: shipped('Audit wrapper enforces retry, timeout, and safe-mode guards.') },
     { key: 'circuit-breaker', label: 'Circuit breaker on external boundaries', weight: 1, ev: partial(50, 'Circuit breaker present for OpenClaw only.', 'Extend the circuit-breaker pattern to other external boundaries.') },
     { key: 'metrics-alerting', label: 'Metrics + alerting backend', weight: 2, ref: 'P1-5', ev: open('No metrics/alerting; no queue durability for fire-and-forget jobs.', 'Add metrics + alerting; durable queue for background jobs (P1-5).') },
-    { key: 'ci', label: 'CI pipeline (typecheck/tests/scan)', weight: 1, ref: 'P3-1', ev: open('No CI pipeline today.', 'Add GitHub Actions CI (P3-1).') },
+    { key: 'ci', label: 'CI pipeline (typecheck/tests/scan)', weight: 1, ref: 'P3-1', ev: shipped('GitHub Actions CI runs typecheck (backend + frontend) + unit tests + secret-scan + route-auth lint on every PR.') },
   ]},
   businessImpact: { label: 'Business Impact', criteria: [
     { key: 'cost-live', label: 'AI dollar-cost measured', weight: 2, ref: 'P1-3', ev: (s) => ({
