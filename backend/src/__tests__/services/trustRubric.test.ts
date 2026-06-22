@@ -20,6 +20,7 @@ const SIGNALS: LiveSignals = {
   errorRatePct: 2,
   toolEvents7d: 5,
   retrievalEvents7d: 8,
+  vectorRetrievalEvents7d: 4,
 };
 
 describe('trustRubric', () => {
@@ -42,7 +43,10 @@ describe('trustRubric', () => {
     const obs = evaluateDimension('observability', SIGNALS)!.criteria.find((c) => c.key === 'tool-retrieval')!;
     expect(obs.status).toBe('met'); // both tool + retrieval events present
     const expl = evaluateDimension('explainability', SIGNALS)!.criteria.find((c) => c.key === 'citations')!;
-    expect(expl.status).toBe('partial'); // retrieval provenance persisted (Maya); Cory vector still partial
+    expect(expl.status).toBe('met'); // both Maya keyword + Cory vector retrieval persist provenance
+    // Keyword-only (no vector) → citations partial
+    const kwOnly = evaluateDimension('explainability', { ...SIGNALS, vectorRetrievalEvents7d: 0 })!.criteria.find((c) => c.key === 'citations')!;
+    expect(kwOnly.status).toBe('partial');
     const none = evaluateDimension('observability', { ...SIGNALS, toolEvents7d: 0, retrievalEvents7d: 0 })!.criteria.find((c) => c.key === 'tool-retrieval')!;
     expect(none.status).toBe('open');
   });
