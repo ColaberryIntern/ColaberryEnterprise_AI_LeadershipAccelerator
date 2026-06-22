@@ -25,6 +25,7 @@ export interface DimensionScore {
   label: string;
   score: number; // 0-100
   state: MetricState;
+  evidence?: string; // why this score — closed gaps (with PR) + what remains. Powers the drill-down.
 }
 
 export interface TrustOverview {
@@ -61,28 +62,45 @@ export interface ObservabilityStatus {
   note: string;
 }
 
-// ---- Audit baseline (docs/trust-audit, 2026-06-20). Constant until the next quarterly re-score. ----
-const BASELINE_SOURCE = 'TBI audit baseline — docs/trust-audit (2026-06-20)';
+// ---- Audit baseline (docs/trust-audit, 2026-06-20), reassessed 2026-06-22 after PR #50/#54.
+// Scores are evidence-grounded desk reassessments (TBI conservative rule: when uncertain, choose
+// lower). A score only rises from a verifiably shipped change, each cited in `evidence`. Phase 2
+// (the scoring rubric) replaces these constants with live, criterion-level computation. ----
+const BASELINE_SOURCE =
+  'TBI audit baseline (2026-06-20), reassessed 2026-06-22 — credits shipped P0/P1 remediation (PR #50, #54). Evidence-only; conservative.';
 
 const TRUST_DIMENSIONS: DimensionScore[] = [
-  { key: 'security', label: 'Security', score: 30, state: 'baseline' },
-  { key: 'privacy', label: 'Privacy', score: 20, state: 'baseline' },
-  { key: 'observability', label: 'Observability', score: 38, state: 'baseline' },
-  { key: 'governance', label: 'Governance', score: 25, state: 'baseline' },
-  { key: 'auditability', label: 'Auditability', score: 40, state: 'baseline' },
-  { key: 'explainability', label: 'Explainability', score: 40, state: 'baseline' },
-  { key: 'reliability', label: 'Reliability', score: 45, state: 'baseline' },
-  { key: 'businessImpact', label: 'Business Impact', score: 35, state: 'baseline' },
+  { key: 'security', label: 'Security', score: 70, state: 'baseline',
+    evidence: 'Audit 30. Closed (PR #50): admin routes now requireAdmin (P0-1), JWT_SECRET fail-fast (P0-5), Mandrill webhook signature enforced (P0-7), kill switch gates actions (P0-2). Remaining: ABAC on AI actions (P2-1).' },
+  { key: 'privacy', label: 'Privacy', score: 42, state: 'baseline',
+    evidence: 'Audit 20. Closed: PII (SSN/card) redacted at the LLM boundary on TS + cron paths (P0-3a, PR #50/#54). Remaining: affirmative consent capture on outbound voice/email (P0-3b, design in PR #53), data-retention policy (P2-5).' },
+  { key: 'observability', label: 'Observability', score: 49, state: 'baseline',
+    evidence: 'Audit 38. Closed: unified ai_events + cost + x-trace-id; ~58/60 LLM call sites instrumented (P1-1/2/3/4, PR #50/#54). Mean of the 7 sub-dimensions. Remaining: tool-call, retrieval, and user-level observability; metrics backend (P1-5/6).' },
+  { key: 'governance', label: 'Governance', score: 50, state: 'baseline',
+    evidence: 'Audit 25. Closed (PR #50): kill switch / safe mode now gate email, voice, and social actions (P0-2); OpenClaw routes to human approval (P0-4). Remaining: ABAC + narrowing autonomy scope (P2-1).' },
+  { key: 'auditability', label: 'Auditability', score: 68, state: 'baseline',
+    evidence: 'Audit 40. Closed (PR #50/#54): unified ai_events model (P1-1), admin audit actor fix (P0-6), ~58/60 call sites logged (P1-2). Remaining: prompt/model versioning in the audit record (P2-3).' },
+  { key: 'explainability', label: 'Explainability', score: 40, state: 'baseline',
+    evidence: 'Audit 40, unchanged. IntelligenceDecision reasoning/confidence is strong but autonomous-engine only; citations/retrieval provenance still not persisted (P1-6, open).' },
+  { key: 'reliability', label: 'Reliability', score: 45, state: 'baseline',
+    evidence: 'Audit 45, unchanged. Wrapper retry/timeout/safe-mode + OpenClaw circuit breaker present; no metrics/alerting backend (P1-5) and no CI pipeline (P3-1) yet.' },
+  { key: 'businessImpact', label: 'Business Impact', score: 45, state: 'baseline',
+    evidence: 'Audit 35. Closed: AI dollar-cost now computed and live from ai_events (P1-3, PR #50). Remaining: revenue / time-saved attribution to AI.' },
 ];
 
 const OBSERVABILITY_DIMENSIONS: DimensionScore[] = [
-  { key: 'user', label: 'User', score: 25, state: 'baseline' },
-  { key: 'workflow', label: 'Workflow', score: 40, state: 'baseline' },
-  { key: 'agent', label: 'Agent', score: 70, state: 'baseline' },
-  { key: 'tool', label: 'Tool', score: 15, state: 'baseline' },
-  { key: 'retrieval', label: 'Retrieval', score: 20, state: 'baseline' },
-  { key: 'decision', label: 'Decision', score: 75, state: 'baseline' },
-  { key: 'cost', label: 'Cost', score: 30, state: 'baseline' },
+  { key: 'user', label: 'User', score: 25, state: 'baseline',
+    evidence: 'Audit 25, unchanged. ai_events carries user_id but it is not yet populated for most call sites.' },
+  { key: 'workflow', label: 'Workflow', score: 60, state: 'baseline',
+    evidence: 'Audit 40. Closed: x-trace-id middleware + AsyncLocalStorage propagation, workflow_id on every event (P1-4, PR #50).' },
+  { key: 'agent', label: 'Agent', score: 70, state: 'baseline', evidence: 'Audit 70, unchanged — already strong.' },
+  { key: 'tool', label: 'Tool', score: 20, state: 'baseline',
+    evidence: 'Audit 15. Tool/function-call arguments and outcomes are still not captured as events (open).' },
+  { key: 'retrieval', label: 'Retrieval', score: 20, state: 'baseline',
+    evidence: 'Audit 20, unchanged. Retrieved doc IDs / citations not persisted on the answer event (P1-6, open).' },
+  { key: 'decision', label: 'Decision', score: 75, state: 'baseline', evidence: 'Audit 75, unchanged — already strong.' },
+  { key: 'cost', label: 'Cost', score: 75, state: 'baseline',
+    evidence: 'Audit 30. Closed: MODEL_PRICING + computeCostUsd at emit; cost is live from ai_events (P1-3, PR #50). Remaining: per-user / per-workflow cost analytics (P3-4).' },
 ];
 
 function hoursAgo(h: number): Date {
@@ -117,11 +135,14 @@ export async function getTrustOverview(): Promise<TrustOverview> {
   return {
     compositeTrustScore: composite,
     band: bandFor(composite),
-    maturityLevel: 'Level 2 of 5 — Emerging / Pilot',
+    maturityLevel: 'Level 3 of 5 — Developing',
     recommendation: 'GO WITH CONDITIONS',
     dimensions: TRUST_DIMENSIONS,
-    inpactEstimatePct: 47,
-    goalsEstimate: 13,
+    // INPACT reassessed: P 2→3 (kill switch now a real gate; capped by missing consent),
+    // T 2→3 (cost + trace + events + dashboard now live). I3 N4 P3 A3 C3 T3 ≈ 53%.
+    inpactEstimatePct: 53,
+    // GOALS reassessed: G 2→3 (kill-switch gating + OpenClaw HITL), O 2→3 (events/cost/trace/coverage). 15/25.
+    goalsEstimate: 15,
     baselineSource: BASELINE_SOURCE,
   };
 }
@@ -162,7 +183,7 @@ export async function getActivityMetrics(): Promise<ActivityMetrics> {
     costUsd24h: {
       value: costUsd,
       state: 'live',
-      note: 'Computed LLM cost from ai_events. Partial coverage — only calls routed through the audit wrapper are counted yet (P1-2 routes the rest).',
+      note: 'Computed LLM cost from ai_events. Coverage now ~58/60 call sites — TS services (PR #50) + cron scripts (PR #54). A few low-traffic paths remain.',
     },
     trend,
   };
@@ -234,9 +255,9 @@ export async function getGovernanceStatus(): Promise<GovernanceStatus> {
     safeModeActive: safeMode,
     blockedAgentWrites24h: { value: blocked, state: 'live' },
     killSwitchGatesActions: {
-      value: false,
+      value: true,
       state: 'baseline',
-      note: 'AUDIT FINDING: kill switch / safe mode do NOT gate email, voice, or social actions (governance-audit.md §3, gap P0-2).',
+      note: 'Kill switch / safe mode now gate email, voice, and social action functions (wired in PR #50; gap P0-2 closed). Consent capture on outbound channels (P0-3b) remains open — see PR #53.',
     },
   };
 }
@@ -252,6 +273,6 @@ export async function getObservabilityStatus(): Promise<ObservabilityStatus> {
   return {
     dimensions: OBSERVABILITY_DIMENSIONS,
     auditedGenerations24h: { value: audited, state: 'live' },
-    note: 'Only ~8 LLM services route through the audit wrapper; 50+ call sites are unlogged (observability-audit.md, gap P1-2).',
+    note: '~58/60 LLM call sites now emit ai_events — TS services (PR #50) + cron scripts (PR #54). P1-2 substantially closed; remaining work is tool-call + retrieval observability (P1-6).',
   };
 }
