@@ -19,7 +19,7 @@ import api from '../../utils/api';
 
 type MetricState = 'live' | 'baseline' | 'placeholder';
 
-interface DimensionScore { key: string; label: string; score: number; state: MetricState; }
+interface DimensionScore { key: string; label: string; score: number; state: MetricState; evidence?: string; }
 interface Stat { value: number; state: MetricState; }
 
 interface Overview {
@@ -53,12 +53,13 @@ interface Observability {
   note: string;
 }
 
+// Open items, reassessed 2026-06-22 (PR #50/#54 closed the original P0 security/control set).
 const TOP_RISKS = [
-  '15 admin route files unauthenticated (incl. production-activate, social posting)',
-  'Kill switch / safe mode do not gate email, voice, or social actions',
-  'PII sent to LLM/voice with no consent capture on outbound channels',
-  'No dollar-cost visibility — cannot prove AI ROI or control spend',
-  'AI auto-approves public social content (no human review)',
+  'No affirmative consent capture on outbound voice/email (PII now redacted at the LLM boundary; consent design pending — PR #53)',
+  'No ABAC on AI actions — autonomy still broad (RBAC scaffold unapplied, P2-1)',
+  'No revenue / time-saved attribution to AI (dollar-cost is now live; the ROI side is still missing)',
+  'No metrics/alerting backend and no CI pipeline (p50/p95 + error-rate views, route-auth lint — P1-5/P3-1)',
+  'Tool-call + retrieval/citation observability not yet captured (P1-6)',
 ];
 
 function barClass(score: number): string {
@@ -78,9 +79,13 @@ function StateBadge({ state }: { state: MetricState }) {
 
 function ScoreBar({ d }: { d: DimensionScore }) {
   return (
-    <div className="mb-2">
+    <div className="mb-2" title={d.evidence || undefined}>
       <div className="d-flex justify-content-between small">
-        <span>{d.label}<StateBadge state={d.state} /></span>
+        <span>
+          {d.label}
+          <StateBadge state={d.state} />
+          {d.evidence && <span className="text-muted ms-1" style={{ cursor: 'help' }} aria-label="score rationale">&#9432;</span>}
+        </span>
         <span className="fw-semibold">{d.score}</span>
       </div>
       <div className="progress" style={{ height: '8px' }} role="progressbar" aria-label={d.label} aria-valuenow={d.score} aria-valuemin={0} aria-valuemax={100}>
@@ -187,7 +192,7 @@ function AdminTrustCenterPage() {
           <div className="col-md-5">
             <div className="card h-100 shadow-sm">
               <div className="card-body">
-                <div className="text-muted small text-uppercase">Top risks</div>
+                <div className="text-muted small text-uppercase">Open risks · next actions to raise the score</div>
                 <ol className="small mb-0 ps-3">
                   {TOP_RISKS.map((r) => <li key={r}>{r}</li>)}
                 </ol>
