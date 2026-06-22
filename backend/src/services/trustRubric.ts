@@ -18,6 +18,7 @@ import AgentWriteAudit from '../models/AgentWriteAudit';
 import { isKillSwitchActive } from './launchSafety';
 import { isSafeModeActive } from './systemControlService';
 import { MINUTES_SAVED_SQL, valueUsd } from './aiValueService';
+import { getConsentMode } from './consentService';
 
 export type CriterionStatus = 'met' | 'partial' | 'open';
 export type CriterionSource = 'live' | 'shipped' | 'open';
@@ -72,6 +73,8 @@ export interface LiveSignals {
   vectorRetrievalEvents7d: number;
   valueUsd30d: number;
   hoursSaved30d: number;
+  consentChecks7d: number;
+  consentEnforcing: boolean;
 }
 
 function band(score: number): 'red' | 'amber' | 'green' {
@@ -111,6 +114,8 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     vectorRetrievalEvents7d: 0,
     valueUsd30d: 0,
     hoursSaved30d: 0,
+    consentChecks7d: 0,
+    consentEnforcing: false,
   };
   try {
     const rows = (await sequelize.query(
@@ -128,10 +133,11 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'tool.call')::int AS tool7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval')::int AS retrieval7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval' AND metadata->>'method' = 'vector')::int AS vec_retrieval7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'consent.check')::int AS consent7d,
          COALESCE(SUM(${MINUTES_SAVED_SQL}) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::int AS minutes30d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; minutes30d: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; minutes30d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -145,6 +151,7 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.toolEvents7d = Number(r.tool7d) || 0;
       s.retrievalEvents7d = Number(r.retrieval7d) || 0;
       s.vectorRetrievalEvents7d = Number(r.vec_retrieval7d) || 0;
+      s.consentChecks7d = Number(r.consent7d) || 0;
       const mins = Number(r.minutes30d) || 0;
       s.hoursSaved30d = Math.round((mins / 60) * 10) / 10;
       s.valueUsd30d = valueUsd(mins);
@@ -171,6 +178,11 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
   } catch (err) {
     logErr('live_signals_safe_mode', err);
   }
+  try {
+    s.consentEnforcing = (await getConsentMode()) === 'enforce';
+  } catch (err) {
+    logErr('live_signals_consent_mode', err);
+  }
   return s;
 }
 
@@ -195,7 +207,23 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
     { key: 'pii-redaction', label: 'PII redacted before LLM/voice', weight: 3, ref: 'P0-3', ev: shipped('SSN/payment-card redacted at the LLM boundary on TS + cron paths (PR #50/#54).') },
     { key: 'suppression', label: 'Unsubscribe / suppression honored', weight: 1, ev: shipped('Unsubscribe + suppression handling present (audit offset).') },
     { key: 'pii-logs', label: 'PII minimized in logs', weight: 1, ev: partial(50, 'redactForLogs helper added (PR #50) but not yet applied at every log site.', 'Apply redactForLogs across all structured log call sites.') },
-    { key: 'consent', label: 'Affirmative consent on outbound voice/email', weight: 3, ref: 'P0-3', ev: open('No consent capture before autonomous outbound voice/email.', 'Build affirmative consent capture (design in PR #53) — TCPA/GDPR/CCPA exposure.') },
+    { key: 'consent', label: 'Affirmative consent on outbound voice/email', weight: 3, ref: 'P0-3', ev: (s) => {
+      // Gate is SHIPPED (consentService + consent_records + send-path hook). Live state:
+      // enforcing+checks → met; shadowing with traffic → partial (exposure quantified, capture pending);
+      // shipped but no outbound yet → partial-low.
+      if (s.consentEnforcing && s.consentChecks7d > 0) {
+        return { status: 'met' as const, source: 'live' as const, pct: 100,
+          evidence: `Consent gate ENFORCING on outbound voice/SMS/email — ${s.consentChecks7d} consent.check decisions in the last 7d.` };
+      }
+      if (s.consentChecks7d > 0) {
+        return { status: 'partial' as const, source: 'live' as const, pct: 65,
+          evidence: `Consent gate live in SHADOW mode — ${s.consentChecks7d} consent.check decisions logged in 7d (would-block exposure now visible on the dashboard); not yet blocking.`,
+          remediation: 'Populate granted records (Phase 2 capture), then set consent_enforcement=enforce to gate voice/SMS (P0-3).' };
+      }
+      return { status: 'partial' as const, source: 'live' as const, pct: 55,
+        evidence: 'Consent gate shipped (shadow) — consent_records + assertConsentForSend wired into the send chokepoint; no outbound sends in the last 7d to evaluate.',
+        remediation: 'Add opt-in capture (Phase 2) + flip consent_enforcement=enforce when granted records exist (P0-3).' };
+    } },
     { key: 'retention', label: 'Data-retention / purge policy', weight: 2, ref: 'P2-5', ev: open('No TTL/purge for chat + call transcripts or leads.', 'Define + enforce retention TTL/purge (P2-5).') },
   ]},
   observability: { label: 'Observability', criteria: [
