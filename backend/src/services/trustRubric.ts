@@ -224,7 +224,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
         evidence: 'Consent gate shipped (shadow) — consent_records + assertConsentForSend wired into the send chokepoint; no outbound sends in the last 7d to evaluate.',
         remediation: 'Add opt-in capture (Phase 2) + flip consent_enforcement=enforce when granted records exist (P0-3).' };
     } },
-    { key: 'retention', label: 'Data-retention / purge policy', weight: 2, ref: 'P2-5', ev: open('No TTL/purge for chat + call transcripts or leads.', 'Define + enforce retention TTL/purge (P2-5).') },
+    { key: 'retention', label: 'Data-retention / purge policy', weight: 2, ref: 'P2-5', ev: partial(50, 'A 24-month retention policy is defined for the PII data classes (chat/call transcripts, comms, sessions, leads) with a live dry-run report (/admin/trust/retention); purge enforcement is gated pending sign-off.', 'Review the dry-run, confirm scope (leads → anonymize, not delete), then enable the scheduled purge (P2-5).') },
   ]},
   observability: { label: 'Observability', criteria: [
     { key: 'unified-events', label: 'Unified ai_events model', weight: 2, ref: 'P1-1', ev: shipped('ai_events + emitAiEvent() unify the event stream (PR #50).') },
