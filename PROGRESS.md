@@ -6,6 +6,21 @@ This file tracks all implementation work. Claude must read this at the start of 
 ---
 
 ## Current Focus
+Portfolio Agent — daily batch GitHub sync for all active enrolled students.
+
+### Portfolio GitHub Sync Agent (2026-06-22)
+- [x] `syncAllActiveStudentGitHubActivity()` — batch sync function in githubIntegrationService
+  - Date: 2026-06-22
+  - Session: CC-20260622-k7m2
+  - What changed:
+    - `backend/src/services/githubIntegrationService.ts` (modified): Added `syncAllActiveStudentGitHubActivity()`. Queries active enrollments, finds those with connected GitHub repos via `GitHubConnection.findAll({ where: { enrollment_id: { [Op.in]: activeIds } } })`, calls `syncStudentActivity()` per-student, isolates failures so one error does not abort others. Returns `{ synced, skipped, failed }` counters.
+    - `backend/src/services/schedulerService.ts` (modified): Added `PortfolioGitHubSyncAgent` cron job at `15 2 * * *` (2:15 AM UTC, offset from existing 2 AM jobs). Uses lazy `import()` pattern; logs structured JSON on completion.
+    - `backend/src/services/agentRegistrySeed.ts` (modified): Added registry entry for `PortfolioGitHubSyncAgent` with `agent_type: 'github_automation'`, `trigger_type: 'cron'`, `schedule: '15 2 * * *'`, `category: 'accelerator'`.
+    - `backend/src/services/__tests__/githubIntegrationService.test.ts` (modified): Rewrote test pattern to match ts-jest `isolatedModules` requirements — `jest.mock()` first, TypeScript `import` for service under test, `require()` inside test bodies for mock references. Added 3 new tests for `syncAllActiveStudentGitHubActivity` (happy path, failure isolation, empty-no-op).
+  - Verification: Jest 10/10 pass. `tsc --noEmit` clean. Also fixed pre-existing environment issue: node_modules had Jest 25 installed against `ts-jest` 29 — ran `npm install` to sync to Jest 29.7.0.
+  - Notes: Webhook-triggered syncs handle real-time push events; this job is the fallback for students who haven't pushed recently or whose webhooks missed. BC ticket 9946499479.
+
+## Previous Focus
 GitHub API integration for Architect Dashboard — OAuth flow, activity sync, webhook receiver.
 
 ---

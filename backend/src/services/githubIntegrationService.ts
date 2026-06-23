@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { GitHubConnection, StudentGithubActivity } from '../models';
+import { Op } from 'sequelize';
+import { GitHubConnection, StudentGithubActivity, Enrollment } from '../models';
 
 const GITHUB_API = 'https://api.github.com';
 const OAUTH_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
@@ -183,4 +184,53 @@ export function validateWebhookSignature(rawBody: Buffer, signature: string): bo
 export async function findEnrollmentByRepo(owner: string, repo: string): Promise<string | null> {
   const connection = await GitHubConnection.findOne({ where: { repo_owner: owner, repo_name: repo } });
   return connection?.enrollment_id ?? null;
+}
+
+// ─── Batch Sync (Portfolio Agent) ─────────────────────────────────────────────
+
+export async function syncAllActiveStudentGitHubActivity(): Promise<{
+  synced: number;
+  skipped: number;
+  failed: number;
+}> {
+  const activeEnrollments = await Enrollment.findAll({
+    where: { status: 'active' },
+    attributes: ['id'],
+  });
+
+  if (activeEnrollments.length === 0) return { synced: 0, skipped: 0, failed: 0 };
+
+  const activeIds = activeEnrollments.map((e: any) => e.id as string);
+
+  const allConnections = await GitHubConnection.findAll({
+    where: { enrollment_id: { [Op.in]: activeIds } },
+    attributes: ['enrollment_id', 'repo_owner', 'repo_name'],
+  });
+
+  const connections = allConnections.filter(
+    (c: any) => c.repo_owner && c.repo_name,
+  );
+
+  const skipped = activeIds.length - connections.length;
+  let synced = 0;
+  let failed = 0;
+
+  for (const connection of connections) {
+    try {
+      await syncStudentActivity(connection.enrollment_id);
+      synced++;
+    } catch (err: any) {
+      failed++;
+      console.error(JSON.stringify({
+        level: 'error',
+        service: 'backend',
+        event: 'portfolio_github_sync_student_failed',
+        outcome: 'failure',
+        error_class: err.constructor?.name ?? 'Error',
+        context: { enrollment_id: connection.enrollment_id, message: err.message },
+      }));
+    }
+  }
+
+  return { synced, skipped, failed };
 }
