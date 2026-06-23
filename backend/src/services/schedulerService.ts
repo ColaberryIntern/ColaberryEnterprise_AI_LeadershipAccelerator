@@ -5,6 +5,7 @@ import nodemailer from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
 import { env } from '../config/env';
+import { runWithRequestContext } from '../utils/requestContext';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
 import { generateMessage, buildConversationHistory } from './aiMessageService';
@@ -34,25 +35,29 @@ import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from '.
  * measures duration, logs to ai_agent_activity_logs, and updates agent metrics.
  */
 async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Promise<void> {
+  // Trace propagation (P1-4): seed a trace_id into AsyncLocalStorage so every downstream AI call this
+  // job makes (getInstrumentedOpenAI / emitAiEvent) correlates to THIS run instead of emitting null.
+  const traceId = uuidv4();
+  const traced = () => runWithRequestContext({ traceId }, fn);
+
   let agent: InstanceType<typeof AiAgent> | null = null;
   try {
     agent = await AiAgent.findOne({ where: { agent_name: agentName } });
   } catch {
     // If registry lookup fails, run the job anyway (don't break existing behavior)
-    await fn();
+    await traced();
     return;
   }
 
   // If agent not in registry, run untracked
   if (!agent) {
-    await fn();
+    await traced();
     return;
   }
 
   // Check enabled and paused status
   if (!agent.enabled || agent.status === 'paused') return;
 
-  const traceId = uuidv4();
   const start = Date.now();
   let result: 'success' | 'failed' = 'success';
   let errorMsg: string | null = null;
@@ -60,7 +65,7 @@ async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Pr
 
   try {
     await agent.update({ status: 'running' });
-    await fn();
+    await traced();
   } catch (err: any) {
     result = 'failed';
     errorMsg = err.message || String(err);

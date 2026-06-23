@@ -56,8 +56,8 @@ async function generateAreaTasks({
 }) {
   const key = openaiKey || process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY required');
-  const OpenAI = require(path.resolve(__dirname, '../../../../node_modules/openai')).default;
-  const openai = new OpenAI({ apiKey: key });
+  const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './openaiInstrumented'));
+  const openai = getInstrumentedOpenAI({ workflow_id: 'launch_pmo_task_gen' }, { apiKey: key });
 
   const today = todayIso || new Date().toISOString().slice(0, 10);
   const rosterStr = teamRoster.map((t) => `  - ${t.handle} (${t.displayName}) - ${t.role}: ${(t.hats || []).slice(0, 4).join(', ')}`).join('\n');

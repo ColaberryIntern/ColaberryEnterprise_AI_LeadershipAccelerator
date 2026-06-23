@@ -9,6 +9,7 @@ interface NavSection { label: string | null; links: NavLink[]; }
 
 const adminNavSections: NavSection[] = [
   { label: null, links: [
+    { path: '/admin/trust', label: 'Trust Center', icon: 'shield-lock' },
     { path: '/admin/dashboard', label: 'Dashboard', icon: 'grid' },
     { path: '/admin/war-room', label: 'War Room', icon: 'activity' },
   ]},
