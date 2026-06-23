@@ -24,8 +24,9 @@ config({ path: path.resolve(__dirname, '../../../.env.dev') });
 import { connectDatabase } from '../config/database';
 import '../models';
 import LiveSession from '../models/LiveSession';
+import { computeMaterialsUpdate, CourseMaterial } from './lib/anthropicCourseMaterials';
 
-const ANTHROPIC_COURSES: Array<{ title: string; type: string; url: string }> = [
+const ANTHROPIC_COURSES: CourseMaterial[] = [
   {
     title: 'Building with the Claude API (Anthropic Skilljar)',
     type: 'reading',
@@ -46,19 +47,14 @@ async function run(): Promise<void> {
   console.log(`[wireWeek3AnthropicCourses] Found ${sessions.length} Week 3 session(s).`);
 
   for (const session of sessions) {
-    const existing: Array<{ title: string; type: string; url: string }> = Array.isArray(session.materials_json)
-      ? (session.materials_json as Array<{ title: string; type: string; url: string }>)
-      : [];
-
-    const existingTitles = new Set(existing.map((m) => m.title));
-    const toAdd = ANTHROPIC_COURSES.filter((c) => !existingTitles.has(c.title));
+    const { toAdd, next } = computeMaterialsUpdate(session.materials_json, ANTHROPIC_COURSES);
 
     if (toAdd.length === 0) {
       console.log(`  [SKIP] Session ${session.id} (cohort ${session.cohort_id}) — course link already present.`);
       continue;
     }
 
-    await session.update({ materials_json: [...toAdd, ...existing] });
+    await session.update({ materials_json: next });
     console.log(`  [UPDATED] Session ${session.id} (cohort ${session.cohort_id}) — prepended: ${toAdd.map((c) => c.title).join(', ')}`);
   }
 
