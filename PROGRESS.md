@@ -6159,8 +6159,8 @@ This audit was produced after discovering the test runner was globally broken (J
 |---|---|---|---|---|---|
 | #70 | Portfolio GitHub Sync Agent | OPEN | Yes — `githubIntegrationService.test.ts` (10 tests) | ✅ Yes | 10/10 pass |
 | #57 | AnthropicCourseWrapper | OPEN | No unit tests — React component; browser-tested locally (screenshots in BC [#9946499773](https://app.basecamp.com/3945211/buckets/47502609/todos/9946499773)) | ✅ Yes (browser) | `tsc --noEmit` exit 0 · local CRA dev server · Session 2 / Week 1 lab loaded correctly · CC-20260622-8k4m |
-| #48 | Wire Week 3 Skilljar course | OPEN | No — config/data change | ❌ No | — |
-| #45 | Wire Week 2 Skilljar course | OPEN | No — config/data change | ❌ No | — |
+| #48 | Wire Week 3 Skilljar course | OPEN | No unit tests — backfill script run locally against dev DB | ✅ Yes (DB) | Session 4 `materials_json` prepended with `Building with the Claude API` → `anthropic.skilljar.com/claude-with-the-anthropic-api` · CC-20260622-k7m2 |
+| #45 | Wire Week 2 Skilljar course | OPEN | No unit tests — backfill script run locally against dev DB | ✅ Yes (DB) | Session 3 `materials_json` prepended with `Introduction to Agent Skills` → `anthropic.skilljar.com/introduction-to-agent-skills` · CC-20260622-k7m2 |
 | #43 | Wire Week 1 Skilljar courses | OPEN | No unit tests — also includes hooks + countdown NaN fix; browser-tested locally same session | ✅ Yes (browser) | `tsc --noEmit` exit 0 · hooks error gone · countdown renders · session detail page loads with Materials section · CC-20260622-k7m9 |
 | #41 | July 2026 cohort seed | OPEN | No — seed script | ❌ No | — |
 | #34 | Mentor Agent + human-review queue | MERGED | Yes — `mentorFeedbackService.test.ts` (11 tests) | ❌ No | Passed at merge 2026-06-17; not re-run since env broke |
@@ -6173,7 +6173,7 @@ This audit was produced after discovering the test runner was globally broken (J
 | #2 | Intelligence Layer L2+L3 | MERGED | No | ❌ No | — |
 | #1 | Intelligence Layer L1+L2 | MERGED | No | ❌ No | — |
 
-**PRs with locally-verified tests today: 4 of 15** — #70 (unit tests, 10/10), #16 (unit tests via shared file), #57 (browser, screenshots in BC), #43 (browser, hooks + countdown fix verified in local CRA server)
+**PRs with locally-verified tests today: 6 of 15** — #70 (unit tests, 10/10), #16 (unit tests via shared file), #57 (browser, screenshots in BC), #43 (browser, hooks + countdown fix), #45 (DB backfill — Session 3 materials updated), #48 (DB backfill — Session 4 materials updated)
 
 **To work through the backlog starting from #1:** run `cd backend && npx jest --no-coverage` after checking out each branch. Fix any failures before marking the PR verified. The test runner is now healthy (Jest 29.7.0 + ts-jest 29.4.11 in sync after today's `npm install`).
 
