@@ -13,6 +13,7 @@ import {
   getCostBreakdown,
 } from '../services/trustMetricsService';
 import { getAiValue } from '../services/aiValueService';
+import { getRetentionReport } from '../services/retentionReportService';
 
 function fail(res: Response, event: string, err: unknown): void {
   const errorClass = err instanceof Error ? err.constructor.name : 'UnknownError';
@@ -96,5 +97,16 @@ export async function handleGetValue(_req: Request, res: Response): Promise<void
     res.json(await getAiValue());
   } catch (err) {
     fail(res, 'trust_value', err);
+  }
+}
+
+export async function handleGetRetention(req: Request, res: Response): Promise<void> {
+  try {
+    // Single optional numeric query param; the service clamps to [1,120]. Read-only (dry-run).
+    const raw = req.query.ttlMonths;
+    const ttlMonths = raw != null ? Number(raw) : undefined;
+    res.json(await getRetentionReport(Number.isFinite(ttlMonths) ? ttlMonths : undefined));
+  } catch (err) {
+    fail(res, 'trust_retention', err);
   }
 }
