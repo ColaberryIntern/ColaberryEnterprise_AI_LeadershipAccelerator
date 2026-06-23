@@ -134,11 +134,43 @@ async function bcGetAll(p) {
   }
   return out;
 }
+// --- Self-reply loop guard -------------------------------------------------
+// Registry of comment IDs THIS process has posted. The dispatcher must never
+// treat its own output as an inbound @CB mention. Tracking by comment ID is
+// sanitizer-proof (Basecamp's rich-text sanitizer can strip an in-band HTML
+// marker) and identity-proof (works even when the BC token degrades to a
+// different person). Seeded from state at tick start, persisted in saveState.
+const ownComments = new Set();
+// True if this recording is OUR OWN output and must be skipped: a comment this
+// process posted (by id), or anything authored by the identity we post as.
+function isOwnOutput(rec, ownSet, postingId) {
+  if (!rec) return false;
+  if (ownSet && ownSet.has(rec.id)) return true;
+  if (postingId != null && rec.creator && rec.creator.id === postingId) return true;
+  return false;
+}
+
 async function bcPost(p, body) {
   if (DRY) { console.log('[dry] POST', p, JSON.stringify(body).slice(0, 200)); return { id: 'dry' }; }
   const r = await fetch(p.startsWith('http') ? p : BASE + p, { method: 'POST', headers: H(), body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`POST ${p} -> ${r.status} ${await r.text()}`);
-  return r.json();
+  const res = await r.json();
+  // Remember every comment we create so the next scan skips our own output.
+  if (/\/comments\.json$/.test(p) && res && typeof res.id !== 'undefined') ownComments.add(res.id);
+  return res;
+}
+
+// The Basecamp identity this process is actually posting AS (resolved once per
+// tick from /my/profile.json). The loop-safety model assumes CB posts as CB
+// System (37708014), which is NOT in ALLOWED_REQUESTER_IDS, so its own comments
+// are naturally ignored. On 2026-06-22 the BC token degraded to Ali (17454835,
+// the #1 allowed requester) after the 06-19 token rekey; every author-based
+// guard collapsed at once and CB answered itself ~60x/hr (1,245 comments). We
+// now resolve the identity each tick and HALT if it is not CB System.
+let selfId = null;
+async function resolveSelfId() {
+  try { const me = await bcGet('/my/profile.json'); return me && typeof me.id !== 'undefined' ? me.id : null; }
+  catch (e) { console.error(`  resolveSelfId failed: ${e.message}`); return null; }
 }
 
 function acquireLock() {
@@ -160,7 +192,12 @@ function loadState() {
     return s;
   } catch { return { last_tick: null, processed: {}, replyCounts: {}, alarmed: {} }; }
 }
-function saveState(s) { fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2)); }
+function saveState(s) {
+  // Persist the most recent own-comment IDs (capped to keep state bounded; only
+  // very recent IDs are ever consulted given the 2h lookback window).
+  s.ownComments = [...ownComments].slice(-3000);
+  fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2));
+}
 const mention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
 
 // --- Duplicate-reply circuit breaker ---------------------------------------
@@ -203,6 +240,32 @@ async function alarmCircuitBreak(state, m, count) {
     });
     console.error(`  circuit-break ALARM sent for ${m.key} (${count} replies)`);
   } catch (e) { console.error(`  circuit-break alarm failed: ${e.message}`); }
+}
+
+// Rate-limited alarm when the dispatcher's posting identity is not CB System
+// (token degradation). Fires at most once / 6h so a stuck token does not email
+// Ali every 3 minutes. Never throws into the tick.
+async function alarmIdentityDegraded(state, gotId) {
+  const last = state.identityAlarmedAt ? new Date(state.identityAlarmedAt).getTime() : 0;
+  if (Date.now() - last < 6 * 3600 * 1000) return;        // at most once / 6h
+  state.identityAlarmedAt = new Date().toISOString();
+  if (DRY) { console.log(`[dry] would alarm identity-degraded (got ${gotId})`); return; }
+  try {
+    if (!process.env.MANDRILL_API_KEY) { console.error('  identity alarm: MANDRILL_API_KEY unset, logged only'); return; }
+    const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    await transport.sendMail({
+      from: '"CB Dispatcher" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      subject: `[CB Dispatcher] HALTED - Basecamp token degraded (posting as ${gotId}, not CB System)`,
+      text: `The CB inbound-dispatcher resolved its Basecamp posting identity as ${gotId}, but it must post as CB System (${CB_SYSTEM_ID}).\n\nThe dispatcher has HALTED (it is posting nothing) to avoid a self-reply loop like 2026-06-22, when a degraded token made CB answer its own comments ~60x/hr (1,245 comments before it was stopped).\n\nRoot cause is almost always the BC token: the dedicated CB System token rotated/expired and the cron-env-wrapper fell back to a token that resolves to a real person. Restore a CB System (${CB_SYSTEM_ID}) token; the next tick then resumes automatically.`,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.error(`  identity-degraded ALARM sent (got ${gotId})`);
+  } catch (e) { console.error(`  identity alarm failed: ${e.message}`); }
 }
 
 // --- Recipes ---------------------------------------------------------------
@@ -358,6 +421,7 @@ async function findNewMentionsByFeed(state, cutoffMs) {
   const seen = new Set();
   const consider = (rec, recId, key) => {
     if (seen.has(key) || state.processed[key]) return;
+    if (isOwnOutput(rec, ownComments, selfId)) return; // never answer our own output (self-reply loop guard)
     if (new Date(rec.created_at).getTime() < cutoffMs) return;
     if (!ALLOWED_REQUESTER_IDS.has(rec.creator?.id)) return;
     if (!isCBMention(rec.content || '')) return;
@@ -459,6 +523,7 @@ async function findNewMentionsByWalk(state, cutoffMs) {
               : await bcGet(`/buckets/${bucketId}/messages/${msg.id}.json`);
             const created = new Date(fullMsg.created_at || msg.created_at).getTime();
             if (created >= cutoffMs
+                && !isOwnOutput({ id: msg.id, creator: fullMsg.creator || msg.creator }, ownComments, selfId)
                 && ALLOWED_REQUESTER_IDS.has(fullMsg.creator?.id ?? msg.creator?.id)
                 && isCBMention(fullMsg.content || '')
                 && !isAutomatedAgentCard(fullMsg.content || '')) {
@@ -516,6 +581,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
   catch (_e) { return; }
   if (!Array.isArray(comments)) return;
   for (const c of comments) {
+    if (isOwnOutput(c, ownComments, selfId)) continue; // never answer our own output (self-reply loop guard)
     if (!ALLOWED_REQUESTER_IDS.has(c.creator?.id)) continue;
     const ctime = new Date(c.created_at).getTime();
     if (ctime < cutoffMs) continue;
@@ -528,7 +594,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 }
 
 // Exported for unit tests. Guarded IIFE below only runs when executed directly.
-module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk };
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID };
 
 if (require.main !== module) return;
 
@@ -552,6 +618,21 @@ if (require.main !== module) return;
   try {
     state = loadState();
     console.log(`tick ${new Date().toISOString()}, last=${state.last_tick}`);
+    // Seed our own-comment registry so we never answer comments we posted.
+    if (Array.isArray(state.ownComments)) for (const id of state.ownComments) ownComments.add(id);
+    // Resolve who we are posting AS. The loop-safety model REQUIRES CB System.
+    // If the token has degraded to a real person, HALT (post nothing) rather
+    // than ignite a self-reply loop. Resumes automatically once the token is fixed.
+    selfId = await resolveSelfId();
+    if (selfId !== CB_SYSTEM_ID) {
+      console.error(`  IDENTITY DEGRADED: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}; halting tick (no posts) to avoid a self-reply loop.`);
+      await alarmIdentityDegraded(state, selfId);
+      state.last_tick = new Date().toISOString();
+      if (!DRY) saveState(state);
+      clearTimeout(timeout);
+      releaseLock();
+      process.exit(0);
+    }
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
