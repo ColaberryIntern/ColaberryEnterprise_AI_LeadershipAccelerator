@@ -1006,6 +1006,12 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     text: stripHtml(html),
     headers: {
       'X-MC-Metadata': JSON.stringify(mcMetadata),
+      // Force Mandrill open + click tracking on every send. The account-level
+      // default has open-tracking OFF (verified empirically 2026-06-23), so without
+      // this header no open pixel is injected and opens never reach the webhook —
+      // the War Room shows zero engagement even when emails are opened. Clicks are
+      // wrapped by account default, but we set clicks_all explicitly for determinism.
+      'X-MC-Track': 'opens,clicks_all',
       'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
       'X-MC-Tags': action.campaign_id ? `campaign-sequence,${mcMetadata.trigger || 'campaign'}` : 'campaign-sequence',
     },
