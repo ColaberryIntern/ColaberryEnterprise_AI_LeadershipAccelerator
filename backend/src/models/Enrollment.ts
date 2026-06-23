@@ -13,10 +13,7 @@ export interface EnrollmentAttributes {
   paysimple_invoice_id?: string;
   paysimple_customer_id?: string;
   paysimple_external_id?: string;
-  // Stripe payment fields (training program)
-  stripe_session_id?: string;
-  stripe_payment_intent_id?: string;
-  stripe_charge_id?: string;
+  paysimple_payment_id?: string;
   intensives?: string;
   industry_track?: string;
   referral_channel?: string;
@@ -53,9 +50,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare paysimple_invoice_id: string;
   declare paysimple_customer_id: string;
   declare paysimple_external_id: string;
-  declare stripe_session_id: string;
-  declare stripe_payment_intent_id: string;
-  declare stripe_charge_id: string;
+  declare paysimple_payment_id: string;
   declare intensives: string;
   declare industry_track: string;
   declare referral_channel: string;
@@ -128,19 +123,11 @@ Enrollment.init(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
-    stripe_session_id: {
+    paysimple_payment_id: {
+      // PaySimple's payment_id from the payment_created webhook — idempotency key
       type: DataTypes.STRING(255),
       allowNull: true,
       unique: true,
-    },
-    stripe_payment_intent_id: {
-      type: DataTypes.STRING(255),
-      allowNull: true,
-      unique: true,
-    },
-    stripe_charge_id: {
-      type: DataTypes.STRING(255),
-      allowNull: true,
     },
     intensives: {
       // Comma-separated SKUs: AISA-BUNDLE | AISA-S1 | AISA-S2 | AISA-S3 | AISA-S4
@@ -248,7 +235,7 @@ Enrollment.init(
       { fields: ['created_at'], name: 'idx_enrollments_created_at' },
       { fields: ['cohort_id'], name: 'idx_enrollments_cohort_id' },
       { fields: ['payment_status'], name: 'idx_enrollments_payment_status' },
-      { fields: ['stripe_payment_intent_id'], name: 'idx_enrollments_stripe_pi', where: { stripe_payment_intent_id: { [require('sequelize').Op.ne]: null } } },
+      { fields: ['paysimple_payment_id'], name: 'idx_enrollments_ps_payment', where: { paysimple_payment_id: { [require('sequelize').Op.ne]: null } } },
     ],
   }
 );

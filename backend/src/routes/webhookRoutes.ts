@@ -6,29 +6,11 @@ import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
 import { handleApolloPhoneReveal } from '../controllers/apolloWebhookController';
 import { handleAdvisoryWebhook, handleAdvisoryWebhookHead } from '../controllers/advisorySyncController';
-import { constructStripeEvent, handleStripeEvent } from '../services/stripeWebhookService';
 
 const router = Router();
 
 // PaySimple payment webhook — JSON body
 router.post('/api/webhook/paysimple', express.json(), handlePaySimpleWebhook);
-
-// Stripe webhook — raw body required for HMAC-SHA256 signature verification
-router.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
-  const signature = req.headers['stripe-signature'] as string | undefined;
-  if (!signature) {
-    res.status(400).json({ error: 'Missing stripe-signature header' });
-    return;
-  }
-  try {
-    const event = constructStripeEvent(req.body as Buffer, signature);
-    await handleStripeEvent(event);
-    res.json({ received: true });
-  } catch (err: any) {
-    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'stripe_webhook_error', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
-    res.status(400).json({ error: err.message });
-  }
-});
 
 // Mandrill webhook — uses URL-encoded body (mandrill_events=<JSON>)
 router.head('/api/webhook/mandrill', handleMandrillWebhookHead);

@@ -1,41 +1,46 @@
--- Migration: Add Stripe fields to enrollments + create enrollment_leads table
--- Created: 2026-06-16
--- Session: CC-20260616-s7r1
--- Run against: CCPP Postgres (accelerator DB) via: ssh root@95.216.199.47 then docker exec
+-- Migration: Add PaySimple enrollment tracking fields + enrollment_leads table
+-- Created: 2026-06-23
+-- Replaces: add_stripe_enrollment_tracking.sql (Stripe design abandoned; PaySimple is the payment system)
+-- Run against: accelerator DB via: ssh root@95.216.199.47 then docker exec
 -- Apply: psql -U accelerator -d accelerator < /path/to/this/file
--- Idempotent: all statements are wrapped in IF NOT EXISTS / conditional guards
+-- Idempotent: all statements wrapped in IF NOT EXISTS / DROP IF EXISTS / conditional guards
 
 BEGIN;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 1. Add Stripe columns to enrollments
+-- 1. Remove Stripe columns if they were applied by the previous interim migration
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE enrollments
-  ADD COLUMN IF NOT EXISTS stripe_session_id        VARCHAR(255)  NULL,
-  ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255)  NULL,
-  ADD COLUMN IF NOT EXISTS stripe_charge_id         VARCHAR(255)  NULL,
-  ADD COLUMN IF NOT EXISTS intensives               VARCHAR(500)  NULL,
-  ADD COLUMN IF NOT EXISTS industry_track           VARCHAR(100)  NULL,
-  ADD COLUMN IF NOT EXISTS referral_channel         VARCHAR(50)   NULL,
-  ADD COLUMN IF NOT EXISTS amount_paid              DECIMAL(10,2) NULL,
-  ADD COLUMN IF NOT EXISTS enrolled_at              TIMESTAMPTZ   NULL;
+  DROP COLUMN IF EXISTS stripe_session_id,
+  DROP COLUMN IF EXISTS stripe_payment_intent_id,
+  DROP COLUMN IF EXISTS stripe_charge_id;
 
--- Unique constraints for Stripe ID idempotency
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_enrollments_stripe_session_id') THEN
-    ALTER TABLE enrollments ADD CONSTRAINT uq_enrollments_stripe_session_id UNIQUE (stripe_session_id);
-  END IF;
-END $$;
+ALTER TABLE enrollments
+  DROP CONSTRAINT IF EXISTS uq_enrollments_stripe_session_id,
+  DROP CONSTRAINT IF EXISTS uq_enrollments_stripe_payment_intent_id;
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 2. Add PaySimple payment tracking columns
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE enrollments
+  ADD COLUMN IF NOT EXISTS paysimple_payment_id VARCHAR(255)  NULL,
+  ADD COLUMN IF NOT EXISTS amount_paid          DECIMAL(10,2) NULL,
+  ADD COLUMN IF NOT EXISTS enrolled_at          TIMESTAMPTZ   NULL,
+  ADD COLUMN IF NOT EXISTS intensives           VARCHAR(500)  NULL,
+  ADD COLUMN IF NOT EXISTS industry_track       VARCHAR(100)  NULL,
+  ADD COLUMN IF NOT EXISTS referral_channel     VARCHAR(50)   NULL;
+
+-- Unique constraint on paysimple_payment_id (idempotency key — PaySimple's payment ID)
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_enrollments_stripe_payment_intent_id') THEN
-    ALTER TABLE enrollments ADD CONSTRAINT uq_enrollments_stripe_payment_intent_id UNIQUE (stripe_payment_intent_id);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_enrollments_paysimple_payment_id') THEN
+    ALTER TABLE enrollments ADD CONSTRAINT uq_enrollments_paysimple_payment_id UNIQUE (paysimple_payment_id);
   END IF;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 2. Create enrollment_leads (funnel tracking pre-payment)
+-- 3. Create enrollment_leads (funnel tracking — pre and post payment)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS enrollment_leads (
