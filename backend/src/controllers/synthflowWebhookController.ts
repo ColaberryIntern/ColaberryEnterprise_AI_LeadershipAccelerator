@@ -7,6 +7,7 @@ import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
 import { logActivity } from '../services/activityService';
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
 import { getTestOverrides } from '../services/settingsService';
 
@@ -359,7 +360,7 @@ async function summarizeTranscriptForSms(firstName: string, transcript: string):
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('No OpenAI key');
 
-    const client = new OpenAI({ apiKey });
+    const client = getInstrumentedOpenAI({ workflow_id: 'voice_summary' }, { apiKey });
     const response = await client.chat.completions.create({
       model: env.chatModel,
       max_tokens: 150,

@@ -1,4 +1,4 @@
-version: "3.8"
+name: accelerator-dev2
 
 # Second dev instance — port 9998
 # Run: docker compose -p colaberry-dev2 -f docker-compose.dev2.yml up -d

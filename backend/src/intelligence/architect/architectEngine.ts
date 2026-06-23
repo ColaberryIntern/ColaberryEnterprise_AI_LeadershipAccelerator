@@ -13,6 +13,8 @@
  * All execution decisions are deterministic.
  */
 
+import { getInstrumentedOpenAI } from '../../services/openaiInstrumented';
+
 export type Phase = 'identify' | 'clarify' | 'assess' | 'plan' | 'confirm' | 'complete';
 
 export interface ConversationTurn {
@@ -487,8 +489,7 @@ async function handleConfirm(state: ConversationState, input: string): Promise<T
 
 async function classifyIntentType(input: string): Promise<ArchitectIntent['intent_type']> {
   try {
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'architect' });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini', temperature: 0, max_tokens: 50,
       response_format: { type: 'json_object' },
@@ -526,8 +527,7 @@ IMPORTANT RULES:
 /** Generate a clean 3-5 word process name from conversation context */
 async function generateProcessName(description: string, requirements: string[]): Promise<string> {
   try {
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'architect' });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini', temperature: 0, max_tokens: 30,
       response_format: { type: 'json_object' },

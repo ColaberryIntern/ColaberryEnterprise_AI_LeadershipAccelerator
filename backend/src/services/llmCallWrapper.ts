@@ -1,7 +1,10 @@
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { ContentGenerationLog } from '../models/ContentGenerationLog';
-import { logAiEvent } from './aiEventService';
+import { logAiEvent, emitAiEvent } from './aiEventService';
+import { redactSensitive } from '../utils/piiRedaction';
+import { computeCostUsd } from '../utils/aiCost';
+import { getTraceId } from '../utils/requestContext';
 
 // ─── Shared OpenAI singleton ────────────────────────────────────────────────
 let _openai: OpenAI | null = null;
@@ -133,6 +136,17 @@ export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallRe
       } catch (logErr) {
         console.error('[LLMWrapper] Failed to log cache hit:', logErr);
       }
+      // Unified event (TBI audit P1): a cache hit is a successful call with zero new spend.
+      emitAiEvent({
+        event_type: 'llm.call', outcome: 'success', external_system: 'openai',
+        trace_id: getTraceId(),
+        workflow_id: generationType, model,
+        prompt_tokens: cached.usage.prompt_tokens,
+        completion_tokens: cached.usage.completion_tokens,
+        total_tokens: cached.usage.total_tokens,
+        cost_usd: 0, duration_ms: 0, cache_hit: true,
+        metadata: { step, lesson_id: lessonId, enrollment_id: enrollmentId || null },
+      }).catch(() => {});
       return { content: cached.content, usage: cached.usage, cacheHit: true };
     }
   }
@@ -149,8 +163,12 @@ export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallRe
       const openaiParams: any = {
         model,
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          // SECURITY (TBI audit P0-3): strip high-sensitivity identifiers (SSN, payment cards)
+          // before the prompt leaves our systems for a third-party LLM. The cache key / inputs_hash
+          // above use the originals; only the outbound payload is sanitized. Names/emails are kept
+          // (legitimate personalization) — see utils/piiRedaction.ts.
+          { role: 'system', content: redactSensitive(systemPrompt) },
+          { role: 'user', content: redactSensitive(userPrompt) },
         ],
         temperature,
         max_tokens: maxTokens,
@@ -201,6 +219,19 @@ export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallRe
         console.error('[LLMWrapper] Failed to log success:', logErr);
       }
 
+      // Unified event + computed cost (TBI audit P1) — turns the dashboard cost tile live.
+      const costUsd = computeCostUsd(model, usage.prompt_tokens, usage.completion_tokens);
+      emitAiEvent({
+        event_type: 'llm.call', outcome: 'success', external_system: 'openai',
+        trace_id: getTraceId(),
+        workflow_id: generationType, model,
+        prompt_tokens: usage.prompt_tokens,
+        completion_tokens: usage.completion_tokens,
+        total_tokens: usage.total_tokens,
+        cost_usd: costUsd, duration_ms: durationMs, cache_hit: false,
+        metadata: { step, lesson_id: lessonId, enrollment_id: enrollmentId || null },
+      }).catch(() => {});
+
       // Slow call detection
       if (durationMs > SLOW_CALL_THRESHOLD_MS) {
         logAiEvent('LLMWrapper', 'SLOW_LLM_CALL_DETECTED', 'lesson', lessonId, {
@@ -243,6 +274,16 @@ export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallRe
   } catch (logErr) {
     console.error('[LLMWrapper] Failed to log failure:', logErr);
   }
+
+  // Unified event (TBI audit P1): record the failed call for observability.
+  emitAiEvent({
+    event_type: 'llm.call', outcome: 'failure', external_system: 'openai',
+    trace_id: getTraceId(),
+    workflow_id: generationType, model,
+    duration_ms: durationMs,
+    error_class: lastError?.name || 'Error',
+    metadata: { step, lesson_id: lessonId, enrollment_id: enrollmentId || null, message: lastError?.message },
+  }).catch(() => {});
 
   throw lastError || new Error('LLM call failed after retries');
 }
