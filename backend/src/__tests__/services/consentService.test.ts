@@ -8,6 +8,8 @@ import {
   normalizePhone,
   subjectCandidates,
   getConsentMode,
+  recordConsent,
+  revokeConsent,
 } from '../../services/consentService';
 
 jest.mock('../../models/ConsentRecord', () => ({
@@ -18,12 +20,14 @@ jest.mock('../../services/settingsService', () => ({ getSetting: jest.fn() }));
 jest.mock('../../services/aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
 
 const findOne = ConsentRecord.findOne as unknown as jest.Mock;
+const create = ConsentRecord.create as unknown as jest.Mock;
 const mockSetting = getSetting as unknown as jest.Mock;
 const mockEmit = emitAiEvent as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   findOne.mockResolvedValue(null);
+  create.mockResolvedValue({ id: 'row-1' });
   mockSetting.mockResolvedValue('shadow');
 });
 
@@ -147,5 +151,37 @@ describe('assertConsentForSend gate (mode-aware, shadow-first, fail-open)', () =
     expect(await getConsentMode()).toBe('shadow');
     mockSetting.mockResolvedValue('enforce');
     expect(await getConsentMode()).toBe('enforce');
+  });
+});
+
+describe('consent capture API (Phase 2 — recordConsent / revokeConsent)', () => {
+  it('recordConsent normalizes an email subject id and defaults status to granted', async () => {
+    await recordConsent({ subjectType: 'email', subjectId: '  Lead@CO.com ', channel: 'email', basis: 'opt_in_form', source: 'web_form' });
+    expect(create).toHaveBeenCalledTimes(1);
+    const row = create.mock.calls[0][0];
+    expect(row.subject_id).toBe('lead@co.com'); // normalized
+    expect(row.status).toBe('granted'); // default
+    expect(row.basis).toBe('opt_in_form');
+  });
+
+  it('recordConsent is swallow-safe — a DB error returns null, never throws', async () => {
+    create.mockRejectedValue(new Error('insert failed'));
+    const r = await recordConsent({ subjectType: 'lead', subjectId: '5', channel: 'sms', source: 'x' });
+    expect(r).toBeNull();
+  });
+
+  it('revokeConsent with a channel writes one revoked row', async () => {
+    await revokeConsent({ subjectType: 'lead', subjectId: '5', channel: 'sms', source: 'sms_stop_keyword' });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0].status).toBe('revoked');
+    expect(create.mock.calls[0][0].channel).toBe('sms');
+  });
+
+  it('revokeConsent without a channel revokes all three channels', async () => {
+    await revokeConsent({ subjectType: 'lead', subjectId: '5', source: 'unsubscribe:admin' });
+    expect(create).toHaveBeenCalledTimes(3);
+    const channels = create.mock.calls.map((c) => c[0].channel).sort();
+    expect(channels).toEqual(['email', 'sms', 'voice']);
+    expect(create.mock.calls.every((c) => c[0].status === 'revoked')).toBe(true);
   });
 });
