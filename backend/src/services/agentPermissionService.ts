@@ -14,6 +14,7 @@ import { Op } from 'sequelize';
 import AgentWriteAudit from '../models/AgentWriteAudit';
 import ProposedAgentAction from '../models/ProposedAgentAction';
 import { AiAgent } from '../models';
+import { authorizeAgentAction } from './agentAuthorizationService';
 
 // ---------------------------------------------------------------------------
 // Permission Tiers
@@ -102,6 +103,14 @@ export async function validateAgentWrite(
 ): Promise<PermissionCheckResult> {
   const permission = getAgentPermission(agentName);
   const startTime = Date.now();
+
+  // ABAC shadow gate (TBI P2-1). Fire-and-forget + swallow-safe: records the would-deny verdict to
+  // ai_events (agent.authorization) for the Trust dashboard but NEVER alters this tier decision in
+  // shadow mode. Passing the known tier avoids a lookup. The existing tier logic below still governs.
+  void authorizeAgentAction({
+    agentId, agentName, action: operation, resourceType: targetTable, resourceId: targetId,
+    tier: permission.tier,
+  }).catch(() => { /* shadow authz must never break the write path */ });
 
   // Read-only agents cannot write anything
   if (permission.tier === 'read_only') {

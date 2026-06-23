@@ -18,7 +18,13 @@ import { runStrategyArchitectAgent } from '../../services/agents/strategy/strate
 import { STRATEGY_CONFIGS } from '../../services/agents/strategy/departmentStrategyConfigs';
 import { AiAgent } from '../../models';
 
+import { requireAdmin } from '../../middlewares/authMiddleware';
+
 const router = Router();
+
+// SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
+// endpoints publicly callable. Require an authenticated admin for every route below.
+router.use(requireAdmin);
 
 // List all departments with scores
 router.get('/api/admin/intelligence/departments', async (_req: Request, res: Response) => {

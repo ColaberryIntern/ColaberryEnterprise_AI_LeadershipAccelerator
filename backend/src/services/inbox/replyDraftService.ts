@@ -3,6 +3,7 @@
  * Drafts are stored in the inbox_reply_drafts table for human review before sending.
  */
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import InboxEmail from '../../models/InboxEmail';
 import InboxClassification from '../../models/InboxClassification';
 import InboxStyleProfile from '../../models/InboxStyleProfile';
@@ -92,7 +93,7 @@ Subject rules:
   let generationFailed = false;
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = getInstrumentedOpenAI({ workflow_id: 'inbox_reply' });
 
     console.log(`${LOG_PREFIX} Generating draft for email ${emailId} (category=${category})`);
 

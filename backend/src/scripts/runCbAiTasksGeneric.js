@@ -79,8 +79,8 @@ function isAi(content, description, assignees) {
 const APPROVE_VERBS_RE = /^(review and approve|review|approve|finalize|sign[- ]?off|conduct (final )?review)\s+/i;
 
 async function generateDeliverable({ task, projectName, projectDescription, reviewerName, threadComments }) {
-  const OpenAI = require(path.resolve(__dirname, '../../../node_modules/openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './lib/openaiInstrumented'));
+  const openai = getInstrumentedOpenAI({ workflow_id: 'cb_ai_tasks_generic' });
   const systemPrompt = `You are CB System, the AI execution arm for Colaberry's project portfolio.
 
 You are taking the FIRST PASS on this AI-tier task for project "${projectName}". Your output is a DRAFT deliverable that the human reviewer (${reviewerName}) reviews + refines + sends if it's an outbound communication.

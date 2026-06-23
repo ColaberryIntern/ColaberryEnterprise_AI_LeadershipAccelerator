@@ -1,6 +1,9 @@
-version: "3.8"
+name: accelerator-dev
 
-# IMPORTANT: Always run with -p flag: docker compose -p colaberry-dev -f docker-compose.dev.yml up -d
+# Project 'accelerator-dev' is set via the top-level `name:` above — it matches the running
+# accelerator-dev-* containers. Do NOT rely on a -p flag: without a baked name this file would
+# default to the directory name (colaberry-accelerator = PROD's project) and a plain
+# `docker compose -f docker-compose.dev.yml up` could recreate/remove prod containers.
 # This prevents Docker from conflicting with production containers.
 
 services:

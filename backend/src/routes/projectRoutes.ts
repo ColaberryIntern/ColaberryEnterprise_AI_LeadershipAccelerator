@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 
 const router = Router();
 
@@ -710,8 +711,7 @@ router.post('/api/portal/project/requirements/expand-questions', requireParticip
       { phase: 'differentiators', category: 'Differentiators',        axis: 'Moat — none yet, simulation/digital twin, or proprietary models?' },
     ];
 
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -8411,8 +8411,7 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
         // Real changes — use LLM with delta context, request bullets
         const changedReqs = processReqs.filter(r => r.verified_by === 'process_level' || r.verified_by === 'e2e_test' || r.verified_by === 'manual').slice(0, 5);
         const newlyMatched = matched - preserved;
-        const OpenAI = (await import('openai')).default;
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 200,
           messages: [{
@@ -8652,8 +8651,7 @@ Keep it practical, structured, and non-generic. Use specifics from the context a
     // Use OpenAI for the learn response
     let response = '';
     try {
-      const { default: OpenAI } = await import('openai');
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
@@ -8745,8 +8743,7 @@ router.post('/api/portal/project/steer/:actionId/apply', requireParticipant, asy
     if (intent?.type === 'add_process') {
       {
         // Delegate to existing NLP add logic
-        const OpenAI = (await import('openai')).default;
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 2000,
           response_format: { type: 'json_object' },
@@ -9924,8 +9921,7 @@ router.post('/api/portal/project/business-processes/add', requireParticipant, as
     if (!description.trim()) { res.status(400).json({ error: 'Description is required' }); return; }
 
     // Use LLM to generate process name + requirements from description
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 2000,
       response_format: { type: 'json_object' },
