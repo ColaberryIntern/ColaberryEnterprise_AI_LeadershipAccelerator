@@ -25,15 +25,17 @@ const SIGNALS: LiveSignals = {
   hoursSaved30d: 24,
   consentChecks7d: 30,
   consentEnforcing: false,
+  abacChecks7d: 40,
+  abacEnforcing: false,
 };
 
 describe('trustRubric', () => {
-  it('rolls Security up to a deterministic 80 (no live criteria)', () => {
+  it('rolls Security up with the live ABAC criterion (shadow)', () => {
     const d = evaluateDimension('security', SIGNALS)!;
-    // admin-auth(3)+jwt(1)+webhook(1)+transport(2)+ci-secrets(1) met = 800 ; abac(2) open = 0 ; /10 = 80
-    expect(d.score).toBe(80);
+    // admin-auth(3)+jwt(1)+webhook(1)+transport(2)+ci-secrets(1) met = 800 ; abac(2) shadow-live = 120 ; /10 = 92
+    expect(d.score).toBe(92);
     expect(d.band).toBe('green');
-    expect(d.state).toBe('baseline'); // no live criterion in Security
+    expect(d.state).toBe('live'); // abac is now a live criterion in Security
   });
 
   it('computes Observability live from the signals', () => {
@@ -110,6 +112,25 @@ describe('trustRubric', () => {
     const idle = evaluateDimension('privacy', { ...SIGNALS, consentChecks7d: 0 })!.criteria.find((c) => c.key === 'consent')!;
     expect(idle.status).toBe('partial');
     expect(idle.pct).toBe(55);
+  });
+
+  it('both ABAC criteria are live: shadow→partial, enforcing→met, idle→partial-low (never open)', () => {
+    for (const [dim, key] of [['security', 'abac'], ['governance', 'abac-gov']] as const) {
+      // Shadow (default) with traffic → partial 60, live
+      const shadow = evaluateDimension(dim, SIGNALS)!.criteria.find((c) => c.key === key)!;
+      expect(shadow.status).toBe('partial');
+      expect(shadow.source).toBe('live');
+      expect(shadow.pct).toBe(60);
+      expect(shadow.evidence).toContain('SHADOW');
+      // Enforcing + checks → met 100
+      const enforcing = evaluateDimension(dim, { ...SIGNALS, abacEnforcing: true })!.criteria.find((c) => c.key === key)!;
+      expect(enforcing.status).toBe('met');
+      expect(enforcing.pct).toBe(100);
+      // Shipped but no agent actions in 7d → still live, partial-low (never 'open' again)
+      const idle = evaluateDimension(dim, { ...SIGNALS, abacChecks7d: 0 })!.criteria.find((c) => c.key === key)!;
+      expect(idle.status).toBe('partial');
+      expect(idle.pct).toBe(50);
+    }
   });
 
   it('roi-attribution flips to partial-live once time-saved value exists', () => {

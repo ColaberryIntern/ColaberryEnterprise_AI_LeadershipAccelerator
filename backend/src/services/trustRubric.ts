@@ -19,6 +19,7 @@ import { isKillSwitchActive } from './launchSafety';
 import { isSafeModeActive } from './systemControlService';
 import { MINUTES_SAVED_SQL, valueUsd } from './aiValueService';
 import { getConsentMode } from './consentService';
+import { getAbacMode } from './agentAuthorizationService';
 
 export type CriterionStatus = 'met' | 'partial' | 'open';
 export type CriterionSource = 'live' | 'shipped' | 'open';
@@ -75,6 +76,8 @@ export interface LiveSignals {
   hoursSaved30d: number;
   consentChecks7d: number;
   consentEnforcing: boolean;
+  abacChecks7d: number;
+  abacEnforcing: boolean;
 }
 
 function band(score: number): 'red' | 'amber' | 'green' {
@@ -116,6 +119,8 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     hoursSaved30d: 0,
     consentChecks7d: 0,
     consentEnforcing: false,
+    abacChecks7d: 0,
+    abacEnforcing: false,
   };
   try {
     const rows = (await sequelize.query(
@@ -134,10 +139,11 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval')::int AS retrieval7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval' AND metadata->>'method' = 'vector')::int AS vec_retrieval7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'consent.check')::int AS consent7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'agent.authorization')::int AS abac7d,
          COALESCE(SUM(${MINUTES_SAVED_SQL}) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::int AS minutes30d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; minutes30d: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; abac7d: number; minutes30d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -152,6 +158,7 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.retrievalEvents7d = Number(r.retrieval7d) || 0;
       s.vectorRetrievalEvents7d = Number(r.vec_retrieval7d) || 0;
       s.consentChecks7d = Number(r.consent7d) || 0;
+      s.abacChecks7d = Number(r.abac7d) || 0;
       const mins = Number(r.minutes30d) || 0;
       s.hoursSaved30d = Math.round((mins / 60) * 10) / 10;
       s.valueUsd30d = valueUsd(mins);
@@ -183,6 +190,11 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
   } catch (err) {
     logErr('live_signals_consent_mode', err);
   }
+  try {
+    s.abacEnforcing = (await getAbacMode()) === 'enforce';
+  } catch (err) {
+    logErr('live_signals_abac_mode', err);
+  }
   return s;
 }
 
@@ -193,6 +205,23 @@ const shipped = (evidence: string): Eval => () => ({ status: 'met', source: 'shi
 const open = (evidence: string, remediation: string): Eval => () => ({ status: 'open', source: 'open', pct: 0, evidence, remediation });
 const partial = (pct: number, evidence: string, remediation: string): Eval => () => ({ status: 'partial', source: 'shipped', pct, evidence, remediation });
 
+// ABAC chokepoint live state (P2-1): shipped+shadow → partial; shadow+traffic → exposure quantified;
+// enforcing+traffic → met. Shared by the Security + Governance ABAC criteria. Never 'open' again.
+const abacEv = (label: string): Eval => (s) => {
+  if (s.abacEnforcing && s.abacChecks7d > 0) {
+    return { status: 'met', source: 'live', pct: 100,
+      evidence: `${label}: ABAC gate ENFORCING on agent actions — ${s.abacChecks7d} authorization decisions in the last 7d.` };
+  }
+  if (s.abacChecks7d > 0) {
+    return { status: 'partial', source: 'live', pct: 60,
+      evidence: `${label}: ABAC gate live in SHADOW — ${s.abacChecks7d} agent.authorization decisions in 7d (over-broad-autonomy exposure now visible); not yet blocking.`,
+      remediation: 'Review the shadow would-deny rate, then set abac_enforcement=enforce on high-risk actions first (P2-1).' };
+  }
+  return { status: 'partial', source: 'live', pct: 50,
+    evidence: `${label}: ABAC chokepoint shipped (shadow) — authorizeAgentAction + the 4-rung autonomy ladder wired into the agent-write path; no agent actions in the last 7d to evaluate.`,
+    remediation: 'Accumulate agent.authorization events, then flip abac_enforcement=enforce (P2-1).' };
+};
+
 // ── The rubric. Criteria + weights grounded in docs/trust-audit/gap-analysis.md. ──
 const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
   security: { label: 'Security', criteria: [
@@ -200,7 +229,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
     { key: 'jwt', label: 'JWT secret fail-fast in prod', weight: 1, ref: 'P0-5', ev: shipped('JWT_SECRET fails fast if unset in production (PR #50).') },
     { key: 'webhook-sig', label: 'Inbound webhook signatures enforced', weight: 1, ref: 'P0-7', ev: shipped('Mandrill webhook rejects bad signatures (PR #50).') },
     { key: 'transport', label: 'Transport hardening (helmet/cors/rate-limit)', weight: 2, ev: shipped('helmet, cors allow-list, and rate limiting present (audit offset).') },
-    { key: 'abac', label: 'ABAC / least-privilege on AI actions', weight: 2, ref: 'P2-1', ev: open('RBAC scaffold present but unapplied to AI data/action access.', 'Apply ABAC "Five W\'s" on AI data + action access (P2-1).') },
+    { key: 'abac', label: 'ABAC / least-privilege on AI actions', weight: 2, ref: 'P2-1', ev: abacEv('Least-privilege on AI actions') },
     { key: 'ci-secrets', label: 'CI secret-scan + route-auth lint', weight: 1, ref: 'P3-1', ev: shipped('GitHub Actions CI runs a secret-scan + admin route-auth lint on every PR (.github/workflows/ci.yml).') },
   ]},
   privacy: { label: 'Privacy', criteria: [
@@ -268,7 +297,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
     { key: 'blocked-writes', label: 'Agent writes audited + gated', weight: 1, ev: (s) => ({
       status: 'met', source: 'live', pct: 100,
       evidence: `AgentWriteAudit is recording gating decisions (${s.blockedWrites24h} blocked in the last 24h).` })},
-    { key: 'abac-gov', label: 'ABAC + narrowed autonomy scope', weight: 4, ref: 'P2-1', ev: open('Autonomy is broad; HITL enforced for campaigns only; no ABAC.', 'Narrow autonomy scope + apply ABAC on AI actions (P2-1).') },
+    { key: 'abac-gov', label: 'ABAC + narrowed autonomy scope', weight: 4, ref: 'P2-1', ev: abacEv('Narrowed autonomy scope') },
   ]},
   auditability: { label: 'Auditability', criteria: [
     { key: 'unified-model', label: 'Unified audit/event model', weight: 2, ref: 'P1-1', ev: shipped('ai_events unifies 15+ disjoint logs (PR #50).') },
