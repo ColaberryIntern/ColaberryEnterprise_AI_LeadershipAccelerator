@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, June 18, 2026 at 11:03 AM</div>
-    <div><span class="sid">CC-20260618-c7r4</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Thursday, June 18, 2026 at 3:27 PM</div>
+    <div><span class="sid">CC-20260618-c7r4</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -72,6 +72,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean (backend, exit 0). New unit suite `backend/src/services/inbox/__tests__/coraAgentDisposition.test.ts` — 13 tests green (parseCoraReply: happy / default / missing-body / malformed; decideCoraDisposition: all 5 branches + handoff-precedence boundary + idempotency). Existing `opportunityScoring` inbox suite still passes.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">BREAK→HARDEN list: out-of-scope mail archived without human follow-up (fixed via needs_human + reroute); generation failure burying mail (now kept for human); send failure burying mail (now kept); handler throwing (now kept, `cora_unhandled_error`); model omitting/garbling needs_human (defaults false, tested); reprocessing loop from not-archiving (impossible — classification dedup). Branch `workstream/cora-out-of-scope-routing` off `origin/main` in an isolated git worktree (the active `interview-prep-report` tree is divergent and lacks the merged Cora code). No new env vars. Still operationally gated before go-live, none touched here: support@ send-as alias, Gmail token, `CORA_DRY_RUN` flip, refund doc (Taiwo, due 2026-06-19).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**P0 fix: support@ classification crashed on `rule_id` UUID type — Cora never ran in prod**</h2>
+          <span class="badge">2026-06-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">End-to-end trace of support@ → Cora (after deploying the out-of-scope routing fix) surfaced a production-down bug, live since PR #30 merged (2026-06-17): `inbox_classifications.rule_id` is a Postgres **UUID** column, but `hardRuleEngine` writes the string `rule_id: &#39;cora_0c&#39;`. The classification `INSERT` in `inboxStateManager` Step 3 threw `invalid input syntax for type uuid: &quot;cora_0c&quot;` **before** dispatch, so `handleCoraInquiry` was never called — every support@ email failed classification, was never archived, and was re-selected every 60s poll (the pipeline only picks up rows with no classification), stuck in an infinite failed-retry loop. Cora had **never** processed a real support@ email in prod; the thread&#39;s &quot;shadow test&quot; used the standalone `testCoraEmail.ts` (direct `generateCoraReply`, no DB insert), which bypassed the failing path.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean (backend, exit 0). New unit suite `backend/src/services/inbox/__tests__/ruleIdPersistence.test.ts` — 8 tests (UUID accept incl. uppercase; reject `cora_0c`/empty/null/undefined/non-string; malformed-UUID boundary; UUID passthrough; idempotency). Post-deploy: the ~4 stuck support@ emails self-heal on the next poll (still unclassified, so reprocessed cleanly).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Chosen fix is code-only (Ali&#39;s call) — no schema change, no migration, reversible, lowest blast radius. **Follow-up (tracked):** widen `inbox_classifications.rule_id` to `VARCHAR` so it can store semantic rule names properly; then the sanitize guard becomes belt-and-suspenders. Branch `workstream/cora-ruleid-persist` off `origin/main` (post-#42) in an isolated worktree. This is what actually makes Cora — and the #42 out-of-scope routing — functional.</span></div>
           
         </div>
       </article>
