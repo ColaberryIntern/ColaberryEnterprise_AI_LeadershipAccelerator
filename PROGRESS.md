@@ -6149,6 +6149,39 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `tsc --noEmit` clean (backend, exit 0). New unit suite `backend/src/services/inbox/__tests__/coraAgentDisposition.test.ts` — 13 tests green (parseCoraReply: happy / default / missing-body / malformed; decideCoraDisposition: all 5 branches + handoff-precedence boundary + idempotency). Existing `opportunityScoring` inbox suite still passes.
   - Notes: BREAK→HARDEN list: out-of-scope mail archived without human follow-up (fixed via needs_human + reroute); generation failure burying mail (now kept for human); send failure burying mail (now kept); handler throwing (now kept, `cora_unhandled_error`); model omitting/garbling needs_human (defaults false, tested); reprocessing loop from not-archiving (impossible — classification dedup). Branch `workstream/cora-out-of-scope-routing` off `origin/main` in an isolated git worktree (the active `interview-prep-report` tree is divergent and lacks the merged Cora code). No new env vars. Still operationally gated before go-live, none touched here: support@ send-as alias, Gmail token, `CORA_DRY_RUN` flip, refund doc (Taiwo, due 2026-06-19).
 
+---
+
+## PR Test-Coverage Audit (2026-06-22, Session CC-20260622-k7m2)
+
+This audit was produced after discovering the test runner was globally broken (Jest 25 installed against ts-jest 29 — fixed this session via `npm install`). It establishes a baseline for sequential local verification starting from PR #1.
+
+| PR | Title | State | Tests exist? | Run locally today? | Today's result |
+|---|---|---|---|---|---|
+| #70 | Portfolio GitHub Sync Agent | OPEN | Yes — `githubIntegrationService.test.ts` (10 tests) | ✅ Yes | 10/10 pass |
+| #57 | AnthropicCourseWrapper | OPEN | No — frontend React component | ❌ No | — |
+| #48 | Wire Week 3 Skilljar course | OPEN | No — config/data change | ❌ No | — |
+| #45 | Wire Week 2 Skilljar course | OPEN | No — config/data change | ❌ No | — |
+| #43 | Wire Week 1 Skilljar courses | OPEN | No — config/data change | ❌ No | — |
+| #41 | July 2026 cohort seed | OPEN | No — seed script | ❌ No | — |
+| #34 | Mentor Agent + human-review queue | MERGED | Yes — `mentorFeedbackService.test.ts` (11 tests) | ❌ No | Passed at merge 2026-06-17; not re-run since env broke |
+| #31 | Stripe enrollment tracking | CLOSED | No | ❌ No | — |
+| #30 | Cora inbox agent | MERGED | No | ❌ No | — |
+| #28 | Enrollment tracking system | OPEN | No | ❌ No | — |
+| #16 | GitHub OAuth + activity sync + webhooks | MERGED | Yes — same file as #70 (7 of 10 tests cover this PR) | ✅ Yes | Covered by #70 run |
+| #4 | POST /api/v1/leads CRM ingest | MERGED | No | ❌ No | — |
+| #3 | ProjectDnaWizard UI | MERGED | No — frontend component | ❌ No | — |
+| #2 | Intelligence Layer L2+L3 | MERGED | No | ❌ No | — |
+| #1 | Intelligence Layer L1+L2 | MERGED | No | ❌ No | — |
+
+**PRs with locally-verified tests today: 2 of 15 (#70 directly; #16 via shared test file)**
+
+**To work through the backlog starting from #1:** run `cd backend && npx jest --no-coverage` after checking out each branch. Fix any failures before marking the PR verified. The test runner is now healthy (Jest 29.7.0 + ts-jest 29.4.11 in sync after today's `npm install`).
+
+**Lesson from #70 testing — GITHUB_ACCESS_TOKEN is NOT a prod env var:**
+The manual test seeded `github_connections.access_token_encrypted` directly with a personal access token. Production never uses a global `GITHUB_ACCESS_TOKEN` — each student's OAuth token is stored per-row in `github_connections` after they connect via the OAuth flow (`/api/portal/github/oauth/callback`). Ali does not need to add `GITHUB_ACCESS_TOKEN` to the prod server. The existing env vars (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_URL`, `GITHUB_OAUTH_REDIRECT_URI`) are sufficient. The cron job is a no-op until at least one student completes the OAuth flow and has a repo connected.
+
+---
+
 - [x] **P0 fix: support@ classification crashed on `rule_id` UUID type — Cora never ran in prod**
   - Date: 2026-06-18
   - Session: CC-20260618-c7r4
