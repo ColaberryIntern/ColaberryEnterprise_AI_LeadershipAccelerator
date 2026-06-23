@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import AnthropicCourseWrapper from '../../components/portal/AnthropicCourseWrapper';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -330,6 +331,28 @@ function PortalSessionDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // All derived state and hooks must be computed before any early return
+  const { session: s, attendance_status, submissions } = (session as any) || {};
+  const materials: any[] = s?.materials_json || [];
+  const curriculum: any[] = s?.curriculum_json || [];
+  const isUpcoming = s?.status === 'scheduled';
+  const isLive = s?.status === 'live';
+  const isCompleted = s?.status === 'completed';
+  const countdownTarget = (() => {
+    if (!s || !isUpcoming || !s.session_date) return null;
+    const raw: string = s.start_time || '09:00';
+    const match = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return null;
+    let h = parseInt(match[1], 10);
+    const m = match[2];
+    const period = match[3]?.toUpperCase();
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return `${s.session_date}T${String(h).padStart(2, '0')}:${m}:00`;
+  })();
+  const countdown = useCountdown(countdownTarget);
+  const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -343,16 +366,6 @@ function PortalSessionDetailPage() {
   if (!session) {
     return <div className="alert alert-danger">Session not found.</div>;
   }
-
-  const { session: s, attendance_status, submissions } = session;
-  const materials = s.materials_json || [];
-  const curriculum = s.curriculum_json || [];
-  const isUpcoming = s.status === 'scheduled';
-  const isLive = s.status === 'live';
-  const isCompleted = s.status === 'completed';
-  const countdownTarget = isUpcoming ? `${s.session_date}T${s.start_time || '09:00'}:00` : null;
-  const countdown = useCountdown(countdownTarget);
-  const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
 
   return (
     <>
@@ -590,17 +603,32 @@ function PortalSessionDetailPage() {
           {/* Collapsible: Materials */}
           {materials.length > 0 && (
             <CollapsibleSection title="Materials" icon="bi-file-earmark">
-              <ul className="mb-0">
-                {materials.map((m: any, i: number) => (
-                  <li key={i} className="small mb-1">
-                    {m.url ? (
-                      <a href={m.url} target="_blank" rel="noopener noreferrer">{m.title || m.url}</a>
-                    ) : (
-                      m.title || JSON.stringify(m)
-                    )}
-                  </li>
-                ))}
-              </ul>
+              {/* Anthropic Skilljar courses rendered as branded cards */}
+              {materials.filter((m: any) => m.url?.includes('anthropic.skilljar.com')).map((m: any, i: number) => (
+                <div key={`skilljar-${i}`} className="mb-2">
+                  <AnthropicCourseWrapper
+                    title={m.title || 'Anthropic Course'}
+                    url={m.url}
+                    description={m.description}
+                    estimatedMinutes={m.estimated_minutes}
+                    courseNumber={m.course_number}
+                  />
+                </div>
+              ))}
+              {/* All other materials as a plain list */}
+              {materials.filter((m: any) => !m.url?.includes('anthropic.skilljar.com')).length > 0 && (
+                <ul className="mb-0 mt-2">
+                  {materials.filter((m: any) => !m.url?.includes('anthropic.skilljar.com')).map((m: any, i: number) => (
+                    <li key={i} className="small mb-1">
+                      {m.url ? (
+                        <a href={m.url} target="_blank" rel="noopener noreferrer">{m.title || m.url}</a>
+                      ) : (
+                        m.title || JSON.stringify(m)
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CollapsibleSection>
           )}
 

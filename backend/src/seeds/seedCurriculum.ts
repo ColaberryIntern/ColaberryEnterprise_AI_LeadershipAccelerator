@@ -112,6 +112,8 @@ async function seed() {
         },
       ],
       materials_json: [
+        { title: 'Claude Code 101 (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-code-101' },
+        { title: 'Claude Code in Action (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-code-in-action' },
         { title: 'Claude Code Setup Guide', type: 'reading', url: '' },
         { title: '3-Agent Architecture Reference', type: 'reading', url: '' },
         { title: 'Starter Repository (GitHub)', type: 'tool', url: '' },
@@ -163,6 +165,7 @@ async function seed() {
         },
       ],
       materials_json: [
+        { title: 'Introduction to Agent Skills (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/introduction-to-agent-skills' },
         { title: 'POC Scoping Canvas', type: 'template', url: '' },
         { title: 'Data Integration Playbook', type: 'reading', url: '' },
         { title: 'Success Metrics Framework', type: 'template', url: '' },
@@ -214,6 +217,7 @@ async function seed() {
         },
       ],
       materials_json: [
+        { title: 'Building with the Claude API (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api' },
         { title: 'Executive Presentation Template', type: 'template', url: '' },
         { title: 'ROI Calculator Spreadsheet', type: 'template', url: '' },
         { title: 'AI Business Case Examples', type: 'reading', url: '' },
