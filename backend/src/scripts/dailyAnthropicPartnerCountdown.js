@@ -57,8 +57,12 @@ async function bcGet(p) { const r = await fetch(p.startsWith('http') ? p : BASE 
 async function bcGetAll(p) { let n = p.startsWith('http') ? p : BASE + p; const out = []; while (n) { const r = await fetch(n, { headers: H }); if (!r.ok) break; out.push(...(await r.json())); const lh = (r.headers.get('link') || '').match(/<([^>]+)>;\s*rel="next"/); n = lh ? lh[1] : null; } return out; }
 
 function bar(pct, width = 24) {
-  const fill = Math.round((pct / 100) * width);
-  return '█'.repeat(fill) + '░'.repeat(width - fill);
+  // Clamp fill to [0, width]. Once the cohort grew past the hard-coded 40-course
+  // goal, pctComplete exceeded 100, making `'░'.repeat(width - fill)` throw
+  // "Invalid count value: -3" and crash the whole report before it could reach
+  // its goal-reached shutoff (observed 2026-06-23). Never repeat a negative.
+  const fill = Math.max(0, Math.min(width, Math.round((Math.max(0, pct) / 100) * width)));
+  return '█'.repeat(fill) + '░'.repeat(Math.max(0, width - fill));
 }
 function progressBarHtml(pct, color = '#16a34a') {
   return `<div style="background:#e2e8f0;border-radius:4px;height:10px;overflow:hidden;width:100%"><div style="background:${color};height:100%;width:${pct}%;transition:width .3s"></div></div>`;
