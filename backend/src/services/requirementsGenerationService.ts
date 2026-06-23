@@ -21,6 +21,7 @@ import { createNewVersion } from './artifactVersionService';
 import { attachArtifactToProject, createProjectForEnrollment, getProjectByEnrollment } from './projectService';
 import { refreshProjectOutputs } from './portfolioEnhancementService';
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -29,7 +30,7 @@ function getOpenAI(): OpenAI {
   // (observed). 4-min timeout + 1 retry caps a single call to ~8 min worst case;
   // a real stall now fails the job cleanly so the UI surfaces a retry instead of
   // spinning forever. (Failure-First: no unbounded external call.)
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 240000, maxRetries: 1 });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'requirements_gen' }, { timeout: 240000, maxRetries: 1 });
   return _openai;
 }
 

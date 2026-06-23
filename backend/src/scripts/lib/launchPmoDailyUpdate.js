@@ -353,8 +353,8 @@ async function generateExecSummary(state, escalations, humanQueue, aiQueue) {
   if (!process.env.OPENAI_API_KEY) {
     return { exec_summary: '(OPENAI_API_KEY missing - skipping AI summary)', risks: [], next_human_actions: [] };
   }
-  const OpenAI = require(path.resolve(__dirname, '../../../../node_modules/openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './openaiInstrumented'));
+  const openai = getInstrumentedOpenAI({ workflow_id: 'launch_pmo_daily_update' });
 
   const context = {
     days_to_launch: state.daysToLaunch,

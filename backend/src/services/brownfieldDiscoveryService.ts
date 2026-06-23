@@ -24,6 +24,7 @@
  * about the system.
  */
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { Capability } from '../models';
 import { classifyAgentRoles, AgentRolesCachePayload } from './classifyAgentRoles';
 
@@ -593,7 +594,7 @@ async function identifyDomains(
   detectedStack: string[],
   totalFiles: number,
 ): Promise<DomainPass1Result> {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getInstrumentedOpenAI({ workflow_id: 'brownfield' });
 
   const bucketsBlock = buckets.map(b => {
     const sampleStems = b.candidates.slice(0, 8).map(c => c.display_name).join(', ');
@@ -670,7 +671,7 @@ async function enumerateCapabilitiesForDomain(
   candidates: RawCandidate[],
   domainContext: string,
 ): Promise<DiscoveredCapability[]> {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getInstrumentedOpenAI({ workflow_id: 'brownfield' });
 
   const candidatesBlock = candidates.map(c => {
     const hits = Object.entries(c.layer_hits)
@@ -810,7 +811,7 @@ async function identifyCapabilities(
   detectedStack: string[],
   totalFiles: number,
 ): Promise<DiscoveryResult> {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getInstrumentedOpenAI({ workflow_id: 'brownfield' });
 
   const candidatesBlock = buildCandidatesBlock(candidates);
 

@@ -1,5 +1,6 @@
 import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
 import { Op } from 'sequelize';
+import { emitRetrieval } from './aiEventService';
 
 /**
  * Find relevant knowledge entries by keyword matching against the query and category.
@@ -73,6 +74,14 @@ export async function findRelevantKnowledge(params: {
  */
 export async function buildKnowledgeContext(query: string, pageCategory?: string): Promise<string> {
   const entries = await findRelevantKnowledge({ query, pageCategory, limit: 4 });
+  // Persist retrieval provenance — source IDs/titles for observability + citations (TBI P1-6).
+  emitRetrieval({
+    method: 'keyword',
+    count: entries.length,
+    sources: entries.map((e) => ({ id: e.id, title: e.title, category: e.category })),
+    workflowId: 'maya_knowledge',
+    agentId: 'Maya',
+  }).catch(() => {});
   if (entries.length === 0) return '';
 
   const parts: string[] = ['KNOWLEDGE BASE (use these facts to answer accurately):'];
