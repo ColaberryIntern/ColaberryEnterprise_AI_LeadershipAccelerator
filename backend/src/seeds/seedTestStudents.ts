@@ -32,7 +32,7 @@ async function seed() {
 
   const result = await createTestEnrollments(cohort.id);
 
-  const base = process.env.FRONTEND_URL || 'http://localhost:3003';
+  const base = process.env.FRONTEND_URL || 'http://localhost:9999';
 
   console.log('='.repeat(60));
   console.log('TEST STUDENT PORTAL LINKS (valid 90 days)');

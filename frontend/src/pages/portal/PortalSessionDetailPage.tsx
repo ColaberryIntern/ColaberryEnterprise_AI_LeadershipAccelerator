@@ -330,6 +330,30 @@ function PortalSessionDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const s = session?.session ?? null;
+  const attendance_status = session?.attendance_status ?? null;
+  const submissions = session?.submissions ?? [];
+  const materials = s?.materials_json ?? [];
+  const curriculum = s?.curriculum_json ?? [];
+  const isUpcoming = s?.status === 'scheduled';
+  const isLive = s?.status === 'live';
+  const isCompleted = s?.status === 'completed';
+  const countdownTarget = (() => {
+    if (!s || !isUpcoming || !s.session_date) return null;
+    const raw: string = s.start_time || '09:00';
+    // Convert "1:00 PM" / "13:00" → "13:00" for ISO string
+    const match = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return null;
+    let h = parseInt(match[1], 10);
+    const m = match[2];
+    const period = match[3]?.toUpperCase();
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return `${s.session_date}T${String(h).padStart(2, '0')}:${m}:00`;
+  })();
+  const countdown = useCountdown(countdownTarget);
+  const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -340,19 +364,9 @@ function PortalSessionDetailPage() {
     );
   }
 
-  if (!session) {
+  if (!session || !s) {
     return <div className="alert alert-danger">Session not found.</div>;
   }
-
-  const { session: s, attendance_status, submissions } = session;
-  const materials = s.materials_json || [];
-  const curriculum = s.curriculum_json || [];
-  const isUpcoming = s.status === 'scheduled';
-  const isLive = s.status === 'live';
-  const isCompleted = s.status === 'completed';
-  const countdownTarget = isUpcoming ? `${s.session_date}T${s.start_time || '09:00'}:00` : null;
-  const countdown = useCountdown(countdownTarget);
-  const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
 
   return (
     <>
