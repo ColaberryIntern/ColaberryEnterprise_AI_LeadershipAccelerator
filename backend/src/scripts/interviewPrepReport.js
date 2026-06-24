@@ -32,6 +32,16 @@ const { classify } = require('./lib/interviewPrepData');
 const { renderHtml, renderText } = require('./lib/renderInterviewPrepReport');
 const { resolveEmails, groupByPerson } = require('./lib/interviewPrepPeople');
 const { buildCombined } = require('./lib/interviewPrepNudges');
+const { sendMailWithRetry } = require('./lib/sendMailWithRetry');
+
+// A transient Mandrill TLS-handshake error (ESOCKET on CONN) can fire on the
+// SMTP socket OUTSIDE the awaited sendMail promise, escaping main().catch as an
+// unhandled rejection (observed 2026-06-23, crashed the whole reporting run).
+// Catch it here so the process exits non-zero with a clear log instead.
+process.on('unhandledRejection', (reason) => {
+  console.error('[InterviewPrepReport] FATAL unhandledRejection', (reason && reason.stack) || reason);
+  process.exit(1);
+});
 
 const DRY = process.argv.includes('--dry');
 const argTo = process.argv.find((a) => a.startsWith('--to='));
@@ -174,14 +184,14 @@ async function main() {
     auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
   });
   const subj = `[Interview Prep] ${k.todayCount} today, ${k.criticalCount} critical, ${k.surveyOwedCount} survey owed · ${k.avgReadinessUpcoming}% avg readiness`;
-  const r = await transport.sendMail({
+  const r = await sendMailWithRetry(transport, {
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: RECIPIENTS.join(', '),
     cc: CC.length ? CC.join(', ') : undefined,
     subject: subj,
     text, html,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', Importance: 'high' },
-  });
+  }, { log: (m) => console.warn(`[InterviewPrepReport] ${m}`) });
   console.log(`[InterviewPrepReport] sent — Mandrill ${r.messageId}`);
 }
 
