@@ -337,7 +337,13 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   const counts = summarizeReporting(auditResults, sendResults);
   const { totalFail, totalWarn, sentCount, sendFailCount } = counts;
   const failTotal = totalFail + sendFailCount;
-  const subject = `[Reporting Audit] ${now.toISOString().slice(0, 10)} - ${failTotal ? `${failTotal} FAIL` : `${sentCount}/${active.length} sent`}${totalWarn ? ` (${totalWarn} warn)` : ''}`;
+  // The alert only sends on failure (see shouldSendAuditEmail). Subject deliberately
+  // drops the "Reporting Audit" phrase: a Gmail filter on ali@colaberry.com was
+  // auto-trashing everything matching it, so the Jun-19 failure alerts landed in
+  // Trash unseen (2026-06-23 / CC-20260623-q8m4). The distinct "Reporting FAILED"
+  // subject + sender dodges that stale filter. NOTE: deleting the filter is the
+  // real fix (can't be done via API); the gmail.com CC also bypasses it.
+  const subject = `🔴 Reporting FAILED ${now.toISOString().slice(0, 10)}: ${failTotal} report${failTotal === 1 ? '' : 's'} did not send${totalWarn ? ` (${totalWarn} warn)` : ''}`;
   const text = `Daily Reporting Audit ${now.toISOString().slice(0, 10)}
 
 ${active.length} reports audited.
@@ -378,7 +384,7 @@ Recipients on every regular report: ali@colaberry.com (to) + alimuwwakkil@gmail.
         auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
       });
       const sentAudit = await sendMailWithRetry(transport, {
-        from: '"CB System" <ali@colaberry.com>',
+        from: '"CB Reporting Alert" <ali@colaberry.com>',
         to: 'ali@colaberry.com',
         cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
         subject, text, html,
