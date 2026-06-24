@@ -6110,6 +6110,13 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `npx tsc --noEmit` clean and `CI=false npm run build` (production CRA build, stricter eslint) succeeded ("build folder is ready to be deployed") in the primary tree on byte-identical files. Visual smoke + Playwright E2E deferred.
   - Notes: Landed on isolated branch `feature/membership-persona-landing` off `origin/main`. The active local branch `feature/skilljar-courselink` is 2 commits ahead of main with an unrelated 72-file backend refactor and an uncommitted preview auth bypass + cloudflared tunnel in its tree — none of that is in this branch. DRAFT COPY: Sohail's text is still "please review" on the BC todo (not signed off); Open House date unset (his earlier copy named 2026-06-21) so the modal copy is generic; pages not yet linked from nav/footer; backend routing of `open_house_*` leads unconfirmed. Membership-vs-$499-intensives business-model pivot approved by Ali in-session. BuildManifest telemetry deferred.
 
+- [x] **Cora go-live prep: add July 2026 cohort seed script so case-7 shadow test returns a real date.**
+  - Date: 2026-06-18
+  - Session: CC-20260617-m9b3
+  - What changed: Added `backend/src/scripts/addJuly2026Cohort.ts` — idempotent `findOrCreate` for "Cohort - July 2026" (start_date 2026-07-23, Thursday, 1:00–3:00 PM EST, max_seats 20, status open). No routes or model changes; pure seed script. Deploy: `docker exec accelerator-backend node dist/scripts/addJuly2026Cohort.js`
+  - Verification: `npx tsc --noEmit` — no new errors on this file.
+  - Notes: Required before Cora shadow test case 7 ("When is the next cohort?") returns a confident date rather than "check the enrollment page." No admin UI exists for cohort creation; seed script is the established pattern (cf. seedCohorts.ts).
+
 - [x] **AI Membership landing pages reformatted to Garage Labs editorial design (BC todo 9946499609).**
   - Date: 2026-06-18
   - Session: CC-20260617-9f3a
