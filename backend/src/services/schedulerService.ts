@@ -18,6 +18,7 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
@@ -514,6 +515,34 @@ async function calculatePacedLimit(
 
 async function processScheduledActions(): Promise<void> {
   const processorId = `proc_${process.pid}_${Date.now()}`;
+
+  // Expire "zombie" actions before claiming. An action whose scheduled_for is
+  // well in the past should never fire (a months-old sequence step sending today
+  // is wrong, not late). Without this the per-lead daily cap re-defers such
+  // actions to "tomorrow" forever, so they never drain and send_throughput stays
+  // red (730 Mar-May zombies, 2026-06-23 / CC-20260623-q8m4). One bulk UPDATE per
+  // tick; affects 0 rows in steady state. Configurable via setting
+  // `scheduled_action_max_age_days` (0/negative disables).
+  try {
+    const maxAgeDays = resolveMaxAgeDays(await getSetting('scheduled_action_max_age_days'));
+    if (maxAgeDays > 0) {
+      const cutoff = staleCutoff(new Date(), maxAgeDays);
+      const [, expiredMeta] = await sequelize.query(
+        `UPDATE scheduled_emails
+            SET status = 'cancelled',
+                metadata = COALESCE(metadata, '{}'::jsonb)
+                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason)
+          WHERE status = 'pending' AND scheduled_for < :cutoff`,
+        { replacements: { cutoff, reason: `auto-expired: >${maxAgeDays}d past scheduled_for` } }
+      );
+      const expiredCount = (expiredMeta as any)?.rowCount ?? 0;
+      if (expiredCount > 0) {
+        console.log(`[Scheduler] Expired ${expiredCount} stale scheduled action(s) (>${maxAgeDays}d past scheduled_for)`);
+      }
+    }
+  } catch (err: any) {
+    console.error('[Scheduler] stale-action expiry failed (non-blocking):', err.message);
+  }
 
   // Atomically claim pending actions using FOR UPDATE SKIP LOCKED
   // This prevents race conditions if multiple scheduler instances run concurrently
