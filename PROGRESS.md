@@ -47,6 +47,21 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 ---
 
 ## Current Focus
+Portfolio Agent — daily batch GitHub sync for all active enrolled students.
+
+### Portfolio GitHub Sync Agent (2026-06-22)
+- [x] `syncAllActiveStudentGitHubActivity()` — batch sync function in githubIntegrationService
+  - Date: 2026-06-22
+  - Session: CC-20260622-k7m2
+  - What changed:
+    - `backend/src/services/githubIntegrationService.ts` (modified): Added `syncAllActiveStudentGitHubActivity()`. Queries active enrollments, finds those with connected GitHub repos via `GitHubConnection.findAll({ where: { enrollment_id: { [Op.in]: activeIds } } })`, calls `syncStudentActivity()` per-student, isolates failures so one error does not abort others. Returns `{ synced, skipped, failed }` counters.
+    - `backend/src/services/schedulerService.ts` (modified): Added `PortfolioGitHubSyncAgent` cron job at `15 2 * * *` (2:15 AM UTC, offset from existing 2 AM jobs). Uses lazy `import()` pattern; logs structured JSON on completion.
+    - `backend/src/services/agentRegistrySeed.ts` (modified): Added registry entry for `PortfolioGitHubSyncAgent` with `agent_type: 'github_automation'`, `trigger_type: 'cron'`, `schedule: '15 2 * * *'`, `category: 'accelerator'`.
+    - `backend/src/services/__tests__/githubIntegrationService.test.ts` (modified): Rewrote test pattern to match ts-jest `isolatedModules` requirements — `jest.mock()` first, TypeScript `import` for service under test, `require()` inside test bodies for mock references. Added 3 new tests for `syncAllActiveStudentGitHubActivity` (happy path, failure isolation, empty-no-op).
+  - Verification: Jest 10/10 pass. `tsc --noEmit` clean. Also fixed pre-existing environment issue: node_modules had Jest 25 installed against `ts-jest` 29 — ran `npm install` to sync to Jest 29.7.0.
+  - Notes: Webhook-triggered syncs handle real-time push events; this job is the fallback for students who haven't pushed recently or whose webhooks missed. BC ticket 9946499479.
+
+## Previous Focus
 GitHub API integration for Architect Dashboard — OAuth flow, activity sync, webhook receiver.
 
 ---
@@ -6217,6 +6232,39 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: Recorded Ali's decision to hold the student community NATIVE at launch-min scope (async build-log feed + threaded comments + categories + basic profiles + lite poll-based "who's online" reusing `Member.presence`); interim Skool rejected. Full websocket realtime presence + peer chat stay P2 (BC#9985688722). Edited two in-repo docs: `docs/training-program-2026-q3/STUDENT_PLATFORM_BUILD_SPEC.md` §12.5 (Open decisions #5) and `STUDENT_PLATFORM_STRATEGY.md` "Decisions locked #1".
   - Verification: User confirmed native in-session (2026-06-18). Shipped as PR #44 off `origin/main`. Authoritative decision record = Basecamp doc 10011889922 on todo 9985688801; Kes System-Approval (build-capacity) requested on the ticket (comment 10011888090).
   - Notes: Docs-only — no runtime/code change, no deploy (the running app does not serve `/docs`). Isolated via a git worktree off `origin/main` so the primary tree's concurrent uncommitted work (another session's presence-decision edits in the same two files + the `feature/skilljar-courselink` frontend WIP) was never swept in. The primary tree still holds those community edits uncommitted alongside the presence edits; they reconcile when PR #44 merges and main is pulled. Rationale: the websocket realtime "long pole" was already deferred to P2, so launch pressure no longer favored Skool, which would also break the one-synced-system thesis + force a 25-student migration.
+---
+
+## PR Test-Coverage Audit (2026-06-22, Session CC-20260622-k7m2)
+
+This audit was produced after discovering the test runner was globally broken (Jest 25 installed against ts-jest 29 — fixed this session via `npm install`). It establishes a baseline for sequential local verification starting from PR #1.
+
+| PR | Title | State | Tests exist? | Run locally today? | Today's result |
+|---|---|---|---|---|---|
+| #70 | Portfolio GitHub Sync Agent | OPEN | Yes — `githubIntegrationService.test.ts` (10 tests) | ✅ Yes | 10/10 pass |
+| #57 | AnthropicCourseWrapper | OPEN | No unit tests — React component; browser-tested locally (screenshots in BC [#9946499773](https://app.basecamp.com/3945211/buckets/47502609/todos/9946499773)) | ✅ Yes (browser) | `tsc --noEmit` exit 0 · local CRA dev server · Session 2 / Week 1 lab loaded correctly · CC-20260622-8k4m |
+| #48 | Wire Week 3 Skilljar course | OPEN | No unit tests — backfill script run locally against dev DB | ✅ Yes (DB) | Session 4 `materials_json` prepended with `Building with the Claude API` → `anthropic.skilljar.com/claude-with-the-anthropic-api` · CC-20260622-k7m2 |
+| #45 | Wire Week 2 Skilljar course | OPEN | No unit tests — backfill script run locally against dev DB | ✅ Yes (DB) | Session 3 `materials_json` prepended with `Introduction to Agent Skills` → `anthropic.skilljar.com/introduction-to-agent-skills` · CC-20260622-k7m2 |
+| #43 | Wire Week 1 Skilljar courses | OPEN | No unit tests — also includes hooks + countdown NaN fix; browser-tested locally same session | ✅ Yes (browser) | `tsc --noEmit` exit 0 · hooks error gone · countdown renders · session detail page loads with Materials section · CC-20260622-k7m9 |
+| #41 | July 2026 cohort seed | OPEN | No — seed script | ❌ No | — |
+| #34 | Mentor Agent + human-review queue | MERGED | Yes — `mentorFeedbackService.test.ts` (11 tests) | ❌ No | Passed at merge 2026-06-17; not re-run since env broke |
+| #31 | Stripe enrollment tracking | CLOSED | No | ❌ No | — |
+| #30 | Cora inbox agent | MERGED | No | ❌ No | — |
+| #28 | Enrollment tracking system | OPEN | No | ❌ No | — |
+| #16 | GitHub OAuth + activity sync + webhooks | MERGED | Yes — same file as #70 (7 of 10 tests cover this PR) | ✅ Yes | Covered by #70 run |
+| #4 | POST /api/v1/leads CRM ingest | MERGED | No | ❌ No | — |
+| #3 | ProjectDnaWizard UI | MERGED | No — frontend component | ❌ No | — |
+| #2 | Intelligence Layer L2+L3 | MERGED | No | ❌ No | — |
+| #1 | Intelligence Layer L1+L2 | MERGED | No | ❌ No | — |
+
+**PRs with locally-verified tests today: 6 of 15** — #70 (unit tests, 10/10), #16 (unit tests via shared file), #57 (browser, screenshots in BC), #43 (browser, hooks + countdown fix), #45 (DB backfill — Session 3 materials updated), #48 (DB backfill — Session 4 materials updated)
+
+**To work through the backlog starting from #1:** run `cd backend && npx jest --no-coverage` after checking out each branch. Fix any failures before marking the PR verified. The test runner is now healthy (Jest 29.7.0 + ts-jest 29.4.11 in sync after today's `npm install`).
+
+**Lesson from #70 testing — GITHUB_ACCESS_TOKEN is NOT a prod env var:**
+The manual test seeded `github_connections.access_token_encrypted` directly with a personal access token. Production never uses a global `GITHUB_ACCESS_TOKEN` — each student's OAuth token is stored per-row in `github_connections` after they connect via the OAuth flow (`/api/portal/github/oauth/callback`). Ali does not need to add `GITHUB_ACCESS_TOKEN` to the prod server. The existing env vars (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_URL`, `GITHUB_OAUTH_REDIRECT_URI`) are sufficient. The cron job is a no-op until at least one student completes the OAuth flow and has a repo connected.
+
+---
+
 - [x] **P0 fix: support@ classification crashed on `rule_id` UUID type — Cora never ran in prod**
   - Date: 2026-06-18
   - Session: CC-20260618-c7r4

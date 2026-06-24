@@ -2598,6 +2598,30 @@ export function startScheduler(): void {
   // rebuilds. Crontab entries to register on the VPS:
   //   0 11 * * * (every day, 6 AM CT)        -> sendFamilyCommandCenterDaily.js
   //   0 13 * * 1 (Monday, 8 AM CT)           -> sendFamilyCommandCenterDaily.js --weekly
+
+  // ── Portfolio GitHub Sync Agent (daily 2:15 AM UTC) ──────────────────────────
+  // Batch-syncs GitHub activity (commits_last_7d, open_prs, total_stars,
+  // contribution_graph_json) for every active enrollment with a connected repo.
+  // Webhook-triggered syncs already handle push events in real time; this job
+  // is the fallback that catches students who haven't pushed recently or whose
+  // webhooks missed. Each student's sync failure is isolated — one error does
+  // not abort the others.
+  cron.schedule('15 2 * * *', () => {
+    instrumentCronJob('PortfolioGitHubSyncAgent', async () => {
+      const { syncAllActiveStudentGitHubActivity } = await import('./githubIntegrationService');
+      const result = await syncAllActiveStudentGitHubActivity();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'portfolio_github_sync_complete',
+        outcome: 'success',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Portfolio GitHub sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Portfolio GitHub sync agent: daily at 02:15 UTC');
 }
 
 // ---------------------------------------------------------------------------

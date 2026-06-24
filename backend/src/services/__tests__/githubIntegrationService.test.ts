@@ -1,19 +1,17 @@
-import crypto from 'crypto';
-
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
 jest.mock('../../models', () => ({
-  GitHubConnection: { findOrCreate: jest.fn(), findOne: jest.fn() },
+  GitHubConnection: { findOrCreate: jest.fn(), findOne: jest.fn(), findAll: jest.fn() },
   StudentGithubActivity: { findOne: jest.fn(), create: jest.fn() },
+  Enrollment: { findAll: jest.fn() },
 }));
 
-const { GitHubConnection, StudentGithubActivity } = require('../../models');
-
-// Re-import after mocks
+import crypto from 'crypto';
 import {
   buildOAuthUrl,
   validateWebhookSignature,
   findEnrollmentByRepo,
+  syncAllActiveStudentGitHubActivity,
 } from '../githubIntegrationService';
 
 // ─── buildOAuthUrl ────────────────────────────────────────────────────────────
@@ -67,6 +65,7 @@ describe('validateWebhookSignature', () => {
 
 describe('findEnrollmentByRepo', () => {
   it('returns enrollment_id when a matching connection exists', async () => {
+    const { GitHubConnection } = require('../../models');
     GitHubConnection.findOne.mockResolvedValue({ enrollment_id: 'enroll-xyz' });
     const result = await findEnrollmentByRepo('owner', 'repo');
     expect(result).toBe('enroll-xyz');
@@ -76,8 +75,64 @@ describe('findEnrollmentByRepo', () => {
   });
 
   it('returns null when no connection matches', async () => {
+    const { GitHubConnection } = require('../../models');
     GitHubConnection.findOne.mockResolvedValue(null);
     const result = await findEnrollmentByRepo('unknown', 'repo');
     expect(result).toBeNull();
+  });
+});
+
+// ─── syncAllActiveStudentGitHubActivity ───────────────────────────────────────
+
+describe('syncAllActiveStudentGitHubActivity', () => {
+  beforeEach(() => {
+    const { GitHubConnection } = require('../../models');
+    jest.clearAllMocks();
+    // syncStudentActivity calls GitHubConnection.findOne internally;
+    // returning null causes an early return (no API calls, no throw).
+    GitHubConnection.findOne.mockResolvedValue(null);
+  });
+
+  it('syncs 2 students with repos and skips 1 without a connected repo', async () => {
+    const { Enrollment, GitHubConnection } = require('../../models');
+    Enrollment.findAll.mockResolvedValue([{ id: 'e1' }, { id: 'e2' }, { id: 'e3' }]);
+    // Only e1 and e2 have repos connected
+    GitHubConnection.findAll.mockResolvedValue([
+      { enrollment_id: 'e1', repo_owner: 'org', repo_name: 'repo1' },
+      { enrollment_id: 'e2', repo_owner: 'org', repo_name: 'repo2' },
+    ]);
+
+    const result = await syncAllActiveStudentGitHubActivity();
+
+    expect(result).toEqual({ synced: 2, skipped: 1, failed: 0 });
+  });
+
+  it('isolates a per-student failure: one error does not abort the remaining syncs', async () => {
+    const { Enrollment, GitHubConnection } = require('../../models');
+    Enrollment.findAll.mockResolvedValue([{ id: 'e1' }, { id: 'e2' }, { id: 'e3' }]);
+    GitHubConnection.findAll.mockResolvedValue([
+      { enrollment_id: 'e1', repo_owner: 'org', repo_name: 'repo1' },
+      { enrollment_id: 'e2', repo_owner: 'org', repo_name: 'repo2' },
+      { enrollment_id: 'e3', repo_owner: 'org', repo_name: 'repo3' },
+    ]);
+    // e2's sync throws; e1 and e3 return normally via the null-findOne early exit
+    GitHubConnection.findOne
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error('DB timeout'))
+      .mockResolvedValueOnce(null);
+
+    const result = await syncAllActiveStudentGitHubActivity();
+
+    expect(result).toEqual({ synced: 2, skipped: 0, failed: 1 });
+  });
+
+  it('returns zeros immediately when there are no active enrollments', async () => {
+    const { Enrollment, GitHubConnection } = require('../../models');
+    Enrollment.findAll.mockResolvedValue([]);
+
+    const result = await syncAllActiveStudentGitHubActivity();
+
+    expect(result).toEqual({ synced: 0, skipped: 0, failed: 0 });
+    expect(GitHubConnection.findAll).not.toHaveBeenCalled();
   });
 });
