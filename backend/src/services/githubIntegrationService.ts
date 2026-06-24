@@ -116,7 +116,7 @@ export async function syncStudentActivity(enrollmentId: string): Promise<void> {
   // Commits in last 7 days
   const commitsRes = await fetch(
     `${GITHUB_API}/repos/${repoPath}/commits?since=${since}&per_page=100`,
-    { headers },
+    { headers, signal: AbortSignal.timeout(15000) },
   );
   const commits: any[] = commitsRes.ok ? await commitsRes.json() : [];
   const commits_last_7d = Array.isArray(commits) ? commits.length : 0;
@@ -140,13 +140,13 @@ export async function syncStudentActivity(enrollmentId: string): Promise<void> {
   // Open PRs
   const prsRes = await fetch(
     `${GITHUB_API}/repos/${repoPath}/pulls?state=open&per_page=100`,
-    { headers },
+    { headers, signal: AbortSignal.timeout(15000) },
   );
   const prs: any[] = prsRes.ok ? await prsRes.json() : [];
   const open_prs = Array.isArray(prs) ? prs.length : 0;
 
   // Repo info (stars + raw snapshot)
-  const repoRes = await fetch(`${GITHUB_API}/repos/${repoPath}`, { headers });
+  const repoRes = await fetch(`${GITHUB_API}/repos/${repoPath}`, { headers, signal: AbortSignal.timeout(15000) });
   const repoData: any = repoRes.ok ? await repoRes.json() : {};
   const total_stars: number = repoData.stargazers_count ?? 0;
   const raw_repos_json = repoRes.ok ? repoData : null;
