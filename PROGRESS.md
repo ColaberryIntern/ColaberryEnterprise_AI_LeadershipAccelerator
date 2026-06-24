@@ -6,6 +6,47 @@ This file tracks all implementation work. Claude must read this at the start of 
 ---
 
 ## Current Focus
+Accelerator Program local dev environment — one-command setup for admin, student portal, and GitHub integration testing.
+
+---
+
+### Dev environment bootstrap — admin seed, student portal tokens, GitHub PAT inject, Docker network fix (2026-06-23)
+- [x] **Fixed stale Docker dev backend (accelerator_prod → accelerator_dev1 + network)**
+  - Date: 2026-06-23
+  - Session: CC-20260623-k9p4
+  - What changed: `docker-compose.dev.yml` — added `postgres_network` external network entry (`colaberryenterprise_ai_leadershipaccelerator_default`) so the Docker dev backend can always resolve `accelerator-db` hostname. Previously required a manual `docker network connect` after every `docker compose down`; now permanent. Root cause: dev container was 3 weeks stale pointing to `accelerator_prod` DB; force-recreated from fresh build.
+  - Verification: `docker logs accelerator-dev-backend` shows DB schema migrations running clean against `accelerator_dev1`. Container stable (no crash loop).
+  - Notes: The working local setup for portal testing uses the host-level Node process on `:3002` (root `.env` → `accelerator_dev`), not the Docker dev stack. Docker stack fixed for completeness; primary dev flow is host Node + frontend npm start.
+
+- [x] **Admin user seed — local dev login**
+  - Date: 2026-06-23
+  - Session: CC-20260623-k9p4
+  - What changed: Created `kes@colaberry.com` admin user in `accelerator_dev` DB via `npm run seed:admin`. Existing `seedAdmin.ts` used — no code change, data only.
+  - Verification: `POST /api/admin/login` returns JWT. `localhost:3003/admin/login` + `localhost:3003/admin/accelerator` accessible.
+  - Notes: Data-only change, not committed. Re-runnable via `npm run seed:admin` (idempotent).
+
+- [x] **seedTestStudents.ts — cold + warm student portal tokens for local dev**
+  - Date: 2026-06-23
+  - Session: CC-20260623-k9p4
+  - What changed: `backend/src/seeds/seedTestStudents.ts` (new). Wraps existing `createTestUsers.ts` module. Auto-detects first open cohort, creates `test-cold@colaberry.test` (no intake) and `test-warm@colaberry.test` (intake complete, 12 variables seeded), prints direct `/portal/verify?token=<token>` URLs. Tokens valid 90 days. No email required. Idempotent — refreshes tokens on re-run.
+  - Verification: Script runs; `backend/package.json` `seed:students` entry added.
+
+- [x] **seedGithubDev.ts — GitHub PAT injection bypassing OAuth for local dev**
+  - Date: 2026-06-23
+  - Session: CC-20260623-k9p4
+  - What changed: `backend/src/seeds/seedGithubDev.ts` (new). Takes a GitHub personal access token + optional `owner/repo`, upserts a `github_connections` record for the warm test student. Bypasses the full OAuth flow entirely. Documents ngrok path for webhook testing.
+  - Verification: `backend/package.json` `seed:github` entry added.
+
+- [x] **scripts/dev-setup.sh + root package.json scripts — one-command dev bootstrap**
+  - Date: 2026-06-23
+  - Session: CC-20260623-k9p4
+  - What changed: `scripts/dev-setup.sh` (new). Starts Postgres if not running, seeds admin, seeds test students, optionally injects GitHub PAT. `package.json` (root) — added `dev:setup`, `seed:students`, `seed:github`. `backend/package.json` — added `seed:students`, `seed:github`. `.env` — added GitHub OAuth env var block with instructions (gitignored, not committed).
+  - Verification: Script runs end-to-end. Admin login confirmed. Student portal URLs generated.
+  - Notes: Full local dev setup now: `npm run dev:setup` → `cd backend && npm run dev` → `cd frontend && npm start`. No 20-minute manual debug cycle per ticket.
+
+---
+
+## Current Focus
 GitHub API integration for Architect Dashboard — OAuth flow, activity sync, webhook receiver.
 
 ---
