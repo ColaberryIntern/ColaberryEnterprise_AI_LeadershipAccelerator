@@ -164,6 +164,7 @@ async function seed() {
         },
       ],
       materials_json: [
+        { title: 'Introduction to Agent Skills (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/introduction-to-agent-skills' },
         { title: 'POC Scoping Canvas', type: 'template', url: '' },
         { title: 'Data Integration Playbook', type: 'reading', url: '' },
         { title: 'Success Metrics Framework', type: 'template', url: '' },
