@@ -537,7 +537,11 @@ async function extractProcareItems(procareRows, now) {
   const todayISO = ctDateISO(now);
   const today = ctParts(now);
   const blocks = rows
-    .map((r, i) => `EMAIL ${i + 1} [${r.subject}] (received ${new Date(r.received_at).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' })}):\n${cleanBody(r.body_text, 600)}`)
+    .map((r, i) => {
+      const rec = new Date(r.received_at);
+      const rp = ctParts(rec);
+      return `EMAIL ${i + 1} [${r.subject}] (received ${rp.dow} ${rp.month} ${rp.day}, ${ctDateISO(rec)}):\n${cleanBody(r.body_text, 600)}`;
+    })
     .join('\n\n');
   const sys =
     `You extract parent-relevant items from a daycare/preschool (Procare) about a child named Creed. ` +
@@ -547,10 +551,12 @@ async function extractProcareItems(procareRows, now) {
     `treats/events (e.g. Kona Ice), closures, payments due, schedule changes. ` +
     `title = short fact or task ("Ms. Brenda out, returns Monday"). detail = one short clarifying line. ` +
     `when = short human timing label ("Thu Jun 11", "Through Mon"), else "". ` +
-    `dateISO = the single most relevant calendar date as YYYY-MM-DD computed from today (${todayISO}); ` +
-    `for a teacher returning Monday use that Monday's date; "" if no specific day. ` +
+    `dateISO = the single most relevant calendar date as YYYY-MM-DD. ` +
+    `CRITICAL: resolve relative day words ("today", "tonight", "tomorrow", "yesterday") against the RECEIVED date of the email they appear in (shown in each EMAIL header), NOT against ${todayISO}. ` +
+    `Example: an email received 2026-06-17 that says "tomorrow" means 2026-06-18, and "this Friday" in it is the first Friday on/after 2026-06-17. ` +
+    `For a teacher returning Monday use that Monday's date; "" if no specific day. ` +
     `gridLabel = a VERY short calendar-cell label (<=18 chars, e.g. "Jersey Day", "Kona Ice", "Ms. Brenda back"). ` +
-    `tone = "urgent" if today, "upcoming" if future-dated, else "info". ` +
+    `tone = "urgent" if dateISO equals ${todayISO} (happening today), "upcoming" if later, else "info". ` +
     `Ignore greetings, sign-offs, app-download links. CONSOLIDATE the same announcement across emails into ONE. Max 5. ` +
     `Nothing noteworthy => {"items":[]}.`;
   try {
@@ -601,7 +607,12 @@ async function extractTravelItems(travelRows, now) {
 function heuristicProcareItems(rows, now) {
   const actions = [], grid = [];
   const seen = new Set();
+  const todayISO = ctDateISO(now);
   for (const r of (rows || [])) {
+    // Relative day words ("today"/"tomorrow") resolve against the email's SEND date,
+    // not the briefing date: a Wednesday email's "tomorrow" is Thursday even when the
+    // briefing itself runs that Thursday. Fall back to `now` if received_at is absent.
+    const anchor = r.received_at ? new Date(r.received_at) : now;
     // protect abbreviation periods (Ms./Dr./...) so they don't split sentences
     const body = (cleanBody(r.body_text, 600) || '').replace(/\b(Mr|Mrs|Ms|Dr|St|Jr|Sr)\.\s/g, '$1<DOT> ');
     const sentences = body
@@ -618,9 +629,12 @@ function heuristicProcareItems(rows, now) {
       const key = s.slice(0, 28).toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      const dateISO = parseDayToISO(s, now);
-      actions.push({ tone: dateISO ? 'upcoming' : 'info', ico: 'CRD', colorKey: 'creed', title: truncate(s, 100) });
-      if (dateISO) grid.push({ dateISO, colorKey: 'creed', label: shortLabel(s) });
+      const dateISO = parseDayToISO(s, anchor);
+      const tone = !dateISO ? 'info' : dateISO === todayISO ? 'urgent' : 'upcoming';
+      actions.push({ tone, ico: 'CRD', colorKey: 'creed', title: truncate(s, 100) });
+      // Guard stale dates off the grid: an old email's "tomorrow" can resolve into the
+      // past once anchored to its send date — keep only dates near the briefing window.
+      if (dateISO && validGridDate(dateISO, now)) grid.push({ dateISO, colorKey: 'creed', label: shortLabel(s) });
       if (actions.length >= 5) break;
     }
     if (actions.length >= 5) break;

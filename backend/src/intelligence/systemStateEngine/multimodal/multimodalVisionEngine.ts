@@ -15,6 +15,7 @@
  *
  * Phase 7 §1, §2, §16.
  */
+import { getInstrumentedOpenAI } from '../../../services/openaiInstrumented';
 import { buildVisionPrompt, type VisionPromptInput } from './visionPromptBuilder';
 import { normalizeVisionResponse, type MultimodalVisionAnalysis } from './visionResponseNormalizer';
 import { getCached, setCached, makeCacheKey, shaOfBytes } from './visionResultCache';
@@ -45,8 +46,7 @@ async function getDefaultProvider(): Promise<VisionProvider | null> {
   if (activeProvider) return activeProvider;
   if (!process.env.OPENAI_API_KEY) return null;
   try {
-    const { default: OpenAI } = await import('openai');
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = getInstrumentedOpenAI({ workflow_id: 'vision' });
     const provider: VisionProvider = {
       id: 'gpt4o',
       async analyze(input: VisionProviderInput): Promise<string> {

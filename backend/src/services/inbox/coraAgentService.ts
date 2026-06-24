@@ -19,6 +19,66 @@ const DRY_RUN = process.env.CORA_DRY_RUN === 'true';
 export interface CoraReply {
   subject: string;
   body: string;
+  /**
+   * True when Cora's reply is a handoff/acknowledgement that still needs a human
+   * to follow up — out-of-scope bootcamp/billing/course-support mail, refunds,
+   * complaints, partnerships, or anything Cora cannot confidently resolve. Drives
+   * whether the email is archived or routed back to the human INBOX.
+   */
+  needsHuman: boolean;
+}
+
+/** Disposition of an email Cora handled — tells the dispatcher whether to archive. */
+export interface CoraDispatchResult {
+  /** True => fully resolved, safe to archive. False => leave in INBOX for a human. */
+  archive: boolean;
+  /** Why it was kept for a human (audit + reclassify reasoning); set when archive=false. */
+  handoffReason?: string;
+}
+
+/**
+ * Parse Cora's raw OpenAI JSON into a typed reply. Pure + deterministic so the
+ * parsing rules — including the needs_human handoff flag — are unit-testable
+ * without an OpenAI round-trip. Throws when the body is missing (the caller
+ * treats that as a generation failure). A missing/invalid needs_human defaults
+ * to false (treat as a normal, fully-answered reply).
+ */
+export function parseCoraReply(content: string, fallbackSubject: string): CoraReply {
+  const parsed = JSON.parse(content) as {
+    subject?: string;
+    body?: string;
+    needs_human?: unknown;
+  };
+  if (!parsed.body) throw new Error('Missing body in Cora OpenAI response');
+  return {
+    subject: parsed.subject?.trim() || `Re: ${fallbackSubject}`,
+    body: parsed.body,
+    needsHuman: parsed.needs_human === true || parsed.needs_human === 'true',
+  };
+}
+
+/**
+ * Decide whether an email Cora touched is fully handled (archive) or must be left
+ * in the human INBOX. Pure decision table — the core of the out-of-scope routing
+ * fix, kept separate from I/O so every branch is unit-tested.
+ *
+ *   generation failed   -> keep for human (never bury an unanswered email)
+ *   dry run              -> archive (no real send; preserves shadow-test behavior)
+ *   needs_human handoff  -> keep for human (Cora only acknowledged; a person must act)
+ *   send failed          -> keep for human (the sender received no reply)
+ *   in-scope reply sent  -> archive (fully resolved)
+ */
+export function decideCoraDisposition(opts: {
+  generated: boolean;
+  dryRun: boolean;
+  needsHuman: boolean;
+  sent: boolean;
+}): CoraDispatchResult {
+  if (!opts.generated) return { archive: false, handoffReason: 'cora_generation_failed' };
+  if (opts.dryRun) return { archive: true };
+  if (opts.needsHuman) return { archive: false, handoffReason: 'cora_handoff_human_review' };
+  if (!opts.sent) return { archive: false, handoffReason: 'cora_send_failed' };
+  return { archive: true };
 }
 
 /**
@@ -74,13 +134,7 @@ export async function generateCoraReply(
   const content = response.choices?.[0]?.message?.content;
   if (!content) throw new Error('Empty response from OpenAI');
 
-  const parsed = JSON.parse(content) as { subject?: string; body?: string };
-  if (!parsed.body) throw new Error('Missing body in Cora OpenAI response');
-
-  return {
-    subject: parsed.subject?.trim() || `Re: ${subject}`,
-    body: parsed.body,
-  };
+  return parseCoraReply(content, subject);
 }
 
 // ─── Main Dispatch Handler ────────────────────────────────────────────────
@@ -95,7 +149,7 @@ export async function handleCoraInquiry(email: {
   provider_message_id: string;
   provider_thread_id: string | null;
   headers: any;
-}): Promise<void> {
+}): Promise<CoraDispatchResult> {
   console.log(`${LOG_PREFIX} Handling inquiry: email=${email.id} from=${email.from_address}`);
 
   let reply: CoraReply;
@@ -114,13 +168,14 @@ export async function handleCoraInquiry(email: {
       actor: 'cora',
       metadata: { error_class: 'GenerationError', error: error.message },
     });
-    return;
+    // Generation failed — don't bury the email; leave it for a human.
+    return decideCoraDisposition({ generated: false, dryRun: DRY_RUN, needsHuman: false, sent: false });
   }
 
   if (DRY_RUN) {
     console.log(
-      `${LOG_PREFIX} DRY RUN — would send to ${email.from_address}:\n` +
-      `Subject: ${reply.subject}\n\n${reply.body}`
+      `${LOG_PREFIX} DRY RUN — would ${reply.needsHuman ? 'send handoff ack + flag for human' : 'send'} ` +
+      `to ${email.from_address}:\nSubject: ${reply.subject}\n\n${reply.body}`
     );
     await logAuditEvent({
       email_id: email.id,
@@ -131,13 +186,16 @@ export async function handleCoraInquiry(email: {
         reply_to: email.from_address,
         subject: reply.subject,
         body_preview: reply.body.substring(0, 300),
+        needs_human: reply.needsHuman,
       },
     });
-    return;
+    return decideCoraDisposition({ generated: true, dryRun: true, needsHuman: reply.needsHuman, sent: false });
   }
 
+  let sent = false;
   try {
     await sendCoraReplyViaGmail(email, reply);
+    sent = true;
     console.log(`${LOG_PREFIX} Sent to ${email.from_address} | subject: ${reply.subject}`);
     await logAuditEvent({
       email_id: email.id,
@@ -148,6 +206,7 @@ export async function handleCoraInquiry(email: {
         reply_to: email.from_address,
         subject: reply.subject,
         body_preview: reply.body.substring(0, 300),
+        needs_human: reply.needsHuman,
       },
     });
   } catch (error: any) {
@@ -160,6 +219,8 @@ export async function handleCoraInquiry(email: {
       metadata: { error_class: 'SendError', error: error.message },
     });
   }
+
+  return decideCoraDisposition({ generated: true, dryRun: false, needsHuman: reply.needsHuman, sent });
 }
 
 // ─── Gmail Send ───────────────────────────────────────────────────────────

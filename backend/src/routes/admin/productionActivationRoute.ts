@@ -22,7 +22,13 @@ import { activateCampaign } from '../../services/campaignService';
 import { getSetting, setSetting } from '../../services/settingsService';
 import { isKillSwitchActive } from '../../services/launchSafety';
 
+import { requireAdmin } from '../../middlewares/authMiddleware';
+
 const router = Router();
+
+// SECURITY (TBI audit P0-1, CRITICAL): production-activate clears the kill switch and
+// enables agents — it shipped with NO auth. Require an authenticated admin for every route.
+router.use(requireAdmin);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

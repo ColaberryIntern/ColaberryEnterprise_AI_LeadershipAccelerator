@@ -11,8 +11,8 @@
 //   first run if missing — script then creates a new parent. To migrate state
 //   between hosts, copy the JSON file.).
 //
-// Calculation: 10-person cohort, 4 courses each = 40 total. % = completed / 40.
-// Goal is hard-coded to 10 cohort members. Ali's own track is excluded.
+// Calculation: cohort size (COHORT_LIST_IDS) x 4 courses each = goal. % =
+// completed / goal. Goal self-adjusts to the cohort size. Ali's own track is excluded.
 
 const path = require('path');
 const fs = require('fs');
@@ -57,8 +57,12 @@ async function bcGet(p) { const r = await fetch(p.startsWith('http') ? p : BASE 
 async function bcGetAll(p) { let n = p.startsWith('http') ? p : BASE + p; const out = []; while (n) { const r = await fetch(n, { headers: H }); if (!r.ok) break; out.push(...(await r.json())); const lh = (r.headers.get('link') || '').match(/<([^>]+)>;\s*rel="next"/); n = lh ? lh[1] : null; } return out; }
 
 function bar(pct, width = 24) {
-  const fill = Math.round((pct / 100) * width);
-  return '█'.repeat(fill) + '░'.repeat(width - fill);
+  // Clamp fill to [0, width]. Once the cohort grew past the hard-coded 40-course
+  // goal, pctComplete exceeded 100, making `'░'.repeat(width - fill)` throw
+  // "Invalid count value: -3" and crash the whole report before it could reach
+  // its goal-reached shutoff (observed 2026-06-23). Never repeat a negative.
+  const fill = Math.max(0, Math.min(width, Math.round((Math.max(0, pct) / 100) * width)));
+  return '█'.repeat(fill) + '░'.repeat(Math.max(0, width - fill));
 }
 function progressBarHtml(pct, color = '#16a34a') {
   return `<div style="background:#e2e8f0;border-radius:4px;height:10px;overflow:hidden;width:100%"><div style="background:${color};height:100%;width:${pct}%;transition:width .3s"></div></div>`;
@@ -92,11 +96,16 @@ function daysUntil(date) {
     } catch (e) { console.error(`Failed for ${p.name}:`, e.message); }
   }
 
-  const totalGoal = 10 * 4; // 40
+  // Goal derives from the actual cohort size (4 Anthropic Academy courses per
+  // person), so it self-adjusts as members are added/removed. Was hard-coded to
+  // `10 * 4 = 40`; the cohort grew to 16 (2026-06-03), which pushed completions
+  // past 40 and crashed the report. Retargeted 2026-06-23 (CC-20260623-q8m4).
+  const totalGoal = COHORT_LIST_IDS.length * 4;
   const totalCompleted = people.reduce((s, p) => s + p.completedCount, 0);
   const pctComplete = Math.round((totalCompleted / totalGoal) * 100);
-  const remaining = totalGoal - totalCompleted;
+  const remaining = Math.max(0, totalGoal - totalCompleted);
   const daysLeft = daysUntil(DEADLINE);
+  const deadlinePassed = daysLeft <= 0;
   const pace = daysLeft > 0 ? (remaining / daysLeft).toFixed(2) : 'N/A';
 
   // Sort + categorize
@@ -109,9 +118,10 @@ function daysUntil(date) {
   // --- TEXT ---
   let text = `ANTHROPIC PARTNER NETWORK - COUNTDOWN
 
-PROGRESS: ${totalCompleted} / 40 courses (${pctComplete}%)
-DEADLINE: 2026-06-12 (${daysLeft} days left)
-PACE REQUIRED: ${pace} completions / day to hit goal
+PROGRESS: ${totalCompleted} / ${totalGoal} courses (${pctComplete}%)
+${deadlinePassed
+  ? `TARGET DATE: 2026-06-12 (passed) - ${remaining} completions remaining`
+  : `DEADLINE: 2026-06-12 (${daysLeft} days left)\nPACE REQUIRED: ${pace} completions / day to hit goal`}
 
 ${bar(pctComplete)} ${pctComplete}%
 
@@ -137,7 +147,7 @@ ${bar(pctComplete)} ${pctComplete}%
     text += `\nNOT YET STARTED (${stalled.length}/10) - the partnership is waiting on these names:\n`;
     for (const p of stalled) text += `  ✗ ${p.name}\n`;
   }
-  text += `\nThis email auto-fires daily until we hit 40/40. Once we reach the goal, it shuts off.\n`;
+  text += `\nThis email auto-fires daily until we hit ${totalGoal}/${totalGoal}. Once we reach the goal, it shuts off.\n`;
 
   // --- HTML ---
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9">
@@ -146,13 +156,15 @@ ${bar(pctComplete)} ${pctComplete}%
 <div style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:white;padding:32px 28px;text-align:center">
 <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#bfdbfe;font-weight:700">🚀 Anthropic Partner Network</div>
 <div style="font-size:42px;font-weight:900;margin:6px 0 4px;color:white;line-height:1">${pctComplete}%</div>
-<div style="font-size:14px;color:#cbd5e0">${totalCompleted} of 40 course completions</div>
+<div style="font-size:14px;color:#cbd5e0">${totalCompleted} of ${totalGoal} course completions</div>
 <div style="margin:18px 0 0;background:rgba(255,255,255,0.15);border-radius:6px;height:14px;overflow:hidden"><div style="background:#10b981;height:100%;width:${pctComplete}%"></div></div>
 <div style="margin-top:18px"><a href="https://app.basecamp.com/3945211/projects/47477101" style="display:inline-block;background:#fbbf24;color:#1c1917;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.5px">Open Anthropic Partner Network in Basecamp &rarr;</a></div>
 </div>
 
 <div style="background:#fef3c7;border-bottom:1px solid #fde68a;padding:14px 28px;font-size:14px;color:#92400e;text-align:center">
-<strong>⏰ ${daysLeft} days left</strong> to deadline 2026-06-12 - need <strong>${pace}/day</strong> to make it
+${deadlinePassed
+  ? `<strong>Target date 2026-06-12 passed</strong> - <strong>${remaining}</strong> of ${totalGoal} completions still to go`
+  : `<strong>⏰ ${daysLeft} days left</strong> to deadline 2026-06-12 - need <strong>${pace}/day</strong> to make it`}
 </div>
 
 <div style="padding:24px 28px">
@@ -191,22 +203,22 @@ ${stalled.map(p => `<div style="margin:4px 0;color:#7f1d1d">✗ <strong>${p.name
 </div>` : ''}
 
 <div style="background:#ebf4ff;border-left:4px solid #2b6cb0;padding:14px 18px;border-radius:4px;font-size:13px;color:#1e3a8a">
-<strong>What this is:</strong> Colaberry's Anthropic Partner Network application requires 10 team members to complete the 4-course Anthropic Academy track (Agent Skills, Claude API, MCP intro, Claude Code in Action). 40 completions total unlocks the partnership status.
+<strong>What this is:</strong> Colaberry's Anthropic Partner Network application requires ${COHORT_LIST_IDS.length} team members to complete the 4-course Anthropic Academy track (Agent Skills, Claude API, MCP intro, Claude Code in Action). ${totalGoal} completions total unlocks the partnership status.
 </div>
 
 </div>
 
 <div style="background:#f8fafc;padding:14px 28px;font-size:11px;color:#64748b;text-align:center;border-top:1px solid #e2e8f0">
-Auto-fires daily until 40/40 reached, then shuts off. Weekly recap posts Mondays to the project Message Board.
+Auto-fires daily until ${totalGoal}/${totalGoal} reached, then shuts off. Weekly recap posts Mondays to the project Message Board.
 </div>
 
 </div>
 </body></html>`;
 
-  console.log(`Progress: ${totalCompleted}/40 (${pctComplete}%). Days left: ${daysLeft}. Movers: ${movers.length}. Stalled: ${stalled.length}.`);
+  console.log(`Progress: ${totalCompleted}/${totalGoal} (${pctComplete}%). Days left: ${daysLeft}. Movers: ${movers.length}. Stalled: ${stalled.length}.`);
 
-  // SHUTOFF: if we hit 40/40 stop sending
-  if (totalCompleted >= 40) {
+  // SHUTOFF: once the whole cohort finishes (totalCompleted >= totalGoal) stop sending.
+  if (totalCompleted >= totalGoal) {
     console.log('GOAL REACHED. Skipping email send. Report can be archived.');
     return;
   }
@@ -223,7 +235,7 @@ Auto-fires daily until 40/40 reached, then shuts off. Weekly recap posts Mondays
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
       cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
-      subject: `[Daily Report] 🚀 Anthropic Partner Network: ${pctComplete}% (${totalCompleted}/40) · ${daysLeft} days left`,
+      subject: `[Daily Report] 🚀 Anthropic Partner Network: ${pctComplete}% (${totalCompleted}/${totalGoal})${deadlinePassed ? '' : ` · ${daysLeft} days left`}`,
       text,
       html,
       headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': 'high', 'X-Priority': '1' },
@@ -249,9 +261,9 @@ Auto-fires daily until 40/40 reached, then shuts off. Weekly recap posts Mondays
     if (!state || !state.threadId) {
       // First run: create the parent thread with an intro (no daily data — that lands in comments)
       const introHtml = `<div>
-<p><strong>What this thread is:</strong> Colaberry's Anthropic Partner Network application requires <strong>10 team members</strong> to complete the <strong>4-course Anthropic Academy track</strong> (Agent Skills, Claude API, MCP intro, Claude Code in Action). 40 completions total unlocks partner status.</p>
+<p><strong>What this thread is:</strong> Colaberry's Anthropic Partner Network application requires <strong>${COHORT_LIST_IDS.length} team members</strong> to complete the <strong>4-course Anthropic Academy track</strong> (Agent Skills, Claude API, MCP intro, Claude Code in Action). ${totalGoal} completions total unlocks partner status.</p>
 <p>Every weekday at ~11 AM CT a fresh countdown will land as a comment on this thread: progress %, days left, pace required, recent wins, who's crossed the finish line, and who hasn't started yet. Same content Ali gets via email.</p>
-<p><strong>Deadline:</strong> 2026-06-12 &middot; <strong>Goal:</strong> 40/40 course completions &middot; <strong>Shut-off:</strong> auto-stops once we hit 40/40.</p>
+<p><strong>Deadline:</strong> 2026-06-12 &middot; <strong>Goal:</strong> ${totalGoal}/${totalGoal} course completions &middot; <strong>Shut-off:</strong> auto-stops once we hit ${totalGoal}/${totalGoal}.</p>
 <p>Open your own course list to check off completions: <a href="https://app.basecamp.com/3945211/projects/47477101">Anthropic Partner Network project</a>.</p>
 </div>`;
       const subject = '📊 Anthropic Partner Network — Daily Countdown (one thread, daily comments)';
@@ -269,7 +281,7 @@ Auto-fires daily until 40/40 reached, then shuts off. Weekly recap posts Mondays
 
     // Post today's countdown as a comment on the parent thread
     const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const commentHtml = `<div><div><strong>${today} &middot; ${pctComplete}% (${totalCompleted}/40) &middot; ${daysLeft} days left &middot; need ${pace}/day</strong></div></div>${html}`;
+    const commentHtml = `<div><div><strong>${today} &middot; ${pctComplete}% (${totalCompleted}/${totalGoal})${deadlinePassed ? ` &middot; ${remaining} to go` : ` &middot; ${daysLeft} days left &middot; need ${pace}/day`}</strong></div></div>${html}`;
     const ccr = await fetch(`${BASE}/recordings/${state.threadId}/comments.json`, {
       method: 'POST', headers: H,
       body: JSON.stringify({ content: commentHtml })

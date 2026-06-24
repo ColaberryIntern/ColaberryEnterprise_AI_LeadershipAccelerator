@@ -5,6 +5,7 @@ import nodemailer from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
 import { env } from '../config/env';
+import { runWithRequestContext } from '../utils/requestContext';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
 import { generateMessage, buildConversationHistory } from './aiMessageService';
@@ -17,6 +18,7 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
@@ -34,25 +36,29 @@ import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from '.
  * measures duration, logs to ai_agent_activity_logs, and updates agent metrics.
  */
 async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Promise<void> {
+  // Trace propagation (P1-4): seed a trace_id into AsyncLocalStorage so every downstream AI call this
+  // job makes (getInstrumentedOpenAI / emitAiEvent) correlates to THIS run instead of emitting null.
+  const traceId = uuidv4();
+  const traced = () => runWithRequestContext({ traceId }, fn);
+
   let agent: InstanceType<typeof AiAgent> | null = null;
   try {
     agent = await AiAgent.findOne({ where: { agent_name: agentName } });
   } catch {
     // If registry lookup fails, run the job anyway (don't break existing behavior)
-    await fn();
+    await traced();
     return;
   }
 
   // If agent not in registry, run untracked
   if (!agent) {
-    await fn();
+    await traced();
     return;
   }
 
   // Check enabled and paused status
   if (!agent.enabled || agent.status === 'paused') return;
 
-  const traceId = uuidv4();
   const start = Date.now();
   let result: 'success' | 'failed' = 'success';
   let errorMsg: string | null = null;
@@ -60,7 +66,7 @@ async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Pr
 
   try {
     await agent.update({ status: 'running' });
-    await fn();
+    await traced();
   } catch (err: any) {
     result = 'failed';
     errorMsg = err.message || String(err);
@@ -509,6 +515,34 @@ async function calculatePacedLimit(
 
 async function processScheduledActions(): Promise<void> {
   const processorId = `proc_${process.pid}_${Date.now()}`;
+
+  // Expire "zombie" actions before claiming. An action whose scheduled_for is
+  // well in the past should never fire (a months-old sequence step sending today
+  // is wrong, not late). Without this the per-lead daily cap re-defers such
+  // actions to "tomorrow" forever, so they never drain and send_throughput stays
+  // red (730 Mar-May zombies, 2026-06-23 / CC-20260623-q8m4). One bulk UPDATE per
+  // tick; affects 0 rows in steady state. Configurable via setting
+  // `scheduled_action_max_age_days` (0/negative disables).
+  try {
+    const maxAgeDays = resolveMaxAgeDays(await getSetting('scheduled_action_max_age_days'));
+    if (maxAgeDays > 0) {
+      const cutoff = staleCutoff(new Date(), maxAgeDays);
+      const [, expiredMeta] = await sequelize.query(
+        `UPDATE scheduled_emails
+            SET status = 'cancelled',
+                metadata = COALESCE(metadata, '{}'::jsonb)
+                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason)
+          WHERE status = 'pending' AND scheduled_for < :cutoff`,
+        { replacements: { cutoff, reason: `auto-expired: >${maxAgeDays}d past scheduled_for` } }
+      );
+      const expiredCount = (expiredMeta as any)?.rowCount ?? 0;
+      if (expiredCount > 0) {
+        console.log(`[Scheduler] Expired ${expiredCount} stale scheduled action(s) (>${maxAgeDays}d past scheduled_for)`);
+      }
+    }
+  } catch (err: any) {
+    console.error('[Scheduler] stale-action expiry failed (non-blocking):', err.message);
+  }
 
   // Atomically claim pending actions using FOR UPDATE SKIP LOCKED
   // This prevents race conditions if multiple scheduler instances run concurrently

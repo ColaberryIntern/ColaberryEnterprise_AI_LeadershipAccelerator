@@ -23,7 +23,11 @@ JSON-file, anonymous, OpenAI-based) and do **not** stand students up on per-seat
 
 1. **Community = native v1.** All components sync in one system (project, tasks, artifacts, build-log,
    community feed). Not Skool. Rationale: Ali wants every component synced together and tied to the
-   Anthropic/Claude Code training layer.
+   Anthropic/Claude Code training layer. **RE-CONFIRMED 2026-06-18 (Ali, BC#9985688801)** against launch
+   pressure — hold native at **launch-min** (async feed + threaded comments + lite poll presence); the
+   websocket realtime long-pole was already deferred to P2 (BC#9985688722), so native no longer carries
+   multi-week launch risk. Interim Skool rejected (walled garden; would force a throw-away migration of the
+   25-student Founding Cohort). Build-capacity sign-off pending from Kes (System Approval).
 2. **Task system = portal-native, replicating the CB-System employee experience.** Students get their own
    "project → list → task → next-action + Claude Code prompt" operating model, native in the portal. No
    per-student Basecamp, no MCP. Basecamp stays the internal team/PMO surface only.
