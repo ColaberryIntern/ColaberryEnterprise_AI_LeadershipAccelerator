@@ -216,6 +216,7 @@ async function seed() {
         },
       ],
       materials_json: [
+        { title: 'Building with the Claude API (Anthropic Skilljar)', type: 'reading', url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api' },
         { title: 'Executive Presentation Template', type: 'template', url: '' },
         { title: 'ROI Calculator Spreadsheet', type: 'template', url: '' },
         { title: 'AI Business Case Examples', type: 'reading', url: '' },
