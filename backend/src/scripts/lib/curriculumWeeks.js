@@ -17,11 +17,13 @@
 // sign-off. Visual dropped; social media is a program-wide optional student
 // assignment, not a per-week build task.
 
-// Cohort 1 kickoff — first Mon/Thu class (Mon Architecture Day + Thu Build Day).
-const KICKOFF = '2026-07-13';
+// Cohort 1 teaching kickoff — first Mon/Thu class (Mon Architecture Day + Thu Build
+// Day). Orientation is Thu 2026-07-23; teaching starts the following Monday.
+// Moved from 2026-07-13 to 2026-07-27 (Ali, 2026-06-19).
+const KICKOFF = '2026-07-27';
 
 // Build-deadline model (Ali, 2026-06-10): ALL content built BEFORE class starts
-// (kickoff 2026-07-13) AND staggered — one intensive due per week across the
+// (kickoff 2026-07-27) AND staggered — one intensive due per week across the
 // pre-launch runway. Intensive 1 due first, Intensive 4 by the Friday before
 // launch. All four dates are Fridays and fall before kickoff.
 const INTENSIVE_DUE = {
@@ -51,7 +53,14 @@ const WEEKS = [
   { week: 3, intensive: 1, theme: 'Claude API + Business Workflow Assistant',
     anthropic: { course: 'Building with the Claude API', url: `${SKILLJAR}/claude-with-the-anthropic-api` } },
   { week: 4, intensive: 2, theme: 'Prompt Engineering + Enterprise Prompt Library',
-    anthropic: { course: 'Colaberry-original (no dedicated Anthropic course; draw from Claude 101)', url: null } },
+    // DECISION 2026-06-18 (BC#9985688677, Ali): build Colaberry-original (lean). NOT
+    // fold-into-W3 (W3 is Intensive 1, W4 opens Intensive 2 — folding breaks the 4x3-week
+    // TWC seminar-independence frame + forces renumbering 60 live BC todos) and NOT
+    // Claude-101-as-course (already the pre-program Foundations course; no PE depth, no
+    // differentiated artifact). Anthropic has no Skilljar PE course but does publish a free
+    // public PE tutorial + docs — curate that as the read/watch layer; Claude 101 as
+    // foundation only. Tier-A artifact = the Enterprise Prompt Library on the student project.
+    anthropic: { course: 'Prompt Engineering - Colaberry-original; background: Anthropic public Prompt Engineering tutorial + docs', url: null } },
   { week: 5, intensive: 2, theme: 'MCP Foundations + First MCP Server',
     anthropic: { course: 'Introduction to Model Context Protocol', url: `${SKILLJAR}/introduction-to-model-context-protocol` } },
   { week: 6, intensive: 2, theme: 'Advanced MCP + Business System Integration',
@@ -153,7 +162,7 @@ function weekTeachingMonday(week) {
   return isoAddDays(KICKOFF, (week - 1) * 7);
 }
 
-// Build deadline: staggered by intensive, all before the 7/13 kickoff.
+// Build deadline: staggered by intensive, all before the 7/27 kickoff.
 // W1-3 = Intensive 1 ... W10-12 = Intensive 4.
 function weekDueDate(week) {
   return INTENSIVE_DUE[Math.ceil(week / 3)];
