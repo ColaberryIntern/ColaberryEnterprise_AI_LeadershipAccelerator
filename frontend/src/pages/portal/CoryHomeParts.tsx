@@ -8,6 +8,7 @@
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { renderMd as md } from '../../utils/renderMd';
 import type {
   UnifiedProjectState,
   ReadinessBand,
@@ -51,7 +52,7 @@ export const NextActionCard: React.FC<{
       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, marginBottom: 4 }}>
         Today's one priority
       </div>
-      <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8, lineHeight: 1.35 }}>{action.title}</div>
+      <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8, lineHeight: 1.35 }}>{md(action.title)}</div>
       <div style={{ fontSize: 13, opacity: 0.92, marginBottom: 10, lineHeight: 1.55 }}>
         {action.reason}
       </div>
@@ -157,7 +158,7 @@ export const QueueRow: React.FC<{ entry: QueueEntry; first: boolean; last: boole
     </span>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {entry.title}
+        {md(entry.title)}
       </div>
       <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginTop: 2 }}>
         {sourceLabel(entry.source)} · {entry.time_est_minutes ? `~${entry.time_est_minutes}m` : 'time TBD'}
