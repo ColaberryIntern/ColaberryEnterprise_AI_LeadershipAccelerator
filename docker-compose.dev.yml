@@ -35,6 +35,7 @@ services:
     networks:
       - default
       - prod_network
+      - postgres_network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/preview-stacks-dev:/var/preview-stacks
@@ -78,3 +79,6 @@ networks:
   prod_network:
     external: true
     name: colaberry-accelerator_default
+  postgres_network:
+    external: true
+    name: colaberryenterprise_ai_leadershipaccelerator_default
