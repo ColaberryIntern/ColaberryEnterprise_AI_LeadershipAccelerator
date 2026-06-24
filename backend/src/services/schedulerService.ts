@@ -1020,6 +1020,21 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       .replace(/click here to opt out/gi, '')
       .replace(/<p>\s*<\/p>/g, '');
   }
+
+  // Branded signature on EVERY outbound send, so the recipient always knows who we are
+  // and where to find us. Sender-aware (uses the resolved sender), injected AFTER the
+  // executive-outreach strip so it is never removed. Fixes cold/personal emails going out
+  // with no company name or website. text body is derived from html below, so it inherits it.
+  const brandSignature = `
+  <div style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-top: 1px solid #e2e8f0; margin-top: 26px; padding-top: 14px; line-height: 1.5;">
+    <div style="font-weight: 700; color: #1a365d;">${senderName}</div>
+    <div style="color: #718096;">Colaberry Inc.</div>
+    <div style="margin-top: 6px;"><a href="https://enterprise.colaberry.ai" style="color: #2b6cb0; text-decoration: none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color: #2b6cb0; text-decoration: none;">${senderEmail}</a></div>
+  </div>`;
+  html = html.includes('</body>')
+    ? html.replace('</body>', `${brandSignature}\n</body>`)
+    : `${html}${brandSignature}`;
+
   // Reply-To: use reply subdomain so Mandrill catches inbound replies
   // For Ali personal outreach, reply goes to ali@colaberry.com directly (he handles personally)
   const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
@@ -1488,9 +1503,7 @@ function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignT
   ${primaryCtaButton}
   <div class="footer">
     <p style="font-size: 13px; margin-top: 12px;"><a href="${advisorUrl}" style="color: #3b82f6; text-decoration: none; font-weight: 600;">Design Your AI Organization in 5 Minutes &rarr;</a></p>
-    <p>Colaberry Enterprise AI Division<br>
-    AI Leadership | Architecture | Implementation | Advisory</p>
-    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
+    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075. If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
   </div>
 </body>
 </html>
