@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { getTestOverrides, getSetting } from './settingsService';
+import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
@@ -25,6 +26,29 @@ const transporter = env.mandrillApiKey
         },
       })
     : null;
+
+/**
+ * SECURITY (TBI audit P0-2): the global kill switch previously did NOT stop outbound email —
+ * it only flipped a DB flag the send paths never read. Every send in this module now routes
+ * through this guard, so an active kill switch actually blocks delivery. Fail-open if the
+ * switch state cannot be read (a transient settings-DB error must not halt all transactional
+ * mail). Returns a SentMessageInfo-shaped stub when blocked so callers keep working.
+ */
+async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nodemailer.SentMessageInfo> {
+  if (await isKillSwitchActive()) {
+    const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
+    console.warn(`[Email] BLOCKED by kill switch — not sending to ${to} (subject: ${options.subject ?? ''})`);
+    return {
+      messageId: '',
+      accepted: [],
+      rejected: to ? [to] : [],
+      pending: [],
+      response: 'blocked_by_kill_switch',
+      envelope: { from: '', to: [] },
+    } as unknown as nodemailer.SentMessageInfo;
+  }
+  return transporter!.sendMail(options);
+}
 
 async function resolveEmailRecipient(
   intended: string,
@@ -97,7 +121,7 @@ export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationDat
 
   const r = await resolveEmailRecipient(data.to, 'Welcome to the Enterprise AI Leadership Accelerator');
   const html = buildConfirmationHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -175,7 +199,7 @@ export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirm
     </div>
   `;
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -201,7 +225,7 @@ export async function sendInterestEmail(data: InterestEmailData): Promise<string
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Enterprise AI Leadership Accelerator Details');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -228,7 +252,7 @@ export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailDat
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Overview + ROI Framework');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -262,7 +286,7 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
   const r = await resolveEmailRecipient(alertTo, `High-Intent Executive Lead: ${data.name} (Score: ${data.score})`);
 
   const html = buildHighIntentAlertHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Lead Alert" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -291,7 +315,7 @@ export async function sendSponsorshipKitEmail(data: SponsorshipKitEmailData): Pr
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Corporate Sponsorship Kit - Building the Internal AI Execution Engine');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -385,7 +409,7 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Strategy Call is Confirmed');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -492,7 +516,7 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
   const r = await resolveEmailRecipient(alertTo, `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) - Score: ${data.completionScore}%`);
 
   const html = buildIntelligenceBriefHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Strategy Intel" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -892,7 +916,7 @@ export async function sendDigestEmail(data: DigestData): Promise<void> {
   const r = await resolveEmailRecipient(alertTo, subject);
   const html = buildDigestHtml(data);
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Admin Digest" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1104,7 +1128,7 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
     `[Accelerator] ${urgency}: Session ${data.sessionNumber} - ${data.sessionTitle}`
   );
   const html = buildSessionReminderHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1190,7 +1214,7 @@ export async function sendMissedSessionEmail(data: MissedSessionData): Promise<v
     `[Accelerator] Missed Session ${data.sessionNumber}: ${data.sessionTitle} - Catch Up`
   );
   const html = buildMissedSessionHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1306,7 +1330,7 @@ export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Accelerator Alert" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1343,7 +1367,7 @@ export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<vo
     `[Accelerator] Your Portal Access Link`
   );
   const html = buildPortalMagicLinkHtml(data, magicLink);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1424,7 +1448,7 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Maya - Colaberry Admissions" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1485,7 +1509,7 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Cory - AI Operations" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
@@ -1600,7 +1624,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Cory - AI COO" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
@@ -1734,7 +1758,7 @@ export async function sendCurriculumImpactDigest(
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Cory - AI Operations" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,

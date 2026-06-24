@@ -88,6 +88,7 @@ import AiAgentActivityLog from './AiAgentActivityLog';
 import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
+import AiEvent from './AiEvent';
 import DatasetRegistry from './DatasetRegistry';
 import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
@@ -900,6 +901,7 @@ export {
   ContentGenerationLog,
   AiAgent,
   AiAgentActivityLog,
+  AiEvent,
   CampaignHealth,
   CampaignError,
   AiSystemEvent,
