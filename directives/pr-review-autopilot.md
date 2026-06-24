@@ -93,3 +93,35 @@ not-yet-sent digest. Idempotent (content-dedup), never touches the deploy checko
 - **Mandrill creds missing** → VPS cron aborts loud (exit 1), logged; no email.
 - **Runaway queue** → capped at 6 PRs/run, skipped ones logged and picked up next tick.
 - **Self-approval** → flagged in `suggestedAction`; the human (Ali) admin-merges or routes to a second reviewer.
+
+---
+
+## Autonomous merge policy (the standing loop's "approve + merge" step)
+
+`scripts/prAutoMerge.js` is the closed-loop merge step. Given a verdicts JSON it merges
+the ELIGIBLE PRs into main serially and FLAGS the rest. A truly autonomous system still
+refuses to merge what it shouldn't.
+
+**A PR is auto-merged only if ALL hold:**
+1. verdict is `APPROVE` or `APPROVE_WITH_NITS` (never `BLOCK` / `REQUEST_CHANGES`),
+2. `mergeReady === true`,
+3. it touches NO guardrail path, and
+4. the diff is not oversized (> 40 files or > 1500 changed lines).
+
+**Guardrail paths always route to a human, even when the gate is green** (a wrong
+auto-merge there sends real money/comms, leaks secrets, or corrupts schema):
+`stripe | paysimple | billing | enrollment | payment | webhook | auth | token |
+password | secret | credential | models/index | migration | *.sql | seeds/`.
+
+**Serial merge queue.** PRs are merged one at a time, re-syncing main between each, so the
+PROGRESS.md union driver resolves cleanly and concurrent PRs don't thrash. (Merging in
+parallel cascades conflicts — observed 2026-06-24 when 9 merges put every in-flight PR
+into conflict.) A merge that hits a non-PROGRESS code conflict is aborted and flagged.
+
+**Standing loop (cloud routine, every 3h):**
+`prReviewState.js diff` → `pr-approval-review` (check) → `remediate-pr` on REQUEST_CHANGES
+(improve) → `prAutoMerge.js --execute` (approve + merge eligible, flag the rest) →
+`sendPrReviewDigest.js` (VPS, email what merged + what was flagged).
+
+**Kill switch / dry-run.** `prAutoMerge.js` defaults to dry-run (prints the plan, merges
+nothing); only `--execute` merges. Run without `--execute` to audit the plan anytime.
