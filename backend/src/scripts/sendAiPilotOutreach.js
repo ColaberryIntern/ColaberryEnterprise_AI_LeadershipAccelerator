@@ -23,6 +23,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { buildOptOutSet, isValidCanSpamAddress, shouldSend } = require('./lib/aiPilotEligibility');
 function req(name) { try { return require(name); } catch { return require(path.resolve(__dirname, '../../node_modules/' + name)); } }
 const nodemailer = req('nodemailer');
 
@@ -123,12 +124,12 @@ function writeSent(obj) { const tmp = SENT_LOG + '.tmp'; fs.writeFileSync(tmp, J
 
   const sent = loadJson(SENT_LOG, {});
   // Suppression = everyone who replied/opted-out + everyone bounced/complained.
-  const optedOut = new Set([...loadJson(REPLIED_FILE, []), ...loadJson(SUPPRESS_FILE, [])].map((e) => String(e).toLowerCase()));
+  const optedOut = buildOptOutSet(loadJson(REPLIED_FILE, []), loadJson(SUPPRESS_FILE, []));
   console.log(`[suppression] ${optedOut.size} addresses on the opt-out/bounce list (will be skipped)`);
 
   if (SEND) {
     if (!process.env.MANDRILL_API_KEY) { console.error('FAILED: MANDRILL_API_KEY not set.'); process.exit(1); }
-    if (!ADDRESS || !/\d/.test(ADDRESS)) { console.error('FAILED: set ADDRESS to a real physical mailing address (must contain a street/PO number) for CAN-SPAM.'); process.exit(1); }
+    if (!isValidCanSpamAddress(ADDRESS)) { console.error('FAILED: set ADDRESS to a real physical mailing address (must contain a street/PO number) for CAN-SPAM.'); process.exit(1); }
   }
   const transporter = SEND ? nodemailer.createTransport({ host: 'smtp.mandrillapp.com', port: 587, secure: false, auth: { user: 'apikey', pass: process.env.MANDRILL_API_KEY } }) : null;
 
@@ -136,9 +137,7 @@ function writeSent(obj) { const tmp = SENT_LOG + '.tmp'; fs.writeFileSync(tmp, J
   for (const row of leads) {
     if (eligible.length >= LIMIT) break;
     const email = row.email.trim().toLowerCase();
-    if (optedOut.has(email)) continue;                                   // opted out or bounced -> never send
-    if (sent[email] && sent[email][TOUCH]) continue;                     // already got this touch
-    if (TOUCH !== '1' && !(sent[email] && sent[email]['1'])) continue;   // never send a follow-up to someone who never got touch 1
+    if (!shouldSend(email, TOUCH, optedOut, sent).send) continue;        // opt-out/bounce, already-sent this touch, or follow-up without touch 1
     eligible.push({ row, email });
   }
   console.log(`[eligible] ${eligible.length} recipients for touch ${TOUCH}`);

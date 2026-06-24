@@ -74,7 +74,9 @@ const sql=require("mssql");(async()=>{
   await sql.connect({server:process.env.MSSQL_HOST,port:parseInt(process.env.MSSQL_PORT||"1433",10),user:process.env.MSSQL_USER,password:process.env.MSSQL_PASS,database:process.env.MSSQL_DATABASE||"CCPP",options:{encrypt:true,trustServerCertificate:true}});
   const r=new sql.Request();
   r.input("t",process.env.NEW_TOKEN); r.input("e",parseInt(process.env.EXPIRES,10)); r.input("id",parseInt(process.env.CCPP_ROW,10));
-  const res=await r.query("UPDATE Basecamp_AuthInfo SET AccessToken=@t, ExpiresAt=@e WHERE BasecampAuthInfoID=@id AND IsActive=1");
+  // Target the NEWEST active row to match every CCPP reader (SELECT TOP 1 ... WHERE IsActive=1 ORDER BY BasecampAuthInfoID DESC).
+  // Updating a hardcoded id (was 237) silently orphaned the refresh whenever the rotation worker inserted a newer active row.
+  const res=await r.query("UPDATE Basecamp_AuthInfo SET AccessToken=@t, ExpiresAt=@e WHERE BasecampAuthInfoID = (SELECT MAX(BasecampAuthInfoID) FROM Basecamp_AuthInfo WHERE IsActive=1)");
   await sql.close();
   console.log("CCPP rows updated: "+((res.rowsAffected&&res.rowsAffected[0])||0));
 })().catch(e=>{console.error("CCPP WRITE FAILED: "+e.message);process.exit(1)})' || { echo "CCPP write failed"; exit 1; }
