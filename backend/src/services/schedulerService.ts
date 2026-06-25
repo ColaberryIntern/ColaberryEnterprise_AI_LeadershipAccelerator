@@ -1000,10 +1000,14 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     mcMetadata.lead_id = action.lead_id;
   }
 
+  // The sequence step content appends its own CAN-SPAM line; strip it so the single legal
+  // footer rendered by the wrapper is not duplicated.
+  emailBody = emailBody.replace(/<p[^>]*>[^<]*Reply STOP[^<]*<\/p>/gi, '');
+
   // Executive outreach: minimal wrapper (personal email feel, no corporate footer)
   let html = campaignType === 'executive_outreach'
     ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id })
-    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id });
+    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, senderName, senderEmail });
 
   // Deterministic validator for Ali personal emails — ensure no corporate artifacts
   if (campaignType === 'executive_outreach') {
@@ -1021,19 +1025,21 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       .replace(/<p>\s*<\/p>/g, '');
   }
 
-  // Branded signature on EVERY outbound send, so the recipient always knows who we are
-  // and where to find us. Sender-aware (uses the resolved sender), injected AFTER the
-  // executive-outreach strip so it is never removed. Fixes cold/personal emails going out
-  // with no company name or website. text body is derived from html below, so it inherits it.
-  const brandSignature = `
-  <div style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-top: 1px solid #e2e8f0; margin-top: 26px; padding-top: 14px; line-height: 1.5;">
-    <div style="font-weight: 700; color: #1a365d;">${senderName}</div>
-    <div style="color: #718096;">Colaberry Inc.</div>
-    <div style="margin-top: 6px;"><a href="https://enterprise.colaberry.ai" style="color: #2b6cb0; text-decoration: none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color: #2b6cb0; text-decoration: none;">${senderEmail}</a></div>
-  </div>`;
-  html = html.includes('</body>')
-    ? html.replace('</body>', `${brandSignature}\n</body>`)
-    : `${html}${brandSignature}`;
+  // cold_outbound gets its clean signature from wrapEmailHtml. Executive-outreach uses the
+  // minimal personal wrapper, so append the same clean signature here (after the strip) so
+  // those personal emails also carry the company name + website. No duplication: only one
+  // path runs per send.
+  if (campaignType === 'executive_outreach') {
+    const sig = `
+  <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
+    <tr><td style="border-left:3px solid #1a365d;padding-left:14px;">
+      <div style="font-weight:700;font-size:16px;color:#1a365d;">${senderName}</div>
+      <div style="font-size:14px;color:#718096;">Colaberry Inc.</div>
+      <div style="font-size:14px;margin-top:6px;"><a href="https://enterprise.colaberry.ai" style="color:#2b6cb0;text-decoration:none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color:#2b6cb0;text-decoration:none;">${senderEmail}</a></div>
+    </td></tr>
+  </table>`;
+    html = html.includes('</body>') ? html.replace('</body>', `${sig}\n</body>`) : `${html}${sig}`;
+  }
 
   // Reply-To: use reply subdomain so Mandrill catches inbound replies
   // For Ali personal outreach, reply goes to ali@colaberry.com directly (he handles personally)
@@ -1458,12 +1464,14 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
   `.trim();
 }
 
-function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number }): string {
-  const advisorParams: string[] = [];
-  if (tracking?.campaignType) { advisorParams.push('utm_source=email', `utm_medium=${tracking.campaignType}`); }
-  if (tracking?.campaignId) { advisorParams.push(`utm_campaign=${tracking.campaignId}`); }
-  if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
-  const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
+function wrapEmailHtml(
+  body: string,
+  tracking?: { campaignId?: string; campaignType?: string; leadId?: number; senderName?: string; senderEmail?: string },
+): string {
+  const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
+  const senderEmail = tracking?.senderEmail || env.emailFrom;
+  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / AI Systems Architect' : '';
+  const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
 
   // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)
   // and inject a styled button after the body so it's visually prominent rather than buried inline.
@@ -1488,22 +1496,23 @@ function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignT
   return `
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
-    h1 { color: #1a365d; font-size: 24px; }
-    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
-    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
-  </style>
-</head>
-<body>
-  ${body}
-  ${primaryCtaButton}
-  <div class="footer">
-    <p style="font-size: 13px; margin-top: 12px;"><a href="${advisorUrl}" style="color: #3b82f6; text-decoration: none; font-weight: 600;">Design Your AI Organization in 5 Minutes &rarr;</a></p>
-    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075. If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+  <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#2d3748;line-height:1.6;max-width:600px;margin:0 auto;padding:24px;">
+    ${body}
+    ${primaryCtaButton}
+    <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;">
+      <tr><td style="border-left:3px solid #1a365d;padding-left:14px;font-family:Arial,Helvetica,sans-serif;">
+        <div style="font-weight:700;font-size:16px;color:#1a365d;">${senderName}</div>
+        ${titleLine}
+        <div style="font-size:14px;color:#718096;">Colaberry Inc.</div>
+        <div style="font-size:14px;margin-top:6px;color:#2d3748;"><a href="https://enterprise.colaberry.ai" style="color:#2b6cb0;text-decoration:none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color:#2b6cb0;text-decoration:none;">${senderEmail}</a></div>
+      </td></tr>
+    </table>
+    <div style="margin-top:28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;color:#a0aec0;line-height:1.5;">
+      Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075<br>
+      Not relevant? Reply &ldquo;unsubscribe&rdquo; or <a href="mailto:${senderEmail}?subject=unsubscribe" style="color:#a0aec0;">click here to opt out</a>.
+    </div>
   </div>
 </body>
 </html>
