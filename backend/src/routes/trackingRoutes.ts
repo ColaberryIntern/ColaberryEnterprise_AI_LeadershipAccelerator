@@ -9,6 +9,7 @@ import {
   handleProactiveCheck,
   handleContextUpdate,
 } from '../controllers/chatController';
+import { handleSalesHubCory } from '../controllers/salesHubCoryController';
 
 const eventLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -70,5 +71,15 @@ router.post('/api/chat/close', chatMessageLimiter, handleChatClose);
 router.get('/api/chat/history/:id', handleChatHistory);
 router.get('/api/chat/proactive-check', handleProactiveCheck);
 router.post('/api/chat/context-update', chatMessageLimiter, handleContextUpdate);
+
+// Sales-hub Cory RAG endpoint (public, rate-limited)
+const coryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => { res.status(429).json({ error: 'Rate limit exceeded' }); },
+});
+router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
 
 export default router;

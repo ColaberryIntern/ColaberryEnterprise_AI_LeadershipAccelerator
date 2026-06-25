@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   var DATA = window.KB_DATA || { categories: [], qa: [] };
-  var CORY_LIVE_ENDPOINT = null; // e.g. '/api/chat' once deployed; null = retrieval-only
+  var CORY_LIVE_ENDPOINT = '/api/sales-hub/cory'; // RAG endpoint; falls back to local retrieval if unreachable (e.g. offline file://)
 
   var DOCS = {
     onepager:   { label: 'Founding Cohort one-pager', href: 'downloads/01-founding-cohort-one-pager.pdf' },
@@ -171,14 +171,15 @@
     var m=document.createElement('div'); m.className='msg '+who; m.innerHTML=html; body.appendChild(m); body.scrollTop=body.scrollHeight; return m;
   }
   function dlBtn(key){ var d=DOCS[key]; return '<a class="dlbtn" href="'+d.href+'" target="_blank" download><span class="cb-i"><i class="ri-download-2-line"></i></span> '+esc(d.label)+'</a>'; }
-  function retrieve(q){
+  function topMatches(q,k){
     var toks=tokens(q); if(!toks.length) return [];
     return DATA.qa.map(function(x){
       var hay=(x.q+' '+(x.tags||[]).join(' ')+' '+x.a+' '+(x.detail||'')).toLowerCase();
       var s=0; toks.forEach(function(t){ if(x.q.toLowerCase().indexOf(t)>=0)s+=3; if((x.tags||[]).join(' ').indexOf(t)>=0)s+=2; if(hay.indexOf(t)>=0)s+=1; });
       return {x:x,s:s};
-    }).filter(function(r){return r.s>0;}).sort(function(a,b){return b.s-a.s;}).slice(0,3).map(function(r){return r.x;});
+    }).filter(function(r){return r.s>0;}).sort(function(a,b){return b.s-a.s;}).slice(0,k).map(function(r){return r.x;});
   }
+  function retrieve(q){ return topMatches(q,3); }
   function docFor(q){
     var l=q.toLowerCase();
     if(/one[- ]?pager|leave[- ]?behind|brochure|sell sheet/.test(l)) return 'onepager';
@@ -218,12 +219,13 @@
       body.scrollTop=body.scrollHeight;
     }
     if(CORY_LIVE_ENDPOINT){
-      // optional live LLM, with retrieval context; falls back to local on any error
+      // RAG: send the top KB matches as grounding context; the server composes a human answer.
+      var ctx = topMatches(q,6).map(function(x){ return { q:x.q, a:x.a, detail:x.detail||'' }; });
       try {
         fetch(CORY_LIVE_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({message:q, context:retrieve(q)})})
-          .then(function(r){return r.ok?r.json():Promise.reject();})
-          .then(function(j){ show({ html: esc(j.reply||j.message||'').replace(/\n/g,'<br>')||answerLocal(q).html, doc:docFor(q) }); })
+          body:JSON.stringify({ question:q, context:ctx })})
+          .then(function(r){ return r.ok?r.json():Promise.reject(); })
+          .then(function(j){ if(j && j.reply){ show({ html: esc(j.reply).replace(/\n/g,'<br>'), doc:docFor(q) }); } else { show(answerLocal(q)); } })
           .catch(function(){ show(answerLocal(q)); });
       } catch(e){ show(answerLocal(q)); }
     } else { setTimeout(function(){ show(answerLocal(q)); }, 150); }
