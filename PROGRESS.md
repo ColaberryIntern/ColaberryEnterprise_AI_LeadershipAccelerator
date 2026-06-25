@@ -6199,6 +6199,14 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `npx tsc --noEmit` clean. Rendered all 3 pages via local CRA dev server + headless Chromium screenshots (hero, dark gold checklist, earthy cards, builders 12-week phase cards, closing into PublicFooter) — all faithful to the reference design Ali approved. Prod build + smoke recorded below.
   - Notes: Design approved by Ali in-session. Copy remains Sohail's draft pending sign-off; Open House date placeholder is June 21, 2026 (confirm); reference's testimonials/recognition section omitted (no quotes yet); Builders gap still omits two of Sohail's source lines ("The challenge is not the idea." / "The challenge is knowing how to build it.") — flagged to Ali, not added. Isolated branch off origin/main; prod-local hotfixes re-stashed for the deploy.
 
+### AnthropicCourseWrapper.tsx — branded course card for Skilljar materials (2026-06-22)
+- [x] Create `AnthropicCourseWrapper.tsx` and wire into session detail Materials section
+  - Date: 2026-06-22
+  - Session: CC-20260622-8k4m
+  - What changed:
+    - `frontend/src/components/portal/AnthropicCourseWrapper.tsx` (new): Typed React component (Props: `title`, `url`, `description?`, `estimatedMinutes?`, `courseNumber?`). Renders a card with Anthropic + Skilljar badge row, title, optional description, duration chip, and a "Launch Course" `<a>` button that opens the Skilljar URL in a new tab (`target="_blank" rel="noopener noreferrer"`). WCAG 2.1 AA: `aria-label` on CTA includes "opens in new tab", all decorative icons carry `aria-hidden="true"`, touch target min-height 36px. Styled with portal CSS tokens and existing Bootstrap 5 utility classes; no new dependencies.
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx` (modified): Imports `AnthropicCourseWrapper`. Materials section now splits on `anthropic.skilljar.com` URL presence — Skilljar entries render as `AnthropicCourseWrapper` cards; all other materials remain a plain `<ul>` list below the cards.
+  - Verification: `npx tsc --noEmit` — exit 0, no errors. BC ticket: https://app.basecamp.com/3945211/buckets/47502609/todos/9946499773
 - [x] **Family Command Center — Procare "tomorrow"/"today" now anchors to the email's SEND date, not the briefing date.**
   - Date: 2026-06-18
   - Session: CC-20260618-fd7k
