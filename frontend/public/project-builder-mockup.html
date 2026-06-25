@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Project Builder Flow — Mockup (idea → 10 questions → requirements → tasks)</title>
+
+<!-- Bootstrap 5 — layout/grid utilities ONLY (brand layer = Colaberry tokens below) -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+<!-- Colaberry Design System fonts + icons, from their own reliable CDNs:
+     Roboto / Roboto Mono / Quicksand (Google Fonts) + RemixIcon (npm).
+     BC#10031928327 · github.com/aleemcolaberry/colaberry-design-system -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&family=Quicksand:wght@600;700&display=swap" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css" rel="stylesheet" />
+
+<style>
+  /* ============================================================
+     Colaberry Design System tokens — INLINED from
+     github.com/aleemcolaberry/colaberry-design-system (BC#10031928327)
+     tokens/colors.css · typography.css · spacing.css.
+     Inlined (not CDN-linked) so the brand always renders offline / in PDF.
+     ============================================================ */
+  :root {
+    /* Cherry Red (primary) */
+    --red-50:#FFF0F1; --red-500:#FB2832; --red-600:#E5121D; --red-700:#C20E1E;
+    /* Leaf Green (secondary) */
+    --green-50:#F1F9EA; --green-500:#77BB4A; --green-600:#5BA63C; --green-700:#468A2E;
+    /* Berry Blue (tertiary / wordmark) */
+    --blue-50:#EAF2F6; --blue-500:#367895; --blue-600:#2E6A86; --blue-700:#265A72;
+    /* Neutrals */
+    --neutral-0:#FFFFFF; --neutral-50:#F8F8F7; --neutral-100:#F1F1F0; --neutral-200:#E4E4E3;
+    --neutral-300:#D8D8D8; --neutral-400:#B4B4B4; --neutral-500:#8C8C8C; --neutral-600:#6B6B6B;
+    --neutral-700:#4A4A4A; --neutral-800:#2B2B2B; --neutral-900:#1A1A1A;
+    /* Functional */
+    --amber-500:#E8920C; --amber-50:#FCF1DD;
+
+    /* Semantic — brand */
+    --brand-accent: var(--red-500);
+    --action-bg: var(--red-500); --action-bg-hover: var(--red-600); --action-bg-press: var(--red-700);
+    --action-fg: var(--neutral-0);
+    /* Semantic — surfaces */
+    --surface-page: var(--neutral-0); --surface-subtle: var(--neutral-50); --surface-card: var(--neutral-0);
+    --surface-sunken: var(--neutral-100); --surface-inverse: var(--neutral-900);
+    --surface-brand-subtle: var(--red-50); --surface-blue-subtle: var(--blue-50);
+    /* Semantic — text */
+    --text-strong: var(--neutral-900); --text-body: var(--neutral-800);
+    --text-muted: var(--neutral-600); --text-subtle: var(--neutral-500);
+    /* Semantic — borders */
+    --border-subtle: var(--neutral-200); --border-default: var(--neutral-300); --border-focus: var(--blue-500);
+    /* Semantic — status */
+    --status-success: var(--green-600); --status-success-bg: var(--green-50);
+    --status-info: var(--blue-500);    --status-info-bg: var(--blue-50);
+    --status-warning: var(--amber-500); --status-warning-bg: var(--amber-50);
+    --status-danger: var(--red-600);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--blue-500) 45%, transparent);
+
+    /* Typography */
+    --font-display:'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body:'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono:'Roboto Mono', ui-monospace, Menlo, monospace;
+    --font-logo:'Quicksand','Trebuchet MS', sans-serif;
+    --heading-font: var(--font-display); --body-font: var(--font-body);
+    --fw-medium:500; --fw-bold:700; --fw-black:900;
+    --fs-body-sm:16px;
+
+    /* Radius / shadow / motion */
+    --radius-xs:4px; --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-pill:999px;
+    --shadow-md: 0 3px 8px rgba(26,26,26,0.06), 0 1px 3px rgba(26,26,26,0.04);
+    --dur-fast:140ms; --dur-base:220ms; --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* ── Mockup component layer — built ONLY on Colaberry semantic tokens ── */
+  body {
+    font-family: var(--body-font);
+    font-size: var(--fs-body-sm);          /* 16px — compact form density */
+    color: var(--text-body);
+    background: var(--surface-subtle);
+  }
+  h1, h2, h3, h4, h5, h6 { font-family: var(--heading-font); color: var(--text-strong); }
+
+  .mock-banner {
+    background: var(--surface-inverse);
+    color: var(--neutral-0);
+    font-size: 13px;
+    border-bottom: 3px solid var(--brand-accent);   /* cherry */
+  }
+  .mock-banner code { color: var(--neutral-300); background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: var(--radius-xs); }
+  /* Colaberry wordmark (Quicksand logotype, cherry mark) — self-contained, no remote asset */
+  .cb-logo { font-family: var(--font-logo); font-weight: 700; font-size: 17px; letter-spacing: -.01em; color: var(--neutral-0); display: inline-flex; align-items: center; }
+  .cb-logo .mark { width: 11px; height: 11px; border-radius: 50%; background: var(--brand-accent); margin-right: 5px; }
+
+  .wizard-shell { max-width: 760px; margin: 0 auto; }
+
+  .preview-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--status-warning); background: var(--status-warning-bg);
+    border: 1px solid color-mix(in srgb, var(--status-warning) 35%, transparent);
+    border-radius: var(--radius-pill); padding: 2px 9px;
+  }
+
+  /* Cards */
+  .mk-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+  }
+  h6.sec-title { font-weight: var(--fw-bold); color: var(--text-strong); }
+
+  /* Stepper */
+  .step-dot { width: 34px; height: 34px; font-size: 13px; flex-shrink: 0; transition: all var(--dur-base) var(--ease-out); font-weight: var(--fw-bold); }
+  .step-rail { height: 2px; margin-bottom: 22px; transition: background var(--dur-base) var(--ease-out); }
+  .step-label { font-size: 11px; white-space: nowrap; }
+
+  /* Inputs — brand focus ring + friendly radius */
+  .form-control, .form-select {
+    border-color: var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-body);
+    font-size: var(--fs-body-sm);
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: var(--border-focus);
+    box-shadow: var(--focus-ring);
+  }
+  .form-label { color: var(--text-body); }
+
+  /* Choice cards / chips */
+  .choice {
+    cursor: pointer; transition: all var(--dur-fast) var(--ease-out);
+    border: 1px solid var(--border-default); background: var(--surface-card);
+    border-radius: var(--radius-sm);
+  }
+  .choice:hover { border-color: var(--brand-accent); }
+  .choice.sel { border-color: var(--brand-accent); background: var(--surface-brand-subtle); }
+  .choice:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+
+  /* Status chips — 4-state requirements engine, mapped to brand status tokens */
+  .chip {
+    font-size: 10px; font-weight: var(--fw-bold); letter-spacing: .03em; text-transform: uppercase;
+    border-radius: var(--radius-pill); padding: 2px 9px; white-space: nowrap;
+    display: inline-flex; align-items: center;
+  }
+  .chip-unmapped { color: var(--text-subtle); background: var(--surface-sunken); border: 1px solid var(--border-default); }
+  .chip-matched  { color: var(--status-info);    background: var(--status-info-bg);    border: 1px solid color-mix(in srgb, var(--status-info) 30%, transparent); }
+  .chip-partial  { color: var(--status-warning); background: var(--status-warning-bg); border: 1px solid color-mix(in srgb, var(--status-warning) 30%, transparent); }
+  .chip-verified { color: var(--status-success); background: var(--status-success-bg); border: 1px solid color-mix(in srgb, var(--status-success) 30%, transparent); }
+
+  .req-row  { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--surface-card); }
+  .task-card{ border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-card); }
+  .q-card   { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-card); }
+
+  .task-check { width: 18px; height: 18px; border: 2px solid var(--border-default); border-radius: var(--radius-xs); flex-shrink: 0; }
+  .task-check.done { background: var(--status-success); border-color: var(--status-success); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .pill-meta { font-size: 11px; color: var(--text-muted); }
+  .text-muted-2 { color: var(--text-muted) !important; }
+  .accent { color: var(--brand-accent); }
+
+  /* Primary CTA — cherry */
+  .btn-cherry { background: var(--action-bg); border: 1px solid var(--action-bg); color: var(--action-fg); border-radius: var(--radius-sm); font-weight: var(--fw-medium); }
+  .btn-cherry:hover { background: var(--action-bg-hover); border-color: var(--action-bg-hover); color: var(--action-fg); }
+  .btn-cherry:active { background: var(--action-bg-press); }
+  .btn-ghost { background: transparent; border: 1px solid var(--border-default); color: var(--text-body); border-radius: var(--radius-sm); }
+  .btn-ghost:hover { background: var(--surface-sunken); color: var(--text-strong); }
+
+  .q-num { width: 24px; height: 24px; font-size: 11px; font-weight: var(--fw-bold); background: var(--surface-brand-subtle); color: var(--brand-accent); flex-shrink: 0; }
+  /* One-at-a-time conversational question */
+  .q-progress { height: 6px; background: var(--surface-sunken); border-radius: var(--radius-pill); overflow: hidden; }
+  .q-progress-fill { height: 100%; background: var(--brand-accent); border-radius: var(--radius-pill); transition: width var(--dur-base) var(--ease-out); }
+  .q-ask { display: flex; gap: 12px; }
+  .q-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--surface-brand-subtle); color: var(--brand-accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; }
+  .q-bubble { background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: 4px 14px 14px 14px; padding: 12px 16px; }
+  .q-onecard { animation: qIn var(--dur-base) var(--ease-out); }
+  @keyframes qIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .gh-teaser { border: 1px dashed var(--border-default); border-radius: var(--radius-md); background: var(--surface-subtle); }
+  .step-pane { display: none; }
+  .step-pane.active { display: block; }
+  .dna-chip { color: var(--text-body); background: var(--surface-blue-subtle); border: 1px solid color-mix(in srgb, var(--blue-500) 25%, transparent); }
+</style>
+</head>
+<body>
+
+<!-- Mockup context banner (not part of the product) -->
+<div class="mock-banner px-3 py-2 d-flex align-items-center justify-content-center gap-2 flex-wrap text-center">
+  <span class="cb-logo"><span class="mark"></span>colaberry</span>
+  <span><i class="ri-artboard-2-line me-1 accent"></i><strong>DESIGN MOCKUP</strong> — Project Builder Flow · BUILD_SPEC §9 #2 + §5 · extends <code>ProjectDnaWizard.tsx</code> · styled with the Colaberry Design System (BC#10031928327). <span class="preview-badge">Preview</span> = illustrative; real wiring = Kes / EPIC&nbsp;1.</span>
+</div>
+
+<div class="container py-4">
+  <div class="wizard-shell">
+
+    <!-- Header -->
+    <div class="mb-4">
+      <h1 class="h4 fw-bold mb-1">Build Your Project</h1>
+      <p class="text-muted-2 small mb-0">Turn your idea into a requirements document and a task list. Every week of the Accelerator personalizes around it.</p>
+    </div>
+
+    <!-- Stepper -->
+    <div class="d-flex align-items-center mb-4" id="stepper" role="progressbar" aria-label="Builder progress"></div>
+
+    <!-- ============ STEP 1: ADD PROJECT ============ -->
+    <div class="step-pane active" data-pane="0">
+      <div class="mk-card mb-3"><div class="p-4">
+        <h6 class="sec-title mb-3"><i class="ri-folder-add-line me-2 accent"></i>Add Your Project</h6>
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Project name <span class="accent">*</span></label>
+          <input type="text" class="form-control form-control-sm" value="Tier-1 Support Copilot" />
+        </div>
+
+        <div class="p-3 rounded" style="background:var(--surface-subtle); border:1px solid var(--border-subtle)">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small fw-bold"><i class="ri-fingerprint-line me-2 accent"></i>Your Project DNA</span>
+            <a href="#" class="small text-decoration-none">Edit DNA</a>
+          </div>
+          <p class="pill-meta mb-2">Captured in the Project&nbsp;DNA wizard — carried into this flow.</p>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="chip dna-chip">Industry · Technology</span>
+            <span class="chip dna-chip">Type · Agent System</span>
+            <span class="chip dna-chip">AI · Claude + RAG</span>
+            <span class="chip dna-chip">Internal · Operational</span>
+            <span class="chip dna-chip">Track · Enterprise Operations</span>
+          </div>
+        </div>
+        <p class="pill-meta mt-3 mb-0"><i class="ri-information-line me-1"></i>This builder <strong>extends</strong> the existing Project DNA wizard — it does not replace it.</p>
+      </div></div>
+    </div>
+
+    <!-- ============ STEP 2: YOUR IDEA ============ -->
+    <div class="step-pane" data-pane="1">
+      <div class="mk-card mb-3"><div class="p-4">
+        <h6 class="sec-title mb-3"><i class="ri-lightbulb-line me-2 accent"></i>Your Idea</h6>
+        <label class="form-label small fw-medium">Describe what you want to build, in your own words <span class="accent">*</span></label>
+        <textarea class="form-control form-control-sm" rows="6" placeholder="e.g. Our support team answers the same tier-1 questions all day...">Our support team answers the same tier-1 questions all day. I want an AI agent that reads our help docs and past tickets, drafts an answer, and only escalates to a human when it isn't confident. It should plug into our existing ticketing tool.</textarea>
+        <p class="pill-meta mt-2 mb-0"><i class="ri-sparkling-2-line me-1 accent"></i>Next, we'll ask you ~10 sharpening questions based on this idea.</p>
+      </div></div>
+    </div>
+
+    <!-- ============ STEP 3: 10 QUESTIONS (one at a time, dynamic) ============ -->
+    <div class="step-pane" data-pane="2">
+      <div class="mk-card mb-3"><div class="p-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-bold"><i class="ri-questionnaire-line me-2 accent"></i><span id="qCounter">Question 1 of 10</span></span>
+          <span class="preview-badge">Preview</span>
+        </div>
+        <div class="q-progress mb-4"><div class="q-progress-fill" id="qProgressFill" style="width:10%"></div></div>
+        <div id="questionOne"></div>
+        <p class="pill-meta mb-0 mt-4"><i class="ri-magic-line me-1 accent"></i>Questions are generated live and each one adapts to your idea and the answers you just gave. <span class="text-muted-2">(Dynamic — advisor brain, Kes / EPIC&nbsp;1.)</span></p>
+      </div></div>
+    </div>
+
+    <!-- ============ STEP 4: REQUIREMENTS ============ -->
+    <div class="step-pane" data-pane="3">
+      <div class="mk-card mb-3"><div class="p-4">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="sec-title mb-0"><i class="ri-file-text-line me-2 accent"></i>Your Requirements Document</h6>
+          <span class="preview-badge">Preview</span>
+        </div>
+        <p class="pill-meta mb-3">
+          Generated from your answers. Each requirement carries a live status as your GitHub pushes are ingested:
+          <span class="chip chip-unmapped ms-1">Unmapped</span>
+          <span class="chip chip-matched">Matched</span>
+          <span class="chip chip-partial">Partial</span>
+          <span class="chip chip-verified">Verified</span>
+        </p>
+        <div class="mb-3">
+          <div class="small fw-bold mb-2 text-uppercase text-muted-2" style="font-size:11px; letter-spacing:.05em">Functional</div>
+          <div class="d-flex flex-column gap-2" id="req-functional"></div>
+        </div>
+        <div>
+          <div class="small fw-bold mb-2 text-uppercase text-muted-2" style="font-size:11px; letter-spacing:.05em">Non-functional</div>
+          <div class="d-flex flex-column gap-2" id="req-nonfunctional"></div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-sm btn-ghost"><i class="ri-refresh-line me-1"></i>Regenerate</button>
+          <button class="btn btn-sm btn-ghost"><i class="ri-add-line me-1"></i>Add requirement</button>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- ============ STEP 5: TASK LIST ============ -->
+    <div class="step-pane" data-pane="4">
+      <div class="mk-card mb-3"><div class="p-4">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="sec-title mb-0"><i class="ri-list-check-2 me-2 accent"></i>Your Task List</h6>
+          <span class="preview-badge">Preview</span>
+        </div>
+        <p class="pill-meta mb-3">Built from your requirements — grouped into lists, assigned to you, ready to work in Claude Code.</p>
+        <div id="tasklists" class="d-flex flex-column gap-3"></div>
+        <div class="gh-teaser p-3 mt-3 d-flex align-items-center gap-3">
+          <i class="ri-github-fill" style="font-size:24px; color:var(--text-strong)"></i>
+          <div class="flex-grow-1">
+            <div class="small fw-bold">Next: Connect GitHub</div>
+            <div class="pill-meta">Link your repo so pushes flip requirements to <span class="chip chip-verified">Verified</span> automatically.</div>
+          </div>
+          <span class="preview-badge">Step 6</span>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Nav -->
+    <div class="d-flex justify-content-between">
+      <button class="btn btn-ghost btn-sm" id="prevBtn"><i class="ri-arrow-left-line me-1"></i>Previous</button>
+      <button class="btn btn-cherry btn-sm" id="nextBtn">Next<i class="ri-arrow-right-line ms-1"></i></button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const STEPS = ['Add Project', 'Your Idea', '10 Questions', 'Requirements', 'Task List'];
+  let step = 0;
+  let qIndex = 0;   // which of the 10 questions is on screen (asked one at a time)
+
+  const QUESTIONS = [
+    { q: 'What is the single most important outcome this system must deliver?', type: 'text', a: 'Cut average tier-1 response time from hours to under 2 minutes.' },
+    { q: 'Who are the primary users, and what is their technical comfort level?', type: 'text', a: 'Support agents (non-technical) and end customers via web chat.' },
+    { q: 'What does success look like, in a number you could measure?', type: 'text', a: '60% of tier-1 tickets resolved without human touch within 90 days.' },
+    { q: 'Which data does the system need, and where does it live today?', type: 'chips', opts: ['Help docs', 'Past tickets', 'Product DB', 'External APIs', 'Spreadsheets', 'Real-time feeds'], sel: ['Help docs', 'Past tickets'] },
+    { q: 'What is the core AI capability at the heart of this?', type: 'select', opts: ['Conversational agent', 'Document understanding', 'Classification / extraction', 'Recommendation', 'Workflow automation'], sel: 'Conversational agent' },
+    { q: 'What is the riskiest assumption that, if wrong, breaks the project?', type: 'text', a: 'That our help docs are accurate and current enough to answer from.' },
+    { q: 'Which existing systems must this integrate with?', type: 'text', a: 'Zendesk (ticketing) and our internal knowledge base.' },
+    { q: 'What is your hardest constraint for v1?', type: 'select', opts: ['Timeline', 'Budget', 'Compliance / privacy', 'Scale / volume'], sel: 'Compliance / privacy' },
+    { q: 'How will you know an answer is good enough to trust automatically?', type: 'text', a: 'A confidence threshold + citation to a source doc; below it, escalate.' },
+    { q: 'What is explicitly OUT of scope for v1?', type: 'text', a: 'Voice/phone support and multi-language — English web chat only.' },
+  ];
+
+  const REQ_FUNCTIONAL = [
+    { t: 'Ingest help docs + past tickets into a searchable knowledge store', s: 'verified' },
+    { t: 'Draft an answer to an incoming ticket, grounded in cited sources', s: 'partial' },
+    { t: 'Compute an answer-confidence score and escalate below threshold', s: 'matched' },
+    { t: 'Post the drafted answer back into Zendesk as an internal note', s: 'unmapped' },
+  ];
+  const REQ_NONFUNCTIONAL = [
+    { t: 'No customer PII leaves the tenant boundary (compliance constraint)', s: 'matched' },
+    { t: 'Median draft latency under 2 seconds', s: 'unmapped' },
+    { t: 'Every escalation decision is logged with a correlation ID', s: 'partial' },
+  ];
+
+  const TASKLISTS = [
+    { name: 'Knowledge ingestion', tasks: [
+      { t: 'Set up the document store + embeddings pipeline', done: true, due: 'Wk 5' },
+      { t: 'Backfill 12 months of resolved tickets', done: false, due: 'Wk 5' },
+    ]},
+    { name: 'Answer agent', tasks: [
+      { t: 'Build the retrieval + draft prompt with source citations', done: false, due: 'Wk 6' },
+      { t: 'Add the confidence score + escalation gate', done: false, due: 'Wk 6' },
+    ]},
+    { name: 'Zendesk integration', tasks: [
+      { t: 'Wire the Zendesk webhook + internal-note write-back', done: false, due: 'Wk 7' },
+    ]},
+  ];
+
+  const CHIP_LABEL = { unmapped: 'Unmapped', matched: 'Matched', partial: 'Partial', verified: 'Verified' };
+
+  function renderStepper() {
+    const el = document.getElementById('stepper');
+    el.innerHTML = '';
+    STEPS.forEach((label, i) => {
+      const done = i < step, active = i === step;
+      const wrap = document.createElement('div');
+      wrap.className = 'd-flex flex-column align-items-center';
+      wrap.style.flexShrink = '0';
+      const dot = document.createElement('div');
+      dot.className = 'd-flex align-items-center justify-content-center rounded-circle step-dot';
+      dot.style.background = done ? 'var(--brand-accent)' : active ? 'var(--surface-brand-subtle)' : 'var(--surface-card)';
+      dot.style.border = '2px solid ' + (done || active ? 'var(--brand-accent)' : 'var(--border-default)');
+      dot.style.color = done ? '#fff' : active ? 'var(--brand-accent)' : 'var(--text-subtle)';
+      dot.innerHTML = done ? '<i class="ri-check-line"></i>' : (i + 1);
+      const lbl = document.createElement('span');
+      lbl.className = 'mt-1 step-label';
+      lbl.style.fontWeight = active ? '700' : '400';
+      lbl.style.color = active ? 'var(--text-strong)' : 'var(--text-subtle)';
+      lbl.textContent = label;
+      wrap.appendChild(dot); wrap.appendChild(lbl);
+      el.appendChild(wrap);
+      if (i < STEPS.length - 1) {
+        const rail = document.createElement('div');
+        rail.className = 'flex-grow-1 mx-1 step-rail';
+        rail.style.background = i < step ? 'var(--brand-accent)' : 'var(--border-default)';
+        el.appendChild(rail);
+      }
+    });
+  }
+
+  function questionInput(item) {
+    if (item.type === 'text') {
+      return `<input type="text" class="form-control" placeholder="Type your answer…" value="${item.a.replace(/"/g, '&quot;')}" />`;
+    } else if (item.type === 'select') {
+      return `<select class="form-select">${item.opts.map(o => `<option ${o === item.sel ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+    } else if (item.type === 'chips') {
+      return `<div class="d-flex flex-wrap gap-2">${item.opts.map(o => {
+        const on = item.sel.includes(o);
+        return `<span class="choice px-3 py-2 small ${on ? 'sel' : ''}" tabindex="0" role="checkbox" aria-checked="${on}">
+          <i class="${on ? 'ri-checkbox-fill' : 'ri-checkbox-blank-line'} me-1" style="color:${on ? 'var(--brand-accent)' : 'var(--text-subtle)'}"></i>${o}</span>`;
+      }).join('')}</div>`;
+    }
+    return '';
+  }
+
+  // Render ONE question at a time (conversational)
+  function renderQuestion() {
+    const item = QUESTIONS[qIndex];
+    const n = QUESTIONS.length;
+    document.getElementById('qCounter').textContent = `Question ${qIndex + 1} of ${n}`;
+    document.getElementById('qProgressFill').style.width = ((qIndex + 1) / n * 100) + '%';
+    document.getElementById('questionOne').innerHTML = `
+      <div class="q-onecard">
+        <div class="q-ask mb-3">
+          <span class="q-avatar"><i class="ri-robot-2-line"></i></span>
+          <div class="q-bubble"><div class="fw-medium" style="color:var(--text-strong)">${item.q}</div></div>
+        </div>
+        <div style="padding-left:46px">${questionInput(item)}</div>
+      </div>`;
+    document.querySelectorAll('#questionOne .choice').forEach(c => {
+      c.addEventListener('click', () => {
+        const on = c.classList.toggle('sel');
+        c.setAttribute('aria-checked', on);
+        const ic = c.querySelector('i');
+        ic.className = `${on ? 'ri-checkbox-fill' : 'ri-checkbox-blank-line'} me-1`;
+        ic.style.color = on ? 'var(--brand-accent)' : 'var(--text-subtle)';
+      });
+    });
+  }
+
+  function reqRow(r) {
+    return `<div class="req-row p-3 d-flex justify-content-between align-items-center gap-3">
+      <span class="small">${r.t}</span>
+      <span class="chip chip-${r.s}">${CHIP_LABEL[r.s]}</span>
+    </div>`;
+  }
+  function renderRequirements() {
+    const f = document.getElementById('req-functional');
+    const nf = document.getElementById('req-nonfunctional');
+    if (!f.childElementCount) f.innerHTML = REQ_FUNCTIONAL.map(reqRow).join('');
+    if (!nf.childElementCount) nf.innerHTML = REQ_NONFUNCTIONAL.map(reqRow).join('');
+  }
+
+  function renderTasks() {
+    const host = document.getElementById('tasklists');
+    if (host.childElementCount) return;
+    host.innerHTML = TASKLISTS.map(list => `
+      <div class="task-card p-3">
+        <div class="small fw-bold mb-2"><i class="ri-stack-line me-2 accent"></i>${list.name}</div>
+        <div class="d-flex flex-column gap-2">
+          ${list.tasks.map(t => `
+            <div class="d-flex align-items-center gap-2">
+              <span class="task-check ${t.done ? 'done' : ''}">${t.done ? '<i class="ri-check-line" style="font-size:12px"></i>' : ''}</span>
+              <span class="small flex-grow-1 ${t.done ? 'text-decoration-line-through text-muted-2' : ''}">${t.t}</span>
+              <span class="pill-meta"><i class="ri-account-circle-line me-1"></i>You</span>
+              <span class="pill-meta"><i class="ri-calendar-line me-1"></i>${t.due}</span>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  function render() {
+    renderStepper();
+    document.querySelectorAll('.step-pane').forEach(p => {
+      p.classList.toggle('active', Number(p.dataset.pane) === step);
+    });
+    if (step === 2) renderQuestion();
+    if (step === 3) renderRequirements();
+    if (step === 4) renderTasks();
+
+    document.getElementById('prevBtn').style.visibility = step === 0 ? 'hidden' : 'visible';
+    const prev = document.getElementById('prevBtn');
+    const next = document.getElementById('nextBtn');
+    if (step === 2) {
+      // inner question paging
+      prev.innerHTML = (qIndex === 0)
+        ? '<i class="ri-arrow-left-line me-1"></i>Back'
+        : '<i class="ri-arrow-left-line me-1"></i>Previous question';
+      next.innerHTML = (qIndex < QUESTIONS.length - 1)
+        ? 'Next question<i class="ri-arrow-right-line ms-1"></i>'
+        : 'Write my requirements<i class="ri-arrow-right-line ms-1"></i>';
+    } else {
+      prev.innerHTML = '<i class="ri-arrow-left-line me-1"></i>Previous';
+      if (step === STEPS.length - 1) {
+        next.innerHTML = '<i class="ri-checkbox-circle-line me-1"></i>Create project &amp; tasks';
+      } else if (step === 1) {
+        next.innerHTML = 'Generate my questions<i class="ri-sparkling-2-line ms-1"></i>';
+      } else {
+        next.innerHTML = 'Next<i class="ri-arrow-right-line ms-1"></i>';
+      }
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    // Inside the 10-question step, advance one question at a time.
+    if (step === 2 && qIndex < QUESTIONS.length - 1) { qIndex++; render(); return; }
+    if (step === STEPS.length - 1) { alert('Mockup: this is where the project + tasks get created and you continue to Connect GitHub.'); return; }
+    step++;
+    if (step === 2) qIndex = 0;          // entering questions from "Your Idea" → first question
+    render();
+  });
+  document.getElementById('prevBtn').addEventListener('click', () => {
+    // Inside the 10-question step, go back one question at a time.
+    if (step === 2 && qIndex > 0) { qIndex--; render(); return; }
+    if (step === 0) return;
+    step--;
+    if (step === 2) qIndex = QUESTIONS.length - 1;  // re-entering questions from Requirements → last question
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
