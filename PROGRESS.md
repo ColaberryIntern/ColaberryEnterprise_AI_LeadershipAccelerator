@@ -6627,6 +6627,41 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: A prospect (CTO, Tribute Technology) replied "I don't even know what company you work for" to a Touch-2 email. Root cause: outbound emails carried no company name or website. The cold-campaign footer said only "Colaberry Enterprise AI Division | AI Leadership..." (no site, no name), and the executive_outreach path strips even that. Fix in `schedulerService.processEmailAction`: inject a sender-aware branded signature (resolved senderName + "Colaberry Inc." + enterprise.colaberry.ai + senderEmail) into EVERY send, after the exec-outreach strip so it is never removed; the plain-text body inherits it via stripHtml. Also replaced the vague `wrapEmailHtml` footer block with the CAN-SPAM/legal line. The live AI ROI Pilot was paused (96 pending deferred, reversible) while this shipped, then resumed.
   - Verification: rendered a sample email post-deploy to confirm name + Colaberry Inc. + enterprise.colaberry.ai appear (HTML + text). Backend tsc gate via Docker build.
   - Notes: Sender-aware so it is correct for any campaign, not just Ali. Matt Powell got a personal apology + re-intro reply (branded). Honors the standing rule (reference_email_signature): every ali@colaberry.com send must carry the branded block with the website.
+
+- [x] **Founding Cohort sales knowledge base shipped to /sales-hub (static)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: Added a self-contained static sales-enablement hub at `frontend/public/sales-hub/`, served by nginx at enterprise.colaberry.ai/sales-hub/. 75 verified Q&A (`kb-data.js`/`.json`) across 11 categories, instant filter-as-you-type search, 4 Mermaid diagrams, 5 downloadable PDFs, a rep-training section, and the Cory assistant (client-side KB retrieval + document handoff + gameplan/call-prep intents; live LLM endpoint not yet wired). Styled with colaberry-design-system tokens (`styles.css` + `tokens/` bundled). No React/TS or routing changes; pure static assets under `public/`, so the SPA fallback (`try_files $uri $uri/ /index.html`) serves `/sales-hub/index.html` directly.
+  - Verification: independent verifier agent 16/16 vs an 8-point checklist; headless Edge render confirmed 75 Q&A cards + 11 categories + 4 Mermaid SVGs + 5 download links + Cory present; `node --check app.js` clean. Deploy: nginx image rebuilt on prod; live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: Content generated via a maker/checker workflow loop (per-category writer then separate verifier then regenerate failures; all 11 categories passed 9-10/10). Refund/cancellation Q&A flagged "drafted-verify" pending Ali's final approval. Reversible (delete folder + rebuild). Follow-up: wire Cory live mode to backend `/api/chat`; optional nav link from main site.
+
+- [x] **/sales-hub: add student-paid third-party cost disclosure (Anthropic + API)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: Per Ali, added a prominent, must-disclose notice that students pay third-party costs Colaberry does NOT cover: an Anthropic subscription for Claude Code (~$20/mo) and LLM API usage on their own key (most projects under $10/mo), paid directly to the providers. Added as: a standout banner under the hero on `/sales-hub`, 3 new pricing Q&A (now 78 total), a dedicated Cory intent for cost/API/subscription queries, and updates to the one-pager, objection sheet (new card), call script (bridge bullet), and positioning guardrails (offer row + do-say). One-pager pricing pill flipped Draft -> Confirmed.
+  - Verification: headless render confirms banner present + $20/$10 figures + 78 Q&A cards; `node --check app.js` clean; 4 doc PDFs regenerated. Deploy: nginx rebuilt on prod; live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: Cost disclosure is grounded (confirmed by Ali), not drafted. Reversible.
+
+- [x] **Cory RAG on /sales-hub: generate grounded human answers (not canned KB echoes)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: Added `POST /api/sales-hub/cory` (controller `salesHubCoryController.ts`, registered in `trackingRoutes.ts` with a 30/min rate limiter). The sales-hub Cory now sends the top KB matches as grounding context; the endpoint composes a natural answer via the existing OpenAI `chatCompletion` helper (model AI_MODEL || gpt-4o-mini), grounded in pinned canonical facts + the retrieved Q&A, instead of restating an entry. Zod-validated body; returns 503 when the LLM is unavailable so the client falls back to client-side retrieval (also covers offline file:// review). Frontend `app.js` rewired: `CORY_LIVE_ENDPOINT='/api/sales-hub/cory'`, sends `{question, context[]}`, renders the generated reply, keeps document handoff.
+  - Verification: `npx tsc --noEmit` clean (backend); `npx jest salesHubCoryController` 3/3 pass (happy path + 400 invalid-body + 503 unavailable failure paths); `node --check app.js` clean. Deploy: backend image rebuilt (`--no-deps`), nginx rebuilt; live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: Reuses the product's existing OpenAI key/instrumentation (no new Anthropic key provisioned on prod); can be switched to Claude later by repointing the helper. Stateless, idempotent, rate-limited. Cost disclosure + drafted-refund flags enforced in the system prompt.
+
+- [x] **Fix: move /api/sales-hub/cory to leadRoutes (deployed server mounts trackingRoutes behind an auth guard)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: The Cory RAG route returned 401 in prod because the deployed (pinned, older) `server.ts` mounts `trackingRoutes` last, after routers that sit behind a broad Bearer-auth guard (verified: `/api/leads` public/400 but `/api/enrollment`, `/api/portal`, `/api/t`, `/api/chat` all 401). Moved `POST /api/sales-hub/cory` registration from `trackingRoutes.ts` (reverted) to `leadRoutes.ts`, an early public router reached before the guard in both the pinned and origin/main route orderings. Controller unchanged.
+  - Verification: `npx tsc --noEmit` clean; redeployed backend; `curl POST /api/sales-hub/cory` returns a generated reply (200).
+  - Notes: Endpoint path unchanged, so no frontend/nginx change needed.
+
+- [x] **Fix sales-hub PDFs: one-pager to a single page; clean pagination on the rest**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: The one-pager PDF was spilling to a 2nd page (the added cost footnote tipped it over the A4 box). Tightened its vertical spacing so it is exactly 1 page. For the multi-section docs (guardrails, objection sheet, call script, outbound) added `break-inside:avoid` on cards/steps/sections (+ `.sheet overflow:visible`) so elements no longer split across page boundaries, and tightened spacing. Regenerated all 5 PDFs and refreshed them in frontend/public/sales-hub/downloads.
+  - Verification: page counts — one-pager 1; objection sheet 2; call script 2; guardrails 2; outbound 3 (all paginate cleanly now). Deploy: nginx rebuilt; downloads live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: The references are legitimately multi-page (full email copy, 9 objection cards, 6 call steps); only the leave-behind one-pager is a strict single page.
 - [x] **AI ROI Pilot: clean professional email redesign (Ali escalation, signature/clutter)**
   - Date: 2026-06-25
   - Session: CC-20260623-e2k7

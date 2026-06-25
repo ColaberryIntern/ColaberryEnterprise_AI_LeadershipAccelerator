@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { submitLead } from '../controllers/leadController';
 import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
+import { handleSalesHubCory } from '../controllers/salesHubCoryController';
 
 const leadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -25,8 +26,20 @@ const ingestRateLimiter = rateLimit({
 
 const router = Router();
 
+// Sales-hub Cory RAG endpoint. Registered here (an early, public router) on
+// purpose: on the deployed server, routers mounted after leadRoutes sit behind
+// a broad auth guard, so a public endpoint must be reachable before them.
+const coryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded' },
+});
+
 router.post('/api/leads', leadRateLimiter, submitLead);
 router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipKit);
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
+router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
 
 export default router;
