@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import { randomUUID } from 'crypto';
 
 /**
  * Per-request context propagation (TBI audit P1-4).
@@ -22,4 +23,14 @@ export function runWithRequestContext<T>(ctx: RequestContext, fn: () => T): T {
 /** The current request's trace id, or undefined outside a request (e.g. cron jobs). */
 export function getTraceId(): string | undefined {
   return storage.getStore()?.traceId;
+}
+
+/**
+ * Resolve a trace id for an emitted event so it is NEVER null (TBI P1-4):
+ *   explicit id  →  current request/cron context  →  a fresh uuid.
+ * Background entry points (no surrounding context) thus still get a correlatable id per call
+ * instead of trace_id = null. No-op-equivalent when a context already exists (returns its id).
+ */
+export function ensureTraceId(explicit?: string | null): string {
+  return explicit || getTraceId() || randomUUID();
 }

@@ -79,7 +79,7 @@ describe('pre-launch staggered schedule', () => {
     expect(cur.weekDueDate(12)).toBe('2026-07-10');
   });
 
-  it('every week is built BEFORE the 2026-07-13 kickoff', () => {
+  it('every week is built BEFORE the 2026-07-27 kickoff', () => {
     for (const w of cur.WEEKS) {
       expect(cur.weekDueDate(w.week) < cur.KICKOFF).toBe(true);
     }
@@ -96,9 +96,9 @@ describe('pre-launch staggered schedule', () => {
     for (const w of cur.WEEKS) expect(utcDay(cur.weekDueDate(w.week))).toBe(5);
   });
 
-  it('teaching Mondays unchanged (delivery still 7/13 → 9/28)', () => {
-    expect(cur.weekTeachingMonday(1)).toBe('2026-07-13');
-    expect(cur.weekTeachingMonday(12)).toBe('2026-09-28');
+  it('teaching Mondays: delivery runs 7/27 → 10/12 (Cohort 1, moved from 7/13)', () => {
+    expect(cur.weekTeachingMonday(1)).toBe('2026-07-27');
+    expect(cur.weekTeachingMonday(12)).toBe('2026-10-12');
   });
 });
 

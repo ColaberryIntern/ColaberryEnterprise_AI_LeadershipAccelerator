@@ -1987,6 +1987,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description: 'Classifies unrouted leads into offer pipelines (accelerator/advisory/custom_build/enterprise). Runs every 6 hours.',
     config: {},
   },
+  {
+    agent_name: 'PortfolioGitHubSyncAgent',
+    agent_type: 'github_automation',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/githubIntegrationService.ts',
+    trigger_type: 'cron',
+    schedule: '15 2 * * *',
+    category: 'accelerator',
+    description:
+      'Daily batch sync of GitHub activity for all active enrolled students. Fetches commits_last_7d, open_prs, total_stars, and contribution_graph_json for every enrollment with a connected repository. Per-student failures are isolated — one failure does not abort others. Webhook-triggered syncs handle real-time push events; this job is the fallback.',
+  },
 ];
 
 /**

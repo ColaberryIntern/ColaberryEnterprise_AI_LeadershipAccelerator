@@ -21,13 +21,13 @@
 **LOCKED:** 12 weeks. Mon Architecture Day + Thu Build Day (2hr each). Sold as 4 stackable 3-week Intensives (TWC compliance). Lego model — one project across 12 weeks.
 
 ## A5. Cohort cadence + size
-**LOCKED (provisional):** Quarterly cadence — Cohort 1 starts 2026-07-13, Cohort 2 starts 2026-10-12, Cohort 3 starts 2027-01-11. **Cohort 1 size cap: 25 students (Founding Cohort).** Can raise to 50 in Cohort 2 if the platform holds.
+**LOCKED (provisional):** Two 2026 cohorts — Cohort 1 orientation 2026-07-23, classes start Mon 2026-07-27; Cohort 2 starts Mon 2026-11-02. (Cohort 3 removed; only two cohorts in 2026.) **Cohort 1 size cap: 40 students (Founding Cohort).** Can raise to 50 in Cohort 2 if the platform holds. _(Dates updated 2026-06-19, Ali.)_
 
 ## A6. LLM choice for training-platform agents
 **LOCKED:** OpenAI gpt-4o family for v1 (matches `@CB` precedent — OpenAI key already in prod env). Swap to Claude API once `ANTHROPIC_API_KEY` is provisioned.
 
 ## A7. Cohort kickoff + Architect Expo dates
-**LOCKED:** Enrollment opens Fri 2026-07-10. Cohort 1 kickoff Mon 2026-07-13. Cohort 1 ends + Architect Expo Fri 2026-10-02.
+**LOCKED:** Enrollment opens Fri 2026-07-10. Cohort 1 orientation Thu 2026-07-23, classes start Mon 2026-07-27. Cohort 1 ends + Architect Expo Fri 2026-10-16.
 **If override:** Whole 41-day plan shifts.
 
 ## A8. Mentor sourcing for Architect Pro tier

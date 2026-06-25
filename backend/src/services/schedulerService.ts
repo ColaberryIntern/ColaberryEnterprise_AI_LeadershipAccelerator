@@ -18,6 +18,7 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
@@ -515,6 +516,34 @@ async function calculatePacedLimit(
 async function processScheduledActions(): Promise<void> {
   const processorId = `proc_${process.pid}_${Date.now()}`;
 
+  // Expire "zombie" actions before claiming. An action whose scheduled_for is
+  // well in the past should never fire (a months-old sequence step sending today
+  // is wrong, not late). Without this the per-lead daily cap re-defers such
+  // actions to "tomorrow" forever, so they never drain and send_throughput stays
+  // red (730 Mar-May zombies, 2026-06-23 / CC-20260623-q8m4). One bulk UPDATE per
+  // tick; affects 0 rows in steady state. Configurable via setting
+  // `scheduled_action_max_age_days` (0/negative disables).
+  try {
+    const maxAgeDays = resolveMaxAgeDays(await getSetting('scheduled_action_max_age_days'));
+    if (maxAgeDays > 0) {
+      const cutoff = staleCutoff(new Date(), maxAgeDays);
+      const [, expiredMeta] = await sequelize.query(
+        `UPDATE scheduled_emails
+            SET status = 'cancelled',
+                metadata = COALESCE(metadata, '{}'::jsonb)
+                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason)
+          WHERE status = 'pending' AND scheduled_for < :cutoff`,
+        { replacements: { cutoff, reason: `auto-expired: >${maxAgeDays}d past scheduled_for` } }
+      );
+      const expiredCount = (expiredMeta as any)?.rowCount ?? 0;
+      if (expiredCount > 0) {
+        console.log(`[Scheduler] Expired ${expiredCount} stale scheduled action(s) (>${maxAgeDays}d past scheduled_for)`);
+      }
+    }
+  } catch (err: any) {
+    console.error('[Scheduler] stale-action expiry failed (non-blocking):', err.message);
+  }
+
   // Atomically claim pending actions using FOR UPDATE SKIP LOCKED
   // This prevents race conditions if multiple scheduler instances run concurrently
   let pendingActions: InstanceType<typeof ScheduledEmail>[];
@@ -991,6 +1020,21 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       .replace(/click here to opt out/gi, '')
       .replace(/<p>\s*<\/p>/g, '');
   }
+
+  // Branded signature on EVERY outbound send, so the recipient always knows who we are
+  // and where to find us. Sender-aware (uses the resolved sender), injected AFTER the
+  // executive-outreach strip so it is never removed. Fixes cold/personal emails going out
+  // with no company name or website. text body is derived from html below, so it inherits it.
+  const brandSignature = `
+  <div style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-top: 1px solid #e2e8f0; margin-top: 26px; padding-top: 14px; line-height: 1.5;">
+    <div style="font-weight: 700; color: #1a365d;">${senderName}</div>
+    <div style="color: #718096;">Colaberry Inc.</div>
+    <div style="margin-top: 6px;"><a href="https://enterprise.colaberry.ai" style="color: #2b6cb0; text-decoration: none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color: #2b6cb0; text-decoration: none;">${senderEmail}</a></div>
+  </div>`;
+  html = html.includes('</body>')
+    ? html.replace('</body>', `${brandSignature}\n</body>`)
+    : `${html}${brandSignature}`;
+
   // Reply-To: use reply subdomain so Mandrill catches inbound replies
   // For Ali personal outreach, reply goes to ali@colaberry.com directly (he handles personally)
   const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
@@ -1006,6 +1050,12 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     text: stripHtml(html),
     headers: {
       'X-MC-Metadata': JSON.stringify(mcMetadata),
+      // Force Mandrill open + click tracking on every send. The account-level
+      // default has open-tracking OFF (verified empirically 2026-06-23), so without
+      // this header no open pixel is injected and opens never reach the webhook —
+      // the War Room shows zero engagement even when emails are opened. Clicks are
+      // wrapped by account default, but we set clicks_all explicitly for determinism.
+      'X-MC-Track': 'opens,clicks_all',
       'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
       'X-MC-Tags': action.campaign_id ? `campaign-sequence,${mcMetadata.trigger || 'campaign'}` : 'campaign-sequence',
     },
@@ -1453,9 +1503,7 @@ function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignT
   ${primaryCtaButton}
   <div class="footer">
     <p style="font-size: 13px; margin-top: 12px;"><a href="${advisorUrl}" style="color: #3b82f6; text-decoration: none; font-weight: 600;">Design Your AI Organization in 5 Minutes &rarr;</a></p>
-    <p>Colaberry Enterprise AI Division<br>
-    AI Leadership | Architecture | Implementation | Advisory</p>
-    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
+    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075. If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
   </div>
 </body>
 </html>
@@ -2563,6 +2611,30 @@ export function startScheduler(): void {
   // rebuilds. Crontab entries to register on the VPS:
   //   0 11 * * * (every day, 6 AM CT)        -> sendFamilyCommandCenterDaily.js
   //   0 13 * * 1 (Monday, 8 AM CT)           -> sendFamilyCommandCenterDaily.js --weekly
+
+  // ── Portfolio GitHub Sync Agent (daily 2:15 AM UTC) ──────────────────────────
+  // Batch-syncs GitHub activity (commits_last_7d, open_prs, total_stars,
+  // contribution_graph_json) for every active enrollment with a connected repo.
+  // Webhook-triggered syncs already handle push events in real time; this job
+  // is the fallback that catches students who haven't pushed recently or whose
+  // webhooks missed. Each student's sync failure is isolated — one error does
+  // not abort the others.
+  cron.schedule('15 2 * * *', () => {
+    instrumentCronJob('PortfolioGitHubSyncAgent', async () => {
+      const { syncAllActiveStudentGitHubActivity } = await import('./githubIntegrationService');
+      const result = await syncAllActiveStudentGitHubActivity();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'portfolio_github_sync_complete',
+        outcome: 'success',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Portfolio GitHub sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Portfolio GitHub sync agent: daily at 02:15 UTC');
 }
 
 // ---------------------------------------------------------------------------

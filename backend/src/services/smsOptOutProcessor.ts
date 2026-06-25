@@ -13,6 +13,7 @@ import Lead from '../models/Lead';
 import ScheduledEmail from '../models/ScheduledEmail';
 import UnsubscribeEvent from '../models/UnsubscribeEvent';
 import { logAiEvent } from './aiEventService';
+import { revokeConsent } from './consentService';
 
 const STOP_KEYWORDS = ['STOP', 'UNSUBSCRIBE', 'QUIT', 'CANCEL', 'OPT OUT', 'OPTOUT', 'END', 'REMOVE'];
 
@@ -52,6 +53,15 @@ export async function processInboundSms(leadId: number, messageBody: string): Pr
       channel: 'sms',
       reason: `SMS opt-out keyword: "${normalized}"`,
     } as any);
+
+    // 3b. Mirror into the consent ledger as `revoked` (TBI P0-3, Phase 2 capture). Swallow-safe.
+    await revokeConsent({
+      subjectType: 'lead',
+      subjectId: String(leadId),
+      channel: 'sms',
+      source: 'sms_stop_keyword',
+      evidence: { keyword: normalized },
+    }).catch((err) => console.warn('[SMSOptOut] consent revoke failed:', err.message));
 
     // 4. Log the event
     await logAiEvent('SMSOptOutProcessor', 'lead_opted_out', 'leads', String(leadId), {

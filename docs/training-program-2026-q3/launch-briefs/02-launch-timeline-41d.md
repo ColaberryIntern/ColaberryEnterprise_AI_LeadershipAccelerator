@@ -1,6 +1,6 @@
 # 41-Day Launch Timeline
 
-**Today: 2026-05-31. Launch: 2026-07-10. Cohort kickoff: 2026-07-13. Mon-Fri working days only.**
+**Today: 2026-05-31. Launch: 2026-07-10. Cohort 1 orientation: 2026-07-23, classes start: 2026-07-27. Mon-Fri working days only.**
 
 ---
 
@@ -76,7 +76,7 @@ The single hardest week. Everything that's been in flight has to land:
 
 **LAUNCH DAY: Friday 2026-07-10**
 
-**COHORT 1 KICKOFF: Monday 2026-07-13** (12 weeks × Mon+Thu = ends ~2026-10-02 with Architect Expo)
+**COHORT 1 CLASSES START: Monday 2026-07-27** (orientation Thu 2026-07-23; 12 weeks × Mon+Thu = ends ~2026-10-16 with Architect Expo)
 
 ---
 
