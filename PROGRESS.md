@@ -6733,3 +6733,50 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: A fresh independent pr-approval-review of the URL-match fix surfaced a second silent-misattribution hazard: `lookupSkilljarUser` returned `results[0]` from `/users?email=` without confirming the returned account's email matched the queried one. If Skilljar does fuzzy/alias/substring matching, the service could sync another student's progress under the queried email (error:null). Now it accepts only an exact case-insensitive email match, else treats the lookup as user-not-found.
   - Verification: `jest` 16/16 — added a mismatch case (Skilljar returns a different account -> skilljar_user_id:null, courses_synced:0, no upsert). Backend `tsc --noEmit` clean (0 errors).
   - Notes: Same silent-wrong-data failure class as the URL-match no-op. Also merged origin/staging in to clear a PROGRESS.md conflict that my own #81 staging push had induced. Base remains staging (Ali-confirmed staging-first flow); merge still needs one approving review.
+
+- [x] **Founding Cohort sales knowledge base shipped to /sales-hub (static)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: Added a self-contained static sales-enablement hub at `frontend/public/sales-hub/`, served by nginx at enterprise.colaberry.ai/sales-hub/. 75 verified Q&A (`kb-data.js`/`.json`) across 11 categories, instant filter-as-you-type search, 4 Mermaid diagrams, 5 downloadable PDFs, a rep-training section, and the Cory assistant (client-side KB retrieval + document handoff + gameplan/call-prep intents; live LLM endpoint not yet wired). Styled with colaberry-design-system tokens (`styles.css` + `tokens/` bundled). No React/TS or routing changes; pure static assets under `public/`, so the SPA fallback (`try_files $uri $uri/ /index.html`) serves `/sales-hub/index.html` directly.
+  - Verification: independent verifier agent 16/16 vs an 8-point checklist; headless Edge render confirmed 75 Q&A cards + 11 categories + 4 Mermaid SVGs + 5 download links + Cory present; `node --check app.js` clean. Deploy: nginx image rebuilt on prod; live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: Content generated via a maker/checker workflow loop (per-category writer then separate verifier then regenerate failures; all 11 categories passed 9-10/10). Refund/cancellation Q&A flagged "drafted-verify" pending Ali's final approval. Reversible (delete folder + rebuild). Follow-up: wire Cory live mode to backend `/api/chat`; optional nav link from main site.
+
+- [x] **/sales-hub: add student-paid third-party cost disclosure (Anthropic + API)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: Per Ali, added a prominent, must-disclose notice that students pay third-party costs Colaberry does NOT cover: an Anthropic subscription for Claude Code (~$20/mo) and LLM API usage on their own key (most projects under $10/mo), paid directly to the providers. Added as: a standout banner under the hero on `/sales-hub`, 3 new pricing Q&A (now 78 total), a dedicated Cory intent for cost/API/subscription queries, and updates to the one-pager, objection sheet (new card), call script (bridge bullet), and positioning guardrails (offer row + do-say). One-pager pricing pill flipped Draft -> Confirmed.
+  - Verification: headless render confirms banner present + $20/$10 figures + 78 Q&A cards; `node --check app.js` clean; 4 doc PDFs regenerated. Deploy: nginx rebuilt on prod; live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: Cost disclosure is grounded (confirmed by Ali), not drafted. Reversible.
+
+- [x] **Cory RAG on /sales-hub: generate grounded human answers (not canned KB echoes)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: Added `POST /api/sales-hub/cory` (controller `salesHubCoryController.ts`, registered in `trackingRoutes.ts` with a 30/min rate limiter). The sales-hub Cory now sends the top KB matches as grounding context; the endpoint composes a natural answer via the existing OpenAI `chatCompletion` helper (model AI_MODEL || gpt-4o-mini), grounded in pinned canonical facts + the retrieved Q&A, instead of restating an entry. Zod-validated body; returns 503 when the LLM is unavailable so the client falls back to client-side retrieval (also covers offline file:// review). Frontend `app.js` rewired: `CORY_LIVE_ENDPOINT='/api/sales-hub/cory'`, sends `{question, context[]}`, renders the generated reply, keeps document handoff.
+  - Verification: `npx tsc --noEmit` clean (backend); `npx jest salesHubCoryController` 3/3 pass (happy path + 400 invalid-body + 503 unavailable failure paths); `node --check app.js` clean. Deploy: backend image rebuilt (`--no-deps`), nginx rebuilt; live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: Reuses the product's existing OpenAI key/instrumentation (no new Anthropic key provisioned on prod); can be switched to Claude later by repointing the helper. Stateless, idempotent, rate-limited. Cost disclosure + drafted-refund flags enforced in the system prompt.
+
+- [x] **Fix: move /api/sales-hub/cory to leadRoutes (deployed server mounts trackingRoutes behind an auth guard)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: The Cory RAG route returned 401 in prod because the deployed (pinned, older) `server.ts` mounts `trackingRoutes` last, after routers that sit behind a broad Bearer-auth guard (verified: `/api/leads` public/400 but `/api/enrollment`, `/api/portal`, `/api/t`, `/api/chat` all 401). Moved `POST /api/sales-hub/cory` registration from `trackingRoutes.ts` (reverted) to `leadRoutes.ts`, an early public router reached before the guard in both the pinned and origin/main route orderings. Controller unchanged.
+  - Verification: `npx tsc --noEmit` clean; redeployed backend; `curl POST /api/sales-hub/cory` returns a generated reply (200).
+  - Notes: Endpoint path unchanged, so no frontend/nginx change needed.
+
+- [x] **Fix sales-hub PDFs: one-pager to a single page; clean pagination on the rest**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: The one-pager PDF was spilling to a 2nd page (the added cost footnote tipped it over the A4 box). Tightened its vertical spacing so it is exactly 1 page. For the multi-section docs (guardrails, objection sheet, call script, outbound) added `break-inside:avoid` on cards/steps/sections (+ `.sheet overflow:visible`) so elements no longer split across page boundaries, and tightened spacing. Regenerated all 5 PDFs and refreshed them in frontend/public/sales-hub/downloads.
+  - Verification: page counts — one-pager 1; objection sheet 2; call script 2; guardrails 2; outbound 3 (all paginate cleanly now). Deploy: nginx rebuilt; downloads live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: The references are legitimately multi-page (full email copy, 9 objection cards, 6 call steps); only the leave-behind one-pager is a strict single page.
+- [x] **AI ROI Pilot: clean professional email redesign (Ali escalation, signature/clutter)**
+  - Date: 2026-06-25
+  - Session: CC-20260623-e2k7
+  - What changed: Ali flagged outbound emails as unprofessional. Audit of a real sent email found THREE stacked footer blocks (body CAN-SPAM + wrapper footer + injected signature), "Colaberry Inc." and the address each repeated 3x, two unsubscribe links, mixed fonts (Segoe UI body vs arial sig), missing title, and signature placed below the legal footer. Redesigned `wrapEmailHtml` into one clean structure: body, then a single signature block (sender name + title[for ali@] + Colaberry Inc. + enterprise.colaberry.ai + sender email, navy left-accent), then ONE legal footer (address + single unsubscribe), arial throughout, sender-aware. `processEmailAction`: strips the step content's duplicate CAN-SPAM line before wrapping, passes senderName/senderEmail to the wrapper, and the old always-inject brandSignature is now exec-outreach-only (cold gets it from the wrapper) so there is no duplication.
+  - Verification: rendered the actual code output (Playwright screenshot) and confirmed one signature, one footer, title present, CAN-SPAM stripped from body, no double-unsubscribe; post-deploy pull of a real send confirms the live email matches.
+  - Notes: The admin preview shows the raw pre-send body (signature is injected at send), which is why a scheduled Touch-3 looked unsigned; the SENT email was signed but cluttered. This redesign fixes the actual cluttered output. Outlook width is best-effort (max-width div).
+- [x] **Scheduler self-heal: reconcile stranded "sent-but-pending" rows (queue starvation fix)**
+  - Date: 2026-06-25
+  - Session: CC-20260623-e2k7
+  - What changed: Found the send queue clogged with phantom work: 456 of 458 "due" email actions had already been emailed (matching outbound communication_log) but their row never flipped pending->sent (process restarted between send and status-update, incl. mid-window deploys), leaving them stuck at attempts_made >= max_attempts where the fetch (`attempts_made < max_attempts`) skips them forever. The AI ROI Pilot's Touch-2 was actually complete (all 99 emailed; 36 stranded). Fix: new `reconcileStrandedSends()` in schedulerService runs at the top of `processScheduledActions` every cycle: UPDATE pending email rows -> 'sent' (sent_at from the comm-log) WHERE a matching outbound comm-log exists (lead+campaign+subject, created_at >= row created_at, so re-enrollments are not mismarked). Idempotent, ~0 rows steady-state, non-blocking. Unclogs the fetch + makes metrics honest + prevents recurrence.
+  - Verification: post-deploy, the 458-stuck backlog clears on the first cycle (stuck-due count -> ~0, fetchable count rises); AI ROI Pilot Touch-2 shows 99 sent.
+  - Notes: Subject-matched comm-log is the proof-of-send (each touch has a unique subject per lead) so re-sending is avoided. Lesson reinforced: deploy after-hours; mid-window restarts strand in-flight sends (this reconciler now self-corrects that within one cycle).
