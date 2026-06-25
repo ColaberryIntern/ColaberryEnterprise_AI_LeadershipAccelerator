@@ -6655,3 +6655,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: The Cory RAG route returned 401 in prod because the deployed (pinned, older) `server.ts` mounts `trackingRoutes` last, after routers that sit behind a broad Bearer-auth guard (verified: `/api/leads` public/400 but `/api/enrollment`, `/api/portal`, `/api/t`, `/api/chat` all 401). Moved `POST /api/sales-hub/cory` registration from `trackingRoutes.ts` (reverted) to `leadRoutes.ts`, an early public router reached before the guard in both the pinned and origin/main route orderings. Controller unchanged.
   - Verification: `npx tsc --noEmit` clean; redeployed backend; `curl POST /api/sales-hub/cory` returns a generated reply (200).
   - Notes: Endpoint path unchanged, so no frontend/nginx change needed.
+
+- [x] **Fix sales-hub PDFs: one-pager to a single page; clean pagination on the rest**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sh01
+  - What changed: The one-pager PDF was spilling to a 2nd page (the added cost footnote tipped it over the A4 box). Tightened its vertical spacing so it is exactly 1 page. For the multi-section docs (guardrails, objection sheet, call script, outbound) added `break-inside:avoid` on cards/steps/sections (+ `.sheet overflow:visible`) so elements no longer split across page boundaries, and tightened spacing. Regenerated all 5 PDFs and refreshed them in frontend/public/sales-hub/downloads.
+  - Verification: page counts — one-pager 1; objection sheet 2; call script 2; guardrails 2; outbound 3 (all paginate cleanly now). Deploy: nginx rebuilt; downloads live at https://enterprise.colaberry.ai/sales-hub/.
+  - Notes: The references are legitimately multi-page (full email copy, 9 objection cards, 6 call steps); only the leave-behind one-pager is a strict single page.
