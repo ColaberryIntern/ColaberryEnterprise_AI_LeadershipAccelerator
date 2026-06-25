@@ -18,6 +18,7 @@ import participantRoutes from './routes/participantRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import v1Routes from './routes/v1Routes';
+import advisorRoutes from './routes/advisorRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
@@ -68,6 +69,7 @@ app.use(adminRoutes);
 app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
+app.use(advisorRoutes);
 
 // OpenClaw tracked short URL redirect (public, no auth)
 app.get('/i/:tag', async (req, res) => {
