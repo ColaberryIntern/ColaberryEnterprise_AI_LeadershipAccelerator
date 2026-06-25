@@ -1,0 +1,238 @@
+/* ============================================================
+   AnthropicCoursesBento — Colaberry Design System, scoped.
+
+   The portal runs on its own navy/Bootstrap system. The approved
+   bento redesign (docs/design/anthropic-course-wrapper-bento.{html,md})
+   is built on the *official* Colaberry Design System (cherry / leaf /
+   berry, Roboto, pill components, radius-xl). To bring that into the
+   portal WITHOUT bleeding brand tokens across the rest of the app,
+   every token and component class here is scoped under `.acw-ds`.
+   Nothing in this file styles a bare element selector, so the portal
+   is untouched outside this section.
+
+   Source of truth: docs/design/anthropic-course-wrapper-bento.html
+   ============================================================ */
+
+/* Roboto + Roboto Mono — the brand families the DS ships with.
+   (RemixIcon from the DS is intentionally swapped for Bootstrap
+   Icons, which the portal already loads — no new icon dependency.) */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap');
+
+/* ---- scoped token layer (light) ------------------------------ */
+.acw-ds {
+  /* brand ramps (only what the bento uses) */
+  --red-500: #FB2832;
+  --red-600: #E5121D;
+  --red-700: #C20E1E;
+  --blue-400: #4A86A2;
+  --blue-500: #367895;
+  --neutral-0: #FFFFFF;
+  --neutral-50: #F8F8F7;
+  --neutral-100: #F1F1F0;
+  --neutral-200: #E4E4E3;
+  --neutral-400: #B4B4B4;
+  --neutral-600: #6B6B6B;
+  --neutral-800: #2B2B2B;
+  --neutral-900: #1A1A1A;
+
+  /* semantic aliases */
+  --surface-subtle: var(--neutral-50);
+  --surface-card: var(--neutral-0);
+  --surface-sunken: var(--neutral-100);
+  --border-subtle: var(--neutral-200);
+  --border-strong: var(--neutral-400);
+  --text-strong: var(--neutral-900);
+  --text-body: var(--neutral-800);
+  --text-muted: var(--neutral-600);
+  --action-fg: var(--neutral-0);
+
+  /* type */
+  --font-body: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --heading-font: var(--font-body);
+  --fw-medium: 500;
+  --fw-bold: 700;
+  --fs-h3: 28px;
+  --fs-h4: 22px;
+  --fs-h5: 20px;
+  --fs-body-sm: 16px;
+  --fs-caption: 14px;
+  --fs-overline: 12px;
+  --ls-tight: -0.01em;
+  --ls-overline: 0.08em;
+  --lh-snug: 1.25;
+  --lh-normal: 1.5;
+
+  /* space / shape */
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-xs: 4px;
+  --radius-md: 12px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* shadow / motion / focus */
+  --shadow-sm: 0 1px 2px rgba(26,26,26,0.05), 0 1px 1px rgba(26,26,26,0.04);
+  --shadow-lg: 0 8px 20px rgba(26,26,26,0.07), 0 3px 6px rgba(26,26,26,0.04);
+  --shadow-brand: 0 6px 18px color-mix(in srgb, var(--red-500) 20%, transparent);
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--blue-500) 45%, transparent);
+
+  font-family: var(--font-body);
+  color: var(--text-body);
+}
+
+/* ---- dark token overrides (inert until a parent sets the attr;
+   present so the section is ready when the portal adds dark mode) -- */
+.acw-ds[data-theme="dark"] {
+  --surface-subtle: #161616;
+  --surface-card: #212120;          /* lifted off the page so cards read */
+  --surface-sunken: #0F0F0F;
+  --border-subtle: rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.24);
+  --text-strong: #FFFFFF;
+  --text-body: var(--neutral-200, #E4E4E3);
+  --text-muted: var(--neutral-400);
+}
+
+/* ---- icon primitives ---------------------------------------- */
+.acw-ds .cb-i {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1em; height: 1em; line-height: 0; flex: none; vertical-align: middle;
+}
+.acw-ds .cb-i > i { display: block; font-size: 1em; line-height: 1; }
+.acw-ds .cb-icon-tile {
+  display: grid; place-items: center; flex: none;
+  width: var(--tile, 44px); height: var(--tile, 44px);
+  border-radius: var(--radius-md); color: #fff;
+  font-size: calc(var(--tile, 44px) * 0.48); line-height: 0;
+}
+
+/* ---- text-clamp helpers ------------------------------------- */
+.acw-ds .cb-clamp-2, .acw-ds .cb-clamp-3 {
+  display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden;
+}
+.acw-ds .cb-clamp-2 { -webkit-line-clamp: 2; line-clamp: 2; }
+.acw-ds .cb-clamp-3 { -webkit-line-clamp: 3; line-clamp: 3; }
+
+/* ---- Card --------------------------------------------------- */
+.acw-ds .cb-card {
+  display: flex; flex-direction: column; background: var(--surface-card);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm); overflow: hidden;
+  transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.acw-ds .cb-card--hoverable { cursor: pointer; }
+.acw-ds .cb-card--hoverable:hover { box-shadow: var(--shadow-lg); transform: translateY(-3px); }
+.acw-ds .cb-card--accent { border-top: 4px solid var(--red-500); }
+.acw-ds .cb-card__body {
+  padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-3); flex: 1;
+}
+
+/* ---- Badge -------------------------------------------------- */
+.acw-ds .cb-badge {
+  display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body);
+  font-weight: var(--fw-medium); font-size: var(--fs-caption); line-height: 1; padding: 5px 12px;
+  border-radius: var(--radius-pill); background: var(--surface-sunken); color: var(--text-body); white-space: nowrap;
+}
+.acw-ds .cb-badge--neutral { background: var(--surface-sunken); color: var(--text-body); }
+.acw-ds .cb-badge--solid { background: var(--red-600); color: #fff; font-weight: var(--fw-bold); }
+
+/* ---- Button ------------------------------------------------- */
+.acw-ds .cb-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-body); font-weight: var(--fw-bold); font-size: var(--fs-body-sm);
+  line-height: 1.2; min-height: 48px; border: none; border-radius: var(--radius-pill);
+  cursor: pointer; padding: 0 24px; text-decoration: none; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.acw-ds .cb-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* sm: bumped to 44px (DS touch goal) vs the mockup's 38px */
+.acw-ds .cb-btn--sm { font-size: var(--fs-caption); min-height: 44px; padding: 0 16px; gap: 6px; }
+.acw-ds .cb-btn--primary { background: var(--red-600); color: #fff; box-shadow: var(--shadow-brand); }
+.acw-ds .cb-btn--primary:hover { background: var(--red-700); color: #fff; }
+.acw-ds .cb-btn--ghost { background: transparent; color: var(--text-strong); padding: 0 12px; }
+.acw-ds .cb-btn--ghost:hover { background: var(--surface-sunken); color: var(--text-strong); }
+.acw-ds .cb-btn--on-accent { background: #fff; color: var(--red-700); }
+.acw-ds .cb-btn--on-accent:hover { background: rgba(255,255,255,0.9); color: var(--red-700); }
+
+/* ---- card internals ----------------------------------------- */
+.acw-ds .acw__head { display: flex; gap: var(--space-4); align-items: flex-start; }
+.acw-ds .acw__tile { --tile: 48px; background: var(--blue-500); flex: none; }
+.acw-ds .acw__head-text { min-width: 0; flex: 1; }
+.acw-ds .acw__topline { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.acw-ds .acw__overline {
+  font-size: var(--fs-overline); letter-spacing: var(--ls-overline); text-transform: uppercase;
+  font-weight: var(--fw-bold); color: var(--text-muted); margin: 0 0 4px;
+}
+.acw-ds .acw__title {
+  font-family: var(--heading-font); font-size: var(--fs-h4); font-weight: var(--fw-bold);
+  line-height: var(--lh-snug); letter-spacing: var(--ls-tight); color: var(--text-strong); margin: 0;
+}
+.acw-ds .acw__title--sm { font-size: var(--fs-h5); }
+.acw-ds .acw__desc { font-size: var(--fs-body-sm); line-height: var(--lh-normal); color: var(--text-muted); margin: 0; }
+.acw-ds .acw__meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
+  font-size: var(--fs-caption); color: var(--text-muted);
+}
+.acw-ds .acw__meta-item { display: inline-flex; align-items: center; gap: 6px; }
+.acw-ds .acw__meta .num { font-family: var(--font-mono); font-weight: var(--fw-medium); color: var(--text-body); }
+.acw-ds .acw__divider { width: 3px; height: 3px; border-radius: 50%; background: var(--border-strong); }
+.acw-ds .acw__foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: auto; padding-top: var(--space-2); }
+
+/* featured */
+.acw-ds .feat .acw__tile { --tile: 60px; }
+.acw-ds .feat .acw__title { font-size: var(--fs-h3); }
+.acw-ds .feat .cb-card__body { gap: var(--space-4); padding: var(--space-8); }
+/* compact */
+.acw-ds .compact .cb-card__body { padding: var(--space-5); gap: var(--space-3); }
+.acw-ds .compact .acw__tile { --tile: 40px; }
+.acw-ds .compact .acw__foot { justify-content: flex-start; }
+
+/* cherry path anchor */
+.acw-ds .stat-tile {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-6);
+  flex-wrap: wrap; background: var(--red-600); color: #fff; border-radius: var(--radius-xl);
+  padding: var(--space-6) var(--space-8); box-shadow: var(--shadow-brand);
+}
+.acw-ds .stat-tile .label {
+  font-size: var(--fs-overline); letter-spacing: var(--ls-overline); text-transform: uppercase;
+  font-weight: var(--fw-bold); margin: 0 0 8px;
+}
+.acw-ds .stat-tile .figures { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.acw-ds .stat-tile .big { font-family: var(--font-mono); font-size: var(--fs-h3); font-weight: var(--fw-bold); line-height: 1; }
+.acw-ds .stat-tile .unit { font-size: var(--fs-body-sm); }
+
+/* ---- bento layout ------------------------------------------- */
+/* Generalized from the mockup's fixed 3-up grid so it never breaks
+   on 4+ courses: featured holds the left 2 columns and spans all
+   compact rows; compacts stack in the right column; anchor spans full
+   width. For exactly 3 courses this is pixel-identical to the spec. */
+.acw-ds .acw-bento { display: grid; gap: var(--space-5); }
+.acw-ds .acw-bento--multi {
+  grid-template-columns: 2fr 1fr;
+  align-items: stretch;
+}
+.acw-ds .acw-bento--multi .ga-feat { grid-column: 1; grid-row: 1 / span var(--compact-rows, 1); }
+.acw-ds .acw-bento--multi .ga-compact { grid-column: 2; }
+.acw-ds .acw-bento--multi .ga-stat { grid-column: 1 / -1; }
+.acw-ds .acw-bento--single { grid-template-columns: 1fr; max-width: 560px; }
+
+@media (max-width: 760px) {
+  .acw-ds .acw-bento--multi { grid-template-columns: 1fr; }
+  .acw-ds .acw-bento--multi .ga-feat { grid-column: 1; grid-row: auto; }
+  .acw-ds .acw-bento--multi .ga-compact { grid-column: 1; }
+}
+
+/* ---- reduced motion ----------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .acw-ds .cb-card,
+  .acw-ds .cb-btn { transition: none; }
+  .acw-ds .cb-card--hoverable:hover { transform: none; }
+}
