@@ -516,6 +516,11 @@ async function calculatePacedLimit(
 async function processScheduledActions(): Promise<void> {
   const processorId = `proc_${process.pid}_${Date.now()}`;
 
+  // Self-heal sends stranded in 'pending' after the email actually went out (e.g. a restart
+  // between send and status-update). Runs each cycle; ~0 rows in steady state. This is what
+  // unclogs the fetch when the queue fills with already-sent rows.
+  await reconcileStrandedSends();
+
   // Expire "zombie" actions before claiming. An action whose scheduled_for is
   // well in the past should never fire (a months-old sequence step sending today
   // is wrong, not late). Without this the per-lead daily cap re-defers such
@@ -946,6 +951,44 @@ async function recoverStaleActions(): Promise<number> {
   );
   if (count > 0) console.log(`[Scheduler] Recovered ${count} stale actions`);
   return count;
+}
+
+/**
+ * Self-heal stranded sends. A send can leave its row stuck in 'pending' when the process
+ * restarts between "email left Mandrill / comm-log written" and "row marked sent". Such rows
+ * sit unfetchable (attempts_made >= max_attempts) and clog the queue forever, so the fetch
+ * starves on real work. If a matching OUTBOUND communication_log exists (same lead + campaign
+ * + subject, logged after the row was created), the email DID go out, so flip the row to
+ * 'sent' (dated from the comm-log) rather than risk a duplicate re-send. Idempotent and cheap:
+ * affects ~0 rows in steady state. The created_at guard prevents a re-enrolled row (whose
+ * matching comm-log predates it) from being wrongly suppressed.
+ */
+async function reconcileStrandedSends(): Promise<number> {
+  try {
+    const [, meta] = await sequelize.query(`
+      UPDATE scheduled_emails se
+      SET status = 'sent',
+          sent_at = COALESCE(se.sent_at, (
+            SELECT MAX(cl.created_at) FROM communication_logs cl
+            WHERE cl.lead_id = se.lead_id AND cl.campaign_id = se.campaign_id
+              AND cl.direction = 'outbound' AND cl.subject = se.subject)),
+          metadata = COALESCE(se.metadata, '{}'::jsonb)
+            || jsonb_build_object('reconciled_stranded', true, 'reconciled_at', NOW())
+      WHERE se.status = 'pending'
+        AND se.channel = 'email'
+        AND EXISTS (
+          SELECT 1 FROM communication_logs cl
+          WHERE cl.lead_id = se.lead_id AND cl.campaign_id = se.campaign_id
+            AND cl.direction = 'outbound' AND cl.subject = se.subject
+            AND cl.created_at >= se.created_at)
+    `);
+    const n = (meta as any)?.rowCount ?? 0;
+    if (n > 0) console.log(`[Scheduler] Reconciled ${n} stranded send(s) (already emailed, stuck pending) -> sent`);
+    return n;
+  } catch (err: any) {
+    console.error('[Scheduler] Stranded-send reconciliation failed (non-blocking):', err.message);
+    return 0;
+  }
 }
 
 async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
