@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Decision Sheet — Community Feed + Post Composer (from Design E)</title>
+<style>
+  :root{
+    --ink:#0f2540; --muted:#5b6b82; --line:#dbe3ec; --bg:#f5f7fa; --card:#ffffff;
+    --navy:#0f2540; --accent:#1f6feb; --accent-soft:#eef4ff; --amber:#b8860b; --warnbg:#fdf6e3;
+    --okbg:#eef9f1; --okline:#bfe6c9; --oktext:#1f7a3d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;font-size:15.5px}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 26px 90px}
+  header.band{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 3px rgba(15,37,64,.05);padding:24px 28px;margin:26px 0 18px}
+  header.band h1{margin:0 0 4px;font-size:23px;letter-spacing:.2px;color:var(--navy)}
+  header.band .tagline{color:var(--muted);font-size:14px;margin-bottom:14px}
+  .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .pill{background:#f1f5fa;border:1px solid var(--line);color:#43566f;border-radius:20px;padding:3px 11px;font-size:12px;white-space:nowrap}
+  .pill b{color:var(--navy);font-weight:600}
+  .pill.warn{background:var(--warnbg);border-color:#e6d9a8;color:#7a5d00}
+  .brief{background:var(--accent-soft);border:1px solid #cfe0fb;border-radius:12px;padding:14px 18px;margin:14px 0}
+  .brief div{margin:5px 0}
+  .brief .lbl{font-weight:700;color:var(--navy)}
+  h2{font-size:17px;margin:30px 0 10px;color:var(--navy)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:14px 0;box-shadow:0 1px 3px rgba(15,37,64,.04)}
+  .stop{border-left:4px solid var(--amber);background:var(--warnbg);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:14px}
+  .rec{border-left:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:0 8px 8px 0;margin:14px 0}
+  .rec .v{font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px}
+  .rec table{border-collapse:collapse;width:100%;margin-top:8px}
+  .rec td{padding:4px 8px;vertical-align:top;font-size:14.5px}
+  .rec td.k{color:var(--muted);width:78px;font-weight:600}
+  /* audit table */
+  table.audit{border-collapse:collapse;width:100%;font-size:14px;margin-top:4px}
+  table.audit th{text-align:left;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid var(--line)}
+  table.audit td{padding:7px 8px;border-bottom:1px solid #eef2f7;vertical-align:top}
+  .tick{color:var(--oktext);font-weight:700}
+  .gap{color:#b5710a;font-weight:700}
+  label.opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin:7px 0;cursor:pointer;background:#fff;transition:.12s}
+  label.opt:hover{border-color:var(--accent)}
+  label.opt input{margin-top:3px}
+  label.opt.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent) inset}
+  .opt .t{font-weight:600}
+  .opt .d{color:var(--muted);font-size:13px;margin-top:2px}
+  .badge{display:inline-block;background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;border-radius:10px;padding:1px 7px;margin-left:6px;vertical-align:middle;letter-spacing:.3px}
+  textarea,input[type=text],input[type=date]{font-family:inherit;font-size:14px;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+  textarea{min-height:64px;resize:vertical}
+  .sub{margin:8px 0 0 30px;display:none}
+  .sub.show{display:block}
+  .assumed{font-size:13.5px;color:#43566f;background:#f1f5fa;border:1px dashed #c4d2e2;border-radius:9px;padding:11px 14px;margin:10px 0}
+  .assumed b{color:var(--navy)}
+  .bc label.chk{display:flex;gap:10px;align-items:flex-start;padding:9px 4px;border-bottom:1px solid #eef2f7}
+  .bc label.chk:last-child{border-bottom:0}
+  .bc .chk input{margin-top:3px}
+  .bc .chk .body{flex:1}
+  .bc .chk .t{font-weight:600}
+  .bc .chk .f{margin-top:6px}
+  .actbar{position:sticky;top:0;z-index:10;background:rgba(245,247,250,.92);backdrop-filter:blur(6px);padding:12px 0;margin-top:10px;border-bottom:1px solid var(--line)}
+  button.copy{background:var(--navy);color:#fff;border:0;border-radius:9px;padding:11px 18px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  button.copy:hover{background:#163052}
+  button.copy.flash{background:var(--accent)}
+  pre.preview{background:#0f2540;color:#e7eef7;border-radius:10px;padding:16px 18px;font-size:12.5px;line-height:1.5;overflow:auto;white-space:pre-wrap;max-height:340px}
+  .muted{color:var(--muted);font-size:13px}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:26px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="actbar">
+    <button class="copy" onclick="copyPrompt(this)">⧉ Copy Claude Code prompt</button>
+    <span class="muted" style="margin-left:10px">Review below, adjust what's wrong, then paste the prompt back to execute everything at once.</span>
+  </div>
+
+  <header class="band">
+    <h1>Community Feed + Post Composer — refine from Design E</h1>
+    <div class="tagline">BC#9985688931 · the Skool-style feed already exists inside Design E — this extracts + refines it to the acceptance criteria for sign-off</div>
+    <div class="pills">
+      <span class="pill"><b>Project:</b> AI Systems Architect Accelerator</span>
+      <span class="pill"><b>List:</b> Design (Aleem) — mockups, Ali approves each</span>
+      <span class="pill warn"><b>Due:</b> 2026-06-19 (6 days overdue)</span>
+      <span class="pill"><b>Urgency:</b> 72 · human_required</span>
+      <span class="pill"><b>Assignee:</b> Aleem</span>
+    </div>
+
+    <div class="brief">
+      <div><span class="lbl">What this is:</span> The P0 community mockup — a single Skool-style feed (post card · composer · categories · comment thread · like). You handed me <strong>Design E</strong> (Aleem's Colaberry design system), which <strong>already contains a complete, working Community view</strong>. So this is no longer a build-from-scratch.</div>
+      <div><span class="lbl">What you need to do:</span> Decide the few real deltas between Design E's Community and BUILD_SPEC §6.A, then paste the prompt back — I'll extract the feed into a clean standalone mockup, apply your deltas (all in Design E's brand), open it, and post for approval.</div>
+    </div>
+  </header>
+
+  <div class="stop">
+    <strong>⚠ Two things changed once I read Design E.</strong>
+    <div style="margin-top:6px"><b>1 · Design system.</b> Design E uses the <b>Colaberry brand palette</b> (cherry #FB2832 · leaf · berry #367895) with Quicksand/Roboto — labelled "Aleem's design system." I'm treating <b>Design E as the source of truth</b> for this screen, which <b>supersedes the earlier "extend baseline-ui" assumption</b> from the sign-off gate sheet. Flag if baseline-ui should still govern.</div>
+    <div style="margin-top:6px"><b>2 · No written acceptance criteria on the ticket</b> (0 comments). I drafted them from §6.A and <b>checked them against Design E</b> — most are already met (audit below). This is a delta-review, not a hard stop.</div>
+  </div>
+
+  <h2>Design E Community — audit vs BUILD_SPEC §6.A</h2>
+  <div class="card">
+    <table class="audit">
+      <tr><th>§6.A acceptance criterion</th><th>In Design E?</th></tr>
+      <tr><td>Single central feed of post cards</td><td class="tick">✓ present</td></tr>
+      <tr><td>Post card: author + avatar + <b>level badge</b>, time, category, body, like + comment counts</td><td class="tick">✓ present</td></tr>
+      <tr><td>Inline composer with category picker</td><td class="tick">✓ collapse→expand + category select</td></tr>
+      <tr><td>Composer <b>attach media + @mention</b></td><td class="gap">gap — not in composer</td></tr>
+      <tr><td>Category filter (incl. auto-sourced Build Logs / Showcase / Video Critiques)</td><td class="tick">✓ pills + "More"</td></tr>
+      <tr><td>Comment thread</td><td class="tick">✓ expand + add comment</td></tr>
+      <tr><td><b>One level of nested replies</b> + <b>like on comments</b></td><td class="gap">gap — comments are flat, no like</td></tr>
+      <tr><td>Like on posts</td><td class="tick">✓ present (→ points)</td></tr>
+      <tr><td>Pinned post</td><td class="tick">✓ present</td></tr>
+      <tr><td>Lite who's-online presence</td><td class="tick">✓ nav + contacts rail + online count</td></tr>
+      <tr><td>Member profiles</td><td class="tick">✓ openMember()</td></tr>
+      <tr><td>Leaderboard</td><td class="gap">present — but §6.A/BC#9985704174 puts leaderboards at <b>P1</b>; P0 = points + personal level only</td></tr>
+    </table>
+  </div>
+
+  <div class="rec">
+    <div class="v">Recommendation</div>
+    <table>
+      <tr><td class="k">Do</td><td><b>Extract Design E's Community view into a standalone <code>COMMUNITY_FEED_MOCKUP.html</code></b> (self-contained, feed-only) for clean per-screen sign-off — all in Design E's brand, no baseline-ui.</td></tr>
+      <tr><td class="k">Add</td><td>The 2 small composer gaps (<b>attach + @mention</b>) and <b>1-level comment replies + like-on-comment</b>, so the screen meets §6.A in full.</td></tr>
+      <tr><td class="k">Trim</td><td>Swap the full leaderboard for a personal <b>"your level + rank"</b> widget at launch (matches the resolved P0 slice — a Day-1 leaderboard on a 25-student cohort reads as a negative signal). Full leaderboard returns in P1.</td></tr>
+    </table>
+  </div>
+
+  <h2>Decision 1 — How to package the deliverable</h2>
+  <div class="card">
+    <label class="opt sel"><input type="radio" name="pkg" value="extract" checked onchange="selRadio(this,'pkg')">
+      <span><span class="t">Extract a standalone Community mockup from Design E <span class="badge">RECOMMENDED</span></span>
+      <span class="d">Self-contained <code>COMMUNITY_FEED_MOCKUP.html</code> — just the feed + composer + sidebar, in Design E's brand. Clean to review and approve on its own, per this list's "mockups, Ali approves each."</span></span></label>
+
+    <label class="opt"><input type="radio" name="pkg" value="inplace" onchange="selRadio(this,'pkg')">
+      <span><span class="t">Approve the Community view in place inside Design E</span>
+      <span class="d">No extraction — sign off the Community tab within the full Design E prototype. Fastest, but reviewers navigate the whole app to see it.</span></span></label>
+
+    <label class="opt"><input type="radio" name="pkg" value="other" onchange="selRadio(this,'pkg')">
+      <span><span class="t">Other</span></span></label>
+    <div class="sub" id="sub-pkg"><textarea id="pkg-other" placeholder="Type how you want it packaged…" oninput="render()"></textarea></div>
+  </div>
+
+  <h2>Decision 2 — Composer gaps (§6.A lists attach + @mention; Design E has neither)</h2>
+  <div class="card">
+    <label class="opt sel"><input type="radio" name="comp" value="add" checked onchange="selRadio(this,'comp')">
+      <span><span class="t">Add attach-media + @mention to the composer <span class="badge">RECOMMENDED</span></span>
+      <span class="d">Small additions to Design E's expand-on-focus composer; completes the §6.A composer spec.</span></span></label>
+
+    <label class="opt"><input type="radio" name="comp" value="keep" onchange="selRadio(this,'comp')">
+      <span><span class="t">Keep composer as-is (text + category only)</span>
+      <span class="d">Defer attach + @mention to the build phase; mockup shows Design E's composer unchanged.</span></span></label>
+
+    <label class="opt"><input type="radio" name="comp" value="other" onchange="selRadio(this,'comp')">
+      <span><span class="t">Other</span></span></label>
+    <div class="sub" id="sub-comp"><textarea id="comp-other" placeholder="Describe the composer you want…" oninput="render()"></textarea></div>
+  </div>
+
+  <h2>Decision 3 — Comment threads (Design E is flat, no comment-likes)</h2>
+  <div class="card">
+    <label class="opt sel"><input type="radio" name="cmt" value="add" checked onchange="selRadio(this,'cmt')">
+      <span><span class="t">Add one level of nested replies + like-on-comment <span class="badge">RECOMMENDED</span></span>
+      <span class="d">Matches §6.A ("threaded, one level of nested replies"; "like works on posts and comments").</span></span></label>
+
+    <label class="opt"><input type="radio" name="cmt" value="keep" onchange="selRadio(this,'cmt')">
+      <span><span class="t">Keep flat single-level comments (as in Design E)</span>
+      <span class="d">Simpler; defer nesting + comment-likes. Slightly under §6.A.</span></span></label>
+
+    <label class="opt"><input type="radio" name="cmt" value="other" onchange="selRadio(this,'cmt')">
+      <span><span class="t">Other</span></span></label>
+    <div class="sub" id="sub-cmt"><textarea id="cmt-other" placeholder="Describe the comment thread you want…" oninput="render()"></textarea></div>
+  </div>
+
+  <h2>Decision 4 — Leaderboard at launch (Design E shows a full one; P0 slice = points + personal level)</h2>
+  <div class="card">
+    <label class="opt sel"><input type="radio" name="lead" value="personal" checked onchange="selRadio(this,'lead')">
+      <span><span class="t">Swap to a personal "your level + rank" widget for launch <span class="badge">RECOMMENDED</span></span>
+      <span class="d">Matches the resolved P0 gamification slice (BC#9985704174). An empty Day-1 leaderboard on 25 students reads as a negative signal. Full leaderboard returns in P1.</span></span></label>
+
+    <label class="opt"><input type="radio" name="lead" value="keep" onchange="selRadio(this,'lead')">
+      <span><span class="t">Keep the full leaderboard (as Design E builds it)</span>
+      <span class="d">Richer hub; accept that it's empty/thin on Day 1 and technically P1 per the gamification decision.</span></span></label>
+
+    <label class="opt"><input type="radio" name="lead" value="other" onchange="selRadio(this,'lead')">
+      <span><span class="t">Other</span></span></label>
+    <div class="sub" id="sub-lead"><textarea id="lead-other" placeholder="Describe the gamification widget you want…" oninput="render()"></textarea></div>
+  </div>
+
+  <div class="assumed">
+    <b>Assumed defaults</b> (I decided these — override in the prompt if wrong): design system = <b>Design E</b> (Colaberry brand: cherry/leaf/berry, Quicksand/Roboto) — <em>supersedes baseline-ui for this screen</em> · source file = <code>Downloads/design-e-colaberry-ds-LATEST-2026-06-24.html</code>, also copied into the repo as the reference · keep Design E's categories incl. the <b>auto-sourced</b> Build Logs / Showcase / Video Critiques (preserves the build-log→feed thesis) · keep lite poll presence · defer <b>polls</b> and <b>DMs/peer-chat</b> (P2) · output at <code>docs/training-program-2026-q3/COMMUNITY_FEED_MOCKUP.html</code> · ticket stays OPEN until you approve.
+  </div>
+
+  <h2>Basecamp actions — pre-decided for you</h2>
+  <div class="card bc">
+    <div class="muted" style="margin-bottom:8px">Pre-ticked = what this task implies. Copy without touching anything and you still get the right behavior. (Nothing is posted until you paste the prompt back.)</div>
+
+    <label class="chk"><input type="checkbox" id="a-comment" checked onchange="render()"><span class="body">
+      <span class="t">Post a comment on the todo: acceptance criteria + Design-E audit + "mockup ready for approval"</span>
+      <div class="f"><textarea id="comment-text" oninput="render()">MOCKUP READY FOR APPROVAL — Community feed + post composer (BC#9985688931). Built per BUILD_SPEC §6.A + §9 #3, on top of Design E (Aleem's Colaberry design system).
+
+The ticket had no written acceptance criteria, so here are the ones I built to — and where Design E already met them:
+- Central feed of post cards — already in Design E.
+- Post card: author/avatar/level badge, time, category, body, like + comment counts — already in Design E.
+- Inline composer with category picker — already in Design E. ADDED: attach media + @mention.
+- Category filter incl. auto-sourced Build Logs / Showcase / Video Critiques — already in Design E.
+- Comment thread — already in Design E. ADDED: one level of nested replies + like-on-comment.
+- Like on posts (1 like = 1 point) — already in Design E.
+- Pinned post, lite who's-online presence, member profiles — already in Design E.
+- Gamification (P0 lite — BC#9985704174): swapped the full leaderboard for a personal "your level + rank" widget at launch; full leaderboard returns in P1.
+- Deferred (not in this mockup): polls, DMs/peer chat (P2).
+
+Design system note: this screen now uses Design E (Colaberry brand), which supersedes the earlier "extend baseline-ui" direction for the student platform. Flag if baseline-ui should still govern.
+
+Mockup file: docs/training-program-2026-q3/COMMUNITY_FEED_MOCKUP.html (extracted from Design E). @Ali — please approve or mark changes. @Aleem — it's your design; confirm the extraction + the 3 deltas before we hand to build (Epic 4).</textarea></div>
+    </span></label>
+
+    <label class="chk"><input type="checkbox" id="a-doc" checked onchange="render()"><span class="body">
+      <span class="t">Save the mockup + audit as a BC Doc in the project vault (linked from the todo)</span>
+      <div class="f muted">Durable artifact — via <code>colaberry_save_doc_to_bc</code>. (HTML mockups don't render inline in BC; note the repo path, convert to PDF if an inline view is wanted — per the "share visual docs as PDF" memory.)</div>
+    </span></label>
+
+    <label class="chk"><input type="checkbox" id="a-mention" checked onchange="render()"><span class="body">
+      <span class="t">@mention / loop in people</span>
+      <div class="f"><input type="text" id="mention-people" value="Ali (approves the mockup), Aleem (owns Design E — confirm extraction + deltas)" oninput="render()"></div>
+    </span></label>
+
+    <label class="chk"><input type="checkbox" id="a-due" checked onchange="render()"><span class="body">
+      <span class="t">Set a new target date (currently 6 days overdue)</span>
+      <div class="f"><input type="date" id="due-date" value="2026-06-30" onchange="render()"> <span class="muted">Approval target — aligns with the P0 mockup-review window from the sign-off gate.</span></div>
+    </span></label>
+
+    <label class="chk"><input type="checkbox" id="a-complete" onchange="render()"><span class="body">
+      <span class="t">Mark THIS todo complete</span>
+      <div class="f muted">Left unticked — "Done means mockup APPROVED," and delivering ≠ approval. Tick it only if you're approving on sight.</div>
+    </span></label>
+
+    <label class="chk"><input type="checkbox" id="a-remember" checked onchange="render()"><span class="body">
+      <span class="t">Save the decisions to operator memory</span>
+      <div class="f muted">Design E = student-platform design system (supersedes baseline-ui); community deltas; P0 gamification = personal widget not leaderboard — via <code>colaberry_remember</code>.</div>
+    </span></label>
+  </div>
+
+  <h2>The prompt you'll paste back</h2>
+  <div class="card">
+    <button class="copy" onclick="copyPrompt(this)">⧉ Copy Claude Code prompt</button>
+    <p class="muted">Live preview — reads every control above:</p>
+    <pre class="preview" id="preview"></pre>
+  </div>
+
+  <footer>Decision sheet · generated for Ali · not posted — review &amp; paste back to execute · Colaberry AI Systems Architect Accelerator</footer>
+</div>
+
+<script>
+function selRadio(r,name){
+  document.querySelectorAll('input[name='+name+']').forEach(x=>x.closest('.opt').classList.toggle('sel',x.checked));
+  var sub=document.getElementById('sub-'+name);
+  if(sub) sub.classList.toggle('show', r.value==='other');
+  render();
+}
+function val(name){ return document.querySelector('input[name='+name+']:checked').value; }
+
+function pkgText(){
+  switch(val('pkg')){
+    case 'extract': return 'Extract Design E’s Community view into a self-contained docs/training-program-2026-q3/COMMUNITY_FEED_MOCKUP.html (feed + composer + category pills + comment threads + right sidebar), carrying over Design E’s CSS tokens and .comm/.cc-* styles. Open it in my browser.';
+    case 'inplace': return 'Do NOT extract a separate file — we approve the Community tab in place inside the existing Design E prototype. Open Design E to the Community view.';
+    default: return (document.getElementById('pkg-other').value||'(write your own)');
+  }
+}
+function compText(){
+  switch(val('comp')){
+    case 'add': return 'Add an attach-media control and an @mention affordance to the composer.';
+    case 'keep': return 'Leave the composer as-is in Design E (text + category only); defer attach + @mention.';
+    default: return (document.getElementById('comp-other').value||'(write your own)');
+  }
+}
+function cmtText(){
+  switch(val('cmt')){
+    case 'add': return 'Add one level of nested replies and a like button on each comment.';
+    case 'keep': return 'Keep flat single-level comments with no comment-likes (as in Design E).';
+    default: return (document.getElementById('cmt-other').value||'(write your own)');
+  }
+}
+function leadText(){
+  switch(val('lead')){
+    case 'personal': return 'Replace the sidebar leaderboard with a personal "your level + rank + points" widget for launch (P0 slice); full leaderboard stays P1.';
+    case 'keep': return 'Keep the full leaderboard in the sidebar as Design E builds it.';
+    default: return (document.getElementById('lead-other').value||'(write your own)');
+  }
+}
+
+function render(){
+  const lines=[];
+  const extract = val('pkg')!=='inplace';
+  lines.push('Execute the Community feed + post composer mockup task for BC#9985688931 (AI Systems Architect Accelerator, project 47502609, Design list 9985688837). Do everything below now — no further questions.');
+  lines.push('');
+  lines.push('SOURCE: start from Design E, Aleem’s Colaberry design system, at C:\\\\Users\\\\ali_m\\\\Downloads\\\\design-e-colaberry-ds-LATEST-2026-06-24.html. First copy that file into the repo at docs/training-program-2026-q3/DESIGN_E_colaberry.html as the design-system reference (it already contains a complete Skool-style Community view). Use Design E’s brand (cherry #FB2832 / leaf / berry #367895, Quicksand/Roboto) — NOT baseline-ui — for this screen.');
+  lines.push('');
+  lines.push('PACKAGING: '+pkgText());
+  lines.push('');
+  lines.push('DELTAS to apply so the screen meets BUILD_SPEC §6.A:');
+  lines.push('  - Composer: '+compText());
+  lines.push('  - Comments: '+cmtText());
+  lines.push('  - Gamification: '+leadText());
+  lines.push('  - Keep Design E’s categories incl. the auto-sourced Build Logs / Showcase / Video Critiques; keep pinned posts + lite who’s-online presence. Defer polls and DMs/peer-chat (P2).');
+  lines.push('  - Scope: this is a static MOCKUP in /docs, not shippable app code — the tsc/tests/PROGRESS.md gates attach to the Epic 4 build, not this artifact.');
+  lines.push('');
+  lines.push('BASECAMP ACTIONS (project 47502609, todo 9985688931, Design list 9985688837):');
+  let n=1;
+  if(document.getElementById('a-comment').checked){ lines.push((n++)+'. Post this as a comment on the todo:'); lines.push('"""'); lines.push(document.getElementById('comment-text').value.trim()); lines.push('"""'); }
+  if(document.getElementById('a-mention').checked) lines.push((n++)+'. In the comment, @mention / loop in: '+document.getElementById('mention-people').value.trim()+'.');
+  if(document.getElementById('a-doc').checked) lines.push((n++)+'. Save the mockup + audit as a BC Doc in the project vault and link it from the todo (colaberry_save_doc_to_bc, ticket_id=9985688931).');
+  if(document.getElementById('a-due').checked) lines.push((n++)+'. Set the todo due date to '+document.getElementById('due-date').value+'.');
+  if(document.getElementById('a-complete').checked) lines.push((n++)+'. Mark todo 9985688931 COMPLETE.');
+  else lines.push((n++)+'. Leave todo 9985688931 OPEN (done = mockup APPROVED; delivering it isn’t approval).');
+  if(document.getElementById('a-remember').checked) lines.push((n++)+'. Save to operator memory (colaberry_remember): Design E is the student-platform design system (supersedes baseline-ui); the community deltas applied; P0 gamification shows a personal widget, not a leaderboard.');
+  lines.push('');
+  lines.push('If any action lacks a direct tool, fold it into the comment/doc text and tell me which. Then report back exactly what was built + posted, with links.');
+  document.getElementById('preview').textContent=lines.join('\n');
+}
+function copyPrompt(btn){
+  render();
+  const txt=document.getElementById('preview').textContent;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const o=btn.textContent; btn.textContent='✓ Copied'; btn.classList.add('flash');
+    setTimeout(()=>{btn.textContent=o;btn.classList.remove('flash');},1500);
+  });
+}
+render();
+</script>
+</body>
+</html>
