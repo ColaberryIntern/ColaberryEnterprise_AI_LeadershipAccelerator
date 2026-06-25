@@ -1,0 +1,956 @@
+{
+ "categories": [
+  {
+   "key": "program-basics",
+   "title": "Program basics & format"
+  },
+  {
+   "key": "pricing-billing",
+   "title": "Pricing & billing"
+  },
+  {
+   "key": "founding-urgency",
+   "title": "Founding Cohort & urgency"
+  },
+  {
+   "key": "eligibility",
+   "title": "Eligibility & prerequisites"
+  },
+  {
+   "key": "time-schedule",
+   "title": "Time & schedule"
+  },
+  {
+   "key": "curriculum-build",
+   "title": "Curriculum & what you build"
+  },
+  {
+   "key": "certification",
+   "title": "Certification & credibility"
+  },
+  {
+   "key": "refunds-guarantee",
+   "title": "Refunds & guarantees"
+  },
+  {
+   "key": "career-outcomes",
+   "title": "Careers, portfolio & internship"
+  },
+  {
+   "key": "enrollment-logistics",
+   "title": "Enrollment & onboarding"
+  },
+  {
+   "key": "objections-comparisons",
+   "title": "Objections & comparisons"
+  }
+ ],
+ "qa": [
+  {
+   "category": "program-basics",
+   "q": "What exactly is the AI Systems Architect Accelerator?",
+   "a": "It's a membership built around a 12-week, project-based program, powered by Anthropic and Claude Code. Most people consume AI; here you learn to build with it. You arrive with an idea and leave with a deployed AI system.",
+   "detail": "Positioning: Learn from Anthropic. Build through Colaberry. Deploy in the real world.",
+   "tags": [
+    "overview",
+    "format",
+    "membership"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "program-basics",
+   "q": "How long is the program and what's the time commitment each week?",
+   "a": "It's a 12-week program at 4 hours of live time per week: a 2-hour Monday Architecture Day and a 2-hour Thursday Build Day. It's built for working professionals.",
+   "detail": "Live sessions only total 4 hours weekly, split across two days so it fits around a full-time job.",
+   "tags": [
+    "schedule",
+    "time-commitment",
+    "format"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "program-basics",
+   "q": "What's included in the membership, and are there extra course fees?",
+   "a": "One membership includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course fees and no per-course tuition.",
+   "detail": "It is a membership, not per-course tuition. Everything is bundled into the single price.",
+   "tags": [
+    "membership",
+    "inclusions",
+    "pricing"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "program-basics",
+   "q": "What does it cost?",
+   "a": "It's $149 a month billed annually, which is our best-value founding rate, or $199 a month month-to-month with cancel anytime. Founding members lock the $149 rate for as long as their membership stays active, even as prices rise for later cohorts.",
+   "detail": "The $149/mo founding rate is the recommended option and stays locked while the membership remains active.",
+   "tags": [
+    "pricing",
+    "founding-rate",
+    "membership"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "program-basics",
+   "q": "What will I actually walk away with when I finish?",
+   "a": "You finish with a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification. Our principle is simple: Anthropic certifies knowledge; Colaberry certifies capability.",
+   "detail": "You build a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+   "tags": [
+    "outcomes",
+    "certification",
+    "portfolio"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "program-basics",
+   "q": "Do I need to be a software engineer or have a coding background to join?",
+   "a": "No professional engineering background is required. It's built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and who have a real business problem to solve.",
+   "detail": "You should arrive with an idea or business problem; the program guides you to a deployed solution.",
+   "tags": [
+    "prerequisites",
+    "audience",
+    "eligibility"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "program-basics",
+   "q": "When does it start and how do I sign up?",
+   "a": "There's a free Open House on Thursday July 16, 2026, and the Founding Cohort kicks off Thursday July 23, 2026, leading to the Architect Expo in early October. You can enroll at training.colaberry.com.",
+   "detail": "The Founding Cohort is capped at 40 seats, so encourage prospects to secure a spot early. Single CTA everywhere is training.colaberry.com.",
+   "tags": [
+    "dates",
+    "enrollment",
+    "open-house"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "program-basics",
+   "q": "What's your refund or cancellation policy if it isn't a fit?",
+   "a": "On the monthly plan you can cancel anytime and keep access through the month you paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff; after that it's non-refundable, but your membership stays active the full year and your founding rate stays locked.",
+   "detail": "These refund terms are proposed and pending final approval, so confirm before committing them in writing to a prospect.",
+   "tags": [
+    "refund",
+    "cancellation",
+    "policy"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "How much does the program cost?",
+   "a": "It is one membership at $149 a month billed annually, which is our best value and locks in the founding rate. If you prefer to pay monthly and cancel anytime, it is $199 a month. That one price includes everything in the program.",
+   "detail": "$149/mo billed annually (founding rate, best value) vs $199/mo monthly. ONE membership covers all four Architect Intensives, Anthropic certification prep, the internship experience, and guided GitHub portfolio projects.",
+   "tags": [
+    "price",
+    "membership",
+    "annual",
+    "monthly"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "What exactly does the membership include? Are there extra course fees?",
+   "a": "There are no separate course fees. The one membership includes all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. Everything is covered under that single price.",
+   "detail": "It is a membership, not per-course tuition. No add-ons or hidden fees.",
+   "tags": [
+    "inclusions",
+    "membership",
+    "no-extra-fees"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "What is the difference between the $149 and the $199 plan?",
+   "a": "The $149 a month plan is billed annually and is our best value, and it locks in your founding rate. The $199 a month plan is billed monthly so you can cancel anytime. Same full membership either way, the only difference is how you pay.",
+   "detail": "Annual: $149/mo (founding rate locked). Monthly: $199/mo (cancel anytime). Identical access and inclusions.",
+   "tags": [
+    "plans",
+    "annual",
+    "monthly",
+    "comparison"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "What is the founding rate and will my price go up later?",
+   "a": "As a founding member you lock the $149 a month founding rate for as long as your membership stays active, even as the price rises for later cohorts. The founding cohort is capped at 40 seats, so that rate is tied to getting in now.",
+   "detail": "Founding rate ($149/mo annual) stays locked while membership remains active; later cohorts will pay more. Founding cohort capped at 40 seats.",
+   "tags": [
+    "founding-rate",
+    "price-lock",
+    "40-seats"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "Can I cancel anytime?",
+   "a": "Yes. On the monthly plan at $199 a month you can cancel anytime and keep access through the month you have paid for, with no partial-month refund. The annual plan is the better value if you are committed to the full program.",
+   "detail": "DRAFT cancellation terms pending Ali's final approval: monthly cancels anytime, access through the paid month, no partial-month refund.",
+   "tags": [
+    "cancellation",
+    "monthly",
+    "cancel-anytime"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "Is there a refund if I change my mind on the annual plan?",
+   "a": "The annual plan has a 14-day money-back window from the July 23 kickoff. After that it is non-refundable, but your membership stays active for the full year and your founding rate stays locked.",
+   "detail": "DRAFT refund terms pending Ali's final approval: 14-day money-back window from kickoff (Jul 23, 2026); after that non-refundable, membership remains active the full year, founding rate locked.",
+   "tags": [
+    "refund",
+    "annual",
+    "money-back",
+    "14-day"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "How do I enroll and where do I pay?",
+   "a": "You enroll at training.colaberry.com. That is the single place to sign up and choose your plan, and seats in the founding cohort are capped at 40.",
+   "detail": "Single CTA everywhere is training.colaberry.com. Founding cohort capped at 40 seats.",
+   "tags": [
+    "enroll",
+    "checkout",
+    "cta"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "Do I have to pay to attend the Open House before I decide?",
+   "a": "No. The Open House on Thursday July 16, 2026 is free. You can come see the program first, then enroll at training.colaberry.com before the founding cohort kicks off on July 23.",
+   "detail": "Free Open House Jul 16, 2026; Founding Cohort kickoff Jul 23, 2026. Enroll at training.colaberry.com.",
+   "tags": [
+    "open-house",
+    "free",
+    "trial",
+    "dates"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "founding-urgency",
+   "q": "How many spots are in the founding cohort?",
+   "a": "The Founding Cohort is capped at 40 seats. That cap is firm because the program runs as a small live cohort, so once those 40 are filled, enrollment for this cohort closes.",
+   "detail": "Use the cap to create real urgency. 4 live hours a week with a small group is the whole point, so the number does not flex.",
+   "tags": [
+    "seats",
+    "cap",
+    "cohort"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "founding-urgency",
+   "q": "What do I actually get by joining as a founding member instead of waiting for a later cohort?",
+   "a": "Founding members lock the $149 a month founding rate for as long as their membership stays active, even as the price rises for later cohorts. You also get one of only 40 seats in the very first cohort working directly with the Anthropic and Claude Code material.",
+   "detail": "The locked founding rate is the strongest financial reason to act now. Pair it with the 40-seat cap for urgency.",
+   "tags": [
+    "founding-rate",
+    "price-lock",
+    "benefits"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "founding-urgency",
+   "q": "Is the $149 price going to go up later?",
+   "a": "Yes, the $149 a month is the founding rate, and the price rises for later cohorts. If you join now and keep your membership active, you keep $149 a month locked in even after the price goes up.",
+   "detail": "Frame it as: the price you lock today is the price you keep, as long as you stay a member.",
+   "tags": [
+    "pricing",
+    "founding-rate",
+    "increase"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "founding-urgency",
+   "q": "When does enrollment close and when does the program start?",
+   "a": "There is a free Open House on Thursday July 16, 2026, and the Founding Cohort kicks off with the first class on Thursday July 23, 2026. Seats close as soon as we hit 40, so the practical deadline is whenever the cohort fills, and that can be before kickoff.",
+   "detail": "Architect Expo is early October 2026. Push prospects to claim a seat ahead of the Open House rather than waiting for kickoff.",
+   "tags": [
+    "dates",
+    "deadline",
+    "kickoff"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "founding-urgency",
+   "q": "Why should I decide now instead of thinking about it for a few weeks?",
+   "a": "Two reasons. There are only 40 founding seats and they fill on a first-come basis, and the $149 a month founding rate is only available to this cohort. Waiting risks losing both the seat and the locked rate.",
+   "detail": "Combine scarcity (40 seats) with the price lock. Both disappear once the cohort fills.",
+   "tags": [
+    "urgency",
+    "scarcity",
+    "decision"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "founding-urgency",
+   "q": "What if I reserve a seat now but the program isn't right for me?",
+   "a": "On the annual plan you have a 14-day money-back window from the July 23 kickoff, so you can join, experience the first sessions, and still step back if it is not a fit. On monthly, you can cancel anytime and keep access through the month you paid for.",
+   "detail": "These refund and cancellation terms are proposed and pending final approval, so confirm before putting them in writing to a prospect.",
+   "tags": [
+    "refund",
+    "risk",
+    "guarantee"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "founding-urgency",
+   "q": "How do I lock in my founding seat?",
+   "a": "Enroll at training.colaberry.com. That is the single place to claim one of the 40 founding seats and lock the $149 a month founding rate before the cohort fills.",
+   "detail": "training.colaberry.com is the one CTA everywhere. Direct every interested prospect there to secure the seat.",
+   "tags": [
+    "enroll",
+    "cta",
+    "signup"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "eligibility",
+   "q": "Do I need a software engineering or computer science background to join?",
+   "a": "No professional engineering background is required. This program is built for career changers and working professionals who are comfortable with basic software concepts and want to build with AI.",
+   "detail": "The Accelerator is project-based and guided. You arrive with an idea and leave with a deployed system, supported through every step.",
+   "tags": [
+    "background",
+    "prerequisites",
+    "career-changers"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "eligibility",
+   "q": "What technical skills do I actually need before starting?",
+   "a": "You should be comfortable with basic software concepts like git and the command line. Beyond that, no advanced coding or engineering experience is needed.",
+   "detail": "The ideal member is a working professional or career changer who has a real business problem they want to solve with AI.",
+   "tags": [
+    "skills",
+    "prerequisites",
+    "git",
+    "command-line"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "eligibility",
+   "q": "Is this right for me if I'm changing careers and not currently in tech?",
+   "a": "Yes. This program is specifically designed for career changers and working professionals. If you understand basic software concepts and have a business problem to solve, you are exactly who this is built for.",
+   "detail": "You will build real systems including a Business Workflow Assistant, a multi-agent AI team, an MCP server, and a complete Solution Architecture Package, plus a GitHub portfolio to show for it.",
+   "tags": [
+    "career-changers",
+    "fit",
+    "non-technical"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "eligibility",
+   "q": "I have a full-time job. Can I realistically keep up with this program?",
+   "a": "Yes. The program is built for working professionals. It is four hours live per week, a two-hour Monday Architecture Day and a two-hour Thursday Build Day.",
+   "detail": "The schedule is intentionally structured so you can fit it around full-time work.",
+   "tags": [
+    "working-professionals",
+    "schedule",
+    "time-commitment"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "eligibility",
+   "q": "Do I need to come in with a project idea, or will one be assigned to me?",
+   "a": "Come in with a business problem you want to solve. The principle is arrive with an idea, leave with a deployed system. The program guides you to build it into something real.",
+   "detail": "Over twelve weeks you build a deployed AI system and a guided GitHub portfolio around your own problem.",
+   "tags": [
+    "project-idea",
+    "prerequisites",
+    "fit"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "eligibility",
+   "q": "Are there any prerequisite courses or certifications I need before enrolling?",
+   "a": "No prerequisite courses or certifications are required. One membership includes everything, including Anthropic Architect certification prep, so you start and finish all in one program.",
+   "detail": "There are no separate course fees and no gating prerequisites. You enroll at training.colaberry.com.",
+   "tags": [
+    "prerequisites",
+    "certification",
+    "enrollment"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "eligibility",
+   "q": "Is there an application or screening, and how many spots are there?",
+   "a": "The Founding Cohort is capped at 40 seats, so spots are limited. The best way to see if it is a fit is the free Open House on Thursday July 16, then enroll at training.colaberry.com.",
+   "detail": "Founding members lock the 149 dollar per month founding rate for as long as their membership stays active. Any formal screening criteria beyond the stated fit profile are not confirmed.",
+   "tags": [
+    "seats",
+    "founding-cohort",
+    "open-house",
+    "enrollment"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "time-schedule",
+   "q": "How many hours a week do I actually need to commit?",
+   "a": "Plan on 4 hours of live class each week: a 2-hour Architecture Day on Monday and a 2-hour Build Day on Thursday. The program is deliberately built for working professionals, so it fits around a full-time job.",
+   "detail": "Live commitment is fixed at 4 hours/week across two sessions. Outside of live time you'll work on your guided GitHub portfolio projects at your own pace.",
+   "tags": [
+    "hours",
+    "weekly",
+    "schedule"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "time-schedule",
+   "q": "What days and times are the classes?",
+   "a": "Classes run twice a week: Monday is Architecture Day for 2 hours, and Thursday is Build Day for 2 hours. Two focused sessions, four hours total, every week.",
+   "detail": "Monday Architecture Day (2h) covers the design and architecture concepts; Thursday Build Day (2h) is hands-on building. Specific clock times are not yet published, so confirm exact start times before quoting them.",
+   "tags": [
+    "days",
+    "monday",
+    "thursday"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "time-schedule",
+   "q": "How long is the whole program?",
+   "a": "The program is 12 weeks, project-based from day one. You arrive with an idea and leave with a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.",
+   "detail": "12-week, project-based program inside the membership. Kickoff is Thursday July 23, 2026, building toward the Architect Expo in early October 2026.",
+   "tags": [
+    "duration",
+    "length",
+    "weeks"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "time-schedule",
+   "q": "Can I do this while working a full-time job?",
+   "a": "Yes, that is exactly who this is built for. The live commitment is just 4 hours a week, split between Monday and Thursday, so working professionals can keep their day job while they build.",
+   "detail": "The schedule is intentionally designed for working professionals and career changers who have a business problem to solve. No professional engineering background is required, just comfort with basic concepts like git and the command line.",
+   "tags": [
+    "working",
+    "full-time",
+    "professionals"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "time-schedule",
+   "q": "What are the key dates I need to know?",
+   "a": "There is a free Open House on Thursday July 16, 2026, the Founding Cohort kicks off Thursday July 23, 2026, and we wrap with the Architect Expo in early October 2026. The founding cohort is capped at 40 seats.",
+   "detail": "Free Open House Jul 16 → Founding Cohort first class Jul 23 → Architect Expo early October 2026. Enroll at training.colaberry.com.",
+   "tags": [
+    "dates",
+    "kickoff",
+    "open-house"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "time-schedule",
+   "q": "What happens if I cancel or fall behind, time-wise?",
+   "a": "On the monthly plan you can cancel anytime and keep access through the month you've paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff, and after that your membership stays active for the full year with your founding rate locked in.",
+   "detail": "These cancellation terms are proposed and pending final approval, so confirm before committing them in writing. Annual: 14-day refund window from kickoff, then non-refundable but access continues the full year. Monthly: cancel anytime, access through the paid month, no partial-month refund.",
+   "tags": [
+    "cancel",
+    "refund",
+    "commitment"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "What will I actually build by the end of the program?",
+   "a": "You build four real systems: a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package. You arrive with an idea and leave with a deployed system and a GitHub portfolio.",
+   "detail": "These four projects map to the four Architect Intensives and are designed to be portfolio-ready, not toy exercises.",
+   "tags": [
+    "projects",
+    "portfolio",
+    "deliverables"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "How long is the program and how is it structured?",
+   "a": "It is a 12-week, project-based program built around four Architect Intensives. Every week you go from architecture to a working build, so by the end you have a deployed AI system rather than just notes.",
+   "detail": "The membership wraps the 12-week program plus certification prep, an internship experience, and guided GitHub projects.",
+   "tags": [
+    "duration",
+    "structure",
+    "12-week"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "How much time do I need to commit each week?",
+   "a": "Four hours live per week: a two-hour Monday Architecture Day and a two-hour Thursday Build Day. It is built for working professionals, so you can keep your job while you go through it.",
+   "detail": "Monday teaches the design and architecture; Thursday is hands-on building.",
+   "tags": [
+    "schedule",
+    "time-commitment",
+    "working-professionals"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "Do I need to be a software engineer or have a technical background?",
+   "a": "No professional engineering background is required. It is built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and who have a business problem they want to solve.",
+   "detail": "The ideal fit is someone who understands the basics and wants to learn to build real AI systems, not a seasoned developer.",
+   "tags": [
+    "prerequisites",
+    "who-its-for",
+    "background"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "What is an MCP server and why am I building one?",
+   "a": "You build a working MCP server that integrates with a real system, which is one of the four core projects in the program. It is hands-on systems work that shows you can connect AI to live tools, not just chat with a model.",
+   "detail": "MCP work sits alongside the Business Workflow Assistant, the multi-agent team, and the Solution Architecture Package as the four build projects.",
+   "tags": [
+    "mcp",
+    "projects",
+    "integration"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "What do I walk away with when I finish?",
+   "a": "Three things: a deployed AI system, a GitHub portfolio of your work, and the Anthropic Architect certification. As we put it, Anthropic certifies knowledge and Colaberry certifies capability.",
+   "detail": "Certification prep is included in the membership, so you finish ready to certify and with proof you can build.",
+   "tags": [
+    "outcomes",
+    "certification",
+    "portfolio"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "Who is actually teaching this and what platform do we build on?",
+   "a": "The program is powered by Anthropic and Claude Code: you learn from Anthropic, build through Colaberry, and deploy in the real world. The curriculum is built directly on Claude Code, the same tooling used to build production AI systems.",
+   "detail": "This pairing is the core promise: Anthropic-grade training delivered through Colaberry's hands-on build model.",
+   "tags": [
+    "anthropic",
+    "claude-code",
+    "instruction"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "curriculum-build",
+   "q": "Is the certification prep part of the program or a separate cost?",
+   "a": "It is included. One membership covers everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course fees.",
+   "detail": "It is a membership model, not per-course tuition, so certification prep is bundled with the build projects and internship experience.",
+   "tags": [
+    "certification",
+    "membership",
+    "whats-included"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "certification",
+   "q": "What certification do I actually walk away with?",
+   "a": "You earn the Anthropic Architect certification. The program includes full Anthropic Architect certification prep, and the membership is built so you arrive with an idea and leave with the cert plus a deployed AI system and a GitHub portfolio.",
+   "detail": "Anthropic certification prep is bundled into the one membership at no separate fee. The certification is paired with real, demonstrable output rather than standing alone.",
+   "tags": [
+    "anthropic",
+    "credential",
+    "outcomes"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "certification",
+   "q": "Is this an Anthropic-recognized certification or just a Colaberry certificate?",
+   "a": "It is the Anthropic Architect certification, and the program is powered by Anthropic and Claude Code. Our principle says it best: Anthropic certifies knowledge, Colaberry certifies capability.",
+   "detail": "The credibility comes from both sides. Anthropic backs the knowledge credential, and Colaberry validates that you can actually build and deploy by having you ship a real system.",
+   "tags": [
+    "anthropic",
+    "recognition",
+    "credibility"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "certification",
+   "q": "Will I have anything to show employers besides a certificate?",
+   "a": "Yes. You leave with three things: the Anthropic Architect certification, a deployed AI system running in the real world, and a GitHub portfolio of guided projects. Employers see proof you can build, not just a piece of paper.",
+   "detail": "Concrete builds include a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+   "tags": [
+    "portfolio",
+    "github",
+    "outcomes"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "certification",
+   "q": "What exactly will be in my portfolio by the end?",
+   "a": "You build a Business Workflow Assistant plus reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package. All of it lives in your GitHub portfolio.",
+   "detail": "These are real, deployable artifacts tied to a business problem you bring in, which is what makes the certification credible to employers.",
+   "tags": [
+    "portfolio",
+    "projects",
+    "github"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "certification",
+   "q": "Do I need an engineering background to earn the certification?",
+   "a": "No professional engineering background is required. It is built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and who have a business problem to solve.",
+   "detail": "The 12-week, project-based structure and 4 live hours per week are designed for working professionals to reach the Anthropic Architect certification.",
+   "tags": [
+    "prerequisites",
+    "career-changers",
+    "accessibility"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "certification",
+   "q": "Is the certification prep included or is it an extra cost?",
+   "a": "It is fully included. One membership covers everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course or certification fees.",
+   "detail": "Membership is $149/mo billed annually at the founding rate or $199/mo monthly. Founding members lock the $149/mo rate for as long as the membership stays active.",
+   "tags": [
+    "pricing",
+    "included",
+    "membership"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "refunds-guarantee",
+   "q": "If I sign up and it's not for me, can I get my money back?",
+   "a": "Yes. On the annual plan you have a 14-day money-back window starting from kickoff on July 23, so you can join the founding cohort, experience the program, and get a full refund if it isn't the right fit within those first two weeks.",
+   "detail": "Annual plan: 14-day money-back window from the July 23 kickoff. After that the membership is non-refundable but stays active the full year and your founding rate stays locked. These terms are pending final approval, so confirm before quoting verbatim.",
+   "tags": [
+    "refund",
+    "money-back",
+    "annual"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "refunds-guarantee",
+   "q": "Can I cancel the monthly plan whenever I want?",
+   "a": "Yes, the monthly plan cancels anytime. You keep full access through the month you've already paid for, and there's no partial-month refund.",
+   "detail": "Monthly plan is $199/mo, cancel anytime, access continues through the paid month, no partial-month refund. Terms are proposed and pending Ali's final approval.",
+   "tags": [
+    "cancellation",
+    "monthly",
+    "refund"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "refunds-guarantee",
+   "q": "Is there a guarantee that I'll actually finish with a real project and a certification?",
+   "a": "The program is built so you leave with three concrete outcomes: a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification. The principle is simple: Anthropic certifies knowledge, Colaberry certifies capability.",
+   "detail": "Outcomes are core to the model: you arrive with an idea and leave with a deployed system, plus a portfolio and the Anthropic Architect certification. This is the program design, not a separate written guarantee.",
+   "tags": [
+    "guarantee",
+    "outcome",
+    "certification"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "refunds-guarantee",
+   "q": "If I pay annually and decide to leave halfway through the year, do I get a refund?",
+   "a": "After the 14-day money-back window from kickoff, the annual plan is non-refundable, but your membership stays active for the full year and your founding rate stays locked the entire time. So you don't lose access by changing your mind midway.",
+   "detail": "Annual: full refund within 14 days of the July 23 kickoff; after that non-refundable, membership active the full year, founding rate locked. Pending Ali's final approval.",
+   "tags": [
+    "annual",
+    "refund",
+    "non-refundable"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "refunds-guarantee",
+   "q": "Do I have to commit before I see what the program is like?",
+   "a": "No. We host a free Open House on Thursday July 16, before the cohort even starts on July 23, so you can see exactly how the program works before you commit a dollar.",
+   "detail": "Free Open House is Thursday July 16, 2026; founding cohort kickoff is Thursday July 23, 2026. The Open House lets prospects evaluate the program at no cost before enrolling.",
+   "tags": [
+    "free",
+    "open-house",
+    "trial"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "refunds-guarantee",
+   "q": "If the price goes up later, will my rate change after I've paid?",
+   "a": "No. Founding members lock the $149/mo founding rate for as long as their membership stays active, even as the price rises for later cohorts. Joining now protects your rate permanently.",
+   "detail": "Founding rate is $149/mo billed annually. The locked rate persists as long as membership stays active, including across an annual term where the membership remains active the full year.",
+   "tags": [
+    "founding-rate",
+    "price-lock",
+    "pricing"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "career-outcomes",
+   "q": "What will I actually have to show for this when I'm done?",
+   "a": "You finish with three things: a real AI system deployed in the real world, a GitHub portfolio of guided projects, and the Anthropic Architect certification. Anthropic certifies your knowledge; Colaberry certifies your capability. You arrive with an idea and leave with a deployed system.",
+   "detail": "Concrete builds during the program: a Business Workflow Assistant plus reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+   "tags": [
+    "portfolio",
+    "outcomes",
+    "deliverables"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "career-outcomes",
+   "q": "Is the internship a real job, or just part of the coursework?",
+   "a": "It's a full-time internship experience built right into the membership at no extra cost. You don't just learn the concepts, you apply them on real work so you graduate with hands-on experience, not just theory.",
+   "detail": "The internship experience is included in the single membership alongside all four Architect Intensives, certification prep, and guided GitHub portfolio projects. No separate fees.",
+   "tags": [
+    "internship",
+    "experience",
+    "hands-on"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "career-outcomes",
+   "q": "What specific projects will end up in my GitHub portfolio?",
+   "a": "You build four portfolio-grade projects: a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package. These are guided, real, and yours to show employers.",
+   "detail": "",
+   "tags": [
+    "portfolio",
+    "projects",
+    "github"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "career-outcomes",
+   "q": "I'm a career changer with no engineering background. Can I realistically get to a portfolio that matters?",
+   "a": "Yes. This is built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and have a business problem to solve. No professional engineering background is required, and you leave with a deployed system, a GitHub portfolio, and the Anthropic Architect certification.",
+   "detail": "",
+   "tags": [
+    "career-change",
+    "beginner",
+    "portfolio"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "career-outcomes",
+   "q": "What is the Anthropic Architect certification and why does it matter to an employer?",
+   "a": "It's a credential you prep for and earn through the program, powered by Anthropic and Claude Code. The principle is simple: Anthropic certifies your knowledge and Colaberry certifies your capability through a real deployed system, so you walk into conversations with both the credential and the proof.",
+   "detail": "",
+   "tags": [
+    "certification",
+    "anthropic",
+    "credential"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "career-outcomes",
+   "q": "When will I have a finished project I can actually show off?",
+   "a": "The 12-week program kicks off Thursday July 23, 2026, and culminates in the Architect Expo in early October 2026, where you showcase your deployed system. By then you have your GitHub portfolio and your path to the Anthropic Architect certification.",
+   "detail": "Free Open House is Thursday July 16, 2026; kickoff is Thursday July 23, 2026; Architect Expo is early October 2026.",
+   "tags": [
+    "timeline",
+    "expo",
+    "milestones"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "career-outcomes",
+   "q": "Can I keep building my portfolio and stay connected after the 12 weeks end?",
+   "a": "Yes. This is a membership, not a one-time course, so your access continues. Founding members also lock the $149 a month founding rate for as long as the membership stays active, even as prices rise for later cohorts.",
+   "detail": "Annual founding rate is $149/mo; the founding rate stays locked while the membership remains active. Specific post-program access details beyond membership continuity are not yet documented; verify before promising specifics.",
+   "tags": [
+    "membership",
+    "ongoing-access",
+    "founding-rate"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "enrollment-logistics",
+   "q": "How do I actually enroll, and is the Open House the same as signing up?",
+   "a": "Enrollment happens at training.colaberry.com, that is the one place to sign up. The Open House on Thursday July 16 is a free, no-commitment session to see the program before you join. Classes officially kick off Thursday July 23, so you can attend the Open House first and enroll right after.",
+   "detail": "Single CTA everywhere is training.colaberry.com. Open House July 16 is free; Founding Cohort kickoff (first class) is July 23, 2026.",
+   "tags": [
+    "enroll",
+    "open-house",
+    "signup"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "enrollment-logistics",
+   "q": "Do I have to attend the Open House to join the program?",
+   "a": "No. The Open House on July 16 is free and optional, it is simply your chance to see exactly how the program works before committing. You can enroll any time at training.colaberry.com, with or without attending.",
+   "detail": "Free Open House Thursday July 16, 2026; enrollment CTA is training.colaberry.com.",
+   "tags": [
+    "open-house",
+    "optional",
+    "enroll"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "enrollment-logistics",
+   "q": "How many seats are there, and what happens if I wait to decide?",
+   "a": "The Founding Cohort is capped at 40 seats. Once those fill, the founding rate of 149 dollars a month closes, so the safest move is to lock your seat early at training.colaberry.com. Founding members keep that 149 rate for as long as their membership stays active, even as the price rises for later cohorts.",
+   "detail": "Founding cohort capped at 40 seats. $149/mo billed annually is the founding rate; founding members lock it as long as membership stays active.",
+   "tags": [
+    "seats",
+    "founding-rate",
+    "deadline"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "enrollment-logistics",
+   "q": "When do classes start and what does the weekly schedule look like once I am in?",
+   "a": "The Founding Cohort kicks off Thursday July 23, 2026. From there it is a 12-week, project-based program with 4 live hours per week, Monday Architecture Day for 2 hours and Thursday Build Day for 2 hours. It is built for working professionals, and the program wraps with the Architect Expo in early October 2026.",
+   "detail": "Kickoff July 23, 2026; 12 weeks; Mon Architecture Day (2h) + Thu Build Day (2h) = 4 live hours/week; Architect Expo early October 2026.",
+   "tags": [
+    "schedule",
+    "kickoff",
+    "weekly-hours"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "enrollment-logistics",
+   "q": "What exactly does my membership include once I enroll?",
+   "a": "One membership includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course fees, it is one membership, not per-course tuition. You arrive with an idea and leave with a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.",
+   "detail": "Membership model, no separate course fees. Outcome: deployed AI system, GitHub portfolio, Anthropic Architect certification.",
+   "tags": [
+    "membership",
+    "whats-included",
+    "onboarding"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "enrollment-logistics",
+   "q": "If I sign up and it is not for me, can I get my money back?",
+   "a": "Yes, you are protected. On the monthly plan you can cancel anytime and keep access through the month you paid for. On the annual plan you get a 14-day money-back window from the July 23 kickoff. After that the annual plan is non-refundable, but your membership stays active the full year and your founding rate stays locked.",
+   "detail": "Refund terms are proposed and pending Ali's final approval. Monthly: cancel anytime, access through paid month, no partial-month refund. Annual: 14-day money-back from kickoff (Jul 23), then non-refundable but membership stays active full year.",
+   "tags": [
+    "refund",
+    "cancellation",
+    "money-back"
+   ],
+   "confidence": "drafted-verify"
+  },
+  {
+   "category": "objections-comparisons",
+   "q": "Why would I pay for this when Anthropic puts so much AI content on YouTube for free?",
+   "a": "Free videos teach you about AI. This membership makes you build with it. Over 12 weeks you ship a deployed AI system, a GitHub portfolio, and sit for the Anthropic Architect certification. The principle is simple: Anthropic certifies knowledge, Colaberry certifies capability. Most people consume AI. Very few learn to build with it, and that is exactly the gap this closes.",
+   "detail": "Lead with the four concrete builds: a Business Workflow Assistant with reusable Skills, a multi-agent AI team plus Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+   "tags": [
+    "free-content",
+    "youtube",
+    "diy"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "objections-comparisons",
+   "q": "I could just teach myself with the docs and Claude Code. What do I actually get here that I can't get on my own?",
+   "a": "Self-teaching gives you scattered knowledge. This gives you structure and proof. You arrive with an idea and leave with a deployed system, a GitHub portfolio, and the Anthropic Architect certification, guided live across 12 weeks by people who do this. You also get a full-time internship experience and guided portfolio projects, all in one membership with no separate course fees.",
+   "detail": "Reinforce 'Arrive with an idea. Leave with a deployed system.' DIY rarely produces a finished, deployed, certifiable result; this program is built to.",
+   "tags": [
+    "diy",
+    "self-taught",
+    "value"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "objections-comparisons",
+   "q": "How is this different from a coding bootcamp?",
+   "a": "A bootcamp turns you into a junior engineer over months of full-time study. This is a 12-week, project-based membership built for working professionals, just 4 hours live per week, Monday Architecture Day and Thursday Build Day. You don't need an engineering background, only basic comfort with git and the command line and a real business problem to solve. You finish with a deployed AI system and the Anthropic Architect certification.",
+   "detail": "Emphasize the working-professional fit (4 hrs/week live) versus a full-time bootcamp grind, and that no professional engineering background is required.",
+   "tags": [
+    "bootcamp",
+    "comparison",
+    "working-professionals"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "objections-comparisons",
+   "q": "Bootcamps cost way more than this. Why is it so cheap, and what's the catch?",
+   "a": "There's no catch. It's one membership at $149 a month billed annually, the founding rate, and it includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. No separate course fees. The founding cohort is capped at 40 seats, and founding members lock that $149 rate for as long as their membership stays active, even as the price rises for later cohorts.",
+   "detail": "Monthly option is $199/mo, cancel anytime. Use the 40-seat cap and locked founding rate to create urgency honestly. Enroll at training.colaberry.com.",
+   "tags": [
+    "pricing",
+    "bootcamp",
+    "membership"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "objections-comparisons",
+   "q": "Free courses don't give me anything to show an employer. Does this?",
+   "a": "Yes, that's the whole point. You walk away with three things you can put in front of any employer: a deployed AI system, a GitHub portfolio of real projects, and the Anthropic Architect certification. Free courses leave you with a watch history. This leaves you with proof of capability.",
+   "detail": "Name the builds as portfolio pieces: Business Workflow Assistant, multi-agent AI team plus Enterprise Prompt Library, a working MCP server, and a Solution Architecture Package.",
+   "tags": [
+    "free-content",
+    "portfolio",
+    "outcomes"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "objections-comparisons",
+   "q": "If I try the DIY route and don't like this, am I stuck paying for a year?",
+   "a": "No. The monthly plan is cancel anytime, so you keep access through the month you've paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff, and after that the membership stays active the full year with your founding rate locked. Either way you can start without feeling trapped.",
+   "detail": "Refund and cancellation terms are proposed and pending Ali's final approval, so confirm before quoting them as policy. Monthly is $199/mo; annual is $149/mo (founding rate).",
+   "tags": [
+    "refund",
+    "cancellation",
+    "risk"
+   ],
+   "confidence": "drafted-verify"
+  }
+ ]
+}
