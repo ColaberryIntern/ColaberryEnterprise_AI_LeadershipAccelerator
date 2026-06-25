@@ -1,13 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
 import SEOHead from '../components/SEOHead';
-import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
-import ArtifactValueBlock from '../components/ArtifactValueBlock';
-import ROIHighlightSection from '../components/ROIHighlightSection';
-import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
-import IndustryDemoGrid from '../components/IndustryDemoGrid';
+import { PROGRAM_SCHEDULE } from '../config/programSchedule';
+import { Badge } from '../colaberry/components/core/Badge';
+import { Button } from '../colaberry/components/core/Button';
+import { Card } from '../colaberry/components/core/Card';
+import { Progress } from '../colaberry/components/core/Progress';
+import { Accordion } from '../colaberry/components/core/Accordion';
 
-/** Intersection Observer hook for fade-in-on-scroll */
+/**
+ * ProgramPage — "The one class everyone enters."
+ *
+ * Strategy: One Class, Many Doors. A single cohort/program sits at the center;
+ * two doors lead into it — individuals (Join the Challenge) and employers
+ * (Sponsor Your Team). This page explains the program itself: what you build,
+ * the cohort rhythm, the outcomes, the Anthropic Architect certification track,
+ * and the leaderboard + Demo Day. It closes with the two-door CTA.
+ *
+ * Built entirely on the Colaberry design system: semantic tokens only (no raw
+ * hex), DS core components (Badge, Button, Card, Progress, Accordion). styles.css
+ * is imported once at the app root (src/index.tsx).
+ */
+
+/** Two-door destinations (see publicRoutes.tsx). */
+const DOOR_A_HREF = '/membership/builders'; // individuals — self-serve membership
+const DOOR_B_HREF = '/sponsorship'; // employers — sponsor annual seats
+
+/* ----------------------------------------------------------------------------
+ * Scroll-reveal helper (collapses under prefers-reduced-motion via global CSS)
+ * ------------------------------------------------------------------------- */
 function useFadeIn() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -28,7 +48,13 @@ function useFadeIn() {
   return ref;
 }
 
-function FadeIn({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function FadeIn({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   const ref = useFadeIn();
   return (
     <div ref={ref} className={`fade-in-section ${className}`}>
@@ -37,578 +63,636 @@ function FadeIn({ children, className = '' }: { children: React.ReactNode; class
   );
 }
 
-const FAQ_ITEMS = [
+/* ----------------------------------------------------------------------------
+ * Shared layout tokens (inline style objects reference semantic CSS variables
+ * only — never raw hex — so corporate color swaps re-point a single token).
+ * ------------------------------------------------------------------------- */
+const sectionPad: React.CSSProperties = {
+  paddingBlock: 'var(--space-24)',
+};
+const container: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 1120,
+  marginInline: 'auto',
+  paddingInline: 'var(--space-6)',
+};
+const narrow: React.CSSProperties = { ...container, maxWidth: 760 };
+const eyebrow: React.CSSProperties = {
+  textTransform: 'uppercase',
+  letterSpacing: 'var(--ls-overline)',
+  fontSize: 'var(--fs-overline)',
+  fontWeight: 700,
+  color: 'var(--brand-accent)',
+};
+const h2: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontSize: 'var(--fs-h2)',
+  fontWeight: 900,
+  lineHeight: 'var(--lh-heading)',
+  color: 'var(--text-strong)',
+  letterSpacing: 'var(--ls-tight)',
+  margin: 0,
+};
+const lead: React.CSSProperties = {
+  fontSize: 'var(--fs-body-lg)',
+  lineHeight: 'var(--lh-relaxed)',
+  color: 'var(--text-muted)',
+  margin: 0,
+};
+const cardTitle: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontSize: 'var(--fs-h5)',
+  fontWeight: 700,
+  color: 'var(--text-strong)',
+  margin: 0,
+};
+const cardBody: React.CSSProperties = { padding: 'var(--space-6)' };
+const muted: React.CSSProperties = {
+  color: 'var(--text-muted)',
+  lineHeight: 'var(--lh-relaxed)',
+  margin: 0,
+};
+
+/* ----------------------------------------------------------------------------
+ * Content data
+ * ------------------------------------------------------------------------- */
+const BUILD_PILLARS = [
   {
-    question: 'What LLM or AI tools do I need?',
-    answer: 'You can use any enterprise LLM your company approves — ChatGPT, Claude, Gemini, or another platform. There is no requirement to use a specific tool. You bring your own credentials and API access.',
+    accent: 'red' as const,
+    title: 'A working AI system — not a slide deck',
+    body:
+      'You scope one real problem from your own world and build a functioning AI solution against it: a multi-step agent, an automation, or a decision tool that actually runs.',
   },
   {
-    question: "What's the time commitment?",
-    answer: `${PROGRAM_SCHEDULE.shortDescription}. Between sessions, expect 2-4 hours of applied work on your own AI initiative using your organization's tools and data.`,
+    accent: 'blue' as const,
+    title: 'The architect mindset',
+    body:
+      'You learn to design with Claude — decomposing a problem, orchestrating tools and context, and shipping something deterministic on top of a probabilistic model.',
   },
   {
-    question: 'Do I need technical experience?',
-    answer: 'No. This program is designed for enterprise leaders — directors, VPs, CTOs, and CDOs — who need to deploy AI capability, not write code. The 3-Agent Model gives you an execution framework that works regardless of your technical background.',
-  },
-  {
-    question: 'What do I walk away with?',
-    answer: 'Concrete, executive-ready artifacts: a working AI Proof of Capability scoped to your organization, an executive presentation deck for internal buy-in, a 90-Day AI expansion roadmap, and reusable architecture templates.',
-  },
-  {
-    question: 'Is my company data safe?',
-    answer: 'Yes. You use your own LLM with your own credentials throughout the program. No company data is shared with Colaberry\'s systems or other participants. All work stays within your organization\'s security perimeter.',
-  },
-  {
-    question: "What's the class format?",
-    answer: 'Live virtual sessions with hands-on exercises. Each session combines instruction with guided execution — you build your actual AI initiative during the program, not hypothetical examples.',
+    accent: 'green' as const,
+    title: 'A portfolio artifact',
+    body:
+      'You leave with a deployed build, a repo, and a Demo Day presentation — proof of capability you can show a hiring manager, a board, or your own team.',
   },
 ];
 
-function FAQAccordion() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+const RHYTHM = [
+  {
+    week: 'Week 1',
+    title: 'Define & architect',
+    body:
+      'Pick your problem. Learn the build patterns with Claude. Lock a scoped, measurable target.',
+  },
+  {
+    week: 'Week 2',
+    title: 'Build & refine',
+    body:
+      'Stand up the system, harden it against real inputs, and instrument it so it works on the second run, not just the first.',
+  },
+  {
+    week: 'Week 3',
+    title: 'Present at Demo Day',
+    body:
+      'Tell the story, run the live demo, and defend your architecture decisions to the cohort and panel.',
+  },
+];
 
+const OUTCOMES = [
+  {
+    accent: 'red' as const,
+    title: 'A deployed AI build',
+    body: 'A real, running system scoped to a problem you care about.',
+  },
+  {
+    accent: 'blue' as const,
+    title: 'Anthropic Architect cert track',
+    body:
+      'Progress along the official Learn-With-Claude curriculum toward Anthropic Architect recognition.',
+  },
+  {
+    accent: 'green' as const,
+    title: 'A Demo Day presentation',
+    body: 'A recorded, panel-tested walkthrough of what you built and why.',
+  },
+  {
+    accent: 'blue' as const,
+    title: 'Reusable patterns',
+    body: 'Architecture templates and prompts you keep and reuse after the cohort ends.',
+  },
+];
+
+const FAQ_ITEMS = [
+  {
+    title: 'Do I need to be technical to enter?',
+    content:
+      'No. The program teaches you to architect and build with Claude as your execution partner — you direct the system, decompose the problem, and ship the result. People from non-engineering backgrounds finish with working builds every cohort.',
+  },
+  {
+    title: 'How much time does it take?',
+    content: `${PROGRAM_SCHEDULE.shortDescription}. Between sessions, expect a few hours of applied work on your own build. Sponsored employees learn on their own time and move at their own pace toward Demo Day.`,
+  },
+  {
+    title: 'What is the Anthropic Architect certification track?',
+    content:
+      'A structured Learn-With-Claude curriculum that runs alongside the build. You progress through the official coursework as you ship your system, working toward Anthropic Architect recognition — the same training path Colaberry uses internally.',
+  },
+  {
+    title: 'How do the leaderboard and Demo Day work?',
+    content:
+      'As you build, your progress posts to a cohort leaderboard. Sponsored teams see a company-scoped board so employers can spot their real AI builders. Every cohort ends in Demo Day: you present your working system live to peers and a panel.',
+  },
+  {
+    title: 'What is the difference between the two doors?',
+    content:
+      'There is one program. Individuals enter through a monthly membership and learn self-serve. Employers sponsor annual seats; employees redeem a code, learn on their own time, and climb a company leaderboard. Same cohort, same Demo Day — two ways in.',
+  },
+];
+
+/* ----------------------------------------------------------------------------
+ * Reusable two-door CTA block
+ * ------------------------------------------------------------------------- */
+function TwoDoorCTA() {
   return (
-    <div className="accordion accordion-flush" id="programFAQ">
-      {FAQ_ITEMS.map((item, i) => (
-        <div className="accordion-item" key={i}>
-          <h3 className="accordion-header">
-            <button
-              className={`accordion-button ${openIndex === i ? '' : 'collapsed'}`}
-              type="button"
-              onClick={() => setOpenIndex(openIndex === i ? null : i)}
-              aria-expanded={openIndex === i}
-              aria-controls={`faq-collapse-${i}`}
-            >
-              {item.question}
-            </button>
+    <div
+      style={{
+        display: 'grid',
+        gap: 'var(--space-6)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      }}
+    >
+      <Card accent="red" elevation="md">
+        <div style={cardBody}>
+          <Badge tone="red">For individuals</Badge>
+          <h3 style={{ ...cardTitle, marginTop: 'var(--space-3)' }}>
+            Learn it yourself
           </h3>
-          <div
-            id={`faq-collapse-${i}`}
-            className={`accordion-collapse collapse ${openIndex === i ? 'show' : ''}`}
-          >
-            <div className="accordion-body text-muted">
-              {item.answer}
-            </div>
-          </div>
+          <p style={{ ...muted, marginBlock: 'var(--space-3) var(--space-5)' }}>
+            Join as a member and start building with Claude this week. Self-serve,
+            month to month, full cohort access.
+          </p>
+          <Button as="a" href={DOOR_A_HREF} variant="primary" size="lg" fullWidth>
+            Join the Challenge
+          </Button>
         </div>
-      ))}
+      </Card>
+
+      <Card accent="blue" elevation="md">
+        <div style={cardBody}>
+          <Badge tone="blue">For employers</Badge>
+          <h3 style={{ ...cardTitle, marginTop: 'var(--space-3)' }}>
+            Sponsor your team
+          </h3>
+          <p style={{ ...muted, marginBlock: 'var(--space-3) var(--space-5)' }}>
+            Find out who your real AI builders are — without taking anyone off the
+            job. Reassignable annual seats, company leaderboard, Demo Day.
+          </p>
+          <Button
+            as="a"
+            href={DOOR_B_HREF}
+            variant="solid"
+            tone="blue"
+            size="lg"
+            fullWidth
+          >
+            Sponsor Your Team
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }
 
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
 function ProgramPage() {
   return (
-    <>
+    <div style={{ background: 'var(--surface-page)' }}>
       <SEOHead
-        title="Program"
-        description="The 3-Week Enterprise AI Execution Journey — from strategic alignment to executive-ready AI deployment. Architecture, governance, POC, and 90-Day roadmap for enterprise leaders."
+        title="The Program"
+        description="One class everyone enters. Build a working AI system with Claude over a 3-week cohort, progress along the Anthropic Architect certification track, climb the leaderboard, and present at Demo Day."
       />
 
-      {/* Hero */}
+      {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <section
-        className="hero-bg text-light py-5"
-        aria-label="Page Header"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1920&q=80)' }}
+        aria-label="Program overview"
+        style={{
+          background: 'var(--surface-inverse)',
+          color: 'var(--text-on-inverse)',
+          paddingBlock: 'var(--space-32)',
+        }}
       >
-        <div className="container text-center py-5">
-          <img src="/colaberry-icon.png" alt="" width="44" height="44" className="mb-3 logo-hero" />
-          <span className="badge-label bg-white text-primary mb-3">
-            EXECUTIVE AI ENABLEMENT PROGRAM
-          </span>
-          <h1 className="display-5 fw-bold text-light mt-3">
-            🧠 The 3-Week Enterprise AI Execution Journey
-          </h1>
-          <p className="lead mb-0" style={{ maxWidth: '720px', margin: '0 auto' }}>
-            From Strategic Alignment to Executive-Ready AI Deployment
-          </p>
+        <div style={{ ...container, maxWidth: 880, textAlign: 'center' }}>
+          <FadeIn>
+            <Badge solid>The Program</Badge>
+            <h1
+              className="cb-balance"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--fs-hero-fluid)',
+                fontWeight: 900,
+                lineHeight: 'var(--lh-tight)',
+                letterSpacing: 'var(--ls-tighter)',
+                color: 'var(--text-on-inverse)',
+                marginBlock: 'var(--space-5) var(--space-4)',
+              }}
+            >
+              The one class everyone enters.
+            </h1>
+            <p
+              style={{
+                fontSize: 'var(--fs-body-lg)',
+                lineHeight: 'var(--lh-relaxed)',
+                color: 'var(--text-on-inverse)',
+                opacity: 0.82,
+                maxWidth: 640,
+                marginInline: 'auto',
+              }}
+            >
+              Most people consume AI. Very few learn to build with it. This is the
+              single cohort both doors lead into — where you ship a real AI system,
+              earn it on a leaderboard, and prove it at Demo Day.
+            </p>
+            <p
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--fs-body-sm)',
+                fontWeight: 700,
+                letterSpacing: 'var(--ls-wide)',
+                color: 'var(--brand-accent)',
+                marginTop: 'var(--space-6)',
+              }}
+            >
+              Learn With Claude. Build Through Colaberry. Deploy In The Real World.
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                gap: 'var(--space-3)',
+                justifyContent: 'center',
+                flexWrap: 'wrap',
+                marginTop: 'var(--space-8)',
+              }}
+            >
+              <Button as="a" href="#enter" variant="primary" size="lg">
+                Join the Challenge
+              </Button>
+              {/* data-theme="dark" re-points --text-strong/--border-strong so the
+                  outline button reads correctly on the inverse hero surface. */}
+              <span data-theme="dark" style={{ display: 'inline-flex' }}>
+                <Button as="a" href={DOOR_B_HREF} variant="outline" size="lg">
+                  Sponsor Your Team
+                </Button>
+              </span>
+            </div>
+          </FadeIn>
         </div>
       </section>
 
-      {/* Journey Overview — Horizontal Timeline */}
-      <section className="section-spacer" aria-label="Journey Overview">
-        <div className="container">
+      {/* ── One class, many doors ─────────────────────────────────────────── */}
+      <section aria-label="One class, many doors" style={sectionPad}>
+        <div style={{ ...narrow, textAlign: 'center' }}>
           <FadeIn>
-            <h2 className="text-center mb-3">Your Transformation in {PROGRAM_SCHEDULE.totalWeeks} Weeks</h2>
-            <p className="text-center text-muted mb-4" style={{ maxWidth: '680px', margin: '0 auto' }}>
-              A structured progression where Colaberry AI Experts guide your team from
-              strategic alignment to deploying a working AI system inside your organization.
+            <span style={eyebrow}>One class, many doors</span>
+            <h2 style={{ ...h2, marginBlock: 'var(--space-4) var(--space-5)' }}>
+              One program. Two ways in.
+            </h2>
+            <p style={lead}>
+              There is exactly one class. Individuals walk through one door and
+              learn self-serve. Employers walk through the other and sponsor seats
+              for their people. Everyone lands in the same cohort, builds the same
+              way, and presents at the same Demo Day.
             </p>
-            <div className="d-flex justify-content-center gap-3 flex-wrap mb-5">
-              {PROGRAM_SCHEDULE.summaryBadges.map((badge: string, i: number) => (
-                <span key={badge} className={`badge ${i < 3 ? 'bg-primary' : 'bg-secondary'} px-3 py-2`}>{badge}</span>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ── What you build ────────────────────────────────────────────────── */}
+      <section
+        aria-label="What you build"
+        style={{ ...sectionPad, background: 'var(--surface-subtle)' }}
+      >
+        <div style={container}>
+          <FadeIn>
+            <div style={{ maxWidth: 680, marginBottom: 'var(--space-10)' }}>
+              <span style={eyebrow}>What you build</span>
+              <h2 style={{ ...h2, marginTop: 'var(--space-4)' }}>
+                You leave with something that runs.
+              </h2>
+            </div>
+          </FadeIn>
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            }}
+          >
+            {BUILD_PILLARS.map((p) => (
+              <FadeIn key={p.title}>
+                <Card accent={p.accent} elevation="sm" hoverable>
+                  <div style={cardBody}>
+                    <h3 style={cardTitle}>{p.title}</h3>
+                    <p style={{ ...muted, marginTop: 'var(--space-3)' }}>{p.body}</p>
+                  </div>
+                </Card>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── The cohort rhythm ─────────────────────────────────────────────── */}
+      <section aria-label="The cohort rhythm" style={sectionPad}>
+        <div style={container}>
+          <FadeIn>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'baseline',
+                gap: 'var(--space-3)',
+                marginBottom: 'var(--space-8)',
+              }}
+            >
+              <span style={eyebrow}>The cohort rhythm</span>
+              <h2 style={{ ...h2, flexBasis: '100%' }}>
+                Three weeks, one build, real momentum.
+              </h2>
+            </div>
+          </FadeIn>
+
+          <FadeIn>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 'var(--space-2)',
+                marginBottom: 'var(--space-10)',
+              }}
+            >
+              {PROGRAM_SCHEDULE.summaryBadges.map((b: string, i: number) => (
+                <Badge key={b} tone={i === 0 ? 'red' : 'neutral'} dot={i === 0}>
+                  {b}
+                </Badge>
               ))}
             </div>
           </FadeIn>
-          <FadeIn>
-            <div className="timeline-horizontal">
-              <div className="timeline-step">
-                <div className="timeline-marker">W1</div>
-                <h3 className="h6 mb-1">🔎 Define &amp; Architect</h3>
-                <p className="text-muted small mb-0">Strategic Alignment &amp; Architecture</p>
-              </div>
-              <div className="timeline-step">
-                <div className="timeline-marker">W2</div>
-                <h3 className="h6 mb-1">⚙ Build &amp; Position</h3>
-                <p className="text-muted small mb-0">Guided Build &amp; Executive Positioning</p>
-              </div>
-              <div className="timeline-step">
-                <div className="timeline-marker timeline-marker-active">W3</div>
-                <h3 className="h6 mb-1">🚀 Operationalize &amp; Present</h3>
-                <p className="text-muted small mb-0">Executive Readiness &amp; Expansion</p>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
 
-      <ArtifactValueBlock />
-
-      <hr className="week-divider" />
-
-      {/* ────────── WEEK 1 ────────── */}
-      <section className="section-spacer-alt" aria-label="Week 1">
-        <div className="container">
-          <FadeIn>
-            <div className="d-flex align-items-center mb-5">
-              <span className="badge bg-primary fs-6 me-3 px-3 py-2">📍 Week 1</span>
-              <h2 className="mb-0">Strategic Alignment &amp; Architecture</h2>
-            </div>
-          </FadeIn>
-
-          {/* Day 1 */}
-          <FadeIn>
-            <div className="card border-0 shadow-sm mb-4 card-lift">
-              <div className="card-body p-4 p-lg-5">
-                <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[0]}</span>
-                  <h3 className="h5 mb-0">🧭 The Enterprise AI Mandate</h3>
-                </div>
-                <div className="row g-4">
-                  <div className="col-lg-8">
-                    <ul className="text-muted mb-3">
-                      <li>Understanding where AI creates enterprise leverage</li>
-                      <li>Identifying viable use cases within your organization</li>
-                      <li>Governance, risk, and internal alignment</li>
-                      <li>Selecting your initial AI Proof of Capability (POC)</li>
-                    </ul>
-                    <p className="mb-0">
-                      <strong>✔ Deliverable:</strong>{' '}
-                      <span className="text-muted">Defined high-impact AI initiative aligned to business objectives</span>
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            }}
+          >
+            {RHYTHM.map((step, i) => (
+              <FadeIn key={step.week}>
+                <Card elevation="sm" accent={i === 2 ? 'green' : undefined}>
+                  <div style={cardBody}>
+                    <Badge tone={i === 2 ? 'green' : 'blue'}>{step.week}</Badge>
+                    <h3
+                      style={{ ...cardTitle, marginTop: 'var(--space-3)' }}
+                    >
+                      {step.title}
+                    </h3>
+                    <p style={{ ...muted, marginTop: 'var(--space-2)' }}>
+                      {step.body}
                     </p>
                   </div>
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-
-          {/* Day 2 */}
-          <FadeIn>
-            <div className="card border-0 shadow-sm mb-4 card-lift">
-              <div className="card-body p-4 p-lg-5">
-                <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[1]}</span>
-                  <h3 className="h5 mb-0">🏗 Architecture &amp; 3-Agent Environment Setup</h3>
-                </div>
-                <div className="row g-4">
-                  <div className="col-lg-12">
-                    <p className="text-muted mb-3">
-                      Introduce the <strong>3-Agent Model</strong> — the operating system for your AI execution:
-                    </p>
-                    <div className="row g-3 mb-4">
-                      <div className="col-md-4">
-                        <div className="agent-card card-lift">
-                          <span className="agent-card-icon" aria-hidden="true">👤</span>
-                          <div className="fw-bold mb-1">The Enterprise Leader</div>
-                          <small className="text-muted">You — strategy &amp; decisions</small>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <div className="agent-card card-lift">
-                          <span className="agent-card-icon" aria-hidden="true">🤖</span>
-                          <div className="fw-bold mb-1">Claude Code</div>
-                          <small className="text-muted">Execution engine</small>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <div className="agent-card card-lift">
-                          <span className="agent-card-icon" aria-hidden="true">🧠</span>
-                          <div className="fw-bold mb-1">Your Custom LLM</div>
-                          <small className="text-muted">ChatGPT, Claude, Gemini, or your company's approved LLM</small>
-                        </div>
-                      </div>
-                    </div>
-                    <ul className="text-muted mb-3">
-                      <li>Establish technical environment</li>
-                      <li>Document problem, architecture, data sources, and risks</li>
-                      <li>Define measurable success criteria</li>
-                      <li>Align POC scope for execution</li>
-                    </ul>
-                    <p className="mb-0">
-                      <strong>✔ Deliverable:</strong>{' '}
-                      <span className="text-muted">Approved architecture blueprint and execution plan</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-
-          {/* Pre-Work Callout */}
-          <FadeIn>
-            <div className="callout-box mb-0">
-              <h4 className="h6 mb-2">📘 Executive Action Required — Between Week 1 &amp; Week 2</h4>
-              <div className="row g-2">
-                <div className="col-md-6">
-                  <ul className="text-muted small mb-0">
-                    <li className="deliverable-item">Secure LLM access — use any LLM your organization approves (ChatGPT, Claude, Gemini, etc.)</li>
-                    <li className="deliverable-item">Confirm tech stack and data access</li>
-                    <li className="deliverable-item">Identify internal stakeholders</li>
-                  </ul>
-                </div>
-                <div className="col-md-6">
-                  <ul className="text-muted small mb-0">
-                    <li className="deliverable-item">Complete architecture documentation</li>
-                    <li className="deliverable-item">Complete custom LLM learning phase</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      <hr className="week-divider" />
-
-      {/* ────────── WEEK 2 ────────── */}
-      <section className="section-spacer" aria-label="Week 2">
-        <div className="container">
-          <FadeIn>
-            <div className="d-flex align-items-center mb-5">
-              <span className="badge bg-primary fs-6 me-3 px-3 py-2">⚙ Week 2</span>
-              <h2 className="mb-0">Guided Build &amp; Executive Positioning</h2>
-            </div>
-          </FadeIn>
-
-          {/* Day 3 */}
-          <FadeIn>
-            <div className="card border-0 shadow-sm mb-4 card-lift">
-              <div className="card-body p-4 p-lg-5">
-                <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[2]}</span>
-                  <h3 className="h5 mb-0">💻 Guided POC Launch</h3>
-                </div>
-                <ul className="text-muted mb-3">
-                  <li>Stand up repository and project architecture</li>
-                  <li>Implement core architecture patterns</li>
-                  <li>Deploy to GitHub with CI foundations</li>
-                  <li>Validate working system foundation</li>
-                </ul>
-                <p className="mb-0">
-                  <strong>✔ Goal:</strong>{' '}
-                  <span className="text-muted">Functional system framework operational</span>
-                </p>
-              </div>
-            </div>
-          </FadeIn>
-
-          {/* Day 4 */}
-          <FadeIn>
-            <div className="card border-0 shadow-sm mb-4 card-lift">
-              <div className="card-body p-4 p-lg-5">
-                <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[3]}</span>
-                  <h3 className="h5 mb-0">📊 Refinement &amp; Executive Positioning</h3>
-                </div>
-                <div className="row g-4">
-                  <div className="col-lg-6">
-                    <h4 className="h6 mb-2" style={{ color: 'var(--color-primary)' }}>
-                      Production-Ready Refinement
-                    </h4>
-                    <ul className="text-muted mb-0">
-                      <li>Error handling and resilience patterns</li>
-                      <li>Structured logging and observability</li>
-                      <li>Edge case handling</li>
-                      <li>Architecture cleanup and documentation</li>
-                    </ul>
-                  </div>
-                  <div className="col-lg-6">
-                    <h4 className="h6 mb-2" style={{ color: 'var(--color-primary)' }}>
-                      Internal Influence &amp; Communication
-                    </h4>
-                    <ul className="text-muted mb-0">
-                      <li>Using AI tools to create executive-ready materials</li>
-                      <li>Demo video creation and narrative framing</li>
-                      <li>Executive narrative and ROI communication strategy</li>
-                      <li>Internal buy-in positioning</li>
-                    </ul>
-                  </div>
-                </div>
-                <p className="mt-3 mb-0">
-                  <strong>✔ Deliverable:</strong>{' '}
-                  <span className="text-muted">Polished working system + executive presentation draft</span>
-                </p>
-              </div>
-            </div>
-          </FadeIn>
-
-          {/* Week 2 Pre-Work Callout */}
-          <FadeIn>
-            <div className="callout-box mb-0">
-              <h4 className="h6 mb-2">📘 Executive Action Required — Between Week 2 &amp; Week 3</h4>
-              <div className="row g-2">
-                <div className="col-md-6">
-                  <ul className="text-muted small mb-0">
-                    <li className="deliverable-item">Finalize POC to production-ready state</li>
-                    <li className="deliverable-item">Refine live demonstration</li>
-                  </ul>
-                </div>
-                <div className="col-md-6">
-                  <ul className="text-muted small mb-0">
-                    <li className="deliverable-item">Complete executive AI presentation</li>
-                    <li className="deliverable-item">Prepare 90-Day expansion roadmap outline</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      <hr className="week-divider" />
-
-      {/* ────────── WEEK 3 ────────── */}
-      <section className="section-spacer-alt" aria-label="Week 3">
-        <div className="container">
-          <FadeIn>
-            <div className="d-flex align-items-center mb-5">
-              <span className="badge bg-primary fs-6 me-3 px-3 py-2">🎯 Week 3</span>
-              <h2 className="mb-0">Executive Readiness &amp; Expansion</h2>
-            </div>
-          </FadeIn>
-
-          {/* Day 5 */}
-          <FadeIn>
-            <div className="card border-0 shadow-sm border-start border-4 border-primary mb-4 card-lift">
-              <div className="card-body p-4 p-lg-5">
-                <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-primary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[4]}</span>
-                  <h3 className="h5 mb-0">🎤 Executive Demonstrations &amp; Expansion Strategy</h3>
-                </div>
-                <p className="text-muted mb-3">
-                  Participants present to the cohort and advisory panel:
-                </p>
-                <div className="row g-3 mb-4">
-                  {[
-                    'Business problem and organizational context',
-                    'Architecture approach and technical decisions',
-                    'Live demonstration of working POC',
-                    'ROI narrative and cost-benefit analysis',
-                    '90-Day expansion roadmap',
-                  ].map((item) => (
-                    <div className="col-md-6" key={item}>
-                      <div className="d-flex align-items-start deliverable-item">
-                        <span className="text-success me-2" aria-hidden="true">✔</span>
-                        <span className="text-muted">{item}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* Expansion Bridge */}
-      <section className="section-spacer" aria-label="Expansion Bridge">
-        <div className="container">
-          <FadeIn>
-            <h2 className="text-center mb-3">🚀 From Proof of Capability to Enterprise Execution</h2>
-            <p className="text-center text-muted mb-5" style={{ maxWidth: '680px', margin: '0 auto' }}>
-              The accelerator is the beginning, not the destination. Participants
-              retain ecosystem access for continued support as they scale AI
-              across their organization.
-            </p>
-          </FadeIn>
-          <FadeIn>
-            <div className="expansion-flow mb-5">
-              <span className="expansion-flow-step">🎓 Accelerator</span>
-              <span className="expansion-flow-arrow" aria-hidden="true">→</span>
-              <span className="expansion-flow-step">🗺 Roadmap Workshop</span>
-              <span className="expansion-flow-arrow" aria-hidden="true">→</span>
-              <span className="expansion-flow-step">🏗 Architecture Design</span>
-              <span className="expansion-flow-arrow" aria-hidden="true">→</span>
-              <span className="expansion-flow-step">🤖 Implementation</span>
-              <span className="expansion-flow-arrow" aria-hidden="true">→</span>
-              <span className="expansion-flow-step">🚀 Enterprise Scale</span>
-            </div>
-          </FadeIn>
-          <FadeIn>
-            <div className="row align-items-center g-5">
-              <div className="col-lg-6">
-                <ul className="list-unstyled">
-                  {[
-                    'AI Roadmap Workshops',
-                    'Enterprise AI Architecture Engagements',
-                    'Implementation Support',
-                    'AI Talent Deployment',
-                    'Ongoing Advisory Labs',
-                  ].map((item) => (
-                    <li className="mb-2 d-flex align-items-center deliverable-item" key={item}>
-                      <span className="text-primary me-2 fw-bold" aria-hidden="true">&#8594;</span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <Link to="/advisory" className="btn btn-outline-primary mt-2">
-                  Explore Advisory Services
-                </Link>
-              </div>
-              <div className="col-lg-6">
-                <div className="img-accent-frame">
-                  <img
-                    src="https://images.unsplash.com/photo-1600880292089-90a7e086ee0c?auto=format&fit=crop&w=800&q=80"
-                    alt="Executive leaders in a strategic planning session"
-                    className="img-feature img-feature-tall"
-                  />
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* What You Will Have in 21 Days */}
-      <section className="section-spacer-alt" aria-label="Outcomes">
-        <div className="container">
-          <FadeIn>
-            <h2 className="text-center mb-5">📦 What You Will Have in {PROGRAM_SCHEDULE.totalWeeks} Weeks</h2>
-          </FadeIn>
-          <div className="row g-4">
-            {[
-              { icon: '💻', title: 'Working AI Proof of Capability', description: 'Production-architecture quality — scoped to your organization\'s highest-priority use case' },
-              { icon: '🎤', title: 'Executive AI Presentation Deck', description: 'Board and C-suite ready — structured for internal buy-in and budget approval' },
-              { icon: '📅', title: '90-Day AI Expansion Roadmap', description: 'Prioritized, resourced, and governed — ready for immediate execution' },
-              { icon: '🏗', title: 'Enterprise AI Architecture Templates', description: 'Reusable patterns, governance frameworks, and risk assessment tools' },
-              { icon: '🛡', title: 'Governance & Risk Alignment', description: 'Frameworks aligned to your regulatory environment and compliance posture' },
-              { icon: '🌐', title: 'Advisory Ecosystem Access', description: 'Ongoing access to Colaberry\'s Enterprise AI Advisory Labs and peer network' },
-            ].map((item) => (
-              <div className="col-md-4" key={item.title}>
-                <FadeIn>
-                  <div className="card h-100 border-0 shadow-sm p-4 card-lift">
-                    <div className="fs-2 mb-2" aria-hidden="true">{item.icon}</div>
-                    <h3 className="h6 mb-2">{item.title}</h3>
-                    <p className="text-muted small mb-0">{item.description}</p>
-                  </div>
-                </FadeIn>
-              </div>
+                </Card>
+              </FadeIn>
             ))}
           </div>
         </div>
       </section>
 
-      <AdvisoryCTABlock
-        headline="Before you enroll, see what AI can do for YOUR organization"
-        subtext="Design your AI-powered organization in 5 minutes - free, no commitment."
-        buttonText="Design It First"
-        trackLabel="program_design_first"
-      />
-
-      <div className="container" style={{ maxWidth: 960 }}>
-        <IndustryDemoGrid trackContext="program" />
-      </div>
-
-      <ROIHighlightSection
-        headline="Before Sponsoring a Leader, Model the ROI."
-        subtext="Run your own enterprise scenario and quantify the impact."
-        presetValues={{ employees: 50, hours: 5 }}
-      />
-
-      {/* Who Should Attend */}
-      <section className="section-spacer" aria-label="Who Should Attend">
-        <div className="container" style={{ maxWidth: '800px' }}>
-          <FadeIn>
-            <h2 className="text-center mb-4">👔 Who This Is Designed For</h2>
-          </FadeIn>
-          <div className="row g-3">
-            {[
-              'Directors and VPs of Engineering, Technology, or Data',
-              'Chief Technology Officers and Chief Data Officers',
-              'Senior Technical Architects responsible for AI adoption',
-              'Technical leaders at organizations with $50M+ in revenue',
-              'Leaders whose teams are being asked to deliver AI outcomes now',
-            ].map((item) => (
-              <div className="col-12" key={item}>
-                <FadeIn>
-                  <div className="d-flex align-items-center p-3 bg-white rounded shadow-sm card-lift">
-                    <span className="text-primary me-3 fw-bold" aria-hidden="true">&#8250;</span>
-                    <span>{item}</span>
-                  </div>
-                </FadeIn>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Security & Governance */}
-      <section className="section-spacer-alt" aria-label="Security and Governance">
-        <div className="container" style={{ maxWidth: '800px' }}>
-          <FadeIn>
-            <h2 className="text-center mb-4">🛡 Security &amp; Governance</h2>
-            <div className="card border-0 shadow-sm p-4">
-              <h3 className="h6 mb-3" style={{ color: 'var(--color-primary)' }}>Bring Your Own LLM</h3>
-              <p className="text-muted mb-3">
-                Participants use their organization's approved AI platform throughout the program. We support
-                ChatGPT, Claude, Gemini, and other enterprise LLMs — you choose the tool that meets your
-                company's security and compliance requirements.
-              </p>
-              <ul className="text-muted mb-0">
-                <li>Your data stays in your environment — no information is shared with Colaberry's systems</li>
-                <li>Use your own API keys and credentials under your organization's policies</li>
-                <li>All exercises are designed to work with any major enterprise LLM</li>
-                <li>Governance frameworks are tailored to your regulatory environment</li>
-              </ul>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="section-spacer" aria-label="Frequently Asked Questions">
-        <div className="container" style={{ maxWidth: '800px' }}>
-          <FadeIn>
-            <h2 className="text-center mb-4">Frequently Asked Questions</h2>
-          </FadeIn>
-          <FadeIn>
-            <FAQAccordion />
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* CTA */}
+      {/* ── Anthropic Architect cert track ────────────────────────────────── */}
       <section
-        className="cta-bg text-light text-center py-5"
-        aria-label="Call to Action"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1920&q=80)' }}
+        aria-label="Anthropic Architect certification track"
+        style={{ ...sectionPad, background: 'var(--surface-inverse)' }}
       >
-        <div className="container py-4">
-          <h2 className="text-light mb-3">🚀 Begin Your Enterprise AI Execution Journey</h2>
-          <p className="mb-4" style={{ maxWidth: '600px', margin: '0 auto' }}>
-            {PROGRAM_SCHEDULE.totalWeeks} weeks from strategic alignment to a working Proof of Capability,
-            executive deck, and 90-day expansion roadmap.
-          </p>
-          <div className="d-flex justify-content-center gap-3 flex-wrap">
-            <a href="/#download-overview" className="btn btn-accent btn-lg">
-              {STANDARD_CTAS.primary}
-            </a>
-            <Link to="/sponsorship" className="btn btn-outline-light btn-lg">
-              🤝 Request Corporate Sponsorship Kit
-            </Link>
+        <div style={container}>
+          <FadeIn>
+            <div
+              style={{
+                display: 'grid',
+                gap: 'var(--space-10)',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                alignItems: 'center',
+              }}
+            >
+              <div>
+                <span style={{ ...eyebrow, color: 'var(--brand-accent)' }}>
+                  Certification track
+                </span>
+                <h2
+                  style={{
+                    ...h2,
+                    color: 'var(--text-on-inverse)',
+                    marginBlock: 'var(--space-4) var(--space-5)',
+                  }}
+                >
+                  Build toward Anthropic Architect.
+                </h2>
+                <p
+                  style={{
+                    fontSize: 'var(--fs-body-lg)',
+                    lineHeight: 'var(--lh-relaxed)',
+                    color: 'var(--text-on-inverse)',
+                    opacity: 0.82,
+                  }}
+                >
+                  Alongside your build, you progress through the official
+                  Learn-With-Claude curriculum — the same training path Colaberry
+                  uses internally — working toward Anthropic Architect recognition.
+                  The coursework and the cohort reinforce each other: you learn the
+                  pattern, then you ship it.
+                </p>
+              </div>
+
+              <Card elevation="md">
+                <div style={cardBody}>
+                  <h3 style={cardTitle}>Your track progress</h3>
+                  <div style={{ marginTop: 'var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
+                    <Progress
+                      label="Learn-With-Claude coursework"
+                      value={100}
+                      tone="blue"
+                      showValue
+                    />
+                    <Progress
+                      label="Working AI build shipped"
+                      value={60}
+                      tone="red"
+                      showValue
+                    />
+                    <Progress
+                      label="Demo Day presentation"
+                      value={20}
+                      tone="green"
+                      showValue
+                    />
+                  </div>
+                  <p style={{ ...muted, marginTop: 'var(--space-5)', fontSize: 'var(--fs-caption)' }}>
+                    Illustrative track. Recognition reflects coursework completed
+                    plus a shipped build defended at Demo Day.
+                  </p>
+                </div>
+              </Card>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ── Leaderboard + Demo Day ────────────────────────────────────────── */}
+      <section aria-label="Leaderboard and Demo Day" style={sectionPad}>
+        <div style={container}>
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            }}
+          >
+            <FadeIn>
+              <Card accent="blue" elevation="sm">
+                <div style={cardBody}>
+                  <Badge tone="blue">The leaderboard</Badge>
+                  <h2
+                    style={{
+                      ...h2,
+                      fontSize: 'var(--fs-h3)',
+                      marginBlock: 'var(--space-3) var(--space-4)',
+                    }}
+                  >
+                    Progress you can see.
+                  </h2>
+                  <p style={muted}>
+                    As you build, your progress posts to a cohort leaderboard.
+                    Sponsored teams get a company-scoped board — so employers find
+                    out who their real AI builders are, without taking anyone off
+                    the job. It is talent discovery, not a training report.
+                  </p>
+                </div>
+              </Card>
+            </FadeIn>
+
+            <FadeIn>
+              <Card accent="red" elevation="sm">
+                <div style={cardBody}>
+                  <Badge tone="red">Demo Day</Badge>
+                  <h2
+                    style={{
+                      ...h2,
+                      fontSize: 'var(--fs-h3)',
+                      marginBlock: 'var(--space-3) var(--space-4)',
+                    }}
+                  >
+                    Prove it live.
+                  </h2>
+                  <p style={muted}>
+                    Every cohort ends in Demo Day. You present your working system
+                    to peers and a panel: the problem, the live demo, and the
+                    architecture decisions behind it. It is the moment the build
+                    becomes proof.
+                  </p>
+                </div>
+              </Card>
+            </FadeIn>
           </div>
         </div>
       </section>
-    </>
+
+      {/* ── Outcomes ──────────────────────────────────────────────────────── */}
+      <section
+        aria-label="What you walk away with"
+        style={{ ...sectionPad, background: 'var(--surface-subtle)' }}
+      >
+        <div style={container}>
+          <FadeIn>
+            <div style={{ maxWidth: 680, marginBottom: 'var(--space-10)' }}>
+              <span style={eyebrow}>Outcomes</span>
+              <h2 style={{ ...h2, marginTop: 'var(--space-4)' }}>
+                What you walk away with.
+              </h2>
+            </div>
+          </FadeIn>
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-5)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            }}
+          >
+            {OUTCOMES.map((o) => (
+              <FadeIn key={o.title}>
+                <Card elevation="sm" accent={o.accent} hoverable>
+                  <div style={cardBody}>
+                    <h3 style={{ ...cardTitle, fontSize: 'var(--fs-h5)' }}>
+                      {o.title}
+                    </h3>
+                    <p style={{ ...muted, marginTop: 'var(--space-2)' }}>{o.body}</p>
+                  </div>
+                </Card>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ───────────────────────────────────────────────────────────── */}
+      <section aria-label="Frequently asked questions" style={sectionPad}>
+        <div style={narrow}>
+          <FadeIn>
+            <div style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
+              <span style={eyebrow}>Questions</span>
+              <h2 style={{ ...h2, marginTop: 'var(--space-4)' }}>
+                Before you choose a door.
+              </h2>
+            </div>
+          </FadeIn>
+          <FadeIn>
+            <Accordion items={FAQ_ITEMS} />
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ── Two-door CTA ──────────────────────────────────────────────────── */}
+      <section
+        id="enter"
+        aria-label="Enter the program"
+        style={{
+          ...sectionPad,
+          background: 'var(--surface-inverse)',
+          scrollMarginTop: 'var(--space-16)',
+        }}
+      >
+        <div style={container}>
+          <FadeIn>
+            <div style={{ textAlign: 'center', marginBottom: 'var(--space-10)' }}>
+              <span style={{ ...eyebrow, color: 'var(--brand-accent)' }}>
+                Pick your door
+              </span>
+              <h2
+                className="cb-balance"
+                style={{
+                  ...h2,
+                  color: 'var(--text-on-inverse)',
+                  marginTop: 'var(--space-4)',
+                }}
+              >
+                Same cohort. Same Demo Day. Two ways in.
+              </h2>
+            </div>
+          </FadeIn>
+          <FadeIn>
+            <TwoDoorCTA />
+          </FadeIn>
+        </div>
+      </section>
+    </div>
   );
 }
 

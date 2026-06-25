@@ -1,7 +1,38 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { NAV_LINKS, NavItem } from '../../constants';
-import { getAdvisoryUrl } from '../../services/utmService';
+import { NAV_LINKS, NavItem, PRIMARY_CTA, SECONDARY_CTA } from '../../constants';
+import { Button } from '../../colaberry/components/core/Button';
+
+/**
+ * Router-aware CTA styled with the Colaberry design-system button.
+ * The DS Button renders a plain <a> for href (full-page nav) and drops the
+ * router `to` prop, so for in-app SPA navigation we render react-router's
+ * <Link> and apply the DS `.cb-btn` classes directly. Rendering a real DS
+ * <Button> elsewhere in this tree guarantees the `.cb-btn` stylesheet is
+ * injected before these links paint.
+ */
+function CtaLink({
+  to,
+  variant,
+  children,
+  onClick,
+  className = '',
+  ...rest
+}: {
+  to: string;
+  variant: 'primary' | 'outline' | 'ghost';
+  children: React.ReactNode;
+  onClick?: () => void;
+  className?: string;
+} & Record<string, unknown>) {
+  const classes = ['cb-btn', 'cb-btn--sm', `cb-btn--${variant}`];
+  if (className) classes.push(className);
+  return (
+    <Link to={to} className={classes.join(' ')} onClick={onClick} {...rest}>
+      <span>{children}</span>
+    </Link>
+  );
+}
 
 function PublicNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -98,53 +129,38 @@ function PublicNavbar() {
                 </li>
               )
             )}
-            <li className="nav-item">
-              <a
-                className="nav-link fw-semibold"
-                href={getAdvisoryUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-track="nav_ai_workforce_designer"
-                style={{ color: '#a78bfa' }}
-              >
-                AI Workforce Designer
-              </a>
-            </li>
           </ul>
-          <Link
-            className="btn btn-outline-light btn-sm ms-lg-3 mt-2 mt-lg-0"
-            to="/portal/login"
-            onClick={closeAll}
-          >
-            Participant Login
-          </Link>
-          <a
-            href={getAdvisoryUrl()}
-            className="btn btn-sm text-white fw-semibold ms-2 d-none d-lg-inline-block"
-            style={{
-              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-              border: 'none',
-              borderRadius: 20,
-              padding: '6px 16px',
-              fontSize: 13,
-              whiteSpace: 'nowrap',
-            }}
-            data-track="nav_design_ai_org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Design AI Org
-          </a>
-          <a
-            href={getAdvisoryUrl()}
-            className="btn btn-primary btn-sm w-100 mt-2 d-lg-none"
-            data-track="nav_design_ai_org_mobile"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', border: 'none', borderRadius: 8 }}
-          >
-            Design AI Org
-          </a>
+          <div className="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-2 ms-lg-3 mt-2 mt-lg-0">
+            {/* Real DS Button: guarantees the .cb-btn stylesheet injects for the
+                router-aware CtaLink siblings, and is the quiet login boundary. */}
+            <Button
+              as="a"
+              href="/portal/login"
+              variant="ghost"
+              size="sm"
+              data-track="nav_participant_login"
+            >
+              Log in
+            </Button>
+            {/* Door B — employers sponsor annual seats (talent discovery). */}
+            <CtaLink
+              to={SECONDARY_CTA.path}
+              variant="outline"
+              onClick={closeAll}
+              data-track="nav_sponsor_team"
+            >
+              {SECONDARY_CTA.label}
+            </CtaLink>
+            {/* Door A — individuals self-serve the $149/mo membership. */}
+            <CtaLink
+              to={PRIMARY_CTA.path}
+              variant="primary"
+              onClick={closeAll}
+              data-track="nav_join_challenge"
+            >
+              {PRIMARY_CTA.label}
+            </CtaLink>
+          </div>
         </div>
       </div>
     </nav>

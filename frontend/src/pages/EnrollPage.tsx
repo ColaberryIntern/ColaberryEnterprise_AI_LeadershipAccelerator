@@ -7,10 +7,45 @@ import { getUTMPayloadFields } from '../services/utmService';
 import { Cohort } from '../models/Cohort';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import StrategyCallModal from '../components/StrategyCallModal';
+import { Card } from '../colaberry/components/core/Card';
+import { Button } from '../colaberry/components/core/Button';
+import { Badge } from '../colaberry/components/core/Badge';
+import { Input } from '../colaberry/components/core/Input';
 
 interface FormErrors {
   [key: string]: string;
 }
+
+interface SponsorErrors {
+  [key: string]: string;
+}
+
+// Shared styling for native <select> controls so they visually match the DS Input.
+const selectStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-body)',
+  fontSize: 'var(--fs-body)',
+  color: 'var(--text-strong)',
+  background: 'var(--surface-card)',
+  border: 'var(--border-1) solid var(--border-default)',
+  borderRadius: 'var(--radius-md)',
+  padding: '12px 14px',
+  width: '100%',
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 'var(--fs-body-sm)',
+  fontWeight: 500,
+  color: 'var(--text-strong)',
+  display: 'block',
+  marginBottom: 'var(--space-1)',
+};
+
+const errorMsgStyle: React.CSSProperties = {
+  fontSize: 'var(--fs-caption)',
+  color: 'var(--red-600)',
+  marginTop: 'var(--space-1)',
+  display: 'block',
+};
 
 function EnrollPage() {
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
@@ -32,6 +67,17 @@ function EnrollPage() {
 
   const [cohortError, setCohortError] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
+
+  // --- Sponsor code redemption (Door B) ---
+  const [sponsorData, setSponsorData] = useState({
+    code: '',
+    full_name: '',
+    email: '',
+  });
+  const [sponsorErrors, setSponsorErrors] = useState<SponsorErrors>({});
+  const [sponsorServerError, setSponsorServerError] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemed, setRedeemed] = useState(false);
 
   useEffect(() => {
     api
@@ -84,7 +130,7 @@ function EnrollPage() {
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
@@ -139,6 +185,68 @@ function EnrollPage() {
     }
   };
 
+  // --- Sponsor code redemption handlers (Door B) ---
+  const handleSponsorChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+    const nextValue = name === 'code' ? value.toUpperCase() : value;
+    setSponsorData((prev) => ({ ...prev, [name]: nextValue }));
+    if (sponsorErrors[name]) {
+      setSponsorErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+    if (sponsorServerError) setSponsorServerError('');
+  };
+
+  const validateSponsor = (): boolean => {
+    const next: SponsorErrors = {};
+    if (!sponsorData.code.trim()) next.code = 'Enter the sponsor code from your employer';
+    if (!sponsorData.full_name.trim()) next.full_name = 'Full name is required';
+    if (!sponsorData.email.trim()) {
+      next.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sponsorData.email)) {
+      next.email = 'Please enter a valid email address';
+    }
+    setSponsorErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handleSponsorRedeem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSponsorServerError('');
+
+    if (!validateSponsor()) return;
+
+    setRedeeming(true);
+    try {
+      await api.post('/api/sponsor/redeem', {
+        code: sponsorData.code.trim(),
+        full_name: sponsorData.full_name.trim(),
+        email: sponsorData.email.trim(),
+        ...getUTMPayloadFields(),
+        form_type: 'sponsor_redemption',
+      });
+      setRedeemed(true);
+    } catch (err: any) {
+      if (err.response?.status === 400 && err.response?.data?.details) {
+        const fieldErrors: SponsorErrors = {};
+        err.response.data.details.forEach(
+          (d: { field: string; message: string }) => {
+            fieldErrors[d.field] = d.message;
+          }
+        );
+        setSponsorErrors(fieldErrors);
+      } else {
+        setSponsorServerError(
+          err.response?.data?.error ||
+            'We could not redeem that code. Check it with your employer and try again.'
+        );
+      }
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
     return d.toLocaleDateString('en-US', {
@@ -152,88 +260,134 @@ function EnrollPage() {
     <>
       <SEOHead
         title="Enroll"
-        description="Enroll in the Enterprise AI Leadership Accelerator. Pay by credit card, ACH, or request a corporate invoice."
+        description="Enroll in the Colaberry AI Challenge. Join as an individual, or redeem a sponsor code from your employer."
       />
 
       {/* Hero */}
       <section
-        className="hero-bg text-light py-5"
         aria-label="Page Header"
         style={{
-          backgroundImage:
-            'url(https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=1920&q=80)',
+          background: 'var(--surface-inverse)',
+          color: 'var(--text-on-accent)',
+          padding: 'var(--space-16) var(--space-4)',
         }}
       >
-        <div className="container text-center py-4">
+        <div
+          className="container text-center"
+          style={{ maxWidth: 820, margin: '0 auto' }}
+        >
           <img
             src="/colaberry-icon.png"
             alt=""
             width="44"
             height="44"
-            className="mb-3 logo-hero"
+            style={{ marginBottom: 'var(--space-4)' }}
           />
-          <h1 className="display-5 fw-bold text-light">
-            Enroll in the Enterprise AI Leadership Accelerator
+          <h1
+            className="cb-balance"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'var(--fs-display)',
+              fontWeight: 900,
+              color: 'var(--text-on-accent)',
+              marginBottom: 'var(--space-3)',
+            }}
+          >
+            Join the Challenge
           </h1>
-          <p className="lead">
-            {PROGRAM_SCHEDULE.price} per participant — pay by credit card or request a corporate invoice
+          <p
+            style={{
+              fontSize: 'var(--fs-body-lg)',
+              color: 'var(--text-on-accent)',
+              opacity: 0.9,
+              marginBottom: 'var(--space-2)',
+            }}
+          >
+            Most people consume AI. Very few learn to build with it. Claim your seat
+            below — {PROGRAM_SCHEDULE.price} per participant, or redeem a code from
+            your employer.
           </p>
           {cohorts.length > 0 && (
-            <CohortUrgencyBadge
-              startDate={cohorts[0].start_date}
-              seatsRemaining={cohorts[0].max_seats - cohorts[0].seats_taken}
-              className="mt-3"
-            />
+            <div style={{ marginTop: 'var(--space-4)' }}>
+              <CohortUrgencyBadge
+                startDate={cohorts[0].start_date}
+                seatsRemaining={cohorts[0].max_seats - cohorts[0].seats_taken}
+              />
+            </div>
           )}
         </div>
       </section>
 
       {/* Enrollment Form */}
-      <section className="section" aria-label="Enrollment Form">
-        <div className="container content-narrow">
+      <section
+        aria-label="Enrollment Form"
+        style={{
+          background: 'var(--surface-page)',
+          padding: 'var(--space-16) var(--space-4)',
+        }}
+      >
+        <div className="container" style={{ maxWidth: 760, margin: '0 auto' }}>
           {invoiceSubmitted ? (
-            <div className="py-4">
-              <div className="text-center mb-4">
-                <h2 className="mb-2" style={{ color: 'var(--color-primary)' }}>
+            <div>
+              <div className="text-center" style={{ marginBottom: 'var(--space-6)' }}>
+                <h2
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--fs-h2)',
+                    fontWeight: 900,
+                    color: 'var(--text-strong)',
+                    marginBottom: 'var(--space-2)',
+                  }}
+                >
                   Your Seat is Reserved
                 </h2>
-                <span className="badge bg-warning text-dark fs-6 px-3 py-2">
+                <Badge tone="warning" dot>
                   Pending Payment
-                </span>
+                </Badge>
               </div>
 
-              <div className="card border-warning mb-4">
-                <div className="card-body">
-                  <p className="mb-3">
-                    A confirmation email with payment instructions has been sent to{' '}
-                    <strong>{formData.email}</strong>.
-                  </p>
-                  <p className="mb-3">
-                    Your seat is temporarily reserved. To fully confirm your spot,
-                    payment must be completed.
-                  </p>
-                  <p className="text-muted small mb-0">
-                    Seats are only guaranteed once payment is received. Due to limited
-                    capacity, we recommend completing payment as soon as possible.
-                    If you don't see the email, check your spam or promotions folder.
-                  </p>
-                </div>
-              </div>
+              <Card accent="red" padded style={{ marginBottom: 'var(--space-5)' }}>
+                <p style={{ marginBottom: 'var(--space-3)', color: 'var(--text-body)' }}>
+                  A confirmation email with payment instructions has been sent to{' '}
+                  <strong style={{ color: 'var(--text-strong)' }}>{formData.email}</strong>.
+                </p>
+                <p style={{ marginBottom: 'var(--space-3)', color: 'var(--text-body)' }}>
+                  Your seat is temporarily reserved. To fully confirm your spot, payment
+                  must be completed.
+                </p>
+                <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
+                  Seats are only guaranteed once payment is received. Due to limited
+                  capacity, we recommend completing payment as soon as possible. If you
+                  don't see the email, check your spam or promotions folder.
+                </p>
+              </Card>
 
-              <div className="card border-0 shadow-sm p-4 mb-4">
-                <h3 className="h5 mb-3" style={{ color: 'var(--color-primary)' }}>
+              <Card padded style={{ marginBottom: 'var(--space-5)' }}>
+                <h3
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--fs-h3)',
+                    fontWeight: 700,
+                    color: 'var(--text-strong)',
+                    marginBottom: 'var(--space-3)',
+                  }}
+                >
                   Next Steps
                 </h3>
-                <ol className="fs-5 mb-0" style={{ lineHeight: 2 }}>
+                <ol style={{ lineHeight: 2, marginBottom: 0, color: 'var(--text-body)' }}>
                   <li>Check your email for the confirmation and payment instructions</li>
                   <li>Complete payment (credit card or ACH)</li>
                   <li>Receive your enrollment confirmation and onboarding access</li>
                 </ol>
-              </div>
+              </Card>
 
-              <div className="d-flex justify-content-center gap-3 flex-wrap mb-4">
-                <button
-                  className="btn btn-primary btn-lg"
+              <div
+                className="d-flex justify-content-center flex-wrap"
+                style={{ gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}
+              >
+                <Button
+                  size="lg"
+                  disabled={submitting}
                   onClick={async () => {
                     setSubmitting(true);
                     try {
@@ -246,53 +400,67 @@ function EnrollPage() {
                       setSubmitting(false);
                     }
                   }}
-                  disabled={submitting}
                 >
                   {submitting ? 'Setting up payment...' : 'Complete Payment Now'}
-                </button>
-                <button className="btn btn-outline-primary btn-lg" onClick={() => setShowBooking(true)}>
+                </Button>
+                <Button variant="outline" size="lg" onClick={() => setShowBooking(true)}>
                   Schedule an AI Strategy Call
-                </button>
+                </Button>
               </div>
 
-              <p className="text-center text-muted small">
+              <p
+                className="text-center"
+                style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}
+              >
                 Secure payment via PaySimple (credit card or ACH)
               </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} noValidate>
               {serverError && (
-                <div className="alert alert-danger" role="alert">
+                <Card
+                  accent="red"
+                  padded
+                  role="alert"
+                  style={{ marginBottom: 'var(--space-5)', color: 'var(--status-danger)' }}
+                >
                   {serverError}
-                </div>
+                </Card>
               )}
 
               <div className="row g-3">
                 {/* Cohort Selector */}
                 <div className="col-12">
-                  <label htmlFor="cohort_id" className="form-label">
-                    Select Cohort <span className="text-danger">*</span>
+                  <label htmlFor="cohort_id" style={fieldLabelStyle}>
+                    Select Cohort <span style={{ color: 'var(--red-500)' }}>*</span>
                   </label>
                   {loadingCohorts ? (
-                    <div className="text-muted">Loading available cohorts...</div>
+                    <div style={{ color: 'var(--text-muted)' }}>
+                      Loading available cohorts...
+                    </div>
                   ) : cohortError ? (
-                    <div className="alert alert-warning">
+                    <Card accent="blue" padded>
                       Unable to load cohort information. Please try again later or{' '}
                       <Link to="/contact">contact us</Link> directly.
-                    </div>
+                    </Card>
                   ) : cohorts.length === 0 ? (
-                    <div className="alert alert-info">
-                      No upcoming cohorts are currently available. Please check back
-                      soon or{' '}
-                      <Link to="/contact">contact us</Link> for private cohort options.
-                    </div>
+                    <Card accent="blue" padded>
+                      No upcoming cohorts are currently available. Please check back soon
+                      or <Link to="/contact">contact us</Link> for private cohort options.
+                    </Card>
                   ) : (
                     <select
-                      className={`form-select ${errors.cohort_id ? 'is-invalid' : ''}`}
+                      style={{
+                        ...selectStyle,
+                        borderColor: errors.cohort_id
+                          ? 'var(--red-500)'
+                          : 'var(--border-default)',
+                      }}
                       id="cohort_id"
                       name="cohort_id"
                       value={formData.cohort_id}
                       onChange={handleChange}
+                      aria-invalid={!!errors.cohort_id}
                       required
                     >
                       <option value="">Choose a cohort...</option>
@@ -304,76 +472,54 @@ function EnrollPage() {
                       ))}
                     </select>
                   )}
-                  {errors.cohort_id && (
-                    <div className="invalid-feedback">{errors.cohort_id}</div>
-                  )}
+                  {errors.cohort_id && <span style={errorMsgStyle}>{errors.cohort_id}</span>}
                 </div>
 
                 {/* Full Name */}
                 <div className="col-md-6">
-                  <label htmlFor="full_name" className="form-label">
-                    Full Name <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className={`form-control ${errors.full_name ? 'is-invalid' : ''}`}
+                  <Input
+                    label="Full Name"
+                    required
                     id="full_name"
                     name="full_name"
                     value={formData.full_name}
                     onChange={handleChange}
-                    required
+                    error={errors.full_name}
                   />
-                  {errors.full_name && (
-                    <div className="invalid-feedback">{errors.full_name}</div>
-                  )}
                 </div>
 
                 {/* Email */}
                 <div className="col-md-6">
-                  <label htmlFor="email" className="form-label">
-                    Email <span className="text-danger">*</span>
-                  </label>
-                  <input
+                  <Input
+                    label="Email"
+                    required
                     type="email"
-                    className={`form-control ${errors.email ? 'is-invalid' : ''}`}
                     id="email"
                     name="email"
+                    autoComplete="email"
                     value={formData.email}
                     onChange={handleChange}
-                    required
+                    error={errors.email}
                   />
-                  {errors.email && (
-                    <div className="invalid-feedback">{errors.email}</div>
-                  )}
                 </div>
 
                 {/* Company */}
                 <div className="col-md-6">
-                  <label htmlFor="company" className="form-label">
-                    Company <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className={`form-control ${errors.company ? 'is-invalid' : ''}`}
+                  <Input
+                    label="Company"
+                    required
                     id="company"
                     name="company"
                     value={formData.company}
                     onChange={handleChange}
-                    required
+                    error={errors.company}
                   />
-                  {errors.company && (
-                    <div className="invalid-feedback">{errors.company}</div>
-                  )}
                 </div>
 
                 {/* Title */}
                 <div className="col-md-6">
-                  <label htmlFor="title" className="form-label">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
+                  <Input
+                    label="Title"
                     id="title"
                     name="title"
                     value={formData.title}
@@ -383,14 +529,12 @@ function EnrollPage() {
 
                 {/* Phone */}
                 <div className="col-md-6">
-                  <label htmlFor="phone" className="form-label">
-                    Phone
-                  </label>
-                  <input
+                  <Input
+                    label="Phone"
                     type="tel"
-                    className="form-control"
                     id="phone"
                     name="phone"
+                    autoComplete="tel"
                     value={formData.phone}
                     onChange={handleChange}
                   />
@@ -398,11 +542,11 @@ function EnrollPage() {
 
                 {/* Company Size */}
                 <div className="col-md-6">
-                  <label htmlFor="company_size" className="form-label">
+                  <label htmlFor="company_size" style={fieldLabelStyle}>
                     Company Size
                   </label>
                   <select
-                    className="form-select"
+                    style={selectStyle}
                     id="company_size"
                     name="company_size"
                     value={formData.company_size}
@@ -419,17 +563,17 @@ function EnrollPage() {
 
                 {/* Payment Option */}
                 <div className="col-12">
-                  <label className="form-label fw-bold">Payment Option</label>
+                  <label style={{ ...fieldLabelStyle, fontWeight: 700 }}>
+                    Payment Option
+                  </label>
                   <div className="row g-3">
                     <div className="col-md-6">
-                      <div
-                        className={`card h-100 p-3 ${
-                          paymentOption === 'credit_card'
-                            ? 'border-primary border-2'
-                            : 'border'
-                        }`}
+                      <Card
+                        padded
+                        hoverable
+                        accent={paymentOption === 'credit_card' ? 'red' : undefined}
                         onClick={() => setPaymentOption('credit_card')}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', height: '100%' }}
                       >
                         <div className="form-check">
                           <input
@@ -441,26 +585,32 @@ function EnrollPage() {
                             onChange={() => setPaymentOption('credit_card')}
                           />
                           <label
-                            className="form-check-label fw-bold"
+                            className="form-check-label"
                             htmlFor="payment_cc"
+                            style={{ fontWeight: 700, color: 'var(--text-strong)' }}
                           >
                             Pay Now (Credit Card / ACH)
                           </label>
-                          <p className="text-muted small mb-0 mt-1">
+                          <p
+                            style={{
+                              fontSize: 'var(--fs-body-sm)',
+                              color: 'var(--text-muted)',
+                              marginBottom: 0,
+                              marginTop: 'var(--space-1)',
+                            }}
+                          >
                             Secure payment via PaySimple — {PROGRAM_SCHEDULE.price}
                           </p>
                         </div>
-                      </div>
+                      </Card>
                     </div>
                     <div className="col-md-6">
-                      <div
-                        className={`card h-100 p-3 ${
-                          paymentOption === 'invoice'
-                            ? 'border-primary border-2'
-                            : 'border'
-                        }`}
+                      <Card
+                        padded
+                        hoverable
+                        accent={paymentOption === 'invoice' ? 'red' : undefined}
                         onClick={() => setPaymentOption('invoice')}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', height: '100%' }}
                       >
                         <div className="form-check">
                           <input
@@ -472,44 +622,44 @@ function EnrollPage() {
                             onChange={() => setPaymentOption('invoice')}
                           />
                           <label
-                            className="form-check-label fw-bold"
+                            className="form-check-label"
                             htmlFor="payment_invoice"
+                            style={{ fontWeight: 700, color: 'var(--text-strong)' }}
                           >
                             Request Corporate Invoice
                           </label>
-                          <p className="text-muted small mb-0 mt-1">
+                          <p
+                            style={{
+                              fontSize: 'var(--fs-body-sm)',
+                              color: 'var(--text-muted)',
+                              marginBottom: 0,
+                              marginTop: 'var(--space-1)',
+                            }}
+                          >
                             For procurement teams — invoice sent within 1 business day
                           </p>
                         </div>
-                      </div>
+                      </Card>
                     </div>
                   </div>
                 </div>
 
                 {/* Submit */}
-                <div className="col-12 mt-4">
-                  <button
+                <div className="col-12" style={{ marginTop: 'var(--space-5)' }}>
+                  <Button
                     type="submit"
-                    className="btn btn-primary btn-lg w-100"
+                    size="lg"
+                    fullWidth
                     disabled={submitting || cohorts.length === 0}
                   >
-                    {submitting ? (
-                      <>
-                        <span
-                          className="spinner-border spinner-border-sm me-2"
-                          role="status"
-                          aria-hidden="true"
-                        />
-                        {paymentOption === 'credit_card'
-                          ? 'Setting up payment...'
-                          : 'Reserving your seat...'}
-                      </>
-                    ) : paymentOption === 'credit_card' ? (
-                      'Proceed to Payment'
-                    ) : (
-                      'Request Invoice'
-                    )}
-                  </button>
+                    {submitting
+                      ? paymentOption === 'credit_card'
+                        ? 'Setting up payment...'
+                        : 'Reserving your seat...'
+                      : paymentOption === 'credit_card'
+                      ? 'Proceed to Payment'
+                      : 'Request Invoice'}
+                  </Button>
                 </div>
               </div>
             </form>
@@ -517,28 +667,216 @@ function EnrollPage() {
         </div>
       </section>
 
+      {/* Sponsor Code Redemption (Door B) */}
+      <section
+        aria-label="Redeem a Sponsor Code"
+        style={{
+          background: 'var(--surface-sunken)',
+          padding: 'var(--space-16) var(--space-4)',
+          borderTop: 'var(--border-1) solid var(--border-subtle)',
+        }}
+      >
+        <div className="container" style={{ maxWidth: 640, margin: '0 auto' }}>
+          <div className="text-center" style={{ marginBottom: 'var(--space-6)' }}>
+            <Badge tone="blue" style={{ marginBottom: 'var(--space-3)' }}>
+              Employer-sponsored
+            </Badge>
+            <h2
+              className="cb-balance"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--fs-h2)',
+                fontWeight: 900,
+                color: 'var(--text-strong)',
+                marginBottom: 'var(--space-2)',
+              }}
+            >
+              Have a sponsor code?
+            </h2>
+            <p
+              style={{
+                fontSize: 'var(--fs-body-lg)',
+                color: 'var(--text-muted)',
+                marginBottom: 0,
+              }}
+            >
+              Your employer reserved a seat for you. Redeem your code to claim it — no
+              payment required. Learn on your own time and climb your company leaderboard.
+            </p>
+          </div>
+
+          <Card padded elevation="md">
+            {redeemed ? (
+              <div className="text-center">
+                <Badge tone="green" dot style={{ marginBottom: 'var(--space-3)' }}>
+                  Seat Claimed
+                </Badge>
+                <h3
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--fs-h3)',
+                    fontWeight: 700,
+                    color: 'var(--text-strong)',
+                    marginBottom: 'var(--space-2)',
+                  }}
+                >
+                  You're in.
+                </h3>
+                <p style={{ color: 'var(--text-body)', marginBottom: 'var(--space-1)' }}>
+                  We've redeemed code{' '}
+                  <strong style={{ color: 'var(--text-strong)' }}>{sponsorData.code}</strong>{' '}
+                  and sent onboarding details to{' '}
+                  <strong style={{ color: 'var(--text-strong)' }}>{sponsorData.email}</strong>.
+                </p>
+                <p
+                  style={{
+                    fontSize: 'var(--fs-body-sm)',
+                    color: 'var(--text-muted)',
+                    marginBottom: 0,
+                  }}
+                >
+                  Check your inbox to set up your account and start building. If you don't
+                  see it, check your spam or promotions folder.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSponsorRedeem} noValidate>
+                {sponsorServerError && (
+                  <div
+                    role="alert"
+                    style={{
+                      color: 'var(--status-danger)',
+                      fontSize: 'var(--fs-body-sm)',
+                      marginBottom: 'var(--space-4)',
+                    }}
+                  >
+                    {sponsorServerError}
+                  </div>
+                )}
+
+                <div className="d-flex flex-column" style={{ gap: 'var(--space-4)' }}>
+                  <Input
+                    label="Sponsor Code"
+                    required
+                    id="sponsor_code"
+                    name="code"
+                    placeholder="e.g. ACME-2026-7QX4"
+                    autoComplete="off"
+                    value={sponsorData.code}
+                    onChange={handleSponsorChange}
+                    error={sponsorErrors.code}
+                    helperText={
+                      sponsorErrors.code
+                        ? undefined
+                        : 'Provided by your employer when they sponsored your seat.'
+                    }
+                  />
+                  <Input
+                    label="Full Name"
+                    required
+                    id="sponsor_full_name"
+                    name="full_name"
+                    autoComplete="name"
+                    value={sponsorData.full_name}
+                    onChange={handleSponsorChange}
+                    error={sponsorErrors.full_name}
+                  />
+                  <Input
+                    label="Work Email"
+                    required
+                    type="email"
+                    id="sponsor_email"
+                    name="email"
+                    autoComplete="email"
+                    value={sponsorData.email}
+                    onChange={handleSponsorChange}
+                    error={sponsorErrors.email}
+                  />
+
+                  <Button type="submit" size="lg" fullWidth disabled={redeeming}>
+                    {redeeming ? 'Redeeming code...' : 'Redeem & Claim My Seat'}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Card>
+
+          <p
+            className="text-center"
+            style={{
+              fontSize: 'var(--fs-body-sm)',
+              color: 'var(--text-muted)',
+              marginTop: 'var(--space-4)',
+              marginBottom: 0,
+            }}
+          >
+            Are you an employer who wants to sponsor your team?{' '}
+            <Link to="/contact">Talk to us about team seats.</Link>
+          </p>
+        </div>
+      </section>
+
       {/* Trust Signals */}
-      <section className="section-alt" aria-label="Trust Signals">
+      <section
+        aria-label="Trust Signals"
+        style={{
+          background: 'var(--surface-page)',
+          padding: 'var(--space-16) var(--space-4)',
+        }}
+      >
         <div className="container">
           <div className="row g-4 text-center">
             <div className="col-md-4">
-              <div className="fs-2 mb-2" aria-hidden="true">🔒</div>
-              <h3 className="h6">Secure Payment</h3>
-              <p className="text-muted small mb-0">
+              <div style={{ fontSize: 'var(--fs-h1)', marginBottom: 'var(--space-2)' }} aria-hidden="true">
+                🔒
+              </div>
+              <h3
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-h4)',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                Secure Payment
+              </h3>
+              <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
                 Payments processed securely via PaySimple
               </p>
             </div>
             <div className="col-md-4">
-              <div className="fs-2 mb-2" aria-hidden="true">🏢</div>
-              <h3 className="h6">Invoice Available</h3>
-              <p className="text-muted small mb-0">
-                Corporate invoice option for procurement teams
+              <div style={{ fontSize: 'var(--fs-h1)', marginBottom: 'var(--space-2)' }} aria-hidden="true">
+                🏢
+              </div>
+              <h3
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-h4)',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                Invoice & Sponsor Codes
+              </h3>
+              <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
+                Corporate invoices and employer-sponsored seats supported
               </p>
             </div>
             <div className="col-md-4">
-              <div className="fs-2 mb-2" aria-hidden="true">✔</div>
-              <h3 className="h6">Instant Confirmation</h3>
-              <p className="text-muted small mb-0">
+              <div style={{ fontSize: 'var(--fs-h1)', marginBottom: 'var(--space-2)' }} aria-hidden="true">
+                ✔
+              </div>
+              <h3
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-h4)',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                Instant Confirmation
+              </h3>
+              <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
                 Enrollment confirmation sent immediately
               </p>
             </div>

@@ -1,6 +1,11 @@
 // Content contract + data for the AI Membership persona landing pages.
-// Copy authored by Sohail Syed on BC todo 9946499609 (2026-06-17). Treated as
-// his source draft pending his sign-off; edit here, not in the template.
+// Copy authored by Sohail Syed on BC todo 9946499609 (2026-06-17), upgraded to the
+// "One Class, Many Doors" strategy (one cohort/class entered via two doors:
+// Door A self-serve $149/mo membership, Door B employer-sponsored seats redeemed by
+// code). Treated as the working source draft pending Sohail's sign-off; edit here,
+// not in the template. The PersonaContent interface/shape is frozen — only content
+// values change. Door-B sponsorship + seat-code redemption is woven into existing
+// fields (gap/builtFor/openHouse/finalCta), never new interface keys.
 
 export interface BuildPhase {
   weeks: string;
@@ -23,40 +28,47 @@ export interface PersonaContent {
   finalCta: { title: string; body: string[]; price: string; tagline: string };
 }
 
-const PRICE = 'Membership starts at $149/month.';
+const PRICE = 'Membership starts at $149/month. Sponsored by your employer? Redeem your seat code — no card needed.';
 const TAGLINE = 'Learn With Claude. Build Through Colaberry. Deploy In The Real World.';
-const PRIMARY_CTA = 'Join The Free Open House';
+const PRIMARY_CTA = 'Join The Challenge';
 const SEAT_CTA = 'Reserve My Free Seat';
+
+// The one line that appears at the close of every persona: the Door-B invitation.
+// Routes (conceptually) to seat-code redemption — employer sponsors annual seats,
+// you redeem the code, learn on your own time, climb the company leaderboard.
+const SPONSOR_LINE =
+  'Is your employer sponsoring you? Enter your seat code to unlock the same class — no membership charge, just your code.';
 
 export const workingProfessionals: PersonaContent = {
   slug: 'working-professionals',
   seo: {
-    title: 'Learn AI Skills You Can Actually Use At Work',
+    title: 'Learn To Build With AI — Skills You Can Use At Work',
     description:
-      'Colaberry’s AI Membership helps working professionals learn with Claude, build through real projects, and stay ahead in the AI economy. Join the free Open House. Membership starts at $149/month.',
+      'One class, two doors. Working professionals join Colaberry’s AI cohort to learn with Claude and build real projects — self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
   },
   hero: {
-    headline: 'Learn AI Skills You Can Actually Use At Work',
+    headline: 'Most People Consume AI. You’ll Learn To Build With It.',
     body: [
-      'AI is changing every role.',
-      'The professionals who learn how to use AI, build with AI, and apply AI to real business problems will have a major advantage.',
-      'Join our free Open House and see how Colaberry’s AI Membership helps working professionals learn with Claude, build through real projects, and stay ahead in the AI economy.',
+      'AI is changing every role — but consuming AI and building with it are not the same skill.',
+      'This is one class, entered through two doors. Join as an individual for $149/month, or redeem a seat code your employer sponsored. Either door, same cohort: you learn with Claude, build real projects on your own time, and prove what you can actually ship.',
+      'Start at our free Open House and see how working professionals turn AI from a buzzword into a workflow.',
     ],
     price: PRICE,
     cta: PRIMARY_CTA,
   },
   gap: {
-    title: 'AI Is No Longer Optional',
+    title: 'Consuming AI Is Easy. Building With It Is Rare.',
     body: [
-      'AI is already changing how teams research, write, analyze, plan, automate, and make decisions.',
-      'Most professionals are experimenting with AI tools.',
-      'Very few are learning how to apply AI to real business workflows.',
-      'That is the gap this membership is designed to close.',
+      'Almost everyone on your team is experimenting with AI tools. Very few are learning to build with AI — to wire it into real research, analysis, and decision-making.',
+      'Most professionals stall at clever prompts. The advantage goes to the people who can design a workflow, connect AI to real data, and ship something that holds up at work.',
+      'That building skill is exactly what this cohort develops — through one class you can enter on your own, or through a seat your employer sponsors.',
+      'Whichever door you walk through, you end up in the same room: learning by building, not just watching.',
     ],
   },
   builtFor: {
     title: 'Built For Working Professionals',
-    intro: 'This membership is designed for professionals who want to stay relevant as AI changes their industry.',
+    intro:
+      'Designed for professionals who want to stay relevant — and for employers who want to discover who their real AI builders are, without pulling anyone off the job.',
     idealFor: [
       'Business Analysts',
       'Project Managers',
@@ -68,71 +80,72 @@ export const workingProfessionals: PersonaContent = {
       'Managers and Team Leads',
     ],
     closing: [
-      'You do not need to become a machine learning engineer.',
-      'You need practical AI skills you can apply at work.',
+      'You do not need to become a machine learning engineer — you need practical AI skills you can apply at work.',
+      'Two doors, one class: join yourself for $149/month, or redeem an employer-sponsored seat code and learn on your own time.',
     ],
   },
   learn: {
-    title: 'Learn With Claude',
-    intro: 'Inside the membership, you will learn how to use Claude for:',
+    title: 'Learn With Claude, Build For Real',
+    intro: 'Inside the cohort, you will learn to use Claude to actually build — not just chat:',
     items: [
-      'Research and analysis',
-      'Planning and documentation',
-      'Workflow improvement',
-      'Business problem solving',
+      'Research and analysis you can defend',
+      'Planning and documentation that ships',
+      'Reusable AI workflows, not one-off prompts',
+      'Solving real business problems end to end',
       'AI-assisted project development',
-      'Real-world use cases',
+      'Use cases drawn from your own role',
     ],
-    goal: 'The goal is simple: learn how to use AI as a practical work partner.',
+    goal: 'The goal is simple: stop consuming AI and start building with it as a practical work partner.',
   },
   practice: {
     title: 'Build Through Real Projects',
     body: [
-      'Learning AI is not enough.',
-      'You need practice.',
-      'Inside the membership, you will work on real projects that show how AI can be used in business, operations, workflows, and problem solving.',
-      'You will learn by building. You will learn by applying. You will learn by doing.',
+      'Learning about AI is not the same as building with it. You need reps.',
+      'Inside the cohort you work real projects that show AI doing real work — in operations, analysis, workflows, and problem solving — on your own time, at your own pace.',
+      'You learn by building. You learn by applying. You learn by shipping something you can demo.',
+      'And at Demo Day, you present what you built — the clearest proof of who can really build with AI.',
     ],
   },
   openHouse: {
     title: 'What You Will Explore In The Free Open House',
     intro: 'During the Open House, you will see:',
     items: [
-      'What is included inside the AI Membership',
-      'How working professionals can learn AI with Claude',
-      'How real projects help you build practical skills',
-      'How the membership helps you stay updated as AI evolves',
-      'How Colaberry guides you from learning to implementation',
-      'How to get started for $149/month',
+      'How one class works through two doors — individual or employer-sponsored',
+      'How working professionals learn to build with Claude, not just use it',
+      'How real projects turn AI skills into work you can demo',
+      'How employers sponsor seats to discover their real AI builders',
+      'How to join yourself for $149/month',
+      'How to redeem an employer seat code if your company is sponsoring you',
     ],
     cta: SEAT_CTA,
   },
   transformation: {
     before: [
-      'You know AI is important.',
-      'You may have tried a few tools.',
-      'But you are not sure how to use AI in a structured, valuable, and professional way.',
+      'You know AI is important and you’ve tried a few tools.',
+      'But you’re still consuming AI, not building with it.',
+      'You can’t yet point to something you shipped with AI at work.',
     ],
     after: [
-      'You understand how to use Claude and AI workflows to solve real problems.',
-      'You can apply AI to your work.',
-      'You can speak confidently about AI use cases.',
-      'You become more valuable in your role and more prepared for the future of work.',
+      'You use Claude and real AI workflows to solve real problems.',
+      'You’ve built and demoed work that applies AI to your actual role.',
+      'You can speak — and build — confidently across AI use cases.',
+      'You’re visibly one of the people who builds with AI, not just talks about it.',
     ],
   },
   different: {
     title: 'Why This Is Different',
     body: [
-      'Most AI courses teach tools. Most AI courses teach prompts. Most AI courses leave you with information, but not enough practice.',
-      'Colaberry’s AI Membership is different.',
-      'You learn with Claude. You build through real projects. You apply AI to practical problems. You keep improving every month.',
+      'Most AI courses teach tools and prompts, then leave you with information and no reps. You finish knowing about AI without having built anything.',
+      'Colaberry runs one class, entered through two doors — you self-serve, or your employer sponsors your seat — and both lead to the same outcome: you build.',
+      'You learn with Claude, build through real projects, present at Demo Day, and keep improving every month. The deliverable isn’t a certificate — it’s proof you can build.',
     ],
   },
   finalCta: {
     title: 'Join The Free Open House',
     body: [
-      'See what is included inside Colaberry’s AI Membership.',
-      'Learn how working professionals are using Claude, real projects, and guided learning to build practical AI skills.',
+      'See the class behind both doors, and choose yours.',
+      'Join the challenge yourself for $149/month, or sponsor your team and discover who your real AI builders are — without taking anyone off the job.',
+      SPONSOR_LINE,
     ],
     price: PRICE,
     tagline: TAGLINE,
@@ -142,29 +155,28 @@ export const workingProfessionals: PersonaContent = {
 export const beginners: PersonaContent = {
   slug: 'beginners',
   seo: {
-    title: 'Start Learning AI, Even If You Are A Beginner',
+    title: 'Start Building With AI — Even If You’re A Beginner',
     description:
-      'Colaberry’s AI Membership helps beginners, students, and career switchers learn AI step by step with Claude, guided projects, and practical support. Join the free Open House. Membership starts at $149/month.',
+      'One class, two doors. Beginners, students, and career switchers learn to build with Claude through guided projects — self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
   },
   hero: {
-    headline: 'Start Learning AI, Even If You Are A Beginner',
+    headline: 'Most People Consume AI. You Can Learn To Build With It.',
     body: [
-      'AI is creating new opportunities across every industry.',
-      'But many people do not know where to begin.',
-      'Join our free Open House and see how Colaberry’s AI Membership helps beginners, students, and career switchers learn AI step by step with Claude, guided projects, and practical support.',
+      'AI is creating new opportunities everywhere — but most people only ever learn to consume it. Very few learn to build.',
+      'This is one class, entered through two doors. Start as an individual for $149/month, or redeem a seat code your employer sponsored. Either way, same cohort: a clear, step-by-step path to building real things with Claude, even from zero.',
+      'Start at our free Open House and see exactly where to begin.',
     ],
     price: PRICE,
     cta: PRIMARY_CTA,
   },
   gap: {
-    title: 'You Do Not Need To Be An AI Expert',
+    title: 'You Don’t Need To Be An Expert. You Need To Start Building.',
     body: [
-      'Many people want to learn AI, but feel stuck.',
-      'They do not know which tools to use.',
-      'They do not know what to learn first.',
-      'They do not know how Claude works.',
-      'They do not know how to turn learning into real skills.',
-      'This membership gives you a clear starting point, guided learning, and real practice.',
+      'Lots of people want to learn AI but feel stuck — too many tools, too many tutorials, no clear first step.',
+      'They consume videos and tips, but never build anything they can point to.',
+      'They don’t know how Claude works, what to learn first, or how to turn watching into a real, demoable skill.',
+      'This cohort gives you one clear starting point, guided practice, and a path from consuming AI to building with it.',
+      'And you can enter either door — join yourself, or redeem a seat your employer sponsored.',
     ],
   },
   builtFor: {
@@ -176,70 +188,74 @@ export const beginners: PersonaContent = {
       'Job seekers',
       'Non-technical professionals',
       'Early-career professionals',
-      'Anyone who wants to start learning AI from the ground up',
+      'Anyone who wants to start building with AI from the ground up',
     ],
     closing: [
-      'You do not need advanced technical experience.',
-      'You need the right guidance and a practical learning path.',
+      'You don’t need advanced technical experience — you need the right guidance and real reps.',
+      'Two doors, one class: start yourself for $149/month, or redeem an employer-sponsored seat code and learn on your own time.',
     ],
   },
   learn: {
-    title: 'Learn AI Step By Step',
-    intro: 'Inside the membership, you will learn:',
+    title: 'Learn To Build With AI, Step By Step',
+    intro: 'Inside the cohort, you will learn:',
     items: [
-      'What AI tools can do',
-      'How Claude works',
+      'What AI tools can really do — beyond the hype',
+      'How Claude works, in plain language',
       'How to use AI for research, writing, planning, and problem solving',
-      'How AI workflows are created',
-      'How real AI projects are built',
+      'How AI workflows are designed, not just prompted',
+      'How real AI projects get built from scratch',
     ],
-    goal: 'The goal is not to overwhelm you. The goal is to help you build confidence one step at a time.',
+    goal: 'The goal isn’t to overwhelm you — it’s to move you from consuming AI to building with it, one confident step at a time.',
   },
   practice: {
     title: 'Build Through Guided Projects',
     body: [
-      'Watching videos is not enough.',
-      'To build real AI skills, you need practice.',
-      'Inside the membership, you will work on guided projects that help you apply what you learn.',
-      'You will learn by doing. You will start creating work you can explain, improve, and show.',
+      'Watching videos makes you a consumer. Building makes you a builder.',
+      'To gain real AI skills you need reps, so inside the cohort you work guided projects that apply what you learn.',
+      'You learn by doing — and start creating work you can explain, improve, and show.',
+      'At Demo Day you present what you built, proof that you’ve moved from beginner to builder.',
     ],
   },
   openHouse: {
     title: 'What You Will Explore In The Free Open House',
     intro: 'During the Open House, you will see:',
     items: [
-      'What is included inside the AI Membership',
-      'How beginners can start learning AI with Claude',
-      'How guided projects help you build practical skills',
-      'How career switchers can use AI to create new opportunities',
-      'How to get started for $149/month',
+      'How one class works through two doors — individual or employer-sponsored',
+      'How beginners start building with Claude, not just watching tutorials',
+      'How guided projects turn learning into work you can demo',
+      'How career switchers use real projects to open new doors',
+      'How to start yourself for $149/month',
+      'How to redeem an employer seat code if your company is sponsoring you',
     ],
     cta: SEAT_CTA,
   },
   transformation: {
     before: [
-      'You are interested in AI, but you feel unsure where to start.',
-      'AI may feel too technical, too fast, or too confusing.',
+      'You’re interested in AI but unsure where to start.',
+      'AI feels too technical, too fast, or too confusing.',
+      'You’ve consumed plenty about AI but built nothing yet.',
     ],
     after: [
-      'You understand the basics of AI.',
-      'You know how to use Claude with confidence.',
-      'You start building practical projects.',
-      'You have a clear path to keep improving.',
+      'You understand the basics of AI and how Claude works.',
+      'You use Claude with confidence on real tasks.',
+      'You’ve built and demoed practical projects of your own.',
+      'You have a clear path to keep building and improving.',
     ],
   },
   different: {
     title: 'Why This Is Different',
     body: [
-      'Most AI learning feels confusing. There are too many tools, videos, and random tutorials.',
-      'Colaberry’s AI Membership gives you a guided path.',
-      'You learn with Claude. You build through projects. You get practical support. You keep improving every month.',
+      'Most AI learning is a pile of random tutorials that leaves you consuming, never building.',
+      'Colaberry runs one guided class, entered through two doors — you start yourself, or your employer sponsors your seat — and both lead to the same place: you build.',
+      'You learn with Claude, build through projects, get real support, present at Demo Day, and keep improving every month.',
     ],
   },
   finalCta: {
     title: 'Join The Free Open House',
     body: [
-      'See how Colaberry’s AI Membership helps beginners and career switchers start learning AI the right way.',
+      'See how beginners and career switchers go from consuming AI to building with it the right way.',
+      'Start the challenge yourself for $149/month — or, if you lead a team, sponsor seats and discover who your real AI builders are without taking anyone off the job.',
+      SPONSOR_LINE,
     ],
     price: PRICE,
     tagline: TAGLINE,
@@ -251,14 +267,14 @@ export const builders: PersonaContent = {
   seo: {
     title: 'Turn Your AI Idea Into A Working System',
     description:
-      'Colaberry’s AI Membership helps builders, entrepreneurs, and idea owners use Claude, live projects, and guided support to turn ideas into real AI-powered systems. Join the free Open House. Membership starts at $149/month.',
+      'One class, two doors. Builders, founders, and idea owners use Claude and a 12-week build path to turn ideas into real AI systems — self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
   },
   hero: {
-    headline: 'Turn Your AI Idea Into A Working System',
+    headline: 'You Have An Idea. Learn To Build It With AI.',
     body: [
-      'You have an idea.',
-      'Now you need the structure, tools, and guidance to build it.',
-      'Join our free Open House and see how Colaberry’s AI Membership helps builders, entrepreneurs, and idea owners use Claude, live projects, and guided support to turn ideas into real AI-powered systems.',
+      'Most people consume AI. Very few build with it. You’re ready to be in the second group.',
+      'This is one class, entered through two doors. Join as an individual for $149/month, or redeem a seat code your employer sponsored. Either door, same cohort: the structure, tools, and guidance to turn your idea into a working AI system with Claude.',
+      'Start at our free Open House and see how builders go from concept to deployed.',
     ],
     price: PRICE,
     cta: PRIMARY_CTA,
@@ -266,9 +282,8 @@ export const builders: PersonaContent = {
   gap: {
     title: 'Your Idea Needs A Build Path',
     body: [
-      'Many people have AI ideas.',
-      'Few know how to turn them into something real.',
-      'You may want to build:',
+      'Many people have AI ideas. Very few know how to build them into something real and deployable.',
+      'Consuming AI content won’t get you there — building will. You may want to build:',
     ],
     list: [
       'A product',
@@ -282,6 +297,8 @@ export const builders: PersonaContent = {
   },
   builtFor: {
     title: 'Built For Builders And Idea Owners',
+    intro:
+      'For people with an idea to ship — and for employers who want to find their real AI builders by seeing who actually deploys something.',
     idealFor: [
       'Entrepreneurs',
       'Founders',
@@ -293,23 +310,23 @@ export const builders: PersonaContent = {
       'Anyone with an idea they want to build using AI',
     ],
     closing: [
-      'You do not need to have everything figured out.',
-      'You need a clear path, practical guidance, and a place to start building.',
+      'You don’t need everything figured out — you need a clear path, practical guidance, and a place to start building.',
+      'Two doors, one class: join yourself for $149/month, or redeem an employer-sponsored seat code and build on your own time.',
     ],
   },
   learn: {
     title: 'Build With Claude',
-    intro: 'Inside the membership, you will learn how to use Claude for:',
+    intro: 'Inside the cohort, you will learn to use Claude to actually build:',
     items: [
-      'Idea development',
+      'Idea development and validation',
       'Research and planning',
-      'Workflow design',
-      'Project documentation',
+      'Workflow and agent design',
+      'Project documentation that scales',
       'AI-assisted prototyping',
-      'Problem solving',
-      'Implementation support',
+      'Real-world problem solving',
+      'Implementation and deployment support',
     ],
-    goal: 'The goal is to help you move from scattered ideas to a clear build plan.',
+    goal: 'The goal is to move you from scattered ideas to a build plan to something you’ve actually shipped.',
   },
   buildPath: {
     title: 'Your 12-Week Build Path',
@@ -332,7 +349,7 @@ export const builders: PersonaContent = {
       {
         weeks: 'Weeks 10–12',
         title: 'Design AI That Scales',
-        desc: 'Turn your project into a stronger system with architecture, documentation, and deployment planning.',
+        desc: 'Turn your project into a stronger system with architecture, documentation, and deployment planning — ready to present at Demo Day.',
       },
     ],
   },
@@ -340,31 +357,34 @@ export const builders: PersonaContent = {
     title: 'What You Will Explore In The Free Open House',
     intro: 'During the Open House, you will see:',
     items: [
-      'What is included inside the AI Membership',
-      'How builders use Claude to develop ideas',
-      'How live projects help you move from concept to execution',
-      'How the 12-week build path works',
-      'How to get started for $149/month',
+      'How one class works through two doors — individual or employer-sponsored',
+      'How builders use Claude to develop and ship ideas',
+      'How live projects move you from concept to deployed system',
+      'How the 12-week build path and Demo Day work',
+      'How to join yourself for $149/month',
+      'How to redeem an employer seat code if your company is sponsoring you',
     ],
     cta: SEAT_CTA,
   },
   transformation: {
     before: [
-      'You have an idea.',
-      'You know AI can help.',
-      'But you are not sure how to build it, structure it, or make it real.',
+      'You have an idea and you know AI can help.',
+      'But you’re not sure how to build it, structure it, or make it real.',
+      'You’ve consumed plenty about AI without shipping anything.',
     ],
     after: [
-      'You have a clear build path.',
-      'You understand how to use Claude in the process.',
-      'You start building your AI-powered system.',
-      'You create something you can improve, demonstrate, and continue developing.',
+      'You have a clear build path and know how to use Claude through it.',
+      'You’ve built your AI-powered system, not just planned it.',
+      'You can improve, demo, and keep developing what you made.',
+      'You present at Demo Day as someone who builds with AI, not just talks about it.',
     ],
   },
   finalCta: {
     title: 'Join The Free Open House',
     body: [
-      'See how Colaberry’s AI Membership helps builders and idea owners turn ideas into AI-powered systems.',
+      'See how builders and idea owners turn ideas into deployed AI systems.',
+      'Join the challenge yourself for $149/month — or sponsor your team and discover who your real AI builders are without taking anyone off the job.',
+      SPONSOR_LINE,
     ],
     price: PRICE,
     tagline: TAGLINE,

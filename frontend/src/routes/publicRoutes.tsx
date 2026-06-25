@@ -24,6 +24,9 @@ import AIWorkforceDesignerPage from '../pages/AIWorkforceDesignerPage';
 import WorkingProfessionalsPage from '../pages/membership/WorkingProfessionalsPage';
 import BeginnersPage from '../pages/membership/BeginnersPage';
 import BuildersPage from '../pages/membership/BuildersPage';
+import SponsorChallengePage from '../pages/SponsorChallengePage';
+import LeaderboardPage from '../pages/LeaderboardPage';
+import DemoDayPage from '../pages/DemoDayPage';
 
 const publicRoutes = (
   <>
@@ -50,6 +53,9 @@ const publicRoutes = (
     <Route path="/membership/working-professionals" element={<WorkingProfessionalsPage />} />
     <Route path="/membership/beginners" element={<BeginnersPage />} />
     <Route path="/membership/builders" element={<BuildersPage />} />
+    <Route path="/challenge" element={<SponsorChallengePage />} />
+    <Route path="/leaderboard" element={<LeaderboardPage />} />
+    <Route path="/demo-day" element={<DemoDayPage />} />
     <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="*" element={<NotFoundPage />} />
   </>

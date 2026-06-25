@@ -4,6 +4,7 @@ import { submitLead } from '../controllers/leadController';
 import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
+import { handleSponsorInquiry } from '../controllers/sponsorController';
 
 const leadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -39,6 +40,9 @@ const coryLimiter = rateLimit({
 
 router.post('/api/leads', leadRateLimiter, submitLead);
 router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipKit);
+// Door B "Sponsor Your Team" inquiry — public, must stay on leadRoutes (mounted
+// before the auth guard). Reuses the lead rate limiter.
+router.post('/api/sponsor-inquiry', leadRateLimiter, handleSponsorInquiry);
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
 router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
 

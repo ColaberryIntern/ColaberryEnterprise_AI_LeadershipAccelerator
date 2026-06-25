@@ -266,6 +266,13 @@ import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
 
+// One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
+import Sponsor from './Sponsor';
+import SponsorSeat from './SponsorSeat';
+import Challenge from './Challenge';
+import ChallengeParticipant from './ChallengeParticipant';
+import LeaderboardScore from './LeaderboardScore';
+
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
 Enrollment.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
@@ -869,6 +876,33 @@ UIElementFeedback.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capa
 Campaign.belongsTo(Capability, { foreignKey: 'capability_id', as: 'businessProcess' });
 Capability.hasMany(Campaign, { foreignKey: 'capability_id', as: 'campaigns' });
 
+// --- One Class, Many Doors: Sponsorship + Challenge/Leaderboard associations ---
+// Door B: a Sponsor (employer) buys seats; the contact is a Lead.
+Sponsor.belongsTo(Lead, { foreignKey: 'contact_lead_id', as: 'contactLead', onDelete: 'SET NULL' });
+Lead.hasMany(Sponsor, { foreignKey: 'contact_lead_id', as: 'sponsorships' });
+
+Sponsor.hasMany(SponsorSeat, { foreignKey: 'sponsor_id', as: 'seats', onDelete: 'CASCADE' });
+SponsorSeat.belongsTo(Sponsor, { foreignKey: 'sponsor_id', as: 'sponsor' });
+
+// A redeemed seat links to the Enrollment that claimed it (reassignable).
+SponsorSeat.belongsTo(Enrollment, { foreignKey: 'assigned_enrollment_id', as: 'assignedEnrollment', onDelete: 'SET NULL' });
+Enrollment.hasMany(SponsorSeat, { foreignKey: 'assigned_enrollment_id', as: 'sponsorSeats' });
+
+// A Challenge may be scoped to a Sponsor (company leaderboard) or global (null).
+Challenge.belongsTo(Sponsor, { foreignKey: 'sponsor_id', as: 'sponsor', onDelete: 'CASCADE' });
+Sponsor.hasMany(Challenge, { foreignKey: 'sponsor_id', as: 'challenges' });
+
+// Participants: one Enrollment in one Challenge.
+Challenge.hasMany(ChallengeParticipant, { foreignKey: 'challenge_id', as: 'participants', onDelete: 'CASCADE' });
+ChallengeParticipant.belongsTo(Challenge, { foreignKey: 'challenge_id', as: 'challenge' });
+
+Enrollment.hasMany(ChallengeParticipant, { foreignKey: 'enrollment_id', as: 'challengeParticipations' });
+ChallengeParticipant.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// One score row per participant (drives the leaderboard).
+ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participant_id', as: 'score', onDelete: 'CASCADE' });
+LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -1063,6 +1097,12 @@ export {
   // AI Systems Architect Accelerator
   ProjectDna,
   StudentGithubActivity,
+  // One Class, Many Doors — Sponsorship + Challenge/Leaderboard
+  Sponsor,
+  SponsorSeat,
+  Challenge,
+  ChallengeParticipant,
+  LeaderboardScore,
 };
 
 // --- AI Company Layer associations ---

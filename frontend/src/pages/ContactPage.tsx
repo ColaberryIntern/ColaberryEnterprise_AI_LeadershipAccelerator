@@ -1,79 +1,122 @@
 import React, { useState } from 'react';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
 import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm, ValidationRules } from '../utils/formValidation';
 import { getUTMParams } from '../services/utmService';
 import api from '../utils/api';
-import { STANDARD_CTAS } from '../config/programSchedule';
-import IndustryDemoGrid from '../components/IndustryDemoGrid';
+import { Button } from '../colaberry/components/core/Button';
+import { Badge } from '../colaberry/components/core/Badge';
+import { Card } from '../colaberry/components/core/Card';
+import { Input } from '../colaberry/components/core/Input';
+import { Textarea } from '../colaberry/components/core/Textarea';
+import { Checkbox } from '../colaberry/components/core/Checkbox';
 
-const VALIDATION_RULES: ValidationRules = {
-  required: ['fullName', 'email', 'company', 'title'],
-  conditionalRequired: [
-    {
-      when: { field: 'willSeekCorporateSponsorship', equals: true },
-      require: ['budgetOwner', 'timeline'],
-    },
-  ],
+type Segment = 'individual' | 'sponsor';
+
+const COMPANY_SIZES = [
+  '1-49 employees',
+  '50-249 employees',
+  '250-999 employees',
+  '1,000-4,999 employees',
+  '5,000+ employees',
+] as const;
+
+const INDUSTRIES = [
+  'Technology',
+  'Finance & Banking',
+  'Healthcare & Life Sciences',
+  'Manufacturing',
+  'Energy & Utilities',
+  'Retail & eCommerce',
+  'Government & Public Sector',
+  'Logistics & Supply Chain',
+  'Other',
+] as const;
+
+const SPONSOR_RULES: ValidationRules = {
+  required: ['fullName', 'email', 'company', 'companySize'],
   email: ['email'],
   phone: ['phone'],
 };
 
+const INDIVIDUAL_RULES: ValidationRules = {
+  required: ['fullName', 'email'],
+  email: ['email'],
+  phone: ['phone'],
+};
+
+const FORM_TYPE: Record<Segment, string> = {
+  individual: 'enterprise_inquiry',
+  sponsor: 'sponsor_inquiry',
+};
+
+interface ContactForm {
+  fullName: string;
+  email: string;
+  phone: string;
+  company: string;
+  title: string;
+  companySize: string;
+  industry: string;
+  seatsInterest: string;
+  message: string;
+  consentContact: boolean;
+}
+
+const EMPTY_FORM: ContactForm = {
+  fullName: '',
+  email: '',
+  phone: '',
+  company: '',
+  title: '',
+  companySize: '',
+  industry: '',
+  seatsInterest: '',
+  message: '',
+  consentContact: false,
+};
+
 function ContactPage() {
+  const [segment, setSegment] = useState<Segment>('individual');
   const [showBooking, setShowBooking] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
-  const [sendBriefing, setSendBriefing] = useState(false);
+  const [form, setForm] = useState<ContactForm>(EMPTY_FORM);
 
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    company: '',
-    title: '',
-    companySize: '',
-    industry: '',
-    roleInAIInitiative: '',
-    aiMaturityLevel: '',
-    primaryObjective: [] as string[],
-    willSeekCorporateSponsorship: false,
-    budgetOwner: '',
-    timeline: '',
-    message: '',
-    consentContact: false,
-  });
+  const isSponsor = segment === 'sponsor';
+
+  const switchSegment = (next: Segment) => {
+    if (next === segment) return;
+    setSegment(next);
+    setErrors({});
+    setServerError('');
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
-  };
-
-  const handleObjectiveToggle = (val: string) => {
-    setForm((prev) => ({
-      ...prev,
-      primaryObjective: prev.primaryObjective.includes(val)
-        ? prev.primaryObjective.filter((v) => v !== val)
-        : [...prev.primaryObjective, val],
-    }));
-    if (errors.primaryObjective) setErrors((prev) => ({ ...prev, primaryObjective: '' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setServerError('');
 
-    const validationErrors = validateForm(form as unknown as Record<string, unknown>, VALIDATION_RULES);
-    if (!form.consentContact) validationErrors.consentContact = 'You must agree to be contacted';
+    const rules = isSponsor ? SPONSOR_RULES : INDIVIDUAL_RULES;
+    const validationErrors = validateForm(
+      form as unknown as Record<string, unknown>,
+      rules,
+    );
+    if (!form.consentContact) {
+      validationErrors.consentContact = 'You must agree to be contacted';
+    }
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
@@ -81,9 +124,25 @@ function ContactPage() {
 
     setSubmitting(true);
     try {
+      const seatsLine = isSponsor && form.seatsInterest
+        ? `Seats of interest: ${form.seatsInterest}`
+        : '';
+      const composedMessage = [form.message.trim(), seatsLine]
+        .filter(Boolean)
+        .join('\n');
+
       const lead: EnterpriseLead = {
-        ...form,
-        formType: sendBriefing ? 'enterprise_inquiry_with_briefing' : 'enterprise_inquiry',
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone || undefined,
+        company: form.company || undefined,
+        title: form.title || undefined,
+        companySize: form.companySize || undefined,
+        industry: form.industry || undefined,
+        willSeekCorporateSponsorship: isSponsor,
+        message: composedMessage || undefined,
+        consentContact: form.consentContact,
+        formType: FORM_TYPE[segment],
         ...getUTMParams(),
         pageOrigin: window.location.href,
       };
@@ -109,376 +168,325 @@ function ContactPage() {
     <>
       <SEOHead
         title="Contact"
-        description="Contact the Colaberry Enterprise AI team. Enterprise AI inquiry, corporate sponsorship, or schedule a strategy call about AI deployment."
+        description="Talk to Colaberry. Join the AI Challenge as an individual, or sponsor your team to discover your real AI builders without taking anyone off the job."
       />
 
       {/* Hero */}
       <section
-        className="hero-bg text-light py-5"
         aria-label="Page Header"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1423666639041-f56000c27a9a?auto=format&fit=crop&w=1920&q=80)' }}
+        style={{
+          background: 'var(--surface-inverse)',
+          color: 'var(--text-on-accent)',
+          padding: 'var(--space-20) 0 var(--space-16)',
+        }}
       >
-        <div className="container text-center py-4">
-          <img src="/colaberry-icon.png" alt="" width="44" height="44" className="mb-3 logo-hero" />
-          <h1 className="display-5 fw-bold text-light">Talk to Our Enterprise AI Team</h1>
-          <p className="lead">
-            Whether you're evaluating enrollment, sponsoring a team, or exploring
-            advisory options — we respond within one business day.
+        <div
+          className="container text-center"
+          style={{ maxWidth: 820 }}
+        >
+          <Badge tone="red" dot style={{ marginBottom: 'var(--space-5)' }}>
+            We respond within one business day
+          </Badge>
+          <h1
+            className="cb-balance"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'var(--fs-display)',
+              fontWeight: 900,
+              lineHeight: 1.05,
+              margin: '0 0 var(--space-4)',
+              color: 'var(--text-on-accent)',
+            }}
+          >
+            Most people consume AI.
+            <br />
+            Very few learn to build with it.
+          </h1>
+          <p
+            style={{
+              fontSize: 'var(--fs-body-lg)',
+              lineHeight: 1.6,
+              opacity: 0.88,
+              maxWidth: 620,
+              margin: '0 auto',
+            }}
+          >
+            One program, two doors. Join the Challenge yourself, or sponsor your
+            team and find out who your real AI builders are.
           </p>
         </div>
       </section>
 
-      {/* Enterprise AI Inquiry Form */}
-      <section className="section" aria-label="Enterprise AI Inquiry">
-        <div className="container" style={{ maxWidth: '800px' }}>
+      {/* Form section */}
+      <section
+        aria-label="Contact"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-16) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 860 }}>
           {submitted ? (
-            <div className="text-center py-5" role="alert">
-              <h2 className="text-success mb-3">Inquiry Received</h2>
-              {form.phone.trim() ? (
-                <p className="fs-5 mb-4">
-                  Maya, our Director of Admissions, will be calling you in less than 60 seconds to discuss your AI initiatives.
-                  {sendBriefing && ' The Executive Briefing will also be sent to your email shortly.'}
+            <Card elevation="md" padded accent="green" role="alert">
+              <div className="text-center" style={{ padding: 'var(--space-6) 0' }}>
+                <Badge tone="green" dot style={{ marginBottom: 'var(--space-4)' }}>
+                  {isSponsor ? 'Sponsorship inquiry received' : 'Inquiry received'}
+                </Badge>
+                <h2
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--fs-h2)',
+                    color: 'var(--text-strong)',
+                    margin: '0 0 var(--space-3)',
+                  }}
+                >
+                  Thanks — we'll be in touch.
+                </h2>
+                <p
+                  style={{
+                    fontSize: 'var(--fs-body-lg)',
+                    color: 'var(--text-body)',
+                    maxWidth: 560,
+                    margin: '0 auto var(--space-5)',
+                  }}
+                >
+                  {isSponsor
+                    ? 'Our team will reach out to scope annual seats, reassignable codes, and your company-scoped leaderboard so you can discover talent without taking anyone off the job.'
+                    : 'Our team will follow up shortly with next steps to join the Challenge.'}
                 </p>
-              ) : (
-                <p className="fs-5 mb-4">
-                  Our Enterprise AI team will follow up via email shortly.
-                  {sendBriefing && ' The Executive Briefing will be sent to your email as well.'}
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                  Time-sensitive? Reach us at{' '}
+                  <a href="mailto:info@colaberry.com" style={{ color: 'var(--brand-accent)' }}>
+                    info@colaberry.com
+                  </a>
+                  .
                 </p>
-              )}
-              <p className="text-muted">
-                If your inquiry is time-sensitive, reach us at{' '}
-                <a href="mailto:info@colaberry.com">info@colaberry.com</a>.
-              </p>
-            </div>
+              </div>
+            </Card>
           ) : (
-            <div className="bg-white rounded-4 shadow p-4 p-md-5">
-              <h2 className="mb-2" style={{ fontSize: '1.75rem' }}>Enterprise AI Inquiry</h2>
-              <p className="text-muted mb-4">
-                Tell us about your AI initiative and we'll connect you with the right resources.
-              </p>
+            <Card elevation="md" padded>
+              {/* Segment switcher — the two doors */}
+              <div
+                role="tablist"
+                aria-label="Choose how you'd like to connect"
+                style={{
+                  display: 'inline-flex',
+                  gap: 'var(--space-1)',
+                  padding: 'var(--space-1)',
+                  background: 'var(--surface-sunken)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-pill)',
+                  marginBottom: 'var(--space-6)',
+                  maxWidth: '100%',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <SegmentTab
+                  active={!isSponsor}
+                  onClick={() => switchSegment('individual')}
+                  label="Join the Challenge"
+                  sub="For individuals"
+                />
+                <SegmentTab
+                  active={isSponsor}
+                  onClick={() => switchSegment('sponsor')}
+                  label="Sponsor Your Team"
+                  sub="For employers"
+                />
+              </div>
+
+              {isSponsor ? (
+                <SponsorIntro />
+              ) : (
+                <IndividualIntro />
+              )}
 
               {serverError && (
-                <div className="alert alert-danger" role="alert">{serverError}</div>
+                <div
+                  role="alert"
+                  style={{
+                    background: 'var(--surface-card)',
+                    border: '1px solid var(--status-danger)',
+                    color: 'var(--status-danger)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    margin: 'var(--space-4) 0',
+                    fontSize: 'var(--fs-body-sm)',
+                  }}
+                >
+                  {serverError}
+                </div>
               )}
 
               <form onSubmit={handleSubmit} noValidate>
-                {/* Section 1: Identity */}
-                <div className="mb-4">
-                  <p className="fw-semibold small text-muted text-uppercase mb-3">Contact Information</p>
+                <FieldGroup label="Your details">
                   <div className="row g-3">
                     <div className="col-md-6">
-                      <label htmlFor="ci-fullName" className="form-label small fw-medium">
-                        Full Name <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        className={`form-control form-control-sm ${errors.fullName ? 'is-invalid' : ''}`}
-                        id="ci-fullName"
+                      <Input
+                        label="Full name"
+                        required
                         name="fullName"
                         value={form.fullName}
                         onChange={handleChange}
-                        required
+                        error={errors.fullName}
+                        autoComplete="name"
                       />
-                      {errors.fullName && <div className="invalid-feedback">{errors.fullName}</div>}
                     </div>
                     <div className="col-md-6">
-                      <label htmlFor="ci-email" className="form-label small fw-medium">
-                        Work Email <span className="text-danger">*</span>
-                      </label>
-                      <input
+                      <Input
+                        label="Work email"
+                        required
                         type="email"
-                        className={`form-control form-control-sm ${errors.email ? 'is-invalid' : ''}`}
-                        id="ci-email"
                         name="email"
                         value={form.email}
                         onChange={handleChange}
-                        required
+                        error={errors.email}
+                        autoComplete="email"
                       />
-                      {errors.email && <div className="invalid-feedback">{errors.email}</div>}
                     </div>
                     <div className="col-md-6">
-                      <label htmlFor="ci-phone" className="form-label small fw-medium">Phone</label>
-                      <input
+                      <Input
+                        label="Phone"
                         type="tel"
-                        className={`form-control form-control-sm ${errors.phone ? 'is-invalid' : ''}`}
-                        id="ci-phone"
                         name="phone"
                         value={form.phone}
                         onChange={handleChange}
+                        error={errors.phone}
                         placeholder="+1 (555) 123-4567"
+                        autoComplete="tel"
                       />
-                      {errors.phone && <div className="invalid-feedback">{errors.phone}</div>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 2: Company */}
-                <div className="mb-4">
-                  <p className="fw-semibold small text-muted text-uppercase mb-3">Organization</p>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label htmlFor="ci-company" className="form-label small fw-medium">
-                        Company <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        className={`form-control form-control-sm ${errors.company ? 'is-invalid' : ''}`}
-                        id="ci-company"
-                        name="company"
-                        value={form.company}
-                        onChange={handleChange}
-                        required
-                      />
-                      {errors.company && <div className="invalid-feedback">{errors.company}</div>}
                     </div>
                     <div className="col-md-6">
-                      <label htmlFor="ci-title" className="form-label small fw-medium">
-                        Title <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        className={`form-control form-control-sm ${errors.title ? 'is-invalid' : ''}`}
-                        id="ci-title"
+                      <Input
+                        label={isSponsor ? 'Your title' : 'Title (optional)'}
                         name="title"
                         value={form.title}
                         onChange={handleChange}
-                        required
+                        error={errors.title}
+                        autoComplete="organization-title"
                       />
-                      {errors.title && <div className="invalid-feedback">{errors.title}</div>}
+                    </div>
+                  </div>
+                </FieldGroup>
+
+                {/* Employer block — only the sponsor door requires company + size */}
+                <FieldGroup
+                  label={isSponsor ? 'Your organization' : 'Company (optional)'}
+                >
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <Input
+                        label="Company"
+                        required={isSponsor}
+                        name="company"
+                        value={form.company}
+                        onChange={handleChange}
+                        error={errors.company}
+                        autoComplete="organization"
+                      />
                     </div>
                     <div className="col-md-6">
-                      <label htmlFor="ci-companySize" className="form-label small fw-medium">Company Size</label>
-                      <select
-                        className="form-select form-select-sm"
-                        id="ci-companySize"
+                      <SelectField
+                        label="Company size"
+                        required={isSponsor}
                         name="companySize"
                         value={form.companySize}
                         onChange={handleChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="1-49">1-49 employees</option>
-                        <option value="50-249">50-249 employees</option>
-                        <option value="250-999">250-999 employees</option>
-                        <option value="1000-4999">1,000-4,999 employees</option>
-                        <option value="5000+">5,000+ employees</option>
-                      </select>
+                        error={errors.companySize}
+                        options={COMPANY_SIZES}
+                      />
                     </div>
                     <div className="col-md-6">
-                      <label htmlFor="ci-industry" className="form-label small fw-medium">Industry</label>
-                      <select
-                        className="form-select form-select-sm"
-                        id="ci-industry"
+                      <SelectField
+                        label="Industry"
                         name="industry"
                         value={form.industry}
                         onChange={handleChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="technology">Technology</option>
-                        <option value="finance">Finance & Banking</option>
-                        <option value="healthcare">Healthcare & Life Sciences</option>
-                        <option value="manufacturing">Manufacturing</option>
-                        <option value="energy">Energy & Utilities</option>
-                        <option value="retail">Retail & eCommerce</option>
-                        <option value="government">Government & Public Sector</option>
-                        <option value="logistics">Logistics & Supply Chain</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: AI Initiative */}
-                <div className="mb-4">
-                  <p className="fw-semibold small text-muted text-uppercase mb-3">AI Initiative Context</p>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label htmlFor="ci-aiMaturityLevel" className="form-label small fw-medium">
-                        AI Maturity Level
-                      </label>
-                      <select
-                        className="form-select form-select-sm"
-                        id="ci-aiMaturityLevel"
-                        name="aiMaturityLevel"
-                        value={form.aiMaturityLevel}
-                        onChange={handleChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="exploring">Exploring — No AI in production</option>
-                        <option value="piloting">Piloting — Running initial experiments</option>
-                        <option value="scaling">Scaling — Deploying AI across teams</option>
-                        <option value="embedded">Embedded — AI is core to operations</option>
-                      </select>
-                    </div>
-                    <div className="col-md-6">
-                      <label htmlFor="ci-roleInAIInitiative" className="form-label small fw-medium">
-                        Your Role in AI Initiative
-                      </label>
-                      <select
-                        className="form-select form-select-sm"
-                        id="ci-roleInAIInitiative"
-                        name="roleInAIInitiative"
-                        value={form.roleInAIInitiative}
-                        onChange={handleChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="executive_sponsor">Executive Sponsor</option>
-                        <option value="technical_lead">Technical Lead</option>
-                        <option value="evaluator">Evaluator / Researcher</option>
-                        <option value="participant">Potential Participant</option>
-                        <option value="hr_ld">HR / L&D Coordinator</option>
-                      </select>
-                    </div>
-                    <div className="col-12">
-                      <label className="form-label small fw-medium">Primary Objectives</label>
-                      <div className="d-flex flex-wrap gap-2">
-                        {[
-                          'Build internal AI capability',
-                          'Evaluate AI vendors',
-                          'Deploy AI POC',
-                          'Train leadership team',
-                          'AI governance & compliance',
-                          'Accelerate time to production',
-                        ].map((obj) => (
-                          <button
-                            key={obj}
-                            type="button"
-                            className={`btn btn-sm ${
-                              form.primaryObjective.includes(obj)
-                                ? 'btn-primary'
-                                : 'btn-outline-secondary'
-                            }`}
-                            onClick={() => handleObjectiveToggle(obj)}
-                          >
-                            {obj}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 4: Timeline & Budget */}
-                <div className="mb-4">
-                  <p className="fw-semibold small text-muted text-uppercase mb-3">Timeline & Sponsorship</p>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label htmlFor="ci-timeline" className="form-label small fw-medium">
-                        Timeline{form.willSeekCorporateSponsorship && <span className="text-danger"> *</span>}
-                      </label>
-                      <select
-                        className={`form-select form-select-sm ${errors.timeline ? 'is-invalid' : ''}`}
-                        id="ci-timeline"
-                        name="timeline"
-                        value={form.timeline}
-                        onChange={handleChange}
-                      >
-                        <option value="">Select...</option>
-                        <option value="immediate">Immediate — Next 30 days</option>
-                        <option value="quarter">This quarter</option>
-                        <option value="6months">Within 6 months</option>
-                        <option value="exploring">Just exploring</option>
-                      </select>
-                      {errors.timeline && <div className="invalid-feedback">{errors.timeline}</div>}
-                    </div>
-                    <div className="col-md-6">
-                      <label htmlFor="ci-budgetOwner" className="form-label small fw-medium">
-                        Budget Owner{form.willSeekCorporateSponsorship && <span className="text-danger"> *</span>}
-                      </label>
-                      <input
-                        type="text"
-                        className={`form-control form-control-sm ${errors.budgetOwner ? 'is-invalid' : ''}`}
-                        id="ci-budgetOwner"
-                        name="budgetOwner"
-                        value={form.budgetOwner}
-                        onChange={handleChange}
-                        placeholder="e.g., VP Engineering, CTO"
+                        options={INDUSTRIES}
                       />
-                      {errors.budgetOwner && <div className="invalid-feedback">{errors.budgetOwner}</div>}
                     </div>
-                    <div className="col-12">
-                      <div className="form-check">
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          id="ci-sponsorship"
-                          name="willSeekCorporateSponsorship"
-                          checked={form.willSeekCorporateSponsorship}
+                    {isSponsor && (
+                      <div className="col-md-6">
+                        <Input
+                          label="Seats you're considering"
+                          name="seatsInterest"
+                          value={form.seatsInterest}
                           onChange={handleChange}
+                          placeholder="e.g., 10–25"
+                          helperText="Seats are reassignable — reassign if someone leaves."
                         />
-                        <label className="form-check-label small" htmlFor="ci-sponsorship">
-                          My organization will seek corporate sponsorship for this program
-                        </label>
                       </div>
-                    </div>
+                    )}
                   </div>
-                </div>
+                </FieldGroup>
 
-                {/* Section 5: Message */}
-                <div className="mb-4">
-                  <label htmlFor="ci-message" className="form-label small fw-medium">
-                    Message or Questions
-                  </label>
-                  <textarea
-                    className="form-control form-control-sm"
-                    id="ci-message"
+                <FieldGroup
+                  label={isSponsor ? 'What are you hoping to discover?' : 'Anything to add?'}
+                >
+                  <Textarea
+                    label="Message"
                     name="message"
                     rows={3}
                     value={form.message}
                     onChange={handleChange}
+                    placeholder={
+                      isSponsor
+                        ? 'Tell us about your team and the AI capability you want to surface.'
+                        : 'Tell us what you want to build.'
+                    }
                   />
+                </FieldGroup>
+
+                <div style={{ margin: 'var(--space-5) 0 var(--space-6)' }}>
+                  <Checkbox
+                    name="consentContact"
+                    checked={form.consentContact}
+                    onChange={handleChange}
+                    label={
+                      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-body)' }}>
+                        I agree to be contacted by Colaberry about the AI Challenge.{' '}
+                        <span style={{ color: 'var(--status-danger)' }}>*</span>
+                      </span>
+                    }
+                  />
+                  {errors.consentContact && (
+                    <div
+                      style={{
+                        color: 'var(--status-danger)',
+                        fontSize: 'var(--fs-body-sm)',
+                        marginTop: 'var(--space-1)',
+                      }}
+                    >
+                      {errors.consentContact}
+                    </div>
+                  )}
                 </div>
 
-                {/* Briefing opt-in */}
-                <div className="mb-3">
-                  <div className="form-check">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      id="ci-sendBriefing"
-                      checked={sendBriefing}
-                      onChange={(e) => setSendBriefing(e.target.checked)}
-                    />
-                    <label className="form-check-label small" htmlFor="ci-sendBriefing">
-                      Send me the Executive Briefing
-                    </label>
-                  </div>
-                </div>
-
-                {/* Consent */}
-                <div className="mb-4">
-                  <div className="form-check">
-                    <input
-                      type="checkbox"
-                      className={`form-check-input ${errors.consentContact ? 'is-invalid' : ''}`}
-                      id="ci-consent"
-                      name="consentContact"
-                      checked={form.consentContact}
-                      onChange={handleChange}
-                    />
-                    <label className="form-check-label small" htmlFor="ci-consent">
-                      I agree to be contacted by Colaberry about the Enterprise AI Leadership Accelerator <span className="text-danger">*</span>
-                    </label>
-                    {errors.consentContact && (
-                      <div className="invalid-feedback">{errors.consentContact}</div>
-                    )}
-                  </div>
-                </div>
-
-                <button
+                <Button
                   type="submit"
-                  className="btn btn-primary btn-lg w-100"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
                   disabled={submitting}
                 >
-                  {submitting ? 'Submitting...' : 'Submit Inquiry'}
-                </button>
+                  {submitting
+                    ? 'Submitting…'
+                    : isSponsor
+                      ? 'Sponsor Your Team'
+                      : 'Join the Challenge'}
+                </Button>
               </form>
 
-              <div className="text-center mt-4 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                <p className="text-muted small mb-0">
-                  We never sell your information. Your data is used solely to deliver requested materials.
-                </p>
-              </div>
-            </div>
+              <p
+                className="text-center"
+                style={{
+                  color: 'var(--text-muted)',
+                  fontSize: 'var(--fs-body-sm)',
+                  margin: 'var(--space-5) 0 0',
+                  paddingTop: 'var(--space-4)',
+                  borderTop: '1px solid var(--border-subtle)',
+                }}
+              >
+                We never sell your information. Your data is used solely to respond to your request.
+              </p>
+            </Card>
           )}
         </div>
       </section>
@@ -489,56 +497,85 @@ function ContactPage() {
 
       {/* Strategy Call CTA */}
       <section
-        className="text-light text-center"
         aria-label="Schedule Strategy Call"
+        className="text-center"
         style={{
-          background: 'linear-gradient(135deg, #0f1b2d 0%, #1a365d 50%, #1e3a5f 100%)',
-          padding: '5rem 0',
+          background: 'var(--surface-inverse)',
+          color: 'var(--text-on-accent)',
+          padding: 'var(--space-20) 0',
         }}
       >
-        <div className="container" style={{ maxWidth: '750px' }}>
-          <h2 className="text-light mb-3" style={{ fontSize: '2rem' }}>
-            Ready to Deploy AI in the Next 30 Days?
-          </h2>
-          <p className="mb-4" style={{ opacity: 0.85, fontSize: '1.1rem' }}>
-            Schedule a 30-minute executive strategy session to align roadmap,
-            architecture, and internal capability.
-          </p>
-          <button
-            className="btn btn-hero-primary btn-lg px-5"
-            onClick={() => setShowBooking(true)}
+        <div className="container" style={{ maxWidth: 760 }}>
+          <h2
+            className="cb-balance"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'var(--fs-h1)',
+              fontWeight: 900,
+              color: 'var(--text-on-accent)',
+              margin: '0 0 var(--space-3)',
+            }}
           >
-            {STANDARD_CTAS.secondary}
-          </button>
-          <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
-            <span className="small">30-minute focused session</span>
-            <span className="small">No obligation</span>
-            <span className="small">Architecture-first discussion</span>
+            Learn With Claude. Build Through Colaberry. Deploy In The Real World.
+          </h2>
+          <p
+            style={{
+              fontSize: 'var(--fs-body-lg)',
+              opacity: 0.85,
+              margin: '0 auto var(--space-6)',
+              maxWidth: 580,
+            }}
+          >
+            Prefer to talk it through first? Book a 30-minute session to map seats,
+            timing, and how the company-scoped leaderboard works.
+          </p>
+          <Button variant="solid" tone="red" size="lg" onClick={() => setShowBooking(true)}>
+            Schedule an Executive AI Strategy Call
+          </Button>
+          <div
+            className="d-flex justify-content-center gap-4 flex-wrap"
+            style={{ opacity: 0.7, marginTop: 'var(--space-6)' }}
+          >
+            <span style={{ fontSize: 'var(--fs-body-sm)' }}>30-minute focused session</span>
+            <span style={{ fontSize: 'var(--fs-body-sm)' }}>No obligation</span>
+            <span style={{ fontSize: 'var(--fs-body-sm)' }}>Talent discovery, not training</span>
           </div>
         </div>
       </section>
 
       {/* Contact Info */}
-      <section className="section-alt" aria-label="Contact Information">
+      <section
+        aria-label="Contact Information"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-16) 0' }}
+      >
         <div className="container">
-          <div className="row g-4 text-center">
+          <div className="row g-4">
             <div className="col-md-4">
-              <h3 className="h5">Email</h3>
-              <p className="text-muted">info@colaberry.com</p>
+              <Card elevation="sm" padded hoverable style={{ height: '100%' }}>
+                <h3 style={infoTitle}>Email</h3>
+                <p style={infoBody}>
+                  <a href="mailto:info@colaberry.com" style={{ color: 'var(--brand-accent)' }}>
+                    info@colaberry.com
+                  </a>
+                </p>
+              </Card>
             </div>
             <div className="col-md-4">
-              <h3 className="h5">Social</h3>
-              <p className="text-muted">LinkedIn | Twitter</p>
+              <Card elevation="sm" padded hoverable style={{ height: '100%' }}>
+                <h3 style={infoTitle}>Social</h3>
+                <p style={infoBody}>LinkedIn · Twitter</p>
+              </Card>
             </div>
             <div className="col-md-4">
-              <h3 className="h5">Strategy Call</h3>
-              <p className="text-muted">Book a 30-minute strategy call with our Enterprise AI team.</p>
-              <button
-                className="btn btn-outline-primary btn-sm"
-                onClick={() => setShowBooking(true)}
-              >
-                Book a Call
-              </button>
+              <Card elevation="sm" padded hoverable style={{ height: '100%' }}>
+                <h3 style={infoTitle}>Strategy Call</h3>
+                <p style={{ ...infoBody, marginBottom: 'var(--space-3)' }}>
+                  Book a 30-minute call with our team.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => setShowBooking(true)}>
+                  Book a Call
+                </Button>
+              </Card>
             </div>
           </div>
         </div>
@@ -546,6 +583,189 @@ function ContactPage() {
 
       <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/contact" />
     </>
+  );
+}
+
+/* ---------- Local presentational helpers ---------- */
+
+const infoTitle: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontSize: 'var(--fs-h3)',
+  color: 'var(--text-strong)',
+  margin: '0 0 var(--space-2)',
+};
+
+const infoBody: React.CSSProperties = {
+  color: 'var(--text-muted)',
+  margin: 0,
+};
+
+interface SegmentTabProps {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  sub: string;
+}
+
+function SegmentTab({ active, onClick, label, sub }: SegmentTabProps) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      style={{
+        border: 'none',
+        cursor: 'pointer',
+        borderRadius: 'var(--radius-pill)',
+        padding: 'var(--space-2) var(--space-5)',
+        background: active ? 'var(--action-bg)' : 'transparent',
+        color: active ? 'var(--text-on-accent)' : 'var(--text-muted)',
+        transition: 'background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)',
+        textAlign: 'left',
+        minHeight: 48,
+      }}
+    >
+      <span style={{ display: 'block', fontWeight: 700, fontSize: 'var(--fs-body-sm)' }}>
+        {label}
+      </span>
+      <span style={{ display: 'block', fontSize: 'var(--fs-caption)', opacity: 0.85 }}>
+        {sub}
+      </span>
+    </button>
+  );
+}
+
+interface FieldGroupProps {
+  label: string;
+  children: React.ReactNode;
+}
+
+function FieldGroup({ label, children }: FieldGroupProps) {
+  return (
+    <div style={{ marginBottom: 'var(--space-5)' }}>
+      <p
+        style={{
+          fontSize: 'var(--fs-caption)',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+          margin: '0 0 var(--space-3)',
+        }}
+      >
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+interface SelectFieldProps {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  options: readonly string[];
+  required?: boolean;
+  error?: string;
+}
+
+function SelectField({ label, name, value, onChange, options, required, error }: SelectFieldProps) {
+  const id = `cf-${name}`;
+  return (
+    <div className="cb-min0">
+      <label
+        htmlFor={id}
+        style={{
+          display: 'block',
+          fontSize: 'var(--fs-body-sm)',
+          fontWeight: 500,
+          color: 'var(--text-strong)',
+          marginBottom: 'var(--space-1)',
+        }}
+      >
+        {label}
+        {required && <span style={{ color: 'var(--status-danger)' }}> *</span>}
+      </label>
+      <select
+        id={id}
+        name={name}
+        value={value}
+        onChange={onChange}
+        style={{
+          width: '100%',
+          minHeight: 48,
+          padding: '0 var(--space-3)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 'var(--fs-body-sm)',
+          color: 'var(--text-strong)',
+          background: 'var(--surface-card)',
+          border: `1px solid ${error ? 'var(--status-danger)' : 'var(--border-default)'}`,
+          borderRadius: 'var(--radius-md)',
+        }}
+      >
+        <option value="">Select…</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+      {error && (
+        <div
+          style={{
+            color: 'var(--status-danger)',
+            fontSize: 'var(--fs-body-sm)',
+            marginTop: 'var(--space-1)',
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IndividualIntro() {
+  return (
+    <p
+      style={{
+        fontSize: 'var(--fs-body)',
+        color: 'var(--text-body)',
+        lineHeight: 1.6,
+        margin: '0 0 var(--space-5)',
+      }}
+    >
+      Self-serve your seat in the cohort. Learn on Claude, build real systems with
+      Colaberry, and present at Demo Day. Tell us about you and we'll get you started.
+    </p>
+  );
+}
+
+function SponsorIntro() {
+  return (
+    <div style={{ marginBottom: 'var(--space-5)' }}>
+      <p
+        style={{
+          fontSize: 'var(--fs-body)',
+          color: 'var(--text-body)',
+          lineHeight: 1.6,
+          margin: '0 0 var(--space-3)',
+        }}
+      >
+        <strong style={{ color: 'var(--text-strong)' }}>
+          Find out who your real AI builders are — without taking anyone off the job.
+        </strong>{' '}
+        Sponsor annual seats; your people redeem codes, learn on their own time, and
+        climb a company-scoped leaderboard, then present at Demo Day.
+      </p>
+      <div className="d-flex flex-wrap gap-2">
+        <Badge tone="blue">Reassignable seats</Badge>
+        <Badge tone="blue">Company-scoped leaderboard</Badge>
+        <Badge tone="blue">Talent discovery, not training</Badge>
+      </div>
+    </div>
   );
 }
 
