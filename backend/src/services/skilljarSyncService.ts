@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { env } from '../config/env';
 import StudentSkilljarProgress from '../models/StudentSkilljarProgress';
 
@@ -121,7 +121,7 @@ async function fetchUserProgress(
   let url: string | null = `/user-course-progress?user_id=${skilljarUserId}`;
 
   while (url) {
-    const resp = await client.get<SkilljarProgressListResponse>(url);
+    const resp: AxiosResponse<SkilljarProgressListResponse> = await client.get<SkilljarProgressListResponse>(url);
     all.push(...resp.data.results);
     url = resp.data.next;
   }
