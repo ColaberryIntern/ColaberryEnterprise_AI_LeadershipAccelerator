@@ -9,6 +9,7 @@
 import { Op } from 'sequelize';
 import { Lead, Campaign, CommunicationLog, UnsubscribeEvent } from '../models';
 import { getTestOverrides, getSetting } from './settingsService';
+import { assertConsentForSend } from './consentService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -304,6 +305,28 @@ export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
         redirect: null,
         testMode: false,
         blockedReason: leadCheck.reason,
+        deliveryMode: 'blocked',
+      };
+    }
+  }
+
+  // 3.5 Consent gate (TBI P0-3). SHADOW BY DEFAULT — assertConsentForSend records the verdict
+  // (ai_events consent.check) but only reports enforced=true when consent_enforcement === 'enforce'.
+  // It is swallow-safe and fails OPEN, so a consent-system error can never block a live send.
+  // Skip simulations (test leads have no consent records by design).
+  if (!req.simulationId) {
+    const consent = await assertConsentForSend({
+      channel: req.channel,
+      leadId: req.leadId,
+      email: req.toEmail,
+      phone: req.toPhone,
+    });
+    if (consent.enforced && consent.verdict === 'block') {
+      return {
+        allowed: false,
+        redirect: null,
+        testMode: false,
+        blockedReason: `consent_${consent.reason}`,
         deliveryMode: 'blocked',
       };
     }

@@ -139,6 +139,18 @@ interface BcTodoRecording extends BcTodo {
   parent: { id: number; type: string; title: string };
 }
 
+// Projects excluded from the ops mirror — high-volume data that doesn't belong
+// in the "waiting on human" ops queue: "Center of Excellence" is student
+// coursework (~26k todos) and "RMG Mortgage" is bulk project data (~2.4k todos).
+// Matched by NAME so renamed/new ones are auto-excluded; override via env.
+const EXCLUDE_PROJECT_NAME_RE = new RegExp(
+  process.env.OPS_SYNC_EXCLUDE_NAME_RE || 'center of excellence|rmg mortgage',
+  'i',
+);
+export function isExcludedProject(name?: string | null): boolean {
+  return !!name && EXCLUDE_PROJECT_NAME_RE.test(name);
+}
+
 // Re-fetch a small overlap before the cursor so a todo updated right at the
 // boundary (or under clock skew) is never missed; upserts are idempotent.
 const SYNC_OVERLAP_MS = 10 * 60 * 1000;
@@ -160,20 +172,27 @@ async function getSyncCursorMs(): Promise<number | null> {
 // Sweep the Todo recordings feed newest-updated-first, returning todos updated
 // at/after sinceMs. Stops at the first page entirely older than the cursor (or
 // the first empty page); sinceMs=null backfills up to FEED_MAX_PAGES pages.
-export async function fetchUpdatedTodos(sinceMs: number | null): Promise<BcTodoRecording[]> {
+export async function fetchUpdatedTodos(
+  sinceMs: number | null,
+  bucketIds?: number[],
+): Promise<BcTodoRecording[]> {
   const out: BcTodoRecording[] = [];
+  // Scope the feed to the real ops projects server-side so we never page through
+  // the high-churn Center-of-Excellence (student) buckets just to skip them.
+  const bucketParam = bucketIds && bucketIds.length ? `&bucket=${bucketIds.join(',')}` : '';
   for (let page = 1; page <= FEED_MAX_PAGES; page++) {
     const items = await bcGet<BcTodoRecording[]>(
-      `/projects/recordings.json?type=Todo&sort=updated_at&direction=desc&page=${page}`,
+      `/projects/recordings.json?type=Todo&sort=updated_at&direction=desc${bucketParam}&page=${page}`,
     );
     if (!Array.isArray(items) || items.length === 0) break;
     let anyFresh = false;
     for (const it of items) {
       if (!it.bucket?.id || !it.parent?.id) continue; // defensive
-      if (sinceMs == null || new Date(it.updated_at).getTime() >= sinceMs) {
-        out.push(it);
-        anyFresh = true;
-      }
+      // updated_at gates the loop, so still count an excluded item as "fresh"
+      // (don't stop early); just don't sync it.
+      const fresh = sinceMs == null || new Date(it.updated_at).getTime() >= sinceMs;
+      if (fresh) anyFresh = true;
+      if (fresh && !isExcludedProject(it.bucket.name)) out.push(it);
     }
     if (sinceMs != null && !anyFresh) break; // whole page older than cursor -> done
   }
@@ -245,6 +264,7 @@ async function runBcSyncInner(): Promise<BcSyncResult> {
   result.projects_seen = projects.length;
 
   for (const project of projects) {
+    if (isExcludedProject(project.name)) continue; // Center of Excellence = student data, not ops
     // Upsert project metadata so the UI can show the name (and so the
     // CB-managed filter has somewhere to live). is_cb_managed defaults to
     // true on first insert; subsequent syncs do NOT overwrite the flag —
@@ -286,7 +306,8 @@ async function runBcSyncInner(): Promise<BcSyncResult> {
   // cursor) backfills everything once.
   try {
     const cursorMs = await getSyncCursorMs();
-    const todos = await fetchUpdatedTodos(cursorMs);
+    const includeBuckets = projects.filter((p) => !isExcludedProject(p.name)).map((p) => p.id);
+    const todos = await fetchUpdatedTodos(cursorMs, includeBuckets);
     result.todos_seen += todos.length;
     for (const t of todos) {
       try {

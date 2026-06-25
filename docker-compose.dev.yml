@@ -1,6 +1,9 @@
-version: "3.8"
+name: accelerator-dev
 
-# IMPORTANT: Always run with -p flag: docker compose -p colaberry-dev -f docker-compose.dev.yml up -d
+# Project 'accelerator-dev' is set via the top-level `name:` above — it matches the running
+# accelerator-dev-* containers. Do NOT rely on a -p flag: without a baked name this file would
+# default to the directory name (colaberry-accelerator = PROD's project) and a plain
+# `docker compose -f docker-compose.dev.yml up` could recreate/remove prod containers.
 # This prevents Docker from conflicting with production containers.
 
 services:
@@ -32,6 +35,7 @@ services:
     networks:
       - default
       - prod_network
+      - postgres_network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/preview-stacks-dev:/var/preview-stacks
@@ -75,3 +79,6 @@ networks:
   prod_network:
     external: true
     name: colaberry-accelerator_default
+  postgres_network:
+    external: true
+    name: colaberryenterprise_ai_leadershipaccelerator_default

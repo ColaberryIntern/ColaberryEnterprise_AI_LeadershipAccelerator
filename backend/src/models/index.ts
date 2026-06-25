@@ -88,6 +88,7 @@ import AiAgentActivityLog from './AiAgentActivityLog';
 import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
+import AiEvent from './AiEvent';
 import DatasetRegistry from './DatasetRegistry';
 import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
@@ -152,6 +153,7 @@ import StrategicInitiative from './StrategicInitiative';
 import RequirementsGenerationJob from './RequirementsGenerationJob';
 import MayaConversationOutcome from './MayaConversationOutcome';
 import MentorIntervention from './MentorIntervention';
+import MentorReviewItem from './MentorReviewItem';
 import SectionExecutionLog from './SectionExecutionLog';
 import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
@@ -902,6 +904,7 @@ export {
   ContentGenerationLog,
   AiAgent,
   AiAgentActivityLog,
+  AiEvent,
   CampaignHealth,
   CampaignError,
   AiSystemEvent,

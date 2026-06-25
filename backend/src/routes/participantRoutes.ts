@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import {
@@ -109,8 +110,7 @@ router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requir
     const rawText = fs.readFileSync(file.path, 'utf-8').substring(0, 20000);
 
     // Summarize via OpenAI
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'participant_routes' });
     const response = await openai.chat.completions.create({
       model: process.env.AI_MODEL || 'gpt-4o-mini',
       messages: [
@@ -182,6 +182,22 @@ router.use(projectRoutes);
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);
 router.get('/api/portal/mentor/history', requireParticipant, handleGetMentorHistory);
+
+// Mentor feedback on submissions
+router.get('/api/portal/submissions/:submissionId/mentor-feedback', requireParticipant, async (req, res) => {
+  try {
+    const { getFeedbackForSubmission } = await import('../services/mentorFeedbackService');
+    const feedback = await getFeedbackForSubmission(
+      req.params.submissionId as string,
+      req.participant!.sub
+    );
+    if (!feedback) return res.status(404).json({ error: 'No mentor feedback available yet' });
+    res.json(feedback);
+  } catch (err: any) {
+    console.error('[ParticipantRoutes] mentor-feedback error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve mentor feedback' });
+  }
+});
 
 // GitHub OAuth endpoints
 router.get('/api/portal/github/oauth/start', requireParticipant, async (req, res) => {

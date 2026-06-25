@@ -36,7 +36,7 @@ const bcComment = `<div>${MENTION} <strong>Training program v1 package ready for
 <li><strong>TRAINING_OVERVIEW.pptx</strong> - the 10-slide team deck. For showing the website / sales / marketing / AI teams how the program works.</li>
 </ul>
 <div><br></div>
-<div><strong>Headline:</strong> AI Systems Architect Accelerator. 12 weeks. Mon Architecture Day + Thu Build Day. 4 stackable $499 intensives or $1,497 bundle (TWC compliance). Hosted on enterprise.colaberry.com. Powered by Anthropic Partner Network. Cohort kickoff Mon 2026-07-13.</div>
+<div><strong>Headline:</strong> AI Systems Architect Accelerator. 12 weeks. Mon Architecture Day + Thu Build Day. 4 stackable $499 intensives or $1,497 bundle (TWC compliance). Hosted on enterprise.colaberry.com. Powered by Anthropic Partner Network. Cohort 1 classes start Mon 2026-07-27 (orientation Thu 2026-07-23).</div>
 <div><br></div>
 <div><strong>Hard gates I flagged:</strong></div>
 <ol>

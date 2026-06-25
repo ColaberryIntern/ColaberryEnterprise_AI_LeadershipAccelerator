@@ -64,8 +64,11 @@ import generatorRoutes from './admin/generatorRoutes';
 import autonomousIngestRoutes from './admin/autonomousRoutes';
 import automatedReportsRoutes from './admin/automatedReportsRoutes';
 import opsRoutes from './admin/opsRoutes';
+import cbSystemRoutes from './admin/cbSystemRoutes';
 import anthropicRoutes from './admin/anthropicRoutes';
 import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
+import mentorReviewRoutes from './admin/mentorReviewRoutes';
+import trustRoutes from './admin/trustRoutes';
 
 const router = Router();
 
@@ -134,7 +137,10 @@ router.use(generatorRoutes);
 router.use(autonomousIngestRoutes);
 router.use(automatedReportsRoutes);
 router.use(opsRoutes);
+router.use(cbSystemRoutes);
 router.use(anthropicRoutes);
 router.use(qrAnalyticsRoutes);
+router.use(mentorReviewRoutes);
+router.use(trustRoutes);
 
 export default router;

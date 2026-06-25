@@ -960,6 +960,14 @@ Decide and act. Always end with basecamp_reply, then finish.`;
   const toolsCalled = [];
   let finished = false;
   let lastError = null;
+  // tool_choice starts 'auto'. If the model ever replies with plain prose
+  // instead of calling a tool, we escalate to 'required' for exactly one retry
+  // (toolChoiceRetryUsed gate) to steer it back onto the proper basecamp_reply
+  // path before falling back to the force-wrap below. This cuts the
+  // "forced-reply (model returned text without a real tool_call)" defect that
+  // cb-quality-audit.js measures at the source.
+  let toolChoice = 'auto';
+  let toolChoiceRetryUsed = false;
 
   for (let i = 0; i < MAX_ITERATIONS && !finished; i++) {
     let resp;
@@ -968,7 +976,7 @@ Decide and act. Always end with basecamp_reply, then finish.`;
         model: MODEL,
         messages,
         tools: availableTools,
-        tool_choice: 'auto',
+        tool_choice: toolChoice,
         temperature: 0.3,
       });
     } catch (e) {
@@ -981,11 +989,25 @@ Decide and act. Always end with basecamp_reply, then finish.`;
     messages.push(msg);
     const calls = msg.tool_calls || [];
     if (calls.length === 0) {
-      // Model returned text without a real tool_call. This is the exact path
-      // that leaked `functions.basecamp_reply({...})` into a live comment
-      // (2026-06-10, todo 9946499609). Hand the RAW text to basecamp_reply,
-      // which sanitizes it (recovers content_html from any leaked literal) and
-      // tags the requester. Do NOT pre-wrap - that defeated the extractor.
+      // Model returned text without a real tool_call. First time: nudge it to
+      // actually call basecamp_reply (tool_choice 'required' guarantees a
+      // tool_call next turn) and retry once. The prose it just produced is
+      // preserved in `messages`, so the retry refines rather than discards it.
+      if (!toolChoiceRetryUsed) {
+        toolChoiceRetryUsed = true;
+        toolChoice = 'required';
+        messages.push({
+          role: 'system',
+          content: 'You replied with plain text instead of calling a tool. Post your answer by calling the basecamp_reply tool now (then finish). Do not reply with prose.',
+        });
+        continue;
+      }
+      // Retry already spent. Fall back to the force-wrap so the requester still
+      // gets an answer. This is the exact path that once leaked
+      // `functions.basecamp_reply({...})` into a live comment (2026-06-10, todo
+      // 9946499609). Hand the RAW text to basecamp_reply, which sanitizes it
+      // (recovers content_html from any leaked literal) and tags the requester.
+      // Do NOT pre-wrap - that defeated the extractor.
       const text = msg.content || '(no content)';
       if (looksLikeToolCallLeak(text)) sideEffects.qualityFlags.push('model_emitted_tool_call_as_text');
       try {

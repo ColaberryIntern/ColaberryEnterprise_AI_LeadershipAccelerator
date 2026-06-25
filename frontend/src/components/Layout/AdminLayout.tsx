@@ -9,6 +9,7 @@ interface NavSection { label: string | null; links: NavLink[]; }
 
 const adminNavSections: NavSection[] = [
   { label: null, links: [
+    { path: '/admin/trust', label: 'Trust Center', icon: 'shield-lock' },
     { path: '/admin/dashboard', label: 'Dashboard', icon: 'grid' },
     { path: '/admin/war-room', label: 'War Room', icon: 'activity' },
   ]},
@@ -38,6 +39,7 @@ const adminNavSections: NavSection[] = [
   ]},
   { label: 'Intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'rocket-takeoff' },
+    { path: '/admin/cb-system', label: 'CB System', icon: 'robot' },
     { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
     { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
     { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },

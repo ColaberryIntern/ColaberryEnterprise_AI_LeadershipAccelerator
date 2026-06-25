@@ -1,3 +1,5 @@
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../config/database';
 import { InteractionOutcome, Lead, ScheduledEmail, CampaignLead, Campaign, FollowUpSequence } from '../models';
 import type { OutcomeType } from '../models/InteractionOutcome';
 import { classifyLead } from './leadClassificationService';
@@ -266,6 +268,26 @@ export async function recordWebhookOutcome(
   if (!action) {
     console.warn(`[InteractionService] ScheduledEmail ${scheduledEmailId} not found for webhook outcome`);
     return;
+  }
+
+  // Idempotency (CLAUDE.md NON-NEGOTIABLE): Mandrill re-delivers a webhook batch on
+  // any non-2xx/slow response, so the same event can arrive more than once. Each event
+  // carries a unix `ts`; dedup on (scheduled_email_id, outcome, ts) so a re-delivered
+  // event is a no-op, while a genuinely distinct open (different ts) still records. If
+  // ts is absent we can't key safely, so we fall through and insert — a rare duplicate
+  // is preferable to dropping a real event.
+  const mandrillTs = metadata?.mandrill_ts;
+  if (mandrillTs !== undefined && mandrillTs !== null) {
+    const dup = await sequelize.query(
+      `select 1 from interaction_outcomes
+         where scheduled_email_id = :sid and outcome = :oc
+           and metadata->>'mandrill_ts' = :ts
+         limit 1`,
+      { replacements: { sid: action.id, oc: outcome, ts: String(mandrillTs) }, type: QueryTypes.SELECT },
+    );
+    if (Array.isArray(dup) && dup.length > 0) {
+      return; // exact event already recorded — idempotent no-op
+    }
   }
 
   await recordOutcome({

@@ -156,8 +156,8 @@ async function summarizeEmail({ senderName, subject, body }) {
     return `${senderName} sent: "${(subject || '').slice(0, 60)}"`;
   }
   try {
-    const OpenAI = require(path.resolve(REPO, 'node_modules/openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './openaiInstrumented'));
+    const openai = getInstrumentedOpenAI({ workflow_id: 'vip_sms_router' });
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.2,

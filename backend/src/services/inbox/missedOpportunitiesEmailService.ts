@@ -8,6 +8,7 @@ import { getReport } from './missedOpportunitiesReportService';
 import type { MissedOpportunitiesReport, HeatMapWord, MissedEmailRow } from './missedOpportunitiesReportService';
 import { reportDateCT } from './opportunityScoringService';
 import { getSetting, setSetting } from '../settingsService';
+import { inboxCosAlertsEnabled } from './inboxAlertsConfig';
 
 const LOG_PREFIX = '[MissedOpportunities]';
 const LAST_SENT_KEY = 'missed_opportunities_last_sent';
@@ -186,6 +187,13 @@ export async function runMissedOpportunitiesReport(
 ): Promise<SendResult> {
   const date = reportDateCT();
   const recipients = opts.recipients && opts.recipients.length ? opts.recipients : ['ali@colaberry.com'];
+
+  // Master switch: scheduled (non-forced) sends are gated off by default.
+  // A forced send (manual "send now" from the admin API) bypasses the gate.
+  if (!opts.force && !inboxCosAlertsEnabled()) {
+    console.log(`${LOG_PREFIX} alerts disabled (INBOX_COS_ALERTS_ENABLED!=true) - scheduled report skipped`);
+    return { sent: false, skipped: true, reportDate: date, reason: 'alerts_disabled' };
+  }
 
   // Idempotency: one send per CT date unless forced.
   if (!opts.force) {
