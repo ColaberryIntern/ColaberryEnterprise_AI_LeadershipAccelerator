@@ -1,16 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { env } from '../config/env';
 import StudentSkilljarProgress from '../models/StudentSkilljarProgress';
-
-// The 5 Anthropic-required Skilljar courses tracked for every accelerator student.
-// Source: seedAnthropicContentRegistry.ts (confirmed 2026-06-18).
-const TRACKED_COURSE_URLS = new Set([
-  'https://anthropic.skilljar.com/introduction-to-agent-skills',
-  'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
-  'https://anthropic.skilljar.com/introduction-to-model-context-protocol',
-  'https://anthropic.skilljar.com/claude-code-in-action',
-  'https://anthropic.skilljar.com/claude-code-101',
-]);
+import { isTrackedCourseUrl } from './lib/skilljarCourseMatch';
 
 // ─── Skilljar API response shapes ─────────────────────────────────────────────
 
@@ -119,11 +110,18 @@ async function fetchUserProgress(
 ): Promise<SkilljarCourseProgressItem[]> {
   const all: SkilljarCourseProgressItem[] = [];
   let url: string | null = `/user-course-progress?user_id=${skilljarUserId}`;
+  let page = 0;
+  const MAX_PAGES = 50; // Failure-First: hard cap so a cyclic/misbehaving `next` link can't loop forever.
 
-  while (url) {
+  while (url && page < MAX_PAGES) {
     const resp: AxiosResponse<SkilljarProgressListResponse> = await client.get<SkilljarProgressListResponse>(url);
     all.push(...resp.data.results);
     url = resp.data.next;
+    page++;
+  }
+
+  if (url) {
+    log('warn', 'skilljar_pagination_cap_hit', { skilljar_user_id: skilljarUserId, pages: page, max_pages: MAX_PAGES });
   }
 
   return all;
@@ -170,7 +168,10 @@ export async function syncUserProgress(email: string): Promise<SyncResult> {
     return { email, skilljar_user_id: skilljarUser.id, courses_synced: 0, courses_completed: 0, error: error_class };
   }
 
-  const tracked = progressItems.filter((p) => TRACKED_COURSE_URLS.has(p.course_url));
+  // Normalize before matching — the live API may return tracked courses with a
+  // trailing slash / different casing / query param, which an exact-string match
+  // would drop silently (courses_synced:0, error:null). See ./lib/skilljarCourseMatch.
+  const tracked = progressItems.filter((p) => isTrackedCourseUrl(p.course_url));
   let synced = 0;
   let completed = 0;
 
@@ -180,7 +181,7 @@ export async function syncUserProgress(email: string): Promise<SyncResult> {
       skilljar_user_id: skilljarUser.id,
       course_url: item.course_url,
       course_title: item.course_title,
-      percent_complete: Math.round(item.percent_complete),
+      percent_complete: Math.min(100, Math.max(0, Math.round(item.percent_complete))),
       completed: item.is_complete,
       completed_at: item.date_completed ? new Date(item.date_completed) : null,
       last_synced_at: new Date(),
