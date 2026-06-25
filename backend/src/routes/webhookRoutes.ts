@@ -33,4 +33,39 @@ router.post('/api/webhook/apollo/phone-reveal', express.json(), handleApolloPhon
 router.head('/api/webhooks/advisory', handleAdvisoryWebhookHead);
 router.post('/api/webhooks/advisory', express.json(), handleAdvisoryWebhook);
 
+// GitHub push webhook — raw body required for HMAC-SHA256 signature validation
+router.post('/api/webhook/github', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = req.headers['x-hub-signature-256'] as string | undefined;
+  if (!signature) { res.status(401).json({ error: 'Missing X-Hub-Signature-256' }); return; }
+
+  const { validateWebhookSignature, findEnrollmentByRepo, syncStudentActivity } = await import('../services/githubIntegrationService');
+
+  if (!validateWebhookSignature(req.body as Buffer, signature)) {
+    res.status(401).json({ error: 'Invalid signature' });
+    return;
+  }
+
+  let payload: any;
+  try {
+    payload = JSON.parse((req.body as Buffer).toString('utf-8'));
+  } catch {
+    res.status(400).json({ error: 'Invalid JSON payload' });
+    return;
+  }
+
+  const owner: string | undefined = payload.repository?.owner?.login;
+  const repo: string | undefined = payload.repository?.name;
+
+  if (owner && repo) {
+    const enrollmentId = await findEnrollmentByRepo(owner, repo);
+    if (enrollmentId) {
+      syncStudentActivity(enrollmentId).catch((err: Error) => {
+        console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_webhook_sync_failed', outcome: 'failure', error_class: err.constructor.name, context: { message: err.message, owner, repo } }));
+      });
+    }
+  }
+
+  res.status(200).json({ ok: true });
+});
+
 export default router;

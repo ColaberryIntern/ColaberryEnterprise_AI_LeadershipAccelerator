@@ -10,7 +10,7 @@
  * reference). The 3 source docs are uploaded to the project Vault so the build
  * system (Kes + Claude Code) can open exactly what it is building.
  *
- * Dates are STAGGERED and all complete by the 2026-07-13 start date.
+ * Dates are STAGGERED and all complete by the 2026-07-27 start date.
  *
  * Idempotent UPSERT (list/group by name, todo by content; refreshes assignee +
  * due_on + description on re-run). Vault upload dedups by filename.
@@ -35,7 +35,7 @@ const LIST_NAME = 'Student Platform Build';
 // owners
 const KES = ['kes'], ALEEM = ['aleem'], ALI = ['ali'], ALI_ALEEM = ['ali', 'aleem'], KES_CB = ['kes', 'cb'], SWATI_CB = ['swati', 'cb'];
 
-// Phase due dates - ALL complete by the 2026-07-13 start date, staggered across
+// Phase due dates - ALL complete by the 2026-07-27 start date, staggered across
 // the runway: decisions -> design -> builds staggered epic by epic -> sign-offs.
 const D = {
   decide: '2026-06-15',
@@ -206,7 +206,7 @@ function labelFor(handles) {
 async function main() {
   console.log(`=== Student Platform Build backlog -> project ${LAUNCH.projectId} ===`);
   const totalTodos = GROUPS.reduce((n, g) => n + g.todos.length, 0);
-  console.log(`${GROUPS.length} groups, ${totalTodos} todos (staggered, all due <= 2026-07-13)\n`);
+  console.log(`${GROUPS.length} groups, ${totalTodos} todos (staggered, all due <= 2026-07-27)\n`);
   for (const g of GROUPS) {
     console.log(g.name);
     for (const t of g.todos) console.log(`   - [${labelFor(t.who)}] ${t.c}  (due ${t.due})`);
@@ -232,7 +232,7 @@ async function main() {
     } catch (e) { console.log(`   skipped ${doc.file}: ${e.message}`); }
   }
 
-  const list = await ops.createTodolist({ projectId: LAUNCH.projectId, name: LIST_NAME, description: `<div><h3>Student Platform Build</h3><p>Kes builds; Aleem design is approval-gated; Ali signs off each piece. Staggered, all complete by the 2026-07-13 start date. ${DOCS_REF}</p></div>` });
+  const list = await ops.createTodolist({ projectId: LAUNCH.projectId, name: LIST_NAME, description: `<div><h3>Student Platform Build</h3><p>Kes builds; Aleem design is approval-gated; Ali signs off each piece. Staggered, all complete by the 2026-07-27 start date. ${DOCS_REF}</p></div>` });
   console.log(`\nList: "${list.name}" (id ${list.id})`);
 
   let groupsN = 0, todosN = 0;

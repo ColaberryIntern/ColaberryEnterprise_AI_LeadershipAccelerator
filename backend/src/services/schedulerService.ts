@@ -5,6 +5,7 @@ import nodemailer from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
 import { env } from '../config/env';
+import { runWithRequestContext } from '../utils/requestContext';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
 import { generateMessage, buildConversationHistory } from './aiMessageService';
@@ -17,6 +18,7 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
@@ -34,25 +36,29 @@ import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from '.
  * measures duration, logs to ai_agent_activity_logs, and updates agent metrics.
  */
 async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Promise<void> {
+  // Trace propagation (P1-4): seed a trace_id into AsyncLocalStorage so every downstream AI call this
+  // job makes (getInstrumentedOpenAI / emitAiEvent) correlates to THIS run instead of emitting null.
+  const traceId = uuidv4();
+  const traced = () => runWithRequestContext({ traceId }, fn);
+
   let agent: InstanceType<typeof AiAgent> | null = null;
   try {
     agent = await AiAgent.findOne({ where: { agent_name: agentName } });
   } catch {
     // If registry lookup fails, run the job anyway (don't break existing behavior)
-    await fn();
+    await traced();
     return;
   }
 
   // If agent not in registry, run untracked
   if (!agent) {
-    await fn();
+    await traced();
     return;
   }
 
   // Check enabled and paused status
   if (!agent.enabled || agent.status === 'paused') return;
 
-  const traceId = uuidv4();
   const start = Date.now();
   let result: 'success' | 'failed' = 'success';
   let errorMsg: string | null = null;
@@ -60,7 +66,7 @@ async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Pr
 
   try {
     await agent.update({ status: 'running' });
-    await fn();
+    await traced();
   } catch (err: any) {
     result = 'failed';
     errorMsg = err.message || String(err);
@@ -510,6 +516,39 @@ async function calculatePacedLimit(
 async function processScheduledActions(): Promise<void> {
   const processorId = `proc_${process.pid}_${Date.now()}`;
 
+  // Self-heal sends stranded in 'pending' after the email actually went out (e.g. a restart
+  // between send and status-update). Runs each cycle; ~0 rows in steady state. This is what
+  // unclogs the fetch when the queue fills with already-sent rows.
+  await reconcileStrandedSends();
+
+  // Expire "zombie" actions before claiming. An action whose scheduled_for is
+  // well in the past should never fire (a months-old sequence step sending today
+  // is wrong, not late). Without this the per-lead daily cap re-defers such
+  // actions to "tomorrow" forever, so they never drain and send_throughput stays
+  // red (730 Mar-May zombies, 2026-06-23 / CC-20260623-q8m4). One bulk UPDATE per
+  // tick; affects 0 rows in steady state. Configurable via setting
+  // `scheduled_action_max_age_days` (0/negative disables).
+  try {
+    const maxAgeDays = resolveMaxAgeDays(await getSetting('scheduled_action_max_age_days'));
+    if (maxAgeDays > 0) {
+      const cutoff = staleCutoff(new Date(), maxAgeDays);
+      const [, expiredMeta] = await sequelize.query(
+        `UPDATE scheduled_emails
+            SET status = 'cancelled',
+                metadata = COALESCE(metadata, '{}'::jsonb)
+                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason)
+          WHERE status = 'pending' AND scheduled_for < :cutoff`,
+        { replacements: { cutoff, reason: `auto-expired: >${maxAgeDays}d past scheduled_for` } }
+      );
+      const expiredCount = (expiredMeta as any)?.rowCount ?? 0;
+      if (expiredCount > 0) {
+        console.log(`[Scheduler] Expired ${expiredCount} stale scheduled action(s) (>${maxAgeDays}d past scheduled_for)`);
+      }
+    }
+  } catch (err: any) {
+    console.error('[Scheduler] stale-action expiry failed (non-blocking):', err.message);
+  }
+
   // Atomically claim pending actions using FOR UPDATE SKIP LOCKED
   // This prevents race conditions if multiple scheduler instances run concurrently
   let pendingActions: InstanceType<typeof ScheduledEmail>[];
@@ -914,6 +953,44 @@ async function recoverStaleActions(): Promise<number> {
   return count;
 }
 
+/**
+ * Self-heal stranded sends. A send can leave its row stuck in 'pending' when the process
+ * restarts between "email left Mandrill / comm-log written" and "row marked sent". Such rows
+ * sit unfetchable (attempts_made >= max_attempts) and clog the queue forever, so the fetch
+ * starves on real work. If a matching OUTBOUND communication_log exists (same lead + campaign
+ * + subject, logged after the row was created), the email DID go out, so flip the row to
+ * 'sent' (dated from the comm-log) rather than risk a duplicate re-send. Idempotent and cheap:
+ * affects ~0 rows in steady state. The created_at guard prevents a re-enrolled row (whose
+ * matching comm-log predates it) from being wrongly suppressed.
+ */
+async function reconcileStrandedSends(): Promise<number> {
+  try {
+    const [, meta] = await sequelize.query(`
+      UPDATE scheduled_emails se
+      SET status = 'sent',
+          sent_at = COALESCE(se.sent_at, (
+            SELECT MAX(cl.created_at) FROM communication_logs cl
+            WHERE cl.lead_id = se.lead_id AND cl.campaign_id = se.campaign_id
+              AND cl.direction = 'outbound' AND cl.subject = se.subject)),
+          metadata = COALESCE(se.metadata, '{}'::jsonb)
+            || jsonb_build_object('reconciled_stranded', true, 'reconciled_at', NOW())
+      WHERE se.status = 'pending'
+        AND se.channel = 'email'
+        AND EXISTS (
+          SELECT 1 FROM communication_logs cl
+          WHERE cl.lead_id = se.lead_id AND cl.campaign_id = se.campaign_id
+            AND cl.direction = 'outbound' AND cl.subject = se.subject
+            AND cl.created_at >= se.created_at)
+    `);
+    const n = (meta as any)?.rowCount ?? 0;
+    if (n > 0) console.log(`[Scheduler] Reconciled ${n} stranded send(s) (already emailed, stuck pending) -> sent`);
+    return n;
+  } catch (err: any) {
+    console.error('[Scheduler] Stranded-send reconciliation failed (non-blocking):', err.message);
+    return 0;
+  }
+}
+
 async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
   const mailer = getTransporter();
   if (!mailer) {
@@ -966,10 +1043,14 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     mcMetadata.lead_id = action.lead_id;
   }
 
+  // The sequence step content appends its own CAN-SPAM line; strip it so the single legal
+  // footer rendered by the wrapper is not duplicated.
+  emailBody = emailBody.replace(/<p[^>]*>[^<]*Reply STOP[^<]*<\/p>/gi, '');
+
   // Executive outreach: minimal wrapper (personal email feel, no corporate footer)
   let html = campaignType === 'executive_outreach'
     ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id })
-    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id });
+    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, senderName, senderEmail });
 
   // Deterministic validator for Ali personal emails — ensure no corporate artifacts
   if (campaignType === 'executive_outreach') {
@@ -986,6 +1067,23 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       .replace(/click here to opt out/gi, '')
       .replace(/<p>\s*<\/p>/g, '');
   }
+
+  // cold_outbound gets its clean signature from wrapEmailHtml. Executive-outreach uses the
+  // minimal personal wrapper, so append the same clean signature here (after the strip) so
+  // those personal emails also carry the company name + website. No duplication: only one
+  // path runs per send.
+  if (campaignType === 'executive_outreach') {
+    const sig = `
+  <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
+    <tr><td style="border-left:3px solid #1a365d;padding-left:14px;">
+      <div style="font-weight:700;font-size:16px;color:#1a365d;">${senderName}</div>
+      <div style="font-size:14px;color:#718096;">Colaberry Inc.</div>
+      <div style="font-size:14px;margin-top:6px;"><a href="https://enterprise.colaberry.ai" style="color:#2b6cb0;text-decoration:none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color:#2b6cb0;text-decoration:none;">${senderEmail}</a></div>
+    </td></tr>
+  </table>`;
+    html = html.includes('</body>') ? html.replace('</body>', `${sig}\n</body>`) : `${html}${sig}`;
+  }
+
   // Reply-To: use reply subdomain so Mandrill catches inbound replies
   // For Ali personal outreach, reply goes to ali@colaberry.com directly (he handles personally)
   const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
@@ -1001,6 +1099,12 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     text: stripHtml(html),
     headers: {
       'X-MC-Metadata': JSON.stringify(mcMetadata),
+      // Force Mandrill open + click tracking on every send. The account-level
+      // default has open-tracking OFF (verified empirically 2026-06-23), so without
+      // this header no open pixel is injected and opens never reach the webhook —
+      // the War Room shows zero engagement even when emails are opened. Clicks are
+      // wrapped by account default, but we set clicks_all explicitly for determinism.
+      'X-MC-Track': 'opens,clicks_all',
       'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
       'X-MC-Tags': action.campaign_id ? `campaign-sequence,${mcMetadata.trigger || 'campaign'}` : 'campaign-sequence',
     },
@@ -1403,12 +1507,14 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
   `.trim();
 }
 
-function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number }): string {
-  const advisorParams: string[] = [];
-  if (tracking?.campaignType) { advisorParams.push('utm_source=email', `utm_medium=${tracking.campaignType}`); }
-  if (tracking?.campaignId) { advisorParams.push(`utm_campaign=${tracking.campaignId}`); }
-  if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
-  const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
+function wrapEmailHtml(
+  body: string,
+  tracking?: { campaignId?: string; campaignType?: string; leadId?: number; senderName?: string; senderEmail?: string },
+): string {
+  const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
+  const senderEmail = tracking?.senderEmail || env.emailFrom;
+  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / AI Systems Architect' : '';
+  const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
 
   // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)
   // and inject a styled button after the body so it's visually prominent rather than buried inline.
@@ -1433,24 +1539,23 @@ function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignT
   return `
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
-    h1 { color: #1a365d; font-size: 24px; }
-    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
-    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
-  </style>
-</head>
-<body>
-  ${body}
-  ${primaryCtaButton}
-  <div class="footer">
-    <p style="font-size: 13px; margin-top: 12px;"><a href="${advisorUrl}" style="color: #3b82f6; text-decoration: none; font-weight: 600;">Design Your AI Organization in 5 Minutes &rarr;</a></p>
-    <p>Colaberry Enterprise AI Division<br>
-    AI Leadership | Architecture | Implementation | Advisory</p>
-    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+  <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#2d3748;line-height:1.6;max-width:600px;margin:0 auto;padding:24px;">
+    ${body}
+    ${primaryCtaButton}
+    <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;">
+      <tr><td style="border-left:3px solid #1a365d;padding-left:14px;font-family:Arial,Helvetica,sans-serif;">
+        <div style="font-weight:700;font-size:16px;color:#1a365d;">${senderName}</div>
+        ${titleLine}
+        <div style="font-size:14px;color:#718096;">Colaberry Inc.</div>
+        <div style="font-size:14px;margin-top:6px;color:#2d3748;"><a href="https://enterprise.colaberry.ai" style="color:#2b6cb0;text-decoration:none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color:#2b6cb0;text-decoration:none;">${senderEmail}</a></div>
+      </td></tr>
+    </table>
+    <div style="margin-top:28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;color:#a0aec0;line-height:1.5;">
+      Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075<br>
+      Not relevant? Reply &ldquo;unsubscribe&rdquo; or <a href="mailto:${senderEmail}?subject=unsubscribe" style="color:#a0aec0;">click here to opt out</a>.
+    </div>
   </div>
 </body>
 </html>
@@ -2558,6 +2663,30 @@ export function startScheduler(): void {
   // rebuilds. Crontab entries to register on the VPS:
   //   0 11 * * * (every day, 6 AM CT)        -> sendFamilyCommandCenterDaily.js
   //   0 13 * * 1 (Monday, 8 AM CT)           -> sendFamilyCommandCenterDaily.js --weekly
+
+  // ── Portfolio GitHub Sync Agent (daily 2:15 AM UTC) ──────────────────────────
+  // Batch-syncs GitHub activity (commits_last_7d, open_prs, total_stars,
+  // contribution_graph_json) for every active enrollment with a connected repo.
+  // Webhook-triggered syncs already handle push events in real time; this job
+  // is the fallback that catches students who haven't pushed recently or whose
+  // webhooks missed. Each student's sync failure is isolated — one error does
+  // not abort the others.
+  cron.schedule('15 2 * * *', () => {
+    instrumentCronJob('PortfolioGitHubSyncAgent', async () => {
+      const { syncAllActiveStudentGitHubActivity } = await import('./githubIntegrationService');
+      const result = await syncAllActiveStudentGitHubActivity();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'portfolio_github_sync_complete',
+        outcome: 'success',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Portfolio GitHub sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Portfolio GitHub sync agent: daily at 02:15 UTC');
 }
 
 // ---------------------------------------------------------------------------

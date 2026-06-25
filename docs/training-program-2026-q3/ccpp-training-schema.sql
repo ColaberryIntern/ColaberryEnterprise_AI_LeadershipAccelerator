@@ -35,7 +35,7 @@ BEGIN
     '12-week project-driven Anthropic-aligned residency. Sold as 4 stackable 3-week Architect Intensives at $499 each (TWC compliance) or as a $1,497 bundle. Hosted on enterprise.colaberry.com.',
     'AISA',
     '2026-07-10',
-    25
+    40
   );
 END;
 
@@ -63,7 +63,8 @@ BEGIN
 
   -- Seed Cohort 1 (Founding Cohort)
   INSERT INTO dbo.ADF_TrainingCohorts (TrainingProgramID, CohortNumber, CohortStartDate, CohortEndDate, EnrollmentOpenDate, EnrollmentCloseDate, SizeCap)
-  SELECT TrainingProgramID, 1, '2026-07-13', '2026-10-02', '2026-07-10', '2026-07-12', 25
+  -- Dates updated 2026-06-19 (Ali): orientation 2026-07-23 start, Expo 2026-10-16 end, enrollment opens 2026-07-10, closes 2026-07-22.
+  SELECT TrainingProgramID, 1, '2026-07-23', '2026-10-16', '2026-07-10', '2026-07-22', 40
   FROM dbo.ADF_TrainingPrograms WHERE ProgramCode = 'AISA';
 END;
 

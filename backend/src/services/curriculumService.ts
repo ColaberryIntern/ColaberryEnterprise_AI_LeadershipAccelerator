@@ -1,4 +1,5 @@
 import CurriculumModule from '../models/CurriculumModule';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import CurriculumLesson from '../models/CurriculumLesson';
 import LessonInstance from '../models/LessonInstance';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
@@ -626,8 +627,7 @@ export async function gradeArtifacts(
   });
   if (!instance) throw new Error('Lesson instance not found');
 
-  const { default: OpenAI } = await import('openai');
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getInstrumentedOpenAI({ workflow_id: 'curriculum' });
 
   const gradingResults: Array<{
     name: string;

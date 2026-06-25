@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { env } from './config/env';
 import { connectDatabase, sequelize } from './config/database';
 import { errorHandler } from './middlewares/errorHandler';
+import { traceMiddleware } from './middlewares/traceMiddleware';
 import healthRoutes from './routes/healthRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
@@ -38,6 +39,11 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors());
 
+// Trace middleware (TBI audit P1-4): assign/propagate an x-trace-id for every request
+// (including webhooks) and run the request inside an AsyncLocalStorage context so AI events
+// emitted deep in the call chain are correlated to the originating request.
+app.use(traceMiddleware);
+
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);
 
@@ -54,14 +60,14 @@ app.use(intelligenceMiddleware());
 app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
-app.use(adminRoutes);
-app.use(calendarRoutes);
-app.use(strategyPrepRoutes);
-app.use(trackingRoutes);
 app.use(participantRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
 app.use(v1Routes);
+app.use(adminRoutes);
+app.use(calendarRoutes);
+app.use(strategyPrepRoutes);
+app.use(trackingRoutes);
 
 // OpenClaw tracked short URL redirect (public, no auth)
 app.get('/i/:tag', async (req, res) => {
@@ -359,6 +365,42 @@ async function ensureIngestionSchema() {
 }
 
 // Explicit migration: ensure composite index for the admin communications
+// AI events telemetry table (TBI audit P1). Explicit idempotent creation because prod does
+// not run sequelize.sync (DB_BOOT_SYNC is off by default); columns mirror the AiEvent model.
+async function ensureAiEventsSchema() {
+  try {
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS ai_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trace_id UUID,
+        event_type VARCHAR(50) NOT NULL,
+        workflow_id VARCHAR(100),
+        agent_id VARCHAR(100),
+        actor_type VARCHAR(20),
+        user_id VARCHAR(100),
+        external_system VARCHAR(40),
+        model VARCHAR(100),
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        total_tokens INTEGER,
+        cost_usd DECIMAL(12,6),
+        duration_ms INTEGER,
+        outcome VARCHAR(20) NOT NULL DEFAULT 'success',
+        error_class VARCHAR(100),
+        cache_hit BOOLEAN NOT NULL DEFAULT false,
+        metadata JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    for (const idx of ['event_type', 'created_at', 'trace_id', 'model', 'outcome']) {
+      await sequelize.query(`CREATE INDEX IF NOT EXISTS ai_events_${idx} ON ai_events(${idx})`);
+    }
+    console.log('[DB] ai_events schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] ai_events schema ensure failed:', err?.message);
+  }
+}
+
+// Explicit migration: ensure composite index for the admin communications
 // list endpoint's outcomes subquery. Sync-based index creation is unreliable
 // on prod (alter sync hits out-of-shared-memory on 170+ models).
 async function ensureCommunicationIndexes() {
@@ -519,6 +561,15 @@ async function start(): Promise<void> {
   await ensureOpsCommandCenterSchema();
   // Missed Opportunities Report schema (idempotent, before alter sync).
   await ensureMissedOpportunitiesSchema();
+  // AI events telemetry table (TBI audit P1) — explicit because prod does not run sync.
+  await ensureAiEventsSchema();
+  // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
+  try {
+    const { ensureConsentSchema } = await import('./services/consentService');
+    await ensureConsentSchema();
+  } catch (err: any) {
+    console.warn('[DB] consent_records schema ensure failed:', err?.message);
+  }
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');
@@ -527,14 +578,24 @@ async function start(): Promise<void> {
     console.warn('[OpsAutomation] seed failed:', err?.message);
   }
 
-  try {
-    await sequelize.sync({ alter: true });
-  } catch (err: any) {
-    console.warn('[DB] sync({ alter: true }) failed, falling back to create-only sync:', err?.message);
+  // Schema is managed explicitly above (ensureOpsCommandCenterSchema, lead-ingestion,
+  // Missed Opportunities, etc.) because sequelize.sync({ alter: true }) is unreliable
+  // on this 215-model prod graph — see the comment on ensureOpsCommandCenterSchema.
+  // It is also SLOW: even when the alter pass fails, the fallback create-only sync runs
+  // a full per-table schema introspection across all 215 models (~6 min on prod) before
+  // erroring on a pre-existing enum drift (anthropic_content_registry.content_type), so
+  // every boot/deploy became a multi-minute API outage. Off by default; set
+  // DB_BOOT_SYNC=true only for a deliberate, supervised schema reconciliation.
+  if (process.env.DB_BOOT_SYNC === 'true') {
     try {
-      await sequelize.sync();
-    } catch (fallbackErr: any) {
-      console.warn('[DB] fallback sync also failed:', fallbackErr?.message);
+      await sequelize.sync({ alter: true });
+    } catch (err: any) {
+      console.warn('[DB] sync({ alter: true }) failed, falling back to create-only sync:', err?.message);
+      try {
+        await sequelize.sync();
+      } catch (fallbackErr: any) {
+        console.warn('[DB] fallback sync also failed:', fallbackErr?.message);
+      }
     }
   }
   await ensureCampaignLinkColumns();

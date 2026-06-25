@@ -41,6 +41,7 @@ import SectionConfig from './SectionConfig';
 import ArtifactDefinition from './ArtifactDefinition';
 import VariableStore from './VariableStore';
 import GitHubConnection from './GitHubConnection';
+import StudentGithubActivity from './StudentGithubActivity';
 import SkillDefinition from './SkillDefinition';
 import ProgramBlueprint from './ProgramBlueprint';
 import MiniSection from './MiniSection';
@@ -87,6 +88,7 @@ import AiAgentActivityLog from './AiAgentActivityLog';
 import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
+import AiEvent from './AiEvent';
 import DatasetRegistry from './DatasetRegistry';
 import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
@@ -151,6 +153,7 @@ import StrategicInitiative from './StrategicInitiative';
 import RequirementsGenerationJob from './RequirementsGenerationJob';
 import MayaConversationOutcome from './MayaConversationOutcome';
 import MentorIntervention from './MentorIntervention';
+import MentorReviewItem from './MentorReviewItem';
 import SectionExecutionLog from './SectionExecutionLog';
 import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
@@ -493,6 +496,10 @@ VariableStore.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_id', as: 'ar
 // GitHubConnection associations
 Enrollment.hasOne(GitHubConnection, { foreignKey: 'enrollment_id', as: 'githubConnection' });
 GitHubConnection.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// StudentGithubActivity associations
+Enrollment.hasOne(StudentGithubActivity, { foreignKey: 'enrollment_id', as: 'githubActivity' });
+StudentGithubActivity.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // SessionGate -> ArtifactDefinition (bidirectional)
 SessionGate.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
@@ -895,6 +902,7 @@ export {
   ContentGenerationLog,
   AiAgent,
   AiAgentActivityLog,
+  AiEvent,
   CampaignHealth,
   CampaignError,
   AiSystemEvent,
@@ -1056,6 +1064,7 @@ export {
   // AI Systems Architect Accelerator
   ProjectDna,
   CurriculumCourseLink,
+  StudentGithubActivity,
 };
 
 // --- AI Company Layer associations ---

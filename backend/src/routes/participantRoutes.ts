@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import {
@@ -109,8 +110,7 @@ router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requir
     const rawText = fs.readFileSync(file.path, 'utf-8').substring(0, 20000);
 
     // Summarize via OpenAI
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'participant_routes' });
     const response = await openai.chat.completions.create({
       model: process.env.AI_MODEL || 'gpt-4o-mini',
       messages: [
@@ -182,6 +182,45 @@ router.use(projectRoutes);
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);
 router.get('/api/portal/mentor/history', requireParticipant, handleGetMentorHistory);
+
+// Mentor feedback on submissions
+router.get('/api/portal/submissions/:submissionId/mentor-feedback', requireParticipant, async (req, res) => {
+  try {
+    const { getFeedbackForSubmission } = await import('../services/mentorFeedbackService');
+    const feedback = await getFeedbackForSubmission(
+      req.params.submissionId as string,
+      req.participant!.sub
+    );
+    if (!feedback) return res.status(404).json({ error: 'No mentor feedback available yet' });
+    res.json(feedback);
+  } catch (err: any) {
+    console.error('[ParticipantRoutes] mentor-feedback error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve mentor feedback' });
+  }
+});
+
+// GitHub OAuth endpoints
+router.get('/api/portal/github/oauth/start', requireParticipant, async (req, res) => {
+  const { buildOAuthUrl } = await import('../services/githubIntegrationService');
+  res.redirect(buildOAuthUrl(req.participant!.sub));
+});
+
+// Callback from GitHub — no session cookie present, identity comes from state param
+router.get('/api/portal/github/oauth/callback', async (req, res) => {
+  const { code, state: enrollmentId } = req.query;
+  if (!code || !enrollmentId || typeof code !== 'string' || typeof enrollmentId !== 'string') {
+    res.status(400).json({ error: 'Missing code or state' });
+    return;
+  }
+  try {
+    const { handleOAuthCallback } = await import('../services/githubIntegrationService');
+    await handleOAuthCallback(code, enrollmentId);
+    res.redirect('/portal/home?github_connected=1');
+  } catch (err: any) {
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_oauth_callback_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'GitHub connection failed' });
+  }
+});
 
 // GitHub integration endpoints
 router.post('/api/portal/github/connect', requireParticipant, async (req, res) => {

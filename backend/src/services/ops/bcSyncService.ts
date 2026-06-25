@@ -19,6 +19,8 @@
 import OpsBcTodo from '../../models/OpsBcTodo';
 import OpsBcProject from '../../models/OpsBcProject';
 import { sequelize } from '../../config/database';
+import { getBcToken, refreshBcToken, isAuthError } from './basecampToken';
+import { BC_RETRYABLE_STATUS, bcBackoffMs, bcPace, sleep } from './bcRetry';
 
 // Projects with no BC activity (no todo updated, no project metadata
 // touched) in this many days get auto-demoted out of the CB-managed set
@@ -65,12 +67,6 @@ const BC_API = `https://3.basecampapi.com/${BC_ACCOUNT_ID}`;
 const BC_USER_AGENT =
   process.env.BASECAMP_USER_AGENT || 'Colaberry AI Ops Command Center (ali@colaberry.com)';
 
-function getBasecampToken(): string {
-  let t = process.env.BASECAMP_ACCESS_TOKEN;
-  if (!t) throw new Error('BASECAMP_ACCESS_TOKEN not set');
-  if (t.startsWith('Bearer ')) t = t.slice(7);
-  return t;
-}
 
 function bcHeaders(token: string): Record<string, string> {
   return {
@@ -80,26 +76,44 @@ function bcHeaders(token: string): Record<string, string> {
   };
 }
 
-async function bcGet<T>(token: string, url: string): Promise<T> {
+// Resilient BC GET: refreshes the token from CCPP on a 401 (token rotation),
+// and backs off + retries on a 429/503 (rate limit). Without the 429 handling
+// the sync dropped hundreds of todolists per cycle when Basecamp throttled the
+// burst, leaving the ops mirror incomplete.
+const BC_MAX_RETRIES = 5;
+async function bcGet<T>(url: string): Promise<T> {
   const u = url.startsWith('http') ? url : `${BC_API}${url}`;
-  const r = await fetch(u, { headers: bcHeaders(token) });
-  if (!r.ok) {
-    const body = await r.text().catch(() => '');
-    throw new Error(`BC GET ${u} -> ${r.status} ${body.slice(0, 200)}`);
+  let refreshed = false;
+  for (let attempt = 0; ; attempt++) {
+    await bcPace(); // stay under BC's rate limit so 429s rarely happen at all
+    const r = await fetch(u, { headers: bcHeaders(getBcToken()) });
+    if (isAuthError(r.status) && !refreshed) {
+      await refreshBcToken();
+      refreshed = true;
+      continue;
+    }
+    if (BC_RETRYABLE_STATUS.has(r.status) && attempt < BC_MAX_RETRIES) {
+      await sleep(bcBackoffMs(r.headers.get('Retry-After'), attempt));
+      continue;
+    }
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      throw new Error(`BC GET ${u} -> ${r.status} ${body.slice(0, 200)}`);
+    }
+    return (await r.json()) as T;
   }
-  return (await r.json()) as T;
 }
 
 /**
  * Pull every page of a BC list endpoint. BC paginates via Link: <next>; rel="next"
  * but the simpler approach in this codebase is to read `?page=N` until empty.
  */
-async function bcGetAll<T>(token: string, url: string): Promise<T[]> {
+async function bcGetAll<T>(url: string): Promise<T[]> {
   const acc: T[] = [];
   for (let page = 1; page < 50; page++) {
     const sep = url.includes('?') ? '&' : '?';
     const pageUrl = `${url}${sep}page=${page}`;
-    const data = await bcGet<T[]>(token, pageUrl);
+    const data = await bcGet<T[]>(pageUrl);
     if (!Array.isArray(data) || data.length === 0) break;
     acc.push(...data);
     if (data.length < 15) break; // BC's typical page size cutoff
@@ -118,11 +132,105 @@ export interface BcSyncResult {
   errors: Array<{ stage: string; message: string }>;
 }
 
+// A Todo as returned by the account-wide recordings feed: the todo fields plus
+// its project (bucket) and todolist (parent).
+interface BcTodoRecording extends BcTodo {
+  bucket: { id: number; name: string };
+  parent: { id: number; type: string; title: string };
+}
+
+// Projects excluded from the ops mirror — high-volume data that doesn't belong
+// in the "waiting on human" ops queue: "Center of Excellence" is student
+// coursework (~26k todos) and "RMG Mortgage" is bulk project data (~2.4k todos).
+// Matched by NAME so renamed/new ones are auto-excluded; override via env.
+const EXCLUDE_PROJECT_NAME_RE = new RegExp(
+  process.env.OPS_SYNC_EXCLUDE_NAME_RE || 'center of excellence|rmg mortgage',
+  'i',
+);
+export function isExcludedProject(name?: string | null): boolean {
+  return !!name && EXCLUDE_PROJECT_NAME_RE.test(name);
+}
+
+// Re-fetch a small overlap before the cursor so a todo updated right at the
+// boundary (or under clock skew) is never missed; upserts are idempotent.
+const SYNC_OVERLAP_MS = 10 * 60 * 1000;
+// Safety cap on feed pages. Steady-state incremental stops far earlier (the
+// first all-older page); this only bounds a one-time backfill of an empty mirror
+// (a partial backfill just continues on the next run as the cursor advances).
+const FEED_MAX_PAGES = 1200;
+
+// High-water mark of what's already synced: max bc_updated_at in the mirror,
+// minus an overlap. null when the mirror is empty (=> full backfill).
+async function getSyncCursorMs(): Promise<number | null> {
+  const [rows] = (await sequelize.query(
+    'SELECT max(bc_updated_at) AS m FROM ops_bc_todos',
+  )) as [Array<{ m: string | Date | null }>, unknown];
+  const m = rows?.[0]?.m;
+  return m ? new Date(m).getTime() - SYNC_OVERLAP_MS : null;
+}
+
+// Sweep the Todo recordings feed newest-updated-first, returning todos updated
+// at/after sinceMs. Stops at the first page entirely older than the cursor (or
+// the first empty page); sinceMs=null backfills up to FEED_MAX_PAGES pages.
+export async function fetchUpdatedTodos(
+  sinceMs: number | null,
+  bucketIds?: number[],
+): Promise<BcTodoRecording[]> {
+  const out: BcTodoRecording[] = [];
+  // Scope the feed to the real ops projects server-side so we never page through
+  // the high-churn Center-of-Excellence (student) buckets just to skip them.
+  const bucketParam = bucketIds && bucketIds.length ? `&bucket=${bucketIds.join(',')}` : '';
+  for (let page = 1; page <= FEED_MAX_PAGES; page++) {
+    const items = await bcGet<BcTodoRecording[]>(
+      `/projects/recordings.json?type=Todo&sort=updated_at&direction=desc${bucketParam}&page=${page}`,
+    );
+    if (!Array.isArray(items) || items.length === 0) break;
+    let anyFresh = false;
+    for (const it of items) {
+      if (!it.bucket?.id || !it.parent?.id) continue; // defensive
+      // updated_at gates the loop, so still count an excluded item as "fresh"
+      // (don't stop early); just don't sync it.
+      const fresh = sinceMs == null || new Date(it.updated_at).getTime() >= sinceMs;
+      if (fresh) anyFresh = true;
+      if (fresh && !isExcludedProject(it.bucket.name)) out.push(it);
+    }
+    if (sinceMs != null && !anyFresh) break; // whole page older than cursor -> done
+  }
+  return out;
+}
+
+// Single-flight: a rate-limit-paced pass can exceed the 2-min cron interval.
+// Without this guard the cron stacks concurrent passes that fight for the same
+// rate-limit budget and never drain (observed 2026-06-16). A skipped tick is
+// harmless — the next one re-syncs (upserts are idempotent by bc_id).
+let bcSyncInFlight = false;
+
+export async function runBcSync(): Promise<BcSyncResult> {
+  if (bcSyncInFlight) {
+    return {
+      started_at: new Date(),
+      finished_at: new Date(),
+      projects_seen: 0,
+      todolists_seen: 0,
+      todos_seen: 0,
+      todos_inserted: 0,
+      todos_updated: 0,
+      errors: [{ stage: 'skipped', message: 'previous sync still in flight' }],
+    };
+  }
+  bcSyncInFlight = true;
+  try {
+    return await runBcSyncInner();
+  } finally {
+    bcSyncInFlight = false;
+  }
+}
+
 /**
  * Run one full sync pass. Safe to invoke concurrently — each upsert is
  * keyed on bc_id so duplicate writes converge to the same end state.
  */
-export async function runBcSync(): Promise<BcSyncResult> {
+async function runBcSyncInner(): Promise<BcSyncResult> {
   const result: BcSyncResult = {
     started_at: new Date(),
     finished_at: new Date(),
@@ -134,9 +242,11 @@ export async function runBcSync(): Promise<BcSyncResult> {
     errors: [],
   };
 
-  let token: string;
+  // Token is resolved per-request inside bcGet (env token, with CCPP refresh +
+  // retry on a 401), so a rotation no longer fails the sync. Surface a clear
+  // auth error only if even the first resolve throws (no token anywhere).
   try {
-    token = getBasecampToken();
+    getBcToken();
   } catch (err: any) {
     result.errors.push({ stage: 'auth', message: err.message });
     result.finished_at = new Date();
@@ -145,7 +255,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
 
   let projects: BcProject[];
   try {
-    projects = await bcGetAll<BcProject>(token, '/projects.json');
+    projects = await bcGetAll<BcProject>('/projects.json');
   } catch (err: any) {
     result.errors.push({ stage: 'list_projects', message: err.message });
     result.finished_at = new Date();
@@ -154,6 +264,7 @@ export async function runBcSync(): Promise<BcSyncResult> {
   result.projects_seen = projects.length;
 
   for (const project of projects) {
+    if (isExcludedProject(project.name)) continue; // Center of Excellence = student data, not ops
     // Upsert project metadata so the UI can show the name (and so the
     // CB-managed filter has somewhere to live). is_cb_managed defaults to
     // true on first insert; subsequent syncs do NOT overwrite the flag —
@@ -183,59 +294,32 @@ export async function runBcSync(): Promise<BcSyncResult> {
       });
     }
 
-    // Each project's "todoset" dock entry leads to its todolists.
-    const todosetDock = project.dock?.find((d) => d.name === 'todoset' && d.enabled);
-    if (!todosetDock) continue;
+  }
 
-    let todoset: BcTodoset;
-    try {
-      todoset = await bcGet<BcTodoset>(token, todosetDock.url);
-    } catch (err: any) {
-      result.errors.push({
-        stage: `todoset:${project.id}`,
-        message: err.message,
-      });
-      continue;
-    }
-
-    let todolists: BcTodolist[];
-    try {
-      todolists = await bcGetAll<BcTodolist>(token, todoset.todolists_url);
-    } catch (err: any) {
-      result.errors.push({
-        stage: `todolists:${project.id}`,
-        message: err.message,
-      });
-      continue;
-    }
-    result.todolists_seen += todolists.length;
-
-    for (const tl of todolists) {
-      let todos: BcTodo[];
+  // Incremental todo sync. Re-walking every project -> todoset -> todolist ->
+  // todo is ~2500 BC calls for the ~30k-todo mirror, which at BC's ~5 req/s
+  // rate limit is ~20 min/pass. Instead we sweep Basecamp's account-wide Todo
+  // recordings feed (newest-updated first) and stop at the last-synced cursor,
+  // so a steady-state pass touches only the handful of todos changed since the
+  // last run (seconds). Each feed item carries its project (bucket) and todolist
+  // (parent), so it upserts exactly as the walk did. An empty mirror (null
+  // cursor) backfills everything once.
+  try {
+    const cursorMs = await getSyncCursorMs();
+    const includeBuckets = projects.filter((p) => !isExcludedProject(p.name)).map((p) => p.id);
+    const todos = await fetchUpdatedTodos(cursorMs, includeBuckets);
+    result.todos_seen += todos.length;
+    for (const t of todos) {
       try {
-        todos = await bcGetAll<BcTodo>(token, tl.todos_url);
+        const res = await upsertTodo(t.bucket.id, t.parent.id, t.parent.title, t);
+        if (res === 'inserted') result.todos_inserted++;
+        else if (res === 'updated') result.todos_updated++;
       } catch (err: any) {
-        result.errors.push({
-          stage: `todos:${project.id}:${tl.id}`,
-          message: err.message,
-        });
-        continue;
-      }
-      result.todos_seen += todos.length;
-
-      for (const todo of todos) {
-        try {
-          const upsertResult = await upsertTodo(project.id, tl.id, tl.title, todo);
-          if (upsertResult === 'inserted') result.todos_inserted++;
-          else if (upsertResult === 'updated') result.todos_updated++;
-        } catch (err: any) {
-          result.errors.push({
-            stage: `upsert:${todo.id}`,
-            message: err.message,
-          });
-        }
+        result.errors.push({ stage: `upsert:${t.id}`, message: err.message });
       }
     }
+  } catch (err: any) {
+    result.errors.push({ stage: 'recordings_todos', message: err.message });
   }
 
   // Auto-detect dormant projects: if a project has zero todos with

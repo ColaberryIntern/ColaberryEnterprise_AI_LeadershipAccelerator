@@ -3,8 +3,25 @@ import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+/**
+ * Resolve the JWT signing secret. In production we refuse to fall back to a
+ * predictable default — an unset JWT_SECRET there is an auth-bypass risk
+ * (anyone could forge a valid admin token), so fail fast at boot instead.
+ * Outside production the dev default is kept so local setup stays frictionless.
+ */
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.length > 0) return secret;
+  if (NODE_ENV === 'production') {
+    throw new Error('[env] JWT_SECRET must be set in production — refusing to start with a default secret.');
+  }
+  return 'dev-secret-change-me';
+}
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv: NODE_ENV,
   port: parseInt(process.env.PORT || '3001', 10),
   databaseUrl: process.env.DATABASE_URL || 'postgres://accelerator:accelerator@localhost:5432/accelerator_dev',
 
@@ -16,7 +33,7 @@ export const env = {
   paymentMode: (process.env.PAYMENT_MODE || 'test') as 'test' | 'live',
 
   // JWT
-  jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
+  jwtSecret: resolveJwtSecret(),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '4h',
 
   // Email (SMTP)
@@ -90,6 +107,11 @@ export const env = {
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+
+  // Open House landing/registration page (training.colaberry.com) — destination for the
+  // Accelerator Open House campaign email CTAs. The page is owned by the landing-page work
+  // (BC 9946499609); set the final URL via env once it is live. Default is a placeholder.
+  openHouseLandingUrl: process.env.OPEN_HOUSE_LANDING_URL || 'https://training.colaberry.com/events/open-house',
 
   // Campaign Test Safety
   campaignTestEmailDomain: process.env.CAMPAIGN_TEST_EMAIL_DOMAIN || '@colaberry-test.local',

@@ -151,6 +151,32 @@ export function scoreTodo(todo: {
   };
 }
 
+/**
+ * Apply a per-project weight multiplier (0.0–2.0, default 1.0) to a scored todo
+ * and re-derive BOTH the score and the category from the weighted result.
+ *
+ * Pure + exported for unit tests. Category is computed from the WEIGHTED score
+ * symmetrically: down-weighting a project below the human_required threshold
+ * removes its todos from that category (not just lowers their rank), and
+ * up-weighting can promote into it. Earlier code only promoted on the weighted
+ * score but fell back to the raw-score category, so down-weighting could never
+ * demote a todo out of human_required (fixed 2026-06-15).
+ */
+export function applyProjectWeight(
+  scored: Scored,
+  weight: number,
+): { weightedScore: number; weightedCategory: OpsTodoCategory } {
+  const w = Number.isFinite(weight) ? weight : 1.0;
+  const weightedScore = Math.max(0, Math.min(100, Math.round(scored.urgency_score * w)));
+  const weightedCategory = categorize(
+    weightedScore,
+    scored.signals.has_assignees,
+    scored.signals.days_stale,
+    scored.signals.days_until_due != null, // hasDue: daysUntil is null iff due_on was null
+  );
+  return { weightedScore, weightedCategory };
+}
+
 export interface PriorityEngineRunResult {
   started_at: Date;
   finished_at: Date;
@@ -289,15 +315,13 @@ export async function runPriorityEngine(): Promise<PriorityEngineRunResult> {
         });
 
         // Apply per-project weight multiplier (0.0–2.0, default 1.0). Lets Ali
-        // down-weight noisy high-velocity admin projects without losing them
-        // from the queue. Final score capped 0–100.
+        // down-weight noisy high-velocity admin projects, which lowers both their
+        // rank AND their category (a down-weighted todo drops out of
+        // human_required). Score + category capped/derived in applyProjectWeight.
         const weight = typeof r.project_weight === 'string'
           ? parseFloat(r.project_weight)
           : (r.project_weight ?? 1.0);
-        const weightedScore = Math.max(0, Math.min(100, Math.round(scored.urgency_score * (Number.isFinite(weight) ? weight : 1.0))));
-        const weightedCategory = weightedScore >= 60 && scored.signals.has_assignees
-          ? 'human_required'
-          : scored.category;
+        const { weightedScore, weightedCategory } = applyProjectWeight(scored, weight);
 
         result.todos_scored++;
         result.category_counts[weightedCategory]++;

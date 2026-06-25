@@ -31,6 +31,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const ops = require('./lib/launchPmoOps');
+const { alreadyDrafted } = require('./lib/cbDraftIdempotency');
 
 const projectArg = process.argv.find((a) => a.startsWith('--project='));
 const PROJECT_ID = projectArg ? Number(projectArg.split('=')[1]) : null;
@@ -78,8 +79,8 @@ function isAi(content, description, assignees) {
 const APPROVE_VERBS_RE = /^(review and approve|review|approve|finalize|sign[- ]?off|conduct (final )?review)\s+/i;
 
 async function generateDeliverable({ task, projectName, projectDescription, reviewerName, threadComments }) {
-  const OpenAI = require(path.resolve(__dirname, '../../../node_modules/openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './lib/openaiInstrumented'));
+  const openai = getInstrumentedOpenAI({ workflow_id: 'cb_ai_tasks_generic' });
   const systemPrompt = `You are CB System, the AI execution arm for Colaberry's project portfolio.
 
 You are taking the FIRST PASS on this AI-tier task for project "${projectName}". Your output is a DRAFT deliverable that the human reviewer (${reviewerName}) reviews + refines + sends if it's an outbound communication.
@@ -182,10 +183,18 @@ function mdToHtml(md) {
 
     if (DRY) { console.log(`  [dry] would draft, reviewer=${reviewerName}`); continue; }
 
-    // Pull thread context
+    // Pull thread. The thread is the AUTHORITATIVE dedup (the state file +
+    // --force are not idempotent). If CB already drafted a deliverable here,
+    // skip — this is what prevents the duplicate pile-ups on re-runs.
     let threadComments = [];
     try {
       const cmts = await ops.bcGetAll(`/buckets/${PROJECT_ID}/recordings/${t.id}/comments.json`);
+      if (alreadyDrafted(cmts)) {
+        console.log('  already drafted in thread - skipping (idempotent)');
+        state.tasks[t.id] = state.tasks[t.id] || { at: new Date().toISOString(), skipped: 'already_drafted_in_thread' };
+        saveState(state);
+        continue;
+      }
       threadComments = (cmts || []).slice(-5);
     } catch (_e) {}
 

@@ -1,0 +1,69 @@
+name: CI
+
+# TBI audit P3-1 / Security ci-secrets: typecheck + unit tests + secret-scan + route-auth lint on
+# every PR and on push to main. Non-blocking by default (not a required status check) — it reports,
+# it does not gate merges, unless branch protection is later configured to require it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend-typecheck:
+    name: Backend typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # The backend imports some deps that live in the ROOT package.json (e.g. axios, playwright),
+      # so install root deps first, then backend's; tsc resolves across both node_modules.
+      - name: Install deps (root + backend)
+        run: |
+          npm install --no-audit --no-fund
+          cd backend && npm install --no-audit --no-fund
+      - name: tsc --noEmit
+        working-directory: backend
+        run: npx tsc --noEmit
+
+  frontend-typecheck:
+    name: Frontend typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: tsc --noEmit
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+
+  unit-tests:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Jest (pure unit tests)
+        working-directory: backend
+        run: |
+          npm install --no-audit --no-fund
+          npx jest --ci --testPathPattern "trustRubric|aiCost|piiRedaction"
+
+  guards:
+    name: Secret scan + route-auth lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Secret scan
+        run: node scripts/secret-scan.js
+      - name: Admin route-auth lint
+        run: node scripts/lint-route-auth.js
