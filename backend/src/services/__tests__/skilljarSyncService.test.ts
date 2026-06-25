@@ -111,6 +111,25 @@ describe('skilljarSyncService', () => {
       expect(MockedProgress.upsert).not.toHaveBeenCalled();
     });
 
+    it('rejects a Skilljar account whose email does not match the queried email (no cross-student sync)', async () => {
+      // Skilljar's /users?email= returns a DIFFERENT account than the one queried
+      // (fuzzy/alias/substring matching). The service must treat this as not-found
+      // and never sync someone else's progress under the queried email.
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        data: {
+          results: [{ id: 'sj-other', email: 'someone-else@test.com', first_name: 'X', last_name: 'Y' }],
+          next: null,
+        },
+      });
+
+      const result = await syncUserProgress('kes@test.com');
+
+      expect(result.skilljar_user_id).toBeNull();
+      expect(result.courses_synced).toBe(0);
+      expect(result.error).toBeNull();
+      expect(MockedProgress.upsert).not.toHaveBeenCalled();
+    });
+
     it('returns TimeoutError when Skilljar API times out', async () => {
       const apiError = new Error('timeout of 15000ms exceeded');
       mockAxiosInstance.get.mockRejectedValueOnce(apiError);

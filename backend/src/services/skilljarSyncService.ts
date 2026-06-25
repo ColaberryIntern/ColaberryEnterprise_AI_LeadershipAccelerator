@@ -101,7 +101,12 @@ async function lookupSkilljarUser(
   const resp = await client.get<SkilljarUserListResponse>('/users', {
     params: { email },
   });
-  return resp.data.results[0] ?? null;
+  // Guard: /users?email= may do prefix/substring/alias matching, ignore the param,
+  // or return multiple accounts. Accept ONLY an exact (case-insensitive) email match
+  // so a fuzzy upstream response can never sync another student's progress under the
+  // queried email (silent misattribution).
+  const target = email.trim().toLowerCase();
+  return resp.data.results.find((u) => u.email?.trim().toLowerCase() === target) ?? null;
 }
 
 async function fetchUserProgress(
