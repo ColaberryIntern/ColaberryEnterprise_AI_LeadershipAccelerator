@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { GitHubConnection, StudentGithubActivity } from '../models';
+import { Op } from 'sequelize';
+import { GitHubConnection, StudentGithubActivity, Enrollment } from '../models';
 
 const GITHUB_API = 'https://api.github.com';
 const OAUTH_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
@@ -115,7 +116,7 @@ export async function syncStudentActivity(enrollmentId: string): Promise<void> {
   // Commits in last 7 days
   const commitsRes = await fetch(
     `${GITHUB_API}/repos/${repoPath}/commits?since=${since}&per_page=100`,
-    { headers },
+    { headers, signal: AbortSignal.timeout(15000) },
   );
   const commits: any[] = commitsRes.ok ? await commitsRes.json() : [];
   const commits_last_7d = Array.isArray(commits) ? commits.length : 0;
@@ -139,13 +140,13 @@ export async function syncStudentActivity(enrollmentId: string): Promise<void> {
   // Open PRs
   const prsRes = await fetch(
     `${GITHUB_API}/repos/${repoPath}/pulls?state=open&per_page=100`,
-    { headers },
+    { headers, signal: AbortSignal.timeout(15000) },
   );
   const prs: any[] = prsRes.ok ? await prsRes.json() : [];
   const open_prs = Array.isArray(prs) ? prs.length : 0;
 
   // Repo info (stars + raw snapshot)
-  const repoRes = await fetch(`${GITHUB_API}/repos/${repoPath}`, { headers });
+  const repoRes = await fetch(`${GITHUB_API}/repos/${repoPath}`, { headers, signal: AbortSignal.timeout(15000) });
   const repoData: any = repoRes.ok ? await repoRes.json() : {};
   const total_stars: number = repoData.stargazers_count ?? 0;
   const raw_repos_json = repoRes.ok ? repoData : null;
@@ -183,4 +184,53 @@ export function validateWebhookSignature(rawBody: Buffer, signature: string): bo
 export async function findEnrollmentByRepo(owner: string, repo: string): Promise<string | null> {
   const connection = await GitHubConnection.findOne({ where: { repo_owner: owner, repo_name: repo } });
   return connection?.enrollment_id ?? null;
+}
+
+// ─── Batch Sync (Portfolio Agent) ─────────────────────────────────────────────
+
+export async function syncAllActiveStudentGitHubActivity(): Promise<{
+  synced: number;
+  skipped: number;
+  failed: number;
+}> {
+  const activeEnrollments = await Enrollment.findAll({
+    where: { status: 'active' },
+    attributes: ['id'],
+  });
+
+  if (activeEnrollments.length === 0) return { synced: 0, skipped: 0, failed: 0 };
+
+  const activeIds = activeEnrollments.map((e: any) => e.id as string);
+
+  const allConnections = await GitHubConnection.findAll({
+    where: { enrollment_id: { [Op.in]: activeIds } },
+    attributes: ['enrollment_id', 'repo_owner', 'repo_name'],
+  });
+
+  const connections = allConnections.filter(
+    (c: any) => c.repo_owner && c.repo_name,
+  );
+
+  const skipped = activeIds.length - connections.length;
+  let synced = 0;
+  let failed = 0;
+
+  for (const connection of connections) {
+    try {
+      await syncStudentActivity(connection.enrollment_id);
+      synced++;
+    } catch (err: any) {
+      failed++;
+      console.error(JSON.stringify({
+        level: 'error',
+        service: 'backend',
+        event: 'portfolio_github_sync_student_failed',
+        outcome: 'failure',
+        error_class: err.constructor?.name ?? 'Error',
+        context: { enrollment_id: connection.enrollment_id, message: err.message },
+      }));
+    }
+  }
+
+  return { synced, skipped, failed };
 }

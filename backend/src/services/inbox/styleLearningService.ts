@@ -3,6 +3,7 @@
  * extracts style deltas via Claude, and gradually updates style profiles.
  */
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { Op } from 'sequelize';
 import InboxReplyDraft from '../../models/InboxReplyDraft';
 import InboxLearningEvent from '../../models/InboxLearningEvent';
@@ -140,7 +141,7 @@ async function processSingleDraft(draft: InboxReplyDraft): Promise<void> {
 // ─── Claude Style Comparison ───────────────────────────────────────────────
 
 async function extractStyleDiff(aiDraft: string, actualReply: string): Promise<StyleDiff> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = getInstrumentedOpenAI({ workflow_id: 'inbox_style' });
 
   const prompt = `Compare these two replies to the same email.
 

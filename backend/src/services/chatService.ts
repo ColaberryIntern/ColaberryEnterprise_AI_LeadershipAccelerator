@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import { getSetting } from './settingsService';
 import {
@@ -16,6 +17,7 @@ import { buildMayaSystemPrompt, generateMayaGreeting } from './admissionsMayaSer
 import { loadMemory, saveConversationToMemory, classifyVisitorType } from './admissionsMemoryService';
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
 import { executeMayaAction, MAYA_TOOLS, type MayaActionResult } from './mayaActionService';
+import { emitToolCall } from './aiEventService';
 import { addMayaInteractionTag } from './mayaCampaignRouter';
 import { recordConversationOutcome } from './mayaConversationIntelligenceService';
 
@@ -25,7 +27,7 @@ function getClient(): OpenAI {
   if (!openaiClient) {
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = new OpenAI({ apiKey });
+    openaiClient = getInstrumentedOpenAI({ workflow_id: 'maya_chat' }, { apiKey });
   }
   return openaiClient;
 }
@@ -430,6 +432,16 @@ export async function sendMessage(
       }
 
       actionResults.push(result.summary);
+
+      // Observability (TBI P1-6): record the tool call (name + arg keys + redacted summary). Swallow-safe.
+      emitToolCall({
+        tool: fn.name,
+        ok: result.success,
+        workflowId: 'maya_chat',
+        agentId: 'Maya',
+        argsJson: fn.arguments,
+        resultSummary: result.summary,
+      }).catch(() => {});
 
       // Add tool result to messages
       messages.push({

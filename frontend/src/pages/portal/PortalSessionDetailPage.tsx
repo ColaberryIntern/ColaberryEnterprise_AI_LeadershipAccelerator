@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import AnthropicCourseWrapper from '../../components/portal/AnthropicCourseWrapper';
+import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -340,16 +341,8 @@ function PortalSessionDetailPage() {
   const isCompleted = s?.status === 'completed';
   const countdownTarget = (() => {
     if (!s || !isUpcoming || !s.session_date) return null;
-    const raw: string = s.start_time || '09:00';
-    // Convert "1:00 PM" / "13:00" → "13:00" for ISO string
-    const match = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-    if (!match) return null;
-    let h = parseInt(match[1], 10);
-    const m = match[2];
-    const period = match[3]?.toUpperCase();
-    if (period === 'PM' && h !== 12) h += 12;
-    if (period === 'AM' && h === 12) h = 0;
-    return `${s.session_date}T${String(h).padStart(2, '0')}:${m}:00`;
+    const hhmm = parseSessionTimeToHHMM(s.start_time || '09:00');
+    return hhmm ? `${s.session_date}T${hhmm}:00` : null;
   })();
   const countdown = useCountdown(countdownTarget);
   const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;

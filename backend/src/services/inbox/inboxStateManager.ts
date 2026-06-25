@@ -10,6 +10,7 @@ import { evaluateHardRules } from './hardRuleEngine';
 import { classifyWithLLM } from './llmClassificationService';
 import { logAuditEvent } from './inboxAuditService';
 import { archiveEmail } from './autoArchiveService';
+import { toPersistableRuleId } from './ruleIdPersistence';
 
 const LOG_PREFIX = '[InboxCOS][StateManager]';
 
@@ -89,13 +90,18 @@ export async function processNewEmails(): Promise<ProcessResult> {
         replyNeeded = llmResult.reply_needed;
       }
 
-      // Step 3: Create classification record
+      // Step 3: Create classification record.
+      // rule_id is a UUID column; hard rules use string ids (e.g. 'cora_0c'),
+      // so persist only a UUID (else null) to avoid a "invalid input syntax for
+      // type uuid" insert failure. The in-memory ruleId below still drives
+      // dispatch, and `reasoning` records which rule matched. (Widen the column
+      // to VARCHAR as the proper follow-up.)
       await InboxClassification.create({
         email_id: email.id,
         state,
         confidence,
         classified_by: classifiedBy,
-        rule_id: ruleId,
+        rule_id: toPersistableRuleId(ruleId),
         reasoning,
         reply_needed: replyNeeded,
         classified_at: new Date(),
@@ -213,16 +219,36 @@ async function dispatchByState(
       }
       break;
 
-    case 'AUTOMATION':
-      // Cora auto-replies to support@colaberry.com inquiries before archiving
+    case 'AUTOMATION': {
+      // Cora auto-replies to support@colaberry.com inquiries before archiving.
+      // For mail Cora cannot fully resolve (out-of-scope legacy bootcamp/billing/
+      // support questions, refunds, complaints, partnerships, send/generation
+      // failures), she only acknowledges — so the email must NOT be archived;
+      // route it to the human INBOX instead, or the promised follow-up never
+      // reaches a person. See coraAgentService.decideCoraDisposition.
+      let keepForHuman = false;
+      let handoffReason: string | undefined;
       if (ruleId === 'cora_0c') {
         try {
           const { handleCoraInquiry } = await import('./coraAgentService');
-          await handleCoraInquiry(email as any);
+          const result = await handleCoraInquiry(email as any);
+          if (result && result.archive === false) {
+            keepForHuman = true;
+            handoffReason = result.handoffReason;
+          }
         } catch (error: any) {
+          // Cora threw unexpectedly — keep the email for a human rather than burying it.
           console.error(`${LOG_PREFIX} Cora reply failed for ${email.id}: ${error.message}`);
+          keepForHuman = true;
+          handoffReason = 'cora_unhandled_error';
         }
       }
+
+      if (keepForHuman) {
+        await reclassifyToInboxForHuman(email.id, handoffReason);
+        break; // do NOT archive — leave it visible in the human INBOX
+      }
+
       try {
         await archiveEmail({
           id: email.id,
@@ -234,6 +260,7 @@ async function dispatchByState(
         console.error(`${LOG_PREFIX} Archive dispatch failed for ${email.id}: ${error.message}`);
       }
       break;
+    }
 
     case 'ASK_USER':
       // No immediate action — collected by digest service on a 4-hour interval
@@ -245,5 +272,46 @@ async function dispatchByState(
 
     default:
       console.warn(`${LOG_PREFIX} Unknown classification state: ${state} for email ${email.id}`);
+  }
+}
+
+/**
+ * Re-route an email Cora could not fully resolve from AUTOMATION to INBOX (the
+ * human-visible queue) instead of archiving it. Without this, an out-of-scope or
+ * handoff reply ("the team will follow up") would be archived and no human would
+ * ever see it. Updates the existing classification row in place — the email is
+ * never reprocessed (processNewEmails only picks up rows with NO classification),
+ * so this is idempotent. Best-effort: a failure here is logged, never thrown.
+ */
+async function reclassifyToInboxForHuman(emailId: string, reason?: string): Promise<void> {
+  try {
+    const existing = await InboxClassification.findOne({ where: { email_id: emailId } });
+    const previous = existing?.state ?? 'AUTOMATION';
+    if (previous === 'INBOX') return; // already human-visible — nothing to do
+
+    await InboxClassification.update(
+      {
+        state: 'INBOX',
+        previous_state: previous,
+        overridden_at: new Date(),
+        reply_needed: true,
+        reasoning: `Cora handed off to human review (${reason || 'unresolved'})`,
+      },
+      { where: { email_id: emailId } }
+    );
+
+    await logAuditEvent({
+      email_id: emailId,
+      action: 'cora_routed_to_human',
+      old_state: previous,
+      new_state: 'INBOX',
+      actor: 'cora',
+      reasoning: reason,
+      metadata: { handoff_reason: reason },
+    });
+
+    console.log(`${LOG_PREFIX} Cora routed email ${emailId} to human INBOX (${reason || 'unresolved'})`);
+  } catch (error: any) {
+    console.error(`${LOG_PREFIX} Failed to reroute ${emailId} to human INBOX: ${error.message}`);
   }
 }

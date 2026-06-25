@@ -42,6 +42,52 @@ interface NormalizedEmail {
 }
 
 /**
+ * True when a Basecamp notification is a person directly tagging or assigning
+ * Ali — an @mention or a to-do assignment — rather than project-management
+ * noise. Basecamp encodes both directly in the subject:
+ *   "<Name> @mentioned you in <thing>"      (someone tagged Ali)
+ *   "<Name> assigned you: <to-do title>"    (someone assigned Ali a to-do)
+ * These are a person asking Ali to act and must reach the inbox. Everything
+ * else from Basecamp is automation: recurring check-in prompts ("What are you
+ * working on today?", "Post links of Tasks worked on today") and status pings
+ * ("<Name> completed a to-do") deliberately do NOT match.
+ */
+export function isBasecampDirectMention(email: { from_address: string; subject: string | null }): boolean {
+  const isBasecamp = /3\.basecamp\.com/i.test(email.from_address || '');
+  if (!isBasecamp) return false;
+  return /@mentioned you|assigned you/i.test(email.subject || '');
+}
+
+/**
+ * True when a Basecamp *comment* notification (a "Re: ..." thread reply) is
+ * directly addressed to Ali by name, even without a formal @mention — e.g.
+ * "Hi Ali, can you review this?" or a line that opens with "Ali,". These are
+ * someone asking Ali to act and must reach the inbox.
+ *
+ * We must NOT route every subscribed-thread comment to the inbox: most are
+ * intern/teammate status updates Ali merely follows (re-flooding the inbox is
+ * exactly what the COS exists to prevent), and Basecamp stamps "...sent to Ali
+ * Muwwakkil, ..." into the footer of EVERY email — so a bare "Ali" substring is
+ * not a signal. We anchor strictly on a greeting verb + "Ali", a line opening
+ * with "Ali,"/"Ali:", or an inline "@Ali", none of which the footer satisfies.
+ * Formal @mentions/assignments are handled by isBasecampDirectMention (subject).
+ */
+export function isBasecampDirectComment(email: {
+  from_address: string;
+  subject: string | null;
+  body_text: string | null;
+}): boolean {
+  const isBasecamp = /3\.basecamp\.com/i.test(email.from_address || '');
+  if (!isBasecamp) return false;
+  if (!/\bre:/i.test(email.subject || '')) return false; // comment replies only
+  const body = email.body_text || '';
+  const greetingToAli = /\b(hi|hello|hey|dear|thanks|thank you|good (?:morning|afternoon|evening))[,!\s]+ali\b/i;
+  const lineLeadingAli = /(^|\n)\s*ali\s*[,:]/i;
+  const inlineAtMention = /@ali\b/i;
+  return greetingToAli.test(body) || lineLeadingAli.test(body) || inlineAtMention.test(body);
+}
+
+/**
  * Deterministic classification engine. Evaluates hard-coded rules and
  * user-defined rules in strict priority order. No LLM, no external calls.
  */
@@ -114,6 +160,30 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     const reason = 'System-generated alert email (self-sent [Alert])';
     console.log(`${LOG_PREFIX} System alert: ${reason}`);
     return { matched: true, state: 'AUTOMATION', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0d. Basecamp @mention / to-do assignment → INBOX ---
+  // When someone tags Ali (@mention) or assigns him a to-do in Basecamp, that
+  // is a person asking him to act — it must reach the inbox. Without this rule
+  // the email skips the name check (Basecamp is an auto-notification sender,
+  // see section 2) and then falls into the List-Unsubscribe rule below →
+  // AUTOMATION → auto-archived, so Ali never sees the tag. Caught 2026-06-24
+  // after week-1/2/3 todo mentions were silently routed to automation.
+  if (isBasecampDirectMention(email)) {
+    const reason = 'Basecamp @mention / to-do assignment directed at Ali';
+    console.log(`${LOG_PREFIX} Basecamp direct action: ${reason}`);
+    return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0e. Basecamp comment reply that addresses Ali by name → INBOX ---
+  // A thread comment that greets/addresses Ali directly ("Hi Ali, ...") is
+  // someone asking him to act, even without a formal @mention. Subscribed-thread
+  // status updates that do NOT address Ali stay automation (see helper for the
+  // anti-flood reasoning and why the BC footer does not trigger this).
+  if (isBasecampDirectComment(email)) {
+    const reason = 'Basecamp comment directly addresses Ali by name';
+    console.log(`${LOG_PREFIX} Basecamp direct comment: ${reason}`);
+    return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 1. VIP Check ---
