@@ -951,6 +951,48 @@
     "risk"
    ],
    "confidence": "drafted-verify"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "Are there any costs beyond the Colaberry membership fee?",
+   "a": "Yes, and we are upfront about it. On top of your Colaberry membership you cover your own third-party tool costs, which Colaberry does not cover: an Anthropic subscription for Claude Code (about $20 a month) and LLM API usage billed to your own key (most projects stay under $10 a month).",
+   "detail": "These are paid directly to the providers (Anthropic, and any LLM API you use), not to Colaberry. They are required because you build and deploy real systems on your own keys, exactly as you would on the job.",
+   "tags": [
+    "costs",
+    "fees",
+    "anthropic",
+    "api",
+    "claude code"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "Does Colaberry cover the Anthropic subscription or the API usage costs?",
+   "a": "No. The Anthropic subscription for Claude Code (around $20 a month) and any LLM API usage (billed to your own key, usually under $10 a month per project) are paid by you, directly to the provider. Your Colaberry membership covers the program, not third-party tool fees.",
+   "detail": "Be clear about this before enrollment so there are no surprises. It is a small, real, usage-based cost that comes with building on live AI tools.",
+   "tags": [
+    "not covered",
+    "fees",
+    "anthropic",
+    "api",
+    "disclosure"
+   ],
+   "confidence": "grounded"
+  },
+  {
+   "category": "pricing-billing",
+   "q": "Why do I need my own Anthropic subscription and API key?",
+   "a": "Because you build and deploy real systems, not demos. You use Claude Code and live LLM APIs on your own account, which is exactly how you would in a job or your own venture. Budget about $20 a month for the Anthropic subscription and usually under $10 a month for API usage.",
+   "detail": "Owning your keys means your projects, your portfolio, and your costs are portable and real after the program.",
+   "tags": [
+    "api key",
+    "subscription",
+    "why",
+    "build",
+    "claude code"
+   ],
+   "confidence": "grounded"
   }
  ]
 }

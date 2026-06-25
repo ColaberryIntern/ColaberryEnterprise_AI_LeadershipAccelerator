@@ -200,6 +200,9 @@
     if(/refund|cancel|money back|guarantee/.test(l)){
       return { html:'Monthly ($199/mo) cancels anytime, access through the paid month, no partial-month refund. Annual locks $149/mo and has a 14-day money-back window from the Jul 23 kickoff, then non-refundable but membership stays active the full year and the rate stays locked. <b>Note:</b> these terms are drafted and pending final approval, so confirm before quoting verbatim.', doc:'objections' };
     }
+    if(/\bapi\b|\bllm\b|subscription|claude code|api key|own key|out of pocket|extra (cost|fee|charge)|additional (cost|fee|charge)|other (cost|fee|charge)|hidden (cost|fee|charge)|tool (cost|fee)|anthropic (cost|fee|subscription)/.test(l)){
+      return { html:'<b>Important to disclose:</b> beyond the Colaberry membership, students cover their own third-party tool costs, which Colaberry does not cover. An Anthropic subscription for Claude Code is about $20 a month, and LLM API usage is billed to the student’s own key, usually under $10 a month per project. These are paid directly to the providers, not to Colaberry, because students build and deploy on real, live AI tools.', doc:'onepager' };
+    }
     var hits=retrieve(q);
     if(hits.length){
       var html = hits.map(function(x,i){ return (i===0?'':'<br><br>')+'<b>'+esc(x.q)+'</b><br>'+esc(x.a); }).join('');
@@ -229,7 +232,7 @@
   function closeCory(){ document.getElementById('cory-panel').classList.remove('open'); document.getElementById('cory-launch').style.display='flex'; }
   function initCory(){
     body=document.getElementById('cory-body');
-    bubble('cory','Hi, I am Cory. I know all 75 answers in this knowledge base. Ask me about the program, a specific objection, your gameplan for a call, or say "send me the one-pager" and I will hand you the document.');
+    bubble('cory','Hi, I am Cory. I know every answer in this knowledge base, including the student-paid Anthropic and API costs. Ask me about the program, a specific objection, your gameplan for a call, or say "send me the one-pager" and I will hand you the document.');
     var c=document.createElement('div'); c.className='msg cory'; c.innerHTML='<div class="chips">'+
       '<span class="chip" data-ask="What is included in the membership?">What is included?</span>'+
       '<span class="chip" data-ask="How do I handle the price objection?">Price objection</span>'+

@@ -61,6 +61,14 @@
   mark { background:#fde68a; color:inherit; border-radius:3px; padding:0 1px; }
   .noresults { display:none; text-align:center; color:var(--text-muted); padding:40px; font-size:15px; }
 
+  /* important cost disclosure banner */
+  .notice { display:flex; gap:14px; align-items:flex-start; margin:18px 40px 0; padding:16px 20px; background:#fff7ed; border:1px solid #fdba74; border-left:5px solid var(--red-500); border-radius:var(--radius-lg); }
+  .notice .cb-i { color:var(--red-600); font-size:24px; flex:none; margin-top:1px; }
+  .notice b { color:var(--red-700); }
+  .notice .body { font-size:13.5px; line-height:1.6; color:var(--text-body); }
+  .notice .nums { margin-top:6px; display:flex; flex-wrap:wrap; gap:8px; }
+  .notice .num { font-family:var(--font-mono); font-size:12px; background:#fff; border:1px solid #fdba74; color:var(--red-700); border-radius:var(--radius-pill); padding:2px 10px; }
+
   /* diagrams */
   .diagram { background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:18px 20px; margin-bottom:16px; }
   .diagram h3 { font-family:var(--font-display); font-weight:900; font-size:15px; color:var(--text-strong); margin:0 0 12px; }
@@ -123,10 +131,18 @@
       <p>Everything you need on a live call: searchable answers, the flows, downloadable leave-behinds, and Cory for strategy and prep. Start typing to filter. AI Systems Architect Accelerator, powered by Anthropic + Claude Code.</p>
     </div>
 
+    <div class="notice">
+      <span class="cb-i"><i class="ri-alert-line"></i></span>
+      <div class="body">
+        <b>Always disclose before enrollment — student-paid costs Colaberry does NOT cover.</b> On top of the Colaberry membership, each student pays their own third-party tool costs, directly to the providers: an <b>Anthropic subscription for Claude Code</b> and <b>LLM API usage</b> on their own key. These are required because students build and deploy on real, live AI tools.
+        <div class="nums"><span class="num">Claude Code: about $20/mo</span><span class="num">LLM API usage: most projects under $10/mo</span><span class="num">Paid to the provider, not Colaberry</span></div>
+      </div>
+    </div>
+
     <div class="searchbar">
       <div class="searchwrap">
         <span class="cb-i"><i class="ri-search-line"></i></span>
-        <input id="q" type="text" placeholder="Search 75 answers — price, time, refund, certification, who it's for..." autocomplete="off">
+        <input id="q" type="text" placeholder="Search every answer — price, fees, API costs, time, refund, certification..." autocomplete="off">
       </div>
       <span id="count"></span>
     </div>
