@@ -62,6 +62,7 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
 app.use(v1Routes);
@@ -69,7 +70,6 @@ app.use(adminRoutes);
 app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
-app.use(advisorRoutes);
 
 // OpenClaw tracked short URL redirect (public, no auth)
 app.get('/i/:tag', async (req, res) => {

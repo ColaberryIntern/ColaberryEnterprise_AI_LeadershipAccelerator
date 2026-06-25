@@ -36,7 +36,7 @@ function buildClient(): Anthropic {
   if (!_client) {
     _client = new Anthropic({
       apiKey: env.anthropicApiKey,
-      timeout: 30000,
+      timeout: 90000,
       maxRetries: 1,
     });
   }
