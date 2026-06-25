@@ -556,7 +556,7 @@ function CaseStudiesPage() {
                 directly on react-router Link to preserve client-side navigation.
                 On the dark inverse band, secondary actions get an explicit light
                 outline so they read against the surface. */}
-            <Link className="cb-btn cb-btn--primary cb-btn--lg" to="/membership/working-professionals">
+            <Link className="cb-btn cb-btn--primary cb-btn--lg" to="/enroll">
               <span>Join the Challenge</span>
             </Link>
             <Link

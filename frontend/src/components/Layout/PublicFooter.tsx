@@ -53,7 +53,7 @@ function PublicFooter() {
             </p>
           </div>
 
-          <div className="col-6 col-lg-3 mb-4">
+          <nav className="col-6 col-lg-3 mb-4" aria-label="Footer">
             <h5 className="text-light">Explore</h5>
             <ul className="list-unstyled">
               {FOOTER_LINKS.map((link) => (
@@ -62,7 +62,7 @@ function PublicFooter() {
                 </li>
               ))}
             </ul>
-          </div>
+          </nav>
 
           <div className="col-6 col-lg-2 mb-4">
             <h5 className="text-light">Connect</h5>

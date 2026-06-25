@@ -279,12 +279,16 @@ function ContactPage() {
                 }}
               >
                 <SegmentTab
+                  id="contact-tab-individual"
+                  controls="contact-form-panel"
                   active={!isSponsor}
                   onClick={() => switchSegment('individual')}
                   label="Join the Challenge"
                   sub="For individuals"
                 />
                 <SegmentTab
+                  id="contact-tab-sponsor"
+                  controls="contact-form-panel"
                   active={isSponsor}
                   onClick={() => switchSegment('sponsor')}
                   label="Sponsor Your Team"
@@ -292,6 +296,11 @@ function ContactPage() {
                 />
               </div>
 
+              <div
+                id="contact-form-panel"
+                role="tabpanel"
+                aria-labelledby={isSponsor ? 'contact-tab-sponsor' : 'contact-tab-individual'}
+              >
               {isSponsor ? (
                 <SponsorIntro />
               ) : (
@@ -486,6 +495,7 @@ function ContactPage() {
               >
                 We never sell your information. Your data is used solely to respond to your request.
               </p>
+              </div>
             </Card>
           )}
         </div>
@@ -563,7 +573,25 @@ function ContactPage() {
             <div className="col-md-4">
               <Card elevation="sm" padded hoverable style={{ height: '100%' }}>
                 <h3 style={infoTitle}>Social</h3>
-                <p style={infoBody}>LinkedIn · Twitter</p>
+                <p style={infoBody}>
+                  <a
+                    href="https://www.linkedin.com/company/colaberry"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--brand-accent)' }}
+                  >
+                    LinkedIn
+                  </a>
+                  {' · '}
+                  <a
+                    href="https://twitter.com/Colaberry"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--brand-accent)' }}
+                  >
+                    Twitter
+                  </a>
+                </p>
               </Card>
             </div>
             <div className="col-md-4">
@@ -605,14 +633,19 @@ interface SegmentTabProps {
   onClick: () => void;
   label: string;
   sub: string;
+  id: string;
+  controls: string;
 }
 
-function SegmentTab({ active, onClick, label, sub }: SegmentTabProps) {
+function SegmentTab({ active, onClick, label, sub, id, controls }: SegmentTabProps) {
   return (
     <button
       type="button"
       role="tab"
+      id={id}
+      aria-controls={controls}
       aria-selected={active}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
       style={{
         border: 'none',

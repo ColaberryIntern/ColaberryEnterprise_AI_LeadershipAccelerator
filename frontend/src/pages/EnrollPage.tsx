@@ -328,7 +328,7 @@ function EnrollPage() {
       >
         <div className="container" style={{ maxWidth: 760, margin: '0 auto' }}>
           {invoiceSubmitted ? (
-            <div>
+            <div role="status">
               <div className="text-center" style={{ marginBottom: 'var(--space-6)' }}>
                 <h2
                   style={{
@@ -432,10 +432,13 @@ function EnrollPage() {
                 {/* Cohort Selector */}
                 <div className="col-12">
                   <label htmlFor="cohort_id" style={fieldLabelStyle}>
-                    Select Cohort <span style={{ color: 'var(--red-500)' }}>*</span>
+                    Select Cohort{' '}
+                    <span style={{ color: 'var(--red-500)' }} aria-hidden="true">
+                      *
+                    </span>
                   </label>
                   {loadingCohorts ? (
-                    <div style={{ color: 'var(--text-muted)' }}>
+                    <div style={{ color: 'var(--text-muted)' }} aria-live="polite">
                       Loading available cohorts...
                     </div>
                   ) : cohortError ? (
@@ -461,6 +464,7 @@ function EnrollPage() {
                       value={formData.cohort_id}
                       onChange={handleChange}
                       aria-invalid={!!errors.cohort_id}
+                      aria-describedby={errors.cohort_id ? 'cohort_id-error' : undefined}
                       required
                     >
                       <option value="">Choose a cohort...</option>
@@ -472,7 +476,11 @@ function EnrollPage() {
                       ))}
                     </select>
                   )}
-                  {errors.cohort_id && <span style={errorMsgStyle}>{errors.cohort_id}</span>}
+                  {errors.cohort_id && (
+                    <span id="cohort_id-error" role="alert" style={errorMsgStyle}>
+                      {errors.cohort_id}
+                    </span>
+                  )}
                 </div>
 
                 {/* Full Name */}
@@ -562,10 +570,10 @@ function EnrollPage() {
                 </div>
 
                 {/* Payment Option */}
-                <div className="col-12">
-                  <label style={{ ...fieldLabelStyle, fontWeight: 700 }}>
+                <div className="col-12" role="radiogroup" aria-label="Payment option">
+                  <span style={{ ...fieldLabelStyle, fontWeight: 700 }}>
                     Payment Option
-                  </label>
+                  </span>
                   <div className="row g-3">
                     <div className="col-md-6">
                       <Card
@@ -707,7 +715,7 @@ function EnrollPage() {
 
           <Card padded elevation="md">
             {redeemed ? (
-              <div className="text-center">
+              <div className="text-center" role="status">
                 <Badge tone="green" dot style={{ marginBottom: 'var(--space-3)' }}>
                   Seat Claimed
                 </Badge>

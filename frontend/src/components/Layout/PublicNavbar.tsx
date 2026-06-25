@@ -95,13 +95,19 @@ function PublicNavbar() {
               item.children ? (
                 <li className={`nav-item dropdown ${openDropdown === item.label ? 'show' : ''}`} key={item.label}>
                   <button
+                    type="button"
                     className={`nav-link dropdown-toggle bg-transparent border-0 ${isChildActive(item) ? 'active' : ''}`}
                     onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
                     aria-expanded={openDropdown === item.label}
+                    aria-haspopup="true"
+                    aria-controls={`nav-dropdown-${item.label.replace(/\s+/g, '-').toLowerCase()}`}
                   >
                     {item.label}
                   </button>
-                  <ul className={`dropdown-menu dropdown-menu-dark ${openDropdown === item.label ? 'show' : ''}`}>
+                  <ul
+                    id={`nav-dropdown-${item.label.replace(/\s+/g, '-').toLowerCase()}`}
+                    className={`dropdown-menu dropdown-menu-dark ${openDropdown === item.label ? 'show' : ''}`}
+                  >
                     {item.children.map((child) => (
                       <li key={child.path}>
                         <Link

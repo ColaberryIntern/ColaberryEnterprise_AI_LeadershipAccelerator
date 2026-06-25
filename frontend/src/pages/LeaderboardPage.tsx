@@ -39,6 +39,7 @@ function CtaButton({ to, children, ...rest }: CtaButtonProps) {
 const CSS = `
 .cblb-root{font-family:var(--font-body);color:var(--text-body);background:var(--surface-page);line-height:var(--lh-relaxed);-webkit-font-smoothing:antialiased}
 .cblb-root *{box-sizing:border-box}
+.cb-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .cblb-root h1,.cblb-root h2,.cblb-root h3{font-family:var(--font-display);color:var(--text-strong);margin:0;line-height:var(--lh-heading);letter-spacing:var(--ls-tight)}
 .cblb-wrap{max-width:var(--container-lg);margin:0 auto;padding:0 var(--space-6)}
 .cblb-eyebrow{font-size:var(--fs-overline);font-weight:var(--fw-bold);letter-spacing:var(--ls-overline);text-transform:uppercase;color:var(--brand-accent)}
@@ -137,11 +138,20 @@ const tierTone = (t: TierName): 'warning' | 'neutral' | 'red' =>
   t === 'Gold' ? 'red' : t === 'Silver' ? 'neutral' : 'warning';
 
 function Delta({ value }: { value: number }) {
-  if (value === 0) return <span className="cblb-delta flat" title="No change">—</span>;
+  if (value === 0) {
+    return (
+      <span className="cblb-delta flat" title="No change">
+        <span aria-hidden="true">—</span>
+        <span className="cb-sr-only">No change since last week</span>
+      </span>
+    );
+  }
   const up = value > 0;
+  const n = Math.abs(value);
   return (
-    <span className={`cblb-delta ${up ? 'up' : 'down'}`} title={`${up ? 'Up' : 'Down'} ${Math.abs(value)} since last week`}>
-      {up ? '▲' : '▼'}{Math.abs(value)}
+    <span className={`cblb-delta ${up ? 'up' : 'down'}`}>
+      <span aria-hidden="true">{up ? '▲' : '▼'}{n}</span>
+      <span className="cb-sr-only">{`${up ? 'Up' : 'Down'} ${n} ${n === 1 ? 'place' : 'places'} since last week`}</span>
     </span>
   );
 }
@@ -205,7 +215,11 @@ function LeaderboardPage() {
       key: 'progress',
       header: 'To next tier',
       render: (_v: unknown, row: LeaderRow) => (
-        <span className="cblb-progcell" style={{ display: 'inline-block' }}>
+        <span
+          className="cblb-progcell"
+          style={{ display: 'inline-block' }}
+          aria-label={`${row.points} of ${TIER_MAX} points toward next tier`}
+        >
           <Progress
             value={row.points}
             max={TIER_MAX}
@@ -253,7 +267,10 @@ function LeaderboardPage() {
           {podium.map((p, i) => (
             <Card key={p.name} elevation={i === 0 ? 'md' : 'sm'} accent={i === 0 ? 'red' : undefined} className={`cblb-pod ${i === 0 ? 'first' : ''}`}>
               <div className="av"><Avatar name={p.name} size="lg" ring={i === 0} /></div>
-              <div className="rank">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</div>
+              <div className="rank">
+                <span aria-hidden="true">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</span>
+                <span className="cb-sr-only">{`Rank ${i + 1}`}</span>
+              </div>
               <div className="name">{p.name}</div>
               <div className="org">{p.org}</div>
               <div className="pts">{p.points.toLocaleString()} <span>pts</span></div>
@@ -265,10 +282,10 @@ function LeaderboardPage() {
       {/* TABLE */}
       <section className="cblb-wrap" style={{ paddingBottom: 'var(--space-12)' }}>
         <div className="cblb-controls" role="group" aria-label="Leaderboard scope">
-          <button className="cblb-tab" aria-pressed={scope === 'public'} onClick={() => setScope('public')}>
+          <button type="button" className="cblb-tab" aria-pressed={scope === 'public'} onClick={() => setScope('public')}>
             Global leaderboard
           </button>
-          <button className="cblb-tab" aria-pressed={scope === 'company'} onClick={() => setScope('company')}>
+          <button type="button" className="cblb-tab" aria-pressed={scope === 'company'} onClick={() => setScope('company')}>
             Sponsored teams
           </button>
         </div>

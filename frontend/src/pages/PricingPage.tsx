@@ -108,7 +108,7 @@ function PricingPage() {
         aria-label="Pricing overview"
         style={{
           background: 'var(--surface-inverse)',
-          color: 'var(--text-on-accent, #fff)',
+          color: 'var(--text-on-inverse)',
           padding: 'var(--space-20) var(--space-4) var(--space-16)',
         }}
       >
@@ -133,7 +133,7 @@ function PricingPage() {
           <p
             style={{
               fontSize: 'var(--fs-body)',
-              color: 'var(--text-muted)',
+              color: 'color-mix(in srgb, var(--text-on-inverse) 80%, transparent)',
               maxWidth: 620,
               margin: '0 auto',
             }}
@@ -427,7 +427,7 @@ function PricingPage() {
         aria-label="Get started"
         style={{
           background: 'var(--surface-inverse)',
-          color: 'var(--text-on-accent, #fff)',
+          color: 'var(--text-on-inverse)',
           padding: 'var(--space-16) var(--space-4)',
           textAlign: 'center',
         }}
@@ -444,7 +444,7 @@ function PricingPage() {
           >
             Learn With Claude. Build Through Colaberry. Deploy In The Real World.
           </h2>
-          <p style={{ color: 'var(--text-muted)', margin: '0 0 var(--space-7)' }}>
+          <p style={{ color: 'color-mix(in srgb, var(--text-on-inverse) 80%, transparent)', margin: '0 0 var(--space-7)' }}>
             Pick your door. The class is the same — the way in is yours to choose.
           </p>
           <div
@@ -461,9 +461,13 @@ function PricingPage() {
               </Button>
             </Link>
             <Link to="/sponsorship" style={{ textDecoration: 'none' }}>
-              <Button as="span" variant="outline" size="lg">
-                Sponsor Your Team
-              </Button>
+              {/* data-theme="dark" re-points --text-strong/--border-strong so the
+                  outline button stays legible on the inverse closing-band surface. */}
+              <span data-theme="dark" style={{ display: 'inline-flex' }}>
+                <Button as="span" variant="outline" size="lg">
+                  Sponsor Your Team
+                </Button>
+              </span>
             </Link>
           </div>
         </div>
