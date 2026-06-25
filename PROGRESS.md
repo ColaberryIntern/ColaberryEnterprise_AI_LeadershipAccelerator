@@ -6702,6 +6702,13 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Added a second hard rule (section 0d) + pure predicate `isBasecampDirectComment()` in `backend/src/services/inbox/hardRuleEngine.ts`. A Basecamp comment notification (subject contains `Re:`) routes to INBOX when the body directly addresses Ali — a greeting verb + "Ali" ("Hi/Hello/Hey/Dear/Thanks Ali", "Good morning Ali"), a line opening with "Ali,"/"Ali:", or an inline "@Ali". Deliberately bounded to avoid re-flooding: subscribed-thread status updates that never address Ali stay automation, and the standard BC footer ("...sent to Ali Muwwakkil, ...") does NOT trigger it (the anchors require a greeting/line-leading/@-form the footer can't satisfy). Formal @mentions/assignments remain covered by the section-0c subject rule.
   - Verification: `hardRuleEngine.test.ts` now 16/16 pass — added 8 comment cases incl. the real BC footer string (must not match), a status update (must not match), a greeting to a different person (must not match), and positive greeting/line-leading/@Ali cases. `tsc --noEmit` clean for inbox/hardRule files.
   - Notes: Verified against a real subscribed-thread (Refactored/Xprize daily-update thread) where every comment carries the footer but none address Ali — confirms blanket "all Re: comments → INBOX" would flood, so the rule is intentionally narrow. If even this proves too noisy, removing the section-0d block reverts it. Ships with the section-0c change on next backend build.
+- [x] **Skilljar sync service — backend + model + migration (BC #9946499805)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sk7j
+  - What changed: Added `skilljarSyncService.ts` (`syncUserProgress`, `getUserProgress`), `StudentSkilljarProgress` Sequelize model, SQL migration `add_student_skilljar_progress.sql`, env vars `skilljarApiKey`/`skilljarBaseUrl` in `env.ts`, model export in `models/index.ts`.
+  - Verification: `tsc --noEmit` exits 0; Jest 8/8 pass (happy path, filter, idempotency, user-not-found, timeout, no-api-key, DB read, DB fail-soft).
+  - Notes: Requires `SKILLJAR_API_KEY` (Token auth) from Anthropic partner portal — not yet provisioned. Service returns a safe error result if key is absent so it will not crash in production. Migration must be applied on prod before service is invoked.
+
 - [x] **AI ROI Pilot: brand every send with sender signature + website (Ali escalation)**
   - Date: 2026-06-24
   - Session: CC-20260623-e2k7
