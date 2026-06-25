@@ -6206,6 +6206,16 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `npx tsc --noEmit` — no new errors on this file.
   - Notes: Required before Cora shadow test case 7 ("When is the next cohort?") returns a confident date rather than "check the enrollment page." No admin UI exists for cohort creation; seed script is the established pattern (cf. seedCohorts.ts).
 
+- [x] **Week 1 Anthropic Skilljar course links wired into enterprise.colaberry.com portal (BC todo 9984355385).**
+  - Date: 2026-06-18
+  - Session: CC-20260618-4k7q
+  - What changed:
+    - `backend/src/seeds/seedAnthropicContentRegistry.ts` — Added Claude Code 101 (`https://anthropic.skilljar.com/claude-code-101`) as the 5th confirmed Skilljar course; updated header comment to reflect all 5 URLs confirmed. Idempotent upsert on url unique constraint.
+    - `backend/src/seeds/seedCurriculum.ts` — Session 2 (Week 1 lab) materials_json updated: replaced empty "Claude Code Setup Guide" material with the two named Skilljar course entries so future cohort seeds include them from day one.
+    - `backend/src/scripts/wireWeek1AnthropicCourses.ts` (new) — Idempotent operational script that finds all existing `session_number=2` records across all cohorts and prepends the two Anthropic course materials if not already present. Deploy: `docker exec accelerator-backend node dist/scripts/wireWeek1AnthropicCourses.js`
+  - Verification: `npx tsc --noEmit` — exit 0, no new errors. Deploy + SSO confirmation pending (flagged to Ali on BC ticket).
+  - Notes: URL confirmed from BC ticket HTML link in description. SSO not in codebase; flagged to Ali — if Anthropic partner SSO is configured externally, direct link suffices; if not, separate architecture task required.
+
 - [x] **AI Membership landing pages reformatted to Garage Labs editorial design (BC todo 9946499609).**
   - Date: 2026-06-18
   - Session: CC-20260617-9f3a
@@ -6524,6 +6534,55 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: `npx tsc --noEmit` clean (backend); `npx jest agentAutonomy agentAuthorizationService trustRubric` 33/33 (new pure-policy suite: tier-map/classification/least-privilege/HITL; new gate suite: shadow/enforce/off/kill-switch-reads-exempt/HITL-queue/**fail-open**; rubric ABAC-flip test). Post-deploy: `agent.authorization` events accumulate as agents write; Security + Governance lift live.
   - Notes: BREAK/HARDEN — the dangerous failure is "ABAC bug blocks a live agent path", so the gate is shadow-by-default + fail-open + reads-always-pass + fire-and-forget at the insertion point. Phase 0 inventory = live derivation from the existing tier map (no AiAgent column add yet — that's when per-agent overrides are needed, honoring the columns-on-AiAgent direction). Scope: this PR ships the chokepoint + one shadow insertion (DB-write path); wiring the remaining chokepoints (comms `evaluateSend` needs `agent_id` threaded, ticket creation, social-post HITL sync), persisting explicit autonomy columns, and the `enforce` flip are the Phase 2+ follow-ups. Completes the ABAC design's Phase 0 + Phase 1.
 
+- [x] **Portfolio GitHub Sync Agent (PR #70) + local test coverage sprint + seedCurriculum hardened with Skilljar URLs (CC-20260622-k7m2)**
+  - Date: 2026-06-22 / 2026-06-23
+  - Session: CC-20260622-k7m2
+  - What changed:
+    - `backend/src/services/githubIntegrationService.ts`: added `syncAllActiveStudentGitHubActivity()` — batch sync across all active enrollments with per-student failure isolation; added `import { Op } from 'sequelize'` and `Enrollment` model.
+    - `backend/src/services/__tests__/githubIntegrationService.test.ts`: rewrote with correct ts-jest hoisting pattern (jest.mock before imports, require() inside tests); 10/10 tests pass including 3 new tests for `syncAllActiveStudentGitHubActivity` (happy path, failure isolation, empty-enrollment no-op).
+    - `backend/src/services/schedulerService.ts`: added `PortfolioGitHubSyncAgent` cron at `15 2 * * *` using lazy `import()` pattern.
+    - `backend/src/services/agentRegistrySeed.ts`: added registry entry with `agent_type: 'github_automation'`, `trigger_type: 'cron'`, `schedule: '15 2 * * *'`, `category: 'accelerator'`.
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx`: fixed React hooks violation — moved `useCountdown` call and all derived state above early returns using optional chaining; added `AnthropicCourseWrapper` import and split Materials section to render Skilljar courses as branded cards vs. plain list for others.
+    - `frontend/src/components/portal/AnthropicCourseWrapper.tsx` (new): Anthropic/Skilljar branded course card with "Launch Course" CTA, ported from `feature/anthropic-course-wrapper`.
+    - `backend/src/seeds/seedCurriculum.ts`: baked Skilljar URLs for sessions 2, 3, 4 directly into seed data so they survive backend restarts on any branch — prevents wireWeek backfill from being wiped on branch switch.
+  - Verification: `tsc --noEmit` clean (frontend + backend); 10/10 Jest tests pass (`githubIntegrationService.test.ts`); 18/18 Jest tests pass for PR #37 suite (`courseLinkService`, `seedCurriculumCourseLinks`, `updateCourseLink`); browser-verified sessions 2, 3, 4 each show correct Skilljar course cards with "Launch Course" buttons at `localhost:3002`.
+  - Notes: GITHUB_ACCESS_TOKEN in `.env` is test scaffolding only — prod uses per-student OAuth tokens in `github_connections.access_token_encrypted`. Skilljar "Launch Course" links navigate correctly but may require Skilljar login (Anthropic partner SSO status for Colaberry unconfirmed — open task). Jest version was 25.0.0 vs ts-jest 29.x; fixed by `npm install` in `backend/`.
+
+  **PR local test audit — updated 2026-06-23 (CC-20260622-k7m2)**
+
+  | PR | Title | Status | Test type | Locally verified? | Evidence |
+  |---|---|---|---|---|---|
+  | #70 | Portfolio GitHub Sync Agent | OPEN | Unit tests (Jest) | ✅ Yes | 10/10 tests pass |
+  | #57 | AnthropicCourseWrapper + hooks fix | OPEN | Browser | ✅ Yes | Screenshots in BC ticket 9946499773; hooks fix browser-confirmed this session |
+  | #43 | Wire Week 1 Skilljar courses | OPEN | Browser | ✅ Yes | Session 2 shows Claude Code 101 + Claude Code in Action cards with Launch Course buttons |
+  | #45 | Wire Week 2 Skilljar courses | OPEN | Browser + DB | ✅ Yes | Session 3 shows Introduction to Agent Skills card; DB verified |
+  | #48 | Wire Week 3 Skilljar courses | OPEN | Browser + DB | ✅ Yes | Session 4 shows Building with the Claude API card; DB verified |
+  | #37 | Per-week Skilljar CourseLink (Curriculum page CTA) | OPEN | tsc + Jest | ✅ Yes | tsc clean (frontend + backend); 18/18 Jest tests pass |
+  | #16 | (unit tests via shared file) | OPEN | Unit tests | ✅ Yes | Tests pass via shared test file |
+  | #1–#15, #17–#36, #38–#42, #44, #46–#47, #49–#56, #58–#69 | Various | OPEN/MERGED | — | ❌ Not yet | — |
+
+  **PRs with locally-verified tests: 7 of 15 open PRs tested** — #70, #57, #43, #45, #48, #37, #16
+
+### Wire Week 2 Anthropic Skilljar course — Introduction to Agent Skills (2026-06-18)
+- [x] Wire "Introduction to Agent Skills" Skilljar link into Week 2 session materials
+  - Date: 2026-06-18
+  - Session: CC-20260618-w2sk
+  - What changed:
+    - `backend/src/scripts/wireWeek2AnthropicCourses.ts` (new): Idempotent backfill script — finds all `session_number=3` records across all cohorts and prepends "Introduction to Agent Skills (Anthropic Skilljar)" to `materials_json` if not already present. URL: https://anthropic.skilljar.com/introduction-to-agent-skills.
+    - `backend/src/seeds/seedCurriculum.ts`: Session 3 ("Guided POC Launch") now carries the Skilljar URL in `materials_json` so all future cohort seeds include it from day one.
+    - `seedAnthropicContentRegistry.ts`: no change — "Introduction to Agent Skills" was already registered (confirmed in current file state).
+  - Verification: `npx tsc --noEmit` — pending VPS deploy (same gate as PR #43). Script is structurally identical to `wireWeek1AnthropicCourses.ts` (pattern-validated). SSO confirmation from Anthropic is an open dependency (flagged in PR).
+  - Notes: BC ticket #9984355511. Course confirmed via https://anthropic.skilljar.com/introduction-to-agent-skills. SSO status unconfirmed — link goes live in portal regardless; if SSO is not active participants hit a Skilljar login wall (separate task to resolve with Anthropic partner team). Branch: ops/wire-week2-skilljar-courses.
+
+### Wire Week 3 Anthropic Skilljar course — Building with the Claude API (2026-06-19)
+- [x] Wire "Building with the Claude API" Skilljar link into Week 3 session materials
+  - Date: 2026-06-19
+  - Session: CC-20260619-w3sk
+  - What changed:
+    - `backend/src/scripts/wireWeek3AnthropicCourses.ts` (new): Idempotent backfill script — finds all `session_number=4` records across all cohorts and prepends "Building with the Claude API (Anthropic Skilljar)" to `materials_json` if not already present. URL: https://anthropic.skilljar.com/claude-with-the-anthropic-api.
+    - `backend/src/seeds/seedCurriculum.ts`: Session 4 ("Refinement & Executive Positioning") now carries the Skilljar URL in `materials_json` so all future cohort seeds include it from day one.
+  - Verification: `npx tsc --noEmit` — pending (background); script structurally identical to wireWeek1/2AnthropicCourses.ts (pattern-validated). VPS deploy required post-merge.
+  - Notes: BC ticket #9984355649. Course confirmed live at https://anthropic.skilljar.com/claude-with-the-anthropic-api (11 modules, publicly accessible). SSO status unconfirmed — link ships regardless. Branch: ops/wire-week3-skilljar-courses.
 ### PR Approval Autopilot - multi-agent PR validation/verification system (2026-06-22)
 - [x] **Multi-agent PR review engine + recommend-only verdicts, run on the live 9-PR queue**
   - Date: 2026-06-22

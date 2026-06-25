@@ -332,10 +332,11 @@ function PortalSessionDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // All derived state and hooks must be computed before any early return
-  const { session: s, attendance_status, submissions } = (session as any) || {};
-  const materials: any[] = s?.materials_json || [];
-  const curriculum: any[] = s?.curriculum_json || [];
+  const s = session?.session ?? null;
+  const attendance_status = session?.attendance_status ?? null;
+  const submissions = session?.submissions ?? [];
+  const materials: any[] = s?.materials_json ?? [];
+  const curriculum: any[] = s?.curriculum_json ?? [];
   const isUpcoming = s?.status === 'scheduled';
   const isLive = s?.status === 'live';
   const isCompleted = s?.status === 'completed';
@@ -357,7 +358,7 @@ function PortalSessionDetailPage() {
     );
   }
 
-  if (!session) {
+  if (!session || !s) {
     return <div className="alert alert-danger">Session not found.</div>;
   }
 
