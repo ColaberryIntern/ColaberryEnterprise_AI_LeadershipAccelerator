@@ -6820,3 +6820,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Found the send queue clogged with phantom work: 456 of 458 "due" email actions had already been emailed (matching outbound communication_log) but their row never flipped pending->sent (process restarted between send and status-update, incl. mid-window deploys), leaving them stuck at attempts_made >= max_attempts where the fetch (`attempts_made < max_attempts`) skips them forever. The AI ROI Pilot's Touch-2 was actually complete (all 99 emailed; 36 stranded). Fix: new `reconcileStrandedSends()` in schedulerService runs at the top of `processScheduledActions` every cycle: UPDATE pending email rows -> 'sent' (sent_at from the comm-log) WHERE a matching outbound comm-log exists (lead+campaign+subject, created_at >= row created_at, so re-enrollments are not mismarked). Idempotent, ~0 rows steady-state, non-blocking. Unclogs the fetch + makes metrics honest + prevents recurrence.
   - Verification: post-deploy, the 458-stuck backlog clears on the first cycle (stuck-due count -> ~0, fetchable count rises); AI ROI Pilot Touch-2 shows 99 sent.
   - Notes: Subject-matched comm-log is the proof-of-send (each touch has a unique subject per lead) so re-sending is avoided. Lesson reinforced: deploy after-hours; mid-window restarts strand in-flight sends (this reconciler now self-corrects that within one cycle).
+
+- [x] **Wire Week 6 Anthropic course: confirm MCP Advanced Topics in seed (BC #9984356110)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed: `backend/src/seeds/seedCurriculumCourseLinks.ts` — Week 6 `link_status` changed from `pending_confirmation` to `confirmed`. URL `https://anthropic.skilljar.com/model-context-protocol-advanced-topics` was already present; ticket provided the confirmation.
+  - Verification: tsc --noEmit clean; seed ran against accelerator_dev1 — Week 6 = confirmed (DB verified via psql query). Awaiting Kes PR approval.
+  - Notes: One-line change in the seed; no server.ts change needed (startup seeding was wired in PR #89).
