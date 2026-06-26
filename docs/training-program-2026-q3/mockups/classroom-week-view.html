@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<!--
+  Classroom / Week View mockup — AI Systems Architect Accelerator
+  BUILD_SPEC §9 #5 · BC todo 9985688999 · project 47502609
+  Extends the APPROVED Design-E Classroom screen (BC#9985689170) into the full
+  Companion-Course wrapper (§6.C): orient → warm up → course → video → lab → quiz → reflect → artifact.
+  Honors locked deep-link delivery (BC#9985688697): "Open on Skilljar" = new tab, no SSO/embed, no auto progress mirror (P1).
+  AI features folded into the base program for launch (Ali, 2026-06-26): per-section AI Mock Interview (Step 7) + per-week AI Video Critiquer (sidebar). Upgrade tier (Job Edition) parked.
+  Self-contained: Design-E tokens inlined, no external JS — renders offline + in PDF. Static mockup only; no app code touched.
+  Session: CC-20260626-k7d2
+-->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Classroom · Week View · Colaberry AI Systems Architect Accelerator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-text:#E5121D; --cherry-deep:#C20E1E;
+    --leaf:#77BB4A; --leaf-action:#5BA63C; --leaf-text:#357021; --leaf-deep:#3C7A26;
+    --berry:#367895; --berry-hover:#2E6A86; --link:#2E6A86;
+    --amber:#E8920C; --amber-deep:#6F4A06;
+    --berry-on-tint:#2E6A86; --cherry-on-tint:#C20E1E;
+    --track:#E4E4E3;
+    --white:#FFFFFF; --n50:#F8F8F7; --n100:#F1F1F0; --n200:#E4E4E3; --n300:#D8D8D8;
+    --n400:#B4B4B4; --n500:#8C8C8C; --n600:#6B6B6B; --n700:#4A4A4A; --n800:#2B2B2B; --n900:#1A1A1A;
+    --surface-page:#FFFFFF; --surface-subtle:#F8F8F7; --surface-sunken:#F1F1F0;
+    --text-strong:#1A1A1A; --text-body:#2B2B2B; --text-muted:#6B6B6B;
+    --border-default:#D8D8D8; --border-subtle:#E4E4E3;
+    --shadow-sm:0 1px 2px rgba(26,26,26,.05);
+    --shadow-md:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04);
+    --shadow-lg:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);
+    --r-4:4px; --r-8:8px; --r-12:12px; --r-16:16px; --r-20:20px; --r-24:24px; --r-pill:999px;
+    --sans:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --mono:'Roboto Mono',ui-monospace,'SFMono-Regular','Menlo','Consolas',monospace;
+    --logo:'Quicksand',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  [data-theme="dark"]{
+    --surface-page:#0F0F0F; --surface-subtle:#1A1A1A; --surface-sunken:#161616;
+    --text-strong:#FFFFFF; --text-body:#E4E4E3; --text-muted:#B4B4B4;
+    --border-default:rgba(255,255,255,.14); --border-subtle:rgba(255,255,255,.10);
+    --white:#1A1A1A; --n50:#161616; --n100:#1F1F1F; --n200:#262626; --n300:#333333;
+    --link:#6FB2CC; --leaf-text:#9BD173; --cherry-text:#FF6A71; --track:rgba(255,255,255,.13);
+    --amber-deep:#E8B96B; --berry-on-tint:#7FC0DA; --cherry-on-tint:#FF6A71;
+    --shadow-md:0 3px 8px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 30px rgba(0,0,0,.5),0 3px 8px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--surface-subtle);color:var(--text-body);line-height:1.55;font-size:16px;-webkit-font-smoothing:antialiased;transition:background .22s var(--ease),color .22s var(--ease)}
+  h1,h2,h3,h4{font-family:var(--sans);font-weight:700;color:var(--text-strong);margin:0;letter-spacing:-.01em}
+  button{font-family:inherit}
+  a{color:var(--link);text-decoration:none}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  :focus-visible{outline:3px solid var(--berry);outline-offset:2px;border-radius:var(--r-4)}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+  /* ===== shell ===== */
+  .app{display:grid;grid-template-columns:248px 1fr;grid-template-rows:auto 1fr;min-height:100vh;grid-template-areas:"top top" "nav main"}
+  .topbar{grid-area:top;display:flex;align-items:center;gap:16px;padding:13px 24px;background:var(--surface-page);border-bottom:1px solid var(--border-default);position:sticky;top:0;z-index:40}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .brand .mark{width:38px;height:38px;flex:none}
+  .brand .txt b{font-family:var(--logo);font-size:18px;font-weight:700;display:block;line-height:1;color:var(--text-strong)}
+  .brand .txt b .cc{color:var(--cherry)}
+  .brand .txt span{font-size:11.5px;color:var(--text-muted);font-weight:500}
+  .top-right{display:flex;align-items:center;gap:13px;margin-left:auto}
+  .iconbtn{width:38px;height:38px;border-radius:var(--r-pill);border:1px solid var(--border-default);background:var(--surface-page);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);transition:.16s var(--ease)}
+  .iconbtn:hover{border-color:var(--berry);color:var(--berry)}
+  .iconbtn svg{width:19px;height:19px}
+  .toppill{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--leaf-text);background:rgba(91,166,60,.12);border:1px solid rgba(91,166,60,.3);border-radius:var(--r-pill);padding:6px 13px}
+  .toppill .dot{width:8px;height:8px;border-radius:50%;background:var(--leaf-action)}
+  @media(max-width:720px){.toppill span{display:none}}
+  .avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#367895,#5BA63C);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+
+  .nav{grid-area:nav;background:var(--surface-page);border-right:1px solid var(--border-default);padding:18px 14px;display:flex;flex-direction:column;gap:3px;position:sticky;top:65px;height:calc(100vh - 65px);overflow:auto}
+  .nav .grp{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:14px 12px 6px;font-weight:700}
+  .navbtn{display:flex;align-items:center;gap:13px;padding:10px 14px;border-radius:var(--r-pill);border:none;background:none;color:var(--text-body);font-size:14.5px;font-weight:500;cursor:pointer;text-align:left;width:100%;transition:.16s var(--ease)}
+  .navbtn svg{width:19px;height:19px;flex:none;opacity:.85}
+  .navbtn .star{margin-left:auto;color:var(--amber)}
+  .navbtn:hover{background:var(--surface-sunken);color:var(--text-strong)}
+  .navbtn.active{background:#ffe7e8;color:var(--cherry-deep);font-weight:700}
+  [data-theme="dark"] .navbtn.active{background:rgba(251,40,50,.16);color:#FF6A71}
+  .navbtn.active svg{opacity:1}
+
+  .main{grid-area:main;padding:28px 38px 80px;max-width:1240px}
+  .view{display:none;animation:fade .28s var(--ease)}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .page-h{margin-bottom:18px}
+  .page-h .crumbs0{font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--cherry-text);margin-bottom:7px}
+  .page-h h1{font-size:30px;line-height:1.14}
+  .page-h .sub{color:var(--text-muted);font-size:16px;margin-top:7px;max-width:780px}
+
+  .card{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-24);box-shadow:var(--shadow-md)}
+  .card.accent-cherry{border-top:4px solid var(--cherry)}
+  .card.accent-leaf{border-top:4px solid var(--leaf)}
+  .card.accent-berry{border-top:4px solid var(--berry)}
+  .card.accent-amber{border-top:4px solid var(--amber)}
+  .section-title{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:30px 0 13px;display:flex;align-items:center;gap:9px}
+  .section-title .hint{margin-left:auto;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--text-muted)}
+  .small{font-size:13.5px;color:var(--text-muted)}
+
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;padding:4px 12px;border-radius:var(--r-pill);letter-spacing:.02em;text-transform:uppercase;line-height:1.2}
+  .chip .sw{width:8px;height:8px;border-radius:50%}
+  .chip.berry{background:rgba(54,120,149,.14);color:var(--berry-on-tint)} .chip.berry .sw{background:var(--berry)}
+  .chip.leaf{background:rgba(91,166,60,.16);color:var(--leaf-text)} .chip.leaf .sw{background:var(--leaf-action)}
+  .chip.amber{background:rgba(232,146,12,.16);color:var(--amber-deep)} .chip.amber .sw{background:var(--amber)}
+  .chip.cherry{background:rgba(251,40,50,.12);color:var(--cherry-on-tint)} .chip.cherry .sw{background:var(--cherry)}
+  .chip.ghost{background:var(--surface-sunken);color:var(--text-muted)} .chip.ghost .sw{background:var(--n400)}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;font-size:14.5px;font-weight:700;padding:11px 20px;border-radius:var(--r-pill);transition:.16s var(--ease);font-family:inherit;text-decoration:none}
+  .btn svg{width:17px;height:17px}
+  .btn.primary{background:var(--cherry);color:#fff} .btn.primary:hover{background:var(--cherry-deep)}
+  .btn.berry{background:var(--berry);color:#fff} .btn.berry:hover{background:var(--berry-hover)}
+  .btn.leaf{background:var(--leaf-action);color:#fff} .btn.leaf:hover{background:var(--leaf-deep)}
+  .btn.amber{background:var(--amber);color:#fff} .btn.amber:hover{background:#cf800a}
+  .btn.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)} .btn.ghost:hover{border-color:var(--berry);color:var(--berry)}
+  .btn.sm{padding:8px 15px;font-size:13.5px}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .btn.is-disabled{opacity:.5;pointer-events:none}
+
+  .meter{height:9px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;border:1px solid var(--border-subtle)}
+  .meter>i{display:block;height:100%;border-radius:var(--r-pill);background:var(--berry);transition:width .8s var(--ease)}
+
+  .callout{display:flex;gap:11px;border-left:4px solid var(--berry);background:rgba(54,120,149,.07);padding:14px 16px;border-radius:0 var(--r-12) var(--r-12) 0;margin:14px 0;font-size:14px;color:var(--text-body)}
+  .callout svg{width:18px;height:18px;flex:none;color:var(--berry);margin-top:1px}
+  .callout.leaf{border-color:var(--leaf-action);background:rgba(91,166,60,.08)} .callout.leaf svg{color:var(--leaf-action)}
+  .callout.amber{border-color:var(--amber);background:rgba(232,146,12,.08)} .callout.amber svg{color:var(--amber-deep)}
+  .callout b{color:var(--text-strong)}
+
+  .tbl{width:100%;border-collapse:collapse;font-size:14px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);overflow:hidden}
+  .tbl th,.tbl td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--border-subtle);vertical-align:top}
+  .tbl th{background:var(--surface-sunken);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);font-weight:700}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl td code,code.k{font-family:var(--mono);font-size:12.5px;background:var(--surface-sunken);padding:1px 6px;border-radius:var(--r-4);color:var(--cherry-text)}
+  .tbl td .mono{font-weight:700;color:var(--text-strong)}
+
+  .codeblk{background:#161616;color:#f1f1f0;border-radius:var(--r-12);padding:16px 18px;font-family:var(--mono);font-size:12.5px;line-height:1.65;white-space:pre-wrap;overflow:auto}
+  .codeblk .ky{color:#9BD173} .codeblk .ty{color:#6FB2CC} .codeblk .cm{color:#8C8C8C}
+
+  footer{margin-top:42px;padding-top:20px;border-top:1px solid var(--border-default);font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .pill{background:var(--surface-sunken);border:1px solid var(--border-default);padding:5px 13px;border-radius:var(--r-pill);font-weight:700;color:var(--cherry-text)}
+
+  /* ===== overview ===== */
+  .sysgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .syscard{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);box-shadow:var(--shadow-md);padding:18px;cursor:pointer;transition:.16s var(--ease);border-top:3px solid var(--border-default);text-align:left;width:100%;font-family:inherit}
+  .syscard:hover{border-color:var(--berry);box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+  .syscard.b{border-top-color:var(--berry)} .syscard.l{border-top-color:var(--leaf)} .syscard.a{border-top-color:var(--amber)} .syscard.c{border-top-color:var(--cherry)}
+  .syscard h4{font-size:16px;margin-bottom:5px;display:flex;align-items:center;gap:9px}
+  .syscard h4 svg{width:18px;height:18px;color:var(--berry)}
+  .syscard p{font-size:13px;color:var(--text-muted);margin:0}
+  .syscard .go{margin-top:11px;font-size:12.5px;font-weight:700;color:var(--berry-on-tint);display:flex;align-items:center;gap:5px}
+  .syscard .go svg{width:14px;height:14px}
+  .ov-hero{padding:26px 28px;margin-bottom:18px}
+  .ov-hero h2{font-size:22px;margin-bottom:8px}
+  .ov-flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 4px}
+  .ov-step{display:inline-flex;align-items:center;gap:8px;background:var(--surface-sunken);border:1px solid var(--border-subtle);border-radius:var(--r-pill);padding:7px 14px;font-size:13px;font-weight:700;color:var(--text-body)}
+  .ov-step .n{width:20px;height:20px;border-radius:50%;background:var(--berry);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono)}
+  .ov-step.l .n{background:var(--leaf-action)} .ov-step.a .n{background:var(--amber)}
+  .ov-arrow{color:var(--n400)}
+
+  /* ===== week navigation ===== */
+  .weeknav{display:flex;align-items:center;gap:12px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-pill);box-shadow:var(--shadow-sm);padding:8px 12px;margin-bottom:18px;flex-wrap:wrap}
+  .navarrow{width:38px;height:38px;border-radius:var(--r-pill);border:1px solid var(--border-default);background:var(--surface-page);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-body);flex:none}
+  .navarrow:hover{border-color:var(--berry);color:var(--berry)} .navarrow svg{width:18px;height:18px}
+  .navarrow[disabled]{opacity:.4;cursor:not-allowed}
+  .weeknav-mid{flex:1;min-width:160px}
+  .weeknav-lbl{font-size:15px;font-weight:700;color:var(--text-strong)}
+  .weekpick{font-family:inherit;font-size:13.5px;font-weight:600;color:var(--text-body);background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:9px 14px;cursor:pointer}
+  .wk-dots{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .wk-dot{width:22px;height:22px;border-radius:50%;border:1px solid var(--border-default);background:var(--surface-page);font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.14s var(--ease)}
+  .wk-dot:hover{border-color:var(--berry);color:var(--berry)}
+  .wk-dot.cur{background:var(--cherry);color:#fff;border-color:var(--cherry)}
+  .wk-dot.done{background:rgba(91,166,60,.18);color:var(--leaf-text);border-color:transparent}
+  @media(max-width:720px){.wk-dots{display:none}}
+
+  /* ===== layout grid ===== */
+  .wk-grid{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+  @media(max-width:980px){.wk-grid{grid-template-columns:1fr}}
+  .wk-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+  /* week banner */
+  .wkbanner{display:flex;gap:18px;padding:22px 24px;align-items:flex-start}
+  .wkbanner .ic{width:54px;height:54px;border-radius:var(--r-16);background:linear-gradient(135deg,#367895,#5BA63C);display:flex;align-items:center;justify-content:center;flex:none}
+  .wkbanner .ic svg{width:28px;height:28px}
+  .wkbanner .pr{flex:1;min-width:0}
+  .wkbanner h2{font-size:21px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;line-height:1.2}
+  .wkbanner .days{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 12px;font-size:13.5px;color:var(--text-muted)}
+  .wkbanner .days b{color:var(--text-body)}
+  .wkbanner .days .d{display:inline-flex;align-items:center;gap:7px}
+  .wkbanner .days .d svg{width:15px;height:15px;color:var(--berry)}
+  .bannerprog{display:flex;align-items:center;gap:12px;margin-top:6px}
+  .bannerprog .meter{flex:1}
+  .bannerprog .pct{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--leaf-text);white-space:nowrap}
+
+  /* ===== companion step cards ===== */
+  .step{position:relative;display:flex;gap:16px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-20);box-shadow:var(--shadow-sm);padding:18px 20px;transition:.16s var(--ease)}
+  .step:hover{box-shadow:var(--shadow-md)}
+  .step.done{background:linear-gradient(0deg,rgba(91,166,60,.05),rgba(91,166,60,.05)),var(--surface-page)}
+  .step.cur{border-color:var(--berry);box-shadow:0 0 0 3px rgba(54,120,149,.13),var(--shadow-md)}
+  .step.locked{opacity:.62}
+  .step-rail{display:flex;flex-direction:column;align-items:center;flex:none}
+  .step-num{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:14px;border:2px solid var(--border-default);background:var(--surface-page);color:var(--text-muted)}
+  .step.cur .step-num{border-color:var(--berry);color:var(--berry);background:rgba(54,120,149,.1)}
+  .step.done .step-num{border-color:var(--leaf-action);background:var(--leaf-action);color:#fff}
+  .step-line{flex:1;width:2px;background:var(--border-subtle);margin:6px 0;min-height:14px}
+  .step:last-child .step-line{display:none}
+  .step-body{flex:1;min-width:0}
+  .step-kicker{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);font-family:var(--mono);display:flex;align-items:center;gap:8px}
+  .step-kicker .k-ic{width:15px;height:15px}
+  .step h3{font-size:17px;margin:5px 0 3px;line-height:1.25}
+  .step .desc{font-size:14px;color:var(--text-body);margin:4px 0 0}
+  .step .desc b{color:var(--text-strong)}
+  .step-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .step-head .step-titles{flex:1;min-width:200px}
+  .step-foot{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .step-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-muted);margin-top:10px}
+  .step-meta .m{display:inline-flex;align-items:center;gap:6px}
+  .step-meta .m svg{width:14px;height:14px;color:var(--text-muted)}
+
+  .statpill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:var(--r-pill);text-transform:uppercase;letter-spacing:.02em}
+  .statpill svg{width:13px;height:13px}
+  .statpill.done{background:rgba(91,166,60,.16);color:var(--leaf-text)}
+  .statpill.cur{background:rgba(54,120,149,.14);color:var(--berry-on-tint)}
+  .statpill.todo{background:var(--surface-sunken);color:var(--text-muted)}
+  .statpill.locked{background:var(--surface-sunken);color:var(--text-muted)}
+  .pts{font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--leaf-text)}
+
+  /* ===== content / activity bands ===== */
+  .band-label{display:flex;align-items:center;gap:10px;margin:24px 2px 4px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+  .band-label .bl-ic{width:26px;height:26px;border-radius:var(--r-8);background:var(--surface-sunken);display:flex;align-items:center;justify-content:center;color:var(--berry);flex:none}
+  .band-label .bl-ic svg{width:15px;height:15px}
+  .band-label .bl-note{margin-left:auto;font-size:11.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--text-muted);text-align:right;max-width:46%}
+  @media(max-width:560px){.band-label .bl-note{display:none}}
+
+  .openitem{background:var(--surface-page);border:1px solid var(--border-default);border-left:3px solid var(--berry);border-radius:var(--r-20);box-shadow:var(--shadow-sm);padding:18px 20px}
+  .oi-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+  .oi-ic{width:38px;height:38px;border-radius:var(--r-12);display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+  .oi-ic svg{width:20px;height:20px}
+  .oi-ic.berry{background:var(--berry)} .oi-ic.cherry{background:var(--cherry)} .oi-ic.leaf{background:var(--leaf-action)}
+  .oi-tx{flex:1;min-width:200px}
+  .oi-kicker{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);font-family:var(--mono);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .oi-tx h3{font-size:16.5px;margin:5px 0 3px;line-height:1.25}
+  .oi-tx .desc{font-size:14px;color:var(--text-body);margin:0}
+  .oi-foot{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .statpill.open{background:rgba(54,120,149,.12);color:var(--berry-on-tint)}
+
+  .revealcard{display:flex;gap:15px;align-items:center;padding:20px;border:1px dashed var(--border-default);background:var(--surface-subtle);box-shadow:none}
+  .revealcard .rc-ic{width:42px;height:42px;border-radius:50%;background:var(--surface-sunken);display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex:none}
+  .revealcard .rc-ic svg{width:21px;height:21px}
+  .revealcard h3{font-size:16px}
+
+  .recstage{margin-top:13px;border-radius:var(--r-16);border:1px dashed var(--border-default);background:var(--surface-subtle);padding:20px;display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center}
+  .recbtn{width:52px;height:52px;border-radius:50%;background:var(--cherry);border:4px solid rgba(251,40,50,.22);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .recbtn span{width:17px;height:17px;border-radius:50%;background:#fff;display:block}
+
+  /* course panel (Anthropic / Skilljar) */
+  .coursebox{background:var(--surface-subtle);border:1px solid var(--border-subtle);border-radius:var(--r-16);padding:15px 16px;margin-top:13px}
+  .courserow{display:flex;align-items:center;gap:13px;padding:9px 0;border-bottom:1px solid var(--border-subtle)}
+  .courserow:last-child{border-bottom:none}
+  .courserow .clogo{width:38px;height:38px;border-radius:var(--r-8);background:linear-gradient(135deg,#23566b,#367895);display:flex;align-items:center;justify-content:center;color:#fff;flex:none;font-family:var(--logo);font-weight:700;font-size:13px}
+  .courserow .cinfo{flex:1;min-width:0}
+  .courserow .cinfo .ct{font-size:14.5px;font-weight:700;color:var(--text-strong);line-height:1.3}
+  .courserow .cinfo .cu{font-family:var(--mono);font-size:11.5px;color:var(--berry-on-tint);word-break:break-all}
+  .provtag{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--berry-on-tint);background:rgba(54,120,149,.1);border:1px solid rgba(54,120,149,.26);border-radius:var(--r-pill);padding:3px 9px}
+  .provtag.orig{color:var(--leaf-text);background:rgba(91,166,60,.1);border-color:rgba(91,166,60,.3)}
+  .provtag.cert{color:var(--amber-deep);background:rgba(232,146,12,.12);border-color:rgba(232,146,12,.32)}
+
+  /* video player */
+  .vplayer{margin-top:13px;border-radius:var(--r-16);overflow:hidden;border:1px solid var(--border-subtle)}
+  .vstage{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,#10222b,#23566b 55%,#2e6a45);display:flex;align-items:center;justify-content:center}
+  .vstage::after{content:"";position:absolute;inset:0;background:
+     repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 14px,transparent 14px 28px)}
+  .vplay{position:relative;z-index:2;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.92);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.35);transition:.16s var(--ease)}
+  .vplay:hover{transform:scale(1.06)}
+  .vplay svg{width:24px;height:24px;color:var(--berry);margin-left:3px}
+  .vbadge{position:absolute;top:11px;left:11px;z-index:2;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.58);border:1px solid rgba(255,255,255,.3);padding:4px 10px;border-radius:var(--r-pill)}
+  .vdur{position:absolute;bottom:11px;right:11px;z-index:2;font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.5);padding:3px 9px;border-radius:var(--r-pill)}
+  .vbar{display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--surface-page)}
+  .vbar .vtrack{flex:1;height:5px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden}
+  .vbar .vtrack>i{display:block;height:100%;width:0;background:var(--cherry)}
+  .vlink{font-size:13px;font-weight:700;color:var(--berry-on-tint);display:inline-flex;align-items:center;gap:6px;cursor:pointer;background:none;border:none;font-family:inherit}
+  .vlink svg{width:14px;height:14px}
+
+  /* lab artifact strip */
+  .artstrip{display:flex;align-items:center;gap:14px;background:rgba(91,166,60,.07);border:1px solid rgba(91,166,60,.22);border-radius:var(--r-12);padding:13px 15px;margin-top:13px;flex-wrap:wrap}
+  .artstrip .a-ic{width:40px;height:40px;border-radius:var(--r-8);background:var(--leaf-action);display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+  .artstrip .a-ic svg{width:21px;height:21px}
+  .artstrip .a-tx{flex:1;min-width:180px}
+  .artstrip .a-tx .at{font-size:13.5px;font-weight:700;color:var(--text-strong)}
+  .artstrip .a-tx .as{font-size:12.5px;color:var(--text-muted)}
+
+  /* quiz preview rows */
+  .qrow{display:flex;align-items:center;gap:11px;padding:8px 0;font-size:13.5px;color:var(--text-body)}
+  .qrow .qn{width:24px;height:24px;border-radius:50%;background:var(--surface-sunken);font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;justify-content:center;flex:none}
+  .scorebadge{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--leaf-text)}
+
+  /* ===== sidebar ===== */
+  .wk-side{position:sticky;top:80px;display:flex;flex-direction:column;gap:16px}
+  @media(max-width:980px){.wk-side{position:static}}
+  .side-card{padding:18px}
+  .side-card h3{font-size:15px;display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .side-card h3 svg{width:17px;height:17px;color:var(--berry)}
+  .cl-cd-when{font-size:13px;color:var(--text-muted);font-weight:600}
+  .countdown{display:flex;gap:8px;margin:12px 0 14px}
+  .cd-unit{flex:1;text-align:center;background:var(--surface-sunken);border:1px solid var(--border-subtle);border-radius:var(--r-12);padding:10px 4px}
+  .cd-unit b{display:block;font-family:var(--mono);font-size:23px;font-weight:700;color:var(--text-strong);line-height:1}
+  .cd-unit span{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-top:3px;display:block}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;margin:0 0 6px}
+  .stat .lab{color:var(--text-muted)} .stat .num{font-family:var(--mono);font-weight:700;color:var(--text-strong)}
+  .miniart{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--border-subtle)}
+  .miniart:first-of-type{border-top:none}
+  .miniart .mi-ic{width:30px;height:30px;border-radius:var(--r-8);display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+  .miniart .mi-ic svg{width:16px;height:16px}
+  .miniart .mi-tx{flex:1;min-width:0}
+  .miniart .mi-tx .t{font-size:13px;font-weight:700;color:var(--text-strong);line-height:1.25}
+  .miniart .mi-tx .s{font-size:11.5px;color:var(--text-muted)}
+
+  /* ===== states view ===== */
+  .stateblk{margin-bottom:30px}
+  .statecols{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .stcard{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);box-shadow:var(--shadow-sm);padding:16px}
+  .stcard .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--text-muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  /* toast */
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--n900);color:#fff;padding:13px 22px;border-radius:var(--r-pill);font-size:14px;font-weight:700;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.3s var(--ease);z-index:90;display:flex;align-items:center;gap:9px}
+  [data-theme="dark"] .toast{background:#fff;color:#1A1A1A}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast svg{width:17px;height:17px;color:var(--leaf-action)}
+
+  @media(max-width:860px){
+    .app{grid-template-columns:1fr;grid-template-areas:"top" "main"}
+    .nav{position:fixed;left:0;top:65px;bottom:0;width:248px;z-index:50;transform:translateX(-100%);transition:transform .22s var(--ease)}
+    .app.nav-open .nav{transform:none}
+    .main{padding:22px 16px 70px}
+    .navtoggle{display:flex!important}
+  }
+  .navtoggle{display:none}
+  .skip{position:absolute;left:-999px;top:8px;background:var(--cherry);color:#fff;padding:9px 16px;border-radius:var(--r-8);z-index:99;font-weight:700}
+  .skip:focus{left:8px}
+</style>
+</head>
+<body>
+<a href="#mainContent" class="skip">Skip to content</a>
+<div class="app" id="app">
+  <header class="topbar">
+    <button class="iconbtn navtoggle" id="navToggle" onclick="toggleNav()" aria-label="Menu" aria-controls="nav" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 40 40" aria-label="Colaberry"><path d="M20 33c-7 0-13-5-13-12 0-2 .6-3.8 1.6-5.2" fill="none" stroke="#77BB4A" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="10" r="6.2" fill="#FB2832"/><circle cx="31" cy="16" r="5" fill="#FB2832"/><path d="M24 16.2c1.4-1.6 3.6-3 6.2-3.6" fill="none" stroke="#77BB4A" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <div class="txt"><b><span class="cc">C</span>olaberry</b><span>AI Systems Architect Accelerator</span></div>
+    </div>
+    <div class="top-right">
+      <span class="toppill"><span class="dot"></span><span>Cohort 1 · Founding</span></span>
+      <button class="iconbtn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle dark mode"><svg id="themeIcon" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+      <span class="avatar" title="Maya Chen">MC</span>
+    </div>
+  </header>
+
+  <nav class="nav" id="nav" aria-label="Primary">
+    <div class="grp">Orient</div>
+    <button class="navbtn" data-v="overview" onclick="go('overview',this)"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg> Overview</button>
+    <div class="grp">The screen</div>
+    <button class="navbtn active" data-v="classroom" aria-current="page" onclick="go('classroom',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 11v5c0 1 2 2 5 2s5-1 5-2v-5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Classroom · Week view <svg class="star" viewBox="0 0 24 24" fill="currentColor" width="13" height="13" aria-hidden="true"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z"/></svg></button>
+    <div class="grp">Handoff</div>
+    <button class="navbtn" data-v="states" onclick="go('states',this)"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/></svg> States &amp; variants</button>
+    <button class="navbtn" data-v="spec" onclick="go('spec',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6l1 3h3v15H5V6h3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> For Kes · build spec</button>
+  </nav>
+
+  <main class="main" id="mainContent">
+
+    <!-- ============ OVERVIEW ============ -->
+    <section class="view" id="view-overview">
+      <div class="page-h">
+        <div class="crumbs0">Design · BUILD_SPEC §9 #5</div>
+        <h1>Classroom / Week view</h1>
+        <div class="sub">One week page that fuses the four things a student does each week — the <b>Anthropic course</b>, the <b>NotebookLM video</b>, the <b>lab</b>, and the <b>quiz</b> — into a single guided sequence. This mockup extends the approved Design-E Classroom screen into the full Companion-Course wrapper from §6.C.</div>
+      </div>
+
+      <div class="card ov-hero accent-berry">
+        <h2>The week, in one guided flow</h2>
+        <p class="small" style="font-size:14.5px;color:var(--text-body);max-width:840px">The page splits into two bands. <b>Content</b> — the Anthropic course, the NotebookLM video, and readings — stays <b>open across every section, any time</b>. <b>Activities</b> — warm-up, lab, record &amp; critique, post-quiz, interview — <b>reveal as you complete them</b>, and only what's visible feeds your main timeline. Same fused curriculum (§3, §6.C), now with a clean open-vs-do split.</p>
+        <div class="small" style="font-weight:700;color:var(--berry-on-tint);margin:16px 0 7px;letter-spacing:.04em;text-transform:uppercase;font-size:11.5px">Content · open anytime</div>
+        <div class="ov-flow">
+          <span class="ov-step"><span class="n" style="background:var(--berry);font-size:0">·</span> Course · Skilljar</span>
+          <span class="ov-step"><span class="n" style="background:var(--cherry);font-size:0">·</span> NotebookLM video</span>
+          <span class="ov-step"><span class="n" style="background:var(--leaf-action);font-size:0">·</span> Readings &amp; articles</span>
+        </div>
+        <div class="small" style="font-weight:700;color:var(--leaf-text);margin:16px 0 7px;letter-spacing:.04em;text-transform:uppercase;font-size:11.5px">Activities · reveal as you complete them</div>
+        <div class="ov-flow">
+          <span class="ov-step a"><span class="n">1</span> Warm-up</span><span class="ov-arrow">→</span>
+          <span class="ov-step l"><span class="n">2</span> Lab</span><span class="ov-arrow">→</span>
+          <span class="ov-step"><span class="n">3</span> Record &amp; critique</span><span class="ov-arrow">→</span>
+          <span class="ov-step a"><span class="n">4</span> Post-quiz + survey</span><span class="ov-arrow">→</span>
+          <span class="ov-step"><span class="n">5</span> AI mock interview</span><span class="ov-arrow">→</span>
+          <span class="ov-step l"><span class="n">6</span> Done</span>
+        </div>
+      </div>
+
+      <div class="section-title">What's in this mockup</div>
+      <div class="sysgrid">
+        <button class="syscard b" onclick="go('classroom',navFor('classroom'))">
+          <h4><svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 11v5c0 1 2 2 5 2s5-1 5-2v-5" stroke="currentColor" stroke-width="2"/></svg> Week view</h4>
+          <p>The live screen, populated with Week 1 (Claude Code Foundations) real data. A 12-week switcher flips the course, lab, video, and artifact for any week — including linked, Colaberry-original, and CCA-F-cert weeks.</p>
+          <span class="go">Open the screen <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        </button>
+        <button class="syscard a" onclick="go('states',navFor('states'))">
+          <h4><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/></svg> States &amp; variants</h4>
+          <p>Per-component states (not-started · in-progress · complete · locked/drip), plus the three week archetypes: linked Skilljar week, Colaberry-original week (no Skilljar), and the Week-12 CCA-F certification week.</p>
+          <span class="go">See states <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        </button>
+        <button class="syscard l" onclick="go('spec',navFor('spec'))">
+          <h4><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6l1 3h3v15H5V6h3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> For Kes · build spec</h4>
+          <p>Each component mapped to the §7 data model (CourseLink, Quiz, Survey, Progress, Artifact), the locked deep-link decision, per-student isolation, idempotency, failure-first, and what's deferred to P1.</p>
+          <span class="go">Read the spec <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+        </button>
+      </div>
+
+      <div class="callout" style="margin-top:24px">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <div><b>Mockup only — for approval, not yet built.</b> Static HTML in the Design-E system (Cherry/Leaf/Berry/Amber tokens, light + dark, WCAG AA). No app code is touched. It also reflects the 2026-06-26 changes: content (course · video · readings) is open across all sections, activities reveal as you complete them, and the two AI features — the per-section <b>AI Mock Interview</b> and the <b>AI Video Critiquer</b> (Record &amp; critique) — are now <b>activity steps</b> in the flow. "Done means: mockup approved" (Ali). Once approved, this hands to Kes as Epic 3 + Epic 4 build spec.</div>
+      </div>
+    </section>
+
+    <!-- ============ CLASSROOM / WEEK VIEW ============ -->
+    <section class="view active" id="view-classroom">
+      <div class="page-h">
+        <div class="crumbs0" id="clCrumb">Classroom · Cohort 1</div>
+        <h1 id="clTitle">Week 1 · Claude Code Foundations</h1>
+        <div class="sub">Your week, as one guided flow. Orient, prime, learn, build, and prove it — every card scores on-site and feeds your readiness score and points.</div>
+      </div>
+
+      <!-- WEEK NAVIGATION -->
+      <div class="weeknav">
+        <button class="navarrow" id="clPrev" onclick="clWeek(-1)" aria-label="Previous week"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="weeknav-mid">
+          <div class="weeknav-lbl" id="clWeekLbl">Week 1 of 12</div>
+          <div class="small" id="clWeekTheme">Claude Code Foundations · Intensive 1</div>
+        </div>
+        <button class="navarrow" id="clNext" onclick="clWeek(1)" aria-label="Next week"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="wk-dots" id="clDots" aria-hidden="true"></div>
+        <label class="small" style="display:flex;align-items:center;gap:7px">Jump to
+          <select class="weekpick" id="clWeekPick" onchange="clGo(+this.value)" aria-label="Jump to week"></select>
+        </label>
+      </div>
+
+      <div class="wk-grid">
+        <!-- MAIN COLUMN -->
+        <div class="wk-col">
+
+          <!-- WEEK BANNER -->
+          <div class="card wkbanner accent-berry">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div>
+            <div class="pr">
+              <h2><span id="wkBannerTitle">Week 1 · Claude Code Foundations</span> <span class="chip berry" id="wkIntensive"><span class="sw"></span>Intensive 1</span> <span class="provtag" id="wkType">Anthropic · Skilljar</span></h2>
+              <p class="desc" id="s1Desc" style="margin:9px 0 0;font-size:14px;color:var(--text-body)"><b>Goal:</b> Stand up Claude Code on your own project, run the build loop (prompt → diff → commit), and connect GitHub so your pushes start verifying requirements.</p>
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:11px" id="s1Vocab">
+                <span class="chip ghost"><span class="sw"></span>Build loop</span>
+                <span class="chip ghost"><span class="sw"></span>Diff review</span>
+                <span class="chip ghost"><span class="sw"></span>CLAUDE.md</span>
+                <span class="chip ghost"><span class="sw"></span>Requirement state</span>
+              </div>
+              <div class="days" style="margin-top:13px">
+                <span class="d"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2"/></svg> <b>Mon</b> Architecture Day</span>
+                <span class="d"><svg viewBox="0 0 24 24" fill="none"><path d="M5 8h14v12H5zM9 4h6v4H9z" stroke="currentColor" stroke-width="2"/></svg> <b>Thu</b> Build Day</span>
+                <span class="d"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> <span id="wkItems">5 activities this week</span></span>
+              </div>
+              <div class="bannerprog">
+                <div class="meter" role="progressbar" aria-label="Week activities complete" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" id="wkMeterRole"><i id="wkProg" style="width:20%"></i></div>
+                <span class="pct"><b id="wkDone">1</b>/<b id="wkTotal">5</b> activities · <span id="wkPts">+25 pts</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== CONTENT BAND · open anytime, across all sections ===== -->
+          <div class="band-label"><span class="bl-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg></span> Content · open anytime <span class="bl-note">browse any section, any time — never locked</span></div>
+
+          <!-- Course (Anthropic / Skilljar) — open -->
+          <div class="openitem">
+            <div class="oi-head">
+              <div class="oi-ic berry"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h7v15H4zM13 5h7v15h-7z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div>
+              <div class="oi-tx">
+                <div class="oi-kicker">Course <span class="provtag" id="courseProv">Anthropic · Skilljar</span></div>
+                <h3 id="courseHeading">Take the Anthropic course for the week</h3>
+                <p class="desc" id="courseDesc">The read/watch layer. Opens in a new tab on Anthropic's Skilljar LMS — you stay enrolled there; we wrap it with the activities below.</p>
+              </div>
+              <span class="statpill open"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg> Open</span>
+            </div>
+            <div class="coursebox" id="courseBox"><!-- rendered --></div>
+            <div class="callout" style="margin:13px 0 0">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M14 3h7v7M21 3l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 7v12h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <div id="courseNote"><b>Opens in a new tab on Skilljar.</b> Per the locked delivery decision (deep-link v1), we link out — no separate login wall expected for enrolled students. Completion for this week is confirmed by your post-quiz; automatic Skilljar progress sync is a P1 upgrade.</div>
+            </div>
+            <div class="oi-foot">
+              <a class="btn berry sm" id="courseBtn" href="https://anthropic.skilljar.com/claude-code-101" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none"><path d="M14 3h7v7M21 3l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 7v12h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> <span id="courseBtnLbl">Open course on Skilljar</span></a>
+              <button class="btn ghost sm" onclick="toast('Marked started — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3l14 9-14 9z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Mark as started</button>
+            </div>
+          </div>
+
+          <!-- NotebookLM video — open -->
+          <div class="openitem">
+            <div class="oi-head">
+              <div class="oi-ic cherry"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="#fff"/></svg></div>
+              <div class="oi-tx">
+                <div class="oi-kicker">Watch <span class="provtag" style="color:var(--cherry-on-tint);background:rgba(251,40,50,.1);border-color:rgba(251,40,50,.28)">Colaberry · NotebookLM</span></div>
+                <h3 id="videoHeading">Week explainer — the architect's lens</h3>
+                <p class="desc">A 9-minute Colaberry NotebookLM explainer that reframes the course through the Systems-Architect lens. Our own explainer — distinct from the Anthropic course’s own videos on Skilljar.</p>
+              </div>
+              <span class="statpill open"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg> Open</span>
+            </div>
+            <div class="vplayer">
+              <div class="vstage">
+                <span class="vbadge">NotebookLM · Colaberry</span>
+                <button class="vplay" onclick="toast('Playing explainer — mockup')" aria-label="Play the week explainer video"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+                <span class="vdur">9:12</span>
+              </div>
+              <div class="vbar">
+                <button class="vplay" style="width:34px;height:34px;box-shadow:none" onclick="toast('Playing — mockup')" aria-label="Play"><svg viewBox="0 0 24 24" fill="none" style="margin-left:2px"><path d="M8 5v14l11-7z" fill="var(--berry)"/></svg></button>
+                <div class="vtrack" role="progressbar" aria-label="Video progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+                <span class="small mono">0:00 / 9:12</span>
+                <button class="vlink" onclick="toast('Transcript — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Transcript</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Readings & articles — open -->
+          <div class="openitem">
+            <div class="oi-head">
+              <div class="oi-ic leaf"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h7v15H4zM13 5h7v15h-7z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div>
+              <div class="oi-tx">
+                <div class="oi-kicker">Read</div>
+                <h3>Readings &amp; articles</h3>
+                <p class="desc">Curated background for the week — Anthropic docs, a deep-dive article, and reference links. Skim now or come back any time.</p>
+              </div>
+              <span class="statpill open"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg> Open</span>
+            </div>
+            <div class="coursebox">
+              <div class="courserow"><div class="clogo" style="background:linear-gradient(135deg,#23566b,#367895)">Dr</div><div class="cinfo"><div class="ct">Anthropic docs — this week's topic</div><div class="cu">docs.anthropic.com</div></div><span class="provtag">Reference</span></div>
+              <div class="courserow"><div class="clogo" style="background:linear-gradient(135deg,#3C7A26,#5BA63C)">Ar</div><div class="cinfo"><div class="ct">Deep-dive article + cheat-sheet</div><div class="small">~8 min read</div></div><span class="provtag orig">Colaberry</span></div>
+            </div>
+          </div>
+
+          <!-- ===== ACTIVITIES BAND · reveal as you go ===== -->
+          <div class="band-label"><span class="bl-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" stroke="currentColor" stroke-width="2"/></svg></span> Activities · complete to finish the week <span class="bl-note">these reveal once you start — hidden items don't show in your timeline</span></div>
+
+          <!-- reveal prompt — shown for weeks the student hasn't started yet -->
+          <div class="card revealcard" id="revealPrompt" style="display:none">
+            <div class="rc-ic"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg></div>
+            <div>
+              <h3>Activities reveal once you start</h3>
+              <p class="small" style="margin:6px 0 0">The content above is open any time. When you start this week and finish your first activity, the lab, recording, post-quiz, survey, and interview appear here — and join your main timeline.</p>
+            </div>
+          </div>
+
+          <div id="activityList">
+
+          <!-- ACTIVITY 1 · WARM-UP QUIZ -->
+          <div class="step done">
+            <div class="step-rail"><div class="step-num">✓</div><div class="step-line"></div></div>
+            <div class="step-body">
+              <div class="step-head">
+                <div class="step-titles">
+                  <div class="step-kicker"><svg class="k-ic" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3 8-8" stroke="var(--amber)" stroke-width="2" stroke-linecap="round"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" stroke="var(--amber)" stroke-width="2"/></svg> Warm up · 5-question quiz</div>
+                  <h3>5-question warm-up quiz</h3>
+                  <p class="desc">A quick primer before the course — surfaces what you already know so the course time lands where it counts.</p>
+                </div>
+                <span class="statpill done"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg> 5 / 5</span>
+              </div>
+              <div class="step-meta">
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2"/></svg> ~5 min</span>
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2"/></svg> Native quiz · scored on-site</span>
+                <span class="m"><span class="pts">+25 pts</span></span>
+              </div>
+              <div class="step-foot">
+                <button class="btn ghost sm" onclick="toast('Warm-up results — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg> Review answers</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 5 · LAB (BUILD DAY) -->
+          <div class="step">
+            <div class="step-rail"><div class="step-num">5</div><div class="step-line"></div></div>
+            <div class="step-body">
+              <div class="step-head">
+                <div class="step-titles">
+                  <div class="step-kicker"><svg class="k-ic" viewBox="0 0 24 24" fill="none"><path d="M5 8h14v12H5zM9 4h6v4H9z" stroke="var(--leaf-action)" stroke-width="2"/></svg> Lab · build it <span class="chip leaf"><span class="sw"></span>Build Day · Thu</span></div>
+                  <h3 id="labHeading">Build it on <em>your</em> project</h3>
+                  <p class="desc" id="labDesc">Apply the week to your own capstone project — not a throwaway exercise. Scored on-site; produces this week's Tier-A artifact for your portfolio.</p>
+                </div>
+                <span class="statpill todo"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg> Not started</span>
+              </div>
+
+              <div class="codeblk" style="margin-top:13px"><span class="cm"># Your Claude Code starter prompt for this lab (auto-tailored to your project)</span>
+<span class="ky">Goal:</span> <span id="labPrompt">Set up Claude Code in your project repo, configure CLAUDE.md, and run one build-loop: turn a single requirement into a verified diff, commit, and push.</span>
+<span class="ky">Resources:</span> your repo · GitHub connection · this week's course
+<span class="ky">Definition of done:</span> 1 requirement flips to VERIFIED on push</div>
+
+              <div class="artstrip">
+                <div class="a-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l5 5v15H6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 2v5h5M9 13h6M9 17h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+                <div class="a-tx">
+                  <div class="at" id="artTitle">Tier-A artifact: Working Claude Code build loop + first verified requirement</div>
+                  <div class="as">Auto-collected into your portfolio when the lab is scored · gradeable &amp; comparable across the cohort</div>
+                </div>
+                <span class="chip ghost"><span class="sw"></span>Tier A</span>
+              </div>
+
+              <div class="step-meta">
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2"/></svg> ~60 min</span>
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2"/></svg> Scored on-site</span>
+                <span class="m"><span class="pts">+90 pts</span></span>
+              </div>
+              <div class="step-foot">
+                <button class="btn leaf sm" onclick="toast('Opening lab — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M5 8h14v12H5zM9 4h6v4H9z" stroke="currentColor" stroke-width="2"/></svg> Open the lab</button>
+                <button class="btn ghost sm" onclick="toast('Copied prompt — mockup')"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="2"/></svg> Copy Claude Code prompt</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACTIVITY 3 · RECORD & CRITIQUE (AI Video Critiquer — now a step) -->
+          <div class="step">
+            <div class="step-rail"><div class="step-num">3</div><div class="step-line"></div></div>
+            <div class="step-body">
+              <div class="step-head">
+                <div class="step-titles">
+                  <div class="step-kicker"><svg class="k-ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="13" height="12" rx="2" stroke="var(--cherry)" stroke-width="2"/><path d="m16 10 5-3v10l-5-3z" stroke="var(--cherry)" stroke-width="2" stroke-linejoin="round"/></svg> Record &amp; critique <span class="provtag" style="color:var(--cherry-on-tint);background:rgba(251,40,50,.1);border-color:rgba(251,40,50,.28)">AI Video Critiquer</span></div>
+                  <h3>Record a 2-min demo of your build</h3>
+                  <p class="desc">Record a short demo of what you built this week — or answer a common interview question. The AI Video Critiquer scores your delivery (pacing, clarity, filler words) and files the clip to your portfolio.</p>
+                </div>
+                <span class="statpill todo"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg> Not started</span>
+              </div>
+              <div class="recstage">
+                <button class="recbtn" onclick="toast('Recording — mockup')" aria-label="Start recording"><span></span></button>
+                <div class="small">Record a take — or upload a clip. AI delivery feedback in ~1 min.</div>
+              </div>
+              <div class="step-meta">
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2"/></svg> ~5 min</span>
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="2"/></svg> Transcript + audio feedback · visual P1</span>
+                <span class="m"><span class="pts">+60 pts</span></span>
+              </div>
+              <div class="step-foot">
+                <button class="btn primary sm" onclick="toast('Recording — mockup')"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg> Record a take</button>
+                <button class="btn ghost sm" onclick="toast('Sample feedback — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg> See sample feedback</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACTIVITY 4 · POST-QUIZ + SURVEY -->
+          <div class="step locked">
+            <div class="step-rail"><div class="step-num">4</div><div class="step-line"></div></div>
+            <div class="step-body">
+              <div class="step-head">
+                <div class="step-titles">
+                  <div class="step-kicker"><svg class="k-ic" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3 8-8" stroke="var(--amber)" stroke-width="2" stroke-linecap="round"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" stroke="var(--amber)" stroke-width="2"/></svg> Prove it · post-quiz + survey</div>
+                  <h3>10-question post-quiz + reflection survey</h3>
+                  <p class="desc">The wrapper that gates the week. The 10-q post-quiz is our completion signal for the course; the short reflection survey closes the loop.</p>
+                </div>
+                <span class="statpill locked"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg> Unlocks after lab</span>
+              </div>
+              <div style="margin-top:12px">
+                <div class="qrow"><span class="qn">1</span> Which command runs a single build-loop step?</div>
+                <div class="qrow"><span class="qn">2</span> A push verifies a requirement when…</div>
+                <div class="qrow" style="color:var(--text-muted)"><span class="qn">…</span> +8 more · then reflection</div>
+              </div>
+              <div class="step-meta">
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2"/></svg> ~12 min</span>
+                <span class="m">10-q quiz + 3-q survey</span>
+                <span class="m"><span class="pts">+120 pts</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 7 · AI MOCK INTERVIEW (folded into base program 2026-06-26) -->
+          <div class="step locked">
+            <div class="step-rail"><div class="step-num">7</div><div class="step-line"></div></div>
+            <div class="step-body">
+              <div class="step-head">
+                <div class="step-titles">
+                  <div class="step-kicker"><svg class="k-ic" viewBox="0 0 24 24" fill="none"><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" stroke="var(--berry)" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="var(--berry)" stroke-width="2" stroke-linecap="round"/></svg> AI mock interview <span class="provtag">AI · section interview</span></div>
+                  <h3 id="ivTitle">AI mock interview — this week’s section</h3>
+                  <p class="desc">An AI interviewer asks you a few questions on this week’s topic, scores your answers against a rubric, and emails you results. This is where you practice <b>saying</b> what you built — the way a real interview will ask.</p>
+                </div>
+                <span class="statpill locked"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg> Unlocks after quiz</span>
+              </div>
+              <div class="coursebox" id="ivMount" style="margin-top:13px"></div>
+              <div class="callout" style="margin:13px 0 0">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <div><b>Launch-min:</b> typed answers + a deterministic rubric score, results emailed. Spoken / voice interviews are a fast-follow (P1). Pairs with the <b>Record &amp; critique</b> activity above for delivery practice.</div>
+              </div>
+              <div class="step-meta">
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2"/></svg> ~10 min</span>
+                <span class="m"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" stroke="currentColor" stroke-width="2"/></svg> AI interviewer · rubric-scored</span>
+                <span class="m"><span class="pts">+80 pts</span></span>
+              </div>
+              <div class="step-foot">
+                <button class="btn berry sm" onclick="toast('Starting interview — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg> Start the interview</button>
+                <button class="btn ghost sm" onclick="toast('Sample result — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" stroke="currentColor" stroke-width="2"/></svg> See a sample result</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACTIVITY 6 · WEEK COMPLETE -->
+          <div class="step locked">
+            <div class="step-rail"><div class="step-num">6</div></div>
+            <div class="step-body">
+              <div class="step-head">
+                <div class="step-titles">
+                  <div class="step-kicker"><svg class="k-ic" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" fill="var(--leaf-action)"/></svg> Week complete · finish</div>
+                  <h3>Artifact filed · readiness updated · next week unlocks</h3>
+                  <p class="desc">Finishing your activities files your Tier-A artifact to your portfolio, banks your quiz + interview scores into your readiness score, and drips Week 2 onto your dashboard.</p>
+                </div>
+                <span class="statpill locked"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg> Locked</span>
+              </div>
+              <div class="step-foot">
+                <button class="btn ghost sm" id="s7Btn" disabled><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg> Complete Week 1</button>
+                <span class="small" id="s7Hint">Finish all 5 activities to complete the week</span>
+              </div>
+            </div>
+          </div>
+
+          </div><!-- /#activityList -->
+
+          <!-- visibility = timeline rule -->
+          <div class="callout leaf" style="margin-top:6px">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            <div><b>Visibility drives your timeline.</b> Content stays open across every section; activities reveal as you complete them. Anything not visible on this page won't appear in your main timeline — so your "today" view never lists work you haven't unlocked yet.</div>
+          </div>
+
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside class="wk-side" aria-label="Week status">
+          <!-- countdown -->
+          <div class="card side-card accent-cherry">
+            <h3><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="2"/><path d="M12 9v4l2.5 2M9 2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Next live class</h3>
+            <div class="cl-cd-when" id="clCdWhen">Thu · Build Day · 6:00 PM CT</div>
+            <div class="countdown" id="cdBlock" aria-label="Time until next class">
+              <div class="cd-unit"><b>2</b><span>days</span></div>
+              <div class="cd-unit"><b>14</b><span>hrs</span></div>
+              <div class="cd-unit"><b>05</b><span>min</span></div>
+            </div>
+            <button class="btn primary sm" style="width:100%;justify-content:center" onclick="toast('Join link — mockup')"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg> Add to calendar</button>
+          </div>
+
+          <!-- this week progress -->
+          <div class="card side-card accent-leaf">
+            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> This week</h3>
+            <div class="stat"><span class="lab">Activities done</span><span class="num"><b id="sbDone">1</b> / <b id="sbTotal">5</b></span></div>
+            <div class="meter" id="sbMeterRole" style="margin:6px 0 14px" role="progressbar" aria-label="Week activities complete" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1"><i id="sbProg" style="width:20%;background:var(--leaf-action)"></i></div>
+            <div class="stat"><span class="lab">Points this week</span><span class="num" style="color:var(--leaf-text)" id="sbPts">+25</span></div>
+            <div class="stat"><span class="lab">Readiness lift</span><span class="num" id="sbReadiness">+2.5%</span></div>
+            <button class="btn ghost sm" style="width:100%;justify-content:center;margin-top:10px" onclick="toast('Points breakdown — mockup')">See points breakdown</button>
+          </div>
+
+          <!-- artifact this week -->
+          <div class="card side-card accent-berry">
+            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l5 5v15H6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 2v5h5" stroke="currentColor" stroke-width="2"/></svg> Produces this week</h3>
+            <div class="miniart">
+              <div class="mi-ic" style="background:var(--leaf-action)"><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l5 5v15H6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></div>
+              <div class="mi-tx"><div class="t" id="sbArt">Build loop + first verified requirement</div><div class="s">Tier-A → portfolio</div></div>
+            </div>
+            <div class="miniart">
+              <div class="mi-ic" style="background:var(--berry)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" fill="currentColor"/></svg></div>
+              <div class="mi-tx"><div class="t">Course completion credit</div><div class="s">via 10-q post-quiz</div></div>
+            </div>
+            <div class="miniart">
+              <div class="mi-ic" style="background:var(--cherry)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+              <div class="mi-tx"><div class="t">Interview readiness score</div><div class="s">from your AI mock interview</div></div>
+            </div>
+            <button class="btn ghost sm" style="width:100%;justify-content:center;margin-top:6px" onclick="go('spec',navFor('spec'))">How completion works</button>
+          </div>
+
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ STATES & VARIANTS ============ -->
+    <section class="view" id="view-states">
+      <div class="page-h">
+        <div class="crumbs0">Handoff</div>
+        <h1>States &amp; variants</h1>
+        <div class="sub">The states each component renders in, and the three week archetypes the one page must cover. Built so Kes never has to guess an edge case.</div>
+      </div>
+
+      <div class="stateblk">
+        <div class="section-title">Per-component status</div>
+        <div class="statecols">
+          <div class="stcard"><div class="lbl">Not started</div><span class="statpill todo"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg> Not started</span><p class="small" style="margin-top:10px">Default. Card is full-opacity and actionable.</p></div>
+          <div class="stcard"><div class="lbl">In progress</div><span class="statpill cur"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2"/></svg> In progress</span><p class="small" style="margin-top:10px">Berry ring highlights the current step.</p></div>
+          <div class="stcard"><div class="lbl">Complete</div><span class="statpill done"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg> Done · +pts</span><p class="small" style="margin-top:10px">Leaf tint, checkmark node, points banked.</p></div>
+          <div class="stcard"><div class="lbl">Locked / drip</div><span class="statpill locked"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg> Locked</span><p class="small" style="margin-top:10px">Gated by prerequisite or cohort drip date.</p></div>
+        </div>
+      </div>
+
+      <div class="stateblk">
+        <div class="section-title">Content vs activities · visibility <span class="hint">new model — Ali 2026-06-26</span></div>
+        <div class="statecols">
+          <div class="stcard" style="border-top:3px solid var(--berry)"><div class="lbl" style="color:var(--berry-on-tint)">Content · always open</div><p class="small">Course, NotebookLM video, readings &amp; articles. <b>Open across every section, any time</b> — never locked, never hidden. Marked with an "Open" pill.</p></div>
+          <div class="stcard" style="border-top:3px solid var(--n400)"><div class="lbl">Activities · before you start</div><p class="small">Lab, record &amp; critique, post-quiz, survey, interview are <b>hidden</b> behind a "reveal once you start" prompt. The content above stays usable.</p></div>
+          <div class="stcard" style="border-top:3px solid var(--leaf)"><div class="lbl" style="color:var(--leaf-text)">Activities · after first activity</div><p class="small">Complete one activity and the rest <b>reveal</b> in order, each gated by its prerequisite (lab → post-quiz → interview).</p></div>
+          <div class="stcard" style="border-top:3px solid var(--cherry)"><div class="lbl" style="color:var(--cherry-on-tint)">Visibility = timeline</div><p class="small"><b>If it isn't visible here, it can't appear in the main timeline.</b> The "today" feed only pulls items currently visible to that student — hidden activities stay out until revealed.</p></div>
+        </div>
+        <p class="small" style="margin-top:12px">Switch the week picker to a future week on the live screen to see the "before you start" state — content open, activities behind the reveal prompt.</p>
+      </div>
+
+      <div class="stateblk">
+        <div class="section-title">The three week archetypes <span class="hint">switch them live on the Week view with the week picker</span></div>
+        <div class="statecols">
+          <div class="stcard" style="border-top:3px solid var(--berry)">
+            <div class="lbl" style="color:var(--berry-on-tint)">A · Linked Skilljar week</div>
+            <p class="small" style="margin:0 0 10px"><b style="color:var(--text-strong)">Weeks 1, 2, 3, 5, 6, 7, 8.</b> Course card shows the Anthropic course with <b>Open on Skilljar ↗</b> (new tab, deep-link). All four components present.</p>
+            <span class="provtag">Anthropic · Skilljar</span>
+          </div>
+          <div class="stcard" style="border-top:3px solid var(--leaf)">
+            <div class="lbl" style="color:var(--leaf-text)">B · Colaberry-original week</div>
+            <p class="small" style="margin:0 0 10px"><b style="color:var(--text-strong)">Weeks 4, 9, 10, 11.</b> No Skilljar course. Course card becomes <b>curated public material</b> (e.g. Anthropic's public Prompt-Engineering tutorial + docs) — read/watch links, not a deep-link.</p>
+            <span class="provtag orig">Colaberry original</span>
+          </div>
+          <div class="stcard" style="border-top:3px solid var(--amber)">
+            <div class="lbl" style="color:var(--amber-deep)">C · Capstone / CCA-F week</div>
+            <p class="small" style="margin:0 0 10px"><b style="color:var(--text-strong)">Week 12.</b> Course card is the <b>Claude Certified Architect — Foundations</b> exam link (claudecertifications.com). Lab = capstone + Expo; quiz → readiness sign-off.</p>
+            <span class="provtag cert">CCA-F · certification</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stateblk">
+        <div class="section-title">System states</div>
+        <div class="statecols">
+          <div class="stcard"><div class="lbl">Course link unconfirmed</div><p class="small">If a week's Skilljar URL is <code class="k">pending</code> (not yet confirmed by Kes), the course card shows a muted "Course link coming soon" state and the rest of the week stays usable.</p></div>
+          <div class="stcard"><div class="lbl">Video not yet produced</div><p class="small">NotebookLM video for a future week shows a "Drops on {date}" placeholder rather than a dead player.</p></div>
+          <div class="stcard"><div class="lbl">Offline / link error</div><p class="small">Deep-link failure surfaces a retry + a copyable URL fallback — never a silent dead end (failure-first).</p></div>
+          <div class="stcard"><div class="lbl">Mobile (&lt; 980px)</div><p class="small">Sidebar collapses under the main column; the step rail stays as a vertical checklist. Single-column, thumb-reachable actions.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FOR KES · BUILD SPEC ============ -->
+    <section class="view" id="view-spec">
+      <div class="page-h">
+        <div class="crumbs0">Handoff · BUILD_SPEC §6.C / §7</div>
+        <h1>For Kes · build spec</h1>
+        <div class="sub">What this screen needs from the backend. Static mockup; this section is the contract, not code.</div>
+      </div>
+
+      <div class="section-title">Each component → build decision &amp; data</div>
+      <table class="tbl">
+        <thead><tr><th>Component</th><th>Decision (§6)</th><th>Backed by (§7)</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">Course (Anthropic)</td><td><b>LINK</b></td><td><code class="k">CourseLink</code> (week → Skilljar URL)</td><td>Deep-link, new tab. Seeded in <code class="k">anthropic_content_registry</code> / <code class="k">curriculum_course_links</code>. No SSO/embed (v1).</td></tr>
+          <tr><td class="mono">NotebookLM video</td><td><b>REPLICATE / LINK</b></td><td><code class="k">Lesson.video_url</code> + transcript</td><td>Colaberry-produced; native player + captions + transcript. Per-week asset.</td></tr>
+          <tr><td class="mono">Lab</td><td><b>REPLICATE</b></td><td><code class="k">Lab</code> → <code class="k">Artifact</code> (Tier-A)</td><td>Bound to the student's <code class="k">Project</code>. Scored on-site; emits the Tier-A artifact.</td></tr>
+          <tr><td class="mono">Warm-up + post-quiz</td><td><b>REPLICATE</b></td><td><code class="k">Quiz</code> (5-q + 10-q) · <code class="k">Survey</code></td><td>Our wrapper. 10-q post-quiz is the course-completion signal (deep-link has no auto-progress in v1).</td></tr>
+          <tr><td class="mono">AI Mock Interview</td><td><b>REPLICATE</b></td><td><code class="k">InterviewSession</code> + <code class="k">Rubric</code> → <code class="k">Score</code></td><td>Per-section. LLM asks + writes feedback; the score is a deterministic rubric; results emailed. <b>Launch-min</b> = typed; voice = P1. Folded into base program 2026-06-26.</td></tr>
+          <tr><td class="mono">AI Video Critiquer</td><td><b>REPLICATE</b></td><td><code class="k">Recording</code> + <code class="k">CritiqueReport</code> → <code class="k">Artifact</code></td><td>Transcribe + critique delivery (pacing/clarity/filler); clip files to portfolio. <b>Launch-min</b> = transcript+audio; visual body-language = P1. Folded into base program 2026-06-26.</td></tr>
+          <tr><td class="mono">Completion / progress</td><td><b>LINK + MIRROR</b></td><td><code class="k">Progress</code> (mirrored)</td><td><b>P1:</b> pull Skilljar progress once Partner API lands. v1 gates on our quiz.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout" style="margin-top:18px">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+        <div><b>Visibility model (Ali 2026-06-26) — drives the timeline.</b> <b>Content</b> (course, video, readings) is always visible/open across all sections. <b>Activities</b> (lab, record, quiz, survey, interview) are <b>hidden until the student starts the section and completes ≥1 activity</b>, then reveal in prerequisite order. <b>Build rule:</b> the student's main timeline / "today" feed is derived from currently-<i>visible</i> items only — an item not visible on the week page MUST NOT be emitted to the timeline. A single <code class="k">visible</code> / <code class="k">revealed_at</code> flag per <code class="k">(enrollment_id, section, item)</code> is the source of truth for both the week page and the timeline.</div>
+      </div>
+
+      <div class="callout amber" style="margin-top:22px">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <div><b>Locked decision honored (BC#9985688697):</b> Skilljar = <b>deep-link v1</b>. Open in a new tab; we link/wrap, we do not re-host. SSO + embed + automatic progress-mirror are <b>P1</b>, conditional on Anthropic Partner enablement. The screen must not assume a progress callback exists.</div>
+      </div>
+
+      <div class="section-title">Per-student isolation, idempotency &amp; failure-first</div>
+      <table class="tbl">
+        <thead><tr><th>Concern</th><th>Requirement</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">Isolation</td><td>Every read/write scoped to <code class="k">enrollment_id</code> + <code class="k">project_id</code>. A student only ever sees their own quiz attempts, interview sessions, recordings, lab artifacts, and progress. Auth on every route + resource-ownership check.</td></tr>
+          <tr><td class="mono">Idempotency</td><td>Quiz submit, lab score, artifact file, and "complete week" are keyed (<code class="k">enrollment_id, week, item</code>) — re-submitting never double-awards points or files a duplicate artifact.</td></tr>
+          <tr><td class="mono">Failure-first</td><td>Skilljar deep-link open is fire-and-forget with a copyable URL fallback. Video/asset load has a placeholder + retry. No external call blocks the page; timeouts + capped retries on any progress fetch (P1).</td></tr>
+          <tr><td class="mono">Determinism</td><td>Points, week %, and readiness lift are pure functions over completion events — never LLM-derived. Same events ⇒ same score.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">Deferred (do not build now)</div>
+      <div class="statecols">
+        <div class="stcard"><div class="lbl">P1</div><p class="small">Automatic Skilljar progress mirror · spoken/voice AI interview · visual body-language video analysis · leaderboards · level-gated unlocks · Hill-chart pacing.</p></div>
+        <div class="stcard"><div class="lbl">P2</div><p class="small">In-page live build rooms (Zoom-style) · realtime co-watch of the video · peer chat in the week page.</p></div>
+        <div class="stcard"><div class="lbl">Scope fence</div><p class="small">This page = the 4 components + companion wrapper only. Internship track &amp; Cert-prep surface stay out (design sign-off condition, BC#9985689170).</p></div>
+      </div>
+
+      <footer>
+        <span class="pill">BUILD_SPEC §9 #5</span>
+        <span>Classroom / Week view · BC 9985688999 · extends Design-E (BC#9985689170)</span>
+        <span style="margin-left:auto">Mockup · pending Ali approval</span>
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><span id="toastMsg">Done</span></div>
+
+<script>
+/* ===== view switching ===== */
+function go(v, btn){
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(b=>{b.classList.remove('active');b.removeAttribute('aria-current');});
+  if(btn){btn.classList.add('active');btn.setAttribute('aria-current','page');}
+  document.getElementById('app').classList.remove('nav-open');
+  document.getElementById('navToggle').setAttribute('aria-expanded','false');
+  const rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({top:0,behavior:rm?'auto':'smooth'});
+}
+function navFor(v){return document.querySelector('.navbtn[data-v="'+v+'"]');}
+function toggleNav(){
+  const open=document.getElementById('app').classList.toggle('nav-open');
+  document.getElementById('navToggle').setAttribute('aria-expanded',String(open));
+}
+function toggleTheme(){
+  const h=document.documentElement, dark=h.getAttribute('data-theme')==='dark';
+  h.setAttribute('data-theme', dark?'light':'dark');
+  document.getElementById('themeIcon').innerHTML = dark
+    ? '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
+    : '<circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+}
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg;
+  t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* ===== 12-week data (Appendix A + seeded course links) ===== */
+const SKILLJAR='https://anthropic.skilljar.com';
+const WEEKS=[
+  {n:1, theme:'Claude Code Foundations', intensive:1, type:'linked', course:'Claude Code 101 (+ Claude Code in Action)', url:SKILLJAR+'/claude-code-101', confirmed:true,
+   goal:'Stand up Claude Code on your own project, run the build loop (prompt → diff → commit), and connect GitHub so your pushes start verifying requirements.',
+   lab:'Set up Claude Code in your project repo, configure CLAUDE.md, and run one build-loop: turn a single requirement into a verified diff, commit, and push.',
+   art:'Working Claude Code build loop + first verified requirement', video:'Week 1 explainer — the architect’s lens'},
+  {n:2, theme:'Agent Skills', intensive:1, type:'linked', course:'Introduction to agent skills', url:SKILLJAR+'/introduction-to-agent-skills', confirmed:true,
+   goal:'Package a repeatable capability for your project as a reusable Agent Skill.',
+   lab:'Author one Agent Skill that automates a recurring task in your project; invoke it end-to-end.',
+   art:'Reusable Agent Skill (with description + invocation)', video:'Week 2 explainer — skills as leverage'},
+  {n:3, theme:'Claude API + Workflow Assistant', intensive:1, type:'linked', course:'Building with the Claude API', url:SKILLJAR+'/claude-with-the-anthropic-api', confirmed:true,
+   goal:'Call the Claude API from your project and wrap it in a small workflow assistant.',
+   lab:'Wire a Claude API call into your app behind a typed contract; add a happy + failure path.',
+   art:'Working Claude API integration + workflow assistant', video:'Week 3 explainer — API as a building block'},
+  {n:4, theme:'Prompt Engineering', intensive:2, type:'original', course:'Colaberry original — Enterprise Prompt Library', url:'', confirmed:true,
+   goal:'Build an Enterprise Prompt Library layered onto your project + the system prompts that drive your build loop.',
+   lab:'Create a structured, versioned prompt library for your project with eval notes.',
+   art:'Enterprise Prompt Library (Tier-A)', video:'Week 4 explainer — prompting as architecture',
+   curated:'Anthropic public Prompt-Engineering tutorial + docs (read/watch)'},
+  {n:5, theme:'MCP Foundations', intensive:2, type:'linked', course:'Introduction to Model Context Protocol', url:SKILLJAR+'/introduction-to-model-context-protocol', confirmed:true,
+   goal:'Stand up your first MCP server and connect a tool to your project.',
+   lab:'Build a minimal MCP server exposing one tool; call it from your project.',
+   art:'Running MCP server + one working tool', video:'Week 5 explainer — context as a protocol'},
+  {n:6, theme:'Advanced MCP', intensive:2, type:'linked', course:'Model Context Protocol: Advanced Topics', url:SKILLJAR+'/model-context-protocol-advanced-topics', confirmed:false,
+   goal:'Add resources, auth, and a second tool to your MCP server.',
+   lab:'Extend your MCP server with a resource + a second tool, with failure handling.',
+   art:'Hardened multi-tool MCP server', video:'Week 6 explainer — MCP at scale'},
+  {n:7, theme:'Subagents + Multi-Agent Team', intensive:3, type:'linked', course:'Introduction to subagents', url:SKILLJAR+'/introduction-to-subagents', confirmed:false,
+   goal:'Split your build across subagents — explore vs edit.',
+   lab:'Add a read-only explorer subagent + an editor flow to your project build.',
+   art:'Multi-agent build pattern in your repo', video:'Week 7 explainer — teams of agents'},
+  {n:8, theme:'Workflows + Automation', intensive:3, type:'linked', course:'Claude Code in Action (workflows)', url:SKILLJAR+'/claude-code-in-action', confirmed:true,
+   goal:'Automate a multi-step workflow in your project deterministically.',
+   lab:'Encode a fan-out/verify workflow over a real task in your project.',
+   art:'Deterministic automation workflow', video:'Week 8 explainer — orchestration'},
+  {n:9, theme:'Reliability', intensive:3, type:'original', course:'Colaberry original — Reliability & Failure-First', url:'', confirmed:true,
+   goal:'Make your project survive failure: timeouts, retries, idempotency, circuit breakers.',
+   lab:'Harden one external boundary in your project with the failure-first checklist.',
+   art:'Failure-first hardening report + tests', video:'Week 9 explainer — designing the failure path',
+   curated:'Colaberry reliability handbook + reference patterns'},
+  {n:10, theme:'Governance', intensive:4, type:'original', course:'Colaberry original — AI Governance', url:'', confirmed:true,
+   goal:'Add the governance layer: auth, isolation, audit, approval gates.',
+   lab:'Add per-tenant isolation + an audit trail to your project.',
+   art:'Governance + audit layer', video:'Week 10 explainer — governed autonomy',
+   curated:'Colaberry governance playbook'},
+  {n:11, theme:'Systems Architecture', intensive:4, type:'original', course:'Colaberry original — Systems Architecture', url:'', confirmed:true,
+   goal:'Pull it together into a coherent system architecture for your project.',
+   lab:'Produce the architecture doc + diagram for your full project.',
+   art:'System architecture doc + diagram', video:'Week 11 explainer — the whole system',
+   curated:'Colaberry architecture reference set'},
+  {n:12, theme:'Capstone + Expo', intensive:4, type:'cert', course:'Claude Certified Architect — Foundations (CCA-F)', url:'https://claudecertifications.com/claude-certified-architect/exam-guide', confirmed:true,
+   goal:'Ship the capstone, sit the CCA-F exam, and present at the Expo.',
+   lab:'Final capstone build + showcase artifacts; readiness sign-off.',
+   art:'Capstone + portfolio + CCA-F credential', video:'Week 12 explainer — capstone & expo'}
+];
+
+let curWeek=1;
+
+/* per-week vocabulary (kept beside WEEKS so the array stays readable) */
+const VOCAB={
+  1:['Build loop','Diff review','CLAUDE.md','Requirement state'],
+  2:['Agent Skill','Invocation','Reusability','Skill description'],
+  3:['Claude API','Typed contract','Workflow assistant','Failure path'],
+  4:['Prompt library','System prompt','Eval','Versioning'],
+  5:['MCP server','Tool','Resource','Client'],
+  6:['Auth','Resource','Multi-tool','Hardening'],
+  7:['Subagent','Explore vs edit','Orchestration','Context window'],
+  8:['Workflow','Fan-out','Determinism','Automation'],
+  9:['Timeout','Retry + backoff','Idempotency','Circuit breaker'],
+  10:['Isolation','Audit trail','Approval gate','Tenant'],
+  11:['Architecture','System diagram','Boundaries','Composition'],
+  12:['Capstone','CCA-F','Expo','Readiness sign-off']
+};
+
+/* per-section AI mock-interview questions (folded into base program 2026-06-26) */
+const IV={
+  1:['Walk me through the Claude Code build loop you used this week.','How does a push end up verifying a requirement in your project?'],
+  2:['What makes a good Agent Skill, and when would you reach for one?','Show me a skill you wrote — what does it automate?'],
+  3:['How did you put the Claude API behind a typed contract?','What happens in your code if that API call times out?'],
+  4:['How is your prompt library structured and versioned?','How do you tell whether a prompt is actually working?'],
+  5:['What does MCP solve that a plain API call does not?','Walk me through the tool you exposed on your MCP server.'],
+  6:['How did you add auth and resources to your MCP server?','What breaks at scale, and how did you harden it?'],
+  7:['When do you split work across subagents vs. one agent?','Describe your explore-vs-edit split.'],
+  8:['Walk me through a workflow you automated end-to-end.','How do you keep a multi-step workflow deterministic?'],
+  9:['How did you make your project survive a failing dependency?','Explain your retry + circuit-breaker strategy.'],
+  10:['What governance did you add — auth, isolation, audit?','How do you keep one tenant’s data isolated from another’s?'],
+  11:['Give me the architecture of your project in two minutes.','Where are the boundaries, and why did you draw them there?'],
+  12:['Present your capstone — what did you build and why?','How did you prepare for the CCA-F exam?']
+};
+
+/* statpill icons keyed by kind, so per-step status stays consistent across weeks */
+const PILL_IC={
+  done:'<path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>',
+  cur:'<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  todo:'<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>',
+  locked:'<rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/>'
+};
+function pillHTML(kind,text){ return '<svg viewBox="0 0 24 24" fill="none">'+PILL_IC[kind]+'</svg> '+text; }
+
+/* two step-status presets: the cohort's open week (Week 1) vs a drip-locked future week */
+/* activity-band presets (6 activity cards): cohort's open week vs a not-yet-started week */
+const STEPS_OPEN=[
+  {cls:'done',num:'✓',pill:'done',text:'5 / 5'},
+  {cls:'cur',num:'2',pill:'cur',text:'In progress'},
+  {cls:'',num:'3',pill:'todo',text:'Not started'},
+  {cls:'locked',num:'4',pill:'locked',text:'Unlocks after lab'},
+  {cls:'locked',num:'5',pill:'locked',text:'Unlocks after quiz'},
+  {cls:'locked',num:'6',pill:'locked',text:'Locked'}
+];
+const STEPS_LOCKED=[1,2,3,4,5,6].map(function(i){ return {cls:'locked',num:String(i),pill:'locked',text:i===1?'Opens soon':'Locked'}; });
+
+function applySteps(preset){
+  const steps=document.querySelectorAll('#view-classroom .wk-col .step');
+  steps.forEach(function(el,i){
+    const p=preset[i]; if(!p) return;
+    el.classList.remove('done','cur','locked');
+    if(p.cls) el.classList.add(p.cls);
+    const num=el.querySelector('.step-num'); if(num) num.textContent=p.num;
+    const pill=el.querySelector('.statpill'); if(pill){ pill.className='statpill '+p.pill; pill.innerHTML=pillHTML(p.pill,p.text); }
+  });
+}
+
+function renderCourse(w,label,provClass){
+  const prov=document.getElementById('courseProv'); prov.className='provtag '+provClass; prov.textContent=label;
+  const box=document.getElementById('courseBox');
+  const btn=document.getElementById('courseBtn');
+  const note=document.getElementById('courseNote');
+  const heading=document.getElementById('courseHeading');
+  const cdesc=document.getElementById('courseDesc');
+  btn.classList.remove('is-disabled'); btn.removeAttribute('aria-disabled');
+  if(w.type==='linked'){
+    heading.textContent='Take the Anthropic course for the week';
+    cdesc.textContent='The read/watch layer. Opens in a new tab on Anthropic’s Skilljar LMS — you stay enrolled there; we wrap it with the quiz and lab below.';
+    box.innerHTML=courseRow('An',w.course,w.url,w.confirmed);
+    if(w.confirmed){
+      btn.href=w.url; setHTML('courseBtnLbl','Open course on Skilljar (new tab)');
+      note.innerHTML='<b>Opens in a new tab on Skilljar.</b> Per the locked delivery decision (deep-link v1), we link out — no separate login wall expected for enrolled students. Completion for this week is confirmed by your post-quiz below; automatic Skilljar progress sync is a P1 upgrade.';
+    } else {
+      btn.removeAttribute('href'); btn.classList.add('is-disabled'); btn.setAttribute('aria-disabled','true'); setHTML('courseBtnLbl','Course link coming soon');
+      note.innerHTML='<b>Course link not yet confirmed.</b> Kes confirms this week’s Skilljar URL before the week opens; the rest of the week stays usable. Failure-first: no dead link is shown.';
+    }
+  } else if(w.type==='original'){
+    heading.textContent='Work through this week’s curated material';
+    cdesc.textContent='No Skilljar course this week — this is Colaberry-original architecture content. Read/watch the curated material, then go straight to the lab.';
+    box.innerHTML='<div class="courserow"><div class="clogo" style="background:linear-gradient(135deg,#3C7A26,#5BA63C)">CB</div><div class="cinfo"><div class="ct">'+w.course+'</div><div class="small">'+(w.curated||'Curated read/watch material')+'</div></div><span class="provtag orig">Original</span></div>';
+    btn.href='#'; setHTML('courseBtnLbl','Open the reading');
+    note.innerHTML='<b>Colaberry-original week.</b> No deep-link — these are our own materials plus curated public references. (Weeks 4, 9, 10, 11.)';
+  } else {
+    heading.textContent='Sit the Claude Certified Architect — Foundations exam';
+    cdesc.textContent='Capstone week. The course card is the CCA-F exam; the lab is your capstone + Expo.';
+    box.innerHTML='<div class="courserow"><div class="clogo" style="background:linear-gradient(135deg,#B5710A,#E8920C)">CC</div><div class="cinfo"><div class="ct">'+w.course+'</div><div class="cu">claudecertifications.com</div></div><span class="provtag cert">Cert</span></div>';
+    btn.href=w.url; setHTML('courseBtnLbl','Open the exam guide (new tab)');
+    note.innerHTML='<b>Certification week.</b> CCA-F is an external Anthropic exam (link out). Your readiness sign-off and capstone Expo close the program.';
+  }
+}
+
+function clRender(){
+  const w=WEEKS.find(function(x){return x.n===curWeek;});
+  const label=({linked:'Anthropic · Skilljar', original:'Colaberry original', cert:'CCA-F · certification'})[w.type];
+  const provClass=({linked:'',original:'orig',cert:'cert'})[w.type];
+  const open=(w.n===1); // Cohort 1 is mid-Week-1; later weeks drip-unlock on the cohort schedule
+
+  set('clTitle','Week '+w.n+' · '+w.theme);
+  set('clWeekLbl','Week '+w.n+' of 12');
+  set('clWeekTheme', w.theme+' · Intensive '+w.intensive);
+  setHTML('wkBannerTitle','Week '+w.n+' · '+w.theme);
+  setHTML('wkIntensive','<span class="sw"></span>Intensive '+w.intensive);
+  const wkType=document.getElementById('wkType'); wkType.className='provtag '+provClass; wkType.textContent=label;
+
+  setHTML('s1Desc','<b>Goal:</b> '+w.goal);
+  setHTML('s1Vocab',(VOCAB[w.n]||[]).map(function(v){return '<span class="chip ghost"><span class="sw"></span>'+v+'</span>';}).join(''));
+
+  renderCourse(w,label,provClass);
+
+  set('labPrompt',w.lab);
+  set('artTitle','Tier-A artifact: '+w.art);
+  set('sbArt', w.art);
+  set('videoHeading', w.video);
+  set('ivTitle','AI mock interview — '+w.theme);
+  setHTML('ivMount',(IV[w.n]||[]).map(function(q,i){return '<div class="qrow"><span class="qn">Q'+(i+1)+'</span> '+q+'</div>';}).join('')+'<div class="qrow" style="color:var(--text-muted)"><span class="qn">…</span> + more · then a rubric-scored summary emailed to you</div>');
+
+  /* progress chrome — driven from state; only ACTIVITIES count toward completion */
+  const total=5, done=open?1:0, pts=open?'+25':'+0', pct=open?20:0;
+  set('wkDone',done); set('wkTotal',total); set('wkPts',pts+' pts');
+  set('wkItems', open?'5 activities this week':'Reveal once you start');
+  setW('wkProg',pct); aria('wkMeterRole',pct);
+  set('sbDone',done); set('sbTotal',total); set('sbPts',pts);
+  setW('sbProg',pct); aria('sbMeterRole',done);
+  set('sbReadiness', open?'+2.5%':'—');
+  set('clCdWhen', open?'Thu · Build Day · 6:00 PM CT':'Opens on the cohort schedule');
+  const cd=document.getElementById('cdBlock'); if(cd) cd.style.display=open?'':'none';
+  setHTML('s7Btn','<svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg> '+(open?'Complete Week 1':'Week '+w.n+' locked'));
+  set('s7Hint', open?'Finish all 5 activities to complete the week':'Reveals once you start this week');
+  // visibility model (Ali 2026-06-26): activities reveal only on the open/started week
+  var al=document.getElementById('activityList'); if(al) al.style.display=open?'':'none';
+  var rp=document.getElementById('revealPrompt'); if(rp) rp.style.display=open?'none':'';
+
+  applySteps(open?STEPS_OPEN:STEPS_LOCKED);
+
+  document.getElementById('clPrev').disabled=(curWeek===1);
+  document.getElementById('clNext').disabled=(curWeek===12);
+  document.getElementById('clWeekPick').value=String(curWeek);
+  renderDots();
+}
+
+function courseRow(logo,title,url,confirmed){
+  const conf = confirmed
+    ? '<span class="provtag" style="color:var(--leaf-text);background:rgba(91,166,60,.1);border-color:rgba(91,166,60,.3)">Link confirmed</span>'
+    : '<span class="provtag" style="color:var(--amber-deep);background:rgba(232,146,12,.12);border-color:rgba(232,146,12,.32)">Link pending</span>';
+  const urlLine = confirmed ? '<div class="cu">'+url.replace('https://','')+'</div>' : '<div class="small">Skilljar URL pending Kes confirmation</div>';
+  return '<div class="courserow"><div class="clogo">'+logo+'</div><div class="cinfo"><div class="ct">'+title+'</div>'+urlLine+'</div>'+conf+'</div>';
+}
+
+function renderDots(){
+  const el=document.getElementById('clDots'); if(!el) return;
+  el.innerHTML = WEEKS.map(function(w){
+    const cls = w.n===curWeek ? 'cur' : (w.n<curWeek ? 'done' : '');
+    return '<button class="wk-dot '+cls+'" onclick="clGo('+w.n+')" tabindex="-1" aria-hidden="true">'+w.n+'</button>';
+  }).join('');
+}
+
+function clWeek(d){ const nx=curWeek+d; if(nx<1||nx>12) return; curWeek=nx; clRender(); }
+function clGo(n){ if(n<1||n>12) return; curWeek=n; clRender(); }
+
+function set(id,v){ const el=document.getElementById(id); if(el&&v!==undefined) el.textContent=v; }
+function setHTML(id,h){ const el=document.getElementById(id); if(el&&h!==undefined) el.innerHTML=h; }
+function setW(id,pct){ const el=document.getElementById(id); if(el) el.style.width=pct+'%'; }
+function aria(id,v){ const el=document.getElementById(id); if(el) el.setAttribute('aria-valuenow',String(v)); }
+
+/* populate week picker + first render */
+(function(){
+  const sel=document.getElementById('clWeekPick');
+  sel.innerHTML = WEEKS.map(function(w){return '<option value="'+w.n+'">Week '+w.n+' · '+w.theme+'</option>';}).join('');
+  clRender();
+})();
+</script>
+</body>
+</html>

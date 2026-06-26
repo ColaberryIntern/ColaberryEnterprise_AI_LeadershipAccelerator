@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-10 · **Author:** Claude Code (for Ali) · **Session:** CC-20260610-q4d7
 **Status:** Ready to convert into Basecamp tasks for Kes (build) + Aleem (design).
-**Launch:** Cohort 1 kickoff **2026-07-13**. **Curriculum already live in Basecamp.**
+**Launch:** Cohort 1 classes start **Mon 2026-07-27** (orientation Thu 2026-07-23). **Curriculum already live in Basecamp.**
 
 > **How to use this document.** This is the single source of truth for building the
 > student-facing platform. It contains: (1) what the curriculum is and how it works,
@@ -36,7 +36,7 @@ fused so the student never leaves the platform.
 |---|---|
 | Curriculum list rebuilt: 12 week-groups × 5-item checklist, 60 todos | Basecamp project 47502609, list 9946468992 (LIVE) |
 | Each week pre-mapped to its Anthropic Skilljar course | See Section 4 + Appendix A |
-| Build deadlines staggered, all before 7/13 launch | I1 06-19, I2 06-26, I3 07-03, I4 07-10 |
+| Build deadlines staggered, all before 7/27 launch | I1 06-19, I2 06-26, I3 07-03, I4 07-10 |
 | Ali co-signs Intensive 1 sign-off (Weeks 1-3) | Verified live |
 | Reconfiguration script + tests on `main` + VPS | `reconfigureCurriculumList.js`, 17/17 tests |
 | Platform strategy | `docs/training-program-2026-q3/STUDENT_PLATFORM_STRATEGY.md` |
@@ -58,7 +58,7 @@ build **one project across all 12 weeks** (Lego model), not 12 toys.
 4. **NotebookLM video produced.** *Owner: Swati/CB.*
 5. **Sign-off** - week validated, launch-ready. *Owner: Swati; **Ali co-signs Weeks 1-3** to set the standard.*
 
-**Build schedule (all before the 7/13 launch, staggered one intensive per week):**
+**Build schedule (all before the 7/27 launch, staggered one intensive per week):**
 
 | Intensive | Weeks | Themes | Build due |
 |---|---|---|---|
@@ -67,7 +67,7 @@ build **one project across all 12 weeks** (Lego model), not 12 toys.
 | 3 - Connect AI To The Real World | 7-9 | Subagents/Multi-Agent · Workflows/Automation · Reliability | **2026-07-03** |
 | 4 - Design AI That Scales | 10-12 | Governance · Systems Architecture · Capstone + Expo | **2026-07-10** |
 
-Teaching dates are unchanged (delivery runs 7/13 → 9/28). See Appendix A for the
+Teaching dates are unchanged (delivery runs 7/27 → 10/12). See Appendix A for the
 full week → Anthropic course map.
 
 ---
@@ -80,8 +80,14 @@ differentiator). **Open integration decision for Kes:** *how* Skilljar is delive
 enterprise.colaberry.com - deep-link/SSO vs. embed vs. Partner content access. Skilljar
 is Anthropic's hosted LMS; we link/wrap, we do not re-host. (See Appendix A for the table.)
 
-**Open curriculum decision:** Week 4 (Prompt Engineering) has no Anthropic course -
-build original, fold into Week 3, or point at Claude 101.
+**Curriculum decision (RESOLVED 2026-06-18, BC#9985688677, Ali): build Colaberry-original
+(lean).** Week 4 (Prompt Engineering) has no Anthropic *Skilljar* course, but Anthropic
+publishes a free *public* Prompt Engineering tutorial + docs (not on Skilljar) - curate
+that as the read/watch layer (Claude 101 as foundation only) and build an original
+Colaberry lab: the **Enterprise Prompt Library** Tier-A artifact layered onto the student's
+project. Rejected: *fold into Week 3* (breaks the 3-week TWC intensive boundary + forces
+renumbering 60 live BC todos) and *point at Claude 101* (intro product course students
+already did pre-program; no PE depth, no differentiated artifact). See Section 12 #1.
 
 ---
 
@@ -145,10 +151,10 @@ or **SKIP** (out of scope for v1, with reason). Hand this to Kes as the feature 
 | Pinned posts (feed + lessons) | **REPLICATE** | Pin announcements + pin posts to lessons |
 | @mentions | **REPLICATE** | Notify mentioned members |
 | Member profiles + directory | **REPLICATE** | Name, photo, bio, level, contributions |
-| **Online/active presence ("who's online")** | **REPLICATE (P2, websockets)** | The "long pole" - explicitly requested; needs realtime layer |
+| **Online/active presence ("who's online")** | **REPLICATE (P0 lite / P2 full)** | P0: poll/heartbeat "who's online" (no websockets, reuses `Member.presence`). P2: full realtime over websockets. Resolved 2026-06-18, BC#9985688722 |
 | Direct messages (1:1) | **REPLICATE** | Peer chat |
-| **Gamification: points → levels → leaderboards** | **REPLICATE** | Skool's killer feature; 7/30/all-time leaderboards |
-| Level-gated unlockable content | **REPLICATE** | Unlock weeks/labs/bonuses at levels |
+| **Gamification: points → levels → leaderboards** | **REPLICATE (points+levels P0 / leaderboards P1)** | Skool's killer feature. Personal points + level progression ship at launch (P0); 7/30/all-time leaderboards in P1. Resolved 2026-06-18, BC#9985704174 |
+| Level-gated unlockable content | **REPLICATE (P1)** | Unlock weeks/labs/bonuses at levels. P1 — couples to the just-in-time curriculum drip. Resolved 2026-06-18, BC#9985704174 |
 | Custom level names | **REPLICATE** | Themed to "Architect" levels |
 | Classroom: modules → lessons → video | **REUSE/REPLICATE** | We have portal curriculum; align to module/lesson |
 | Native video + transcripts | **REPLICATE/LINK** | NotebookLM videos + course video |
@@ -206,7 +212,9 @@ groups, assignees, due dates, notify-when-done, comments, completion.
 | Completion certificates | **LINK** | Plus our internal readiness score |
 | **CCA-F certification** (Week 12) | **LINK** | claudecertifications.com exam |
 | SSO / enrollment | **LINK** | Confirm Skilljar SSO/Partner access |
-| Companion Course wrapper (pre/during/post) | **REPLICATE** | Objectives + vocab + warmup → coach → lab + quiz + reflection + artifact |
+| Companion Course wrapper (pre/during/post) | **REPLICATE** | Objectives + vocab + warmup → coach → lab + quiz + reflection + **AI mock interview** + artifact |
+| **AI Mock Interview** (per section) | **REPLICATE (P0)** | AI asks section-scoped questions → deterministic rubric score → emailed results. Launch-min typed; voice P1. Folded into base program 2026-06-26 |
+| **AI Video Critiquer** | **REPLICATE (P0)** | Record demo/interview answer → AI delivery feedback (transcript+audio) → portfolio artifact. Visual body-language analysis P1. Folded into base program 2026-06-26 |
 
 ### 6.D - OUR CURRENT SYSTEM  → REUSE (the foundation)
 
@@ -252,23 +260,25 @@ LMS
 
 ---
 
-## 8. Phased build plan to 2026-07-13 (and beyond)
+## 8. Phased build plan to 2026-07-27 (and beyond)
 
-**P0 - launch-critical (by 7/13):**
+**P0 - launch-critical (by 7/27):**
 - Wire the end-to-end project-builder: ProjectDnaWizard → idea + 10-Q → requirements → native student tasks → GitHub connect (port advisor brain; reuse existing pieces).
 - Student CB-System Phase 1 (Run My Day + approval workspace + next-action prompt) on `CoryHome`.
 - Skilljar link/SSO wired per week + progress mirror; quizzes/surveys loaded.
 - Portfolio Tier-A/B slots; build-log social drafter.
-- Community v1: feed + threaded comments + categories + basic profiles. (Presence deferred.)
+- Community v1: feed + threaded comments + categories + basic profiles + lite presence ("who's online", poll/heartbeat - no websockets; reuses `Member.presence`). *(Full realtime presence + peer chat stay P2.)*
+- Gamification (lite): points + personal level progression (deterministic tally over feed/like/comment/build-log events; `Member.points`/`level` already in the §7 data model). *(Leaderboards + level-gated unlocks stay P1.)*
+- **AI career features (launch-min, folded into base program 2026-06-26):** per-section **AI Mock Interview** (AI asks section-scoped questions → deterministic rubric → emailed results; typed at launch, voice P1) and **AI Video Critiquer** (record → transcript+audio delivery feedback → portfolio artifact; visual body-language analysis P1). *Gated on Kes build-capacity sign-off; if tight, AI Interview ships P0 and the Video Critiquer fast-follows.* (Paid "Job Edition" upgrade — live mentorship, job-submission, per-interview prep — PARKED; revisit post-launch with TWC posture confirmed.)*
 - Intensive 1 (Weeks 1-3) content fully built (already scheduled due 6/19).
 
 **P1 - Weeks 1-6 (during cohort):**
-- Gamification (points → levels → leaderboards → level-gated unlocks).
+- Gamification (full): leaderboards (7/30/all-time) + level-gated unlocks. *(Points + personal levels already shipped in P0 — BC#9985704174.)*
 - NotebookLM videos + assessment packs week-by-week.
 - Hill Charts + Automatic Check-ins; portfolio polish.
 
 **P2 - post-cohort / v1.1:**
-- **Realtime presence ("who's online") + peer chat** (websocket layer - the long pole).
+- **Full realtime presence + peer chat** (websocket layer - the long pole). *(Lite poll-based "who's online" already ships in P0 - BC#9985688722.)*
 - Per-industry communities, reactions, mobile.
 
 ---
@@ -282,7 +292,7 @@ build.** Each produces an approved mockup (Aleem + Ali) before Kes builds the su
 2. **Project builder flow** - the add-project → idea → 10-question → requirements → tasks wizard UI.
 3. **Community feed + post composer** - Skool-style feed, categories, post card, comment thread.
 4. **Member profile + leaderboard + level badge** - gamification visual language ("Architect" levels).
-5. **Classroom / week view** - course (Skilljar) + lab + quiz + NotebookLM video in one week page.
+5. **Classroom / week view** - course (Skilljar) + lab + quiz + NotebookLM video in one week page. **APPROVED 2026-06-26 (Ali); mockup `mockups/classroom-week-view.html`.** Two bands: **Content** (course/video/readings) open across all sections; **Activities** (warm-up → lab → record+critique → post-quiz/survey → AI interview → done) reveal once the student starts + completes ≥1 activity. AI Mock Interview + AI Video Critiquer are activity steps (folded into base program, §12 #6). **Visibility gates the timeline:** items not visible on the week page are NOT emitted to the student's main timeline — single `visible`/`revealed_at` flag per `(enrollment_id, section, item)` is the source of truth for both the week page and the timeline.
 6. **Portfolio page** - Tier-A build artifacts + Tier-B showcase artifacts, public shareable.
 7. **Live preview embed** - how the running student app appears in-portal.
 8. **Presence / who's-online + chat UI** (P2).
@@ -297,7 +307,7 @@ Deliverable per task: Figma/mockup → Aleem + Ali approval → handoff to Kes.
 Create these as a **"Student Platform" project (or a list on the AI Systems list,
 Basecamp 9946469022)**. Suggested groups = the epics below; todos = the bullets. Assign
 Kes (build), Aleem (design), CB (drafts), Swati (curriculum content). Set due dates
-**ahead of 7/13** for P0 items.
+**ahead of 7/27** for P0 items.
 
 **EPIC 1 - Project Builder (port advisor brain) [Kes + CB]**
 - [ ] Port idea-intake + 10-question enhancement into a portal service (Claude-targeted, not OpenAI)
@@ -316,21 +326,25 @@ Kes (build), Aleem (design), CB (drafts), Swati (curriculum content). Set due da
 - [ ] Decide + implement Skilljar delivery (deep-link / SSO / embed) on enterprise.colaberry.com
 - [ ] Per-week course wiring (Appendix A) + progress mirror into portal
 - [ ] Quiz (5-q + 10-q) + survey engine per week (content from Swati/CB)
+- [ ] **P0 (launch-min):** AI Mock Interview per section — AI asks rubric-scored questions, emails results (typed v1; voice P1). Folded into base program 2026-06-26 [Kes + CB]
 - [ ] CCA-F cert link (Week 12)
 
 **EPIC 4 - Community + Gamification (the Skool layer) [Kes + Aleem]**
 - [ ] Data model: Post/Comment/Like/Member/Leaderboard/Event (Section 7)
 - [ ] Feed + composer + categories + pinned + @mentions
 - [ ] Threaded comments + likes; profiles + directory
-- [ ] Gamification: points → levels → leaderboards → level-gated unlocks
+- [ ] **P0:** Gamification lite — points + personal level progression (deterministic tally; `Member.points`/`level`) — BC#9985704174
+- [ ] **P1:** Gamification full — leaderboards (7/30/all-time) + level-gated unlocks — BC#9985704174
 - [ ] Calendar/events + notifications (in-app/email) + digest
 - [ ] Build-log → social drafter (#Colaberry stream)
-- [ ] **P2:** realtime presence ("who's online") + peer chat (websocket layer)
+- [ ] **P0:** lite heartbeat presence ("who's online", poll-based, no websockets - reuses `Member.presence`) - due 2026-07-09 (BC#9985688722)
+- [ ] **P2:** full realtime presence + peer chat (websocket layer)
 - [ ] Design approval: feed, profile/leaderboard, classroom, portfolio (Aleem) ← blocks build
 
 **EPIC 5 - Portfolio + Artifacts [Kes + CB]**
 - [ ] Tier-A build-artifact slots (per 12-week Lego model)
 - [ ] Tier-B showcase-artifact slots (demo/explainer/podcast/PPT/infographic) + AI drafting
+- [ ] **P0 (launch-min):** AI Video Critiquer — record → transcript+audio delivery feedback → portfolio artifact (visual analysis P1). Folded into base program 2026-06-26 [Kes + CB]
 - [ ] Public shareable portfolio + readiness score wiring
 
 **EPIC 6 - Curriculum content [Swati + CB]** (already tracked on the Curriculum list)
@@ -354,11 +368,12 @@ Kes (build), Aleem (design), CB (drafts), Swati (curriculum content). Set due da
 
 ## 12. Open decisions (Ali to resolve when back)
 
-1. **Week 4 (Prompt Engineering)** - no Anthropic course: build original / fold into Week 3 / point at Claude 101.
+1. **Week 4 (Prompt Engineering)** — **RESOLVED 2026-06-18 (BC#9985688677, Ali): build Colaberry-original (lean).** No Anthropic *Skilljar* course exists for prompt engineering, but Anthropic publishes free *public* PE material (interactive Prompt Engineering tutorial + the docs PE guide) that is **not** a Skilljar course; curate that as the read/watch layer (Claude 101 as foundation only) and build an original Colaberry lab — the **Enterprise Prompt Library** Tier-A artifact layered onto the student's own project + the system / Claude-Code prompts that drive their build loop. **Rejected:** *fold into Week 3* (Week 3 is in Intensive 1, Week 4 opens Intensive 2 — folding breaks the clean 4×3-week TWC seminar-independence frame and forces renumbering 60 live BC todos for negative value) and *point at Claude 101* (already the pre-program Foundations course — re-serves consumed content, teaches no PE depth, yields no differentiated artifact, and would strip Week 4 out of the four Colaberry-original differentiator weeks 4/9/10/11). Curriculum source of truth updated: `scripts/lib/curriculumWeeks.js` W4 + `seeds/seedCurriculumCourseLinks.ts` (already `colaberry_original`/`not_applicable`). Lab + assessment build tracked on the Curriculum list (Intensive 2, due 2026-06-26).
 2. **Skilljar delivery method** - deep-link vs SSO vs embed vs Partner content (Kes to scope; gates Epic 3).
-3. **Presence at launch?** - realtime "who's online" is the long pole; default is P2 (post-launch). Confirm if it must be in P0.
-4. **Gamification depth at launch** - points+levels in P1, or pull into P0 for day-one engagement?
-5. **Community: native vs interim Skool** - locked NATIVE (all synced); re-confirm given the timeline pressure.
+3. **Presence at launch?** - **RESOLVED 2026-06-18 (BC#9985688722, Ali):** lite poll-based "who's online" ships in **P0**; full websocket realtime presence + peer chat deferred to **P2**.
+4. **Gamification depth at launch** — **RESOLVED 2026-06-18 (BC#9985704174, Ali):** thin slice ships in **P0** — points + personal level progression (deterministic tally over feed/like/comment/build-log events; `Member.points`/`level` already in the §7 P0 data model). **Leaderboards (7/30/all-time) + level-gated unlocks stay P1.** Rationale: points are already a P0 dependency (likes→points→readiness), so the thin slice is near-free and delivers Skool's day-one personal-progress hook; a leaderboard is an empty board on Day 1 of a 25-student cohort (negative signal) and level-gated unlocks couple to the JIT curriculum (launch risk). Matches presence (BC#9985688722) + community (BC#9985688801) phasing. Build-capacity sign-off pending from Kes; level-badge visual from Aleem.
+5. **Community: native vs interim Skool** - **RE-CONFIRMED native (launch-min) 2026-06-18 (Ali, BC#9985688801).** Launch-min = async build-log feed + threaded comments + categories + basic profiles + lite poll-based presence (reuses `Member.presence`); full websocket realtime presence + peer chat stay P2 (BC#9985688722). Interim Skool rejected: it breaks the one-synced-system thesis (build-log→feed, likes→points→readiness, never-leave-platform) and forces a throw-away migration of the 25-student Founding Cohort. Build-capacity sign-off pending from Kes (System Approval).
+6. **AI career features at launch** — **RESOLVED 2026-06-26 (Ali): fold the two scalable AI features into the base program (launch-min); PARK the paid upgrade.** In P0: (a) **AI Mock Interview** — per-section AI interviewer asks rubric-scored questions and emails results (typed at launch, voice P1); (b) **AI Video Critiquer** — record a demo/answer, get AI delivery feedback (transcript+audio at launch, visual body-language P1), clip files to portfolio. Both are scalable, near-zero-marginal-cost, and on-brand (an AI program using AI to make students interview-ready). **Parked** to a later paid "Job Edition" upgrade: live mentorship, job-submission services, per-interview prep + tracking — these are staff-hours (margin/capacity) and, for job-submission/placement, change the **TWC career-services regulatory surface**; parking them keeps the launch a "learn + get interview-ready" product with no new compliance gate before 7/27. **Gate:** Kes build-capacity sign-off (does launch-min fit by 7/13/7/27 alongside existing P0); fallback if tight = ship AI Interview in P0, fast-follow the Video Critiquer. Upgrade pricing deferred with the tier ($199 annual must be a discount or carry extra value vs the $149 base; Job-Edition human-services need usage caps or a higher price). Design folded into the Classroom/Week-view mockup (§9 #5, BC#9985688999, pending Ali approval); spec amended here (§6.C, §8 P0, Epic 3 + Epic 5).
 
 ---
 
@@ -369,7 +384,7 @@ Kes (build), Aleem (design), CB (drafts), Swati (curriculum content). Set due da
 | 1 | Claude Code Foundations | Claude Code 101 (+ Claude Code in Action) | linked |
 | 2 | Agent Skills | Introduction to agent skills | linked |
 | 3 | Claude API + Workflow Assistant | Building with the Claude API | linked |
-| 4 | Prompt Engineering | - Colaberry-original (no Anthropic course) | original |
+| 4 | Prompt Engineering | Colaberry-original — build original (BC#9985688677); bg: Anthropic public PE tutorial/docs | original |
 | 5 | MCP Foundations | Introduction to Model Context Protocol | linked |
 | 6 | Advanced MCP | Model Context Protocol: Advanced Topics | linked |
 | 7 | Subagents + Multi-Agent Team | Introduction to subagents | linked |
