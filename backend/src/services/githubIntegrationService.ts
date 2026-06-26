@@ -186,6 +186,70 @@ export async function findEnrollmentByRepo(owner: string, repo: string): Promise
   return connection?.enrollment_id ?? null;
 }
 
+// ─── Push-Driven Requirement Verification (DNA Wizard students) ───────────────
+//
+// For students whose RequirementsMap rows have capability_id = null (new DNA
+// wizard path), commitDrivenMatcher won't find them because it queries through
+// Capability. This function handles that path: scan commit messages for
+// requirement keys (e.g. AUTH.001) and flip the matching row to verified.
+//
+// Idempotent: calling twice with the same sha re-stamps last_verified_at but
+// does not create duplicate rows or side effects.
+
+const KEY_PATTERN = /\b([A-Z][A-Z0-9_]*\.[0-9]{3,})\b/g;
+
+export async function verifyRequirementsFromCommits(
+  projectId: string,
+  commits: Array<{ message: string }>,
+  headSha: string,
+): Promise<{ verified: number }> {
+  if (commits.length === 0) return { verified: 0 };
+
+  // Collect all unique requirement keys mentioned across all commit messages
+  const mentionedKeys = new Set<string>();
+  for (const c of commits) {
+    const matches = c.message.matchAll(KEY_PATTERN);
+    for (const m of matches) mentionedKeys.add(m[1].toUpperCase());
+  }
+  if (mentionedKeys.size === 0) return { verified: 0 };
+
+  const { Op } = await import('sequelize');
+  const { RequirementsMap } = await import('../models');
+
+  // Only touch capability_id = null rows (Capability-based rows are handled by commitDrivenMatcher)
+  const rows = await RequirementsMap.findAll({
+    where: {
+      project_id: projectId,
+      capability_id: { [Op.is]: null as any },
+      requirement_key: { [Op.in]: [...mentionedKeys] },
+      is_active: true,
+    },
+  });
+
+  let verified = 0;
+  for (const req of rows) {
+    (req as any).status = 'verified';
+    (req as any).verified_by = 'github_push';
+    (req as any).last_verified_at = new Date();
+    (req as any).metadata = {
+      ...((req as any).metadata || {}),
+      github_push_sha: headSha,
+      github_push_verified_at: new Date().toISOString(),
+    };
+    await req.save();
+    verified++;
+  }
+
+  if (verified > 0) {
+    console.log(JSON.stringify({
+      level: 'info', service: 'backend', event: 'github_push_requirements_verified',
+      outcome: 'success', context: { project_id: projectId, verified, head_sha: headSha },
+    }));
+  }
+
+  return { verified };
+}
+
 // ─── Batch Sync (Portfolio Agent) ─────────────────────────────────────────────
 
 export async function syncAllActiveStudentGitHubActivity(): Promise<{
