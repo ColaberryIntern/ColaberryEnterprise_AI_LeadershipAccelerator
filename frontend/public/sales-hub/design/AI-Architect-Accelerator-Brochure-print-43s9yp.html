@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<style data-omelette-print-defaults>
+@media print {
+  @page { margin: 0; }
+  body { padding: 0.5in; box-sizing: border-box; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  figure, table, pre, blockquote, img, svg, li, tr { break-inside: avoid; }
+  section, article, [class~="card" i] { break-inside: avoid; }
+  img, svg { max-width: 100%; }
+  p { orphans: 3; widows: 3; }
+}
+</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Systems Architect Accelerator — Colaberry</title>
+<link rel="icon" href="assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { margin: 0; background: var(--neutral-200); }
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 32px 16px; }
+
+  /* A4 portrait page */
+  .page {
+    width: 794px; max-width: 100%; min-height: 1123px;
+    background: var(--surface-page); position: relative;
+    box-shadow: var(--shadow-lg); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .pad { padding: 56px 60px; }
+
+  /* Running header / footer */
+  .runhead { display: flex; align-items: center; justify-content: space-between; padding: 22px 60px; border-bottom: 1px solid var(--border-subtle); }
+  .runhead img { height: 24px; }
+  .runhead span { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+  .runfoot { margin-top: auto; padding: 18px 60px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-subtle); }
+  .runfoot b { color: var(--red-500); font-weight: var(--fw-bold); }
+
+  /* Cover */
+  .cover { background: linear-gradient(150deg, var(--red-500), var(--red-700)); color: #fff; flex: 1; justify-content: space-between; }
+  .cover .pad { display: flex; flex-direction: column; justify-content: space-between; flex: 1; }
+  .cover__logo { height: 32px; align-self: flex-start; }
+  .cover__eyebrow { font-family: var(--font-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; opacity: .9; margin: 0 0 20px; }
+  .cover h1 { font-family: var(--font-display); font-weight: 900; font-size: 60px; line-height: 1.0; letter-spacing: -.025em; color: #fff; margin: 0 0 26px; text-wrap: balance; }
+  .cover__sub { font-size: 21px; line-height: 1.5; opacity: .95; max-width: 30ch; margin: 0; }
+  .cover__sub b { font-weight: var(--fw-bold); }
+  .cover__powered { display: flex; align-items: center; gap: 12px; font-size: 15px; opacity: .92; }
+  .cover__powered span { width: 34px; height: 1px; background: rgba(255,255,255,.5); }
+  .cover__foot { display: flex; gap: 28px; font-size: 14px; opacity: .9; flex-wrap: wrap; }
+
+  /* Section heads */
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--red-500); margin: 0 0 10px; }
+  h2.sec { font-family: var(--font-display); font-weight: 900; font-size: 34px; letter-spacing: -.02em; color: var(--text-strong); margin: 0 0 16px; line-height: 1.08; }
+  h3.sub { font-family: var(--font-display); font-weight: 700; font-size: 19px; color: var(--text-strong); margin: 0 0 8px; }
+  p.body { font-size: 15px; line-height: 1.65; color: var(--text-body); margin: 0 0 16px; text-wrap: pretty; }
+  p.body b { color: var(--text-strong); }
+  .lead { font-size: 17px; line-height: 1.6; color: var(--text-muted); margin: 0 0 28px; max-width: 60ch; }
+
+  .who { background: var(--surface-blue-subtle); border-radius: var(--radius-lg); padding: 20px 24px; font-size: 14px; line-height: 1.6; color: var(--text-body); }
+  .who b { color: var(--blue-700); }
+
+  /* Includes list */
+  .inc { display: grid; gap: 16px; margin-top: 8px; }
+  .inc__item { display: flex; gap: 16px; align-items: flex-start; padding: 18px 20px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
+  .inc__ic { width: 42px; height: 42px; border-radius: var(--radius-md); display: grid; place-items: center; flex: none; }
+  .inc__ic .cb-i { font-size: 21px; color: #fff; }
+  .inc__item b { font-size: 16px; color: var(--text-strong); display: block; margin-bottom: 3px; }
+  .inc__item p { margin: 0; font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+
+  /* Build timeline */
+  .build { display: grid; gap: 14px; }
+  .build__row { display: grid; grid-template-columns: 132px 1fr; gap: 18px; align-items: start; padding: 16px 0; border-bottom: 1px solid var(--border-subtle); }
+  .build__row:last-child { border-bottom: none; }
+  .build__wk { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .build__wk b { display: block; font-family: var(--font-display); font-weight: 900; font-size: 15px; color: var(--red-500); margin-bottom: 4px; letter-spacing: -.01em; }
+  .build__d b { color: var(--text-strong); }
+  .build__d { font-size: 14px; line-height: 1.6; color: var(--text-body); }
+
+  /* Pricing */
+  .price { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 8px 0 20px; }
+  .plan { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: 26px; position: relative; }
+  .plan--feat { border: 2px solid var(--red-500); }
+  .plan__tag { position: absolute; top: -11px; left: 24px; background: var(--red-500); color: #fff; font-size: 11px; font-weight: var(--fw-bold); padding: 4px 12px; border-radius: var(--radius-pill); }
+  .plan__name { font-size: 14px; color: var(--text-muted); margin: 0 0 6px; }
+  .plan__price { font-family: var(--font-display); font-weight: 900; font-size: 44px; color: var(--text-strong); line-height: 1; letter-spacing: -.02em; }
+  .plan__price small { font-size: 16px; font-weight: var(--fw-regular); color: var(--text-muted); }
+  .plan__note { font-size: 13px; color: var(--text-muted); margin: 10px 0 0; line-height: 1.5; }
+  .founding { background: linear-gradient(135deg, var(--red-500), var(--red-700)); color: #fff; border-radius: var(--radius-xl); padding: 26px 28px; display: flex; align-items: center; justify-content: space-between; gap: 20px; box-shadow: var(--shadow-brand); }
+  .founding b { font-family: var(--font-display); font-weight: 900; font-size: 22px; display: block; letter-spacing: -.01em; }
+  .founding p { margin: 6px 0 0; font-size: 14px; opacity: .92; line-height: 1.5; max-width: 44ch; }
+  .founding__seats { font-family: var(--font-display); font-weight: 900; font-size: 52px; line-height: .9; flex: none; text-align: center; }
+  .founding__seats span { display: block; font-size: 13px; font-weight: var(--fw-medium); opacity: .9; letter-spacing: .04em; }
+
+  /* Deep dive cards */
+  .dive { border: 1px solid var(--border-subtle); border-left: 4px solid var(--red-500); border-radius: var(--radius-lg); padding: 22px 24px; margin-bottom: 16px; }
+  .dive:nth-child(2) { border-left-color: var(--blue-500); }
+  .dive:nth-child(3) { border-left-color: var(--green-500); }
+  .dive:nth-child(4) { border-left-color: var(--red-500); }
+  .dive:nth-child(5) { border-left-color: var(--blue-500); }
+  .dive__h { display: block; margin-bottom: 10px; }
+  .dive__h b { display: block; font-family: var(--font-display); font-weight: 900; font-size: 19px; color: var(--text-strong); letter-spacing: -.01em; line-height: 1.2; padding-right: 90px; }
+  .dive__wk { float: right; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .dive p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.6; color: var(--text-body); }
+  .dive p:last-child { margin-bottom: 0; }
+  .dive .prereq { font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+
+  /* FAQ */
+  .faq { margin-bottom: 18px; }
+  .faq b { display: block; font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--text-strong); margin-bottom: 6px; }
+  .faq p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-body); }
+
+  /* Dates / CTA */
+  .dates { background: var(--surface-subtle); border-radius: var(--radius-xl); padding: 30px; }
+  .dates__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-bottom: 24px; }
+  .dates__item b { font-family: var(--font-mono); font-size: 12px; color: var(--red-500); letter-spacing: .04em; display: block; margin-bottom: 4px; }
+  .dates__item span { font-size: 15px; color: var(--text-strong); font-weight: var(--fw-medium); }
+  .enroll { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--text-strong); color: var(--neutral-0); border-radius: var(--radius-lg); padding: 22px 28px; }
+  .enroll b { font-family: var(--font-display); font-weight: 900; font-size: 20px; }
+  .enroll span { font-family: var(--font-mono); font-size: 14px; color: var(--neutral-300); }
+
+  @media print {
+    body { background: #fff; }
+    .stage { padding: 0; gap: 0; }
+    .page { box-shadow: none; page-break-after: always; min-height: 100vh; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- PAGE 1 — COVER -->
+  <div class="page cover">
+    <div class="pad">
+      <img class="cover__logo" src="assets/logo/colaberry-horizontal-white.png" alt="Colaberry">
+      <div>
+        <p class="cover__eyebrow">12-week, project-based accelerator</p>
+        <h1>AI Systems Architect Accelerator</h1>
+        <p class="cover__powered">Powered by Anthropic + Claude Code <span></span></p>
+        <p class="cover__sub" style="margin-top:28px"><b>Bring your idea.</b> We help you turn it into a real AI system. Learn from Anthropic. Build through Colaberry. Deploy in the real world.</p>
+      </div>
+      <div class="cover__foot">
+        <span>Founding Cohort · 40 seats</span>
+        <span>Kickoff July 13, 2026</span>
+        <span>training.colaberry.com</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2 — THE PROGRAM -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>AI Systems Architect Accelerator</span></div>
+    <div class="pad">
+      <p class="eyebrow">The Program</p>
+      <h2 class="sec">Arrive with an idea. Leave with a deployed system.</h2>
+      <p class="body">A membership built around a 12-week, project-based program that turns your own venture idea into a working AI system. You do not study toward a generic capstone. You arrive in Week 1 with a real problem, and you leave with a <b>deployed AI system, a GitHub portfolio, and the Anthropic Architect certification</b>.</p>
+      <p class="body">Anthropic certifies knowledge. Colaberry certifies capability. Every graduate leaves with a unique system, not an identical class project.</p>
+      <div class="who">
+        <b>Who it is for:</b> career changers and working professionals who want to build and deploy real AI systems, not sit through prompt-writing tips. Comfort with basic software concepts (git and the command line) and a business problem you want to solve.
+      </div>
+
+      <p class="eyebrow" style="margin-top:40px">What Your Membership Includes</p>
+      <h2 class="sec" style="font-size:26px">One membership, everything included</h2>
+      <div class="inc">
+        <div class="inc__item"><span class="inc__ic" style="background:var(--red-500)"><span class="cb-i"><i data-lucide="presentation"></i></span></span><div><b>Live training programs</b><p>The full 12-week curriculum, all four Architect Intensives, taught live: Monday Architecture Day (2 hours) and Thursday Build Day (2 hours).</p></div></div>
+        <div class="inc__item"><span class="inc__ic" style="background:var(--blue-500)"><span class="cb-i"><i data-lucide="award"></i></span></span><div><b>Anthropic Architect certification prep</b><p>Structured preparation for the Claude Certified Architect, Foundations credential.</p></div></div>
+        <div class="inc__item"><span class="inc__ic" style="background:var(--green-600)"><span class="cb-i"><i data-lucide="briefcase"></i></span></span><div><b>Full-time internships</b><p>Real-world, hands-on experience applying what you build.</p></div></div>
+        <div class="inc__item"><span class="inc__ic" style="background:var(--red-500)"><span class="cb-i"><i data-lucide="folder-git-2"></i></span></span><div><b>Portfolio projects</b><p>Guided projects that build up your GitHub portfolio with real, demonstrable AI systems.</p></div></div>
+      </div>
+    </div>
+    <div class="runfoot"><span>training.colaberry.com</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+  <!-- PAGE 3 — WHAT YOU BUILD + PRICING -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>AI Systems Architect Accelerator</span></div>
+    <div class="pad">
+      <p class="eyebrow">What You Build</p>
+      <h2 class="sec" style="font-size:26px">Four intensives, four real systems</h2>
+      <div class="build">
+        <div class="build__row"><div class="build__wk"><b>Intensive 1</b>Weeks 1–3</div><div class="build__d"><b>Build Your AI Foundation.</b> A configured Architect Workspace, three reusable AI Skills, and a working Business Workflow Assistant.</div></div>
+        <div class="build__row"><div class="build__wk"><b>Intensive 2</b>Weeks 4–6</div><div class="build__d"><b>Create Your AI Team.</b> A multi-agent system of three coordinated AI agents plus a reusable Enterprise Prompt Library.</div></div>
+        <div class="build__row"><div class="build__wk"><b>Intensive 3</b>Weeks 7–9</div><div class="build__d"><b>Connect AI To The Real World.</b> A working MCP server integrated with a real business system of your choice.</div></div>
+        <div class="build__row"><div class="build__wk"><b>Intensive 4</b>Weeks 10–12</div><div class="build__d"><b>Design AI That Scales.</b> A reliability framework, a governance engine, and a complete Solution Architecture Package.</div></div>
+      </div>
+
+      <p class="eyebrow" style="margin-top:40px">Membership Pricing</p>
+      <h2 class="sec" style="font-size:26px">Everything in one membership</h2>
+      <div class="price">
+        <div class="plan plan--feat">
+          <span class="plan__tag">Best value</span>
+          <p class="plan__name">Annual plan</p>
+          <div class="plan__price">$149<small> / mo</small></div>
+          <p class="plan__note">Billed for a full year. The Founding rate locks for as long as you stay a member.</p>
+        </div>
+        <div class="plan">
+          <p class="plan__name">Monthly plan</p>
+          <div class="plan__price">$199<small> / mo</small></div>
+          <p class="plan__note">Cancel anytime. Everything is included in one membership — no separate course fees.</p>
+        </div>
+      </div>
+      <div class="founding">
+        <div>
+          <b>Founding Cohort</b>
+          <p>Founding members lock the $149/mo founding rate for as long as their membership stays active, even as the price rises for later cohorts. First cohort price holds.</p>
+        </div>
+        <div class="founding__seats">40<span>seats only</span></div>
+      </div>
+    </div>
+    <div class="runfoot"><span>training.colaberry.com</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+  <!-- PAGE 4 — INTENSIVE DEEP DIVES -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>Intensive Deep Dives</span></div>
+    <div class="pad">
+      <p class="eyebrow">Intensive Deep Dives</p>
+      <h2 class="sec" style="font-size:26px">What each intensive delivers</h2>
+      <div class="dive">
+        <div class="dive__h"><b>1 · Build Your AI Foundation</b><span class="dive__wk">Weeks 1–3</span></div>
+        <p>Set up the workspace and habits of a working AI systems architect, then ship your first automation. You build a configured Architect Workspace, three reusable AI Skills in a domain you choose, and a working Business Workflow Assistant connected to one external API.</p>
+        <p>You leave with a workspace reusable on any future project, a portfolio-ready Skills library, and an assistant you can use immediately.</p>
+        <p class="prereq">Prerequisites: basic software concepts (git, command line) and a business problem to address.</p>
+      </div>
+      <div class="dive">
+        <div class="dive__h"><b>2 · Create Your AI Team</b><span class="dive__wk">Weeks 4–6</span></div>
+        <p>Move from a single assistant to a coordinated team of AI agents. You build an Enterprise Prompt Library, a multi-agent system of at least three specialized agents that coordinate on a complex task (for example a Compliance Agent, an Audit Agent, and a Reviewer Agent), and documented coordination patterns.</p>
+        <p>You leave with a reusable prompt library, a multi-agent architecture you can extend, and pattern documentation strong enough for technical interviews.</p>
+      </div>
+      <div class="dive">
+        <div class="dive__h"><b>3 · Connect AI To The Real World</b><span class="dive__wk">Weeks 7–9</span></div>
+        <p>Give your AI access to real business data through the Model Context Protocol (MCP), a scarce and in-demand skill. You build a working MCP server, at least one integration with a business system you select (SQL database, document store, CRM, calendar, or email), and an end-to-end flow showing AI consuming real data.</p>
+        <p>You leave with a reusable MCP server and a real integration suitable for production or portfolio use.</p>
+      </div>
+      <div class="dive">
+        <div class="dive__h"><b>4 · Design AI That Scales</b><span class="dive__wk">Weeks 10–12</span></div>
+        <p>Take an AI system from "it works" to "it is reliable, governed, and ready for production review." You build an AI Reliability Framework (validation, retry logic, confidence scoring), an AI Governance Engine (audit logging, human approval flows, escalation paths), and a complete Solution Architecture Package.</p>
+        <p>You leave with reusable frameworks and a polished package suitable for executive review, technical interviews, or RFP submissions.</p>
+      </div>
+    </div>
+    <div class="runfoot"><span>training.colaberry.com</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+  <!-- PAGE 5 — FAQ + DATES -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>Common Questions</span></div>
+    <div class="pad">
+      <p class="eyebrow">Common Questions</p>
+      <h2 class="sec" style="font-size:26px">Answers before you ask</h2>
+      <div class="faq"><b>Is this worth $149 a month?</b><p>Your membership is not a course fee. For one monthly price you get live training in all four intensives, Anthropic Architect certification prep, a full-time internship, and guided portfolio projects. Compare that to a traditional bootcamp charging ten to fifteen thousand dollars up front for less.</p></div>
+      <div class="faq"><b>I work full time — can I keep up?</b><p>Live time is four hours a week: Monday and Thursday, two hours each, for 12 weeks. You build your own project between sessions at your own pace, and because the project is yours, the build time doubles as real work.</p></div>
+      <div class="faq"><b>Am I technical enough?</b><p>You need comfort with basic software concepts like git and the command line, a business problem you want to solve, and the willingness to build. You do not need to be a professional engineer.</p></div>
+      <div class="faq"><b>What if it is not for me?</b><p>On the monthly plan, cancel anytime. On the annual plan, a 7-day refund window from your start date lets you begin, see how it runs, and decide with no risk. (Exact annual refund terms pending confirmation.)</p></div>
+      <div class="faq"><b>Why now?</b><p>The Founding Cohort is capped at 40 seats and locks the $149 founding rate for as long as you stay a member. Enrollment opens July 10, 2026 for a July 13, 2026 start.</p></div>
+
+      <div class="dates" style="margin-top:36px">
+        <p class="eyebrow" style="margin-bottom:18px">Dates &amp; Enrollment</p>
+        <div class="dates__grid">
+          <div class="dates__item"><b>ENROLLMENT OPENS</b><span>Friday, July 10, 2026</span></div>
+          <div class="dates__item"><b>FOUNDING COHORT KICKOFF</b><span>Monday, July 13, 2026</span></div>
+          <div class="dates__item"><b>COHORT ENDS · ARCHITECT EXPO</b><span>Early October 2026</span></div>
+          <div class="dates__item"><b>SEATS</b><span>40 founding members</span></div>
+        </div>
+        <div class="enroll">
+          <b>Enroll at training.colaberry.com</b>
+          <span>Powered by Anthropic + Claude Code</span>
+        </div>
+      </div>
+    </div>
+    <div class="runfoot"><span>© 2026 Colaberry, Inc.</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+</div>
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script>if (window.lucide) lucide.createIcons();</script>
+<script>
+(async () => {
+  if (!document.title || !document.title.trim()) document.title = "AI-Architect-Accelerator-Brochure";
+  // Prepend so page-supplied @page / break rules (deck-stage's margin:0,
+  // author CSS) keep source-order precedence over the baseline.
+  const baseCss = document.createElement('style');
+  baseCss.textContent = "@media print {\n  @page { margin: 0.5cm; }\n  section, article, figure, table { break-inside: avoid; }\n  *, *::before, *::after {\n    print-color-adjust: exact; -webkit-print-color-adjust: exact;\n    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;\n    animation-delay: -99s !important; animation-duration: .001s !important;\n    animation-iteration-count: 1 !important; animation-fill-mode: both !important;\n    animation-play-state: running !important; transition-duration: 0s !important;\n  }\n}";
+  document.head.prepend(baseCss);
+  if (document.readyState === 'loading') {
+    await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
+  }
+  let ds = document.querySelector('deck-stage');
+  // whenDefined never resolves when nothing registers the element, so only
+  // await it when a <deck-stage> tag exists (and race a timeout regardless).
+  if (ds && !customElements.get('deck-stage')) {
+    try {
+      await Promise.race([
+        customElements.whenDefined('deck-stage'),
+        new Promise((r) => setTimeout(r, 3000)),
+      ]);
+    } catch (e) {}
+    ds = document.querySelector('deck-stage');
+  }
+  // dc-runtime assigns window.DCLogic at init and mounts into #dc-root on
+  // DOMContentLoaded; settle on that subtree so React has rendered before
+  // print(). Non-DC pages fall through to weighing body.
+  const isDc = !ds && 'DCLogic' in window;
+  const settleRoot = ds || (isDc ? document.getElementById('dc-root') : null) || document.body;
+  if (settleRoot) {
+    // Weigh only content children — skip script/style/template so inline
+    // Babel/CSS doesn't register as stable "content" before the framework
+    // has mounted anything.
+    const MEDIA = 'img,svg,canvas,video,picture,iframe,embed,object';
+    const weigh = () => {
+      let text = 0, media = 0;
+      for (const c of settleRoot.children) {
+        const t = c.tagName;
+        if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+        text += (c.textContent || '').trim().length;
+        media += c.querySelectorAll(MEDIA).length + (c.matches(MEDIA) ? 1 : 0);
+      }
+      return text + media * 100;
+    };
+    // "Non-zero and stable" alone is not sufficient to mean rendered: generic
+    // body can carry a static shell while async main content is pending, and
+    // #dc-root can carry the root DC's static text while child refs are still
+    // .sc-placeholder boxes. Gate generic on readyState 'complete', and never
+    // accept stability while a dc-runtime placeholder is present.
+    const isGeneric = settleRoot === document.body;
+    const deadline = Date.now() + 15000;
+    let last = -1, stable = 0;
+    while (Date.now() < deadline) {
+      const n = weigh();
+      const ready =
+        (!isGeneric || document.readyState === 'complete') &&
+        !settleRoot.querySelector('.sc-placeholder');
+      if (n > 0 && n === last && ready) { if (++stable >= 2) break; } else { stable = 0; }
+      last = n;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  // Reveal content gated on scroll or visibility before printing. Lazy <img>,
+  // IntersectionObserver fade-ins, and collapsed <details> don't render while
+  // off-screen, so a long page would print with them blank or closed. Open
+  // every <details>, force native-lazy images eager, and scroll the document
+  // through its full height to trip lazy-load + IO; then wait (bounded) for the
+  // newly-triggered images. Inert for deck-stage (slides aren't scroll-gated).
+  try {
+    for (const d of document.querySelectorAll('details')) d.open = true;
+    for (const img of document.querySelectorAll('img[loading="lazy"]'))
+      img.loading = 'eager';
+    const scroller = document.scrollingElement || document.documentElement;
+    const full = Math.max(scroller.scrollHeight, document.body.scrollHeight);
+    const step = window.innerHeight || 800;
+    for (let y = 0; y <= full; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    window.scrollTo(0, 0);
+    await Promise.race([
+      Promise.all(
+        [...document.images].map((img) =>
+          img.complete
+            ? null
+            : new Promise((res) => {
+                img.addEventListener('load', res, { once: true });
+                img.addEventListener('error', res, { once: true });
+              })
+        )
+      ),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
+  } catch (e) {}
+  try { await document.fonts.ready; } catch (e) {}
+  // Jump every animation to its end state so print() never captures a slide
+  // mid-entrance. Ordering matters: the 0s-transition style must be live
+  // BEFORE data-deck-active is set so attribute-keyed transitions don't
+  // start a (now-0s) run from the pre-active base.
+  const st = document.createElement('style');
+  st.textContent = '*,*::before,*::after{animation-delay:-99s !important;animation-duration:.001s !important;animation-iteration-count:1 !important;animation-fill-mode:both !important;animation-play-state:running !important;transition-duration:0s !important}';
+  document.head.appendChild(st);
+  for (const d of document.querySelectorAll('deck-stage')) {
+    for (const c of d.children) {
+      const t = c.tagName;
+      if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+      c.setAttribute('data-deck-active', '');
+    }
+  }
+  // Re-append deck-stage's @page last so no author @page can add a margin and
+  // spill each full-bleed slide onto two sheets. Backstop for old copies.
+  if (ds) {
+    let pg = document.getElementById('deck-stage-print-page');
+    if (!pg) {
+      pg = document.createElement('style');
+      pg.textContent = '@page{size:' + (+ds.getAttribute('width') || 1920) +
+        'px ' + (+ds.getAttribute('height') || 1080) + 'px;margin:0}';
+    }
+    document.body.appendChild(pg);
+  }
+  try {
+    const sweep = () => {
+      for (const a of document.getAnimations()) {
+        try { a.finish(); } catch (e) {
+          try { a.currentTime = (a.effect && a.effect.getComputedTiming().duration) || 0; a.pause(); } catch (e2) {}
+        }
+      }
+    };
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+  } catch (e) {}
+  // Relax break-inside on oversized elements. An element taller than a
+  // printable page can't honor break-inside: avoid — browsers either overflow
+  // it or push it whole to the next page, leaving a blank gap, then break it
+  // anyway at an arbitrary point. After the final layout (content revealed,
+  // animations jumped), find elements taller than a page that still compute
+  // break-inside: avoid and reset them to auto, so the browser breaks them at
+  // their children's boundaries instead (children keep their own avoid). PAGE_PX
+  // is a conservative portrait estimate at 96 CSS px/in — Letter/A4 usable
+  // height minus our 0.5in margins — so only clearly-oversized elements are
+  // touched and under-page elements still stay whole. Skipped for decks, whose
+  // slides are sized to the page.
+  try {
+    if (!document.querySelector('deck-stage')) {
+      const PAGE_PX = 1024;
+      // Our print defaults add a body padding inset only when we also zero the
+      // @page margin; computed style can't tell us (it reports screen media),
+      // so read the injected rule directly.
+      const defaults = document.querySelector('style[data-omelette-print-defaults]');
+      const pageInset = /body\s*\{[^}]*padding/.test(defaults ? defaults.textContent || '' : '');
+      const SEL = 'section,article,figure,table,pre,blockquote,[class~="card" i],[class~="page" i],[class~="sheet" i]';
+      for (const el of document.body.querySelectorAll(SEL)) {
+        if (el instanceof HTMLElement && el.offsetHeight > PAGE_PX) {
+          el.setAttribute('data-om-oversized', '');
+          // Fake-paged docs simulate sheets with over-tall break-after:page
+          // boxes; honoring the break spills half-blank pages and ends a
+          // colored box mid-sheet. Flow them, and (only when we own the page
+          // inset) drop the redundant padding/background via the rule below.
+          const cs = getComputedStyle(el);
+          if (cs.breakAfter === 'page' || cs.pageBreakAfter === 'always') {
+            el.setAttribute('data-om-fakepage', '');
+          }
+        }
+      }
+      const ost = document.createElement('style');
+      ost.textContent = '@media print{' +
+        '[data-om-oversized]{break-inside:auto !important;page-break-inside:auto !important}' +
+        '[data-om-fakepage]{break-after:auto !important;page-break-after:auto !important}' +
+        (pageInset ? '[data-om-fakepage]{padding:0 !important;background:none !important}' : '') +
+        '}';
+      document.head.appendChild(ost);
+    }
+  } catch (e) {}
+  // macOS Preview renders Skia-PDF Luminosity soft-masks as opaque grey boxes;
+  // swap the CSS that triggers them for Preview-safe forms.
+  try {
+    for (const el of document.body.querySelectorAll('*')) {
+      const cs = getComputedStyle(el);
+
+      if (cs.boxShadow !== 'none' && cs.filter === 'none') {
+        const outs = [], kept = [];
+        for (const s of cs.boxShadow.split(/,(?![^(]*[)])/)) {
+          const t = s.trim();
+          const m = t.match(/^(rgba?[(][^)]+[)]) (-?[0-9.]+px) (-?[0-9.]+px) ([0-9.]+px) -?[0-9.]+px$/);
+          if (m && parseFloat(m[4]) > 0) outs.push('drop-shadow(' + m[2] + ' ' + m[3] + ' ' + m[4] + ' ' + m[1] + ')');
+          else kept.push(t);
+        }
+        if (outs.length) {
+          el.style.setProperty('filter', outs.join(' '), 'important');
+          el.style.setProperty('box-shadow', kept.join(', ') || 'none', 'important');
+        }
+      }
+
+      const mask = cs.maskImage && cs.maskImage !== 'none' ? cs.maskImage : cs.webkitMaskImage;
+      if (mask && mask !== 'none' && cs.filter === 'none') el.style.setProperty('filter', 'opacity(1)', 'important');
+    }
+  } catch (e) {}
+  setTimeout(() => { try { window.print(); } catch (e) {} }, 200);
+})();
+</script>
+</body>
+</html>

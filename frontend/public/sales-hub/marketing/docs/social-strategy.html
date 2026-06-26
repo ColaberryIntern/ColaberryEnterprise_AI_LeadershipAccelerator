@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Social Media Strategy · Open House Marketing Hub</title>
+<link rel="icon" href="../assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../assets/hub.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><img src="../assets/logo/colaberry-horizontal.png" alt="Colaberry"></div>
+    <a class="nav home" href="../index.html"><span class="cb-i"><i class="ri-arrow-left-line"></i></span> Marketing Hub</a>
+    <div class="navsec">On this page</div>
+    <a class="nav" href="#objective"><span class="cb-i"><i class="ri-focus-3-line"></i></span> Objective and funnel</a>
+    <a class="nav" href="#channels"><span class="cb-i"><i class="ri-apps-2-line"></i></span> Channel roles</a>
+    <a class="nav" href="#cadence"><span class="cb-i"><i class="ri-rhythm-line"></i></span> The 5-beat cadence</a>
+    <a class="nav" href="#mix"><span class="cb-i"><i class="ri-stack-line"></i></span> Organic + email + paid</a>
+    <a class="nav" href="#posting"><span class="cb-i"><i class="ri-calendar-schedule-line"></i></span> Posting cadence</a>
+    <a class="nav" href="#sop"><span class="cb-i"><i class="ri-customer-service-2-line"></i></span> Engagement SOP</a>
+  </aside>
+  <main class="content">
+    <div class="hero berry">
+      <p class="crumbs"><a href="../index.html">Marketing Hub</a> / Social Media Strategy</p>
+      <p class="eyebrow">Channels &amp; cadence</p>
+      <h1>Social Media Strategy</h1>
+      <p>How LinkedIn, X, Instagram, and email work together to fill free Open House seats and feed the Founding Cohort.</p>
+      <div class="meta"><span class="pill">Open House Jul 16</span><span class="pill">Founding Cohort</span></div>
+    </div>
+    <div class="actionbar">
+      <a class="btn btn-ghost" href="../../index.html"><span class="cb-i"><i class="ri-stack-line"></i></span> Knowledge Base</a> <a class="btn btn-ghost" href="../index.html"><span class="cb-i"><i class="ri-home-4-line"></i></span> Hub</a>
+      <div class="spacer"></div>
+      <a class="btn btn-ghost" href="social-strategy.html" download><span class="cb-i"><i class="ri-download-2-line"></i></span> Download this doc</a>
+      <a class="btn btn-primary" href="#" onclick="window.print();return false;"><span class="cb-i"><i class="ri-printer-line"></i></span> Print / PDF</a>
+    </div>
+    <div class="wrap">
+
+      <section class="section" id="objective">
+        <h2>Objective and funnel by channel</h2>
+        <p class="sub">Every channel has one job: generate free Open House registrations. The Open House is the only call to action in awareness copy. Enrollment happens later, with attendees.</p>
+
+        <div class="callout info">
+          <span class="cb-i"><i class="ri-information-line"></i></span>
+          <div>
+            <div class="ttl">One goal, one CTA</div>
+            <div class="body">Goal: generate free Open House registrations, then convert attendees into Founding Cohort enrollment. On social and in email, the only ask is to reserve a free seat. No price appears anywhere in awareness copy. Pricing is revealed at the Open House.</div>
+          </div>
+        </div>
+
+        <div class="diagram">
+          <div class="cap">Funnel by channel. Organic social and owned email both drive to one registration endpoint, then to the live event.</div>
+          <pre class="mermaid">
+flowchart TD
+  LI["LinkedIn<br/>primary reach"]
+  X["X<br/>punchy amplification"]
+  IG["Instagram<br/>visual proof"]
+  EM["Email<br/>owned 5-beat sequence"]
+  REG["Free Open House<br/>registration page<br/>[reg link]"]
+  OH["Open House<br/>Thu Jul 16"]
+  COH["Founding Cohort<br/>kickoff Thu Jul 23"]
+  LI --> REG
+  X --> REG
+  IG --> REG
+  EM --> REG
+  REG --> OH
+  OH --> COH
+</pre>
+        </div>
+
+        <div class="callout success">
+          <span class="cb-i"><i class="ri-links-line"></i></span>
+          <div>
+            <div class="ttl">Where registrations land</div>
+            <div class="body">Registrations return through the OpenHouseModal into /api/leads as open_house_* leads. Every link uses env.openHouseLandingUrl with UTM and campaign_id so each channel and beat is attributable. The campaign engine bakes in the rules: no price, no em-dashes, drive to the Open House.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="channels">
+        <h2>Channel roles</h2>
+        <p class="sub">Four channels, four distinct roles. The primary CTA is the same everywhere: reserve a free Open House seat.</p>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th>Role</th>
+                <th>Format</th>
+                <th>Cadence</th>
+                <th>Primary CTA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="chchip ch-li"><i class="ri-linkedin-box-fill"></i> LinkedIn</span></td>
+                <td class="cell-good">Primary. Reaches alumni and working professionals where credibility matters most.</td>
+                <td>Text posts, document carousels, founder and team voice.</td>
+                <td>3 to 4 posts per week</td>
+                <td>Reserve your free seat</td>
+              </tr>
+              <tr>
+                <td><span class="chchip ch-x"><i class="ri-twitter-x-fill"></i> X</span></td>
+                <td class="cell-info">Amplify. Short, punchy framing of the same beats for quick reach.</td>
+                <td>Short posts and threads, single-line hooks.</td>
+                <td>4 to 6 posts per week</td>
+                <td>Register for the Open House</td>
+              </tr>
+              <tr>
+                <td><span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span></td>
+                <td class="cell-info">Visual proof. Show the journey and what you build, not just words.</td>
+                <td>Carousels and stories, link in bio plus story link.</td>
+                <td>2 to 3 posts per week plus stories</td>
+                <td>Reserve your seat</td>
+              </tr>
+              <tr>
+                <td><span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span></td>
+                <td class="cell-good">Owned and parallel. The approved 5-email sequence carries the same beats to your list.</td>
+                <td>The 5-beat sequence, one beat per send.</td>
+                <td>5 sends across the run</td>
+                <td>Reserve your free seat</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout approval">
+          <span class="cb-i"><i class="ri-shield-check-line"></i></span>
+          <div>
+            <div class="ttl">Content angles, not paid segments, on organic</div>
+            <div class="body">On organic social the three approved messages are broadcast content angles, not targeting. They become true audience segments only for paid and retargeting. Alumni: "You've already invested in your future. Now learn how to build with AI." Dropouts: "Your journey doesn't have to end here. Here's a new opportunity built for today's AI economy." Prospects: "Most people are consuming AI. Very few are learning how to build with it."</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="cadence">
+        <h2>The 5-beat cadence overview</h2>
+        <p class="sub">One narrative arc, five beats, repeated across every channel and the email sequence. The beats build from the shift in the market to a final live-today reminder.</p>
+
+        <div class="diagram">
+          <div class="cap">The 5-beat arc. Each beat is generated at send time by the campaign engine with the same baked-in rules.</div>
+          <pre class="mermaid">
+flowchart LR
+  B1["Beat 1<br/>The shift is<br/>already happening"]
+  B2["Beat 2<br/>From AI user<br/>to AI builder"]
+  B3["Beat 3<br/>See what<br/>you'll build"]
+  B4["Beat 4<br/>Meet the<br/>founding cohort"]
+  B5["Beat 5<br/>Final<br/>reminder"]
+  OH["Open House<br/>Jul 16"]
+  B1 --> B2 --> B3 --> B4 --> B5 --> OH
+</pre>
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-flashlight-line"></i></span> Beat 1. The shift is already happening</h4>
+            <p>Frame the moment. Most people use AI. Very few build with it. CTA: reserve your free seat.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-user-star-line"></i></span> Beat 2. From AI user to AI builder</h4>
+            <p>Name the gap and the promise: turn an idea into a real AI system. CTA: register for the Open House.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-tools-line"></i></span> Beat 3. See what you'll build</h4>
+            <p>Show the 12 weeks. Bring your idea, leave with a working AI system. Best as a carousel. CTA: reserve your seat.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-group-line"></i></span> Beat 4. Meet the founding cohort</h4>
+            <p>Invitation and scarcity. Only 40 seats available. CTA: register before seats fill.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-alarm-line"></i></span> Beat 5. Final reminder</h4>
+            <p>We're live tomorrow, then live today. CTA: add to calendar and join us.</p>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <span class="cb-i"><i class="ri-price-tag-3-line"></i></span>
+          <div>
+            <div class="ttl">No price in any beat</div>
+            <div class="body">Subjects and captions stay price-free across all five beats. Beat 4 may say "only 40 seats available" but never a dollar amount. Pricing is revealed at the Open House.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="mix">
+        <h2>How organic, email, and optional paid combine</h2>
+        <p class="sub">Organic carries the story to your network, email carries it to your list, and optional paid extends reach to the same three angles. All three point to one free registration.</p>
+
+        <div class="grid cols-3">
+          <div class="card accent-top">
+            <h3 class="h"><span class="cb-i"><i class="ri-megaphone-line"></i></span> Organic social</h3>
+            <p class="prose">LinkedIn leads, X amplifies, Instagram shows the build. Each beat is posted as a broadcast content angle. No targeting. Every post links to [reg link] with channel and beat UTMs.</p>
+          </div>
+          <div class="card accent-top">
+            <h3 class="h"><span class="cb-i"><i class="ri-mail-send-line"></i></span> Owned email</h3>
+            <p class="prose">The approved 5-email sequence runs in parallel to your list, one beat per send. Same arc, same single CTA, same no-price rule. Email is the most direct path to your warmest audiences.</p>
+          </div>
+          <div class="card accent-top">
+            <h3 class="h"><span class="cb-i"><i class="ri-cursor-line"></i></span> Optional paid</h3>
+            <p class="prose">If budget is approved, paid extends the same three angles as true segments for targeting and retargeting registration page visitors. Paid spend and creative are <span class="badge approval">[NEEDS APPROVAL]</span>.</p>
+          </div>
+        </div>
+
+        <div class="callout info" style="margin-top:16px">
+          <span class="cb-i"><i class="ri-cpu-line"></i></span>
+          <div>
+            <div class="ttl">One engine behind all of it</div>
+            <div class="body">The Accelerator runs a native, prompt-based campaign engine. Each segment campaign has its own ai_system_prompt, and posts and emails are generated at send time. The baked-in rules are constant: no price, no em-dashes, drive to the Open House. This keeps organic, email, and paid on message without manual policing.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="posting">
+        <h2>Posting cadence guidance</h2>
+        <p class="sub">A suggested, adjustable calendar. All activity is pre Open House. Treat dates as guidance, not a hard schedule.</p>
+
+        <div class="cal" aria-label="Suggested posting calendar leading to the Open House">
+          <div class="dow">Sun</div><div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div><div class="dow">Thu</div><div class="dow">Fri</div><div class="dow">Sat</div>
+
+          <div class="day empty"></div>
+          <div class="day empty"></div>
+          <div class="day"><div class="dn">Jun 30</div></div>
+          <div class="day"><div class="dn">Jul 1</div></div>
+          <div class="day"><div class="dn">Jul 2</div><div class="ev oh">Optional teaser</div></div>
+          <div class="day"><div class="dn">Jul 3</div></div>
+          <div class="day empty"></div>
+
+          <div class="day empty"></div>
+          <div class="day"><div class="dn">Jul 6</div></div>
+          <div class="day"><div class="dn">Jul 7</div><div class="ev b1">Beat 1 launch</div></div>
+          <div class="day"><div class="dn">Jul 8</div></div>
+          <div class="day"><div class="dn">Jul 9</div><div class="ev b2">Beat 2</div></div>
+          <div class="day"><div class="dn">Jul 10</div></div>
+          <div class="day empty"></div>
+
+          <div class="day empty"></div>
+          <div class="day"><div class="dn">Jul 13</div><div class="ev b3">Beat 3 carousel</div></div>
+          <div class="day"><div class="dn">Jul 14</div></div>
+          <div class="day"><div class="dn">Jul 15</div><div class="ev b4">Beat 4 / 40 seats</div></div>
+          <div class="day is-key"><div class="dn">Jul 16</div><div class="ev b5">Beat 5 + live today</div><div class="ev oh">Open House</div></div>
+          <div class="day"><div class="dn">Jul 17</div></div>
+          <div class="day empty"></div>
+        </div>
+
+        <div class="legend">
+          <span class="tag">Beat 1</span>
+          <span class="tag">Beat 2</span>
+          <span class="tag">Beat 3</span>
+          <span class="tag">Beat 4</span>
+          <span class="tag">Beat 5</span>
+          <span class="tag">Open House Jul 16</span>
+        </div>
+
+        <hr class="div">
+
+        <div class="dodont">
+          <div class="col do">
+            <h4>Do</h4>
+            <ul>
+              <li>Lead with proof. Warm, inclusive, proven since 2012, with 5,000+ careers built.</li>
+              <li>Keep every post in sentence case and speak to "you".</li>
+              <li>End every post with the free Open House CTA and a UTM-tagged [reg link].</li>
+              <li>Adapt the same beat to each channel's format rather than cross-posting identical copy.</li>
+              <li>Lean on Beat 3 carousels for Instagram and LinkedIn to show what you build.</li>
+            </ul>
+          </div>
+          <div class="col dont">
+            <h4>Don't</h4>
+            <ul>
+              <li>Never state a price. Pricing is revealed at the Open House.</li>
+              <li>No emoji and no em-dash characters anywhere.</li>
+              <li>Do not promise refund or cancellation terms. Those are <span class="badge approval">[NEEDS APPROVAL]</span>.</li>
+              <li>Do not invent metrics, testimonials, names, or quotes.</li>
+              <li>Do not push enrollment in awareness copy. The only ask is the free Open House.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sop">
+        <h2>Engagement SOP</h2>
+        <p class="sub">How the team handles replies, comments, and DMs during the run. Fast, warm, and always pointed back to the free registration and the FAQ.</p>
+
+        <div class="steps">
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-timer-flash-line"></i></span> 1. Respond fast</h4>
+            <p>Respond to comments, replies, and DMs within 4 business hours during the campaign run. On Open House day, monitor in near real time.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-question-answer-line"></i></span> 2. Answer from the FAQ</h4>
+            <p>For program, schedule, certification, and cost questions, answer from the approved FAQ doc. Do not improvise facts. If it is not in the FAQ, say you will confirm and follow up.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-price-tag-3-line"></i></span> 3. Handle price questions carefully</h4>
+            <p>If someone asks about price, warmly note that pricing is revealed at the Open House and invite them to register free. Do not state a number on social.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-arrow-right-circle-line"></i></span> 4. Always route to the seat</h4>
+            <p>Close every helpful reply with the free Open House CTA and the [reg link]. The goal of every conversation is a registration.</p>
+          </div>
+          <div class="step">
+            <h4><span class="cb-i"><i class="ri-flag-line"></i></span> 5. Escalate the unknowns</h4>
+            <p>Refund and cancellation terms, exact start time, and anything not in the FAQ are escalated, not answered. Mark them [NEEDS APPROVAL] internally and confirm before replying.</p>
+          </div>
+        </div>
+
+        <div class="callout danger" style="margin-top:16px">
+          <span class="cb-i"><i class="ri-error-warning-line"></i></span>
+          <div>
+            <div class="ttl">Tokens to confirm before they go public</div>
+            <div class="body">[reg link] is the Open House registration URL from BC 9946499609. [time + TZ] is the exact Open House start time and timezone. Both must be filled with confirmed values before any post or reply ships. Refund and cancellation terms are drafted and pending Ali.</div>
+          </div>
+        </div>
+
+        <div class="callout success" style="margin-top:16px">
+          <span class="cb-i"><i class="ri-chat-smile-3-line"></i></span>
+          <div>
+            <div class="ttl">Voice for every reply</div>
+            <div class="body">Warm and credible. Sentence case. Speak to "you". Lead with proof, keep CTAs friendly, and never use emoji or em-dashes. The positioning to echo when it fits: learn with Claude, build through Colaberry, deploy in the real world.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="foot">
+        Social Media Strategy. Grounded in the approved strategy (Basecamp 9946499631) and Ali-confirmed facts (2026-06-25). Draft for review only. Pricing is revealed at the Open House. Tokens in brackets require confirmation before publishing.
+      </div>
+    </div>
+  </main>
+</div>
+<script src="../assets/hub.js"></script>
+</body>
+</html>

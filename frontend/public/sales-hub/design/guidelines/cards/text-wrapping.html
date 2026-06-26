@@ -1,0 +1,51 @@
+<!-- @dsCard group="Type" viewport="700x320" name="Text wrapping" subtitle="Defaults + helpers: balance, pretty, break, truncate, clamp" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 24px 26px; background: var(--surface-page); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 26px; }
+  .demo { min-width: 0; }
+  .tag { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 6px; }
+  h3 { margin: 0; font-size: 20px; }
+  p { margin: 0; font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+  .box { border: 1px dashed var(--border-default); border-radius: var(--radius-md); padding: 10px 12px; }
+  .flexrow { display: flex; gap: 10px; align-items: center; border: 1px dashed var(--border-default); border-radius: var(--radius-md); padding: 10px 12px; }
+  .swatch { width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--red-500); flex: none; }
+  code { font-family: var(--font-mono); font-size: 12px; color: var(--red-600); }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="demo">
+      <p class="tag">heading · balance (default)</p>
+      <h3 class="cb-balance">Future-proof your career in data and AI</h3>
+    </div>
+    <div class="demo">
+      <p class="tag">body · pretty (default)</p>
+      <p>Colaberry nurtures an inclusive learning space, uniting people from diverse backgrounds to thrive in the age of AI.</p>
+    </div>
+    <div class="demo">
+      <p class="tag">long string · <code>.cb-break</code></p>
+      <div class="box"><p class="cb-break">https://training.colaberry.com/programs/data-analytics/spring-cohort-enrollment</p></div>
+    </div>
+    <div class="demo">
+      <p class="tag">flex child · <code>.cb-min0</code></p>
+      <div class="flexrow">
+        <span class="swatch"></span>
+        <p class="cb-min0">This text shrinks and wraps inside the flex row instead of overflowing it.</p>
+      </div>
+    </div>
+    <div class="demo">
+      <p class="tag">single line · <code>.cb-truncate</code></p>
+      <div class="box"><p class="cb-truncate">very-long-export-file-name-that-truncates-with-ellipsis.csv</p></div>
+    </div>
+    <div class="demo">
+      <p class="tag">two lines · <code>.cb-clamp-2</code></p>
+      <div class="box"><p class="cb-clamp-2">Instructor-led, project-based, and supported by mentors every step of the way — this description is clamped to two lines with an ellipsis.</p></div>
+    </div>
+  </div>
+</body>
+</html>
