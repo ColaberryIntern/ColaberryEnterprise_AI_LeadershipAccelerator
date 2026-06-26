@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Member Profile System · Colaberry AI Systems Architect Accelerator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-text:#E5121D; --cherry-deep:#C20E1E;
+    --leaf:#77BB4A; --leaf-action:#5BA63C; --leaf-text:#468A2E; --leaf-deep:#3C7A26;
+    --berry:#367895; --berry-hover:#2E6A86; --link:#2E6A86;
+    --amber:#E8920C; --amber-deep:#B5710A;
+    --white:#FFFFFF; --n50:#F8F8F7; --n100:#F1F1F0; --n200:#E4E4E3; --n300:#D8D8D8;
+    --n400:#B4B4B4; --n500:#8C8C8C; --n600:#6B6B6B; --n700:#4A4A4A; --n800:#2B2B2B; --n900:#1A1A1A;
+    --surface-page:#FFFFFF; --surface-subtle:#F8F8F7; --surface-sunken:#F1F1F0;
+    --text-strong:#1A1A1A; --text-body:#2B2B2B; --text-muted:#6B6B6B;
+    --border-default:#D8D8D8; --border-subtle:#E4E4E3;
+    --shadow-md:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04);
+    --shadow-lg:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);
+    --r-4:4px; --r-8:8px; --r-12:12px; --r-16:16px; --r-20:20px; --r-24:24px; --r-pill:999px;
+    --sans:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --mono:'Roboto Mono',ui-monospace,'SFMono-Regular','Menlo','Consolas',monospace;
+    --logo:'Quicksand',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  [data-theme="dark"]{
+    --surface-page:#0F0F0F; --surface-subtle:#1A1A1A; --surface-sunken:#161616;
+    --text-strong:#FFFFFF; --text-body:#E4E4E3; --text-muted:#B4B4B4;
+    --border-default:rgba(255,255,255,.14); --border-subtle:rgba(255,255,255,.10);
+    --white:#1A1A1A; --n50:#161616; --n100:#1F1F1F; --n200:#262626; --n300:#333333;
+    --link:#6FB2CC; --leaf-text:#9BD173; --cherry-text:#FF6A71;
+    --shadow-md:0 3px 8px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 30px rgba(0,0,0,.5),0 3px 8px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--surface-subtle);color:var(--text-body);line-height:1.55;font-size:16px;-webkit-font-smoothing:antialiased;transition:background .22s var(--ease),color .22s var(--ease)}
+  h1,h2,h3,h4{font-family:var(--sans);font-weight:700;color:var(--text-strong);margin:0;letter-spacing:-.01em}
+  button{font-family:inherit}
+  a{color:var(--link);text-decoration:none}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  :focus-visible{outline:3px solid var(--berry);outline-offset:2px;border-radius:var(--r-4)}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+  /* ===== shell ===== */
+  .app{display:grid;grid-template-columns:248px 1fr;grid-template-rows:auto 1fr;min-height:100vh;grid-template-areas:"top top" "nav main"}
+  .topbar{grid-area:top;display:flex;align-items:center;gap:16px;padding:13px 24px;background:var(--surface-page);border-bottom:1px solid var(--border-default);position:sticky;top:0;z-index:40}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .brand .mark{width:38px;height:38px;flex:none}
+  .brand .txt b{font-family:var(--logo);font-size:18px;font-weight:700;display:block;line-height:1;color:var(--text-strong)}
+  .brand .txt b .cc{color:var(--cherry)}
+  .brand .txt span{font-size:11.5px;color:var(--text-muted);font-weight:500}
+  .top-right{display:flex;align-items:center;gap:13px;margin-left:auto}
+  .iconbtn{width:38px;height:38px;border-radius:var(--r-pill);border:1px solid var(--border-default);background:var(--surface-page);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);transition:.16s var(--ease)}
+  .iconbtn:hover{border-color:var(--berry);color:var(--berry)}
+  .iconbtn svg{width:19px;height:19px}
+  .hud{display:flex;align-items:center;gap:11px;background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:5px 14px 5px 6px;cursor:pointer;transition:.16s var(--ease)}
+  .hud:hover{border-color:var(--berry)}
+  .hud .hud-tx{display:flex;flex-direction:column;line-height:1.15}
+  .hud .lv{font-size:12.5px;font-weight:700;color:var(--leaf-text)}
+  .hud .pts{font-size:11px;color:var(--text-muted);font-family:var(--mono);font-weight:700}
+  @media(max-width:720px){.hud .hud-tx{display:none}}
+
+  .nav{grid-area:nav;background:var(--surface-page);border-right:1px solid var(--border-default);padding:18px 14px;display:flex;flex-direction:column;gap:3px;position:sticky;top:65px;height:calc(100vh - 65px);overflow:auto}
+  .nav .grp{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:14px 12px 6px;font-weight:700}
+  .navbtn{display:flex;align-items:center;gap:13px;padding:10px 14px;border-radius:var(--r-pill);border:none;background:none;color:var(--text-body);font-size:14.5px;font-weight:500;cursor:pointer;text-align:left;width:100%;transition:.16s var(--ease)}
+  .navbtn svg{width:19px;height:19px;flex:none;opacity:.85}
+  .navbtn .n{margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text-muted)}
+  .navbtn:hover{background:var(--surface-sunken);color:var(--text-strong)}
+  .navbtn.active{background:#ffe7e8;color:var(--cherry-deep);font-weight:700}
+  [data-theme="dark"] .navbtn.active{background:rgba(251,40,50,.16);color:#FF6A71}
+  .navbtn.active svg{opacity:1}
+
+  .main{grid-area:main;padding:28px 38px 80px;max-width:1180px}
+  .view{display:none;animation:fade .28s var(--ease)}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .page-h{margin-bottom:22px}
+  .page-h .crumbs0{font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--cherry-text);margin-bottom:7px}
+  .page-h h1{font-size:32px;line-height:1.12}
+  .page-h .sub{color:var(--text-muted);font-size:16px;margin-top:7px;max-width:760px}
+
+  .card{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-24);box-shadow:var(--shadow-md)}
+  .card.accent-cherry{border-top:4px solid var(--cherry)}
+  .card.accent-leaf{border-top:4px solid var(--leaf)}
+  .card.accent-berry{border-top:4px solid var(--berry)}
+  .card.accent-amber{border-top:4px solid var(--amber)}
+  .section-title{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:30px 0 13px;display:flex;align-items:center;gap:9px}
+  .section-title .hint{margin-left:auto;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--text-muted)}
+  .small{font-size:13.5px;color:var(--text-muted)}
+
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;padding:4px 12px;border-radius:var(--r-pill);letter-spacing:.02em;text-transform:uppercase;line-height:1.2}
+  .chip .sw{width:8px;height:8px;border-radius:50%}
+  .chip.berry{background:rgba(54,120,149,.14);color:var(--berry)} .chip.berry .sw{background:var(--berry)}
+  .chip.leaf{background:rgba(91,166,60,.16);color:var(--leaf-text)} .chip.leaf .sw{background:var(--leaf-action)}
+  .chip.amber{background:rgba(232,146,12,.16);color:var(--amber-deep)} .chip.amber .sw{background:var(--amber)}
+  .chip.cherry{background:rgba(251,40,50,.12);color:var(--cherry-text)} .chip.cherry .sw{background:var(--cherry)}
+  .chip.ghost{background:var(--surface-sunken);color:var(--text-muted)}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;font-size:14.5px;font-weight:700;padding:11px 20px;border-radius:var(--r-pill);transition:.16s var(--ease);font-family:inherit}
+  .btn svg{width:17px;height:17px}
+  .btn.primary{background:var(--cherry);color:#fff} .btn.primary:hover{background:var(--cherry-deep)}
+  .btn.berry{background:var(--berry);color:#fff} .btn.berry:hover{background:var(--berry-hover)}
+  .btn.leaf{background:var(--leaf-action);color:#fff} .btn.leaf:hover{background:var(--leaf-deep)}
+  .btn.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)} .btn.ghost:hover{border-color:var(--berry);color:var(--berry)}
+  .btn.sm{padding:8px 15px;font-size:13.5px}
+
+  .meter{height:9px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;border:1px solid var(--border-subtle)}
+  .meter>i{display:block;height:100%;border-radius:var(--r-pill);background:var(--berry)}
+
+  /* ===== avatar ===== */
+  .av{border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;flex:none;overflow:hidden;position:relative}
+  .av img{width:100%;height:100%;object-fit:cover}
+  .pres{position:absolute;right:-1px;bottom:-1px;width:30%;height:30%;min-width:9px;min-height:9px;border-radius:50%;border:2px solid var(--surface-page);background:var(--n400)}
+  .pres.on{background:var(--leaf-action)} .pres.idle{background:var(--amber)}
+
+  /* ===== LEVEL BADGE (the reusable component) ===== */
+  .lvbadge{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center}
+  .lvbadge svg{display:block;transform:rotate(-90deg)}
+  .lvbadge .tile{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .lvbadge .glyph{display:flex;align-items:center;justify-content:center}
+  .lvbadge .glyph svg{transform:none}
+  .lvbadge .rn{font-family:var(--mono);font-weight:700;color:#fff;line-height:1}
+  .badge-row{display:flex;gap:10px;align-items:center}
+
+  /* ===== profile hero ===== */
+  .profile-head{padding:0;overflow:hidden;margin-bottom:18px}
+  .ph-cover{height:118px;position:relative;overflow:hidden}
+  .ph-cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.22));z-index:1}
+  :root{--cover-motif:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='130' viewBox='0 0 480 130'%3E%3Cg fill='none' stroke='%23fff' stroke-width='2' opacity='.16'%3E%3Crect x='24' y='18' width='432' height='96' rx='10'/%3E%3Cline x1='24' y1='40' x2='456' y2='40'/%3E%3Cline x1='110' y1='40' x2='110' y2='114'/%3E%3C/g%3E%3Cg fill='%23fff' opacity='.14'%3E%3Crect x='44' y='56' width='48' height='6' rx='3'/%3E%3Crect x='44' y='72' width='48' height='6' rx='3'/%3E%3Crect x='44' y='88' width='34' height='6' rx='3'/%3E%3Crect x='130' y='54' width='120' height='50' rx='8'/%3E%3Crect x='264' y='54' width='120' height='50' rx='8'/%3E%3C/g%3E%3Cpolyline points='398,96 414,80 428,86 442,66' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' opacity='.3'/%3E%3C/svg%3E")}
+  .ph-cover::before{content:"";position:absolute;inset:0;background-image:var(--cover-motif);background-size:cover;background-position:center;z-index:0}
+  .ph-body{padding:0 26px 22px}
+  .ph-idrow{display:flex;align-items:flex-end;gap:18px;margin-top:-44px;position:relative;z-index:2;flex-wrap:wrap}
+  .ph-av{border:4px solid var(--surface-page);box-shadow:var(--shadow-md);border-radius:50%}
+  .ph-meta{flex:1;min-width:220px;padding-bottom:4px}
+  .ph-name{font-size:24px;font-weight:700;color:var(--text-strong);display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .ph-headline{color:var(--text-muted);font-size:15px;margin-top:3px}
+  .ph-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+  .ph-pill{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text-body);background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:6px 13px}
+  .ph-pill svg{width:14px;height:14px;color:var(--text-muted)}
+  .ph-pill.open{border-color:rgba(91,166,60,.45);background:rgba(91,166,60,.1);color:var(--leaf-text)}
+  .ph-pill.open .dot{width:7px;height:7px;border-radius:50%;background:var(--leaf-action)}
+  .ph-actions{display:flex;gap:9px;align-items:center;padding-bottom:6px;flex-wrap:wrap}
+
+  /* level progress strip in hero */
+  .lvstrip{display:flex;align-items:center;gap:16px;margin-top:18px;padding:16px 18px;border:1px solid var(--border-subtle);border-radius:var(--r-16);background:var(--surface-subtle);flex-wrap:wrap}
+  .lvstrip .lvtxt{flex:1;min-width:200px}
+  .lvstrip .lvtxt b{color:var(--text-strong)}
+  .lvstrip .nextpts{font-family:var(--mono);font-weight:700;color:var(--berry)}
+
+  /* stat tiles */
+  .statgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  @media(max-width:900px){.statgrid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:560px){.statgrid{grid-template-columns:repeat(2,1fr)}}
+  .stat{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);padding:15px;box-shadow:var(--shadow-md)}
+  .stat .n{font-size:25px;font-family:var(--mono);font-weight:700;color:var(--text-strong);line-height:1}
+  .stat .l{font-size:12px;color:var(--text-muted);margin-top:6px;font-weight:600}
+  .stat.cherry .n{color:var(--cherry-text)} .stat.leaf .n{color:var(--leaf-text)} .stat.berry .n{color:var(--berry)} .stat.amber .n{color:var(--amber-deep)}
+
+  .twocol{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;margin-top:22px}
+  @media(max-width:980px){.twocol{grid-template-columns:1fr}}
+  .side-card{padding:20px;margin-bottom:18px}
+  .side-card h3{font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .side-card h3 svg{width:16px;height:16px;flex:none}
+
+  .skillgrp{margin-bottom:13px}
+  .skillgrp p{margin:0 0 6px;font-size:12px;font-weight:700;color:var(--text-muted)}
+  .skills{display:flex;flex-wrap:wrap;gap:6px}
+  .skill{padding:4px 11px;border-radius:var(--r-8);font-size:12.5px;font-weight:600;background:rgba(54,120,149,.1);color:var(--berry)}
+  .linkrow{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13.5px}
+  .linkrow svg{width:16px;height:16px;flex:none;color:var(--text-muted)}
+  .strength{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;color:var(--leaf-text);margin-bottom:7px}
+  .strength svg{width:16px;height:16px;flex:none;color:var(--leaf-action);margin-top:1px}
+
+  /* activity feed */
+  .actrow{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-subtle)}
+  .actrow:last-child{border-bottom:none}
+  .actic{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff}
+  .actic svg{width:18px;height:18px}
+  .actbody{flex:1;min-width:0}
+  .actbody .at{font-size:14.5px;color:var(--text-body)} .actbody .at b{color:var(--text-strong)}
+  .actbody .aw{font-size:12px;color:var(--text-muted);margin-top:2px;font-family:var(--mono)}
+  .actpts{font-family:var(--mono);font-weight:700;color:var(--leaf-text);font-size:13px;flex:none;align-self:center}
+
+  /* recent artifacts */
+  .artrow{display:flex;align-items:center;gap:13px;padding:12px 0;border-bottom:1px solid var(--border-subtle);cursor:pointer}
+  .artrow:last-child{border-bottom:none}
+  .artrow:hover .an{color:var(--cherry-text)}
+  .artthumb{width:46px;height:46px;border-radius:var(--r-12);flex:none;display:flex;align-items:center;justify-content:center;color:#fff}
+  .artthumb svg{width:22px;height:22px}
+  .an{font-size:14.5px;font-weight:700;color:var(--text-strong)}
+  .artrow .am{font-size:12.5px;color:var(--text-muted);margin-top:2px}
+  .grade{font-size:11px;font-weight:700;border-radius:var(--r-pill);padding:3px 11px;background:rgba(91,166,60,.16);color:var(--leaf-text);margin-left:auto;flex:none}
+  .grade.review{background:rgba(232,146,12,.16);color:var(--amber-deep)} .grade.planned{background:var(--surface-sunken);color:var(--text-muted)}
+
+  /* ===== leaderboard ===== */
+  .toggle{display:inline-flex;background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:4px}
+  .toggle button{border:none;background:none;padding:8px 18px;border-radius:var(--r-pill);font-size:13.5px;cursor:pointer;color:var(--text-muted);font-weight:700;font-family:inherit}
+  .toggle button.active{background:var(--surface-page);color:var(--text-strong);box-shadow:var(--shadow-md)}
+  .lbtoolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .podium{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+  @media(max-width:680px){.podium{grid-template-columns:1fr}}
+  .pod{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-20);box-shadow:var(--shadow-md);padding:20px 16px;text-align:center;position:relative;cursor:pointer;transition:.16s var(--ease)}
+  .pod:hover{border-color:var(--berry);transform:translateY(-2px)}
+  .pod.first{border-top:4px solid var(--amber)} .pod.second{border-top:4px solid var(--n400)} .pod.third{border-top:4px solid #C08552}
+  .pod .rk{position:absolute;top:12px;left:14px;font-family:var(--mono);font-weight:700;font-size:13px;color:var(--text-muted)}
+  .pod .crown{position:absolute;top:10px;right:14px;color:var(--amber)}
+  .pod .av{margin:4px auto 11px}
+  .pod .pn{font-size:15.5px;font-weight:700;color:var(--text-strong)}
+  .pod .pp{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--text-strong);margin-top:8px}
+  .pod .pd{font-size:12px;color:var(--leaf-text);font-weight:700;margin-top:2px}
+  .lblist{overflow:hidden}
+  .lbrow{display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:.14s var(--ease)}
+  .lbrow:last-child{border-bottom:none}
+  .lbrow:hover{background:var(--surface-subtle)}
+  .lbrow.me{background:rgba(251,40,50,.06)}
+  [data-theme="dark"] .lbrow.me{background:rgba(251,40,50,.12)}
+  .lbrk{width:30px;text-align:center;font-family:var(--mono);font-weight:700;color:var(--text-muted)}
+  .lbinfo{flex:1;min-width:0}
+  .lbinfo .ln{font-size:14.5px;font-weight:700;color:var(--text-strong);display:flex;align-items:center;gap:8px}
+  .lbinfo .ll{font-size:12.5px;color:var(--text-muted);margin-top:1px}
+  .lbpts{font-family:var(--mono);font-weight:700;color:var(--text-strong);text-align:right}
+  .lbpts .delta{display:block;font-size:11.5px;color:var(--leaf-text);font-weight:700}
+  .move{display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:700;font-family:var(--mono);width:38px;justify-content:flex-end}
+  .move.up{color:var(--leaf-text)} .move.dn{color:var(--cherry-text)} .move.fl{color:var(--text-muted)}
+  .move svg{width:12px;height:12px}
+
+  /* ===== directory ===== */
+  .dirtools{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .search{flex:1;min-width:220px;display:flex;align-items:center;gap:10px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:10px 16px;color:var(--text-muted)}
+  .search input{border:none;background:none;outline:none;font-size:14.5px;color:var(--text-body);width:100%;font-family:inherit}
+  .search svg{width:16px;height:16px;flex:none}
+  .dirgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:14px}
+  .memcard{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-20);box-shadow:var(--shadow-md);padding:18px;cursor:pointer;transition:.16s var(--ease)}
+  .memcard:hover{border-color:var(--berry);box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+  .memcard .mc-top{display:flex;align-items:center;gap:13px}
+  .memcard .mc-nm{font-size:15.5px;font-weight:700;color:var(--text-strong)}
+  .memcard .mc-hl{font-size:12.5px;color:var(--text-muted);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .memcard .mc-stats{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .memstat{flex:1;min-width:70px;background:var(--surface-sunken);border:1px solid var(--border-subtle);border-radius:var(--r-12);padding:9px 6px;text-align:center}
+  .memstat .n{font-size:16px;font-family:var(--mono);font-weight:700;color:var(--text-strong)} .memstat .l{font-size:10.5px;color:var(--text-muted);margin-top:2px}
+  .memcard .mc-foot{display:flex;gap:8px;margin-top:14px}
+  .memcard .mc-foot .btn{flex:1;justify-content:center}
+
+  /* ===== generic info table (spec + rules) ===== */
+  .tbl{width:100%;border-collapse:collapse;font-size:14px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);overflow:hidden}
+  .tbl th,.tbl td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--border-subtle);vertical-align:top}
+  .tbl th{background:var(--surface-sunken);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);font-weight:700}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl td code,.tbl th code,code.k{font-family:var(--mono);font-size:12.5px;background:var(--surface-sunken);padding:1px 6px;border-radius:var(--r-4);color:var(--cherry-text)}
+  .tbl td .mono{font-weight:700;color:var(--text-strong)}
+
+  .callout{display:flex;gap:11px;border-left:4px solid var(--berry);background:rgba(54,120,149,.07);padding:14px 16px;border-radius:0 var(--r-12) var(--r-12) 0;margin:14px 0;font-size:14px;color:var(--text-body)}
+  .callout svg{width:18px;height:18px;flex:none;color:var(--berry);margin-top:1px}
+  .callout.leaf{border-color:var(--leaf-action);background:rgba(91,166,60,.08)} .callout.leaf svg{color:var(--leaf-action)}
+  .callout.amber{border-color:var(--amber);background:rgba(232,146,12,.08)} .callout.amber svg{color:var(--amber-deep)}
+  .callout b{color:var(--text-strong)}
+
+  .codeblk{background:#161616;color:#f1f1f0;border-radius:var(--r-12);padding:18px;font-family:var(--mono);font-size:12.5px;line-height:1.65;white-space:pre;overflow:auto}
+  .codeblk .ky{color:#9BD173} .codeblk .ty{color:#6FB2CC} .codeblk .cm{color:#8C8C8C}
+
+  /* overview system map */
+  .sysgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .syscard{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);box-shadow:var(--shadow-md);padding:18px;cursor:pointer;transition:.16s var(--ease);border-top:3px solid var(--border-default)}
+  .syscard:hover{border-color:var(--berry);box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+  .syscard.b{border-top-color:var(--berry)} .syscard.l{border-top-color:var(--leaf)} .syscard.a{border-top-color:var(--amber)} .syscard.c{border-top-color:var(--cherry)}
+  .syscard h4{font-size:16px;margin-bottom:5px;display:flex;align-items:center;gap:9px}
+  .syscard h4 svg{width:18px;height:18px;color:var(--berry)}
+  .syscard p{font-size:13px;color:var(--text-muted);margin:0}
+  .syscard .go{margin-top:11px;font-size:12.5px;font-weight:700;color:var(--berry);display:flex;align-items:center;gap:5px}
+  .syscard .go svg{width:14px;height:14px}
+
+  .specgroup{margin-bottom:30px}
+  .matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
+  .mtile{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);box-shadow:var(--shadow-md);padding:18px;text-align:center}
+  .mtile .ml{font-size:12px;font-weight:700;color:var(--text-muted);margin-top:12px;text-transform:uppercase;letter-spacing:.04em}
+  .mtile .md{font-size:12px;color:var(--text-muted);margin-top:4px}
+
+  .crumbback{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-default);background:var(--surface-page);border-radius:var(--r-pill);padding:7px 14px;font-size:13.5px;font-weight:700;color:var(--text-body);cursor:pointer;margin-bottom:16px;font-family:inherit}
+  .crumbback:hover{border-color:var(--berry);color:var(--berry)} .crumbback svg{width:15px;height:15px}
+  footer{margin-top:42px;padding-top:20px;border-top:1px solid var(--border-default);font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .pill{background:var(--surface-sunken);border:1px solid var(--border-default);padding:5px 13px;border-radius:var(--r-pill);font-weight:700;color:var(--cherry-text)}
+
+  @media(max-width:860px){
+    .app{grid-template-columns:1fr;grid-template-areas:"top" "main"}
+    .nav{position:fixed;left:0;top:65px;bottom:0;width:248px;z-index:50;transform:translateX(-100%);transition:transform .22s var(--ease)}
+    .app.nav-open .nav{transform:none}
+    .main{padding:22px 16px 70px}
+    .navtoggle{display:flex!important}
+  }
+  .navtoggle{display:none}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <button class="iconbtn navtoggle" onclick="document.getElementById('app').classList.toggle('nav-open')" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 40 40" aria-label="Colaberry"><path d="M20 33c-7 0-13-5-13-12 0-2 .6-3.8 1.6-5.2" fill="none" stroke="#77BB4A" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="10" r="6.2" fill="#FB2832"/><circle cx="31" cy="16" r="5" fill="#FB2832"/><path d="M24 16.2c1.4-1.6 3.6-3 6.2-3.6" fill="none" stroke="#77BB4A" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <div class="txt"><b><span class="cc">C</span>olaberry</b><span>Member Profile System · build kit</span></div>
+    </div>
+    <div class="top-right">
+      <button class="hud" onclick="go('points')" title="Your points & level" id="hudBtn"></button>
+      <button class="iconbtn" id="themeBtn" onclick="toggleTheme()" aria-label="Theme"><svg id="themeIcon" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+    </div>
+  </header>
+
+  <nav class="nav" id="nav">
+    <div class="grp">Orient</div>
+    <button class="navbtn active" data-v="overview" onclick="go('overview',this)"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg> System overview</button>
+    <div class="grp">The screens</div>
+    <button class="navbtn" data-v="me" onclick="go('me',this)"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> My profile</button>
+    <button class="navbtn" data-v="member" onclick="go('member',this)"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="2"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 7a3 3 0 0 1 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> A teammate's profile</button>
+    <button class="navbtn" data-v="levels" onclick="go('levels',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 11l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Level system</button>
+    <button class="navbtn" data-v="points" onclick="go('points',this)"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v10M9.5 9.2c0-1 1.1-1.7 2.5-1.7s2.5.8 2.5 2-1 1.7-2.5 1.7-2.5.6-2.5 1.8 1.1 1.8 2.5 1.8 2.5-.7 2.5-1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Points & XP</button>
+    <button class="navbtn" data-v="leaderboard" onclick="go('leaderboard',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M5 21V10M12 21V4M19 21v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Leaderboard</button>
+    <button class="navbtn" data-v="directory" onclick="go('directory',this)"><svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="9" r="2.5" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="9" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M3 18c0-2.5 2.2-4 5-4M21 18c0-2.5-2.2-4-5-4M9.5 18c0-2 1.3-3.2 2.5-3.2S14.5 16 14.5 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Member directory</button>
+    <div class="grp">Handoff</div>
+    <button class="navbtn" data-v="states" onclick="go('states',this)"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/></svg> States & variants</button>
+    <button class="navbtn" data-v="spec" onclick="go('spec',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6l1 3h3v15H5V6h3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> For Kes · build spec</button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ OVERVIEW ============ -->
+    <section class="view active" id="view-overview">
+      <div class="page-h">
+        <div class="crumbs0">Gamification · visual language</div>
+        <h1>Member Profile System</h1>
+        <div class="sub">The profile, level badge, points, and leaderboard surface for the AI Systems Architect Accelerator — built in Aleem's Colaberry design system, ready for Kes to wire to live data. Click any tile to open that screen.</div>
+      </div>
+
+      <div class="callout leaf">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        <div><b>What's in scope:</b> BUILD_SPEC §6.A + §9 #4 — member profile, points, themed "Architect" levels, 7/30/all-time leaderboard, level badge. Everything here is a presentation mockup with seeded data; <b>live wiring, level-gated unlocks, and full realtime presence are Kes's build (P0/P1).</b></div>
+      </div>
+
+      <div class="section-title">The screens</div>
+      <div class="sysgrid">
+        <div class="syscard b" onclick="go('me')"><h4><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="currentColor" stroke-width="2"/></svg> My profile</h4><p>The student's own profile — editable. Hero, level badge, six key stats, progress to next tier, skills, links, recent activity.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+        <div class="syscard l" onclick="go('member')"><h4><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="2"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="2"/></svg> A teammate's profile</h4><p>The same layout viewed as someone else — Message / Add friend instead of Edit, mutual-cohort context, no private stats.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+        <div class="syscard a" onclick="go('levels')"><h4><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="2"/></svg> Level system</h4><p>The four Architect tiers, the reusable badge component in every tier and size, and how leveling works.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+        <div class="syscard c" onclick="go('points')"><h4><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg> Points & XP</h4><p>How every point is earned, the running tally, the level track, and a recent-events log.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+        <div class="syscard b" onclick="go('leaderboard')"><h4><svg viewBox="0 0 24 24" fill="none"><path d="M5 21V10M12 21V4M19 21v-7" stroke="currentColor" stroke-width="2"/></svg> Leaderboard</h4><p>7-day / 30-day / all-time, cohort-scoped with a community toggle. Podium, you-highlighted, rank movement.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+        <div class="syscard l" onclick="go('directory')"><h4><svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="9" r="2.5" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="9" r="2.5" stroke="currentColor" stroke-width="2"/></svg> Member directory</h4><p>The cohort at a glance — presence, level badge, points, search, and quick actions into any profile.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+        <div class="syscard a" onclick="go('states')"><h4><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="18" height="6" rx="2" stroke="currentColor" stroke-width="2"/></svg> States & variants</h4><p>Every variant in one place: presence, all tiers, own-vs-other, new member, empty states.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+        <div class="syscard c" onclick="go('spec')"><h4><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6l1 3h3v15H5V6h3z" stroke="currentColor" stroke-width="2"/></svg> For Kes · build spec</h4><p>Data model, point/level rules, component inventory, endpoints, and isolation notes — the plug-in layer.</p><div class="go">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"/></svg></div></div>
+      </div>
+
+      <div class="section-title">Design language <span class="hint">straight from Aleem's Colaberry design system (Design E)</span></div>
+      <div class="card" style="padding:22px">
+        <div class="badge-row" style="flex-wrap:wrap;gap:22px;align-items:center">
+          <div id="ovBadges" class="badge-row"></div>
+          <div style="height:34px;width:1px;background:var(--border-default)"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <span class="chip berry"><span class="sw"></span>Berry</span>
+            <span class="chip leaf"><span class="sw"></span>Leaf</span>
+            <span class="chip amber"><span class="sw"></span>Amber</span>
+            <span class="chip cherry"><span class="sw"></span>Cherry</span>
+          </div>
+          <div class="small">Roboto · Roboto Mono · Quicksand · light + dark · tokens identical to the live platform.</div>
+        </div>
+      </div>
+      <footer><span class="pill">Member Profile System</span><span>Colaberry design system · loop-built & self-verified · seeded data, no live wiring yet.</span></footer>
+    </section>
+
+    <!-- ============ MY PROFILE ============ -->
+    <section class="view" id="view-me"></section>
+
+    <!-- ============ A MEMBER ============ -->
+    <section class="view" id="view-member"></section>
+
+    <!-- ============ LEVELS ============ -->
+    <section class="view" id="view-levels">
+      <div class="page-h">
+        <div class="crumbs0">Architect tiers</div>
+        <h1>Level system</h1>
+        <div class="sub">Custom level names themed to "Architect," exactly as the spec calls for. Points roll up into four tiers; the badge is one reusable component that renders at any tier, size, and progress.</div>
+      </div>
+
+      <div class="section-title">The four Architect tiers</div>
+      <div id="tierLadder"></div>
+
+      <div class="section-title">The badge component · every tier</div>
+      <div class="card" style="padding:26px"><div id="tierShowcase" class="badge-row" style="gap:30px;flex-wrap:wrap;justify-content:space-around"></div></div>
+
+      <div class="section-title">One component · every size</div>
+      <div class="card" style="padding:26px">
+        <div id="sizeShowcase" style="display:flex;gap:34px;align-items:flex-end;flex-wrap:wrap"></div>
+        <div class="callout" style="margin-top:22px"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16v-5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg><div>The ring fills with <b>progress toward the next tier</b>. The tile colour is the tier colour; the Roman numeral is the tier rank. <code class="k">sm</code> rides in the nav + leaderboard rows, <code class="k">md</code> on cards, <code class="k">lg</code> on the profile hero, <code class="k">xl</code> on the level screen.</div></div>
+      </div>
+
+      <div class="section-title">How leveling works</div>
+      <table class="tbl">
+        <thead><tr><th style="width:60px">Tier</th><th>Name</th><th>Reach at</th><th>What it signals</th></tr></thead>
+        <tbody id="tierTable"></tbody>
+      </table>
+      <div class="callout leaf"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><div><b>Deterministic & idempotent:</b> a member's level is a pure function of their cumulative points — <code class="k">level = max(tier where points ≥ tier.min)</code>. Recompute any time from the points ledger; it never drifts. Thresholds live in config, not code, so Aleem/Ali can retune without a deploy.</div></div>
+    </section>
+
+    <!-- ============ POINTS ============ -->
+    <section class="view" id="view-points">
+      <div class="page-h">
+        <div class="crumbs0">Gamification currency</div>
+        <h1>Points & XP</h1>
+        <div class="sub">Points come only from real completions and contributions — never participation for its own sake. Here's the running tally, the level track, how each point is earned, and the recent-events ledger.</div>
+      </div>
+      <div class="twocol">
+        <div>
+          <div class="section-title">How points are earned</div>
+          <table class="tbl">
+            <thead><tr><th>Action</th><th style="width:90px;text-align:right">Points</th><th style="width:140px">Source</th></tr></thead>
+            <tbody id="earnTable"></tbody>
+          </table>
+          <div class="section-title">Recent point events · your ledger</div>
+          <div class="card" style="padding:8px 18px" id="ledger"></div>
+        </div>
+        <aside>
+          <div class="card side-card accent-leaf">
+            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Your standing</h3>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+              <div id="ptsBadge"></div>
+              <div><div style="font-size:26px;font-family:var(--mono);font-weight:700;color:var(--text-strong);line-height:1" id="ptsTotal">2,140</div><div class="small" id="ptsLevel">Builder · tier II</div></div>
+            </div>
+            <div class="meter" style="margin-bottom:7px"><i id="ptsBar" style="width:42%;background:var(--leaf-action)"></i></div>
+            <div class="small" id="ptsNext">560 pts to Architect</div>
+          </div>
+          <div class="card side-card">
+            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Level track</h3>
+            <div id="lvtrack"></div>
+            <div class="callout leaf" style="margin:14px 0 0"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16v-5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg><div style="font-size:13px">Likes drive points (1 like = 2 pts), so points double as a community-contribution signal, not just coursework.</div></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ LEADERBOARD ============ -->
+    <section class="view" id="view-leaderboard">
+      <div class="page-h">
+        <div class="crumbs0">Where you stand</div>
+        <h1>Leaderboard</h1>
+        <div class="sub">7-day, 30-day, and all-time — cohort-scoped by default with a community toggle. Your row is always highlighted, and rank movement shows momentum, not just position.</div>
+      </div>
+      <div class="lbtoolbar">
+        <div class="toggle" id="lbPeriod"><button class="active" data-p="d7" onclick="lbSet('d7',this)">7 days</button><button data-p="d30" onclick="lbSet('d30',this)">30 days</button><button data-p="all" onclick="lbSet('all',this)">All time</button></div>
+        <div class="toggle" id="lbScope"><button class="active" data-s="cohort" onclick="lbScopeSet('cohort',this)">My cohort</button><button data-s="community" onclick="lbScopeSet('community',this)">Whole community</button></div>
+        <div class="small" style="margin-left:auto" id="lbScopeNote">Cohort 1 · 15 members</div>
+      </div>
+      <div class="podium" id="podium"></div>
+      <div class="card lblist" id="lblist"></div>
+      <div class="callout amber" style="margin-top:18px"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16v-5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg><div><b>Why cohort-default:</b> ranking inside your own 12-week cohort keeps the comparison relevant and the newcomer pressure low. The community toggle is there for the competitive few. Per-student data isolation still applies — a member only ever appears on a board they belong to.</div></div>
+    </section>
+
+    <!-- ============ DIRECTORY ============ -->
+    <section class="view" id="view-directory">
+      <div class="page-h">
+        <div class="crumbs0">Member directory</div>
+        <h1>Your cohort</h1>
+        <div class="sub">Everyone in Cohort 1, with presence, level, and points at a glance. Search by name or focus area; click anyone to open their profile.</div>
+      </div>
+      <div class="dirtools">
+        <div class="search"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input id="dirSearch" placeholder="Search members, focus areas…" oninput="renderDirectory()"></div>
+        <div class="toggle" id="dirFilter"><button class="active" data-f="all" onclick="dirFilterSet('all',this)">All</button><button data-f="on" onclick="dirFilterSet('on',this)">Online</button><button data-f="mentor" onclick="dirFilterSet('mentor',this)">Mentors</button></div>
+      </div>
+      <div class="dirgrid" id="dirgrid"></div>
+    </section>
+
+    <!-- ============ STATES ============ -->
+    <section class="view" id="view-states">
+      <div class="page-h">
+        <div class="crumbs0">QA reference</div>
+        <h1>States & variants</h1>
+        <div class="sub">Every state Kes needs to build, in one place. If it's not on this page, it's not in scope for v1.</div>
+      </div>
+
+      <div class="specgroup">
+        <div class="section-title">Presence</div>
+        <div class="matrix" id="presMatrix"></div>
+      </div>
+      <div class="specgroup">
+        <div class="section-title">Level badge · all tiers</div>
+        <div class="matrix" id="tierMatrix"></div>
+      </div>
+      <div class="specgroup">
+        <div class="section-title">Profile viewer context</div>
+        <div class="matrix">
+          <div class="mtile"><div style="display:flex;justify-content:center"><span class="chip cherry"><span class="sw"></span>Own profile</span></div><div class="ml">Edit mode</div><div class="md">Edit avatar/headline/bio/skills/links · sees private stats (rank, streak)</div></div>
+          <div class="mtile"><div style="display:flex;justify-content:center"><span class="chip berry"><span class="sw"></span>Teammate</span></div><div class="ml">View mode</div><div class="md">Message + Add friend · public stats only · mutual-cohort line</div></div>
+          <div class="mtile"><div style="display:flex;justify-content:center"><span class="chip leaf"><span class="sw"></span>Mentor</span></div><div class="ml">View + badge</div><div class="md">Mentor tag on the hero · same public surface</div></div>
+        </div>
+      </div>
+      <div class="specgroup">
+        <div class="section-title">Edge & empty states</div>
+        <div class="matrix">
+          <div class="mtile"><div id="es-new"></div><div class="ml">New member · day 1</div><div class="md">Apprentice · 0 pts · empty ring · "No artifacts yet" · streak 0</div></div>
+          <div class="mtile"><div style="display:flex;justify-content:center;height:60px;align-items:center"><div class="small" style="text-align:center;border:1px dashed var(--border-default);border-radius:var(--r-12);padding:14px">No artifacts<br>shared yet</div></div><div class="ml">Empty portfolio</div><div class="md">Showcase rail collapses to a single prompt-to-act card</div></div>
+          <div class="mtile"><div style="display:flex;justify-content:center;height:60px;align-items:center"><div class="small" style="text-align:center;border:1px dashed var(--border-default);border-radius:var(--r-12);padding:14px">No photo →<br>initials avatar</div></div><div class="ml">No avatar uploaded</div><div class="md">Falls back to coloured initials (deterministic colour by name)</div></div>
+          <div class="mtile"><div style="display:flex;justify-content:center;height:60px;align-items:center"><div class="small mono" style="text-align:center">— · —</div></div><div class="ml">Private / hidden</div><div class="md">Member opted out of leaderboard → shown as "—", never errors</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SPEC FOR KES ============ -->
+    <section class="view" id="view-spec">
+      <div class="page-h">
+        <div class="crumbs0">Handoff</div>
+        <h1>For Kes · build spec</h1>
+        <div class="sub">The plug-in layer: the data model, the deterministic point/level rules, every reusable component, the endpoints, and the isolation guarantees. Built to CLAUDE.md — typed contracts, idempotency, per-student isolation.</div>
+      </div>
+
+      <div class="section-title">1 · The <code class="k">Member</code> entity (extends §7 data model)</div>
+      <div class="codeblk"><span class="cm">// backend/src/models/Member.ts — the gamification + profile contract</span>
+<span class="ky">interface</span> <span class="ty">Member</span> {
+  id:            <span class="ty">string</span>;          <span class="cm">// uuid</span>
+  enrollmentId:  <span class="ty">string</span>;          <span class="cm">// FK → Enrollment (cohort + tenant boundary)</span>
+  cohortId:      <span class="ty">string</span>;          <span class="cm">// scopes the directory + leaderboard</span>
+  displayName:   <span class="ty">string</span>;
+  headline:      <span class="ty">string</span>;          <span class="cm">// "AI Systems Architect in training"</span>
+  bio:           <span class="ty">string</span>;
+  avatarUrl:     <span class="ty">string</span> | <span class="ty">null</span>;   <span class="cm">// null → initials fallback</span>
+  role:          <span class="ty">'student'</span> | <span class="ty">'mentor'</span> | <span class="ty">'admin'</span>;
+  skills:        <span class="ty">string</span>[];
+  links:         { kind: <span class="ty">'github'</span>|<span class="ty">'linkedin'</span>|<span class="ty">'portfolio'</span>|<span class="ty">'x'</span>; url: <span class="ty">string</span> }[];
+  <span class="cm">// --- gamification (deterministic, derived from the points ledger) ---</span>
+  points:        <span class="ty">number</span>;          <span class="cm">// cumulative; sum(PointEvent.delta)</span>
+  level:         <span class="ty">1</span>|<span class="ty">2</span>|<span class="ty">3</span>|<span class="ty">4</span>;        <span class="cm">// derived: levelFor(points)</span>
+  streakDays:    <span class="ty">number</span>;
+  contributions: { posts: <span class="ty">number</span>; comments: <span class="ty">number</span>; likesGiven: <span class="ty">number</span>; labsShipped: <span class="ty">number</span>; artifacts: <span class="ty">number</span> };
+  presence:      <span class="ty">'online'</span> | <span class="ty">'idle'</span> | <span class="ty">'offline'</span>;  <span class="cm">// P0: poll/heartbeat</span>
+  optOutLeaderboard: <span class="ty">boolean</span>;     <span class="cm">// privacy → renders as "—"</span>
+  joinedAt:      <span class="ty">string</span>;          <span class="cm">// ISO-8601</span>
+}
+
+<span class="cm">// PointEvent is the source of truth; points/level/contributions are projections.</span>
+<span class="ky">interface</span> <span class="ty">PointEvent</span> {
+  id: <span class="ty">string</span>; memberId: <span class="ty">string</span>; cohortId: <span class="ty">string</span>;
+  kind: <span class="ty">PointKind</span>; delta: <span class="ty">number</span>; refId: <span class="ty">string</span>;  <span class="cm">// refId = idempotency key</span>
+  createdAt: <span class="ty">string</span>;
+} <span class="cm">// UNIQUE(memberId, kind, refId) → INSERT ... ON CONFLICT DO NOTHING (no double-award)</span></div>
+
+      <div class="section-title">2 · Point rules <span class="hint">config, not code — retune without a deploy</span></div>
+      <table class="tbl">
+        <thead><tr><th>PointKind</th><th style="text-align:right;width:80px">delta</th><th>refId (idempotency key)</th></tr></thead>
+        <tbody id="specPoints"></tbody>
+      </table>
+
+      <div class="section-title">3 · Level rule</div>
+      <div class="codeblk"><span class="cm">// pure, idempotent, recomputable from points alone</span>
+<span class="ky">const</span> TIERS = [
+  { level: <span class="ty">1</span>, name: <span class="ty">'Apprentice'</span>,           min: <span class="ty">0</span>    },
+  { level: <span class="ty">2</span>, name: <span class="ty">'Builder'</span>,              min: <span class="ty">1500</span> },
+  { level: <span class="ty">3</span>, name: <span class="ty">'Architect'</span>,            min: <span class="ty">2700</span> },
+  { level: <span class="ty">4</span>, name: <span class="ty">'Principal Architect'</span>,  min: <span class="ty">4200</span> },
+];
+<span class="ky">const</span> <span class="ty">levelFor</span> = (pts: <span class="ty">number</span>) => TIERS.reduce((a,t) => pts >= t.min ? t : a, TIERS[0]);
+<span class="ky">const</span> <span class="ty">progressToNext</span> = (pts: <span class="ty">number</span>) => { <span class="cm">/* (pts - cur.min) / (next.min - cur.min); 100% at max tier */</span> };</div>
+
+      <div class="section-title">4 · Component inventory <span class="hint">what to build once and reuse</span></div>
+      <table class="tbl">
+        <thead><tr><th style="width:200px">Component</th><th>Props</th><th>Used on</th></tr></thead>
+        <tbody>
+          <tr><td><code class="k">&lt;LevelBadge&gt;</code></td><td><code class="k">level</code>, <code class="k">progress</code>, <code class="k">size</code> (sm/md/lg/xl)</td><td>nav HUD · profile hero · leaderboard rows · directory · level screen</td></tr>
+          <tr><td><code class="k">&lt;Avatar&gt;</code></td><td><code class="k">src</code>, <code class="k">name</code>, <code class="k">size</code>, <code class="k">presence</code></td><td>everywhere a member appears</td></tr>
+          <tr><td><code class="k">&lt;ProfileHero&gt;</code></td><td><code class="k">member</code>, <code class="k">viewerIsSelf</code></td><td>my profile · teammate profile</td></tr>
+          <tr><td><code class="k">&lt;StatTiles&gt;</code></td><td><code class="k">member</code></td><td>profile</td></tr>
+          <tr><td><code class="k">&lt;LevelProgress&gt;</code></td><td><code class="k">points</code></td><td>profile hero · points screen · nav HUD</td></tr>
+          <tr><td><code class="k">&lt;Leaderboard&gt;</code></td><td><code class="k">period</code> (7/30/all), <code class="k">scope</code></td><td>leaderboard screen · profile sidebar</td></tr>
+          <tr><td><code class="k">&lt;MemberCard&gt;</code></td><td><code class="k">member</code></td><td>directory</td></tr>
+          <tr><td><code class="k">&lt;PointsLedger&gt;</code></td><td><code class="k">events[]</code></td><td>points screen</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">5 · Endpoints</div>
+      <table class="tbl">
+        <thead><tr><th style="width:340px">Route</th><th>Returns</th><th>Isolation</th></tr></thead>
+        <tbody>
+          <tr><td><code class="k">GET /api/portal/members/me</code></td><td><code class="k">Member</code> + private stats (rank, streak)</td><td>session memberId</td></tr>
+          <tr><td><code class="k">GET /api/portal/members/:id</code></td><td><code class="k">Member</code> public projection</td><td>must share a cohort</td></tr>
+          <tr><td><code class="k">GET /api/portal/members/:id/points</code></td><td><code class="k">PointEvent[]</code> (ledger)</td><td>self only</td></tr>
+          <tr><td><code class="k">GET /api/portal/cohorts/:id/directory</code></td><td><code class="k">Member[]</code> public projection</td><td>caller ∈ cohort</td></tr>
+          <tr><td><code class="k">GET /api/portal/leaderboard?period=&amp;scope=</code></td><td>ranked rows + viewer's rank</td><td>cohort scope enforced server-side</td></tr>
+          <tr><td><code class="k">PATCH /api/portal/members/me</code></td><td>updated <code class="k">Member</code></td><td>self only · Zod-validated body</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout"><svg viewBox="0 0 24 24" fill="none"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><div><b>Per-student isolation (non-negotiable):</b> every read is cohort-scoped server-side. A member only resolves another member if they share a cohort; the leaderboard never leaks a member onto a board they don't belong to; <code class="k">/points</code> is self-only. Validate <code class="k">period</code> and <code class="k">scope</code> with Zod — reject anything else with 400.</div></div>
+
+      <div class="section-title">6 · Phasing</div>
+      <table class="tbl">
+        <thead><tr><th style="width:90px">Phase</th><th>In this surface</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip leaf" style="text-transform:none"><span class="sw"></span>P0</span></td><td>Profile (self + others), level badge, points + personal level progression, directory, lite presence (poll/heartbeat).</td></tr>
+          <tr><td><span class="chip amber" style="text-transform:none"><span class="sw"></span>P1</span></td><td>Leaderboards (7/30/all-time) + level-gated unlocks. <span class="small">(This mockup shows the leaderboard so the visual language is locked now.)</span></td></tr>
+          <tr><td><span class="chip ghost" style="text-transform:none"><span class="sw"></span>P2</span></td><td>Full realtime presence over websockets.</td></tr>
+        </tbody>
+      </table>
+      <footer><span class="pill">Build spec</span><span>Adheres to CLAUDE.md · typed contracts (tsc green) · idempotent point awards · per-student isolation · config-driven thresholds.</span></footer>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* =================== DATA =================== */
+const TIERS=[
+  {level:1,name:'Apprentice',roman:'I',min:0,color:'#367895',blurb:'Onboarded and building. The first weeks — Claude Code, first commits, first skill.'},
+  {level:2,name:'Builder',roman:'II',min:1500,color:'#5BA63C',blurb:'Shipping consistently. Labs passing, artifacts landing, contributing in the community.'},
+  {level:3,name:'Architect',roman:'III',min:2700,color:'#E8920C',blurb:'Designing systems, not just features. Graded build artifacts, reliability, mentoring peers.'},
+  {level:4,name:'Principal Architect',roman:'IV',min:4200,color:'#C20E1E',blurb:'Top of the ladder. Capstone-grade work, sets the bar for the cohort.'}
+];
+function levelFor(p){ return TIERS.reduce((a,t)=>p>=t.min?t:a,TIERS[0]); }
+function nextTier(p){ return TIERS.find(t=>p<t.min)||null; }
+function progressPct(p){ const c=levelFor(p),n=nextTier(p); if(!n) return 100; return Math.max(4,Math.min(100,Math.round((p-c.min)/(n.min-c.min)*100))); }
+
+const ME={id:'m-maya',nm:'Maya Chen',in:'MC',bg:'#367895',photo:'https://randomuser.me/api/portraits/women/65.jpg',
+  headline:'AI Systems Architect in training',cohort:'Cohort 1',role:'student',pres:'on',pts:2140,streak:6,rank:6,joined:'Jul 6, 2026',
+  bio:'Coming from product analytics. Building agentic systems with Claude Code + MCP — shipping a graded artifact most weeks. On track for the Week 12 Architect Expo.',
+  skills:[['AI & Agents',['Claude Code','MCP','Agent Skills','Prompt Engineering']],['Engineering',['TypeScript','Python','React','SQL']]],
+  links:[['github','github.com/maya-chen'],['linkedin','in/maya-chen'],['portfolio','portfolio.colaberry.ai/maya-chen']],
+  contrib:{posts:14,comments:38,likes:52,labs:9,artifacts:7},
+  strengths:['Claude Code — 72/100 readiness','MCP integration — 58/100','Reliability — building'],
+  activity:[
+    {k:'lab',t:'Shipped <b>MCP Notes Server</b> — all 4 acceptance checks',w:'2h ago',p:90,c:'#FB2832'},
+    {k:'like',t:'Liked <b>Aanya R.</b>\'s pantry MCP walkthrough',w:'3h ago',p:2,c:'#FB2832'},
+    {k:'post',t:'Posted in <b>Wins</b> — "Passed the MCP concepts check 7/7"',w:'5h ago',p:10,c:'#5BA63C'},
+    {k:'cert',t:'Uploaded <b>Introduction to MCP</b> SkillsJar certificate',w:'yesterday',p:60,c:'#E8920C'},
+    {k:'streak',t:'Claimed daily streak — <b>6-day streak</b>',w:'yesterday',p:16,c:'#E8920C'},
+    {k:'comment',t:'Commented on <b>Dev Kumar</b>\'s build log',w:'2 days ago',p:3,c:'#367895'}
+  ],
+  artifacts:[
+    {nm:'Workflow Assistant',meta:'Tier A · Week 3',grade:'92 / 100',gc:'',c:'#367895',ic:'<path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>'},
+    {nm:'Agent Skill · Doc Summarizer',meta:'Tier A · Week 2',grade:'88 / 100',gc:'',c:'#5BA63C',ic:'<path d="M6 4h9l3 3v13H6z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>'},
+    {nm:'MCP Notes Server',meta:'Tier A · Week 5',grade:'In review',gc:'review',c:'#FB2832',ic:'<rect x="4" y="5" width="16" height="14" rx="2" stroke="#fff" stroke-width="2"/>'}
+  ]};
+
+const MEMBERS=[
+  {id:'m-aanya',nm:'Aanya R.',in:'AR',bg:'#367895',photo:'https://randomuser.me/api/portraits/women/44.jpg',headline:'Agent systems for fintech operations',cohort:'Cohort 1',role:'student',pres:'on',pts:3210,streak:14,artifacts:9,labs:12,joined:'Jul 6, 2026'},
+  {id:'m-yuki',nm:'Yuki Tanaka',in:'YT',bg:'#2E6A86',photo:'https://randomuser.me/api/portraits/women/29.jpg',headline:'Healthcare data pipelines + MCP',cohort:'Cohort 1',role:'student',pres:'on',pts:2880,streak:9,artifacts:8,labs:10,joined:'Jul 6, 2026'},
+  {id:'m-dev',nm:'Dev Kumar',in:'DK',bg:'#E8920C',photo:'https://randomuser.me/api/portraits/men/32.jpg',headline:'Support-triage automation agents',cohort:'Cohort 1',role:'student',pres:'on',pts:2640,streak:7,artifacts:7,labs:9,joined:'Jul 6, 2026'},
+  {id:'m-priya',nm:'Priya N.',in:'PN',bg:'#FB2832',photo:'https://randomuser.me/api/portraits/women/90.jpg',headline:'Retail recommendation agents',cohort:'Cohort 1',role:'student',pres:'on',pts:2210,streak:5,artifacts:5,labs:7,joined:'Jul 6, 2026'},
+  {id:'m-hana',nm:'Hana Cho',in:'HC',bg:'#367895',photo:'https://randomuser.me/api/portraits/women/33.jpg',headline:'EdTech tutoring agents',cohort:'Cohort 1',role:'student',pres:'on',pts:2150,streak:8,artifacts:6,labs:8,joined:'Jul 6, 2026'},
+  {id:'m-maya',nm:'Maya Chen',in:'MC',bg:'#367895',photo:'https://randomuser.me/api/portraits/women/65.jpg',headline:'AI Systems Architect in training',cohort:'Cohort 1',role:'student',pres:'on',pts:2140,streak:6,artifacts:7,labs:9,joined:'Jul 6, 2026',me:true},
+  {id:'m-jordan',nm:'Jordan M.',in:'JM',bg:'#2E6A86',photo:'https://randomuser.me/api/portraits/men/75.jpg',headline:'Prompt systems for legal review',cohort:'Cohort 1',role:'student',pres:'on',pts:2070,streak:4,artifacts:5,labs:6,joined:'Jul 6, 2026'},
+  {id:'m-omar',nm:'Omar Haddad',in:'OH',bg:'#FB2832',photo:'https://randomuser.me/api/portraits/men/41.jpg',headline:'Reliability & circuit breakers',cohort:'Cohort 1',role:'student',pres:'on',pts:2030,streak:6,artifacts:5,labs:7,joined:'Jul 6, 2026'},
+  {id:'m-rosa',nm:'Rosa Perez',in:'RP',bg:'#5BA63C',photo:'https://randomuser.me/api/portraits/women/68.jpg',headline:'Recipe & cooking assistant (MCP)',cohort:'Cohort 1',role:'student',pres:'idle',pts:1980,streak:3,artifacts:4,labs:6,joined:'Jul 6, 2026'},
+  {id:'m-sam',nm:'Sam Okafor',in:'SO',bg:'#E8920C',photo:'https://randomuser.me/api/portraits/men/19.jpg',headline:'Logistics routing agents',cohort:'Cohort 1',role:'student',pres:'off',pts:1920,streak:2,artifacts:4,labs:5,joined:'Jul 6, 2026'},
+  {id:'m-theo',nm:'Theo Blanc',in:'TB',bg:'#2E6A86',photo:'https://randomuser.me/api/portraits/men/85.jpg',headline:'Energy demand forecasting',cohort:'Cohort 1',role:'student',pres:'on',pts:1890,streak:5,artifacts:4,labs:5,joined:'Jul 6, 2026'},
+  {id:'m-lena',nm:'Lena Park',in:'LP',bg:'#5BA63C',photo:'https://randomuser.me/api/portraits/women/12.jpg',headline:'Doc-summarization agent skills',cohort:'Cohort 1',role:'student',pres:'on',pts:1760,streak:4,artifacts:3,labs:5,joined:'Jul 6, 2026'},
+  {id:'m-bea',nm:'Bea Nguyen',in:'BN',bg:'#5BA63C',photo:'https://randomuser.me/api/portraits/women/65.jpg',headline:'Customer-onboarding agents',cohort:'Cohort 1',role:'student',pres:'idle',pts:1640,streak:3,artifacts:3,labs:4,joined:'Jul 6, 2026'},
+  {id:'m-tariq',nm:'Coach Tariq',in:'CT',bg:'#5BA63C',photo:'https://randomuser.me/api/portraits/men/52.jpg',headline:'Lead mentor · Architecture + reliability',cohort:'Cohort 1',role:'mentor',pres:'on',pts:0,streak:0,artifacts:0,labs:0,joined:'Jul 1, 2026'},
+  {id:'m-marcus',nm:'Marcus Hill',in:'MH',bg:'#367895',photo:'https://randomuser.me/api/portraits/men/64.jpg',headline:'Healthcare ops → AI architect',cohort:'Cohort 1',role:'student',pres:'idle',pts:1340,streak:2,artifacts:2,labs:3,joined:'Jul 6, 2026'},
+  {id:'m-carlos',nm:'Carlos Ruiz',in:'CR',bg:'#E8920C',photo:'https://randomuser.me/api/portraits/men/3.jpg',headline:'Manufacturing QA agents',cohort:'Cohort 1',role:'student',pres:'off',pts:1120,streak:1,artifacts:1,labs:2,joined:'Jul 8, 2026'}
+];
+/* movement + period deltas (seeded for realistic 7/30/all tabs) */
+const DELTAS={ 'm-aanya':[300,820,3210,0],'m-yuki':[240,690,2880,1],'m-dev':[410,910,2640,1],'m-priya':[345,640,2210,2],
+  'm-hana':[265,600,2150,-1],'m-maya':[360,720,2140,1],'m-jordan':[280,540,2070,-2],'m-omar':[230,560,2030,0],
+  'm-rosa':[150,430,1980,-1],'m-sam':[120,360,1920,0],'m-theo':[210,500,1890,2],'m-lena':[260,540,1760,3],
+  'm-bea':[140,360,1640,-1],'m-marcus':[180,470,1340,1],'m-carlos':[120,300,1120,0] };
+
+const EARN=[
+  ['Complete a lab (all acceptance checks)',90,'classroom'],
+  ['Upload a SkillsJar certificate',60,'cert'],
+  ['Project task complete',50,'projects'],
+  ['Record a critique video (bonus)',50,'classroom'],
+  ['Pass a quiz / test (≥70%)',40,'classroom'],
+  ['Watch a video / course unit',35,'classroom'],
+  ['Internship checkpoint',30,'internship'],
+  ['Submit a survey / reflection',25,'cert'],
+  ['Reading complete',20,'classroom'],
+  ['Attend a live session / event',15,'events'],
+  ['Daily streak check-in',  '10–50','streak'],
+  ['Share an artifact publicly','10 +4/platform','community'],
+  ['Post in the community',10,'community'],
+  ['Comment / reply',3,'community'],
+  ['Give a like','2','community']
+];
+
+/* =================== LEVEL BADGE COMPONENT =================== */
+const SIZES={sm:{box:30,ring:3,fs:11},md:{box:46,ring:4,fs:15},lg:{box:72,ring:5,fs:22},xl:{box:108,ring:7,fs:32}};
+function badge(level,pct,size){
+  const t=TIERS[level-1], s=SIZES[size]||SIZES.md, r=(s.box-s.ring)/2-1, c=2*Math.PI*r, off=c-c*(pct/100);
+  const tile=s.box-s.ring*2-6, ti=(s.box-tile)/2;
+  return `<span class="lvbadge" style="width:${s.box}px;height:${s.box}px" title="${t.name} · ${pct}% to next">
+    <svg width="${s.box}" height="${s.box}" viewBox="0 0 ${s.box} ${s.box}">
+      <circle cx="${s.box/2}" cy="${s.box/2}" r="${r}" fill="none" stroke="var(--surface-sunken)" stroke-width="${s.ring}"/>
+      <circle cx="${s.box/2}" cy="${s.box/2}" r="${r}" fill="none" stroke="${t.color}" stroke-width="${s.ring}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/>
+    </svg>
+    <span class="tile"><span class="rn" style="font-size:${s.fs}px">${t.roman}</span></span>
+  </span>`;
+}
+function avatar(m,size,pres){
+  const s=size||42; const showP=pres!==false && m.pres;
+  // initials are the text node; photo (if any) is overlaid and removes itself on error -> clean fallback
+  const img=m.photo?`<img src="${m.photo}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()">`:'';
+  return `<span class="av" style="width:${s}px;height:${s}px;font-size:${Math.round(s*0.36)}px;background:${m.bg}">${m.in}${img}${showP?`<span class="pres ${m.pres==='off'?'':m.pres}"></span>`:''}</span>`;
+}
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* =================== NAV =================== */
+function go(v,btn){
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+  (btn||document.querySelector('.navbtn[data-v="'+v+'"]')).classList.add('active');
+  document.getElementById('app').classList.remove('nav-open');
+  if(v==='me') renderProfile(ME,true);
+  if(v==='member') renderProfile(MEMBERS.find(m=>m.id==='m-dev'),false);
+  if(v==='levels') renderLevels();
+  if(v==='points') renderPoints();
+  if(v==='leaderboard') renderLeaderboard();
+  if(v==='directory') renderDirectory();
+  if(v==='states') renderStates();
+  window.scrollTo(0,0);
+}
+
+/* =================== PROFILE (self + other) =================== */
+function openMember(id){ const m=MEMBERS.find(x=>x.id===id); if(!m) return; if(m.me){ go('me'); return; }
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  document.getElementById('view-member').classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.navbtn[data-v="member"]').classList.add('active');
+  renderProfile(m,false,true); window.scrollTo(0,0);
+}
+function renderProfile(m,self,fromDir){
+  const pct=progressPct(m.pts), cur=levelFor(m.pts), nxt=nextTier(m.pts);
+  const mentor=m.role==='mentor';
+  const contrib=m.contrib||{posts:m.posts||0,comments:0,likes:0,labs:m.labs||0,artifacts:m.artifacts||0};
+  const skills=m.skills||[['AI & Agents',['Claude Code','MCP','Agent Skills']],['Engineering',['TypeScript','Python']]];
+  const links=m.links||[['github','github.com/'+m.in.toLowerCase()],['portfolio','portfolio.colaberry.ai']];
+  const bio=m.bio||(m.headline+'. Building toward the Architect Expo with Cohort 1.');
+  const strengths=m.strengths||['Claude Code — building','MCP integration — building'];
+  const artifacts=m.artifacts && m.artifacts.length ? m.artifacts : null;
+
+  const head=`
+    ${fromDir?'<button class="crumbback" onclick="go(\'directory\')"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Back to directory</button>':''}
+    <div class="card profile-head">
+      <div class="ph-cover" style="background:linear-gradient(120deg,${m.bg} 0%, ${cur.color} 70%, #2E6A86 130%)"></div>
+      <div class="ph-body">
+        <div class="ph-idrow">
+          <div class="ph-av">${avatar(m,96,true)}</div>
+          <div class="ph-meta">
+            <div class="ph-name">${escapeHtml(m.nm)} ${badge(cur.level,pct,'md')}</div>
+            <div class="ph-headline">${escapeHtml(m.headline)}</div>
+            <div class="ph-tags">
+              <span class="ph-pill"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="2"/></svg>${cur.name} · tier ${cur.roman}</span>
+              <span class="ph-pill"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/></svg>${m.cohort}</span>
+              ${mentor?'<span class="ph-pill" style="border-color:rgba(91,166,60,.45);background:rgba(91,166,60,.1);color:var(--leaf-text)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" stroke-width="2"/></svg>Mentor</span>':'<span class="ph-pill open"><span class="dot"></span>Open to collaborate</span>'}
+              <span class="ph-pill"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18" stroke="currentColor" stroke-width="2"/></svg>Joined ${m.joined}</span>
+            </div>
+          </div>
+          <div class="ph-actions">
+            ${self
+              ? '<button class="btn ghost sm" onclick="alert(\'Edit profile — wired by Kes\')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Edit profile</button><button class="btn berry sm" onclick="alert(\'Public portfolio — see Portfolio screen\')"><svg viewBox="0 0 24 24" fill="none"><path d="M14 4h6v6M20 4l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> View public portfolio</button>'
+              : '<button class="btn berry sm"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Message</button><button class="btn ghost sm"><svg viewBox="0 0 24 24" fill="none"><path d="M16 11h6M19 8v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Add friend</button>'}
+          </div>
+        </div>
+        <div class="lvstrip">
+          ${badge(cur.level,pct,'lg')}
+          <div class="lvtxt">
+            <div style="font-weight:700;font-size:15px;color:var(--text-strong);margin-bottom:3px">${cur.name}${nxt?` <span class="small" style="font-weight:500">→ ${nxt.name}</span>`:' · max tier'}</div>
+            <div class="meter" style="margin:8px 0 7px"><i style="width:${pct}%;background:${cur.color}"></i></div>
+            <div class="small"><b class="mono">${m.pts.toLocaleString()}</b> pts${nxt?` · <span class="nextpts">${(nxt.min-m.pts).toLocaleString()} to ${nxt.name}</span>`:' · top of the ladder'}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const stats=`<div class="statgrid">
+    <div class="stat leaf"><div class="n">${m.pts.toLocaleString()}</div><div class="l">Points</div></div>
+    <div class="stat amber"><div class="n">${cur.roman}</div><div class="l">${cur.name}</div></div>
+    ${self?`<div class="stat cherry"><div class="n">#${m.rank}</div><div class="l">Cohort rank</div></div>`:`<div class="stat cherry"><div class="n">#${cohortRank(m.id)}</div><div class="l">Cohort rank</div></div>`}
+    <div class="stat amber"><div class="n">${(m.streak||0)}</div><div class="l">Day streak</div></div>
+    <div class="stat berry"><div class="n">${contrib.artifacts}</div><div class="l">Artifacts</div></div>
+    <div class="stat berry"><div class="n">${contrib.labs}</div><div class="l">Labs shipped</div></div>
+  </div>`;
+
+  const main=`
+    <div class="section-title">${self?'Your recent activity':'Recent activity'}</div>
+    <div class="card" style="padding:8px 20px">${
+      (m.activity||defaultActivity(m)).map(a=>`<div class="actrow"><span class="actic" style="background:${a.c}"><svg viewBox="0 0 24 24" fill="none">${actIcon(a.k)}</svg></span><div class="actbody"><div class="at">${a.t}</div><div class="aw">${a.w}</div></div>${a.p?`<span class="actpts">+${a.p}</span>`:''}</div>`).join('')
+    }</div>
+    <div class="section-title">${self?'Your build artifacts':'Build artifacts'}</div>
+    <div class="card" style="padding:8px 20px">${
+      artifacts? artifacts.map(ar=>`<div class="artrow"><span class="artthumb" style="background:${ar.c}"><svg viewBox="0 0 24 24" fill="none">${ar.ic}</svg></span><div style="flex:1"><div class="an">${ar.nm}</div><div class="am">${ar.meta}</div></div><span class="grade ${ar.gc}">${ar.grade}</span></div>`).join('')
+       : `<div style="padding:26px;text-align:center" class="small">No artifacts shared yet. Graded builds appear here automatically.</div>`
+    }</div>`;
+
+  const side=`
+    <div class="card side-card">
+      <h3><svg viewBox="0 0 24 24" fill="none"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Contributions</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${[['Posts',contrib.posts],['Comments',contrib.comments],['Likes given',contrib.likes],['Labs',contrib.labs]].map(x=>`<div class="memstat"><div class="n">${x[1]}</div><div class="l">${x[0]}</div></div>`).join('')}
+      </div>
+    </div>
+    <div class="card side-card">
+      <h3><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg> About</h3>
+      <p class="small" style="margin:0 0 4px;line-height:1.55">${escapeHtml(bio)}</p>
+    </div>
+    <div class="card side-card">
+      <h3><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M5 12h14M5 17h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Focus & skills</h3>
+      ${skills.map(g=>`<div class="skillgrp"><p>${g[0]}</p><div class="skills">${g[1].map(s=>`<span class="skill">${s}</span>`).join('')}</div></div>`).join('')}
+    </div>
+    <div class="card side-card">
+      <h3><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg> Verified strengths</h3>
+      ${strengths.map(s=>`<div class="strength"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><span>${s}</span></div>`).join('')}
+    </div>
+    <div class="card side-card">
+      <h3><svg viewBox="0 0 24 24" fill="none"><path d="M9 15l6-6M10 7h5v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" stroke-width="2"/></svg> Links</h3>
+      ${links.map(l=>`<div class="linkrow"><svg viewBox="0 0 24 24" fill="none">${linkIcon(l[0])}</svg><a href="https://${l[1]}" target="_blank" rel="noopener">${l[1]}</a></div>`).join('')}
+    </div>`;
+
+  const crumb=self?'My profile':'Member profile';
+  document.getElementById('view-'+(self?'me':'member')).innerHTML=
+    `<div class="page-h"><div class="crumbs0">${crumb}${self?' · editable':' · view'}</div><h1>${self?'Your profile':escapeHtml(m.nm)}</h1><div class="sub">${self?'Exactly what your cohort sees — your level badge, points, streak, contributions, artifacts, and links. Edit your headline, bio, skills, and photo inline.':'A teammate\'s public profile. You can message or add them; private stats (rank movement, ledger) stay theirs.'}</div></div>`
+    + head + stats + `<div class="twocol"><div>${main}</div><aside>${side}</aside></div>`;
+}
+function cohortRank(id){ const sorted=MEMBERS.filter(m=>m.role!=='mentor').slice().sort((a,b)=>b.pts-a.pts); return sorted.findIndex(m=>m.id===id)+1; }
+function defaultActivity(m){ return [
+  {k:'lab',t:'Passed a lab — acceptance checks green',w:'today',p:90,c:'#FB2832'},
+  {k:'post',t:'Posted a build log in the community',w:'yesterday',p:10,c:'#5BA63C'},
+  {k:'cert',t:'Uploaded a SkillsJar certificate',w:'2 days ago',p:60,c:'#E8920C'},
+  {k:'comment',t:'Helped a teammate in #project-help',w:'3 days ago',p:3,c:'#367895'}
+];}
+function actIcon(k){return({
+  lab:'<path d="M9 4h6M8 8h8v12H8z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>',
+  like:'<path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="#fff" stroke-width="2"/>',
+  post:'<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>',
+  cert:'<path d="M12 3l9 4-9 4-9-4z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>',
+  streak:'<path d="M12 2c1 3-1 4.5-2.5 6.5C8 10.5 7 12 7 14a5 5 0 0 0 10 0c0-2-1-3.4-2-5" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>',
+  comment:'<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>'
+}[k]||'<circle cx="12" cy="12" r="8" stroke="#fff" stroke-width="2"/>');}
+function linkIcon(k){return({
+  github:'<path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z" fill="currentColor"/>',
+  linkedin:'<path d="M4.5 3.5A2 2 0 1 1 4.49 7.5 2 2 0 0 1 4.5 3.5zM3 9h3v12H3zM9 9h2.9v1.6h.04c.4-.76 1.4-1.6 2.86-1.6 3.06 0 3.62 2 3.62 4.6V21h-3v-5.2c0-1.24-.02-2.84-1.73-2.84-1.74 0-2 1.35-2 2.75V21H9z" fill="currentColor"/>',
+  portfolio:'<rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M9 6V4h6v2" stroke="currentColor" stroke-width="2"/>',
+  x:'<path d="M17.5 3h3l-7 8 8.2 10h-6.4l-4.3-5.6L5.4 21H2.4l7.5-8.6L2 3h6.5l3.9 5.2z" fill="currentColor"/>'
+}[k]||'<path d="M9 15l6-6" stroke="currentColor" stroke-width="2"/>');}
+
+/* =================== LEVELS SCREEN =================== */
+function renderLevels(){
+  document.getElementById('tierLadder').innerHTML=`<div class="card" style="padding:8px 22px">${TIERS.map((t,i)=>{
+    const reached=ME.pts>=t.min, here=levelFor(ME.pts).level===t.level;
+    return `<div class="artrow" style="cursor:default;${i===TIERS.length-1?'border-bottom:none':''}">
+      ${badge(t.level,here?progressPct(ME.pts):(reached?100:0),'md')}
+      <div style="flex:1"><div class="an">${t.name} ${here?'<span class="chip cherry" style="margin-left:4px"><span class="sw"></span>You are here</span>':reached?'<span class="chip leaf" style="margin-left:4px"><span class="sw"></span>Reached</span>':''}</div><div class="am">${t.blurb}</div></div>
+      <div class="mono" style="font-weight:700;color:var(--text-strong);text-align:right">${t.min.toLocaleString()}<div class="small">pts</div></div>
+    </div>`;}).join('')}</div>`;
+
+  document.getElementById('tierShowcase').innerHTML=TIERS.map(t=>`<div style="text-align:center">${badge(t.level,t.level===4?100:65,'xl')}<div style="margin-top:12px;font-weight:700;color:var(--text-strong)">${t.name}</div><div class="small mono">tier ${t.roman} · ${t.min.toLocaleString()}+</div></div>`).join('');
+
+  document.getElementById('sizeShowcase').innerHTML=['sm','md','lg','xl'].map(s=>`<div style="text-align:center">${badge(3,62,s)}<div class="small mono" style="margin-top:8px">${s}</div></div>`).join('');
+
+  document.getElementById('tierTable').innerHTML=TIERS.map(t=>`<tr><td><span class="mono" style="font-weight:700;color:${t.color}">${t.roman}</span></td><td><b style="color:var(--text-strong)">${t.name}</b></td><td class="mono">${t.min.toLocaleString()} pts</td><td class="small" style="color:var(--text-body)">${t.blurb}</td></tr>`).join('');
+}
+
+/* =================== POINTS SCREEN =================== */
+function renderPoints(){
+  const cur=levelFor(ME.pts), nxt=nextTier(ME.pts), pct=progressPct(ME.pts);
+  document.getElementById('ptsBadge').innerHTML=badge(cur.level,pct,'lg');
+  document.getElementById('ptsTotal').textContent=ME.pts.toLocaleString();
+  document.getElementById('ptsLevel').textContent=cur.name+' · tier '+cur.roman;
+  document.getElementById('ptsBar').style.width=pct+'%';
+  document.getElementById('ptsNext').textContent=nxt?`${(nxt.min-ME.pts).toLocaleString()} pts to ${nxt.name}`:'Top of the ladder';
+  document.getElementById('earnTable').innerHTML=EARN.map(e=>`<tr><td>${e[0]}</td><td style="text-align:right"><b class="mono">+${e[1]}</b></td><td><span class="chip ghost" style="text-transform:none">${e[2]}</span></td></tr>`).join('');
+  const led=[
+    ['lab','Lab · MCP Notes Server — all checks passed',90,'2h ago','#FB2832'],
+    ['cert','SkillsJar · Introduction to MCP certificate',60,'yesterday','#E8920C'],
+    ['streak','Daily streak · 6-day check-in',16,'yesterday','#E8920C'],
+    ['post','Posted in Wins',10,'5h ago','#5BA63C'],
+    ['comment','Commented on Dev Kumar\'s build log',3,'2 days ago','#367895'],
+    ['like','Liked Aanya R.\'s walkthrough',2,'3h ago','#FB2832'],
+    ['quiz','Quiz · MCP core concepts 7/7',40,'3 days ago','#5BA63C']
+  ];
+  document.getElementById('ledger').innerHTML=led.map(l=>`<div class="actrow"><span class="actic" style="background:${l[4]}"><svg viewBox="0 0 24 24" fill="none">${actIcon(l[0])}</svg></span><div class="actbody"><div class="at">${l[1]}</div><div class="aw">${l[3]}</div></div><span class="actpts">+${l[2]}</span></div>`).join('');
+  document.getElementById('lvtrack').innerHTML=`<div class="meter" style="height:auto;background:none;border:none;display:flex;flex-direction:column;gap:7px">${TIERS.map(t=>{
+    const here=cur.level===t.level, passed=ME.pts>=t.min&&!here;
+    return `<div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:var(--r-12);background:${here?'rgba(251,40,50,.07)':passed?'rgba(91,166,60,.1)':'var(--surface-sunken)'};border:1px solid ${here?'rgba(251,40,50,.25)':'var(--border-subtle)'}">${badge(t.level,here?pct:(passed?100:0),'sm')}<div style="flex:1"><div style="font-weight:700;font-size:13.5px;color:var(--text-strong)">${t.name}</div><div class="small mono">${t.min.toLocaleString()}+ pts</div></div>${here?'<span class="chip cherry"><span class="sw"></span>Now</span>':passed?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="var(--leaf-action)" stroke-width="3" stroke-linecap="round"/></svg>':''}</div>`;
+  }).join('')}</div>`;
+}
+
+/* =================== LEADERBOARD =================== */
+let lbPeriod='d7', lbScope='cohort';
+const PERIOD_IDX={d7:0,d30:1,all:2};
+function lbSet(p,btn){ lbPeriod=p; document.querySelectorAll('#lbPeriod button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderLeaderboard(); }
+function lbScopeSet(s,btn){ lbScope=s; document.querySelectorAll('#lbScope button').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+  document.getElementById('lbScopeNote').textContent = s==='cohort'?'Cohort 1 · 15 members':'Whole community · 3 cohorts'; renderLeaderboard(); }
+function lbRows(){
+  const idx=PERIOD_IDX[lbPeriod];
+  let pool=MEMBERS.filter(m=>m.role!=='mentor').map(m=>{ const d=DELTAS[m.id]||[0,0,m.pts,0];
+    return {m, score:(lbPeriod==='all'?m.pts:d[idx]), all:m.pts, move:d[3]}; });
+  if(lbScope==='community'){
+    pool=pool.concat([
+      {m:{id:'c2-imani',nm:'Imani Brooks',in:'IB',bg:'#367895',photo:'https://randomuser.me/api/portraits/women/50.jpg',pres:'on',cohort:'Cohort 2'},score:(lbPeriod==='all'?3680:(lbPeriod==='d30'?760:330)),all:3680,move:0},
+      {m:{id:'c2-noah',nm:'Noah Feld',in:'NF',bg:'#E8920C',photo:'https://randomuser.me/api/portraits/men/14.jpg',pres:'on',cohort:'Cohort 2'},score:(lbPeriod==='all'?3020:(lbPeriod==='d30'?640:300)),all:3020,move:1},
+      {m:{id:'c3-grace',nm:'Grace Lin',in:'GL',bg:'#2E6A86',photo:'https://randomuser.me/api/portraits/women/8.jpg',pres:'off',cohort:'Cohort 3'},score:(lbPeriod==='all'?2400:(lbPeriod==='d30'?700:360)),all:2400,move:2}
+    ]);
+  }
+  return pool.sort((a,b)=>b.score-a.score);
+}
+function renderLeaderboard(){
+  const rows=lbRows();
+  const unit=lbPeriod==='all'?'pts':'pts';
+  const top3=rows.slice(0,3), rest=rows.slice(3);
+  const podClass=['first','second','third'];
+  document.getElementById('podium').innerHTML=top3.map((r,i)=>`<div class="pod ${podClass[i]}" onclick="openMember('${r.m.id}')">
+    <span class="rk">#${i+1}</span>${i===0?'<span class="crown"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18l-1.5-9-4 4L12 6l-3.5 7-4-4z"/></svg></span>':''}
+    ${avatar(r.m,56,true)}
+    <div class="pn" style="margin-top:8px">${r.m.me?'You · '+r.m.nm:escapeHtml(r.m.nm)}</div>
+    <div style="margin:8px auto 0;display:flex;justify-content:center">${badge(levelFor(r.all).level,progressPct(r.all),'sm')}</div>
+    <div class="pp">${r.score.toLocaleString()}</div>
+    <div class="pd">${lbPeriod==='all'?levelFor(r.all).name:'+'+r.score.toLocaleString()+' this period'}</div>
+  </div>`).join('');
+  document.getElementById('lblist').innerHTML=rest.map((r,i)=>{
+    const rank=i+4, lv=levelFor(r.all);
+    return `<div class="lbrow ${r.m.me?'me':''}" onclick="openMember('${r.m.id}')">
+      <span class="lbrk">${rank}</span>
+      ${moveBadge(r.move)}
+      ${avatar(r.m,38,true)}
+      <div class="lbinfo"><div class="ln">${r.m.me?'You · '+r.m.nm:escapeHtml(r.m.nm)} ${badge(lv.level,progressPct(r.all),'sm')}</div><div class="ll">${lv.name}${lbScope==='community'?' · '+(r.m.cohort||'Cohort 1'):''}</div></div>
+      <div class="lbpts">${r.score.toLocaleString()} <span class="small" style="font-weight:500">${unit}</span>${lbPeriod!=='all'?`<span class="delta">all-time ${r.all.toLocaleString()}</span>`:''}</div>
+    </div>`;}).join('');
+}
+function moveBadge(m){
+  if(m>0) return `<span class="move up"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 11l6-6 6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>${m}</span>`;
+  if(m<0) return `<span class="move dn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 13l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>${Math.abs(m)}</span>`;
+  return `<span class="move fl">—</span>`;
+}
+
+/* =================== DIRECTORY =================== */
+let dirFilter='all';
+function dirFilterSet(f,btn){ dirFilter=f; document.querySelectorAll('#dirFilter button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderDirectory(); }
+function renderDirectory(){
+  const q=(document.getElementById('dirSearch').value||'').toLowerCase();
+  let list=MEMBERS.filter(m=>{
+    if(dirFilter==='on'&&m.pres!=='on') return false;
+    if(dirFilter==='mentor'&&m.role!=='mentor') return false;
+    if(q && !(m.nm.toLowerCase().includes(q)||m.headline.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  document.getElementById('dirgrid').innerHTML=list.map(m=>{
+    const lv=levelFor(m.pts), mentor=m.role==='mentor';
+    return `<div class="memcard" onclick="openMember('${m.id}')">
+      <div class="mc-top">${avatar(m,52,true)}<div style="flex:1;min-width:0"><div class="mc-nm">${m.me?'You · '+m.nm:escapeHtml(m.nm)}</div><div class="small" style="margin-top:2px;display:flex;align-items:center;gap:6px">${mentor?'<span class="chip leaf" style="padding:2px 8px"><span class="sw"></span>Mentor</span>':badge(lv.level,progressPct(m.pts),'sm')} ${mentor?'':lv.name}</div></div></div>
+      <div class="mc-hl">${escapeHtml(m.headline)}</div>
+      ${mentor?'':`<div class="mc-stats"><div class="memstat"><div class="n">${m.pts.toLocaleString()}</div><div class="l">pts</div></div><div class="memstat"><div class="n">${m.streak}</div><div class="l">streak</div></div><div class="memstat"><div class="n">${m.artifacts}</div><div class="l">artifacts</div></div></div>`}
+      <div class="mc-foot"><button class="btn ghost sm" onclick="event.stopPropagation();openMember('${m.id}')">View</button>${m.me?'':'<button class="btn berry sm" onclick="event.stopPropagation()">Message</button>'}</div>
+    </div>`;}).join('') || '<div class="small" style="padding:30px">No members match that search.</div>';
+}
+
+/* =================== STATES =================== */
+function renderStates(){
+  const pres=[['on','Online','Active now · green dot · counts toward "who\'s online"'],['idle','Idle','Away · amber dot · last seen within the hour'],['off','Offline','Grey dot · not counted online']];
+  document.getElementById('presMatrix').innerHTML=pres.map(p=>{
+    const m={in:'MC',bg:'#367895',photo:'https://randomuser.me/api/portraits/women/65.jpg',pres:p[0]};
+    return `<div class="mtile"><div style="display:flex;justify-content:center">${avatar(m,56,true)}</div><div class="ml">${p[1]}</div><div class="md">${p[2]}</div></div>`;
+  }).join('');
+  document.getElementById('tierMatrix').innerHTML=TIERS.map(t=>`<div class="mtile"><div style="display:flex;justify-content:center">${badge(t.level,t.level===4?100:60,'lg')}</div><div class="ml">${t.name}</div><div class="md mono">tier ${t.roman} · ${t.min.toLocaleString()}+ pts</div></div>`).join('');
+  document.getElementById('es-new').innerHTML=`<div style="display:flex;justify-content:center">${badge(1,0,'lg')}</div>`;
+  document.getElementById('specPoints').innerHTML=[
+    ['like','+2','postId+memberId'],['comment','+3','commentId'],['post','+10','postId'],
+    ['reading','+20','lessonId'],['survey','+25','surveyId'],['video','+35','lessonId'],
+    ['quiz','+40','quizAttemptId (passing)'],['project_task','+50','taskId'],['cert','+60','certUploadId'],
+    ['lab','+90','labSubmissionId (passing)'],['streak','+10…50','date'],['event','+15','eventId']
+  ].map(r=>`<tr><td><code class="k">${r[0]}</code></td><td style="text-align:right"><b class="mono">${r[1]}</b></td><td><code class="k">${r[2]}</code></td></tr>`).join('');
+}
+
+/* =================== THEME + INIT =================== */
+function toggleTheme(){
+  const r=document.documentElement, dark=r.getAttribute('data-theme')==='dark';
+  r.setAttribute('data-theme',dark?'light':'dark');
+  document.getElementById('themeIcon').innerHTML = dark
+    ? '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
+    : '<circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+}
+function renderHud(){ const cur=levelFor(ME.pts),pct=progressPct(ME.pts);
+  document.getElementById('hudBtn').innerHTML=`${badge(cur.level,pct,'sm')}<span class="hud-tx"><span class="lv">${cur.name}</span><span class="pts">${ME.pts.toLocaleString()} pts</span></span>`;
+}
+document.getElementById('ovBadges').innerHTML=TIERS.map(t=>badge(t.level,t.level===4?100:60,'md')).join('');
+renderHud();
+renderProfile(ME,true);
+</script>
+</body>
+</html>

@@ -199,6 +199,12 @@ import RawLeadPayload from './RawLeadPayload';
 import AnthropicContentRegistry from './AnthropicContentRegistry';
 import AnthropicChangeEvent from './AnthropicChangeEvent';
 
+// Skilljar Progress Tracking
+import StudentSkilljarProgress from './StudentSkilljarProgress';
+
+// Enrollment Tracking
+import EnrollmentLead from './EnrollmentLead';
+
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
 import InboxClassification from './InboxClassification';
@@ -265,6 +271,7 @@ import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
+import CurriculumCourseLink from './CurriculumCourseLink';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -1103,7 +1110,15 @@ export {
   Challenge,
   ChallengeParticipant,
   LeaderboardScore,
+  // Curriculum + enrollment + Skilljar sync (from main)
+  CurriculumCourseLink,
+  EnrollmentLead,
+  StudentSkilljarProgress,
 };
+
+// --- Enrollment Lead associations ---
+EnrollmentLead.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(EnrollmentLead, { foreignKey: 'enrollment_id', as: 'enrollmentLead' });
 
 // --- AI Company Layer associations ---
 AiCompany.hasMany(CompanyGoal, { foreignKey: 'company_id', as: 'goals' });
