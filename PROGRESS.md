@@ -6941,3 +6941,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Merged origin/main (branch was 43 commits behind) into feat/ai-challenge-gtm-rebuild so PR #91 is mergeable. One conflict — backend/src/models/index.ts — resolved by union (kept the branch's Sponsor/SponsorSeat/Challenge/ChallengeParticipant/LeaderboardScore exports plus main's CurriculumCourseLink/EnrollmentLead/StudentSkilljarProgress). 48 other files auto-merged from main.
   - Verification: frontend tsc 0 errors + frontend prod build (react-scripts build) exit 0; backend src tsc clean (only the @anthropic-ai/sdk dep is absent in the local junctioned node_modules — installed fresh at Docker build).
   - Notes: The deploy itself (merge PR->main + prod docker build) is gated on Ali's approval; not performed in this step.
+
+- [x] **Durable: unify /sales-hub on main (replace old 34-file single-domain hub with the deployed 6-domain Knowledge Base)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-kb02
+  - What changed: `main` carried the OLD single-domain sales hub (34 files, landed via PR #87, kept through PR #91), so a clean nginx rebuild from `main` would clobber the unified hub that is already live in prod. This PR brings the deployed unified Knowledge Base (6 domains, 212 answers; identical to `deploy/sales-hub` commit `471b7ef`) onto `main` so `/sales-hub/` is regression-proof. Scope is strictly `frontend/public/sales-hub/` + this note.
+  - Verification: content byte-identical to the live prod tree (curl-verified live: `/sales-hub/` 200, unified hub; `kb.json` count 212; sub-sections `/sales-hub/sales/`, `/marketing/`, `/design/` all 200). Static-only; no backend change.
+  - Notes: Compliance & Trust is public-safe trust content only (COA U5306 = the Data Analytics school; the AI Accelerator's own TWC status is NOT asserted). Supersedes the now-merged-but-stale PR #87.

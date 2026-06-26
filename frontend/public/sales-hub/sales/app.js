@@ -1,4 +1,4 @@
-/* Founding Cohort — Sales Knowledge Base engine
+/* Founding Cohort · Sales Knowledge Base engine
    Self-contained: data from window.KB_DATA (kb-data.js). Works offline from file://.
    Cory uses client-side retrieval over the KB by default; set CORY_LIVE_ENDPOINT to also
    try a live LLM (e.g. '/api/chat' on enterprise.colaberry.ai) with graceful fallback. */
@@ -91,9 +91,9 @@
 
   /* ---------- diagrams ---------- */
   var DIAGRAMS = [
-    { t:'Sales funnel — lead to enrolled', g:
+    { t:'Sales funnel · lead to enrolled', g:
       'flowchart LR\n A[Lead / outreach] --> B["Free Open House<br/>Thu Jul 16"]\n B --> C{Ready to join?}\n C -->|Yes| D["Enroll<br/>training.colaberry.com"]\n C -->|Not yet| E["Follow up<br/>+ send 1-pager"]\n E --> D\n D --> F["Founding Cohort kickoff<br/>Thu Jul 23"]\n F --> G["Architect Expo<br/>early October"]' },
-    { t:'The 12 weeks — what you build', g:
+    { t:'The 12 weeks · what you build', g:
       'flowchart LR\n I1["Intensive 1<br/>Business Workflow Assistant<br/>+ reusable AI Skills"] --> I2["Intensive 2<br/>Multi-agent AI team<br/>+ Enterprise Prompt Library"]\n I2 --> I3["Intensive 3<br/>Working MCP server<br/>integrated with a real system"]\n I3 --> I4["Intensive 4<br/>Complete Solution<br/>Architecture Package"]\n I4 --> O["Deployed AI system +<br/>GitHub portfolio +<br/>Anthropic Architect certification"]' },
     { t:'Pick a plan', g:
       'flowchart TD\n Q{How do you want to pay?}\n Q -->|Best value, committed| A["Annual<br/>$149/mo<br/>founding rate locks for life of membership"]\n Q -->|Want flexibility| M["Monthly<br/>$199/mo<br/>cancel anytime"]\n A --> S["One membership =<br/>all 4 intensives + cert prep<br/>+ internship + portfolio"]\n M --> S\n S --> Z["Checkout: training.colaberry.com"]' },
@@ -144,17 +144,17 @@
         '<li>Ask Cory to build a gameplan for the specific person you are about to call.</li>'+
       '</ol></div>'+
       '<div class="train"><h4>The talk track</h4><ol>'+
-        '<li><b>Open</b> — set the frame, earn two minutes.</li>'+
-        '<li><b>Discovery</b> — find their problem and their bar. Sell with their words.</li>'+
-        '<li><b>Pitch</b> — the outcome (deployed system + portfolio + cert), tied to their problem.</li>'+
-        '<li><b>Bridge</b> — acknowledge, one-line answer, return to their goal.</li>'+
-        '<li><b>Close</b> — 40 seats, founding rate locks. Ask for the decision.</li>'+
-        '<li><b>Next step</b> — secure a seat or book the follow-up before you hang up.</li>'+
+        '<li><b>Open</b> · set the frame, earn two minutes.</li>'+
+        '<li><b>Discovery</b> · find their problem and their bar. Sell with their words.</li>'+
+        '<li><b>Pitch</b> · the outcome (deployed system + portfolio + cert), tied to their problem.</li>'+
+        '<li><b>Bridge</b> · acknowledge, one-line answer, return to their goal.</li>'+
+        '<li><b>Close</b> · 40 seats, founding rate locks. Ask for the decision.</li>'+
+        '<li><b>Next step</b> · secure a seat or book the follow-up before you hang up.</li>'+
       '</ol><p style="font-size:12.5px;color:var(--text-muted);margin:10px 0 0">Full script in Downloads.</p></div>'+
       '<div class="train"><h4>Three prospect angles</h4><ul>'+
-        '<li><b>Working professionals</b> — build with AI without leaving the job. Four hours a week.</li>'+
-        '<li><b>Beginners / switchers</b> — no engineering degree needed; finish with a real project.</li>'+
-        '<li><b>Builders / idea-owners</b> — bring the idea, leave with a deployed system.</li>'+
+        '<li><b>Working professionals</b> · build with AI without leaving the job. Four hours a week.</li>'+
+        '<li><b>Beginners / switchers</b> · no engineering degree needed; finish with a real project.</li>'+
+        '<li><b>Builders / idea-owners</b> · bring the idea, leave with a deployed system.</li>'+
       '</ul></div>'+
       '<div class="train"><h4>Practice with Cory</h4><div class="chips">'+
         '<span class="chip" data-ask="Build me a gameplan for a working professional who is worried about time">Gameplan: busy professional</span>'+
@@ -193,7 +193,7 @@
     var l=q.toLowerCase();
     // strategy / gameplan
     if(/strateg|gameplan|game plan|plan for|approach|pitch (to|a)/.test(l)){
-      return { html:'Here is a simple gameplan:<br>1. <b>Open</b> and earn two minutes.<br>2. <b>Discovery</b> — get their real problem and their bar.<br>3. <b>Pitch the outcome</b> tied to that problem: a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.<br>4. <b>Bridge</b> any objection (price is not a course fee, four hours a week, no engineering degree needed).<br>5. <b>Close on scarcity</b>: 40 founding seats, $149/mo rate locks for life of membership.<br>6. <b>Lock a next step</b> before you hang up.', doc:'script' };
+      return { html:'Here is a simple gameplan:<br>1. <b>Open</b> and earn two minutes.<br>2. <b>Discovery</b> · get their real problem and their bar.<br>3. <b>Pitch the outcome</b> tied to that problem: a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.<br>4. <b>Bridge</b> any objection (price is not a course fee, four hours a week, no engineering degree needed).<br>5. <b>Close on scarcity</b>: 40 founding seats, $149/mo rate locks for life of membership.<br>6. <b>Lock a next step</b> before you hang up.', doc:'script' };
     }
     if(/prep|prepare|before (the|a) ?call|get ready|ready for/.test(l)){
       return { html:'Five-minute prep:<br>1. Numbers reflexive: $149/mo annual, $199/mo monthly, 40 seats, rate locks.<br>2. Dates cold: Open House Thu Jul 16, kickoff Thu Jul 23.<br>3. One-pager open in a tab.<br>4. Pick the angle: working professional, beginner/switcher, or builder.<br>5. Ask me for a gameplan on the specific person.', doc:'onepager' };
