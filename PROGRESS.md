@@ -6752,3 +6752,9 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Corrected the next-cohort date to Thu Jul 23 everywhere (CohortUrgency default 2026-07-23 + 5 page references via sed). Rebuilt CohortUrgency into a two-column layout (copy + scarcity + CTA left, live countdown right) over a subtle photo watermark (/img/workshop.jpg) so the card fills its width instead of bunching on the left. ContactPage: added a dark photo hero (/img/team-collab.jpg) + removed the out-of-place IndustryDemoGrid "Education & Training demo" block (+ its import). Sponsor-dashboard hero image swapped from a stray chart placeholder to a virtual-presentation photo (/img/online-presentation.jpg).
   - Verification: dev server "Compiled successfully" (tsc + eslint + webpack clean); tsc --noEmit clean.
   - Notes: images remain swappable placeholders.
+- [x] **Dashboard hero image -> real hybrid video-call / online-presentation photo**
+  - Date: 2026-06-26
+  - Session: CC-20260625-q4m8
+  - What changed: Replaced /img/online-presentation.jpg (was a watermarked loremflickr filler — small laptop photo on a red field) with a real full-frame photo of a room watching a presentation delivered over a video call (projector shows the remote presenter + a Zoom-style tile gallery), matching Ali's "presentation over Zoom, people watching" direction. Inspected 8 candidates and picked the on-theme one.
+  - Verification: image viewed/confirmed (real full-frame, no filler/watermark field); /sponsor/dashboard hero already references this path.
+  - Notes: minor corner CC-attribution watermark, heavily obscured by the 74-93% dark hero overlay; swappable placeholder pending real brand photography.
