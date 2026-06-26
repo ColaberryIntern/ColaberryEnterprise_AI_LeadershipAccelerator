@@ -171,12 +171,27 @@ function CaseStudiesPage() {
       <section
         aria-label="Page header"
         style={{
+          position: 'relative',
+          overflow: 'hidden',
           background: 'var(--surface-inverse)',
           color: 'var(--text-on-inverse)',
-          padding: 'var(--space-20) var(--space-5)',
+          padding: 'var(--space-24) var(--space-5) var(--space-20)',
         }}
       >
-        <div style={{ maxWidth: 'var(--container-lg)', margin: '0 auto', textAlign: 'center' }}>
+        {/* Hero photo + dark overlay (decorative) */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 72%, transparent), color-mix(in srgb, var(--surface-inverse) 92%, transparent)), url('/img/presentation.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 'var(--container-lg)', margin: '0 auto', textAlign: 'center' }}>
           <Badge solid style={{ marginBottom: 'var(--space-5)' }}>
             Demo Day Wins · AI Champion Stories
           </Badge>

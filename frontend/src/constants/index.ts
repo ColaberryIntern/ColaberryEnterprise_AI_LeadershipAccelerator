@@ -57,21 +57,20 @@ export type NavItem = {
 export const NAV_LINKS: NavItem[] = [
   { path: '/', label: 'Home' },
   {
-    label: 'The Challenge',
+    label: 'The Program',
     children: [
-      { path: '/program', label: 'How It Works' },
-      { path: '/membership/working-professionals', label: 'For Working Professionals' },
-      { path: '/membership/beginners', label: 'For Beginners' },
-      { path: '/membership/builders', label: 'For Builders' },
-      { path: '/ai-architect/instructor', label: 'Your Instructor' },
+      { path: '/program', label: 'Program' },
+      { path: '/pricing', label: 'Pricing' },
+      { path: '/case-studies', label: 'Case Studies' },
+      { path: '/demo-day', label: 'Demo Day' },
     ],
   },
   {
     label: 'For Employers',
     children: [
       { path: '/sponsorship', label: 'Sponsor Your Team' },
-      { path: '/case-studies', label: 'Proof & Case Studies' },
-      { path: '/pricing', label: 'Pricing & Seats' },
+      { path: '/consulting', label: 'Consulting' },
+      { path: '/sponsor/dashboard', label: 'Employer Dashboard' },
     ],
   },
   { path: '/contact', label: 'Contact' },
