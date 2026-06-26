@@ -56,6 +56,10 @@ export const env = {
   aiModel: process.env.AI_MODEL || 'gpt-4o-mini',
   aiMaxTokens: parseInt(process.env.AI_MAX_TOKENS || '1024', 10),
 
+  // Skilljar (Anthropic partner LMS — requires API key from Anthropic partner portal)
+  skilljarApiKey: process.env.SKILLJAR_API_KEY || '',
+  skilljarBaseUrl: process.env.SKILLJAR_BASE_URL || 'https://api.skilljar.com/v1',
+
   // Apollo
   apolloApiKey: process.env.APOLLO_API_KEY || '',
 

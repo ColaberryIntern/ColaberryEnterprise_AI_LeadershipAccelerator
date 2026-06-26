@@ -6702,18 +6702,37 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Added a second hard rule (section 0d) + pure predicate `isBasecampDirectComment()` in `backend/src/services/inbox/hardRuleEngine.ts`. A Basecamp comment notification (subject contains `Re:`) routes to INBOX when the body directly addresses Ali — a greeting verb + "Ali" ("Hi/Hello/Hey/Dear/Thanks Ali", "Good morning Ali"), a line opening with "Ali,"/"Ali:", or an inline "@Ali". Deliberately bounded to avoid re-flooding: subscribed-thread status updates that never address Ali stay automation, and the standard BC footer ("...sent to Ali Muwwakkil, ...") does NOT trigger it (the anchors require a greeting/line-leading/@-form the footer can't satisfy). Formal @mentions/assignments remain covered by the section-0c subject rule.
   - Verification: `hardRuleEngine.test.ts` now 16/16 pass — added 8 comment cases incl. the real BC footer string (must not match), a status update (must not match), a greeting to a different person (must not match), and positive greeting/line-leading/@Ali cases. `tsc --noEmit` clean for inbox/hardRule files.
   - Notes: Verified against a real subscribed-thread (Refactored/Xprize daily-update thread) where every comment carries the footer but none address Ali — confirms blanket "all Re: comments → INBOX" would flood, so the rule is intentionally narrow. If even this proves too noisy, removing the section-0d block reverts it. Ships with the section-0c change on next backend build.
+- [x] **Skilljar sync service — backend + model + migration (BC #9946499805)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sk7j
+  - What changed: Added `skilljarSyncService.ts` (`syncUserProgress`, `getUserProgress`), `StudentSkilljarProgress` Sequelize model, SQL migration `add_student_skilljar_progress.sql`, env vars `skilljarApiKey`/`skilljarBaseUrl` in `env.ts`, model export in `models/index.ts`.
+  - Verification: `tsc --noEmit` exits 0; Jest 8/8 pass (happy path, filter, idempotency, user-not-found, timeout, no-api-key, DB read, DB fail-soft).
+  - Notes: Requires `SKILLJAR_API_KEY` (Token auth) from Anthropic partner portal — not yet provisioned. Service returns a safe error result if key is absent so it will not crash in production. Migration must be applied on prod before service is invoked.
+
 - [x] **AI ROI Pilot: brand every send with sender signature + website (Ali escalation)**
   - Date: 2026-06-24
   - Session: CC-20260623-e2k7
   - What changed: A prospect (CTO, Tribute Technology) replied "I don't even know what company you work for" to a Touch-2 email. Root cause: outbound emails carried no company name or website. The cold-campaign footer said only "Colaberry Enterprise AI Division | AI Leadership..." (no site, no name), and the executive_outreach path strips even that. Fix in `schedulerService.processEmailAction`: inject a sender-aware branded signature (resolved senderName + "Colaberry Inc." + enterprise.colaberry.ai + senderEmail) into EVERY send, after the exec-outreach strip so it is never removed; the plain-text body inherits it via stripHtml. Also replaced the vague `wrapEmailHtml` footer block with the CAN-SPAM/legal line. The live AI ROI Pilot was paused (96 pending deferred, reversible) while this shipped, then resumed.
   - Verification: rendered a sample email post-deploy to confirm name + Colaberry Inc. + enterprise.colaberry.ai appear (HTML + text). Backend tsc gate via Docker build.
   - Notes: Sender-aware so it is correct for any campaign, not just Ali. Matt Powell got a personal apology + re-intro reply (branded). Honors the standing rule (reference_email_signature): every ali@colaberry.com send must carry the branded block with the website.
+- [x] PR #85 (skilljarSyncService): fix silent-no-op course-URL match + Failure-First hardening
+  - Date: 2026-06-25
+  - Session: CC-20260625-pr9k
+  - What changed: Extracted the tracked-course matching decision into `backend/src/services/lib/skilljarCourseMatch.ts` (`normalizeCourseUrl` + `isTrackedCourseUrl`). The service previously matched with `TRACKED_COURSE_URLS.has(p.course_url)` — an exact-string compare against 5 hardcoded landing-page URLs, so any trailing-slash / casing / protocol / query difference from the live Skilljar API silently filtered out every course (`courses_synced:0, error:null`). Now both sides normalize (host+path, lowercased, no trailing slash/query/hash) before comparison. Also clamped `percent_complete` to 0..100 (migration enforces a CHECK constraint) and added a 50-page hard cap + `skilljar_pagination_cap_hit` warn log to `fetchUserProgress` (Failure-First: no unbounded `next`-link loop).
+  - Verification: `jest` 15/15 — new `skilljarCourseMatch.test.ts` (7 cases incl. the trailing-slash/casing/query/protocol variants the live API would have silently dropped) + existing `skilljarSyncService.test.ts` unbroken. Backend `tsc --noEmit` clean (0 errors).
+  - Notes: Remediation of the pr-approval-review MAJOR on PR #85. Used defensive URL normalization rather than keying on course_id (the reviewer's alternative) because confirming the live id/url field needs the unprovisioned SKILLJAR_API_KEY; normalization is correct regardless of the live format. Base is staging (Kes's PR); still needs one approving review before merge.
 - [x] PR #81 (staging→main promotion): close the markEnrollmentPaid test gap
   - Date: 2026-06-25
   - Session: CC-20260625-pr9k
   - What changed: Added `backend/src/__tests__/services/enrollmentService.test.ts` covering `markEnrollmentPaid` — the PaySimple payment-confirmation path that `webhookController.test.ts` mocks out entirely. Three cases: happy path (persists paysimple_payment_id/amount_paid/enrolled_at, flips to paid, increments seats), idempotent already-paid early-return (no re-write, no double seat increment), and external_id-not-found (returns null, no seat touch). Models mocked; `Campaign.findOne→null` makes the fire-and-forget `exitPaymentCampaign` a clean early return. Test-only, no source change.
   - Verification: `jest enrollmentService.test.ts` → 3/3 pass.
   - Notes: Closes the pr-approval-review MAJOR on PR #81 — the DB-unique idempotency-key write previously had zero executed coverage. Feature author is Kes; main still requires one approving review from a non-author before merge.
+- [x] PR #85 (skilljarSyncService): email-equality guard in lookupSkilljarUser (review iteration 2)
+  - Date: 2026-06-25
+  - Session: CC-20260625-pr9k
+  - What changed: A fresh independent pr-approval-review of the URL-match fix surfaced a second silent-misattribution hazard: `lookupSkilljarUser` returned `results[0]` from `/users?email=` without confirming the returned account's email matched the queried one. If Skilljar does fuzzy/alias/substring matching, the service could sync another student's progress under the queried email (error:null). Now it accepts only an exact case-insensitive email match, else treats the lookup as user-not-found.
+  - Verification: `jest` 16/16 — added a mismatch case (Skilljar returns a different account -> skilljar_user_id:null, courses_synced:0, no upsert). Backend `tsc --noEmit` clean (0 errors).
+  - Notes: Same silent-wrong-data failure class as the URL-match no-op. Also merged origin/staging in to clear a PROGRESS.md conflict that my own #81 staging push had induced. Base remains staging (Ali-confirmed staging-first flow); merge still needs one approving review.
 
 - [x] **Founding Cohort sales knowledge base shipped to /sales-hub (static)**
   - Date: 2026-06-25
