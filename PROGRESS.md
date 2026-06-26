@@ -6853,3 +6853,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
     - `backend/src/routes/projectRoutes.ts` (modified): added GET /api/portal/project/tasks endpoint — returns StudentTaskList+StudentTask rows; fails safe to empty array until feat/wire-project-dna-requirements (#93) merges (models loaded via dynamic import with null-check).
   - Verification: `tsc --noEmit` clean on both backend and frontend (exit code 0). Route wired. Wizard reaches done screen in browser via /portal/project/builder.
   - Notes: GitHub OAuth returns to /portal/home?github_connected=1; detect on next builder load via URL param (sets step=5 with connected state). Task list shows "generating" placeholder until PR #93 merges. Design E tokens additive (no existing --color-* conflicts). Remix icons loaded globally — required for ri-* classes in the new wizard.
+
+- [x] **Dev env: load .env into backend container so ANTHROPIC_API_KEY is available locally**
+  - Date: 2026-06-26
+  - Session: CC-20260625-k3p7
+  - What changed: `docker-compose.dev.yml` — `env_file` for backend service changed from scalar `.env.dev` to list `[.env, .env.dev]` so secrets in the gitignored `.env` (ANTHROPIC_API_KEY, etc.) are automatically available in the dev container without manual injection.
+  - Verification: `docker exec accelerator-dev-backend printenv ANTHROPIC_API_KEY` returns key; advisor questions endpoint responds successfully.
+  - Notes: `.env` is gitignored; `.env.dev` is tracked and contains no secrets. Safe pattern.
