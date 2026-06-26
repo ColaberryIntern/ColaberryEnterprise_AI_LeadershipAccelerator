@@ -1,29 +1,36 @@
 import React, { useEffect, useRef } from 'react';
 import SEOHead from '../components/SEOHead';
-import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import { Badge } from '../colaberry/components/core/Badge';
 import { Button } from '../colaberry/components/core/Button';
 import { Card } from '../colaberry/components/core/Card';
-import { Progress } from '../colaberry/components/core/Progress';
 import { Accordion } from '../colaberry/components/core/Accordion';
+import ProgramRoadmap from '../components/visuals/ProgramRoadmap';
+import MermaidDiagram from '../components/visuals/MermaidDiagram';
+import PartnerStrip from '../components/visuals/PartnerStrip';
+import SectionFigure from '../components/visuals/SectionFigure';
+import { PhaseBand } from '../components/visuals/charts';
 
 /**
- * ProgramPage — "The one class everyone enters."
+ * ProgramPage — "The 12-week journey to Certified Anthropic AI Systems Architect."
  *
- * Strategy: One Class, Many Doors. A single cohort/program sits at the center;
- * two doors lead into it — individuals (Join the Challenge) and employers
- * (Sponsor Your Team). This page explains the program itself: what you build,
- * the cohort rhythm, the outcomes, the Anthropic Architect certification track,
- * and the leaderboard + Demo Day. It closes with the two-door CTA.
+ * Strategy: One continuous 12-WEEK program. There is NO 3-week class — the four
+ * phases (Build Your AI Foundation → Create Your AI Team → Connect AI to the Real
+ * World → Design AI That Scales) are GROUPINGS of weeks within the single 12-week
+ * path. Learners train hands-on with Claude Code (Anthropic / Claude Code partner)
+ * and prep for the "Certified Anthropic AI Systems Architect" (CCA-F) credential.
  *
- * Built entirely on the Colaberry design system: semantic tokens only (no raw
- * hex), DS core components (Badge, Button, Card, Progress, Accordion). styles.css
- * is imported once at the app root (src/index.tsx).
+ * Two doors lead into the one program: "Join the Challenge" (individual) and
+ * "Sponsor Your Team" (employer). Next 12-week cohort starts Mon Jul 27.
+ *
+ * Built on the Colaberry design system: semantic tokens only (no raw layout hex),
+ * DS core components (Badge, Button, Card, Accordion) + the shared visual
+ * components (ProgramRoadmap, MermaidDiagram, PartnerStrip, SectionFigure,
+ * PhaseBand). styles.css is imported once at the app root (src/index.tsx).
  */
 
 /** Two-door destinations (see publicRoutes.tsx). */
-const DOOR_A_HREF = '/membership/builders'; // individuals — self-serve membership
-const DOOR_B_HREF = '/sponsorship'; // employers — sponsor annual seats
+const DOOR_A_HREF = '/enroll'; // individuals — Join the Challenge
+const DOOR_B_HREF = '/sponsorship'; // employers — Sponsor Your Team
 
 /* ----------------------------------------------------------------------------
  * Scroll-reveal helper (collapses under prefers-reduced-motion via global CSS)
@@ -76,6 +83,7 @@ const container: React.CSSProperties = {
   marginInline: 'auto',
   paddingInline: 'var(--space-6)',
 };
+const wide: React.CSSProperties = { ...container, maxWidth: 1280 };
 const narrow: React.CSSProperties = { ...container, maxWidth: 760 };
 const eyebrow: React.CSSProperties = {
   textTransform: 'uppercase',
@@ -116,45 +124,80 @@ const muted: React.CSSProperties = {
 /* ----------------------------------------------------------------------------
  * Content data
  * ------------------------------------------------------------------------- */
+
+/** Card accent + Badge tone are constrained to the values those DS components
+ *  actually support (Card: red|green|blue; Badge adds warning|neutral|outline). */
+type CardAccent = 'red' | 'green' | 'blue';
+type BadgeTone = CardAccent | 'warning' | 'neutral';
+
+interface Phase {
+  n: string;
+  weeks: string;
+  accent: CardAccent;
+  /** Optional Badge tone override when the phase color isn't a Card accent. */
+  badge?: BadgeTone;
+  title: string;
+  body: string;
+}
+
+/** The four PHASES — groupings of weeks within the single 12-week program. */
+const PHASES: Phase[] = [
+  {
+    n: '1',
+    weeks: 'Weeks 1–3',
+    accent: 'red' as const,
+    title: 'Build Your AI Foundation',
+    body:
+      'Master the architect mindset with Claude Code: decompose a real problem, structure context, and ship deterministic behavior on top of a probabilistic model.',
+  },
+  {
+    n: '2',
+    weeks: 'Weeks 4–6',
+    accent: 'green' as const,
+    title: 'Create Your AI Team',
+    body:
+      'Orchestrate multi-step agents — tools, sub-agents, and handoffs — so the system does real work instead of answering one prompt at a time.',
+  },
+  {
+    n: '3',
+    weeks: 'Weeks 7–9',
+    accent: 'blue' as const,
+    title: 'Connect AI to the Real World',
+    body:
+      'Wire your build to live data, APIs, and your own systems. Harden it against messy inputs so it works on the hundredth run, not just the first.',
+  },
+  {
+    n: '4',
+    weeks: 'Weeks 10–12',
+    // Card supports red|green|blue accents; Badge supports a 'warning' (amber)
+    // tone. Phase 4 wears the amber Badge for brand-correct phase color while
+    // taking the supported blue Card accent so its top rule still renders.
+    accent: 'blue' as const,
+    badge: 'warning' as const,
+    title: 'Design AI That Scales',
+    body:
+      'Make it production-grade: observability, guardrails, cost control, and a defended architecture you present as your Certified Architect capstone.',
+  },
+];
+
 const BUILD_PILLARS = [
   {
     accent: 'red' as const,
     title: 'A working AI system — not a slide deck',
     body:
-      'You scope one real problem from your own world and build a functioning AI solution against it: a multi-step agent, an automation, or a decision tool that actually runs.',
+      'Over the 12 weeks you scope one real problem from your own world and build a functioning AI solution against it: a multi-step agent, an automation, or a decision tool that actually runs.',
   },
   {
     accent: 'blue' as const,
     title: 'The architect mindset',
     body:
-      'You learn to design with Claude — decomposing a problem, orchestrating tools and context, and shipping something deterministic on top of a probabilistic model.',
+      'You learn to design with Claude Code — decomposing a problem, orchestrating tools and context, and shipping something deterministic on top of a probabilistic model.',
   },
   {
     accent: 'green' as const,
     title: 'A portfolio artifact',
     body:
-      'You leave with a deployed build, a repo, and a Demo Day presentation — proof of capability you can show a hiring manager, a board, or your own team.',
-  },
-];
-
-const RHYTHM = [
-  {
-    week: 'Week 1',
-    title: 'Define & architect',
-    body:
-      'Pick your problem. Learn the build patterns with Claude. Lock a scoped, measurable target.',
-  },
-  {
-    week: 'Week 2',
-    title: 'Build & refine',
-    body:
-      'Stand up the system, harden it against real inputs, and instrument it so it works on the second run, not just the first.',
-  },
-  {
-    week: 'Week 3',
-    title: 'Present at Demo Day',
-    body:
-      'Tell the story, run the live demo, and defend your architecture decisions to the cohort and panel.',
+      'You leave with a deployed build, a repo, and a capstone presentation — proof of capability you can show a hiring manager, a board, or your own team.',
   },
 ];
 
@@ -162,23 +205,23 @@ const OUTCOMES = [
   {
     accent: 'red' as const,
     title: 'A deployed AI build',
-    body: 'A real, running system scoped to a problem you care about.',
+    body: 'A real, running system scoped to a problem you care about — shipped over the full 12 weeks.',
   },
   {
     accent: 'blue' as const,
-    title: 'Anthropic Architect cert track',
+    title: 'Certified Anthropic AI Systems Architect',
     body:
-      'Progress along the official Learn-With-Claude curriculum toward Anthropic Architect recognition.',
+      'Completion of the program plus your defended capstone preps you for the CCA-F credential.',
   },
   {
     accent: 'green' as const,
-    title: 'A Demo Day presentation',
-    body: 'A recorded, panel-tested walkthrough of what you built and why.',
+    title: 'A capstone presentation',
+    body: 'A recorded, panel-tested walkthrough of what you built and the architecture decisions behind it.',
   },
   {
     accent: 'blue' as const,
     title: 'Reusable patterns',
-    body: 'Architecture templates and prompts you keep and reuse after the cohort ends.',
+    body: 'Architecture templates and prompts you keep and reuse long after week 12.',
   },
 ];
 
@@ -186,28 +229,47 @@ const FAQ_ITEMS = [
   {
     title: 'Do I need to be technical to enter?',
     content:
-      'No. The program teaches you to architect and build with Claude as your execution partner — you direct the system, decompose the problem, and ship the result. People from non-engineering backgrounds finish with working builds every cohort.',
+      'No. The program teaches you to architect and build with Claude Code as your execution partner — you direct the system, decompose the problem, and ship the result. People from non-engineering backgrounds finish with working builds every cohort.',
   },
   {
-    title: 'How much time does it take?',
-    content: `${PROGRAM_SCHEDULE.shortDescription}. Between sessions, expect a few hours of applied work on your own build. Sponsored employees learn on their own time and move at their own pace toward Demo Day.`,
-  },
-  {
-    title: 'What is the Anthropic Architect certification track?',
+    title: 'How long is the program?',
     content:
-      'A structured Learn-With-Claude curriculum that runs alongside the build. You progress through the official coursework as you ship your system, working toward Anthropic Architect recognition — the same training path Colaberry uses internally.',
+      'It is one continuous 12-week program — a single, guided path from week 1 to week 12. The four phases (Build Your AI Foundation, Create Your AI Team, Connect AI to the Real World, Design AI That Scales) simply group the weeks; they are not separate classes. The next 12-week cohort starts Monday, July 27.',
   },
   {
-    title: 'How do the leaderboard and Demo Day work?',
+    title: 'What is the "Certified Anthropic AI Systems Architect" credential?',
     content:
-      'As you build, your progress posts to a cohort leaderboard. Sponsored teams see a company-scoped board so employers can spot their real AI builders. Every cohort ends in Demo Day: you present your working system live to peers and a panel.',
+      'It is the outcome credential of the program. Across the 12 weeks you train hands-on with Claude Code on the Anthropic-aligned curriculum and build toward CCA-F (Claude Code Architect — Foundations) certification readiness. Colaberry is an Anthropic / Claude Code partner, so you prepare with the same tools teams ship with in production.',
+  },
+  {
+    title: 'How do the phases and capstone work?',
+    content:
+      'Each phase is a three-week block within the single 12-week path, and each builds on the last: foundation, then your AI team, then real-world connection, then scale. The program closes with a capstone — you present your working system to peers and a panel: the problem, the live demo, and the architecture decisions behind it.',
   },
   {
     title: 'What is the difference between the two doors?',
     content:
-      'There is one program. Individuals enter through a monthly membership and learn self-serve. Employers sponsor annual seats; employees redeem a code, learn on their own time, and climb a company leaderboard. Same cohort, same Demo Day — two ways in.',
+      'There is one 12-week program. Individuals enter through "Join the Challenge" and learn alongside the cohort. Employers "Sponsor Your Team" — employees redeem a seat, learn on their own time, and progress through the same 12 weeks toward the same credential. Same program, same capstone — two ways in.',
   },
 ];
+
+/* ----------------------------------------------------------------------------
+ * Learn → Build → Deploy mermaid source (the brand spine of the 12 weeks).
+ * ------------------------------------------------------------------------- */
+const JOURNEY_CHART = `flowchart LR
+  L["LEARN<br/>Weeks 1-3<br/>Build your AI foundation with Claude Code"]
+  B["BUILD<br/>Weeks 4-9<br/>Create your AI team & connect it to the real world"]
+  D["DEPLOY<br/>Weeks 10-12<br/>Design AI that scales · ship · defend"]
+  C(["Certified Anthropic<br/>AI Systems Architect"])
+  L --> B --> D --> C
+  classDef learn fill:#FFE7E8,stroke:#FB2832,stroke-width:2px,color:#1A1A1A;
+  classDef build fill:#EAF2F6,stroke:#367895,stroke-width:2px,color:#1A1A1A;
+  classDef deploy fill:#FCF1DD,stroke:#E8920C,stroke-width:2px,color:#1A1A1A;
+  classDef cert fill:#F1F9EA,stroke:#5BA63C,stroke-width:3px,color:#1A1A1A;
+  class L learn;
+  class B build;
+  class D deploy;
+  class C cert;`;
 
 /* ----------------------------------------------------------------------------
  * Reusable two-door CTA block
@@ -228,8 +290,9 @@ function TwoDoorCTA() {
             Learn it yourself
           </h3>
           <p style={{ ...muted, marginBlock: 'var(--space-3) var(--space-5)' }}>
-            Join as a member and start building with Claude this week. Self-serve,
-            month to month, full cohort access.
+            Join the next 12-week cohort and start building with Claude Code.
+            One continuous program, full cohort access, all the way to your
+            Certified Architect capstone.
           </p>
           <Button as="a" href={DOOR_A_HREF} variant="primary" size="lg" fullWidth>
             Join the Challenge
@@ -244,8 +307,9 @@ function TwoDoorCTA() {
             Sponsor your team
           </h3>
           <p style={{ ...muted, marginBlock: 'var(--space-3) var(--space-5)' }}>
-            Find out who your real AI builders are — without taking anyone off the
-            job. Reassignable annual seats, company leaderboard, Demo Day.
+            Put your people in Anthropic-partner hands. Reassignable seats, a
+            company view of progress, and the same 12-week path to Certified
+            Anthropic AI Systems Architect.
           </p>
           <Button
             as="a"
@@ -270,8 +334,8 @@ function ProgramPage() {
   return (
     <div style={{ background: 'var(--surface-page)' }}>
       <SEOHead
-        title="The Program"
-        description="One class everyone enters. Build a working AI system with Claude over a 3-week cohort, progress along the Anthropic Architect certification track, climb the leaderboard, and present at Demo Day."
+        title="The Program — 12-Week AI Systems Architect"
+        description="One continuous 12-week program. Train hands-on with Claude Code, build a real AI system across four phases, and prep for the Certified Anthropic AI Systems Architect (CCA-F) credential. Next cohort starts Mon Jul 27."
       />
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
@@ -292,14 +356,24 @@ function ProgramPage() {
             inset: 0,
             zIndex: 0,
             backgroundImage:
-              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-ai.jpg')",
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 78%, transparent), color-mix(in srgb, var(--surface-inverse) 92%, transparent)), url('/hero/hero-ai.jpg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
         />
-        <div style={{ ...container, maxWidth: 880, textAlign: 'center', position: 'relative', zIndex: 1 }}>
+        <div
+          style={{
+            ...container,
+            maxWidth: 880,
+            textAlign: 'center',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
           <FadeIn>
-            <Badge solid>The Program</Badge>
+            <Badge solid>The Program · 12 weeks</Badge>
+            {/* HERO CONTRAST: dark photo hero — every line uses light
+                --text-on-inverse so the headline is never near-black. */}
             <h1
               className="cb-balance"
               style={{
@@ -312,21 +386,22 @@ function ProgramPage() {
                 marginBlock: 'var(--space-5) var(--space-4)',
               }}
             >
-              The one class everyone enters.
+              One 12-week journey. From first prompt to Certified Architect.
             </h1>
             <p
               style={{
                 fontSize: 'var(--fs-body-lg)',
                 lineHeight: 'var(--lh-relaxed)',
                 color: 'var(--text-on-inverse)',
-                opacity: 0.82,
-                maxWidth: 640,
+                opacity: 0.86,
+                maxWidth: 660,
                 marginInline: 'auto',
               }}
             >
-              Most people consume AI. Very few learn to build with it. This is the
-              single cohort both doors lead into — where you ship a real AI system,
-              earn it on a leaderboard, and prove it at Demo Day.
+              Most people consume AI. Very few learn to build with it. This is one
+              continuous 12-week program — not a short course — where you train
+              hands-on with Claude Code, ship a real AI system, and prep for the
+              Certified Anthropic AI Systems Architect credential.
             </p>
             <p
               style={{
@@ -360,33 +435,165 @@ function ProgramPage() {
                 </Button>
               </span>
             </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* ── One class, many doors ─────────────────────────────────────────── */}
-      <section aria-label="One class, many doors" style={sectionPad}>
-        <div style={{ ...narrow, textAlign: 'center' }}>
-          <FadeIn>
-            <span style={eyebrow}>One class, many doors</span>
-            <h2 style={{ ...h2, marginBlock: 'var(--space-4) var(--space-5)' }}>
-              One program. Two ways in.
-            </h2>
-            <p style={lead}>
-              There is exactly one class. Individuals walk through one door and
-              learn self-serve. Employers walk through the other and sponsor seats
-              for their people. Everyone lands in the same cohort, builds the same
-              way, and presents at the same Demo Day.
+            <p
+              style={{
+                fontSize: 'var(--fs-caption)',
+                color: 'var(--text-on-inverse)',
+                opacity: 0.74,
+                marginTop: 'var(--space-5)',
+              }}
+            >
+              Next 12-week cohort starts Monday, July 27.
             </p>
           </FadeIn>
         </div>
       </section>
 
-      {/* ── What you build ────────────────────────────────────────────────── */}
+      {/* ── The 12-week roadmap (flagship visual) ─────────────────────────── */}
+      <section aria-label="The 12-week roadmap" style={sectionPad}>
+        <div style={wide}>
+          <FadeIn>
+            <div style={{ maxWidth: 720, marginBottom: 'var(--space-10)' }}>
+              <span style={eyebrow}>The 12-week path</span>
+              <h2 style={{ ...h2, marginBlock: 'var(--space-4) var(--space-4)' }}>
+                One continuous program. Twelve weeks. Four phases.
+              </h2>
+              <p style={lead}>
+                There is no three-week class here. You follow a single, guided path
+                from week 1 to week 12, with a project lane and a CCA-F
+                certification lane running alongside the whole way — converging on
+                one finish: Certified Anthropic AI Systems Architect.
+              </p>
+            </div>
+          </FadeIn>
+          <FadeIn>
+            <ProgramRoadmap />
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ── Learn → Build → Deploy (mermaid) ──────────────────────────────── */}
       <section
-        aria-label="What you build"
+        aria-label="Learn, build, deploy"
         style={{ ...sectionPad, background: 'var(--surface-subtle)' }}
       >
+        <div style={container}>
+          <FadeIn>
+            <div
+              style={{
+                maxWidth: 720,
+                marginBottom: 'var(--space-8)',
+                textAlign: 'center',
+                marginInline: 'auto',
+              }}
+            >
+              <span style={eyebrow}>How the weeks flow</span>
+              <h2 style={{ ...h2, marginTop: 'var(--space-4)' }}>
+                Learn. Build. Deploy.
+              </h2>
+              <p style={{ ...lead, marginTop: 'var(--space-4)' }}>
+                The same arc runs through all twelve weeks: you learn a pattern with
+                Claude Code, build it into your system, and deploy it for real.
+              </p>
+            </div>
+          </FadeIn>
+          <FadeIn>
+            <div style={{ maxWidth: 980, marginInline: 'auto' }}>
+              <MermaidDiagram
+                chart={JOURNEY_CHART}
+                caption="One continuous 12-week path: Learn (weeks 1–3) → Build (weeks 4–9) → Deploy (weeks 10–12), converging on the Certified Anthropic AI Systems Architect credential."
+              />
+            </div>
+          </FadeIn>
+
+          <FadeIn>
+            <div style={{ marginTop: 'var(--space-10)' }}>
+              <PhaseBand
+                phases={[
+                  { label: '1 · Build Foundation', color: 'var(--brand-accent)' },
+                  { label: '2 · Create AI Team', color: 'var(--chart-3)' },
+                  { label: '3 · Connect Real World', color: 'var(--chart-1)' },
+                  { label: '4 · Design AI That Scales', color: 'var(--chart-4)' },
+                ]}
+              />
+              <p
+                style={{
+                  ...muted,
+                  fontSize: 'var(--fs-caption)',
+                  marginTop: 'var(--space-3)',
+                  textAlign: 'center',
+                }}
+              >
+                Four phases, three weeks each — groupings within the single
+                12-week program, never standalone classes.
+              </p>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ── The four phases, detailed ─────────────────────────────────────── */}
+      <section aria-label="The four phases" style={sectionPad}>
+        <div style={container}>
+          <FadeIn>
+            <div style={{ maxWidth: 680, marginBottom: 'var(--space-10)' }}>
+              <span style={eyebrow}>Inside the 12 weeks</span>
+              <h2 style={{ ...h2, marginTop: 'var(--space-4)' }}>
+                Four phases, one path.
+              </h2>
+            </div>
+          </FadeIn>
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            }}
+          >
+            {PHASES.map((p) => (
+              <FadeIn key={p.title}>
+                <Card accent={p.accent} elevation="sm" hoverable>
+                  <div style={cardBody}>
+                    <Badge tone={p.badge ?? p.accent}>
+                      Phase {p.n} · {p.weeks}
+                    </Badge>
+                    <h3 style={{ ...cardTitle, marginTop: 'var(--space-3)' }}>
+                      {p.title}
+                    </h3>
+                    <p style={{ ...muted, marginTop: 'var(--space-2)' }}>{p.body}</p>
+                  </div>
+                </Card>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── SectionFigure: mentor coaching ────────────────────────────────── */}
+      <section
+        aria-label="Mentored, every week"
+        style={{ ...sectionPad, background: 'var(--surface-subtle)' }}
+      >
+        <div style={container}>
+          <FadeIn>
+            <SectionFigure
+              src="/img/mentor-coaching.jpg"
+              alt="A mentor coaching a learner through an AI build at a laptop"
+              eyebrow="Mentored every week"
+              title="You are never building alone."
+              body={[
+                'Across all twelve weeks you work with mentors who have shipped real AI systems. They review your architecture, unblock you in Claude Code, and hold you to a production bar — not a tutorial bar.',
+                'Because it is one continuous program, the support compounds: week 8 builds on the same problem you scoped in week 1, with the same people who have watched it take shape.',
+              ]}
+              side="right"
+              cta={{ label: 'Join the Challenge', to: DOOR_A_HREF }}
+            />
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ── What you build ────────────────────────────────────────────────── */}
+      <section aria-label="What you build" style={sectionPad}>
         <div style={container}>
           <FadeIn>
             <div style={{ maxWidth: 680, marginBottom: 'var(--space-10)' }}>
@@ -417,74 +624,31 @@ function ProgramPage() {
         </div>
       </section>
 
-      {/* ── The cohort rhythm ─────────────────────────────────────────────── */}
-      <section aria-label="The cohort rhythm" style={sectionPad}>
+      {/* ── SectionFigure: developer code (hands-on with Claude Code) ─────── */}
+      <section
+        aria-label="Hands-on with Claude Code"
+        style={{ ...sectionPad, background: 'var(--surface-subtle)' }}
+      >
         <div style={container}>
           <FadeIn>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'baseline',
-                gap: 'var(--space-3)',
-                marginBottom: 'var(--space-8)',
-              }}
-            >
-              <span style={eyebrow}>The cohort rhythm</span>
-              <h2 style={{ ...h2, flexBasis: '100%' }}>
-                Three weeks, one build, real momentum.
-              </h2>
-            </div>
+            <SectionFigure
+              src="/img/developer-code.jpg"
+              alt="Close-up of a developer building an AI system in a code editor"
+              eyebrow="Hands-on with Claude Code"
+              title="Real tools. Real builds. From week one."
+              body={[
+                'This is not slideware. From the first week you work in Claude Code — the same agentic tooling teams ship with in production — and keep shipping against your own problem through week twelve.',
+                'By the end you have a deployed system, a repo, and a defended architecture: the raw material of the Certified Anthropic AI Systems Architect capstone.',
+              ]}
+              side="left"
+            />
           </FadeIn>
-
-          <FadeIn>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 'var(--space-2)',
-                marginBottom: 'var(--space-10)',
-              }}
-            >
-              {PROGRAM_SCHEDULE.summaryBadges.map((b: string, i: number) => (
-                <Badge key={b} tone={i === 0 ? 'red' : 'neutral'} dot={i === 0}>
-                  {b}
-                </Badge>
-              ))}
-            </div>
-          </FadeIn>
-
-          <div
-            style={{
-              display: 'grid',
-              gap: 'var(--space-6)',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            }}
-          >
-            {RHYTHM.map((step, i) => (
-              <FadeIn key={step.week}>
-                <Card elevation="sm" accent={i === 2 ? 'green' : undefined}>
-                  <div style={cardBody}>
-                    <Badge tone={i === 2 ? 'green' : 'blue'}>{step.week}</Badge>
-                    <h3
-                      style={{ ...cardTitle, marginTop: 'var(--space-3)' }}
-                    >
-                      {step.title}
-                    </h3>
-                    <p style={{ ...muted, marginTop: 'var(--space-2)' }}>
-                      {step.body}
-                    </p>
-                  </div>
-                </Card>
-              </FadeIn>
-            ))}
-          </div>
         </div>
       </section>
 
-      {/* ── Anthropic Architect cert track ────────────────────────────────── */}
+      {/* ── Certification path ────────────────────────────────────────────── */}
       <section
-        aria-label="Anthropic Architect certification track"
+        aria-label="Certification path"
         style={{ ...sectionPad, background: 'var(--surface-inverse)' }}
       >
         <div style={container}>
@@ -499,7 +663,7 @@ function ProgramPage() {
             >
               <div>
                 <span style={{ ...eyebrow, color: 'var(--brand-accent)' }}>
-                  Certification track
+                  The credential
                 </span>
                 <h2
                   style={{
@@ -508,50 +672,88 @@ function ProgramPage() {
                     marginBlock: 'var(--space-4) var(--space-5)',
                   }}
                 >
-                  Build toward Anthropic Architect.
+                  Become a Certified Anthropic AI Systems Architect.
                 </h2>
                 <p
                   style={{
                     fontSize: 'var(--fs-body-lg)',
                     lineHeight: 'var(--lh-relaxed)',
                     color: 'var(--text-on-inverse)',
-                    opacity: 0.82,
+                    opacity: 0.86,
                   }}
                 >
-                  Alongside your build, you progress through the official
-                  Learn-With-Claude curriculum — the same training path Colaberry
-                  uses internally — working toward Anthropic Architect recognition.
-                  The coursework and the cohort reinforce each other: you learn the
-                  pattern, then you ship it.
+                  The 12-week program is built to prepare you for the Certified
+                  Anthropic AI Systems Architect credential (CCA-F prep). As you move
+                  through the four phases, you train on the Anthropic-aligned
+                  curriculum and, in parallel, ship the build you defend as your
+                  capstone. Coursework and project reinforce each other: you learn
+                  the pattern, then you ship it.
                 </p>
               </div>
 
               <Card elevation="md">
                 <div style={cardBody}>
-                  <h3 style={cardTitle}>Your track progress</h3>
-                  <div style={{ marginTop: 'var(--space-5)', display: 'grid', gap: 'var(--space-5)' }}>
-                    <Progress
-                      label="Learn-With-Claude coursework"
-                      value={100}
-                      tone="blue"
-                      showValue
-                    />
-                    <Progress
-                      label="Working AI build shipped"
-                      value={60}
-                      tone="red"
-                      showValue
-                    />
-                    <Progress
-                      label="Demo Day presentation"
-                      value={20}
-                      tone="green"
-                      showValue
-                    />
-                  </div>
-                  <p style={{ ...muted, marginTop: 'var(--space-5)', fontSize: 'var(--fs-caption)' }}>
-                    Illustrative track. Recognition reflects coursework completed
-                    plus a shipped build defended at Demo Day.
+                  <h3 style={cardTitle}>What the credential requires</h3>
+                  <ul
+                    style={{
+                      marginTop: 'var(--space-5)',
+                      display: 'grid',
+                      gap: 'var(--space-4)',
+                      paddingLeft: 0,
+                      listStyle: 'none',
+                    }}
+                  >
+                    {[
+                      {
+                        tone: 'red' as const,
+                        label: 'Complete all 12 weeks',
+                        sub: 'The full continuous program across four phases.',
+                      },
+                      {
+                        tone: 'blue' as const,
+                        label: 'CCA-F coursework',
+                        sub: 'The Anthropic-aligned Claude Code curriculum, week by week.',
+                      },
+                      {
+                        tone: 'green' as const,
+                        label: 'A defended capstone',
+                        sub: 'A working AI system you present and defend to a panel.',
+                      },
+                    ].map((row) => (
+                      <li
+                        key={row.label}
+                        style={{
+                          display: 'flex',
+                          gap: 'var(--space-3)',
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <span style={{ marginTop: 2, flex: '0 0 auto' }}>
+                          <Badge tone={row.tone} dot>
+                            &nbsp;
+                          </Badge>
+                        </span>
+                        <span>
+                          <strong style={{ color: 'var(--text-strong)' }}>
+                            {row.label}
+                          </strong>
+                          <br />
+                          <span style={{ ...muted, fontSize: 'var(--fs-body-sm)' }}>
+                            {row.sub}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p
+                    style={{
+                      ...muted,
+                      marginTop: 'var(--space-5)',
+                      fontSize: 'var(--fs-caption)',
+                    }}
+                  >
+                    Recognition reflects coursework completed plus a shipped build
+                    defended at the capstone.
                   </p>
                 </div>
               </Card>
@@ -560,63 +762,11 @@ function ProgramPage() {
         </div>
       </section>
 
-      {/* ── Leaderboard + Demo Day ────────────────────────────────────────── */}
-      <section aria-label="Leaderboard and Demo Day" style={sectionPad}>
-        <div style={container}>
-          <div
-            style={{
-              display: 'grid',
-              gap: 'var(--space-6)',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            }}
-          >
-            <FadeIn>
-              <Card accent="blue" elevation="sm">
-                <div style={cardBody}>
-                  <Badge tone="blue">The leaderboard</Badge>
-                  <h2
-                    style={{
-                      ...h2,
-                      fontSize: 'var(--fs-h3)',
-                      marginBlock: 'var(--space-3) var(--space-4)',
-                    }}
-                  >
-                    Progress you can see.
-                  </h2>
-                  <p style={muted}>
-                    As you build, your progress posts to a cohort leaderboard.
-                    Sponsored teams get a company-scoped board — so employers find
-                    out who their real AI builders are, without taking anyone off
-                    the job. It is talent discovery, not a training report.
-                  </p>
-                </div>
-              </Card>
-            </FadeIn>
-
-            <FadeIn>
-              <Card accent="red" elevation="sm">
-                <div style={cardBody}>
-                  <Badge tone="red">Demo Day</Badge>
-                  <h2
-                    style={{
-                      ...h2,
-                      fontSize: 'var(--fs-h3)',
-                      marginBlock: 'var(--space-3) var(--space-4)',
-                    }}
-                  >
-                    Prove it live.
-                  </h2>
-                  <p style={muted}>
-                    Every cohort ends in Demo Day. You present your working system
-                    to peers and a panel: the problem, the live demo, and the
-                    architecture decisions behind it. It is the moment the build
-                    becomes proof.
-                  </p>
-                </div>
-              </Card>
-            </FadeIn>
-          </div>
-        </div>
+      {/* ── Partner strip ─────────────────────────────────────────────────── */}
+      <section aria-label="Anthropic partner" style={{ paddingBlock: 'var(--space-16)' }}>
+        <FadeIn>
+          <PartnerStrip />
+        </FadeIn>
       </section>
 
       {/* ── Outcomes ──────────────────────────────────────────────────────── */}
@@ -629,7 +779,7 @@ function ProgramPage() {
             <div style={{ maxWidth: 680, marginBottom: 'var(--space-10)' }}>
               <span style={eyebrow}>Outcomes</span>
               <h2 style={{ ...h2, marginTop: 'var(--space-4)' }}>
-                What you walk away with.
+                What you walk away with after 12 weeks.
               </h2>
             </div>
           </FadeIn>
@@ -697,7 +847,7 @@ function ProgramPage() {
                   marginTop: 'var(--space-4)',
                 }}
               >
-                Same cohort. Same Demo Day. Two ways in.
+                Same 12-week program. Same credential. Two ways in.
               </h2>
             </div>
           </FadeIn>

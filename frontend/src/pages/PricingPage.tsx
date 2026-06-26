@@ -7,6 +7,9 @@ import { Card } from '../colaberry/components/core/Card';
 import { Button } from '../colaberry/components/core/Button';
 // @ts-ignore
 import { Badge } from '../colaberry/components/core/Badge';
+import SectionFigure from '../components/visuals/SectionFigure';
+import CohortUrgency from '../components/visuals/CohortUrgency';
+import { PhaseBand, StatCounter } from '../components/visuals/charts';
 
 /**
  * PricingPage — "One Class, Many Doors".
@@ -130,6 +133,8 @@ function PricingPage() {
           <Badge solid dot>
             One Class · Two Doors
           </Badge>
+          {/* Hero lives on a dark photo: force light text explicitly so global
+              heading color rules can't render the headline near-black. */}
           <h1
             className="cb-balance"
             style={{
@@ -137,6 +142,7 @@ function PricingPage() {
               fontSize: 'var(--fs-display)',
               fontWeight: 900,
               lineHeight: 1.05,
+              color: 'var(--text-on-inverse)',
               margin: 'var(--space-5) 0 var(--space-4)',
             }}
           >
@@ -147,15 +153,60 @@ function PricingPage() {
           <p
             style={{
               fontSize: 'var(--fs-body)',
-              color: 'color-mix(in srgb, var(--text-on-inverse) 80%, transparent)',
+              color: 'color-mix(in srgb, var(--text-on-inverse) 82%, transparent)',
               maxWidth: 620,
-              margin: '0 auto',
+              margin: '0 auto var(--space-6)',
             }}
           >
             One program. Two ways in. Join as an individual builder, or sponsor your
             team and discover who your real AI builders are — without taking anyone off
-            the job.
+            the job. Graduate as a{' '}
+            <strong style={{ color: 'var(--text-on-inverse)', fontWeight: 700 }}>
+              Certified Anthropic AI Systems Architect
+            </strong>{' '}
+            — trained hands-on in Anthropic-partner hands.
           </p>
+
+          {/* Visual proof row — the 12-week shape + headline outcomes, all light on dark. */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: 'var(--space-4)',
+              maxWidth: 640,
+              margin: '0 auto',
+            }}
+          >
+            <StatCounter value="12 wks" label="One continuous program — four phases, no gaps" accent="var(--brand-secondary)" />
+            <StatCounter value="$149/mo" label="Individual membership — cancel anytime" accent="var(--brand-accent)" />
+            <StatCounter value="CCA-F" label="Certified Anthropic AI Systems Architect prep" accent="var(--chart-3)" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── The 12-week shape ────────────────────────────────── */}
+      <section
+        aria-label="The 12-week program shape"
+        style={{
+          background: 'var(--surface-page)',
+          padding: 'var(--space-12) var(--space-4) 0',
+        }}
+      >
+        <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+          <p
+            style={{
+              textAlign: 'center',
+              color: 'var(--text-muted)',
+              fontSize: 'var(--fs-body-sm)',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              margin: '0 0 var(--space-4)',
+            }}
+          >
+            One continuous 12-week path · four phases
+          </p>
+          <PhaseBand />
         </div>
       </section>
 
@@ -307,6 +358,30 @@ function PricingPage() {
         </div>
       </section>
 
+      {/* ── What you graduate as (photo figure) ──────────────── */}
+      <section
+        aria-label="The credential you earn"
+        style={{
+          background: 'var(--surface-page)',
+          padding: 'var(--space-16) var(--space-4)',
+        }}
+      >
+        <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+          <SectionFigure
+            src="/img/certificate.jpg"
+            alt="A Colaberry learner receiving the Certified Anthropic AI Systems Architect credential."
+            eyebrow="The outcome"
+            title="You don't finish with a certificate. You finish as a builder."
+            body={[
+              'Either door leads to the same place: graduating as a Certified Anthropic AI Systems Architect (CCA-F prep). You learn hands-on with Claude Code, building a real working AI system — not slideware.',
+              'Colaberry is an Anthropic / Claude Code partner, so you put yourself — or your people — in Anthropic-partner hands from day one. Learn with Claude, build through Colaberry, deploy in the real world.',
+            ]}
+            side="right"
+            cta={{ label: 'Join the Challenge', to: '/membership/working-professionals' }}
+          />
+        </div>
+      </section>
+
       {/* ── Employer seat tiers ──────────────────────────────── */}
       <section
         aria-label="Employer seat tiers"
@@ -433,6 +508,19 @@ function PricingPage() {
               </p>
             </div>
           </Card>
+        </div>
+      </section>
+
+      {/* ── Next cohort urgency ──────────────────────────────── */}
+      <section
+        aria-label="Next cohort"
+        style={{
+          background: 'var(--surface-sunken)',
+          padding: 'var(--space-16) var(--space-4)',
+        }}
+      >
+        <div style={{ maxWidth: 880, margin: '0 auto' }}>
+          <CohortUrgency startDateISO="2026-07-27" seatsTotal={40} seatsLeft={7} />
         </div>
       </section>
 

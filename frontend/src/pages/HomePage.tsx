@@ -3,24 +3,34 @@ import SEOHead from '../components/SEOHead';
 import { Button } from '../colaberry/components/core/Button';
 import { Card } from '../colaberry/components/core/Card';
 import { Badge } from '../colaberry/components/core/Badge';
+import ProgramRoadmap from '../components/visuals/ProgramRoadmap';
+import PartnerStrip from '../components/visuals/PartnerStrip';
+import CohortUrgency from '../components/visuals/CohortUrgency';
+import SectionFigure from '../components/visuals/SectionFigure';
+import { StatCounter } from '../components/visuals/charts';
 
 /**
- * HomePage — "One Class, Many Doors".
+ * HomePage — "One Program. Two Doors In."
  *
- * One program (the cohort), entered through two doors:
- *   Door A — individuals self-serve a $149/mo membership.
- *   Door B — employers sponsor annual seats; employees redeem codes,
- *            learn on their own time, climb a company leaderboard, present at Demo Day.
+ * One continuous 12-week program (the cohort), entered through two doors:
+ *   Door A — individuals "Join the Challenge" at /enroll.
+ *   Door B — employers "Sponsor Your Team" at /sponsorship.
  *
- * The corporate value prop is TALENT DISCOVERY, not training:
- * "Find out who your real AI builders are — without taking anyone off the job."
+ * There is NO standalone 3-week class: the four phases simply group the 12
+ * weeks. The outcome credential is the "Certified Anthropic AI Systems
+ * Architect" (CCA-F prep). Colaberry is an Anthropic / Claude Code partner —
+ * learners train hands-on with Claude Code, so sponsors "put their people in
+ * Anthropic-partner hands."
  *
- * Built on the Colaberry design system: semantic tokens only (no raw hex),
- * core DS components (Button, Card, Badge). Section order:
- * hero → two doors → how the Challenge works → brand-line band → trust strip → final dual CTA.
+ * Built on the Colaberry design system: semantic tokens only (no raw layout
+ * hex), bold premium brand language, big Roboto headings, full-bleed brand
+ * moments. Section order:
+ *   hero (light text over dark photo) → two doors → 12-week roadmap centerpiece
+ *   → partner strip → outcomes stat row → section figure (real photo)
+ *   → cohort urgency → brand-line band → final dual CTA.
  */
 
-const INDIVIDUAL_PATH = '/membership/working-professionals';
+const INDIVIDUAL_PATH = '/enroll';
 const SPONSOR_PATH = '/sponsorship';
 const DESIGNER_PATH = '/ai-workforce-designer';
 
@@ -42,11 +52,11 @@ const DOORS: Door[] = [
     tone: 'red',
     title: 'Join the Challenge',
     who: 'For working professionals, career-changers, and self-starters.',
-    body: 'Enter the same cohort the pros do, on your own schedule. A guided path that turns "I use AI" into "I build with AI" — with real projects, not toy demos.',
+    body: 'Enter the same 12-week cohort the pros do, on your own schedule. A guided path that turns "I use AI" into "I build with AI" — with real projects, not toy demos.',
     points: [
-      'Self-serve membership at $149/mo — start this week',
+      'One continuous 12-week program — start with the next cohort',
       'Learn With Claude, build through Colaberry, deploy in the real world',
-      'Earn your spot on the leaderboard and present at Demo Day',
+      'Graduate as a Certified Anthropic AI Systems Architect (CCA-F prep)',
     ],
     ctaLabel: 'Join the Challenge',
     ctaHref: INDIVIDUAL_PATH,
@@ -57,7 +67,7 @@ const DOORS: Door[] = [
     tone: 'blue',
     title: 'Sponsor Your Team',
     who: 'For leaders who need to know who their real AI builders are.',
-    body: 'Sponsor annual seats and let your people prove it. They learn on their own time, climb a company-scoped leaderboard, and ship work you can see — no one comes off the job.',
+    body: 'Put your people in Anthropic-partner hands. They train hands-on with Claude Code, ship work you can see, and climb a company-scoped leaderboard — no one comes off the job.',
     points: [
       'Reassignable seats — if someone leaves, the seat does not',
       'A company leaderboard that surfaces your true builders',
@@ -89,7 +99,7 @@ const STEPS: Step[] = [
   {
     n: '03',
     title: 'Learn on their own time',
-    body: 'No one leaves their desk. People progress through the build path on their own schedule, around the work they already do.',
+    body: 'No one leaves their desk. People progress through the 12-week build path on their own schedule, around the work they already do.',
   },
   {
     n: '04',
@@ -103,16 +113,17 @@ const STEPS: Step[] = [
   },
 ];
 
-interface Proof {
-  stat: string;
+interface Outcome {
+  value: string;
   label: string;
+  accent?: string;
 }
 
-const PROOF: Proof[] = [
-  { stat: 'Since 2012', label: 'Colaberry has helped people build careers in data and AI' },
-  { stat: '5,000+', label: 'careers launched through hands-on, build-first programs' },
-  { stat: 'Learn With Claude', label: 'frontier AI guidance built into every step of the path' },
-  { stat: 'One cohort', label: 'two doors — individuals and teams learn side by side' },
+const OUTCOMES: Outcome[] = [
+  { value: '12', label: 'weeks, one continuous program — four phases, one credential', accent: 'var(--brand-accent)' },
+  { value: '5,000+', label: 'careers launched through hands-on, build-first programs', accent: 'var(--chart-3)' },
+  { value: 'Since 2012', label: 'helping people build real careers in data and AI', accent: 'var(--chart-1)' },
+  { value: 'CCA-F', label: 'Certified Anthropic AI Systems Architect — what you graduate as', accent: 'var(--chart-4)' },
 ];
 
 function HomePage() {
@@ -120,12 +131,12 @@ function HomePage() {
     <>
       <SEOHead
         title="Home"
-        description="One class, many doors. Find out who your real AI builders are — without taking anyone off the job. Join the Challenge as an individual, or sponsor your team. Learn with Claude, build through Colaberry, deploy in the real world."
+        description="One program, two doors. Learn with Claude, build through Colaberry, deploy in the real world. Join the 12-week Challenge as an individual, or sponsor your team — and graduate a Certified Anthropic AI Systems Architect."
       />
 
       {/* ============================ HERO ============================ */}
       <section
-        aria-label="Find your AI builders"
+        aria-label="Most people consume AI. Very few learn to build with it."
         style={{
           position: 'relative',
           overflow: 'hidden',
@@ -135,6 +146,7 @@ function HomePage() {
           padding: 'var(--space-32) 0 var(--space-24)',
         }}
       >
+        {/* Dark photo wash — keep it dark enough that light hero text stays AA-legible. */}
         <div
           aria-hidden="true"
           style={{
@@ -142,7 +154,7 @@ function HomePage() {
             inset: 0,
             zIndex: 0,
             backgroundImage:
-              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-home.jpg')",
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 78%, transparent), color-mix(in srgb, var(--surface-inverse) 92%, transparent)), url('/hero/hero-home.jpg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
@@ -152,7 +164,7 @@ function HomePage() {
           style={{ position: 'relative', zIndex: 1, maxWidth: 980, paddingInline: 'var(--space-6)', textAlign: 'center' }}
         >
           <Badge solid style={{ marginBottom: 'var(--space-6)' }}>
-            One class · many doors
+            One program · two doors · one credential
           </Badge>
           <h1
             className="cb-balance"
@@ -166,20 +178,32 @@ function HomePage() {
               color: 'var(--text-on-inverse)',
             }}
           >
-            Find out who your real AI builders are — without taking anyone off the job.
+            Most people consume AI. Very few learn to build with it.
           </h1>
           <p
             style={{
               fontSize: 'var(--fs-body-lg)',
               lineHeight: 'var(--lh-relaxed)',
-              color: 'color-mix(in srgb, var(--text-on-inverse) 80%, transparent)',
-              maxWidth: 680,
-              margin: '0 auto var(--space-10)',
+              color: 'color-mix(in srgb, var(--text-on-inverse) 82%, transparent)',
+              maxWidth: 700,
+              margin: '0 auto var(--space-8)',
             }}
           >
-            Most people consume AI. Very few learn to build with it. One cohort, two
-            doors: enter it yourself, or sponsor your team and let your people prove
-            what they can ship.
+            Learn With Claude. Build Through Colaberry. Deploy In The Real World. One
+            continuous 12-week cohort, two doors in: walk in yourself, or sponsor your
+            team and find out who your real AI builders are.
+          </p>
+          <p
+            style={{
+              fontSize: 'var(--fs-body-sm)',
+              fontWeight: 600,
+              letterSpacing: 'var(--ls-wide)',
+              textTransform: 'uppercase',
+              color: 'color-mix(in srgb, var(--brand-secondary) 70%, var(--text-on-inverse))',
+              margin: '0 0 var(--space-8)',
+            }}
+          >
+            Graduate as a Certified Anthropic AI Systems Architect
           </p>
           <div
             style={{
@@ -206,10 +230,11 @@ function HomePage() {
             style={{
               marginTop: 'var(--space-6)',
               fontSize: 'var(--fs-caption)',
-              color: 'color-mix(in srgb, var(--text-on-inverse) 60%, transparent)',
+              color: 'color-mix(in srgb, var(--text-on-inverse) 64%, transparent)',
             }}
           >
-            $149/mo for individuals · annual, reassignable seats for teams
+            Next 12-week cohort starts Mon, Jul 27 · individuals self-serve · annual,
+            reassignable seats for teams
           </p>
         </div>
       </section>
@@ -323,9 +348,131 @@ function HomePage() {
         </div>
       </section>
 
+      {/* ============ THE 12-WEEK ROADMAP (CENTERPIECE) ============ */}
+      <section
+        aria-label="Your 12-week path"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1200, paddingInline: 'var(--space-6)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto var(--space-12)' }}>
+            <Badge tone="warning" style={{ marginBottom: 'var(--space-4)' }}>
+              The path
+            </Badge>
+            <h2
+              className="cb-balance"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 900,
+                fontSize: 'var(--fs-h2)',
+                lineHeight: 'var(--lh-heading)',
+                letterSpacing: 'var(--ls-tight)',
+                color: 'var(--text-strong)',
+                margin: '0 0 var(--space-4)',
+              }}
+            >
+              Your 12-week path to Certified Anthropic AI Systems Architect
+            </h2>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+              One continuous program — never a quick course. The four phases simply group
+              the twelve weeks, while a real project lane and a CCA-F certification lane
+              run alongside and converge at the finish.
+            </p>
+          </div>
+
+          <ProgramRoadmap />
+        </div>
+      </section>
+
+      {/* ==================== ANTHROPIC PARTNER STRIP ==================== */}
+      <section
+        aria-label="Anthropic partnership"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-16) 0' }}
+      >
+        <div className="container" style={{ paddingInline: 'var(--space-6)' }}>
+          <PartnerStrip />
+        </div>
+      </section>
+
+      {/* ====================== OUTCOMES STAT ROW ====================== */}
+      <section
+        aria-label="Outcomes"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-12) 0 var(--space-24)' }}
+      >
+        <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto var(--space-12)' }}>
+            <h2
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 900,
+                fontSize: 'var(--fs-h2)',
+                lineHeight: 'var(--lh-heading)',
+                letterSpacing: 'var(--ls-tight)',
+                color: 'var(--text-strong)',
+                margin: '0 0 var(--space-4)',
+              }}
+            >
+              Built for outcomes, proven since 2012
+            </h2>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+              A build-first track record, an Anthropic-partner curriculum, and a
+              credential that says you can ship.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            }}
+          >
+            {OUTCOMES.map((item) => (
+              <StatCounter
+                key={item.label}
+                value={item.value}
+                label={item.label}
+                accent={item.accent}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===================== SECTION FIGURE ===================== */}
+      <section
+        aria-label="How you learn"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+          <SectionFigure
+            src="/img/mentor-coaching.jpg"
+            alt="A mentor coaching a builder through a hands-on AI project at a laptop"
+            eyebrow="Learn With Claude"
+            title="Hands-on with Claude Code, from week one"
+            body={[
+              'You do not watch slides — you build. Every week you ship real, guided work with Claude Code, the same tools and workflows teams use in production.',
+              'A continuous 12-week program means momentum compounds: foundations become an AI team, the team connects to the real world, and your work scales into a system you can demo.',
+            ]}
+            caption="Real project work, mentor-guided — not toy demos."
+            side="right"
+            cta={{ label: 'Join the Challenge', to: INDIVIDUAL_PATH }}
+          />
+        </div>
+      </section>
+
+      {/* ===================== COHORT URGENCY ===================== */}
+      <section
+        aria-label="Next cohort"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+          <CohortUrgency startDateISO="2026-07-27" seatsTotal={40} seatsLeft={7} />
+        </div>
+      </section>
+
       {/* =================== HOW THE CHALLENGE WORKS =================== */}
       <section
-        aria-label="How the Challenge works"
+        aria-label="How the Challenge works for teams"
         style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
       >
         <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
@@ -447,52 +594,6 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ======================= TRUST / PROOF ======================= */}
-      <section
-        aria-label="Why Colaberry"
-        style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}
-      >
-        <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
-          <div
-            style={{
-              display: 'grid',
-              gap: 'var(--space-6)',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            }}
-          >
-            {PROOF.map((item) => (
-              <div
-                key={item.stat}
-                className="cb-min0"
-                style={{
-                  textAlign: 'center',
-                  padding: 'var(--space-6)',
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--surface-subtle)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 900,
-                    fontSize: 'var(--fs-h3)',
-                    lineHeight: 'var(--lh-tight)',
-                    color: 'var(--brand-accent)',
-                    marginBottom: 'var(--space-2)',
-                  }}
-                >
-                  {item.stat}
-                </div>
-                <div style={{ fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-                  {item.label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ====================== FINAL DUAL CTA ====================== */}
       <section
         aria-label="Get started"
@@ -526,7 +627,8 @@ function HomePage() {
             }}
           >
             Walk in yourself, or send your team and find out who your real AI builders
-            are — without taking anyone off the job.
+            are — without taking anyone off the job. Either way, you graduate a Certified
+            Anthropic AI Systems Architect.
           </p>
           <div
             style={{

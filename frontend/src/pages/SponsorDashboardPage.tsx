@@ -304,15 +304,39 @@ function SponsorDashboardPage() {
       />
 
       {/* HEADER */}
-      <header className="cbsd-head">
-        <div className="cbsd-wrap">
+      <header
+        className="cbsd-head"
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'var(--surface-inverse)',
+          color: 'var(--text-on-inverse)',
+          padding: 'var(--space-24) var(--space-5) var(--space-16)',
+        }}
+      >
+        {/* Hero photo + dark overlay (decorative) */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 74%, transparent), color-mix(in srgb, var(--surface-inverse) 93%, transparent)), url('/img/data-dashboard.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div className="cbsd-wrap" style={{ position: 'relative', zIndex: 1 }}>
           <div className="cbsd-head-row">
             <div>
-              <div className="cbsd-eyebrow">Sponsor Dashboard</div>
-              <h1 className="cb-balance" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="cbsd-eyebrow" style={{ color: 'var(--text-on-inverse)', opacity: 0.85 }}>
+                Sponsor Dashboard
+              </div>
+              <h1 className="cb-balance" style={{ marginTop: 'var(--space-3)', color: 'var(--text-on-inverse)' }}>
                 {view.company}: find out who your real AI builders are.
               </h1>
-              <p>
+              <p style={{ color: 'var(--text-on-inverse)', opacity: 0.88 }}>
                 Every seat you sponsor puts a colleague in the same Challenge as everyone else — they learn on
                 their own time and ship real projects. This is where you watch the talent surface, without taking
                 anyone off the job.

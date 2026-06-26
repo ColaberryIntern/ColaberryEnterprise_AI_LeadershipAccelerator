@@ -24,6 +24,7 @@ import SponsorChallengePage from '../pages/SponsorChallengePage';
 import LeaderboardPage from '../pages/LeaderboardPage';
 import DemoDayPage from '../pages/DemoDayPage';
 import SponsorDashboardPage from '../pages/SponsorDashboardPage';
+import ConsultingPage from '../pages/ConsultingPage';
 
 const publicRoutes = (
   <>
@@ -32,6 +33,7 @@ const publicRoutes = (
     <Route path="/pricing" element={<PricingPage />} />
     <Route path="/sponsorship" element={<SponsorshipPage />} />
     <Route path="/advisory" element={<AdvisoryPage />} />
+    <Route path="/consulting" element={<ConsultingPage />} />
     <Route path="/case-studies" element={<CaseStudiesPage />} />
     <Route path="/enroll" element={<EnrollPage />} />
     <Route path="/enroll/success" element={<EnrollSuccessPage />} />

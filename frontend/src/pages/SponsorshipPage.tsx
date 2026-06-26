@@ -5,6 +5,11 @@ import { Button } from '../colaberry/components/core/Button';
 import { Badge } from '../colaberry/components/core/Badge';
 import { Card } from '../colaberry/components/core/Card';
 import { Table } from '../colaberry/components/core/Table';
+import EmployerDashboardPreview from '../components/visuals/EmployerDashboardPreview';
+import CohortUrgency from '../components/visuals/CohortUrgency';
+import PartnerStrip from '../components/visuals/PartnerStrip';
+import MermaidDiagram from '../components/visuals/MermaidDiagram';
+import SectionFigure from '../components/visuals/SectionFigure';
 
 /* ------------------------------------------------------------------ *
  * Sponsor Your Team — The AI Builder Challenge
@@ -243,6 +248,19 @@ const TIERS: Tier[] = [
   },
 ];
 
+/* The sponsorship flow, as a Mermaid flowchart. Buy seats → redeem codes →
+   learn on own time → climb the leaderboard → Demo Day → certified. */
+const SPONSOR_FLOW = `flowchart LR
+  A([Buy seats]) --> B([Redeem codes])
+  B --> C([Learn on own time])
+  C --> D([Company leaderboard])
+  D --> E([Demo Day])
+  E --> F([Certified Anthropic<br/>AI Systems Architect])
+  classDef step fill:#FFE7E8,stroke:#FB2832,stroke-width:1.5px,color:#1A1A1A;
+  classDef win fill:#1A1A1A,stroke:#FB2832,stroke-width:2px,color:#FFFFFF;
+  class A,B,C,D,E step;
+  class F win;`;
+
 /* Scoped: an outline button that stays legible on the dark (inverse)
    surfaces. Pure DS tokens — no raw hex — so a re-pointed palette flows
    through. Scoped under #sponsor-team-page to avoid leaking globally. */
@@ -303,13 +321,14 @@ function SponsorshipPage() {
               style={{
                 fontSize: 'var(--fs-body-lg)',
                 lineHeight: 'var(--lh-relaxed)',
-                color: 'var(--neutral-300)',
+                color: 'color-mix(in srgb, var(--text-on-inverse) 88%, transparent)',
                 maxWidth: 'var(--container-sm)',
                 margin: '0 auto var(--space-3)',
               }}
             >
               Without taking a single person off the job. Sponsor your team for the cohort,
-              and watch who actually ships working systems with AI.
+              and watch who actually ships working systems with AI &mdash; trained hands-on
+              with Claude Code, in Anthropic-partner hands.
             </p>
             <p
               style={{
@@ -340,12 +359,19 @@ function SponsorshipPage() {
             <p
               style={{
                 fontSize: 'var(--fs-caption)',
-                color: 'var(--neutral-400)',
+                color: 'color-mix(in srgb, var(--text-on-inverse) 72%, transparent)',
                 margin: 'var(--space-8) 0 0',
               }}
             >
               Learn With Claude. Build Through Colaberry. Deploy In The Real World.
             </p>
+          </div>
+        </section>
+
+        {/* ===================== PARTNER TRUST BAND ===================== */}
+        <section style={{ padding: 'var(--space-12) var(--space-6) 0' }}>
+          <div style={S.inner}>
+            <PartnerStrip />
           </div>
         </section>
 
@@ -428,6 +454,34 @@ function SponsorshipPage() {
                 </Card>
               ))}
             </div>
+
+            {/* The same five steps as a single, scannable flow. */}
+            <div style={{ maxWidth: 'var(--container-md)', margin: 'var(--space-10) auto 0' }}>
+              <MermaidDiagram
+                chart={SPONSOR_FLOW}
+                caption="The sponsorship flow end to end: buy seats, redeem codes, your people learn on their own time, climb the company leaderboard, present at Demo Day, and graduate as a Certified Anthropic AI Systems Architect."
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ================== EMPLOYER DASHBOARD PREVIEW ================== */}
+        <section style={S.section}>
+          <div style={S.inner}>
+            <div style={{ textAlign: 'center', maxWidth: 'var(--container-md)', margin: '0 auto var(--space-10)' }}>
+              <p style={S.eyebrow}>Your sponsor view</p>
+              <h2 style={S.h2}>See exactly how your people build skills.</h2>
+              <p style={{ ...S.lead, marginBottom: 0 }}>
+                A live, company-scoped dashboard ranks your sponsored builders by what they actually
+                ship &mdash; team readiness, skill mastery, and your Demo Day shortlist, in real time.
+                This is the talent map you walk away with.
+              </p>
+            </div>
+            <EmployerDashboardPreview
+              companyName="Your Company"
+              sponsoredCount={14}
+              cohortLabel="Cohort 1"
+            />
           </div>
         </section>
 
@@ -455,6 +509,23 @@ function SponsorshipPage() {
                   <p style={S.cardBody}>{b.body}</p>
                 </Card>
               ))}
+            </div>
+
+            {/* Real photo: the partnership + credential story. */}
+            <div style={{ marginTop: 'var(--space-16)' }}>
+              <SectionFigure
+                src="/img/handshake-deal.jpg"
+                alt="Two business leaders shaking hands to close a team-sponsorship agreement."
+                side="right"
+                eyebrow="Anthropic-partner hands"
+                title="Put your people in Anthropic-partner hands."
+                body={[
+                  'Colaberry is an Anthropic / Claude Code partner. Your sponsored builders train hands-on with the same tools and workflows teams ship with in production — not slideware, and not a generic course library.',
+                  'Graduates earn the Certified Anthropic AI Systems Architect credential (CCA-F prep) — a defensible, evidence-backed signal of who on your team can turn AI into deployed value.',
+                ]}
+                caption="One continuous 12-week program — four phases, one cohort, real shipped work."
+                cta={{ label: 'Sponsor Your Team', to: '/sponsorship#sponsor-inquiry' }}
+              />
             </div>
           </div>
         </section>
@@ -569,6 +640,13 @@ function SponsorshipPage() {
             <p style={{ textAlign: 'center', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginTop: 'var(--space-6)' }}>
               Seats are reassignable across your organization for the full year. Demo Day access included for every sponsored seat.
             </p>
+          </div>
+        </section>
+
+        {/* ========================= COHORT URGENCY ========================= */}
+        <section style={S.section}>
+          <div style={S.inner}>
+            <CohortUrgency startDateISO="2026-07-27" seatsTotal={40} seatsLeft={7} />
           </div>
         </section>
 

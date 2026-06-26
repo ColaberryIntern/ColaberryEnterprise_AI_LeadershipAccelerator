@@ -4,6 +4,10 @@ import SEOHead from '../components/SEOHead';
 import { Button, ButtonProps } from '../colaberry/components/core/Button';
 import { Badge } from '../colaberry/components/core/Badge';
 import { Card } from '../colaberry/components/core/Card';
+import MermaidDiagram from '../components/visuals/MermaidDiagram';
+import CohortUrgency from '../components/visuals/CohortUrgency';
+import SectionFigure from '../components/visuals/SectionFigure';
+import { StatCounter } from '../components/visuals/charts';
 
 // CtaButton: the DS Button only forwards href + on* handlers to its host
 // element (it drops React Router's `to` prop), so we wire SPA navigation
@@ -57,12 +61,12 @@ const CSS = `
 .cbc-hero-bg{position:absolute;inset:0;z-index:0;background-image:linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-ai.jpg');background-size:cover;background-position:center}
 .cbc-hero .cbc-wrap{position:relative;z-index:1}
 .cbc-hero h1{color:var(--text-on-inverse);font-size:var(--fs-hero-fluid);font-weight:var(--fw-black);max-width:16ch}
-.cbc-hero .cbc-eyebrow{color:var(--red-300)}
-.cbc-hero .cbc-lead{color:var(--neutral-300);max-width:60ch;margin-top:var(--space-5)}
+.cbc-hero .cbc-eyebrow{color:var(--text-on-inverse)}
+.cbc-hero .cbc-lead{color:var(--text-on-inverse);opacity:.92;max-width:60ch;margin-top:var(--space-5)}
 .cbc-hero-cta{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-top:var(--space-10)}
-.cbc-hero-stats{display:flex;gap:var(--space-12);flex-wrap:wrap;margin-top:var(--space-16);padding-top:var(--space-10);border-top:var(--border-1) solid var(--border-default)}
+.cbc-hero-stats{display:flex;gap:var(--space-12);flex-wrap:wrap;margin-top:var(--space-16);padding-top:var(--space-10);border-top:var(--border-1) solid color-mix(in srgb, var(--text-on-inverse) 28%, transparent)}
 .cbc-stat .n{font-family:var(--font-display);font-size:var(--fs-h2);font-weight:var(--fw-black);color:var(--text-on-inverse)}
-.cbc-stat .l{font-size:var(--fs-caption);color:var(--neutral-400);letter-spacing:var(--ls-wide);text-transform:uppercase;margin-top:var(--space-1)}
+.cbc-stat .l{font-size:var(--fs-caption);color:var(--text-on-inverse);opacity:.78;letter-spacing:var(--ls-wide);text-transform:uppercase;margin-top:var(--space-1)}
 
 /* DOORS */
 .cbc-doors{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);margin-top:var(--space-10)}
@@ -110,6 +114,11 @@ const CSS = `
 .cbc-demo h2{color:var(--text-on-inverse);font-size:var(--fs-h2)}
 .cbc-demo p{color:var(--neutral-300);max-width:56ch;margin:var(--space-4) auto var(--space-8)}
 
+/* FLOW DIAGRAM + STAT TILES */
+.cbc-flow{margin-top:var(--space-10)}
+.cbc-stat-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-5);margin-top:var(--space-10)}
+.cbc-urgency{margin-top:var(--space-12)}
+
 /* CLOSING */
 .cbc-closing{text-align:center}
 .cbc-closing h2{font-size:var(--fs-h1);max-width:20ch;margin:0 auto}
@@ -119,11 +128,11 @@ const CSS = `
 
 @media(max-width:900px){
   .cbc-doors,.cbc-score,.cbc-tiers{grid-template-columns:1fr}
-  .cbc-grid3,.cbc-grid4,.cbc-season{grid-template-columns:1fr 1fr}
+  .cbc-grid3,.cbc-grid4,.cbc-season,.cbc-stat-tiles{grid-template-columns:1fr 1fr}
   .cbc-hero-stats{gap:var(--space-8)}
 }
 @media(max-width:560px){
-  .cbc-grid3,.cbc-grid4,.cbc-season{grid-template-columns:1fr}
+  .cbc-grid3,.cbc-grid4,.cbc-season,.cbc-stat-tiles{grid-template-columns:1fr}
 }
 `;
 
@@ -171,6 +180,16 @@ const TIERS: Tier[] = [
     perks: ['Everything in Silver', 'Guaranteed Demo Day showcase slot', 'Featured in the public Builders directory', 'Considered first for sponsored hiring intros'],
   },
 ];
+
+// The Challenge as a single visual flow: how a builder moves from the door to
+// the Certified Anthropic AI Systems Architect credential.
+const CHALLENGE_FLOW = `flowchart LR
+  A([Join / Redeem a seat]) --> B[Build with Claude]
+  B --> C{{Climb the leaderboard}}
+  C --> D[Demo Day]
+  D --> E([Certified Anthropic<br/>AI Systems Architect])
+  B -.points.-> C
+  C -.top builders.-> D`;
 
 const SEASON = [
   { w: 'Weeks 1–2', title: 'Onboard & ship #1', desc: 'Set up your environment with Claude and ship a first small build to get on the board.' },
@@ -270,8 +289,33 @@ function SponsorChallengePage() {
         </div>
       </section>
 
-      {/* SCORING */}
+      {/* THE FLOW + STAT TILES */}
       <section className="cbc-sec">
+        <div className="cbc-wrap">
+          <div className="cbc-eyebrow">The Challenge Flow</div>
+          <h2 className="cbc-h2 cbc-mt2">One path. From your first build to a recognized credential.</h2>
+          <p className="cbc-lead cbc-mt4 cbc-narrow">
+            Join or redeem a seat, build hands-on with Claude Code, climb the leaderboard, and present at Demo
+            Day. Finish the 12-week program and you walk away a <strong>Certified Anthropic AI Systems
+            Architect</strong> (CCA-F prep) — trained in Anthropic-partner hands.
+          </p>
+          <div className="cbc-flow">
+            <MermaidDiagram
+              chart={CHALLENGE_FLOW}
+              caption="The Challenge flow: Join/Redeem → Build with Claude → Leaderboard → Demo Day → Certified Anthropic AI Systems Architect."
+            />
+          </div>
+          <div className="cbc-stat-tiles">
+            <StatCounter value="12 wks" label="One continuous program, four phases" />
+            <StatCounter value="100%" label="Hands-on building with Claude Code" />
+            <StatCounter value="1 stage" label="Live Demo Day capstone showcase" />
+            <StatCounter value="CCA-F" label="Certified Anthropic AI Systems Architect prep" />
+          </div>
+        </div>
+      </section>
+
+      {/* SCORING */}
+      <section className="cbc-sec cbc-alt">
         <div className="cbc-wrap">
           <div className="cbc-eyebrow">Scoring</div>
           <h2 className="cbc-h2 cbc-mt2">Points reward building, not watching.</h2>
@@ -294,7 +338,7 @@ function SponsorChallengePage() {
       </section>
 
       {/* TIERS */}
-      <section className="cbc-sec cbc-alt">
+      <section className="cbc-sec">
         <div className="cbc-wrap">
           <div className="cbc-eyebrow">Tiers</div>
           <h2 className="cbc-h2 cbc-mt2">Bronze, Silver, Gold.</h2>
@@ -320,7 +364,7 @@ function SponsorChallengePage() {
       </section>
 
       {/* SEASONS */}
-      <section className="cbc-sec">
+      <section className="cbc-sec cbc-alt">
         <div className="cbc-wrap">
           <div className="cbc-eyebrow">Seasons</div>
           <h2 className="cbc-h2 cbc-mt2">A 12-week arc, run on repeat.</h2>
@@ -337,6 +381,28 @@ function SponsorChallengePage() {
               </div>
             ))}
           </div>
+          <div className="cbc-urgency">
+            <CohortUrgency />
+          </div>
+        </div>
+      </section>
+
+      {/* THE OUTCOME — figure */}
+      <section className="cbc-sec">
+        <div className="cbc-wrap">
+          <SectionFigure
+            src="/img/workshop.jpg"
+            alt="Builders working hands-on with Claude Code in a Colaberry workshop session."
+            eyebrow="The Outcome"
+            title="You don't finish with a certificate. You finish as a builder."
+            body={[
+              'Every points-earning move on the leaderboard is a real, shipped project built hands-on with Claude Code — reviewed by mentors, defended at Demo Day. This is what it means to put your people in Anthropic-partner hands.',
+              'Complete the 12 weeks and you earn the Certified Anthropic AI Systems Architect credential (CCA-F prep): proof you can architect and deploy AI in the real world, not just talk about it.',
+            ]}
+            caption="Most people consume AI. Very few learn to build with it."
+            side="right"
+            cta={{ label: 'Join the Challenge', to: '/enroll' }}
+          />
         </div>
       </section>
 
