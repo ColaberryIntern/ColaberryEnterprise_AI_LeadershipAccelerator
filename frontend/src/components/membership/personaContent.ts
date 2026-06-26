@@ -37,7 +37,7 @@ export interface PersonaContent {
   finalCta: { title: string; body: string[]; price: string; tagline: string };
 }
 
-const PRICE = 'Membership starts at $149/month. Sponsored by your employer? Redeem your seat code — no card needed.';
+const PRICE = 'Membership is $149/month when you pay for the year up front, or $199/month month-to-month. Sponsored by your employer? Redeem your seat code — no card needed.';
 const TAGLINE = 'Learn With Claude. Build Through Colaberry. Deploy In The Real World.';
 const PRIMARY_CTA = 'Join The Challenge';
 const SEAT_CTA = 'Reserve My Free Seat';

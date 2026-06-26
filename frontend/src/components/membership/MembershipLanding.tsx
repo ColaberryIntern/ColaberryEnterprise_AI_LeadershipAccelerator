@@ -19,7 +19,7 @@ import { Badge } from '../../colaberry/components/core/Badge';
  * frozen — only presentation changed.
  * ------------------------------------------------------------------ */
 
-const META_CHIPS = ['Online', 'Free Open House', '$149 / month membership', 'Learn with Claude'];
+const META_CHIPS = ['Online', 'Free Open House', 'From $149 / month', 'Learn with Claude'];
 
 /* Self-hosted hero photo per persona, served from /public/hero/. Keyed on
    the frozen PersonaContent.slug union so the map stays exhaustive. */
@@ -662,11 +662,11 @@ function MembershipLanding({ content }: MembershipLandingProps) {
                     $149
                   </span>
                   <span style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 'var(--fw-medium)', color: 'var(--text-muted)' }}>
-                    /month
+                    /mo billed annually
                   </span>
                 </div>
-                <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 'var(--space-3) 0 var(--space-5)' }}>
-                  Next Open House: {OPEN_HOUSE_DATE}
+                <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 'var(--space-2) 0 var(--space-5)' }}>
+                  Pay for the year up front — or $199/mo month-to-month. Next Open House: {OPEN_HOUSE_DATE}
                 </p>
                 <Button fullWidth onClick={() => openRegister('open_house_section')}>
                   {content.openHouse.cta}

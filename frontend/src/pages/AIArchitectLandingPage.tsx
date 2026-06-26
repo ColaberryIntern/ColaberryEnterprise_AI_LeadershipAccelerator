@@ -221,7 +221,7 @@ function AIArchitectLandingPage() {
               How the Challenge Works
             </CtaButton>
           </div>
-          <p className="cbaa-hero-meta">Individuals join on a $149/month membership. Employers can sponsor a seat block instead.</p>
+          <p className="cbaa-hero-meta">Individuals join from $149/month (billed annually; $199/month month-to-month). Employers can sponsor a seat block instead.</p>
         </div>
       </header>
 

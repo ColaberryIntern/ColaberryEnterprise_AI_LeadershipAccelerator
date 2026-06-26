@@ -103,7 +103,7 @@ function PricingPage() {
     <>
       <SEOHead
         title="Pricing — Join the Challenge or Sponsor Your Team"
-        description="One program, two doors. Individuals join the build challenge for $149/mo. Employers sponsor annual, reassignable seats to discover their real AI builders. Most people consume AI. Very few learn to build with it."
+        description="One program, two doors. Individuals join the build challenge from $149/mo (billed annually; $199/mo month-to-month). Employers sponsor annual, reassignable seats to discover their real AI builders. Most people consume AI. Very few learn to build with it."
       />
 
       {/* ── Hero ─────────────────────────────────────────────── */}
@@ -178,7 +178,7 @@ function PricingPage() {
             }}
           >
             <StatCounter value="12 wks" label="One continuous program — four phases, no gaps" accent="var(--brand-secondary)" />
-            <StatCounter value="$149/mo" label="Individual membership — cancel anytime" accent="var(--brand-accent)" />
+            <StatCounter value="$149/mo" label="Billed annually — or $199/mo month-to-month" accent="var(--brand-accent)" />
             <StatCounter value="CCA-F" label="Certified Anthropic AI Systems Architect prep" accent="var(--chart-3)" />
           </div>
         </div>
@@ -283,11 +283,15 @@ function PricingPage() {
                     $149
                   </span>
                   <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
-                    /month membership
+                    /mo · billed annually
                   </span>
                 </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body-sm)', margin: '0 0 var(--space-1)' }}>
+                  Pay for the year up front — or{' '}
+                  <strong style={{ color: 'var(--text-body)' }}>$199/mo</strong> month-to-month.
+                </p>
                 <p style={{ color: 'var(--text-body)', margin: 0 }}>
-                  Self-serve, month-to-month. The fastest way to go from consuming AI to
+                  Self-serve. The fastest way to go from consuming AI to
                   building with it — with a working project to show for it.
                 </p>
 

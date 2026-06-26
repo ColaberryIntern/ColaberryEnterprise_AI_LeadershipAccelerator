@@ -6764,3 +6764,9 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Dropped the `price: '$4,500'` field from config/programSchedule.ts and removed its two consumers on EnrollPage (hero copy + PaySimple line) plus the now-unused PROGRAM_SCHEDULE import. Removed the hardcoded "$4,500 per participant" callout on AlumniChampionPage (kept the "View full pricing" link).
   - Verification: tsc --noEmit clean; dev server "Compiled successfully"; grep confirms no $4,500 on public pages/config/components.
   - Notes: No replacement price was given, so the figure was removed, not substituted. Left untouched (flagged to Ali): internal admin revenue/settings $4,500 default, and the sales doc docs/CorporateSponsorshipKit.md (still quotes $4,500 + the old 3-week model).
+- [x] **Two-tier membership pricing: $149/mo annual (pay up front) vs $199/mo month-to-month**
+  - Date: 2026-06-26
+  - Session: CC-20260625-q4m8
+  - What changed: Established the correct individual pricing across public surfaces — $149/month only when paid for the year up front (billed annually), $199/month month-to-month. Updated the canonical PRICE constant in personaContent.ts (drives every persona hero + final-CTA price), the PricingPage Door-A price card (added the $199 month-to-month line + "billed annually" framing) and its StatCounter + SEO description, the MembershipLanding meta chip + Open House price card, and the AIArchitectLandingPage hero meta. Removed the now-incorrect "$149 month-to-month / cancel anytime" labels (month-to-month is the $199 tier).
+  - Verification: tsc --noEmit clean (0 errors); dev server "Compiled successfully".
+  - Notes: Scattered marketing prose still cites "$149/month" as the headline/from price (accurate as the annual rate); not mass-edited. Replaces the removed $4,500 figure.
