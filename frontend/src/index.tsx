@@ -6,6 +6,7 @@ import { initGA } from './utils/analytics';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/global.css';
 import './styles/responsive.css';
+import './colaberry/styles.css';
 
 initGA();
 
