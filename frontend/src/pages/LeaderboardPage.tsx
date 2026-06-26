@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { Button, ButtonProps } from '../colaberry/components/core/Button';
@@ -7,6 +7,7 @@ import { Card } from '../colaberry/components/core/Card';
 import { Avatar } from '../colaberry/components/core/Avatar';
 import { Progress } from '../colaberry/components/core/Progress';
 import { Table } from '../colaberry/components/core/Table';
+import { fetchLeaderboard, ApiLeaderboardRow } from '../services/challengeApi';
 
 // CtaButton: the DS Button only forwards href + on* handlers to its host
 // element (it drops React Router's `to`), so we route via href + onClick —
@@ -32,9 +33,11 @@ function CtaButton({ to, children, ...rest }: CtaButtonProps) {
 }
 
 // LeaderboardPage — /leaderboard
-// DS-only, semantic tokens only. Sample rows now; will later read
-// GET /api/challenge/leaderboard. The row shape below is the contract
-// that endpoint should return.
+// DS-only, semantic tokens only. Reads the live GET /api/challenge/leaderboard
+// (via services/challengeApi) with a loading state, and GRACEFULLY FALLS BACK
+// to the sample rows below on error, empty board, or pre-migration (no
+// challenge id configured) so the page never looks broken. The LeaderRow shape
+// below is the page's view model; mapApiRow() adapts the API contract to it.
 
 const CSS = `
 .cblb-root{font-family:var(--font-body);color:var(--text-body);background:var(--surface-page);line-height:var(--lh-relaxed);-webkit-font-smoothing:antialiased}
@@ -88,6 +91,12 @@ const CSS = `
 /* NOTE */
 .cblb-note{margin-top:var(--space-6);font-size:var(--fs-caption);color:var(--text-subtle)}
 
+/* LOADING */
+.cblb-loading{display:flex;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-12) var(--space-6);color:var(--text-muted);font-size:var(--fs-body-sm)}
+.cblb-spin{width:18px;height:18px;border-radius:var(--radius-circle);border:2px solid var(--border-default);border-top-color:var(--brand-accent);animation:cblb-spin 0.8s linear infinite}
+@keyframes cblb-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.cblb-spin{animation-duration:1.6s}}
+
 /* CTA */
 .cblb-cta{background:var(--surface-subtle);border-radius:var(--radius-xl);padding:var(--space-12);text-align:center;margin:var(--space-16) 0}
 .cblb-cta h2{font-size:var(--fs-h2);max-width:20ch;margin:0 auto var(--space-4)}
@@ -137,6 +146,32 @@ const ROWS: LeaderRow[] = [
 const tierTone = (t: TierName): 'warning' | 'neutral' | 'red' =>
   t === 'Gold' ? 'red' : t === 'Silver' ? 'neutral' : 'warning';
 
+// Capitalize the API's lowercase tier into the page's TierName union. Unknown
+// values fall back to Bronze so a contract drift never renders an undefined tier.
+const TIER_FROM_API: Record<string, TierName> = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze' };
+
+// Adapt one API row to the page's view model. The API contract carries identity,
+// score, tier, projects, and cert; it does not (yet) carry per-row scope, rank
+// delta, or streak. We derive scope from company presence ("Self-funded" / blank
+// = individual/public; a named employer = sponsored/company) and leave delta and
+// streak neutral until the endpoint exposes them, so the UI degrades cleanly
+// rather than inventing movement that did not happen.
+function mapApiRow(r: ApiLeaderboardRow): LeaderRow {
+  const company = (r.company || '').trim();
+  const isPublic = company === '' || /^self[\s-]?funded$/i.test(company);
+  return {
+    rank: r.rank,
+    name: r.full_name,
+    org: isPublic ? 'Self-funded' : company,
+    scope: isPublic ? 'public' : 'company',
+    tier: TIER_FROM_API[r.tier] ?? 'Bronze',
+    points: r.score,
+    builds: r.projects_shipped,
+    streak: 0,
+    delta: 0,
+  };
+}
+
 function Delta({ value }: { value: number }) {
   if (value === 0) {
     return (
@@ -160,11 +195,41 @@ type ScopeFilter = 'public' | 'company';
 
 function LeaderboardPage() {
   const [scope, setScope] = useState<ScopeFilter>('public');
+  // live = rows returned by the API; null = "no live data, use sample". loading
+  // gates the first paint per scope so we never flash sample → live.
+  const [live, setLive] = useState<LeaderRow[] | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const rows = useMemo(
-    () => (scope === 'company' ? ROWS.filter((r) => r.scope === 'company') : ROWS).map((r, i) => ({ ...r, displayRank: i + 1 })),
-    [scope]
-  );
+  // Fetch the live board whenever scope changes. The page's "Sponsored teams"
+  // tab maps to the API's company scope; "Global" maps to global. Any failure,
+  // empty board, or unconfigured-challenge result clears live → sample fallback.
+  // AbortController cancels an in-flight request if the scope changes again.
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setLoading(true);
+    fetchLeaderboard(scope === 'company' ? 'company' : 'global', controller.signal)
+      .then((result) => {
+        if (!active) return;
+        setLive(result.ok ? result.rows.map(mapApiRow) : null);
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [scope]);
+
+  // True when we are showing the built-in sample set rather than live API rows.
+  const usingSample = live === null;
+
+  const rows = useMemo(() => {
+    // Live rows already arrive scoped + ranked from the API; sample rows are
+    // client-filtered by scope exactly as before. Re-derive a contiguous
+    // displayRank so the visible 1..N is dense after filtering either source.
+    const source = live ?? (scope === 'company' ? ROWS.filter((r) => r.scope === 'company') : ROWS);
+    return source.map((r, i) => ({ ...r, displayRank: i + 1 }));
+  }, [live, scope]);
 
   const podium = rows.slice(0, 3);
 
@@ -209,7 +274,17 @@ function LeaderboardPage() {
       key: 'streak',
       header: 'Streak',
       align: 'right' as const,
-      render: (v: number) => <span title={`${v}-week streak`}>{v}w</span>,
+      // Live API rows don't carry a streak yet (mapped to 0); show a neutral
+      // dash with screen-reader text rather than a misleading "0w".
+      render: (v: number) =>
+        v > 0 ? (
+          <span title={`${v}-week streak`}>{v}w</span>
+        ) : (
+          <span title="No active streak">
+            <span aria-hidden="true">—</span>
+            <span className="cb-sr-only">No active streak</span>
+          </span>
+        ),
     },
     {
       key: 'progress',
@@ -263,8 +338,10 @@ function LeaderboardPage() {
 
       {/* PODIUM */}
       <section className="cblb-wrap">
-        <div className="cblb-podium">
-          {podium.map((p, i) => (
+        <div className="cblb-podium" aria-busy={loading}>
+          {/* Hidden until the first fetch resolves so the top 3 don't flash
+              sample → live. The table region shows the loading status text. */}
+          {!loading && podium.map((p, i) => (
             <Card key={p.name} elevation={i === 0 ? 'md' : 'sm'} accent={i === 0 ? 'red' : undefined} className={`cblb-pod ${i === 0 ? 'first' : ''}`}>
               <div className="av"><Avatar name={p.name} size="lg" ring={i === 0} /></div>
               <div className="rank">
@@ -290,13 +367,26 @@ function LeaderboardPage() {
           </button>
         </div>
 
-        <Table columns={columns} data={rows} hover striped />
+        <div aria-busy={loading} aria-live="polite">
+          {loading ? (
+            <div className="cblb-loading" role="status">
+              <span className="cblb-spin" aria-hidden="true" />
+              Loading the live leaderboard…
+            </div>
+          ) : (
+            <Table columns={columns} data={rows} hover striped />
+          )}
+        </div>
 
-        <p className="cblb-note">
-          Showing the top {rows.length} of the current season. Rank deltas compare to last week. Sponsored-team
-          view filters to builders on employer-purchased seats; employers see only their own company-scoped board.
-          Sample data shown — this view will read <code>GET /api/challenge/leaderboard</code> once wired.
-        </p>
+        {!loading && (
+          <p className="cblb-note">
+            Showing the top {rows.length} of the current season. Rank deltas compare to last week. Sponsored-team
+            view filters to builders on employer-purchased seats; employers see only their own company-scoped board.
+            {usingSample
+              ? <> Live data is not available yet — showing a representative sample of <code>GET /api/challenge/leaderboard</code>.</>
+              : <> Live data from <code>GET /api/challenge/leaderboard</code>.</>}
+          </p>
+        )}
       </section>
 
       {/* CTA */}

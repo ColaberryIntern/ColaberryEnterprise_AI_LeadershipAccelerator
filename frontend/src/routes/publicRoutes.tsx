@@ -11,14 +11,10 @@ import EnrollPage from '../pages/EnrollPage';
 import EnrollSuccessPage from '../pages/EnrollSuccessPage';
 import EnrollCancelPage from '../pages/EnrollCancelPage';
 import ExecOverviewThankYouPage from '../pages/ExecOverviewThankYouPage';
-import StrategyCallPrepPage from '../pages/StrategyCallPrepPage';
 import ExecutiveROICalculatorPage from '../pages/ExecutiveROICalculatorPage';
 import AIArchitectLandingPage from '../pages/AIArchitectLandingPage';
 import InstructorPage from '../pages/InstructorPage';
 import NotFoundPage from '../pages/NotFoundPage';
-import PilotZeroRiskPage from '../pages/PilotZeroRiskPage';
-import PilotAITeamPage from '../pages/PilotAITeamPage';
-import PilotExclusivePage from '../pages/PilotExclusivePage';
 import AgencyPartnerPage from '../pages/AgencyPartnerPage';
 import AIWorkforceDesignerPage from '../pages/AIWorkforceDesignerPage';
 import WorkingProfessionalsPage from '../pages/membership/WorkingProfessionalsPage';
@@ -27,6 +23,7 @@ import BuildersPage from '../pages/membership/BuildersPage';
 import SponsorChallengePage from '../pages/SponsorChallengePage';
 import LeaderboardPage from '../pages/LeaderboardPage';
 import DemoDayPage from '../pages/DemoDayPage';
+import SponsorDashboardPage from '../pages/SponsorDashboardPage';
 
 const publicRoutes = (
   <>
@@ -41,13 +38,15 @@ const publicRoutes = (
     <Route path="/enroll/cancel" element={<EnrollCancelPage />} />
     <Route path="/contact" element={<ContactPage />} />
     <Route path="/executive-overview/thank-you" element={<ExecOverviewThankYouPage />} />
-    <Route path="/strategy-call-prep" element={<StrategyCallPrepPage />} />
     <Route path="/executive-roi-calculator" element={<ExecutiveROICalculatorPage />} />
     <Route path="/ai-architect" element={<AIArchitectLandingPage />} />
     <Route path="/ai-architect/instructor" element={<InstructorPage />} />
-    <Route path="/pilot/zero-risk" element={<PilotZeroRiskPage />} />
-    <Route path="/pilot/ai-team" element={<PilotAITeamPage />} />
-    <Route path="/pilot/exclusive" element={<PilotExclusivePage />} />
+    <Route path="/sponsor/dashboard" element={<SponsorDashboardPage />} />
+    {/* Retired enterprise-sales pages — folded into the sponsor-challenge model */}
+    <Route path="/strategy-call-prep" element={<Navigate to="/sponsorship" replace />} />
+    <Route path="/pilot/zero-risk" element={<Navigate to="/sponsorship" replace />} />
+    <Route path="/pilot/ai-team" element={<Navigate to="/sponsorship" replace />} />
+    <Route path="/pilot/exclusive" element={<Navigate to="/sponsorship" replace />} />
     <Route path="/partners" element={<AgencyPartnerPage />} />
     <Route path="/ai-workforce-designer" element={<AIWorkforceDesignerPage />} />
     <Route path="/membership/working-professionals" element={<WorkingProfessionalsPage />} />

@@ -5,6 +5,10 @@ import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
 import { handleSponsorInquiry } from '../controllers/sponsorController';
+import {
+  handleGetLeaderboard,
+  handleGetSponsorDashboard,
+} from '../controllers/challengeController';
 
 const leadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -45,5 +49,14 @@ router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipK
 router.post('/api/sponsor-inquiry', leadRateLimiter, handleSponsorInquiry);
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
 router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
+
+// One Class, Many Doors — read-only Challenge leaderboard + Sponsor dashboard.
+// Registered here (an early, public router) on purpose: routers mounted after
+// leadRoutes sit behind a broad auth guard on the deployed server, so these
+// public read surfaces must be reachable before them. The dashboard enforces a
+// per-sponsor access token in its controller (real-auth follow-up documented
+// there); the leaderboard is fully public.
+router.get('/api/challenge/leaderboard', handleGetLeaderboard);
+router.get('/api/sponsor/dashboard', handleGetSponsorDashboard);
 
 export default router;

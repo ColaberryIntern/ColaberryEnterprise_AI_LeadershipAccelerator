@@ -1,40 +1,143 @@
-import React, { useState, useEffect, Suspense } from 'react'; // eslint-disable-line
+import React, { useState, useEffect, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
+import { Button, ButtonProps } from '../colaberry/components/core/Button';
+import { Badge } from '../colaberry/components/core/Badge';
+import { Card } from '../colaberry/components/core/Card';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
+import { captureUTMFromURL } from '../services/utmService';
+import { initTracker, trackEvent } from '../utils/tracker';
 
 const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
-import { captureUTMFromURL, getAdvisoryUrl } from '../services/utmService';
-import { initTracker, trackEvent } from '../utils/tracker';
-import IndustryDemoGrid from '../components/IndustryDemoGrid';
 
-const BG = '#F8FAFC';
-const BG_ALT = '#F1F5F9';
-const WHITE = '#FFFFFF';
-const TEXT = '#0F172A';
-const TEXT2 = '#1E293B';
-const MUTED = '#64748B';
-const BORDER = '#E2E8F0';
-const ACCENT = '#3b82f6';
-const ACCENT2 = '#8b5cf6';
-const GREEN = '#10b981';
-const HERO_BG = '#0f172a';
+// AIArchitectLandingPage — /ai-architect
+// REFRAME: this is now a ROLE DOOR into the one class. Data professionals and
+// tech leaders enter the same Challenge as everyone else ("Join the Challenge"),
+// learn on their own time, ship a real AI build, and climb the leaderboard.
+// DS-only, semantic tokens only. Default export + component name preserved.
 
-const btnStyle: React.CSSProperties = {
-  background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
-  color: '#fff',
-  border: 'none',
-  borderRadius: 8,
-  padding: '16px 44px',
-  fontSize: 18,
-  fontWeight: 700,
-  cursor: 'pointer',
-  letterSpacing: 0.5,
-  transition: 'transform 0.2s, box-shadow 0.2s',
-};
+// CtaButton: the DS Button only forwards href + on* handlers to its host element
+// (it drops React Router's `to`), so we route via href + onClick.
+interface CtaButtonProps extends Omit<ButtonProps, 'href' | 'onClick'> {
+  to: string;
+}
+function CtaButton({ to, children, onClick, ...rest }: CtaButtonProps & { onClick?: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <Button
+      href={to}
+      onClick={(e: React.MouseEvent<HTMLElement>) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+        e.preventDefault();
+        if (onClick) onClick();
+        navigate(to);
+      }}
+      {...rest}
+    >
+      {children}
+    </Button>
+  );
+}
+
+const CSS = `
+.cbaa-root{font-family:var(--font-body);color:var(--text-body);background:var(--surface-page);line-height:var(--lh-relaxed);-webkit-font-smoothing:antialiased}
+.cbaa-root *{box-sizing:border-box}
+.cbaa-root h1,.cbaa-root h2,.cbaa-root h3,.cbaa-root h4{font-family:var(--font-display);color:var(--text-strong);margin:0;line-height:var(--lh-heading);letter-spacing:var(--ls-tight)}
+.cbaa-wrap{max-width:var(--container-lg);margin:0 auto;padding:0 var(--space-6)}
+.cbaa-narrow{max-width:var(--container-md)}
+.cbaa-eyebrow{font-size:var(--fs-overline);font-weight:var(--fw-bold);letter-spacing:var(--ls-overline);text-transform:uppercase;color:var(--brand-accent)}
+.cbaa-sec{padding:var(--space-24) 0}
+.cbaa-sec-sm{padding:var(--space-16) 0}
+.cbaa-alt{background:var(--surface-subtle)}
+.cbaa-h2{font-size:var(--fs-h2);font-weight:var(--fw-bold)}
+.cbaa-lead{font-size:var(--fs-body-lg);line-height:var(--lh-normal);color:var(--text-muted)}
+.cbaa-mt2{margin-top:var(--space-2)}
+.cbaa-mt4{margin-top:var(--space-4)}
+.cbaa-mt5{margin-top:var(--space-5)}
+
+/* HERO */
+.cbaa-hero{background:var(--surface-inverse);color:var(--text-on-inverse);padding:var(--space-24) 0 var(--space-20);position:relative;overflow:hidden}
+.cbaa-hero h1{color:var(--text-on-inverse);font-size:var(--fs-hero-fluid);font-weight:var(--fw-black);max-width:18ch}
+.cbaa-hero .cbaa-eyebrow{color:var(--red-300)}
+.cbaa-hero .cbaa-lead{color:var(--neutral-300);max-width:60ch;margin-top:var(--space-5)}
+.cbaa-hero-cta{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-top:var(--space-10)}
+.cbaa-hero-meta{font-size:var(--fs-body-sm);color:var(--neutral-400);margin-top:var(--space-5)}
+
+/* STACK GRID */
+.cbaa-stack{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--space-4);margin-top:var(--space-10)}
+.cbaa-tile{padding:var(--space-6);text-align:center;height:100%}
+.cbaa-tile .ic{font-size:var(--fs-h2);line-height:1}
+.cbaa-tile h3{font-size:var(--fs-body-sm);font-weight:var(--fw-bold);margin-top:var(--space-3)}
+.cbaa-tile p{font-size:var(--fs-caption);color:var(--text-muted);margin:var(--space-1) 0 0}
+
+/* TWO-COL LISTS */
+.cbaa-two{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-6);margin-top:var(--space-10);align-items:start}
+.cbaa-list{padding:var(--space-8)}
+.cbaa-list h3{font-size:var(--fs-h4)}
+.cbaa-list ul{list-style:none;margin:var(--space-5) 0 0;padding:0;display:flex;flex-direction:column;gap:var(--space-3)}
+.cbaa-list li{display:flex;gap:var(--space-3);font-size:var(--fs-body-sm);color:var(--text-body)}
+.cbaa-list li .mk{flex:none;font-weight:var(--fw-bold)}
+.cbaa-list.bad li .mk{color:var(--status-danger)}
+.cbaa-list.good li .mk{color:var(--status-success)}
+
+/* COHORT CARD */
+.cbaa-cohort{max-width:var(--container-sm);margin:var(--space-10) auto 0}
+.cbaa-cohort-body{padding:var(--space-10) var(--space-8);text-align:center}
+.cbaa-cohort .date{font-family:var(--font-display);font-weight:var(--fw-black);color:var(--brand-accent);font-size:var(--fs-h2);margin:var(--space-3) 0 var(--space-1)}
+.cbaa-cohort .seats{font-size:var(--fs-body-sm);color:var(--text-muted)}
+.cbaa-cohort p{color:var(--text-muted);font-size:var(--fs-body-sm);margin:var(--space-6) auto 0;max-width:48ch}
+
+/* CTA SECTION */
+.cbaa-cta{background:var(--surface-inverse);color:var(--text-on-inverse);border-radius:var(--radius-xl);padding:var(--space-16);margin:var(--space-10) auto 0;text-align:center}
+.cbaa-cta h2{color:var(--text-on-inverse);font-size:var(--fs-h2);max-width:22ch;margin:0 auto}
+.cbaa-cta p{color:var(--neutral-300);max-width:54ch;margin:var(--space-4) auto var(--space-8)}
+.cbaa-cta-row{display:flex;gap:var(--space-4);justify-content:center;flex-wrap:wrap}
+
+/* CLOSING */
+.cbaa-closing{text-align:center}
+.cbaa-closing h2{font-size:var(--fs-h1);max-width:20ch;margin:0 auto}
+.cbaa-closing .cbaa-lead{max-width:54ch;margin:var(--space-5) auto var(--space-8)}
+.cbaa-closing-cta{display:flex;gap:var(--space-4);justify-content:center;flex-wrap:wrap}
+
+/* STICKY CTA */
+.cbaa-sticky{position:fixed;left:0;right:0;bottom:0;z-index:var(--z-sticky);background:var(--surface-inverse);color:var(--text-on-inverse);padding:var(--space-3) var(--space-6);display:flex;align-items:center;justify-content:center;gap:var(--space-4);flex-wrap:wrap;box-shadow:var(--shadow-lg)}
+.cbaa-sticky span{font-weight:var(--fw-medium);font-size:var(--fs-body-sm)}
+
+/* DEMO SKELETON */
+.cbaa-skel{height:400px;background:var(--surface-subtle);border-radius:var(--radius-lg)}
+
+@media(max-width:900px){.cbaa-two{grid-template-columns:1fr}}
+`;
+
+const STACK = [
+  { ic: '📋', title: 'Product', desc: 'What to build' },
+  { ic: '🎨', title: 'UX', desc: 'How it works for users' },
+  { ic: '🧠', title: 'AI Systems', desc: 'How intelligence operates' },
+  { ic: '📊', title: 'Data', desc: 'What powers the system' },
+  { ic: '🔗', title: 'Integrations', desc: 'How systems connect' },
+  { ic: '⚡', title: 'Automation', desc: 'How work gets done' },
+  { ic: '🚀', title: 'Deployment', desc: 'How it runs in production' },
+];
+
+const PROBLEMS = [
+  'You use AI tools, but have never shipped an AI system',
+  'No clear path to deploy AI inside your own work',
+  'You can prompt, but can’t debug a workflow when it breaks',
+  'You’re stuck at the prompt level, not the system level',
+];
+
+const OUTCOMES = [
+  'A real AI build scoped to your actual work — not a toy demo',
+  'A working deployment you can show, not just concepts',
+  'A repeatable architecture you can apply to the next problem',
+  'Points, a leaderboard rank, and a shot at presenting on Demo Day',
+];
 
 function AIArchitectLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
   const [showStickyCta, setShowStickyCta] = useState(false);
+  const navigate = useNavigate();
   const [nextCohort, setNextCohort] = useState<{ name: string; start_date: string; seats_remaining: number } | null>(null);
   const [prefill, setPrefill] = useState<{ name: string; email: string; company: string; phone: string }>({ name: '', email: '', company: '', phone: '' });
 
@@ -82,351 +185,194 @@ function AIArchitectLandingPage() {
       .catch(() => {});
   }, []);
 
+  const goJoin = () => {
+    trackEvent('cta_click', { cta_name: 'join_the_challenge', page: '/ai-architect' });
+    navigate('/enroll');
+  };
+
   const openBooking = () => {
-    trackEvent('cta_click', { cta_name: 'book_strategy_call', page: '/ai-architect' });
+    trackEvent('cta_click', { cta_name: 'sponsor_strategy_call', page: '/ai-architect' });
     setShowBooking(true);
   };
 
   return (
-    <>
+    <div className="cbaa-root">
+      <style>{CSS}</style>
       <SEOHead
-        title="Build & Deploy Real AI Systems in 3 Weeks"
-        description="For Data Professionals and Leaders ready to 10X their productivity with AI. Book a strategy call."
+        title="The AI Builder Door — Join the Challenge"
+        description="For data professionals and tech leaders: enter the one Colaberry AI Challenge through the builder door. Ship a real AI system, climb the leaderboard, and present at Demo Day — learning on your own time."
       />
 
-      <div style={{ background: BG, color: TEXT, fontFamily: "'Inter', -apple-system, sans-serif", minHeight: '100vh' }}>
+      {/* HERO */}
+      <header className="cbaa-hero">
+        <div className="cbaa-wrap">
+          <div className="cbaa-eyebrow">The Builder Door · For Data &amp; Tech Professionals</div>
+          <h1 className="cb-balance cbaa-mt4">Stop using AI tools. Start shipping AI systems.</h1>
+          <p className="cbaa-lead">
+            This is one class with many doors — and this is yours. Data professionals, engineers, and tech
+            leaders enter the same Challenge as everyone else, then go from idea to a real, deployed AI system
+            inside their own work. You learn on your own time and climb a public leaderboard as you build.
+          </p>
+          <div className="cbaa-hero-cta">
+            <CtaButton to="/enroll" size="lg" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
+              Join the Challenge
+            </CtaButton>
+            <CtaButton to="/challenge" size="lg" variant="outline">
+              How the Challenge Works
+            </CtaButton>
+          </div>
+          <p className="cbaa-hero-meta">Individuals join on a $149/month membership. Employers can sponsor a seat block instead.</p>
+        </div>
+      </header>
 
-        {/* HERO — dark section */}
-        <section style={{ background: HERO_BG, padding: '80px 20px 70px', textAlign: 'center' }}>
-          <div style={{ maxWidth: 900, margin: '0 auto' }}>
-            <div style={{ display: 'inline-block', background: 'rgba(59,130,246,0.15)', borderRadius: 20, padding: '6px 18px', fontSize: 13, color: ACCENT, marginBottom: 24, fontWeight: 500 }}>
-              For Data Professionals & Leaders
-            </div>
-            <h1 style={{ fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 800, lineHeight: 1.1, marginBottom: 20, color: '#fff' }}>
-              Build & Deploy Real{' '}
-              <span style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                AI Systems
-              </span>
-              {' '}in 3 Weeks
-            </h1>
-            <div style={{ maxWidth: 640, margin: '0 auto 36px' }}>
-              <p style={{ fontSize: 'clamp(15px, 2.2vw, 18px)', color: '#cbd5e1', lineHeight: 1.7, marginBottom: 14 }}>
-                AI is no longer a tool — it's becoming <strong style={{ color: '#fff' }}>how work gets done</strong>.
-              </p>
-              <p style={{ fontSize: 'clamp(15px, 2.2vw, 18px)', color: '#94a3b8', lineHeight: 1.7, marginBottom: 14 }}>
-                The professionals who understand how to <strong style={{ color: '#cbd5e1' }}>build systems</strong> — not just use tools — are the ones pulling ahead fast.
-              </p>
-              <p style={{ fontSize: 'clamp(15px, 2.2vw, 18px)', color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>
-                In 3 weeks, you'll go from ideas {'\u2192'} a <strong style={{ color: ACCENT }}>real AI system</strong> inside your company.
-              </p>
-            </div>
-            <button onClick={openBooking} style={{ ...btnStyle, padding: '18px 48px', fontSize: 20 }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              BOOK YOUR STRATEGY CALL
-            </button>
+      {/* SYSTEM STACK */}
+      <section className="cbaa-sec">
+        <div className="cbaa-wrap">
+          <div className="cbaa-eyebrow">What You’ll Connect</div>
+          <h2 className="cbaa-h2 cbaa-mt2">You already work in part of the stack. The Challenge connects the rest.</h2>
+          <p className="cbaa-lead cbaa-mt4 cbaa-narrow">
+            Most data and tech professionals already operate in two or three of these areas. The advantage comes
+            from understanding how all seven connect into one working system — and that is exactly what you build.
+          </p>
+          <div className="cbaa-stack">
+            {STACK.map((s) => (
+              <Card key={s.title} elevation="sm" className="cbaa-tile">
+                <div className="ic" aria-hidden>{s.ic}</div>
+                <h3>{s.title}</h3>
+                <p>{s.desc}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PROBLEM / OUTCOME */}
+      <section className="cbaa-sec cbaa-alt">
+        <div className="cbaa-wrap">
+          <div className="cbaa-eyebrow">Why This Door</div>
+          <h2 className="cbaa-h2 cbaa-mt2">From tool user to system builder.</h2>
+          <div className="cbaa-two">
+            <Card elevation="sm" accent="red" className="cbaa-list bad">
+              <Badge tone="red" outline>Where most people stall</Badge>
+              <h3 className="cbaa-mt4">Using AI the shallow way</h3>
+              <ul>
+                {PROBLEMS.map((p) => (
+                  <li key={p}><span className="mk" aria-hidden>✗</span><span>{p}</span></li>
+                ))}
+              </ul>
+            </Card>
+            <Card elevation="sm" accent="green" className="cbaa-list good">
+              <Badge tone="green" outline>What you walk away with</Badge>
+              <h3 className="cbaa-mt4">Building the real thing</h3>
+              <ul>
+                {OUTCOMES.map((o) => (
+                  <li key={o}><span className="mk" aria-hidden>✓</span><span>{o}</span></li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* INTELLIGENCE DEMO */}
+      <Suspense fallback={
+        <section className="cbaa-sec-sm">
+          <div className="cbaa-wrap cbaa-narrow"><div className="cbaa-skel" /></div>
+        </section>
+      }>
+        <IntelligenceDemoSection onOpenBooking={goJoin} ctaLabel="JOIN THE CHALLENGE" />
+      </Suspense>
+
+      {/* COHORT URGENCY */}
+      {nextCohort && (
+        <section className="cbaa-sec">
+          <div className="cbaa-wrap">
+            <Card elevation="md" className="cbaa-cohort">
+              <div className="cbaa-cohort-body">
+                <Badge tone="blue" outline>Next Cohort</Badge>
+                <div className="date">
+                  {new Date(nextCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </div>
+                <div className="seats">{nextCohort.seats_remaining} seats remaining</div>
+                <p>
+                  Seats are limited so every builder gets real support. When this cohort fills, enrollment closes
+                  and the next start date moves out. If you’re serious about shipping a real AI system, this is
+                  your window.
+                </p>
+                <div className="cbaa-mt5">
+                  <CtaButton to="/enroll" size="lg" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
+                    Claim a Seat
+                  </CtaButton>
+                </div>
+              </div>
+            </Card>
           </div>
         </section>
+      )}
 
-        {/* Design AI Org CTA */}
-        <div className="text-center py-4" style={{ background: 'rgba(255,255,255,0.03)' }}>
-          <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 8 }}>Not ready to book? Design your AI organization first.</p>
-          <a
-            href={getAdvisoryUrl()}
-            className="btn btn-sm text-white"
-            style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '6px 20px', fontSize: 13 }}
-            data-track="ai_architect_design_first"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Design AI Org - Free &rarr;
-          </a>
-          <div style={{ maxWidth: 960, margin: '20px auto 0' }}>
+      {/* WHO THIS IS FOR + CTA */}
+      <section className="cbaa-sec cbaa-alt">
+        <div className="cbaa-wrap">
+          <div className="cbaa-cta">
+            <Badge tone="red" solid>Your Door Into The Challenge</Badge>
+            <h2 className="cb-balance cbaa-mt4">If you already work with data, systems, or code — this door is built for you.</h2>
+            <p>
+              You see AI changing how work gets done, and you’d rather lead that change than follow it. Join the
+              Challenge, build on your own time, and let the leaderboard show what you ship. Bringing a whole team?
+              Have your employer sponsor a seat block instead.
+            </p>
+            <div className="cbaa-cta-row">
+              <CtaButton to="/enroll" size="lg" tone="red" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
+                Join the Challenge
+              </CtaButton>
+              <Button variant="outline" size="lg" onClick={openBooking}>
+                Talk to Us About Sponsoring
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* DEMO BY INDUSTRY */}
+      <section className="cbaa-sec-sm">
+        <div className="cbaa-wrap cbaa-narrow">
+          <div className="cbaa-eyebrow">See What Gets Built</div>
+          <h2 className="cbaa-h2 cbaa-mt2">Real builds, by industry.</h2>
+          <div className="cbaa-mt5">
             <IndustryDemoGrid trackContext="ai_architect" />
           </div>
         </div>
+      </section>
 
-        {/* SYSTEM FRAMEWORK */}
-        <section style={{ background: WHITE, padding: '70px 20px' }}>
-          <div style={{ maxWidth: 960, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, textAlign: 'center', color: TEXT }}>
-              The Full-Stack AI System
-            </h2>
-            <div style={{ maxWidth: 700, margin: '0 auto 40px', textAlign: 'center' }}>
-              <p style={{ color: TEXT2, fontSize: 16, lineHeight: 1.7, marginBottom: 16 }}>
-                Most executives, tech leaders, developers, and data professionals already have experience in several of these areas.
-              </p>
-              <p style={{ color: TEXT2, fontSize: 16, lineHeight: 1.7, marginBottom: 16 }}>
-                The shift isn't starting from scratch — it's learning how to <strong>connect what you already know</strong> into a complete AI system.
-              </p>
-              <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 8 }}>
-                This is the shift happening across the industry:
-              </p>
-              <p style={{ fontSize: 17, fontWeight: 700, color: ACCENT, lineHeight: 1.6, marginBottom: 12 }}>
-                From specialized roles {'\u2192'} AI Systems Architect
-              </p>
-              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
-                The people who understand how these systems connect are the ones leading AI inside their organizations.
-              </p>
-              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
-                You don't need to learn everything. You need to understand how the pieces work together. That's exactly what we show you how to do.
-              </p>
-              <p style={{ color: TEXT2, fontSize: 16, lineHeight: 1.7, marginBottom: 12, fontStyle: 'italic' }}>
-                You're not learning something new — you're stepping into the role your experience has already been preparing you for.
-              </p>
-              <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 8 }}>
-                This is why roles across BI, Data, Engineering, and Leadership are converging into one:
-              </p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: ACCENT, margin: 0 }}>
-                AI Systems Architect
-              </p>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 14 }}>
-              {[
-                { title: 'Product', desc: 'What to build', icon: '\u{1F4CB}' },
-                { title: 'UX', desc: 'How it works for users', icon: '\u{1F3A8}' },
-                { title: 'AI Systems', desc: 'How intelligence operates', icon: '\u{1F9E0}' },
-                { title: 'Data', desc: 'What powers the system', icon: '\u{1F4CA}' },
-                { title: 'Integrations', desc: 'How systems connect', icon: '\u{1F517}' },
-                { title: 'Automation', desc: 'How work gets done', icon: '\u26A1' },
-                { title: 'Deployment', desc: 'How it runs in production', icon: '\u{1F680}' },
-              ].map((d, i) => (
-                <div key={i} style={{
-                  background: WHITE, borderRadius: 10, padding: '22px 14px', textAlign: 'center',
-                  border: `1px solid ${BORDER}`, transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'default',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-                >
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>{d.icon}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: TEXT2, marginBottom: 4 }}>{d.title}</div>
-                  <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.4 }}>{d.desc}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 28 }}>
-              <p style={{ fontSize: 15, color: TEXT2, lineHeight: 1.6, marginBottom: 6 }}>
-                Most professionals already operate in 2–3 of these areas.
-              </p>
-              <p style={{ fontSize: 15, fontWeight: 600, color: ACCENT2, lineHeight: 1.6, margin: 0 }}>
-                The advantage comes from understanding how all 7 connect into a working system.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* PROBLEM */}
-        <section style={{ background: BG_ALT, padding: '70px 20px' }}>
-          <div style={{ maxWidth: 700, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32, textAlign: 'center', color: TEXT }}>
-              Most People Are Using AI <span style={{ color: '#dc2626' }}>the Wrong Way</span>
-            </h2>
-            <div style={{ display: 'grid', gap: 14 }}>
-              {[
-                'Using tools instead of building systems',
-                'No clear path to deploy AI inside their company',
-                "Can't debug when AI workflows break",
-                'Stuck at the prompt level, not the system level',
-              ].map((point, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '16px 20px', background: WHITE, borderRadius: 8, borderLeft: '3px solid #dc2626', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                  <span style={{ color: '#dc2626', fontSize: 16, lineHeight: 1.4 }}>{'\u2717'}</span>
-                  <span style={{ fontSize: 15, lineHeight: 1.6, color: TEXT2 }}>{point}</span>
-                </div>
-              ))}
-            </div>
-            <div className="text-center mt-4">
-              <p style={{ color: '#94a3b8', fontSize: 14 }}>Start by seeing what your AI organization looks like</p>
-              <a
-                href={getAdvisoryUrl()}
-                className="btn btn-outline-light btn-sm"
-                data-track="ai_architect_see_org"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ borderRadius: 20, fontSize: 13 }}
-              >
-                Design Your AI Organization &rarr;
-              </a>
-            </div>
-          </div>
-        </section>
-
-        {/* OUTCOMES */}
-        <section style={{ background: WHITE, padding: '70px 20px' }}>
-          <div style={{ maxWidth: 700, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32, textAlign: 'center', color: TEXT }}>
-              What You Walk Away With
-            </h2>
-            <div style={{ display: 'grid', gap: 14 }}>
-              {[
-                'A real AI system scoped to YOUR company',
-                'A working deployment — not just concepts',
-                'A structured AI architecture you can replicate',
-                'The ability to expand and lead AI initiatives internally',
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '16px 20px', background: BG, borderRadius: 8, borderLeft: `3px solid ${GREEN}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                  <span style={{ color: GREEN, fontSize: 16, lineHeight: 1.4 }}>{'\u2713'}</span>
-                  <span style={{ fontSize: 15, lineHeight: 1.6, color: TEXT2 }}>{item}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 32, padding: '16px 24px', background: 'rgba(139,92,246,0.06)', borderRadius: 8, border: `1px solid rgba(139,92,246,0.2)` }}>
-              <span style={{ fontSize: 16, fontWeight: 600, color: ACCENT2 }}>
-                This is not a course — this is a build experience.
-              </span>
-            </div>
-          </div>
-        </section>
-
-        {/* INTELLIGENCE DEMO */}
-        <Suspense fallback={
-          <section style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f7fafc 100%)', padding: '60px 20px' }}>
-            <div style={{ maxWidth: 960, margin: '0 auto', textAlign: 'center' }}>
-              <div style={{ height: 400, background: BG_ALT, borderRadius: 12 }} />
-            </div>
-          </section>
-        }>
-          <IntelligenceDemoSection onOpenBooking={openBooking} ctaLabel="BOOK YOUR CALL NOW" />
-        </Suspense>
-
-        {/* SOCIAL PROOF */}
-        <section style={{ background: BG_ALT, padding: '70px 20px' }}>
-          <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 36, color: TEXT }}>
-              Trusted Track Record
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
-              {[
-                { stat: '10,000+', label: 'Data professionals trained' },
-                { stat: '$100M+', label: 'In wage impact generated' },
-                { stat: '3 Weeks', label: 'From idea to deployed system' },
-                { stat: 'Multi-Agent', label: 'AI systems built & running' },
-              ].map((s, i) => (
-                <div key={i} style={{ background: WHITE, borderRadius: 10, padding: '28px 16px', border: `1px solid ${BORDER}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: ACCENT, marginBottom: 6 }}>{s.stat}</div>
-                  <div style={{ fontSize: 13, color: MUTED }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* COHORT URGENCY */}
-        {nextCohort && (
-          <section style={{ background: WHITE, padding: '70px 20px' }}>
-            <div style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center' }}>
-              <div style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '36px 32px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                <h2 style={{ fontSize: 'clamp(22px, 3vw, 32px)', fontWeight: 700, marginBottom: 16, color: TEXT }}>
-                  Next Cohort Starting Soon
-                </h2>
-                <div style={{ background: 'rgba(59,130,246,0.06)', borderRadius: 8, padding: '16px 20px', marginBottom: 20, border: `1px solid rgba(59,130,246,0.15)` }}>
-                  <div style={{ fontSize: 13, color: MUTED, marginBottom: 4 }}>Next Cohort Starting</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: ACCENT }}>
-                    {new Date(nextCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </div>
-                  <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
-                    {nextCohort.seats_remaining} seats remaining
-                  </div>
-                </div>
-                <div style={{ textAlign: 'left', marginBottom: 24 }}>
-                  <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 12 }}>
-                    This is a guided, hands-on build experience — not a passive course.
-                  </p>
-                  <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 12 }}>
-                    Because of the level of support, we limit how many people can join each cohort.
-                  </p>
-                  <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 12 }}>
-                    Once this cohort fills, enrollment closes and the next start date moves out.
-                  </p>
-                  <p style={{ color: TEXT, fontSize: 15, lineHeight: 1.7, fontWeight: 600, margin: 0 }}>
-                    If you're serious about building a real AI system, this is your window.
-                  </p>
-                </div>
-                <button onClick={openBooking} style={{ ...btnStyle }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  APPLY FOR THIS COHORT
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* WHO THIS IS FOR */}
-        <section style={{ background: BG_ALT, padding: '70px 20px' }}>
-          <div style={{ maxWidth: 640, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 32px)', fontWeight: 700, marginBottom: 28, textAlign: 'center', color: TEXT }}>
-              Who This Is For
-            </h2>
-            <div style={{ background: WHITE, borderRadius: 10, padding: '28px 28px', border: `1px solid ${BORDER}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 20 }}>
-                This is for you if:
-              </p>
-              {[
-                "You're already working with data, systems, or technology",
-                'You see AI changing how work gets done',
-                'You want to move beyond tools \u2192 into building systems',
-                'You want to lead AI initiatives, not follow them',
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, fontSize: 15, lineHeight: 1.6, color: TEXT2 }}>
-                  <span style={{ color: GREEN, marginTop: 2 }}>{'\u2713'}</span> {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA SECTION */}
-        <section style={{ background: HERO_BG, padding: '70px 20px' }}>
-          <div style={{ maxWidth: 620, margin: '0 auto', textAlign: 'center' }}>
-            <h2 style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 700, marginBottom: 12, color: '#fff' }}>
-              Let's Map Your AI System
-            </h2>
-            <p style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
-              This is not a sales call.
-            </p>
-            <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.7, marginBottom: 24 }}>
-              This is where we map your AI system. We'll walk through:
-            </p>
-            <div style={{ maxWidth: 420, margin: '0 auto 32px', textAlign: 'left' }}>
-              {[
-                'What you should build',
-                'How the system should work',
-                'Where AI creates the biggest impact',
-                'What it would take to deploy it in 3 weeks',
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 15, color: '#cbd5e1', marginBottom: 10, lineHeight: 1.5 }}>
-                  <span style={{ color: GREEN, marginTop: 2 }}>{'\u2022'}</span> {item}
-                </div>
-              ))}
-            </div>
-            <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 32 }}>
-              If it makes sense, we'll show you exactly how to move forward.
-            </p>
-            <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 16 }}>
-              No technical background in AI systems required — we guide you step-by-step.
-            </p>
-            <button onClick={openBooking} style={{ ...btnStyle, padding: '20px 56px', fontSize: 22 }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              BOOK YOUR CALL NOW
-            </button>
-            <p style={{ color: '#475569', fontSize: 13, marginTop: 14 }}>
-              Free 30-minute strategy session. No obligations.
-            </p>
-          </div>
-        </section>
-
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 20px' }}>
-          <IndustryDemoGrid trackContext="ai_architect_bottom" />
-        </div>
-
-        {/* FOOTER */}
-        <footer style={{ padding: '24px 20px', textAlign: 'center', background: BG, borderTop: `1px solid ${BORDER}` }}>
-          <p style={{ color: MUTED, fontSize: 12, margin: 0 }}>
-            Colaberry Enterprise AI Division
+      {/* CLOSING */}
+      <section className="cbaa-sec">
+        <div className="cbaa-wrap cbaa-closing">
+          <div className="cbaa-eyebrow">Pick Your Door</div>
+          <h2 className="cb-balance cbaa-mt4">One class. Your door is open.</h2>
+          <p className="cbaa-lead">
+            Join the Challenge as an individual builder, or have your employer sponsor your team. Either way, you
+            end up in the same room — building, ranking, and presenting what you shipped.
           </p>
-        </footer>
-      </div>
+          <div className="cbaa-closing-cta">
+            <CtaButton to="/enroll" size="lg" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
+              Join the Challenge
+            </CtaButton>
+            <CtaButton to="/sponsorship" size="lg" variant="outline">
+              Sponsor Your Team
+            </CtaButton>
+          </div>
+        </div>
+      </section>
+
+      {/* STICKY CTA */}
+      {showStickyCta && (
+        <div className="cbaa-sticky">
+          <span>One class, many doors — yours is the builder door.</span>
+          <CtaButton to="/enroll" tone="red" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
+            Join the Challenge
+          </CtaButton>
+        </div>
+      )}
 
       <StrategyCallModal
         show={showBooking}
@@ -437,7 +383,7 @@ function AIArchitectLandingPage() {
         initialCompany={prefill.company}
         initialPhone={prefill.phone}
       />
-    </>
+    </div>
   );
 }
 
