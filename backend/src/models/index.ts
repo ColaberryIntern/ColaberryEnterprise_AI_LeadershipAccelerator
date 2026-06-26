@@ -269,6 +269,8 @@ import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
 import CurriculumCourseLink from './CurriculumCourseLink';
+import StudentTaskList from './StudentTaskList';
+import StudentTask from './StudentTask';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -855,6 +857,15 @@ CampaignDeployment.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 CampaignDeployment.belongsTo(LandingPage, { foreignKey: 'landing_page_id', as: 'landingPage' });
 LandingPage.hasMany(CampaignDeployment, { foreignKey: 'landing_page_id', as: 'deployments' });
 
+// --- Student Task List / Task associations ---
+Project.hasMany(StudentTaskList, { foreignKey: 'project_id', as: 'taskLists', onDelete: 'CASCADE' });
+StudentTaskList.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+StudentTaskList.hasMany(StudentTask, { foreignKey: 'task_list_id', as: 'tasks', onDelete: 'CASCADE' });
+StudentTask.belongsTo(StudentTaskList, { foreignKey: 'task_list_id', as: 'taskList' });
+StudentTask.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'studentTasks' });
+StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
+
 // Capability Agent Map associations
 Capability.hasMany(CapabilityAgentMap, { foreignKey: 'capability_id', as: 'agentMaps' });
 CapabilityAgentMap.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capability' });
@@ -1069,6 +1080,8 @@ export {
   StudentGithubActivity,
   CurriculumCourseLink,
   EnrollmentLead,
+  StudentTaskList,
+  StudentTask,
 };
 
 // --- Enrollment Lead associations ---

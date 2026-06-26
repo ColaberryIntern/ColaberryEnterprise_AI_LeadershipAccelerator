@@ -136,20 +136,59 @@ function ProjectDnaWizard() {
 
   if (done) {
     return (
-      <div className="text-center py-5">
-        <span className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
-          style={{ width: 64, height: 64, background: 'var(--color-success-bg)' }}>
-          <i className="bi bi-check-lg" style={{ fontSize: 32, color: 'var(--color-success)' }}></i>
-        </span>
-        <h2 className="h5 fw-bold mb-2" style={{ color: '#1e293b' }}>Project DNA Saved</h2>
-        <p className="text-muted small mb-4">Your project blueprint is ready. Every week will be personalized around it.</p>
-        <button
-          className="btn btn-primary px-4"
-          style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
-          onClick={() => navigate('/portal/project/blueprint')}
-        >
-          <i className="bi bi-arrow-right me-2"></i>Go to Your Project
-        </button>
+      <div className="py-5" style={{ maxWidth: 560, margin: '0 auto' }}>
+        {/* Confirmed */}
+        <div className="text-center mb-4">
+          <span className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+            style={{ width: 64, height: 64, background: 'var(--color-success-bg)' }}>
+            <i className="bi bi-check-lg" style={{ fontSize: 32, color: 'var(--color-success)' }}></i>
+          </span>
+          <h2 className="h5 fw-bold mb-1" style={{ color: '#1e293b' }}>Project DNA Saved</h2>
+          <p className="text-muted small mb-0">Your project context is locked in.</p>
+        </div>
+
+        {/* What's happening now */}
+        <div className="rounded-3 p-4 mb-4" style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}>
+          <div className="d-flex align-items-start gap-3 mb-3">
+            <span className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
+              style={{ width: 36, height: 36, background: 'rgba(99,102,241,0.1)' }}>
+              <i className="bi bi-cpu" style={{ color: 'var(--color-purple)', fontSize: 16 }}></i>
+            </span>
+            <div>
+              <p className="fw-semibold small mb-1" style={{ color: '#1e293b' }}>Generating your requirements document</p>
+              <p className="text-muted small mb-0">
+                An AI architect is analysing your DNA and building a full system requirements spec — architecture, data flows, integrations, and implementation roadmap.
+                This runs in the background and takes <strong>15–30 minutes</strong>.
+              </p>
+            </div>
+          </div>
+          <div className="d-flex align-items-start gap-3">
+            <span className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
+              style={{ width: 36, height: 36, background: 'rgba(99,102,241,0.1)' }}>
+              <i className="bi bi-list-check" style={{ color: 'var(--color-purple)', fontSize: 16 }}></i>
+            </span>
+            <div>
+              <p className="fw-semibold small mb-1" style={{ color: '#1e293b' }}>Your project tasks will be ready shortly after</p>
+              <p className="text-muted small mb-0">
+                Once the requirements doc is complete, your personalised task board is created automatically — one task list per system area.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="text-center">
+          <button
+            className="btn btn-primary px-4"
+            style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
+            onClick={() => navigate('/portal/home')}
+          >
+            <i className="bi bi-house me-2"></i>Back to Home
+          </button>
+          <p className="text-muted small mt-3 mb-0">
+            You can leave this page — your requirements will be ready when you come back.
+          </p>
+        </div>
       </div>
     );
   }
