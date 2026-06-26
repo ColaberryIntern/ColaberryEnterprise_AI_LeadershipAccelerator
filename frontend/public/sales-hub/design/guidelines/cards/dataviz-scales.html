@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Data-viz · sequential & diverging" subtitle="Single-hue scale + cherry↔leaf diverging scale" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 24px 26px; background: var(--surface-page); font-family: var(--font-body); }
+  .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .05em; }
+  .scale { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 40px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-subtle); margin-bottom: 18px; }
+  .scale span { display: block; }
+</style>
+</head>
+<body>
+  <p class="lbl">Sequential — low → high</p>
+  <div class="scale">
+    <span style="background:var(--seq-1)"></span><span style="background:var(--seq-2)"></span><span style="background:var(--seq-3)"></span>
+    <span style="background:var(--seq-4)"></span><span style="background:var(--seq-5)"></span><span style="background:var(--seq-6)"></span>
+  </div>
+  <p class="lbl">Diverging — negative ↔ neutral ↔ positive</p>
+  <div class="scale">
+    <span style="background:var(--div-neg-2)"></span><span style="background:var(--div-neg-1)"></span><span style="background:var(--div-mid)"></span>
+    <span style="background:var(--div-pos-1)"></span><span style="background:var(--div-pos-2)"></span>
+  </div>
+</body>
+</html>
