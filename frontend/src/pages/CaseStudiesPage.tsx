@@ -85,7 +85,7 @@ const champions: ChampionStory[] = [
     shipped: 'Claims Triage Copilot',
     photo: '/img/member-home.jpg',
     photoAlt:
-      'Priya Nair building her claims-triage copilot on her laptop at home in the evenings',
+      'Priya Nair, an AI Champion, with the claims-triage copilot she built with Claude',
     side: 'right',
     summary:
       'Priya joined the Challenge on her own as a $149/mo member while working full time. By Demo Day she had shipped a claims-triage copilot that reads incoming tickets, drafts a disposition, and routes edge cases to a human — built end to end with Claude during her own evenings.',
