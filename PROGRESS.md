@@ -6746,3 +6746,9 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: The dev server failed to compile — "[eslint] Definition for rule '@typescript-eslint/no-explicit-any' was not found" — because react-scripts' eslint config does not load that rule, so the inline `// eslint-disable-next-line @typescript-eslint/no-explicit-any` comment in MermaidDiagram.tsx itself errored (the documented CRA gotcha in frontend/CLAUDE.md). Removed the disable comment; the bare `any` lints clean.
   - Verification: dev server recompiled to "Compiled successfully! No issues found" (eslint + webpack clean); tsc still clean.
   - Notes: tsc does NOT run eslint — the dev-server compile (or react-scripts build) is the check for this error class.
+- [x] **Cohort date -> Jul 23; CohortUrgency rebalanced + watermark; contact hero + demo removed; dashboard hero image**
+  - Date: 2026-06-26
+  - Session: CC-20260625-q4m8
+  - What changed: Corrected the next-cohort date to Thu Jul 23 everywhere (CohortUrgency default 2026-07-23 + 5 page references via sed). Rebuilt CohortUrgency into a two-column layout (copy + scarcity + CTA left, live countdown right) over a subtle photo watermark (/img/workshop.jpg) so the card fills its width instead of bunching on the left. ContactPage: added a dark photo hero (/img/team-collab.jpg) + removed the out-of-place IndustryDemoGrid "Education & Training demo" block (+ its import). Sponsor-dashboard hero image swapped from a stray chart placeholder to a virtual-presentation photo (/img/online-presentation.jpg).
+  - Verification: dev server "Compiled successfully" (tsc + eslint + webpack clean); tsc --noEmit clean.
+  - Notes: images remain swappable placeholders.

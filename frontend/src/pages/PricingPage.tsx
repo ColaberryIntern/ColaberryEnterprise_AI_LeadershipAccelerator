@@ -562,7 +562,7 @@ function PricingPage() {
         }}
       >
         <div style={{ maxWidth: 880, margin: '0 auto' }}>
-          <CohortUrgency startDateISO="2026-07-27" seatsTotal={40} seatsLeft={7} />
+          <CohortUrgency startDateISO="2026-07-23" seatsTotal={40} seatsLeft={7} />
         </div>
       </section>
 

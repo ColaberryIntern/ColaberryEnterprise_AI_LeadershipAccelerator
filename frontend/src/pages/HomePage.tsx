@@ -233,7 +233,7 @@ function HomePage() {
               color: 'color-mix(in srgb, var(--text-on-inverse) 64%, transparent)',
             }}
           >
-            Next 12-week cohort starts Mon, Jul 27 · individuals self-serve · annual,
+            Next 12-week cohort starts Thu, Jul 23 · individuals self-serve · annual,
             reassignable seats for teams
           </p>
         </div>
@@ -494,7 +494,7 @@ function HomePage() {
         style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}
       >
         <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
-          <CohortUrgency startDateISO="2026-07-27" seatsTotal={40} seatsLeft={7} />
+          <CohortUrgency startDateISO="2026-07-23" seatsTotal={40} seatsLeft={7} />
         </div>
       </section>
 

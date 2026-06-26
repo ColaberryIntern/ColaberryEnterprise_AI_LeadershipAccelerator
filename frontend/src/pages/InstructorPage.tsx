@@ -367,7 +367,7 @@ function InstructorPage() {
       {/* ── Next cohort urgency ───────────────────────────────────────────── */}
       <section aria-label="Next cohort" style={{ ...sectionPad, paddingBlockEnd: 'var(--space-12)' }}>
         <div style={container}>
-          <CohortUrgency startDateISO="2026-07-27" />
+          <CohortUrgency startDateISO="2026-07-23" />
         </div>
       </section>
 

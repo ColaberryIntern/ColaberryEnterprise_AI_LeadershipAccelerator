@@ -322,7 +322,7 @@ function SponsorDashboardPage() {
             inset: 0,
             zIndex: 0,
             backgroundImage:
-              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 74%, transparent), color-mix(in srgb, var(--surface-inverse) 93%, transparent)), url('/img/data-dashboard.jpg')",
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 74%, transparent), color-mix(in srgb, var(--surface-inverse) 93%, transparent)), url('/img/online-presentation.jpg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}

@@ -20,7 +20,7 @@ import { PhaseBand } from '../components/visuals/charts';
  * and prep for the "Certified Anthropic AI Systems Architect" (CCA-F) credential.
  *
  * Two doors lead into the one program: "Join the Challenge" (individual) and
- * "Sponsor Your Team" (employer). Next 12-week cohort starts Mon Jul 27.
+ * "Sponsor Your Team" (employer). Next 12-week cohort starts Thu Jul 23.
  *
  * Built on the Colaberry design system: semantic tokens only (no raw layout hex),
  * DS core components (Badge, Button, Card, Accordion) + the shared visual
@@ -234,7 +234,7 @@ const FAQ_ITEMS = [
   {
     title: 'How long is the program?',
     content:
-      'It is one continuous 12-week program — a single, guided path from week 1 to week 12. The four phases (Build Your AI Foundation, Create Your AI Team, Connect AI to the Real World, Design AI That Scales) simply group the weeks; they are not separate classes. The next 12-week cohort starts Monday, July 27.',
+      'It is one continuous 12-week program — a single, guided path from week 1 to week 12. The four phases (Build Your AI Foundation, Create Your AI Team, Connect AI to the Real World, Design AI That Scales) simply group the weeks; they are not separate classes. The next 12-week cohort starts Thursday, July 23.',
   },
   {
     title: 'What is the "Certified Anthropic AI Systems Architect" credential?',
@@ -335,7 +335,7 @@ function ProgramPage() {
     <div style={{ background: 'var(--surface-page)' }}>
       <SEOHead
         title="The Program — 12-Week AI Systems Architect"
-        description="One continuous 12-week program. Train hands-on with Claude Code, build a real AI system across four phases, and prep for the Certified Anthropic AI Systems Architect (CCA-F) credential. Next cohort starts Mon Jul 27."
+        description="One continuous 12-week program. Train hands-on with Claude Code, build a real AI system across four phases, and prep for the Certified Anthropic AI Systems Architect (CCA-F) credential. Next cohort starts Thu Jul 23."
       />
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
@@ -443,7 +443,7 @@ function ProgramPage() {
                 marginTop: 'var(--space-5)',
               }}
             >
-              Next 12-week cohort starts Monday, July 27.
+              Next 12-week cohort starts Thursday, July 23.
             </p>
           </FadeIn>
         </div>

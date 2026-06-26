@@ -646,7 +646,7 @@ function SponsorshipPage() {
         {/* ========================= COHORT URGENCY ========================= */}
         <section style={S.section}>
           <div style={S.inner}>
-            <CohortUrgency startDateISO="2026-07-27" seatsTotal={40} seatsLeft={7} />
+            <CohortUrgency startDateISO="2026-07-23" seatsTotal={40} seatsLeft={7} />
           </div>
         </section>
 

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
-import IndustryDemoGrid from '../components/IndustryDemoGrid';
 import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm, ValidationRules } from '../utils/formValidation';
 import { getUTMParams } from '../services/utmService';
@@ -175,14 +174,28 @@ function ContactPage() {
       <section
         aria-label="Page Header"
         style={{
+          position: 'relative',
+          overflow: 'hidden',
           background: 'var(--surface-inverse)',
           color: 'var(--text-on-accent)',
           padding: 'var(--space-20) 0 var(--space-16)',
         }}
       >
         <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 72%, transparent), color-mix(in srgb, var(--surface-inverse) 92%, transparent)), url('/img/team-collab.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div
           className="container text-center"
-          style={{ maxWidth: 820 }}
+          style={{ position: 'relative', zIndex: 1, maxWidth: 820 }}
         >
           <Badge tone="red" dot style={{ marginBottom: 'var(--space-5)' }}>
             We respond within one business day
@@ -500,10 +513,6 @@ function ContactPage() {
           )}
         </div>
       </section>
-
-      <div className="container" style={{ maxWidth: 900 }}>
-        <IndustryDemoGrid trackContext="contact" />
-      </div>
 
       {/* Strategy Call CTA */}
       <section
