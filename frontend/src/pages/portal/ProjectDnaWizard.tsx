@@ -146,7 +146,7 @@ function ProjectDnaWizard() {
         <button
           className="btn btn-primary px-4"
           style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
-          onClick={() => navigate('/portal/project/blueprint')}
+          onClick={() => navigate('/portal/project/builder')}
         >
           <i className="bi bi-arrow-right me-2"></i>Go to Your Project
         </button>
