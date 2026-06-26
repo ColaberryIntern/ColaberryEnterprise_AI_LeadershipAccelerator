@@ -6710,3 +6710,9 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: QA link-crawl of every internal link across the rebuilt public pages vs the route table — found + fixed one dead link (SponsorshipPage "Join the Challenge as an individual" -> /membership which has no route; now /enroll). Authored a print-ready, self-contained CEO Sponsor One-Pager on the Colaberry brand at frontend/public/sales-hub/sponsor-ceo-onepager.html. Canonical Copy Deck saved to BC Docs & Files (doc 10036895002).
   - Verification: TypeScript passes — tsc --noEmit clean on frontend (0). Link-crawl: all other internal links across the rebuilt pages resolve to valid routes or correct redirects.
   - Notes: CEO one-pager pricing numbers are ILLUSTRATIVE placeholders flagged for Ali to set. Copy-deck outreach angles are DRAFT (human-approved before send).
+- [x] **Membership landing pages reformatted to the Colaberry DS + hero photos added**
+  - Date: 2026-06-26
+  - Session: CC-20260625-q4m8
+  - What changed: Reformatted MembershipLanding.tsx (shared renderer for all 3 persona landing pages) from the old Garage-Labs Playfair/charcoal-gold .mlx-root template to the Colaberry DS (Roboto, cherry/leaf/berry semantic tokens, DS Card/Button/Badge), matching the rest of the site; preserved the PersonaContent contract + OpenHouseModal + trackEvent wiring; fixed the stale Open House date (June 21 -> July 16). Added self-hosted hero background photos (frontend/public/hero/*.jpg, 6 images) behind a dark token-based overlay to the hero sections of Home, Sponsor, the 3 persona pages, Challenge, Program, Demo Day, and Pricing.
+  - Verification: TypeScript passes — tsc --noEmit clean on frontend (0).
+  - Notes: Hero photos are STOCK PLACEHOLDERS (self-hosted) — flagged for swap with licensed/brand photography; swapping = replace the file in public/hero/.

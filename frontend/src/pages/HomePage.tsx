@@ -127,6 +127,8 @@ function HomePage() {
       <section
         aria-label="Find your AI builders"
         style={{
+          position: 'relative',
+          overflow: 'hidden',
           background:
             'radial-gradient(1200px 600px at 70% -10%, color-mix(in srgb, var(--brand-accent) 22%, transparent), transparent 60%), var(--surface-inverse)',
           color: 'var(--text-on-inverse)',
@@ -134,8 +136,20 @@ function HomePage() {
         }}
       >
         <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-home.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div
           className="container"
-          style={{ maxWidth: 980, paddingInline: 'var(--space-6)', textAlign: 'center' }}
+          style={{ position: 'relative', zIndex: 1, maxWidth: 980, paddingInline: 'var(--space-6)', textAlign: 'center' }}
         >
           <Badge solid style={{ marginBottom: 'var(--space-6)' }}>
             One class · many doors

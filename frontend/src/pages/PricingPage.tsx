@@ -110,9 +110,23 @@ function PricingPage() {
           background: 'var(--surface-inverse)',
           color: 'var(--text-on-inverse)',
           padding: 'var(--space-20) var(--space-4) var(--space-16)',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ maxWidth: 880, margin: '0 auto', textAlign: 'center' }}>
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-sponsor.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div style={{ maxWidth: 880, margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
           <Badge solid dot>
             One Class · Two Doors
           </Badge>

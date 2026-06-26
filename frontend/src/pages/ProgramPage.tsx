@@ -281,9 +281,23 @@ function ProgramPage() {
           background: 'var(--surface-inverse)',
           color: 'var(--text-on-inverse)',
           paddingBlock: 'var(--space-32)',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ ...container, maxWidth: 880, textAlign: 'center' }}>
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-ai.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div style={{ ...container, maxWidth: 880, textAlign: 'center', position: 'relative', zIndex: 1 }}>
           <FadeIn>
             <Badge solid>The Program</Badge>
             <h1

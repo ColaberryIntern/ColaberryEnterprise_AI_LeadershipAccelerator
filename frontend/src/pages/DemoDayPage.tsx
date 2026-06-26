@@ -49,6 +49,8 @@ const CSS = `
 
 /* HERO */
 .cbdd-hero{background:var(--surface-inverse);color:var(--text-on-inverse);padding:var(--space-24) 0 var(--space-20);position:relative;overflow:hidden}
+.cbdd-hero-bg{position:absolute;inset:0;z-index:0;background-image:linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-home.jpg');background-size:cover;background-position:center}
+.cbdd-hero .cbdd-wrap{position:relative;z-index:1}
 .cbdd-hero h1{color:var(--text-on-inverse);font-size:var(--fs-hero-fluid);font-weight:var(--fw-black);max-width:16ch}
 .cbdd-hero .cbdd-eyebrow{color:var(--red-300)}
 .cbdd-hero .cbdd-lead{color:var(--neutral-300);max-width:58ch;margin-top:var(--space-5)}
@@ -201,6 +203,7 @@ function DemoDayPage() {
 
       {/* HERO */}
       <header className="cbdd-hero">
+        <div className="cbdd-hero-bg" aria-hidden="true" />
         <div className="cbdd-wrap">
           <div className="cbdd-eyebrow">Demo Day</div>
           <h1 className="cb-balance cbdd-mt4">The day builders stop talking about AI and show what they shipped.</h1>

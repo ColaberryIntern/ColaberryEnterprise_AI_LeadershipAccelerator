@@ -19,6 +19,8 @@ const S = {
   /* Page sections */
   page: { background: 'var(--surface-page)', color: 'var(--text-body)' } as React.CSSProperties,
   hero: {
+    position: 'relative',
+    overflow: 'hidden',
     background: 'var(--surface-inverse)',
     color: 'var(--text-on-inverse)',
     padding: 'var(--space-24) var(--space-6) var(--space-20)',
@@ -270,7 +272,19 @@ function SponsorshipPage() {
       <div id="sponsor-team-page" style={S.page}>
         {/* ============================ HERO ============================ */}
         <section style={S.hero}>
-          <div style={{ ...S.innerNarrow, textAlign: 'center' }}>
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 0,
+              backgroundImage:
+                "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-sponsor.jpg')",
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          />
+          <div style={{ ...S.innerNarrow, position: 'relative', zIndex: 1, textAlign: 'center' }}>
             <Badge solid>The AI Builder Challenge</Badge>
             <h1
               className="cb-balance"

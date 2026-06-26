@@ -53,7 +53,9 @@ const CSS = `
 .cbc-mt10{margin-top:var(--space-10)}
 
 /* HERO */
-.cbc-hero{background:var(--surface-inverse);color:var(--text-on-inverse);padding:var(--space-24) 0 var(--space-20)}
+.cbc-hero{background:var(--surface-inverse);color:var(--text-on-inverse);padding:var(--space-24) 0 var(--space-20);position:relative;overflow:hidden}
+.cbc-hero-bg{position:absolute;inset:0;z-index:0;background-image:linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-ai.jpg');background-size:cover;background-position:center}
+.cbc-hero .cbc-wrap{position:relative;z-index:1}
 .cbc-hero h1{color:var(--text-on-inverse);font-size:var(--fs-hero-fluid);font-weight:var(--fw-black);max-width:16ch}
 .cbc-hero .cbc-eyebrow{color:var(--red-300)}
 .cbc-hero .cbc-lead{color:var(--neutral-300);max-width:60ch;margin-top:var(--space-5)}
@@ -188,6 +190,7 @@ function SponsorChallengePage() {
 
       {/* HERO */}
       <header className="cbc-hero">
+        <div className="cbc-hero-bg" aria-hidden="true" />
         <div className="cbc-wrap">
           <div className="cbc-eyebrow">The Colaberry AI Challenge</div>
           <h1 className="cb-balance cbc-mt4">Most people consume AI. Very few learn to build with it.</h1>
