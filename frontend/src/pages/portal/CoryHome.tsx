@@ -39,6 +39,7 @@ import ContinuationCard from '../../components/workspace/ContinuationCard';
 import FirstVisitFramingCard from '../../components/workspace/FirstVisitFramingCard';
 import OperatorFocusCard from '../../components/workspace/OperatorFocusCard';
 import { fireToast } from '../../components/workspace/MicroToast';
+import portalApi from '../../utils/portalApi';
 import {
   BAND_COLOR,
   NextActionCard,
@@ -50,6 +51,9 @@ import {
   greetingFor,
   shortenOrgName,
   buildOneLineStatus,
+  StudentQueueSection,
+  RunMyDayMode,
+  type StudentQueueItem,
 } from './CoryHomeParts';
 
 const SEVERITY_COLOR: Record<BlockerEntry['severity'], string> = {
@@ -134,6 +138,113 @@ const CoryHome: React.FC = () => {
   // engaged BEFORE this visit), same rationale as momentum + activePath.
   const operatorFocus = useOperatorFocus(initialMemoryRef.current);
 
+  // ── Student CB-System queue ───────────────────────────────────────────────
+  const [studentQueue, setStudentQueue] = useState<StudentQueueItem[]>([]);
+  const [sqLoading, setSqLoading] = useState(false);
+  const [sqError, setSqError] = useState<string | null>(null);
+  const [sqExpandedId, setSqExpandedId] = useState<string | null>(null);
+  const [sqCopiedId, setSqCopiedId] = useState<string | null>(null);
+  const [sqDecidingId, setSqDecidingId] = useState<string | null>(null);
+  const [walkMode, setWalkMode] = useState(false);
+  const [walkIndex, setWalkIndex] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setSqLoading(true);
+      setSqError(null);
+      try {
+        const r = await portalApi.get<{ items: StudentQueueItem[] }>('/api/portal/student-ops/my-queue');
+        if (!cancelled) setStudentQueue(r.data.items || []);
+      } catch (err: any) {
+        if (!cancelled) setSqError(err?.response?.data?.error || err?.message || 'Failed to load queue');
+      } finally {
+        if (!cancelled) setSqLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSqToggle = (id: string) => {
+    setSqExpandedId((prev) => (prev === id ? null : id));
+  };
+
+  const handleSqDone = async (id: string) => {
+    setSqDecidingId(id);
+    try {
+      await portalApi.post('/api/portal/student-ops/decide', { requirement_id: id, decision: 'done' });
+      setStudentQueue((prev) => prev.filter((q) => q.id !== id));
+      if (walkMode) {
+        setWalkIndex((i) => Math.min(i, studentQueue.length - 2));
+      }
+    } catch {
+      // fail silently — queue item stays; user can retry
+    } finally {
+      setSqDecidingId(null);
+    }
+  };
+
+  const handleSqDefer = (id: string) => {
+    setStudentQueue((prev) => {
+      const idx = prev.findIndex((q) => q.id === id);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.push({ ...item, rank: next.length + 1 });
+      return next.map((q, i) => ({ ...q, rank: i + 1 }));
+    });
+    if (walkMode) {
+      setWalkIndex((i) => Math.min(i, studentQueue.length - 2));
+    }
+  };
+
+  const handleSqFlagBlocker = async (id: string) => {
+    setSqDecidingId(id);
+    try {
+      await portalApi.post('/api/portal/student-ops/decide', { requirement_id: id, decision: 'flag_blocker' });
+      setStudentQueue((prev) =>
+        prev.map((q) => q.id === id ? { ...q, status: 'unmatched' } : q),
+      );
+    } catch {
+      // fail silently
+    } finally {
+      setSqDecidingId(null);
+      setSqExpandedId(null);
+    }
+  };
+
+  const handleSqCopyPrompt = (prompt: string, id?: string) => {
+    try { navigator.clipboard.writeText(prompt); } catch { /* ignore */ }
+    const targetId = id ?? sqExpandedId;
+    if (targetId) {
+      setSqCopiedId(targetId);
+      setTimeout(() => setSqCopiedId(null), 2000);
+    }
+  };
+
+  const handleWalkNav = (delta: -1 | 1) => {
+    setWalkIndex((i) => Math.max(0, Math.min(studentQueue.length - 1, i + delta)));
+  };
+
+  // Keyboard nav for Run My Day modal
+  useEffect(() => {
+    if (!walkMode) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') handleWalkNav(1);
+      else if (e.key === 'ArrowLeft') handleWalkNav(-1);
+      else if (e.key === 'Escape') setWalkMode(false);
+      else if (e.key === ' ') {
+        e.preventDefault();
+        const item = studentQueue[walkIndex];
+        if (item) handleSqCopyPrompt(item.claude_code_prompt, item.id);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [walkMode, walkIndex, studentQueue]); // eslint-disable-line
+
+  // ── Contextual drawers ────────────────────────────────────────────────────
   // Contextual drawers — opened by clicking tiles or the priority card.
   // The drawer key is persisted to memory so the next visit can offer
   // "you last opened the X drawer" affordances.
@@ -505,6 +616,22 @@ const CoryHome: React.FC = () => {
         )}
       </section>
 
+      {/* Student build queue — priority engine + approval workspace + Run My Day */}
+      <StudentQueueSection
+        items={studentQueue}
+        loading={sqLoading}
+        error={sqError}
+        expandedId={sqExpandedId}
+        onToggle={handleSqToggle}
+        onDone={handleSqDone}
+        onDefer={handleSqDefer}
+        onFlagBlocker={handleSqFlagBlocker}
+        onCopyPrompt={(prompt) => handleSqCopyPrompt(prompt)}
+        copiedId={sqCopiedId}
+        decidingId={sqDecidingId}
+        onEnterWalkMode={() => { setWalkIndex(0); setWalkMode(true); }}
+      />
+
       {/* Active build + verification */}
       <div className="row g-3 mb-3">
         <div className="col-md-7">
@@ -544,6 +671,21 @@ const CoryHome: React.FC = () => {
           footer. Shows synthesis age, last-touched age, last-critique age, and
           confidence — all sourced from state + memory + sessionStorage. */}
       <OperationalHistoryStrip state={state} memory={memory} />
+
+      {/* Run My Day overlay — full-screen walk mode for the student build queue */}
+      {walkMode && studentQueue.length > 0 && (
+        <RunMyDayMode
+          items={studentQueue}
+          currentIndex={walkIndex}
+          onNav={handleWalkNav}
+          onExit={() => setWalkMode(false)}
+          onDone={(id) => { void handleSqDone(id); if (walkIndex >= studentQueue.length - 1) setWalkMode(false); }}
+          onDefer={(id) => { handleSqDefer(id); if (walkIndex >= studentQueue.length - 1) setWalkIndex(Math.max(0, studentQueue.length - 2)); }}
+          onCopyPrompt={handleSqCopyPrompt}
+          copiedId={sqCopiedId}
+          decidingId={sqDecidingId}
+        />
+      )}
     </div>
   );
 };

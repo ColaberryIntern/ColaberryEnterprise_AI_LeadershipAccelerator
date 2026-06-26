@@ -327,3 +327,483 @@ export function targetLabel(route: string): string {
   if (route.startsWith('/portal/project/system')) return 'System';
   return 'workspace';
 }
+
+// =============================================================================
+// Student CB-System — priority queue + approval workspace + Run My Day
+// Adapts the employee ops pattern for students.
+// Work source: RequirementsMap rows (native student tasks), not Basecamp todos.
+// =============================================================================
+
+export interface StudentQueueItem {
+  id: string;
+  requirement_key: string;
+  requirement_text: string;
+  status: string;
+  urgency_score: number;
+  category: 'build' | 'integrate' | 'deploy' | 'test' | 'design' | 'default';
+  claude_code_prompt: string;
+  github_file_paths: string[];
+  rank: number;
+}
+
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  unmatched:    { label: 'Not started',  color: 'var(--color-danger)' },
+  unmapped:     { label: 'Not started',  color: 'var(--color-danger)' },
+  partial:      { label: 'In progress',  color: 'var(--color-warning)' },
+  matched:      { label: 'Matched',      color: 'var(--color-info, #0369a1)' },
+  planned:      { label: 'Planned',      color: 'var(--color-text-light)' },
+};
+
+const CAT_ICON: Record<StudentQueueItem['category'], string> = {
+  build:     'bi-hammer',
+  integrate: 'bi-plug',
+  deploy:    'bi-cloud-upload',
+  test:      'bi-check2-square',
+  design:    'bi-palette',
+  default:   'bi-card-list',
+};
+
+function urgencyColor(score: number): string {
+  if (score >= 70) return 'var(--color-danger)';
+  if (score >= 40) return 'var(--color-warning)';
+  return 'var(--color-text-light)';
+}
+
+// ---------------------------------------------------------------------------
+// ApprovalWorkspace — inline action panel expanded below a queue row
+// ---------------------------------------------------------------------------
+
+interface ApprovalWorkspaceProps {
+  item: StudentQueueItem;
+  onDone: (id: string) => void;
+  onDefer: (id: string) => void;
+  onFlagBlocker: (id: string) => void;
+  onCopyPrompt: (prompt: string) => void;
+  copied: boolean;
+  deciding: boolean;
+}
+
+export const ApprovalWorkspace: React.FC<ApprovalWorkspaceProps> = ({
+  item, onDone, onDefer, onFlagBlocker, onCopyPrompt, copied, deciding,
+}) => (
+  <div style={{
+    background: 'var(--color-bg-alt, #f8fafc)',
+    borderTop: '1px solid var(--color-border)',
+    padding: '0.85rem 1rem',
+  }}>
+    <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginBottom: 8, lineHeight: 1.5 }}>
+      {item.requirement_text}
+    </div>
+
+    {/* Action bar */}
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+      <button
+        type="button"
+        className="btn btn-sm btn-success"
+        onClick={() => onDone(item.id)}
+        disabled={deciding}
+        style={{ fontSize: 11 }}
+      >
+        <i className="bi bi-check-lg me-1"></i>Mark done
+      </button>
+      <button
+        type="button"
+        className="btn btn-sm btn-outline-secondary"
+        onClick={() => onDefer(item.id)}
+        disabled={deciding}
+        style={{ fontSize: 11 }}
+      >
+        <i className="bi bi-arrow-down me-1"></i>Defer
+      </button>
+      <button
+        type="button"
+        className="btn btn-sm btn-outline-danger"
+        onClick={() => onFlagBlocker(item.id)}
+        disabled={deciding}
+        style={{ fontSize: 11 }}
+      >
+        <i className="bi bi-flag me-1"></i>Flag blocker
+      </button>
+      <button
+        type="button"
+        className="btn btn-sm btn-outline-primary"
+        onClick={() => onCopyPrompt(item.claude_code_prompt)}
+        style={{ fontSize: 11, marginLeft: 'auto' }}
+      >
+        <i className={`bi ${copied ? 'bi-check-lg' : 'bi-clipboard'} me-1`}></i>
+        {copied ? 'Copied!' : 'Copy Claude Code prompt'}
+      </button>
+    </div>
+
+    {/* Prompt preview */}
+    <pre style={{
+      background: 'var(--color-primary, #1a365d)',
+      color: '#e2e8f0',
+      fontSize: 11,
+      padding: '0.65rem 0.85rem',
+      borderRadius: 4,
+      margin: 0,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+      maxHeight: 120,
+      overflowY: 'auto',
+      lineHeight: 1.55,
+    }}>
+      {item.claude_code_prompt}
+    </pre>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// StudentQueueRow — collapsible row with embedded ApprovalWorkspace
+// ---------------------------------------------------------------------------
+
+interface StudentQueueRowProps {
+  item: StudentQueueItem;
+  expanded: boolean;
+  onToggle: (id: string) => void;
+  onDone: (id: string) => void;
+  onDefer: (id: string) => void;
+  onFlagBlocker: (id: string) => void;
+  onCopyPrompt: (prompt: string) => void;
+  copied: boolean;
+  deciding: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+}
+
+export const StudentQueueRow: React.FC<StudentQueueRowProps> = ({
+  item, expanded, onToggle, onDone, onDefer, onFlagBlocker, onCopyPrompt,
+  copied, deciding, isFirst, isLast,
+}) => {
+  const statusMeta = STATUS_LABEL[item.status] ?? { label: item.status, color: 'var(--color-text-light)' };
+  return (
+    <div style={{ borderBottom: isLast && !expanded ? 'none' : '1px solid var(--color-border)' }}>
+      {/* Row header — click to expand */}
+      <button
+        type="button"
+        onClick={() => onToggle(item.id)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          width: '100%', background: 'none', border: 'none',
+          padding: '0.65rem 0.95rem', cursor: 'pointer',
+          textAlign: 'left',
+        }}
+        aria-expanded={expanded}
+      >
+        {/* Rank circle */}
+        <span style={{
+          width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+          background: isFirst ? 'var(--color-primary)' : 'var(--color-bg-alt, #f1f5f9)',
+          color: isFirst ? 'white' : 'var(--color-text-light)',
+          fontWeight: 600, fontSize: 12,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {item.rank}
+        </span>
+
+        {/* Category icon + text */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <i className={`bi ${CAT_ICON[item.category]} me-1`} style={{ color: 'var(--color-text-light)', fontSize: 11 }}></i>
+            {item.requirement_text.length > 80 ? item.requirement_text.slice(0, 77) + '…' : item.requirement_text}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginTop: 2 }}>
+            <span style={{ color: statusMeta.color, fontWeight: 600 }}>{statusMeta.label}</span>
+            {' · '}urgency {item.urgency_score}
+          </div>
+        </div>
+
+        {/* Urgency bar */}
+        <div style={{ width: 32, height: 4, background: 'var(--color-border)', borderRadius: 2, flexShrink: 0 }}>
+          <div style={{ width: `${item.urgency_score}%`, height: '100%', background: urgencyColor(item.urgency_score), borderRadius: 2 }} />
+        </div>
+
+        {/* Expand chevron */}
+        <i className={`bi bi-chevron-${expanded ? 'up' : 'down'}`} style={{ fontSize: 11, color: 'var(--color-text-light)', flexShrink: 0 }}></i>
+      </button>
+
+      {expanded && (
+        <ApprovalWorkspace
+          item={item}
+          onDone={onDone}
+          onDefer={onDefer}
+          onFlagBlocker={onFlagBlocker}
+          onCopyPrompt={onCopyPrompt}
+          copied={copied}
+          deciding={deciding}
+        />
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// StudentQueueSection — list container with header + Walk My Queue button
+// ---------------------------------------------------------------------------
+
+interface StudentQueueSectionProps {
+  items: StudentQueueItem[];
+  loading: boolean;
+  error: string | null;
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  onDone: (id: string) => void;
+  onDefer: (id: string) => void;
+  onFlagBlocker: (id: string) => void;
+  onCopyPrompt: (prompt: string) => void;
+  copiedId: string | null;
+  decidingId: string | null;
+  onEnterWalkMode: () => void;
+}
+
+export const StudentQueueSection: React.FC<StudentQueueSectionProps> = ({
+  items, loading, error, expandedId, onToggle, onDone, onDefer, onFlagBlocker,
+  onCopyPrompt, copiedId, decidingId, onEnterWalkMode,
+}) => (
+  <section className="mb-3">
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+      <h6 style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)', margin: 0, fontWeight: 600 }}>
+        Your build queue
+      </h6>
+      {items.length > 0 && (
+        <span style={{ fontSize: 10, background: 'var(--color-bg-alt, #f1f5f9)', color: 'var(--color-text-light)', padding: '0.1rem 0.45rem', borderRadius: 9999, fontWeight: 600 }}>
+          {items.length}
+        </span>
+      )}
+      <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-light)', fontStyle: 'italic' }}>
+        ranked by urgency
+      </span>
+      {items.length > 0 && (
+        <button
+          type="button"
+          className="btn btn-sm btn-primary"
+          onClick={onEnterWalkMode}
+          style={{ fontSize: 11 }}
+        >
+          <i className="bi bi-play-fill me-1"></i>Walk my queue
+        </button>
+      )}
+    </div>
+
+    {loading && (
+      <div style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, padding: '1.25rem', textAlign: 'center' }}>
+        <div className="spinner-border spinner-border-sm text-primary me-2" role="status" />
+        <span style={{ fontSize: 12, color: 'var(--color-text-light)' }}>Loading your build queue…</span>
+      </div>
+    )}
+
+    {!loading && error && (
+      <div className="alert alert-warning py-2" style={{ fontSize: 12 }}>
+        Could not load build queue. <strong>{error}</strong>
+      </div>
+    )}
+
+    {!loading && !error && items.length === 0 && (
+      <div className="ws-breath" style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, padding: '1.25rem', textAlign: 'center', color: 'var(--color-text-light)', fontSize: 13 }}>
+        <i className="bi bi-check2-circle me-1" style={{ color: 'var(--color-success)' }}></i>
+        All requirements verified. Set up your GitHub repo to track new work.
+      </div>
+    )}
+
+    {!loading && !error && items.length > 0 && (
+      <div style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden' }}>
+        {items.map((item, i) => (
+          <StudentQueueRow
+            key={item.id}
+            item={item}
+            expanded={expandedId === item.id}
+            onToggle={onToggle}
+            onDone={onDone}
+            onDefer={onDefer}
+            onFlagBlocker={onFlagBlocker}
+            onCopyPrompt={onCopyPrompt}
+            copied={copiedId === item.id}
+            deciding={decidingId === item.id}
+            isFirst={i === 0}
+            isLast={i === items.length - 1}
+          />
+        ))}
+      </div>
+    )}
+  </section>
+);
+
+// ---------------------------------------------------------------------------
+// RunMyDayMode — full-screen walk mode, one item at a time
+// ---------------------------------------------------------------------------
+
+interface RunMyDayModeProps {
+  items: StudentQueueItem[];
+  currentIndex: number;
+  onNav: (delta: -1 | 1) => void;
+  onExit: () => void;
+  onDone: (id: string) => void;
+  onDefer: (id: string) => void;
+  onCopyPrompt: (prompt: string, id: string) => void;
+  copiedId: string | null;
+  decidingId: string | null;
+}
+
+export const RunMyDayMode: React.FC<RunMyDayModeProps> = ({
+  items, currentIndex, onNav, onExit, onDone, onDefer, onCopyPrompt, copiedId, decidingId,
+}) => {
+  const item = items[currentIndex];
+  if (!item) return null;
+
+  const statusMeta = STATUS_LABEL[item.status] ?? { label: item.status, color: 'var(--color-text-light)' };
+  const isCopied = copiedId === item.id;
+  const isDeciding = decidingId === item.id;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1050,
+      background: 'rgba(15, 23, 42, 0.92)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '1.5rem',
+    }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Run My Day walk mode"
+    >
+      <div style={{
+        background: 'white', borderRadius: 12, width: '100%', maxWidth: 680,
+        boxShadow: '0 25px 60px rgba(0,0,0,0.4)',
+        overflow: 'hidden',
+      }}>
+        {/* Header bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0.85rem 1.25rem',
+          background: 'var(--color-primary, #1a365d)', color: 'white',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <i className="bi bi-play-fill" style={{ fontSize: 14 }}></i>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Run My Day</span>
+            <span style={{ fontSize: 11, opacity: 0.75 }}>
+              {currentIndex + 1} of {items.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onExit}
+            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.4)', color: 'white', borderRadius: 4, padding: '0.2rem 0.65rem', fontSize: 11, cursor: 'pointer' }}
+          >
+            Exit
+          </button>
+        </div>
+
+        {/* Item body */}
+        <div style={{ padding: '1.5rem 1.5rem 1rem' }}>
+          {/* Category + urgency */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{
+              background: 'var(--color-bg-alt, #f1f5f9)', color: 'var(--color-text-light)',
+              borderRadius: 4, padding: '0.2rem 0.55rem', fontSize: 11, fontWeight: 600,
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+            }}>
+              <i className={`bi ${CAT_ICON[item.category]} me-1`}></i>
+              {item.category}
+            </span>
+            <span style={{ fontSize: 11, color: urgencyColor(item.urgency_score), fontWeight: 600 }}>
+              urgency {item.urgency_score}
+            </span>
+            <span style={{ fontSize: 11, color: statusMeta.color, marginLeft: 'auto' }}>
+              {statusMeta.label}
+            </span>
+          </div>
+
+          {/* Requirement text */}
+          <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-primary)', lineHeight: 1.45, marginBottom: 14 }}>
+            {item.requirement_text}
+          </p>
+
+          {/* Prompt block */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-light)', fontWeight: 600, marginBottom: 6 }}>
+              Claude Code prompt
+            </div>
+            <pre style={{
+              background: 'var(--color-primary, #1a365d)', color: '#e2e8f0',
+              fontSize: 11, padding: '0.85rem 1rem', borderRadius: 6,
+              margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              lineHeight: 1.6, maxHeight: 160, overflowY: 'auto',
+            }}>
+              {item.claude_code_prompt}
+            </pre>
+          </div>
+
+          {/* Action bar */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={() => onDone(item.id)}
+              disabled={isDeciding}
+              style={{ fontSize: 12 }}
+            >
+              <i className="bi bi-check-lg me-1"></i>Mark done
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => onDefer(item.id)}
+              disabled={isDeciding}
+              style={{ fontSize: 12 }}
+            >
+              <i className="bi bi-arrow-down me-1"></i>Defer
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => onCopyPrompt(item.claude_code_prompt, item.id)}
+              style={{ fontSize: 12, marginLeft: 'auto' }}
+            >
+              <i className={`bi ${isCopied ? 'bi-check-lg' : 'bi-clipboard'} me-1`}></i>
+              {isCopied ? 'Copied!' : 'Copy prompt'}
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation footer */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0.75rem 1.25rem',
+          borderTop: '1px solid var(--color-border)',
+          background: 'var(--color-bg-alt, #f8fafc)',
+        }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => onNav(-1)}
+            disabled={currentIndex === 0}
+            style={{ fontSize: 11 }}
+          >
+            <i className="bi bi-arrow-left me-1"></i>Prev
+          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {items.map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: i === currentIndex ? 'var(--color-primary)' : 'var(--color-border)',
+                  transition: 'background 200ms',
+                }}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => onNav(1)}
+            disabled={currentIndex === items.length - 1}
+            style={{ fontSize: 11 }}
+          >
+            Next<i className="bi bi-arrow-right ms-1"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -27,6 +27,7 @@ import {
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import projectRoutes from './projectRoutes';
+import studentOpsRoutes from './studentOpsRoutes';
 
 const router = Router();
 
@@ -178,6 +179,9 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
 
 // Project endpoints
 router.use(projectRoutes);
+
+// Student CB-System operating model (priority queue, Run My Day, decisions)
+router.use(studentOpsRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);
