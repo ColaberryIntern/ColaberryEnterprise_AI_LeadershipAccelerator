@@ -60,6 +60,10 @@ export const env = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
   advisorClaudeModel: process.env.ADVISOR_CLAUDE_MODEL || 'claude-sonnet-4-6',
 
+  // Skilljar (Anthropic partner LMS — requires API key from Anthropic partner portal)
+  skilljarApiKey: process.env.SKILLJAR_API_KEY || '',
+  skilljarBaseUrl: process.env.SKILLJAR_BASE_URL || 'https://api.skilljar.com/v1',
+
   // Apollo
   apolloApiKey: process.env.APOLLO_API_KEY || '',
 
