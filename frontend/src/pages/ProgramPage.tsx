@@ -244,7 +244,7 @@ const FAQ_ITEMS = [
   {
     title: 'How do the phases and capstone work?',
     content:
-      'Each phase is a three-week block within the single 12-week path, and each builds on the last: foundation, then your AI team, then real-world connection, then scale. The program closes with a capstone — you present your working system to peers and a panel: the problem, the live demo, and the architecture decisions behind it.',
+      'Each phase is a stage within the single 12-week path, and each builds on the last: foundation, then your AI team, then real-world connection, then scale. The program closes with a capstone — you present your working system to peers and a panel: the problem, the live demo, and the architecture decisions behind it.',
   },
   {
     title: 'What is the difference between the two doors?',
@@ -453,16 +453,16 @@ function ProgramPage() {
       <section aria-label="The 12-week roadmap" style={sectionPad}>
         <div style={wide}>
           <FadeIn>
-            <div style={{ maxWidth: 720, marginBottom: 'var(--space-10)' }}>
+            <div style={{ maxWidth: 760, marginInline: 'auto', marginBottom: 'var(--space-10)', textAlign: 'center' }}>
               <span style={eyebrow}>The 12-week path</span>
               <h2 style={{ ...h2, marginBlock: 'var(--space-4) var(--space-4)' }}>
                 One continuous program. Twelve weeks. Four phases.
               </h2>
               <p style={lead}>
-                There is no three-week class here. You follow a single, guided path
-                from week 1 to week 12, with a project lane and a CCA-F
-                certification lane running alongside the whole way — converging on
-                one finish: Certified Anthropic AI Systems Architect.
+                You follow a single, guided path from week 1 to week 12, with a
+                project lane and a CCA-F certification lane running alongside the
+                whole way — converging on one finish: Certified Anthropic AI
+                Systems Architect.
               </p>
             </div>
           </FadeIn>
@@ -524,8 +524,8 @@ function ProgramPage() {
                   textAlign: 'center',
                 }}
               >
-                Four phases, three weeks each — groupings within the single
-                12-week program, never standalone classes.
+                Four phases — groupings within the single 12-week program,
+                never standalone classes.
               </p>
             </div>
           </FadeIn>

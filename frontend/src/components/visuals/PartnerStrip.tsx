@@ -99,7 +99,28 @@ function PartnerStrip({ className = '' }: PartnerStripProps) {
           pointer-events: none;
         }
 
+        /* photo + brand-glow background (decorative, behind content) */
+        .ps-bg {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          background-image:
+            radial-gradient(120% 140% at 0% 0%,
+              color-mix(in srgb, var(--brand-accent) 26%, transparent) 0%, transparent 52%),
+            radial-gradient(120% 140% at 100% 100%,
+              color-mix(in srgb, var(--blue-500) 22%, transparent) 0%, transparent 55%),
+            linear-gradient(180deg,
+              color-mix(in srgb, var(--surface-inverse) 82%, transparent),
+              color-mix(in srgb, var(--surface-inverse) 93%, transparent)),
+            url('/img/ai-network.jpg');
+          background-size: cover;
+          background-position: center;
+          pointer-events: none;
+        }
+
         .ps-inner {
+          position: relative;
+          z-index: 1;
           max-width: var(--container-lg);
           margin: 0 auto;
           display: flex;
@@ -108,6 +129,41 @@ function PartnerStrip({ className = '' }: PartnerStripProps) {
           text-align: center;
           gap: var(--space-5);
         }
+
+        /* Colaberry x Anthropic-partner co-brand lockup */
+        .ps-cobrand {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-3);
+        }
+        .ps-logo-chip {
+          display: inline-flex;
+          align-items: center;
+          background: var(--neutral-0);
+          padding: var(--space-2) var(--space-4);
+          border-radius: var(--radius-pill);
+          box-shadow: var(--shadow-sm);
+        }
+        .ps-logo-chip img { height: 26px; width: auto; display: block; }
+        .ps-cobrand-x {
+          font-family: var(--font-display);
+          font-size: var(--fs-h4);
+          font-weight: var(--fw-bold);
+          color: color-mix(in srgb, var(--text-on-inverse) 70%, transparent);
+        }
+        .ps-spark-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 48px;
+          height: 48px;
+          border-radius: var(--radius-circle);
+          background: color-mix(in srgb, var(--brand-accent) 18%, transparent);
+          border: var(--border-1) solid
+            color-mix(in srgb, var(--brand-accent) 45%, transparent);
+          color: var(--brand-accent);
+        }
+        .ps-spark-badge .ps-spark { width: 28px; height: 28px; }
 
         .ps-eyebrow {
           display: inline-flex;
@@ -235,7 +291,17 @@ function PartnerStrip({ className = '' }: PartnerStripProps) {
         }
       `}</style>
 
+      <div className="ps-bg" aria-hidden="true" />
+
       <div className="ps-inner">
+        <div className="ps-cobrand" role="img" aria-label="Colaberry — an Anthropic partner">
+          <span className="ps-logo-chip">
+            <img src="/colaberry-logo.png" alt="" />
+          </span>
+          <span className="ps-cobrand-x" aria-hidden="true">×</span>
+          <span className="ps-spark-badge"><SparkMark /></span>
+        </div>
+
         <span className="ps-eyebrow">
           <SparkMark />
           Official Anthropic Partner Network

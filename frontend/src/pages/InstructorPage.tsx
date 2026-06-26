@@ -355,7 +355,7 @@ function InstructorPage() {
             eyebrow="The program he leads"
             title="One continuous 12-week path to Architect."
             body={[
-              'There is no three-week class. It is one continuous 12-week program — the four phases simply group the weeks — built around real deployment instead of theory.',
+              'It is one continuous 12-week program — the four phases simply group the weeks — built around real deployment instead of theory.',
               'The outcome credential is the Certified Anthropic AI Systems Architect (CCA-F prep). You put your people in Anthropic-partner hands, and they come out with the credential and a build to prove it.',
             ]}
             side="left"
