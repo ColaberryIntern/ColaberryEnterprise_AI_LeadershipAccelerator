@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import AnthropicCoursesBento from '../../components/portal/anthropic-bento/AnthropicCoursesBento';
 import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
 
 /* ------------------------------------------------------------------ */
@@ -331,10 +332,11 @@ function PortalSessionDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // All derived state and hooks must be computed before any early return
-  const { session: s, attendance_status, submissions } = (session as any) || {};
-  const materials: any[] = s?.materials_json || [];
-  const curriculum: any[] = s?.curriculum_json || [];
+  const s = session?.session ?? null;
+  const attendance_status = session?.attendance_status ?? null;
+  const submissions = session?.submissions ?? [];
+  const materials: any[] = s?.materials_json ?? [];
+  const curriculum: any[] = s?.curriculum_json ?? [];
   const isUpcoming = s?.status === 'scheduled';
   const isLive = s?.status === 'live';
   const isCompleted = s?.status === 'completed';
@@ -356,7 +358,7 @@ function PortalSessionDetailPage() {
     );
   }
 
-  if (!session) {
+  if (!session || !s) {
     return <div className="alert alert-danger">Session not found.</div>;
   }
 
@@ -596,17 +598,36 @@ function PortalSessionDetailPage() {
           {/* Collapsible: Materials */}
           {materials.length > 0 && (
             <CollapsibleSection title="Materials" icon="bi-file-earmark">
-              <ul className="mb-0">
-                {materials.map((m: any, i: number) => (
-                  <li key={i} className="small mb-1">
-                    {m.url ? (
-                      <a href={m.url} target="_blank" rel="noopener noreferrer">{m.title || m.url}</a>
-                    ) : (
-                      m.title || JSON.stringify(m)
-                    )}
-                  </li>
-                ))}
-              </ul>
+              {/* Anthropic Skilljar courses rendered as the Colaberry DS bento */}
+              {materials.filter((m: any) => m.url?.includes('anthropic.skilljar.com')).length > 0 && (
+                <div className="mb-2">
+                  <AnthropicCoursesBento
+                    courses={materials
+                      .filter((m: any) => m.url?.includes('anthropic.skilljar.com'))
+                      .map((m: any) => ({
+                        title: m.title || 'Anthropic Course',
+                        url: m.url,
+                        description: m.description,
+                        estimatedMinutes: m.estimated_minutes,
+                        courseNumber: m.course_number,
+                      }))}
+                  />
+                </div>
+              )}
+              {/* All other materials as a plain list */}
+              {materials.filter((m: any) => !m.url?.includes('anthropic.skilljar.com')).length > 0 && (
+                <ul className="mb-0 mt-2">
+                  {materials.filter((m: any) => !m.url?.includes('anthropic.skilljar.com')).map((m: any, i: number) => (
+                    <li key={i} className="small mb-1">
+                      {m.url ? (
+                        <a href={m.url} target="_blank" rel="noopener noreferrer">{m.title || m.url}</a>
+                      ) : (
+                        m.title || JSON.stringify(m)
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CollapsibleSection>
           )}
 

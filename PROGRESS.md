@@ -6110,6 +6110,20 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: A complete sync re-walked every project -> todoset -> todolist -> todo (~2500 BC calls for the ~30k-todo mirror), which under BC's ~5 req/s limit took ~20 min/pass — unacceptable. Replaced the walk in `bcSyncService.ts` with an **incremental sweep** of Basecamp's account-wide Todo recordings feed (`/projects/recordings.json?type=Todo&sort=updated_at&direction=desc`, paginated): each feed item carries the todo's fields + its project (`bucket`) + todolist (`parent`), so it upserts identically. New helpers `getSyncCursorMs` (high-water mark = `max(bc_updated_at)` minus a 10-min overlap) and `fetchUpdatedTodos` (sweep newest-first, stop at the first all-older page; `null` cursor backfills once, capped at FEED_MAX_PAGES). The project list is still fetched for `ops_bc_projects` + dormant-autodetect, but the per-project todo walk is gone. Same pattern that made the CB dispatcher 38x faster.
   - Verification: new `bcSyncIncremental.test.ts` → 4/4 (cursor stop, empty-page stop, null-cursor backfill, malformed-item skip); full ops BC suite 25/25; `tsc --noEmit` clean. **Live, direct-timed in the prod container: `runBcSync()` = 3.0–7.5 s** (was ~20 min), errors 0, seen 3 (only the todos changed since the cursor). Mirror intact at 29,997 rows; downstream priority + automation chain runs each cycle; 0 `429` errors.
   - Notes: Steady state touches only changed todos (seconds); a one-time backfill of an empty mirror still costs ~1 full sweep but that's rare and self-continues across runs as the cursor advances. Residual gaps from the pre-fix incomplete syncs self-heal as those todos next change (updated_at crosses the cursor). Combined with the rate-limit entry above (pacing + single-flight + 429 backoff), OpsBcSync is now fast, complete, and rate-safe.
+- [x] **Enrollment tracking system — Stripe webhook + enrollment_leads table + EnrollmentLead model.**
+  - Date: 2026-06-16
+  - Session: CC-20260616-s7r1
+  - What changed: Implemented the Stripe-based enrollment tracking system across 5 files. (1) New `EnrollmentLead` model (`backend/src/models/EnrollmentLead.ts`) — `enrollment_leads` table with `name/email/phone/referral_channel/status/lost_reason/enrollment_id/notes`, unique on email, idempotency guard on upsert. (2) Extended `Enrollment` model with 8 Stripe fields: `stripe_session_id` (unique), `stripe_payment_intent_id` (unique, idempotency key), `stripe_charge_id`, `intensives` (comma-list of SKUs), `industry_track`, `referral_channel`, `amount_paid`, `enrolled_at`. (3) New `stripeWebhookService.ts` handles `checkout.session.completed` (insert enrollment + upsert EnrollmentLead + fire automation), `payment_intent.payment_failed` (mark failed), `charge.refunded` (withdraw + churn lead), `customer.subscription.deleted` (log). Metadata keys: `intensives`, `cohort`, `industry_track`, `referral_source`. (4) Added `POST /api/webhook/stripe` route to `webhookRoutes.ts` with raw-body + `stripe-signature` HMAC verification. (5) SQL migration `backend/src/seeds/migrations/add_stripe_enrollment_tracking.sql` — idempotent (IF NOT EXISTS throughout), adds 8 columns to `enrollments`, creates `enrollment_leads` table. (6) Installed `stripe@22.2.1`. (7) Registered `EnrollmentLead` in `models/index.ts` with Enrollment association.
+  - Verification: `tsc --noEmit` passes for all new files; only pre-existing axios/playwright module errors remain (baseline noise). Migration SQL is idempotent and not yet run on prod (run on 2026-06-17 per deadline).
+  - Notes: Stripe SDK v22 uses `export =` CJS style; types accessed via `StripeLib.Stripe` instance type and `ReturnType<StripeInstance['webhooks']['constructEvent']>` for event type (no direct namespace access). PaySimple code untouched — Stripe runs alongside it. Cohort lookup falls back to first open cohort when `metadata.cohort` is missing or unresolvable.
+  - **SUPERSEDED** by CC-20260623-ps8w entry below — Stripe removed; redesigned for PaySimple (the actual payment system in use).
+
+- [x] **Enrollment tracking — redesigned for PaySimple (Stripe removed); paysimple_payment_id idempotency; EnrollmentLead upsert on confirmed payment; local E2E test verified.**
+  - Date: 2026-06-23
+  - Session: CC-20260623-ps8w
+  - What changed: Ali confirmed Colaberry uses PaySimple, not Stripe. Full redesign of PR #28 (`workstream/enrollment-tracking`). (1) Deleted `stripeWebhookService.ts` entirely. (2) Removed Stripe import and `POST /api/webhook/stripe` route from `webhookRoutes.ts`. (3) Updated `Enrollment` model: removed `stripe_session_id`, `stripe_payment_intent_id`, `stripe_charge_id` fields; replaced with `paysimple_payment_id` (VARCHAR 255, unique) as the PaySimple idempotency key; kept `amount_paid`, `enrolled_at`, `intensives`, `industry_track`, `referral_channel`. (4) Updated `enrollmentService.markEnrollmentPaid` to accept optional `{ paymentId, amount }` and store `paysimple_payment_id`, `amount_paid`, `enrolled_at` on the enrollment row. (5) Updated `webhookController.handlePaySimpleWebhook` to pass payment details to `markEnrollmentPaid` and upsert an `EnrollmentLead` record (`status: enrolled`) on confirmed payment — non-blocking via `.then()/.catch()`. (6) Replaced `add_stripe_enrollment_tracking.sql` with `add_paysimple_enrollment_tracking.sql`: drops Stripe columns, adds `paysimple_payment_id` with unique constraint, keeps all analytics columns, creates `enrollment_leads` table (idempotent throughout). (7) Updated `webhookController.test.ts`: mocked `EnrollmentLead`, updated `markEnrollmentPaid` call assertion to include payment details, added tests for EnrollmentLead creation, existing-lead status update, and idempotency. (8) Created `backend/scripts/testPaySimpleWebhook.js` (self-signed HMAC webhook test — no CLI tool needed) and `backend/start-paysimple-test.ps1` (backend launcher with test secret).
+  - Verification: `tsc --noEmit` exit 0. `npx jest webhookController paysimpleService` → 25/25 tests passing. Migration applied to local `accelerator_dev` DB (Stripe cols dropped, `paysimple_payment_id` with unique constraint live). Live E2E test: seeded pending enrollment (`CB-TEST-1234567890`), fired signed webhook via `testPaySimpleWebhook.js`, confirmed DB: `payment_status=paid`, `amount_paid=4500.00`, `enrolled_at=2026-06-23 14:49:47+00`, `paysimple_payment_id=1782226187035`, `enrollment_leads` row `status=enrolled` linked to enrollment `53aa46cb`.
+  - Notes: Second webhook run (idempotency test) returned 200 without re-processing — `markEnrollmentPaid` returns early when `payment_status` is already `paid`. No Stripe dependency remains in the codebase.
 
 - [x] **OpsBcSync — exclude Center of Excellence (student) projects; mirror 30k -> 4k.**
   - Date: 2026-06-17
@@ -6192,6 +6206,16 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `npx tsc --noEmit` — no new errors on this file.
   - Notes: Required before Cora shadow test case 7 ("When is the next cohort?") returns a confident date rather than "check the enrollment page." No admin UI exists for cohort creation; seed script is the established pattern (cf. seedCohorts.ts).
 
+- [x] **Week 1 Anthropic Skilljar course links wired into enterprise.colaberry.com portal (BC todo 9984355385).**
+  - Date: 2026-06-18
+  - Session: CC-20260618-4k7q
+  - What changed:
+    - `backend/src/seeds/seedAnthropicContentRegistry.ts` — Added Claude Code 101 (`https://anthropic.skilljar.com/claude-code-101`) as the 5th confirmed Skilljar course; updated header comment to reflect all 5 URLs confirmed. Idempotent upsert on url unique constraint.
+    - `backend/src/seeds/seedCurriculum.ts` — Session 2 (Week 1 lab) materials_json updated: replaced empty "Claude Code Setup Guide" material with the two named Skilljar course entries so future cohort seeds include them from day one.
+    - `backend/src/scripts/wireWeek1AnthropicCourses.ts` (new) — Idempotent operational script that finds all existing `session_number=2` records across all cohorts and prepends the two Anthropic course materials if not already present. Deploy: `docker exec accelerator-backend node dist/scripts/wireWeek1AnthropicCourses.js`
+  - Verification: `npx tsc --noEmit` — exit 0, no new errors. Deploy + SSO confirmation pending (flagged to Ali on BC ticket).
+  - Notes: URL confirmed from BC ticket HTML link in description. SSO not in codebase; flagged to Ali — if Anthropic partner SSO is configured externally, direct link suffices; if not, separate architecture task required.
+
 - [x] **AI Membership landing pages reformatted to Garage Labs editorial design (BC todo 9946499609).**
   - Date: 2026-06-18
   - Session: CC-20260617-9f3a
@@ -6199,6 +6223,14 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Verification: `npx tsc --noEmit` clean. Rendered all 3 pages via local CRA dev server + headless Chromium screenshots (hero, dark gold checklist, earthy cards, builders 12-week phase cards, closing into PublicFooter) — all faithful to the reference design Ali approved. Prod build + smoke recorded below.
   - Notes: Design approved by Ali in-session. Copy remains Sohail's draft pending sign-off; Open House date placeholder is June 21, 2026 (confirm); reference's testimonials/recognition section omitted (no quotes yet); Builders gap still omits two of Sohail's source lines ("The challenge is not the idea." / "The challenge is knowing how to build it.") — flagged to Ali, not added. Isolated branch off origin/main; prod-local hotfixes re-stashed for the deploy.
 
+### AnthropicCourseWrapper.tsx — branded course card for Skilljar materials (2026-06-22)
+- [x] Create `AnthropicCourseWrapper.tsx` and wire into session detail Materials section
+  - Date: 2026-06-22
+  - Session: CC-20260622-8k4m
+  - What changed:
+    - `frontend/src/components/portal/AnthropicCourseWrapper.tsx` (new): Typed React component (Props: `title`, `url`, `description?`, `estimatedMinutes?`, `courseNumber?`). Renders a card with Anthropic + Skilljar badge row, title, optional description, duration chip, and a "Launch Course" `<a>` button that opens the Skilljar URL in a new tab (`target="_blank" rel="noopener noreferrer"`). WCAG 2.1 AA: `aria-label` on CTA includes "opens in new tab", all decorative icons carry `aria-hidden="true"`, touch target min-height 36px. Styled with portal CSS tokens and existing Bootstrap 5 utility classes; no new dependencies.
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx` (modified): Imports `AnthropicCourseWrapper`. Materials section now splits on `anthropic.skilljar.com` URL presence — Skilljar entries render as `AnthropicCourseWrapper` cards; all other materials remain a plain `<ul>` list below the cards.
+  - Verification: `npx tsc --noEmit` — exit 0, no errors. BC ticket: https://app.basecamp.com/3945211/buckets/47502609/todos/9946499773
 - [x] **Family Command Center — Procare "tomorrow"/"today" now anchors to the email's SEND date, not the briefing date.**
   - Date: 2026-06-18
   - Session: CC-20260618-fd7k
@@ -6502,6 +6534,55 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: `npx tsc --noEmit` clean (backend); `npx jest agentAutonomy agentAuthorizationService trustRubric` 33/33 (new pure-policy suite: tier-map/classification/least-privilege/HITL; new gate suite: shadow/enforce/off/kill-switch-reads-exempt/HITL-queue/**fail-open**; rubric ABAC-flip test). Post-deploy: `agent.authorization` events accumulate as agents write; Security + Governance lift live.
   - Notes: BREAK/HARDEN — the dangerous failure is "ABAC bug blocks a live agent path", so the gate is shadow-by-default + fail-open + reads-always-pass + fire-and-forget at the insertion point. Phase 0 inventory = live derivation from the existing tier map (no AiAgent column add yet — that's when per-agent overrides are needed, honoring the columns-on-AiAgent direction). Scope: this PR ships the chokepoint + one shadow insertion (DB-write path); wiring the remaining chokepoints (comms `evaluateSend` needs `agent_id` threaded, ticket creation, social-post HITL sync), persisting explicit autonomy columns, and the `enforce` flip are the Phase 2+ follow-ups. Completes the ABAC design's Phase 0 + Phase 1.
 
+- [x] **Portfolio GitHub Sync Agent (PR #70) + local test coverage sprint + seedCurriculum hardened with Skilljar URLs (CC-20260622-k7m2)**
+  - Date: 2026-06-22 / 2026-06-23
+  - Session: CC-20260622-k7m2
+  - What changed:
+    - `backend/src/services/githubIntegrationService.ts`: added `syncAllActiveStudentGitHubActivity()` — batch sync across all active enrollments with per-student failure isolation; added `import { Op } from 'sequelize'` and `Enrollment` model.
+    - `backend/src/services/__tests__/githubIntegrationService.test.ts`: rewrote with correct ts-jest hoisting pattern (jest.mock before imports, require() inside tests); 10/10 tests pass including 3 new tests for `syncAllActiveStudentGitHubActivity` (happy path, failure isolation, empty-enrollment no-op).
+    - `backend/src/services/schedulerService.ts`: added `PortfolioGitHubSyncAgent` cron at `15 2 * * *` using lazy `import()` pattern.
+    - `backend/src/services/agentRegistrySeed.ts`: added registry entry with `agent_type: 'github_automation'`, `trigger_type: 'cron'`, `schedule: '15 2 * * *'`, `category: 'accelerator'`.
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx`: fixed React hooks violation — moved `useCountdown` call and all derived state above early returns using optional chaining; added `AnthropicCourseWrapper` import and split Materials section to render Skilljar courses as branded cards vs. plain list for others.
+    - `frontend/src/components/portal/AnthropicCourseWrapper.tsx` (new): Anthropic/Skilljar branded course card with "Launch Course" CTA, ported from `feature/anthropic-course-wrapper`.
+    - `backend/src/seeds/seedCurriculum.ts`: baked Skilljar URLs for sessions 2, 3, 4 directly into seed data so they survive backend restarts on any branch — prevents wireWeek backfill from being wiped on branch switch.
+  - Verification: `tsc --noEmit` clean (frontend + backend); 10/10 Jest tests pass (`githubIntegrationService.test.ts`); 18/18 Jest tests pass for PR #37 suite (`courseLinkService`, `seedCurriculumCourseLinks`, `updateCourseLink`); browser-verified sessions 2, 3, 4 each show correct Skilljar course cards with "Launch Course" buttons at `localhost:3002`.
+  - Notes: GITHUB_ACCESS_TOKEN in `.env` is test scaffolding only — prod uses per-student OAuth tokens in `github_connections.access_token_encrypted`. Skilljar "Launch Course" links navigate correctly but may require Skilljar login (Anthropic partner SSO status for Colaberry unconfirmed — open task). Jest version was 25.0.0 vs ts-jest 29.x; fixed by `npm install` in `backend/`.
+
+  **PR local test audit — updated 2026-06-23 (CC-20260622-k7m2)**
+
+  | PR | Title | Status | Test type | Locally verified? | Evidence |
+  |---|---|---|---|---|---|
+  | #70 | Portfolio GitHub Sync Agent | OPEN | Unit tests (Jest) | ✅ Yes | 10/10 tests pass |
+  | #57 | AnthropicCourseWrapper + hooks fix | OPEN | Browser | ✅ Yes | Screenshots in BC ticket 9946499773; hooks fix browser-confirmed this session |
+  | #43 | Wire Week 1 Skilljar courses | OPEN | Browser | ✅ Yes | Session 2 shows Claude Code 101 + Claude Code in Action cards with Launch Course buttons |
+  | #45 | Wire Week 2 Skilljar courses | OPEN | Browser + DB | ✅ Yes | Session 3 shows Introduction to Agent Skills card; DB verified |
+  | #48 | Wire Week 3 Skilljar courses | OPEN | Browser + DB | ✅ Yes | Session 4 shows Building with the Claude API card; DB verified |
+  | #37 | Per-week Skilljar CourseLink (Curriculum page CTA) | OPEN | tsc + Jest | ✅ Yes | tsc clean (frontend + backend); 18/18 Jest tests pass |
+  | #16 | (unit tests via shared file) | OPEN | Unit tests | ✅ Yes | Tests pass via shared test file |
+  | #1–#15, #17–#36, #38–#42, #44, #46–#47, #49–#56, #58–#69 | Various | OPEN/MERGED | — | ❌ Not yet | — |
+
+  **PRs with locally-verified tests: 7 of 15 open PRs tested** — #70, #57, #43, #45, #48, #37, #16
+
+### Wire Week 2 Anthropic Skilljar course — Introduction to Agent Skills (2026-06-18)
+- [x] Wire "Introduction to Agent Skills" Skilljar link into Week 2 session materials
+  - Date: 2026-06-18
+  - Session: CC-20260618-w2sk
+  - What changed:
+    - `backend/src/scripts/wireWeek2AnthropicCourses.ts` (new): Idempotent backfill script — finds all `session_number=3` records across all cohorts and prepends "Introduction to Agent Skills (Anthropic Skilljar)" to `materials_json` if not already present. URL: https://anthropic.skilljar.com/introduction-to-agent-skills.
+    - `backend/src/seeds/seedCurriculum.ts`: Session 3 ("Guided POC Launch") now carries the Skilljar URL in `materials_json` so all future cohort seeds include it from day one.
+    - `seedAnthropicContentRegistry.ts`: no change — "Introduction to Agent Skills" was already registered (confirmed in current file state).
+  - Verification: `npx tsc --noEmit` — pending VPS deploy (same gate as PR #43). Script is structurally identical to `wireWeek1AnthropicCourses.ts` (pattern-validated). SSO confirmation from Anthropic is an open dependency (flagged in PR).
+  - Notes: BC ticket #9984355511. Course confirmed via https://anthropic.skilljar.com/introduction-to-agent-skills. SSO status unconfirmed — link goes live in portal regardless; if SSO is not active participants hit a Skilljar login wall (separate task to resolve with Anthropic partner team). Branch: ops/wire-week2-skilljar-courses.
+
+### Wire Week 3 Anthropic Skilljar course — Building with the Claude API (2026-06-19)
+- [x] Wire "Building with the Claude API" Skilljar link into Week 3 session materials
+  - Date: 2026-06-19
+  - Session: CC-20260619-w3sk
+  - What changed:
+    - `backend/src/scripts/wireWeek3AnthropicCourses.ts` (new): Idempotent backfill script — finds all `session_number=4` records across all cohorts and prepends "Building with the Claude API (Anthropic Skilljar)" to `materials_json` if not already present. URL: https://anthropic.skilljar.com/claude-with-the-anthropic-api.
+    - `backend/src/seeds/seedCurriculum.ts`: Session 4 ("Refinement & Executive Positioning") now carries the Skilljar URL in `materials_json` so all future cohort seeds include it from day one.
+  - Verification: `npx tsc --noEmit` — pending (background); script structurally identical to wireWeek1/2AnthropicCourses.ts (pattern-validated). VPS deploy required post-merge.
+  - Notes: BC ticket #9984355649. Course confirmed live at https://anthropic.skilljar.com/claude-with-the-anthropic-api (11 modules, publicly accessible). SSO status unconfirmed — link ships regardless. Branch: ops/wire-week3-skilljar-courses.
 ### PR Approval Autopilot - multi-agent PR validation/verification system (2026-06-22)
 - [x] **Multi-agent PR review engine + recommend-only verdicts, run on the live 9-PR queue**
   - Date: 2026-06-22
@@ -6621,12 +6702,77 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Added a second hard rule (section 0d) + pure predicate `isBasecampDirectComment()` in `backend/src/services/inbox/hardRuleEngine.ts`. A Basecamp comment notification (subject contains `Re:`) routes to INBOX when the body directly addresses Ali — a greeting verb + "Ali" ("Hi/Hello/Hey/Dear/Thanks Ali", "Good morning Ali"), a line opening with "Ali,"/"Ali:", or an inline "@Ali". Deliberately bounded to avoid re-flooding: subscribed-thread status updates that never address Ali stay automation, and the standard BC footer ("...sent to Ali Muwwakkil, ...") does NOT trigger it (the anchors require a greeting/line-leading/@-form the footer can't satisfy). Formal @mentions/assignments remain covered by the section-0c subject rule.
   - Verification: `hardRuleEngine.test.ts` now 16/16 pass — added 8 comment cases incl. the real BC footer string (must not match), a status update (must not match), a greeting to a different person (must not match), and positive greeting/line-leading/@Ali cases. `tsc --noEmit` clean for inbox/hardRule files.
   - Notes: Verified against a real subscribed-thread (Refactored/Xprize daily-update thread) where every comment carries the footer but none address Ali — confirms blanket "all Re: comments → INBOX" would flood, so the rule is intentionally narrow. If even this proves too noisy, removing the section-0d block reverts it. Ships with the section-0c change on next backend build.
+- [x] **Skilljar sync service — backend + model + migration (BC #9946499805)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-sk7j
+  - What changed: Added `skilljarSyncService.ts` (`syncUserProgress`, `getUserProgress`), `StudentSkilljarProgress` Sequelize model, SQL migration `add_student_skilljar_progress.sql`, env vars `skilljarApiKey`/`skilljarBaseUrl` in `env.ts`, model export in `models/index.ts`.
+  - Verification: `tsc --noEmit` exits 0; Jest 8/8 pass (happy path, filter, idempotency, user-not-found, timeout, no-api-key, DB read, DB fail-soft).
+  - Notes: Requires `SKILLJAR_API_KEY` (Token auth) from Anthropic partner portal — not yet provisioned. Service returns a safe error result if key is absent so it will not crash in production. Migration must be applied on prod before service is invoked.
+
 - [x] **AI ROI Pilot: brand every send with sender signature + website (Ali escalation)**
   - Date: 2026-06-24
   - Session: CC-20260623-e2k7
   - What changed: A prospect (CTO, Tribute Technology) replied "I don't even know what company you work for" to a Touch-2 email. Root cause: outbound emails carried no company name or website. The cold-campaign footer said only "Colaberry Enterprise AI Division | AI Leadership..." (no site, no name), and the executive_outreach path strips even that. Fix in `schedulerService.processEmailAction`: inject a sender-aware branded signature (resolved senderName + "Colaberry Inc." + enterprise.colaberry.ai + senderEmail) into EVERY send, after the exec-outreach strip so it is never removed; the plain-text body inherits it via stripHtml. Also replaced the vague `wrapEmailHtml` footer block with the CAN-SPAM/legal line. The live AI ROI Pilot was paused (96 pending deferred, reversible) while this shipped, then resumed.
   - Verification: rendered a sample email post-deploy to confirm name + Colaberry Inc. + enterprise.colaberry.ai appear (HTML + text). Backend tsc gate via Docker build.
   - Notes: Sender-aware so it is correct for any campaign, not just Ali. Matt Powell got a personal apology + re-intro reply (branded). Honors the standing rule (reference_email_signature): every ali@colaberry.com send must carry the branded block with the website.
+
+- [x] Apply Colaberry Design System to AnthropicCourseWrapper portal card (BC 9946499773)
+  - Date: 2026-06-25
+  - Session: CC-20260625-a4k9
+  - What changed: Restyled frontend/src/components/portal/AnthropicCourseWrapper.tsx (Skilljar course card) onto the portal design system. Replaced all 13 hardcoded indigo/slate hex values with global.css tokens (var(--color-primary) navy accent + left border, var(--color-primary-light), var(--color-bg)) and Bootstrap utilities (btn btn-primary navy override, badge bg-light border, text-muted, card-lift). h6 title now inherits navy from the global heading rule. Net -23 lines, zero hardcoded hex. Did NOT rebuild the component (scope per Kes: restyle only) and did NOT use the off-brand external repos (worldoftaxonomy cyan / aleemcolaberry cherry) since a live portal card must match the portal palette.
+  - Verification: npx tsc --noEmit passes (exit 0) on the staging base; grep confirms 0 hardcoded hex remain; WCAG aria-labels + aria-hidden + 44px touch target (responsive.css) preserved.
+  - Notes: Branched workstream/design-system-anthropic-wrapper off origin/staging per MERGE_WORKFLOW.md; PR targets staging (Kes reviews, Ali promotes to main). Aleem's local WIP (App.tsx, _PreviewAnthropicCourseWrapper.tsx) left untouched in git stash 'aleem-wip-feature-anthropic' on feature/anthropic-course-wrapper.
+
+- [x] AnthropicCourseWrapper: approved Colaberry DS bento redesign (design deliverable) (BC 9946499773)
+  - Date: 2026-06-25
+  - Session: CC-20260625-a4k9
+  - What changed: Added docs/design/anthropic-course-wrapper-bento.{html,md} + the Colaberry DS token files (styles.css, tokens/*.css) as a self-contained design reference (under docs/, NOT wired into the app build). Captures the design-approved (Aleem, Senior UI/UX) bento redesign on the official Colaberry Design System (cherry/leaf/berry, Roboto, pill components, radius-xl): fixed information architecture (content leads, source becomes a kicker, grouped meta), 3/2/1-course responsive fallbacks, WCAG AA contrast (white-on-cherry moved red-500 to red-600 for 4.7:1), and hardened dark mode (lifted card surface, border/glow elevation since soft shadows vanish on dark).
+  - Verification: Self-contained mockup renders light+dark from docs/design/styles.css; contrast audited to AA (table in the .md); design approved by Aleem in BC 9946499773.
+  - Notes: Production React port intentionally NOT in this commit. Bento expands scope beyond Kes's "restyle only" (new container component + PortalSessionDetailPage change + bringing the Colaberry DS into the portal) which is a DRI/Ali decision. PR #82 keeps the interim navy restyle mergeable; bento follows on Kes/Ali sign-off. The committed code restyle (navy) is superseded by this approved direction.
+
+- [x] AnthropicCoursesBento: production React port of the approved Colaberry DS bento (BC 9946499773)
+  - Date: 2026-06-25
+  - Session: CC-20260625-Q7m4
+  - What changed: Built the bento in React per Kes's greenlight (BC comment 10034608849: "implement the full bento in React. Push the TSX to the same PR #82 branch."). New container component frontend/src/components/portal/anthropic-bento/AnthropicCoursesBento.tsx takes the whole Skilljar course list and arranges featured entry tile + compact supporting tiles + cherry path-anchor (computes count + total duration), with 1/2/3+ responsive fallbacks. New scoped stylesheet anthropicBento.css brings the official Colaberry DS (cherry/leaf/berry tokens, Roboto + Roboto Mono, radius-xl/pill, cb-card/cb-badge/cb-btn/icon-tile) into the portal scoped entirely under `.acw-ds` so the navy portal is untouched. Wired into PortalSessionDetailPage.tsx: the per-card map of AnthropicCourseWrapper replaced with a single <AnthropicCoursesBento courses={...}/>. AnthropicCourseWrapper.tsx is now unused (left in place; Kes may still reference it).
+  - Verification: npx tsc --noEmit passes (exit 0); static render-check (DOM mirrors component output) loads the real anthropicBento.css and renders the 3-course Week 1 bento correctly in browser; faithful 1:1 of the already-approved docs/design mockup. Kes to pull and test locally per his comment.
+  - Notes: 3 logged implementation assumptions (no governance boundary crossed): (1) RemixIcon (DS default) swapped for Bootstrap Icons, already loaded by the portal, to avoid a new icon-font dependency; (2) "Start the path" anchor CTA points at the featured (lowest-numbered) course URL since no separate path URL exists yet — spec flagged this destination as TBD; (3) generalized the spec's fixed 3-up grid to featured-spans-compacts so 4+ courses never break (pixel-identical to the spec at exactly 3). HARDEN: compact ghost CTA bumped 38px->44px to meet the DS/WCAG touch goal; prefers-reduced-motion disables hover transforms. Dark-mode tokens included but inert (portal has no dark toggle yet). Branch workstream/design-system-anthropic-wrapper (PR #82 -> staging); pushed from fork remote (aleemcolaberry) since the account is read-only on the org repo.
+
+- [x] AnthropicCoursesBento: heuristic + WCAG re-audit, fixes, and org-branch re-home into staging (BC 9946499812 / 9946499773)
+  - Date: 2026-06-25
+  - Session: CC-20260625-q4r9
+  - What changed: Ran a Nielsen 10-heuristic + WCAG 2.1 AA re-audit on the production React bento (AnthropicCoursesBento) per Ali's request ("run a heuristic analysis and fix any changes") and applied 3 fixes in frontend/src/components/portal/anthropic-bento/: (1) removed `cursor: pointer` from `.cb-card--hoverable` — the card body is not itself clickable (only the CTA link is the action), so the pointer was a false affordance; kept the hover-lift as a hint. (2) Added a high-contrast `:focus-visible` ring (white banded by red-700) to `.cb-btn--on-accent`, because the default blue focus ring sits on the cherry red-600 path tile and risked failing WCAG 1.4.11 non-text contrast (3:1). (3) Added `role="group"` + an `aria-label` (label + course count) to both bento containers so screen-reader users get the grouping/name the bare div lacked. No layout, token, or copy changes.
+  - Verification: npx tsc --noEmit exit 0; CI=true npm run build (production CRA, stricter eslint) exit 0 — "build folder is ready to be deployed", no eslint errors. Re-checked the spec contrast table: title 16.9:1, body/meta 5.4:1, CTAs on red-600 4.7:1, anchor on white 6.2:1 — all clear AA.
+  - Notes: Re-homed Aleem's approved PR #82 work (3 commits) onto org-owned branch workstream/design-system-anthropic-wrapper-react cut from the same head, so the PR into staging is controlled by the org/admin account (Aleem's aleemcolaberry is read-only on the org repo and had to PR from a fork — follow-up filed to grant write access). Legacy AnthropicCourseWrapper.tsx is now unused after the page switched to the bento; left in place (deletion is a separate cleanup, not bundled into this change). Bringing the Colaberry DS into the portal scoped to `.acw-ds` is a DRI-level call — authorized by Ali ("build this out, use Aleem's design").
+- [x] **Advisor Brain Service: idea → questions → requirements doc (Claude-backed)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-ab7x
+  - What changed: `backend/src/services/advisorBrainService.ts` (new) — two-function service: `generateClarifyingQuestions(idea, enrollmentId)` generates ~10 targeted questions via Claude; `generateRequirementsDoc(idea, answers, enrollmentId)` produces a structured requirements document. `@anthropic-ai/sdk` added to backend/package.json. `env.ts` extended with `anthropicApiKey` and `advisorClaudeModel`. `backend/src/routes/advisorRoutes.ts` (new) — two authenticated portal routes: `POST /api/portal/advisor/questions` and `POST /api/portal/advisor/requirements`, wired into `server.ts`. Unit tests: `backend/src/services/__tests__/advisorBrainService.test.ts` — 12/12 pass.
+  - Verification: `npx jest advisorBrainService.test.ts` → 12/12 pass. `npx tsc --noEmit` → exit 0. BC ticket: 9985689214.
+  - Notes: BC ticket comment deferred until Kes runs UX test. Service is stateless (no new DB tables). Requires `ANTHROPIC_API_KEY` in `.env` — returns structured AuthError (no throw) when absent. Routes are `requireParticipant`-gated. Model configurable via `ADVISOR_CLAUDE_MODEL` env var (default: `claude-sonnet-4-6`). Out of scope: wiring `ProjectDnaWizard.tsx` to these routes (separate UI ticket, blocked on Aleem's design).
+
+- [x] **advisor brain: route-order fix + 90s timeout (UX-verified)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-ab7x
+  - What changed: `server.ts` — moved `app.use(advisorRoutes)` before `app.use(adminRoutes)` to prevent global `router.use(requireAdmin)` in admin sub-routes from intercepting participant JWTs. `advisorBrainService.ts` — bumped client timeout from 30s to 90s (requirements endpoint generates 4096 tokens, exceeds 30s under load). Both endpoints curl-verified against live backend with participant JWT.
+  - Verification: `POST /api/portal/advisor/questions` → 10 Claude-generated questions (200). `POST /api/portal/advisor/requirements` → full structured doc with title, 8 TRs, 5 NFRs, MVP scope, 5 metrics, raw_markdown (200). BC ticket: 9985689214.
+- [x] PR #85 (skilljarSyncService): fix silent-no-op course-URL match + Failure-First hardening
+  - Date: 2026-06-25
+  - Session: CC-20260625-pr9k
+  - What changed: Extracted the tracked-course matching decision into `backend/src/services/lib/skilljarCourseMatch.ts` (`normalizeCourseUrl` + `isTrackedCourseUrl`). The service previously matched with `TRACKED_COURSE_URLS.has(p.course_url)` — an exact-string compare against 5 hardcoded landing-page URLs, so any trailing-slash / casing / protocol / query difference from the live Skilljar API silently filtered out every course (`courses_synced:0, error:null`). Now both sides normalize (host+path, lowercased, no trailing slash/query/hash) before comparison. Also clamped `percent_complete` to 0..100 (migration enforces a CHECK constraint) and added a 50-page hard cap + `skilljar_pagination_cap_hit` warn log to `fetchUserProgress` (Failure-First: no unbounded `next`-link loop).
+  - Verification: `jest` 15/15 — new `skilljarCourseMatch.test.ts` (7 cases incl. the trailing-slash/casing/query/protocol variants the live API would have silently dropped) + existing `skilljarSyncService.test.ts` unbroken. Backend `tsc --noEmit` clean (0 errors).
+  - Notes: Remediation of the pr-approval-review MAJOR on PR #85. Used defensive URL normalization rather than keying on course_id (the reviewer's alternative) because confirming the live id/url field needs the unprovisioned SKILLJAR_API_KEY; normalization is correct regardless of the live format. Base is staging (Kes's PR); still needs one approving review before merge.
+- [x] PR #81 (staging→main promotion): close the markEnrollmentPaid test gap
+  - Date: 2026-06-25
+  - Session: CC-20260625-pr9k
+  - What changed: Added `backend/src/__tests__/services/enrollmentService.test.ts` covering `markEnrollmentPaid` — the PaySimple payment-confirmation path that `webhookController.test.ts` mocks out entirely. Three cases: happy path (persists paysimple_payment_id/amount_paid/enrolled_at, flips to paid, increments seats), idempotent already-paid early-return (no re-write, no double seat increment), and external_id-not-found (returns null, no seat touch). Models mocked; `Campaign.findOne→null` makes the fire-and-forget `exitPaymentCampaign` a clean early return. Test-only, no source change.
+  - Verification: `jest enrollmentService.test.ts` → 3/3 pass.
+  - Notes: Closes the pr-approval-review MAJOR on PR #81 — the DB-unique idempotency-key write previously had zero executed coverage. Feature author is Kes; main still requires one approving review from a non-author before merge.
+- [x] PR #85 (skilljarSyncService): email-equality guard in lookupSkilljarUser (review iteration 2)
+  - Date: 2026-06-25
+  - Session: CC-20260625-pr9k
+  - What changed: A fresh independent pr-approval-review of the URL-match fix surfaced a second silent-misattribution hazard: `lookupSkilljarUser` returned `results[0]` from `/users?email=` without confirming the returned account's email matched the queried one. If Skilljar does fuzzy/alias/substring matching, the service could sync another student's progress under the queried email (error:null). Now it accepts only an exact case-insensitive email match, else treats the lookup as user-not-found.
+  - Verification: `jest` 16/16 — added a mismatch case (Skilljar returns a different account -> skilljar_user_id:null, courses_synced:0, no upsert). Backend `tsc --noEmit` clean (0 errors).
+  - Notes: Same silent-wrong-data failure class as the URL-match no-op. Also merged origin/staging in to clear a PROGRESS.md conflict that my own #81 staging push had induced. Base remains staging (Ali-confirmed staging-first flow); merge still needs one approving review.
 
 - [x] **Founding Cohort sales knowledge base shipped to /sales-hub (static)**
   - Date: 2026-06-25

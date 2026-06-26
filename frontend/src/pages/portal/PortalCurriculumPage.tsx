@@ -11,6 +11,14 @@ interface LessonSummary {
   status: string;
 }
 
+interface CourseLinkInfo {
+  module_number: number;
+  provider: 'skilljar' | 'external_cert' | 'colaberry_original';
+  course_title: string | null;
+  course_url: string | null;
+  link_status: 'confirmed' | 'pending_confirmation' | 'not_applicable';
+}
+
 interface ModuleSummary {
   id: string;
   module_number: number;
@@ -20,6 +28,7 @@ interface ModuleSummary {
   total_lessons: number;
   completed_lessons: number;
   lessons: LessonSummary[];
+  course_link?: CourseLinkInfo | null;
 }
 
 interface CurriculumData {
@@ -93,6 +102,49 @@ function proficiencyColor(level: number): string {
   if (level >= 4) return '#10b981';
   if (level >= 2) return '#f59e0b';
   return '#ef4444';
+}
+
+// Per-week course CTA (deep-link delivery, BC decision 9985688697):
+//  - confirmed Skilljar / cert URL -> a real "open in new tab" link
+//  - pending_confirmation          -> a "coming soon" pill (no dead link shipped)
+//  - colaberry_original            -> a muted "original module" tag (no external course)
+function CourseLinkCta({ link }: { link?: CourseLinkInfo | null }) {
+  if (!link) return null;
+
+  if (link.link_status === 'pending_confirmation') {
+    return (
+      <span className="badge mt-2 d-inline-flex align-items-center" style={{ background: '#fffbeb', color: '#b45309', fontSize: 11, fontWeight: 600 }}>
+        <i className="bi bi-hourglass-split me-1"></i>Anthropic course link coming soon
+      </span>
+    );
+  }
+
+  if (link.provider === 'colaberry_original') {
+    return (
+      <span className="badge mt-2 d-inline-flex align-items-center" style={{ background: '#eef2ff', color: '#6366f1', fontSize: 11, fontWeight: 600 }}>
+        <i className="bi bi-stars me-1"></i>Colaberry-original module
+      </span>
+    );
+  }
+
+  if (link.link_status === 'confirmed' && link.course_url) {
+    const isCert = link.provider === 'external_cert';
+    return (
+      <a
+        href={link.course_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn btn-sm mt-2 d-inline-flex align-items-center gap-1"
+        style={{ background: isCert ? '#10b981' : '#6366f1', color: '#fff', fontSize: 12, fontWeight: 600, borderRadius: 6 }}
+        aria-label={`${isCert ? 'Go to certification exam' : 'Open course'}: ${link.course_title ?? ''} (opens in a new tab)`}
+      >
+        <i className={`bi ${isCert ? 'bi-patch-check' : 'bi-box-arrow-up-right'}`}></i>
+        {isCert ? 'Go to CCA-F exam' : 'Open course on Skilljar'}
+      </a>
+    );
+  }
+
+  return null;
 }
 
 function PortalCurriculumPage() {
@@ -460,6 +512,7 @@ function PortalCurriculumPage() {
                     </div>
                     <h5 className="fw-bold mb-1" style={{ color: '#1e293b' }}>{activeModule.title}</h5>
                     <p className="text-muted small mb-0">{activeModule.description}</p>
+                    <CourseLinkCta link={activeModule.course_link} />
                   </div>
                   <div className="text-end">
                     <div className="fw-bold" style={{ fontSize: 20, color: SKILL_COLORS[activeModule.skill_area] || '#6366f1' }}>

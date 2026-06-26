@@ -199,6 +199,12 @@ import RawLeadPayload from './RawLeadPayload';
 import AnthropicContentRegistry from './AnthropicContentRegistry';
 import AnthropicChangeEvent from './AnthropicChangeEvent';
 
+// Skilljar Progress Tracking
+import StudentSkilljarProgress from './StudentSkilljarProgress';
+
+// Enrollment Tracking
+import EnrollmentLead from './EnrollmentLead';
+
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
 import InboxClassification from './InboxClassification';
@@ -265,6 +271,7 @@ import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
+import CurriculumCourseLink from './CurriculumCourseLink';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1063,7 +1070,14 @@ export {
   // AI Systems Architect Accelerator
   ProjectDna,
   StudentGithubActivity,
+  CurriculumCourseLink,
+  EnrollmentLead,
+  StudentSkilljarProgress,
 };
+
+// --- Enrollment Lead associations ---
+EnrollmentLead.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(EnrollmentLead, { foreignKey: 'enrollment_id', as: 'enrollmentLead' });
 
 // --- AI Company Layer associations ---
 AiCompany.hasMany(CompanyGoal, { foreignKey: 'company_id', as: 'goals' });

@@ -56,6 +56,14 @@ export const env = {
   aiModel: process.env.AI_MODEL || 'gpt-4o-mini',
   aiMaxTokens: parseInt(process.env.AI_MAX_TOKENS || '1024', 10),
 
+  // Advisor Brain — Claude-backed idea→questions→requirements pipeline
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+  advisorClaudeModel: process.env.ADVISOR_CLAUDE_MODEL || 'claude-sonnet-4-6',
+
+  // Skilljar (Anthropic partner LMS — requires API key from Anthropic partner portal)
+  skilljarApiKey: process.env.SKILLJAR_API_KEY || '',
+  skilljarBaseUrl: process.env.SKILLJAR_BASE_URL || 'https://api.skilljar.com/v1',
+
   // Apollo
   apolloApiKey: process.env.APOLLO_API_KEY || '',
 

@@ -22,6 +22,9 @@ jest.mock('../../models', () => ({
   Cohort: {
     findByPk: jest.fn(),
   },
+  EnrollmentLead: {
+    findOrCreate: jest.fn(),
+  },
 }));
 
 jest.mock('../../services/automationService', () => ({
@@ -31,7 +34,7 @@ jest.mock('../../services/automationService', () => ({
 import { handlePaySimpleWebhook } from '../../controllers/webhookController';
 import { verifyWebhookSignature } from '../../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed } from '../../services/enrollmentService';
-import { Cohort } from '../../models';
+import { Cohort, EnrollmentLead } from '../../models';
 import { runEnrollmentAutomation } from '../../services/automationService';
 
 function mockRequest(body: any, headers: Record<string, string> = {}): Partial<Request> {
@@ -48,12 +51,49 @@ function mockResponse(): Partial<Response> & { statusCode?: number; jsonData?: a
   return res;
 }
 
+const PAYMENT_CREATED_EVENT = {
+  event_type: 'payment_created',
+  event_id: 'evt_123',
+  merchant_id: 1234,
+  data: {
+    order_external_id: 'CB-42620872-1710700000000',
+    payment_id: 29124495,
+    amount: 4500,
+    payment_status: 'authorized',
+    payment_type: 'credit_card',
+    customer_id: 42620872,
+  },
+};
+
+const MOCK_ENROLLMENT = {
+  id: 'enroll-123',
+  email: 'user@test.com',
+  full_name: 'Test User',
+  phone: '555-1234',
+  cohort_id: 'cohort-abc',
+  payment_status: 'paid',
+};
+
+const MOCK_COHORT = {
+  name: 'Cohort Alpha',
+  start_date: '2026-04-01',
+  core_day: 'Tuesday',
+  core_time: '1:00 PM EST',
+  optional_lab_day: null,
+};
+
 describe('handlePaySimpleWebhook', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Default happy-path mocks
+    (EnrollmentLead.findOrCreate as jest.Mock).mockResolvedValue([
+      { status: 'enrolled', save: jest.fn() },
+      true,
+    ]);
   });
 
   afterEach(() => {
@@ -91,47 +131,77 @@ describe('handlePaySimpleWebhook', () => {
     );
   });
 
-  it('processes payment_created event and marks enrollment paid', async () => {
+  it('processes payment_created event: marks enrollment paid with payment details', async () => {
     (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+    (markEnrollmentPaid as jest.Mock).mockResolvedValue(MOCK_ENROLLMENT);
+    (Cohort.findByPk as jest.Mock).mockResolvedValue(MOCK_COHORT);
 
-    const mockEnrollment = {
-      id: 'enroll-123',
-      email: 'user@test.com',
-      full_name: 'Test User',
-      phone: '555-1234',
-      cohort_id: 'cohort-abc',
-      payment_status: 'paid',
-    };
-
-    const mockCohort = {
-      name: 'Cohort Alpha',
-      start_date: '2026-04-01',
-      core_day: 'Tuesday',
-      core_time: '1:00 PM EST',
-      optional_lab_day: null,
-    };
-
-    (markEnrollmentPaid as jest.Mock).mockResolvedValue(mockEnrollment);
-    (Cohort.findByPk as jest.Mock).mockResolvedValue(mockCohort);
-
-    const req = mockRequest({
-      event_type: 'payment_created',
-      event_id: 'evt_123',
-      merchant_id: 1234,
-      data: {
-        order_external_id: 'CB-42620872-1710700000000',
-        payment_id: 29124495,
-        amount: 0.01,
-        payment_status: 'authorized',
-        payment_type: 'credit_card',
-        customer_id: 42620872,
-      },
-    });
+    const req = mockRequest(PAYMENT_CREATED_EVENT);
     const res = mockResponse();
 
     await handlePaySimpleWebhook(req as Request, res as Response);
 
-    expect(markEnrollmentPaid).toHaveBeenCalledWith('CB-42620872-1710700000000');
+    expect(markEnrollmentPaid).toHaveBeenCalledWith(
+      'CB-42620872-1710700000000',
+      { paymentId: 29124495, amount: 4500 }
+    );
+    expect(res.json).toHaveBeenCalledWith({ received: true });
+  });
+
+  it('creates EnrollmentLead on payment_created', async () => {
+    (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+    (markEnrollmentPaid as jest.Mock).mockResolvedValue(MOCK_ENROLLMENT);
+    (Cohort.findByPk as jest.Mock).mockResolvedValue(MOCK_COHORT);
+
+    const req = mockRequest(PAYMENT_CREATED_EVENT);
+    const res = mockResponse();
+
+    await handlePaySimpleWebhook(req as Request, res as Response);
+
+    expect(EnrollmentLead.findOrCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { email: 'user@test.com' },
+        defaults: expect.objectContaining({
+          name: 'Test User',
+          email: 'user@test.com',
+          status: 'enrolled',
+          enrollment_id: 'enroll-123',
+        }),
+      })
+    );
+  });
+
+  it('updates existing EnrollmentLead status to enrolled when not already enrolled', async () => {
+    (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+    (markEnrollmentPaid as jest.Mock).mockResolvedValue(MOCK_ENROLLMENT);
+    (Cohort.findByPk as jest.Mock).mockResolvedValue(MOCK_COHORT);
+
+    const mockLead = { status: 'prospect', enrollment_id: null, save: jest.fn().mockResolvedValue(undefined) };
+    (EnrollmentLead.findOrCreate as jest.Mock).mockResolvedValue([mockLead, false]);
+
+    const req = mockRequest(PAYMENT_CREATED_EVENT);
+    const res = mockResponse();
+
+    await handlePaySimpleWebhook(req as Request, res as Response);
+
+    // Wait for the non-blocking .then() to settle
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    expect(mockLead.status).toBe('enrolled');
+    expect(mockLead.enrollment_id).toBe('enroll-123');
+    expect(mockLead.save).toHaveBeenCalled();
+  });
+
+  it('triggers enrollment automation after confirmed payment', async () => {
+    (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+    (markEnrollmentPaid as jest.Mock).mockResolvedValue(MOCK_ENROLLMENT);
+    (Cohort.findByPk as jest.Mock).mockResolvedValue(MOCK_COHORT);
+
+    const req = mockRequest(PAYMENT_CREATED_EVENT);
+    const res = mockResponse();
+
+    await handlePaySimpleWebhook(req as Request, res as Response);
+
     expect(Cohort.findByPk).toHaveBeenCalledWith('cohort-abc');
     expect(runEnrollmentAutomation).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -140,7 +210,6 @@ describe('handlePaySimpleWebhook', () => {
         full_name: 'Test User',
       })
     );
-    expect(res.json).toHaveBeenCalledWith({ received: true });
   });
 
   it('handles payment_failed event', async () => {
@@ -220,8 +289,29 @@ describe('handlePaySimpleWebhook', () => {
 
     await handlePaySimpleWebhook(req as Request, res as Response);
 
-    expect(markEnrollmentPaid).toHaveBeenCalledWith('CB-UNKNOWN-9999999');
+    expect(markEnrollmentPaid).toHaveBeenCalledWith('CB-UNKNOWN-9999999', { paymentId: 99999, amount: 0.01 });
     // Should still return 200 — acknowledged even if not found
+    expect(res.json).toHaveBeenCalledWith({ received: true });
+    // EnrollmentLead should NOT be created when enrollment not found
+    expect(EnrollmentLead.findOrCreate).not.toHaveBeenCalled();
+  });
+
+  it('idempotency: duplicate payment returns early without triggering automation again', async () => {
+    (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+    // markEnrollmentPaid returns the already-paid enrollment (status=paid, no changes)
+    (markEnrollmentPaid as jest.Mock).mockResolvedValue({
+      ...MOCK_ENROLLMENT,
+      payment_status: 'paid',
+      paysimple_payment_id: '29124495', // already stored from first call
+    });
+    (Cohort.findByPk as jest.Mock).mockResolvedValue(MOCK_COHORT);
+
+    const req = mockRequest(PAYMENT_CREATED_EVENT);
+    const res = mockResponse();
+
+    await handlePaySimpleWebhook(req as Request, res as Response);
+
+    // Still responds 200 (PaySimple will retry otherwise)
     expect(res.json).toHaveBeenCalledWith({ received: true });
   });
 });

@@ -86,7 +86,10 @@ export async function createInvoiceEnrollment(
   return enrollment;
 }
 
-export async function markEnrollmentPaid(externalId: string): Promise<Enrollment | null> {
+export async function markEnrollmentPaid(
+  externalId: string,
+  paymentDetails?: { paymentId: number; amount: number }
+): Promise<Enrollment | null> {
   // Look up by external ID (CB-{customerId}-{timestamp}) — this is what PaySimple sends in webhooks
   const enrollment = await Enrollment.findOne({
     where: { paysimple_external_id: externalId },
@@ -98,6 +101,11 @@ export async function markEnrollmentPaid(externalId: string): Promise<Enrollment
   if (enrollment.payment_status === 'paid') return enrollment;
 
   enrollment.payment_status = 'paid';
+  if (paymentDetails) {
+    enrollment.paysimple_payment_id = String(paymentDetails.paymentId);
+    enrollment.amount_paid = paymentDetails.amount;
+    enrollment.enrolled_at = new Date();
+  }
   await enrollment.save();
 
   // Increment seats on confirmed payment
