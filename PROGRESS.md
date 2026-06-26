@@ -6821,6 +6821,12 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: post-deploy, the 458-stuck backlog clears on the first cycle (stuck-due count -> ~0, fetchable count rises); AI ROI Pilot Touch-2 shows 99 sent.
   - Notes: Subject-matched comm-log is the proof-of-send (each touch has a unique subject per lead) so re-sending is avoided. Lesson reinforced: deploy after-hours; mid-window restarts strand in-flight sends (this reconciler now self-corrects that within one cycle).
 
+- [x] **Wire Week 5 Anthropic course: seed curriculum_course_links into server startup (BC #9984355973)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed: `backend/src/server.ts` — added import + `await seedCurriculumCourseLinks()` call in the startup seed sequence (after `seedCurriculumTypeDefinitions`). The `curriculum_course_links` table is the actual delivery mechanism for Skilljar course CTAs on `PortalCurriculumPage.tsx`; it was missing from both dev DBs because the seed was never wired into server startup. Week 5 (Introduction to Model Context Protocol, `https://anthropic.skilljar.com/introduction-to-model-context-protocol`) is already `confirmed` in the seed data; no code change needed to the seed itself.
+  - Verification: `tsc --noEmit` clean; seed ran locally (12 rows upserted, accelerator_dev); Week 5 = `confirmed` in DB; Jest 18/18 pass (seedCurriculumCourseLinks + courseLinkService + updateCourseLink).
+  - Notes: The `wireWeek5` script approach was ruled out — no Week 5 LiveSession exists in the DB (old 5-session curriculum only). The correct path is `curriculum_course_links` → `courseLinkService` → `PortalCurriculumPage.tsx`. Needs prod deploy to go live on enterprise.colaberry.com.
 - [ ] **Week 4 Prompt Engineering content spec (BC #9984355775)**
   - Date: 2026-06-25
   - Session: CC-20260625-c8r2
