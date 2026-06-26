@@ -76,6 +76,133 @@
   function domain(k){ for(var i=0;i<DOMAINS.length;i++){ if(DOMAINS[i].key===k) return DOMAINS[i]; } return null; }
   function activeLabels(){ return DOMAINS.filter(function(d){return d.status==="active";}).map(function(d){return d.label;}).join(", "); }
 
+  /* ---------- charts (mermaid) ---------- */
+  var PAL = {
+    hub:{f:"#1b1b1b",b:"#1b1b1b",t:"#ffffff"},
+    s:{f:"#d3ebc0",b:"#4a8f2e",t:"#1f3d12"},
+    m:{f:"#fbd2d5",b:"#FB2832",t:"#5a0a0e"},
+    d:{f:"#cfe1ea",b:"#367895",t:"#14323d"},
+    c:{f:"#d7ebc4",b:"#3f7d2a",t:"#1c3c12"},
+    p:{f:"#cfe1ef",b:"#3f7fab",t:"#143042"},
+    k:{f:"#fae2bd",b:"#E8920C",t:"#5a3a05"},
+    node:{f:"#f3f5f7",b:"#aab2bc",t:"#1b1b1b"}
+  };
+  function sty(ids, key){ var p=PAL[key]; return ids.map(function(id){ return "style " + id + " fill:" + p.f + ",stroke:" + p.b + ",stroke-width:1.5px,color:" + p.t; }).join("\n"); }
+  function mm(dir, lines){ return "flowchart " + dir + "\n" + lines.join("\n"); }
+  var CHARTS = {
+    home: mm("LR", [
+      'OH["Free Open House<br/>Jul 16"] --> FC["Founding Cohort<br/>starts Jul 23"] --> WK["12 weeks<br/>4 intensives"] --> CAP["Capstone<br/>+ Architect Expo"] --> CE["Anthropic Architect<br/>certification"]',
+      sty(["OH","FC"],"s"), sty(["WK","CAP","CE"],"c"),
+      'click OH call kbChart("sales","open house")',
+      'click FC call kbChart("sales","founding cohort")',
+      'click WK call kbChart("curriculum","intensive")',
+      'click CAP call kbChart("curriculum","capstone")',
+      'click CE call kbChart("curriculum","certification")'
+    ]),
+    all: mm("LR", [
+      'KB["Knowledge Base"] --> S["Sales"]',
+      'KB --> M["Marketing"]', 'KB --> D["Design"]', 'KB --> C["Curriculum"]', 'KB --> P["Product"]', 'KB --> K["Compliance and Trust"]',
+      sty(["KB"],"hub"), sty(["S"],"s"), sty(["M"],"m"), sty(["D"],"d"), sty(["C"],"c"), sty(["P"],"p"), sty(["K"],"k"),
+      'click S call kbChart("sales","")', 'click M call kbChart("marketing","")', 'click D call kbChart("design","")',
+      'click C call kbChart("curriculum","")', 'click P call kbChart("product","")', 'click K call kbChart("compliance","")'
+    ]),
+    sales: mm("LR", [
+      'A["Awareness"] --> O["Open House"] --> F["Founding Cohort"] --> E["Enrolled"]',
+      'O --> PR["Pricing and billing"]', 'F --> OB["Objections"]', 'E --> CE["Certification"]',
+      sty(["A","O","F","E"],"s"), sty(["PR","OB","CE"],"node"),
+      'click O call kbChart("sales","open house")', 'click F call kbChart("sales","founding cohort")',
+      'click E call kbChart("sales","enrollment")', 'click PR call kbChart("sales","pricing")',
+      'click OB call kbChart("sales","objection")', 'click CE call kbChart("sales","certification")'
+    ]),
+    marketing: mm("LR", [
+      'G["Goal:<br/>Open House regs"] --> CH["Channels"] --> CT["Content"] --> KP["KPIs"]',
+      'CH --> LI["LinkedIn + email"]', 'CT --> CA["Calendar"]',
+      sty(["G","CH","CT","KP"],"m"), sty(["LI","CA"],"node"),
+      'click G call kbChart("marketing","open house")', 'click CH call kbChart("marketing","channel")',
+      'click CT call kbChart("marketing","content")', 'click KP call kbChart("marketing","kpi")',
+      'click LI call kbChart("marketing","linkedin")', 'click CA call kbChart("marketing","calendar")'
+    ]),
+    design: mm("TD", [
+      'BR["Brand<br/>BRAND.md + assets"] --> CO["Code<br/>tokens + components"] --> AG["Agent<br/>SKILL.md + docs"]',
+      'CO --> CL["Color"]', 'CO --> TY["Typography"]', 'CO --> CM["Components"]',
+      sty(["BR","CO","AG"],"d"), sty(["CL","TY","CM"],"node"),
+      'click BR call kbChart("design","brand")', 'click CO call kbChart("design","token")', 'click AG call kbChart("design","prompt")',
+      'click CL call kbChart("design","color")', 'click TY call kbChart("design","typography")', 'click CM call kbChart("design","component")'
+    ]),
+    curriculum: mm("LR", [
+      'I1["1 Foundation<br/>W1-3"] --> I2["2 AI Team<br/>W4-6"] --> I3["3 Real World<br/>W7-9"] --> I4["4 Scale<br/>W10-12"] --> CAP["Capstone + Expo"]',
+      'I4 --> CE["Certification"]', 'I1 --> LN["Project, internship<br/>and portfolio"]',
+      sty(["I1","I2","I3","I4","CAP"],"c"), sty(["CE","LN"],"node"),
+      'click I1 call kbChart("curriculum","foundation")', 'click I2 call kbChart("curriculum","team")',
+      'click I3 call kbChart("curriculum","real world")', 'click I4 call kbChart("curriculum","scale")',
+      'click CAP call kbChart("curriculum","capstone")', 'click CE call kbChart("curriculum","certification")',
+      'click LN call kbChart("curriculum","internship")'
+    ]),
+    product: mm("TD", [
+      'MEM["Colaberry AI Membership"] --> INC["Includes<br/>4 intensives, cert,<br/>internship, portfolio"]',
+      'MEM --> PL["Plans<br/>$149 annual / $199 monthly"]', 'MEM --> TR["Tracks<br/>pro, beginner, builder"]',
+      sty(["MEM"],"p"), sty(["INC","PL","TR"],"node"),
+      'click MEM call kbChart("product","membership")', 'click INC call kbChart("product","included")',
+      'click PL call kbChart("product","pricing")', 'click TR call kbChart("product","track")'
+    ]),
+    compliance: mm("LR", [
+      'REG["Regulated school<br/>COA U5306"] --> TR["Track record<br/>5,000+ since 2012"] --> SP["Student protections"] --> TP["Transparency"]',
+      sty(["REG","TR","SP","TP"],"k"),
+      'click REG call kbChart("compliance","regulated")', 'click TR call kbChart("compliance","track record")',
+      'click SP call kbChart("compliance","protect")', 'click TP call kbChart("compliance","transparen")'
+    ])
+  };
+  var CHART_SEQ = 0, MERMAID_READY = false;
+  function initMermaid(){
+    if(MERMAID_READY || !window.mermaid) return;
+    try {
+      window.mermaid.initialize({
+        startOnLoad:false, securityLevel:"loose", theme:"base",
+        flowchart:{ htmlLabels:true, curve:"basis", useMaxWidth:true, padding:10 },
+        themeVariables:{ fontFamily:"Roboto, system-ui, sans-serif", fontSize:"14px", lineColor:"#9aa3ad" }
+      });
+      MERMAID_READY = true;
+    } catch(e){}
+  }
+  function renderChart(key, containerId){
+    var el = document.getElementById(containerId); if(!el) return;
+    var def = CHARTS[key]; if(!def){ el.innerHTML=""; el.style.display="none"; return; }
+    if(el.getAttribute("data-key")===key && el.querySelector("svg")) return; // already current
+    if(!window.mermaid){ el.style.display="none"; return; }
+    initMermaid();
+    var gid = "kbmmd" + (++CHART_SEQ);
+    var hint = '<p class="charthint"><span class="cb-i"><i class="ri-cursor-line"></i></span> Click any box to filter the answers' + (containerId==="home-chart" ? " by topic." : " below.") + '</p>';
+    try {
+      window.mermaid.render(gid, def).then(function(res){
+        el.innerHTML = hint + res.svg;
+        if(res.bindFunctions) res.bindFunctions(el);
+        el.style.display=""; el.setAttribute("data-key", key);
+      }).catch(function(){ el.style.display="none"; });
+    } catch(e){ el.style.display="none"; }
+  }
+
+  /* ---------- chart -> filter bridge, and Cory deep links ---------- */
+  function kbChart(scope2, q){
+    var inp = document.getElementById("q"); if(inp) inp.value = q || "";
+    var target = (scope2 && domain(scope2)) ? scope2 : "all";
+    goScope(target);
+    filter();
+    var anchor = document.getElementById("kb-root");
+    if(anchor) setTimeout(function(){ try{ anchor.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){} }, 70);
+  }
+  window.kbChart = kbChart;
+  function srcLink(e){
+    return '<a class="cory-src" data-scope="' + e.domain + '" data-q="' + esc(e.q) + '" role="button" tabindex="0">' +
+      '<span class="cb-i"><i class="ri-arrow-right-circle-line"></i></span><span>' + esc(e.q) + '</span><em>' + esc(e.domain) + '</em></a>';
+  }
+  function coryOpen(scope2, q){
+    closeCory();
+    kbChart(scope2, q);
+    setTimeout(function(){
+      for(var i=0;i<cards.length;i++){ if(cards[i].e.q===q){ cards[i].el.open=true; try{ cards[i].el.scrollIntoView({behavior:"smooth", block:"center"}); }catch(e){} break; } }
+    }, 150);
+  }
+
   var STOP = {the:1,a:1,an:1,is:1,are:1,do:1,does:1,how:1,what:1,for:1,to:1,of:1,in:1,on:1,it:1,we:1,our:1,i:1,me:1,my:1,you:1,your:1,and:1,or:1,can:1,with:1,about:1,this:1,that:1,when:1,where:1,who:1};
   function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];}); }
   function tokens(s){ return String(s||"").toLowerCase().split(/[^a-z0-9$]+/).filter(function(w){return w.length>2 && !STOP[w];}); }
@@ -225,6 +352,7 @@
       else { var d=domain(s); st.innerHTML = '<span class="dot" style="background:'+(d?d.color:'var(--neutral-700)')+'"><span class="cb-i"><i class="'+(d?d.icon:'ri-folder-line')+'"></i></span></span> '+esc(d?d.label:s); }
     }
     renderResources();
+    renderChart(s, "browse-chart");
     filter();
   }
   function debounce(fn, ms){ var t; return function(){ var args=arguments, ctx=this; clearTimeout(t); t=setTimeout(function(){ fn.apply(ctx,args); }, ms); }; }
@@ -235,6 +363,7 @@
     document.querySelectorAll(".tab[data-scope]").forEach(function(t){ t.classList.remove("on"); t.removeAttribute("aria-current"); });
     var qi=document.getElementById("q"); if(qi) qi.value="";
     filter();
+    renderChart("home", "home-chart");
     window.scrollTo({top:0, behavior:"auto"});
   }
   function browseView(s){
@@ -284,9 +413,16 @@
   }
   function retrievalAnswer(q){
     var hits = topMatches(q,3);
-    if(!hits.length) return { html:"I could not find that in the knowledge base for this scope. Try All, or terms like pricing, objections, sequence, calendar, certification, components, or tokens.", e:null };
-    var html = hits.map(function(e,i){ return (i===0?"":"<br><br>")+"<span class=\"dbadge "+e.domain+"\">"+e.domain+"</span> <b>"+esc(e.q)+"</b><br>"+esc(e.a); }).join("");
-    return { html:html, e:hits[0] };
+    if(!hits.length) return { html:"I could not find that in the knowledge base for this scope. Try All at the top, or terms like pricing, objections, the 12-week plan, certification, components, or tokens. You can also click any box in a chart to filter the page.", links:"" };
+    var scopeBit = scope!=="all" ? (" in " + (domain(scope)?domain(scope).label:scope)) : "";
+    var top = hits[0];
+    var lead = "Here is what I found" + scopeBit + ":";
+    var summary = "<br><br><b>" + esc(top.q) + "</b><br>" + esc(top.a);
+    var more = hits.length>1
+      ? "<br><br>Want the full detail? Tap any of these and I will open it in the docs and filter the page to it:"
+      : "<br><br>Tap to open it in the docs:";
+    var links = '<div class="cory-srcs">' + hits.map(srcLink).join("") + '</div>';
+    return { html: lead + summary + more, links: links };
   }
   function buildSystem(q){
     var ctx = topMatches(q,8).map(function(e){ return "["+e.domain+"] Q: "+e.q+"\nA: "+e.a+(e.detail?("\n("+e.detail+")"):""); }).join("\n\n");
@@ -332,14 +468,20 @@
         return pump();
       }); }
       return pump();
-    }).then(function(){ clearTimeout(to); setBusy(false); coryCtrl=null; if(!acc){ var r=retrievalAnswer(q); target.innerHTML = r.html + (r.e?("<br>"+refBtn(r.e)):""); } else if(truncated){ target.innerHTML += "<br><br><em style=\"color:var(--text-muted)\">Response was truncated. Ask Cory to continue.</em>"; } })
-      .catch(function(err){ clearTimeout(to); setBusy(false); coryCtrl=null; var r=retrievalAnswer(q); var em=String((err&&err.message)||err); var msg; if(err&&err.name==="AbortError"){ msg="stopped"; } else if(/HTTP 40[13]/.test(em)){ msg="check your API key"; } else if(/HTTP (429|5\d\d)/.test(em)){ msg="service busy, try again shortly"; } else { msg=esc(em).slice(0,80); } target.innerHTML = "<span style=\"color:var(--status-danger)\">Live answer unavailable ("+msg+"). Showing the knowledge base instead.</span><br><br>"+r.html+(r.e?("<br>"+refBtn(r.e)):""); });
+    }).then(function(){ clearTimeout(to); setBusy(false); coryCtrl=null;
+        if(!acc){ var r=retrievalAnswer(q); target.innerHTML = r.html + (r.links||""); }
+        else {
+          var hits = topMatches(q,3);
+          if(hits.length){ target.innerHTML += '<div class="cory-srcs-lead">Open in the docs:</div><div class="cory-srcs">' + hits.map(srcLink).join("") + '</div>'; }
+          if(truncated){ target.innerHTML += "<br><br><em style=\"color:var(--text-muted)\">Response was truncated. Ask Cory to continue.</em>"; }
+        } })
+      .catch(function(err){ clearTimeout(to); setBusy(false); coryCtrl=null; var r=retrievalAnswer(q); var em=String((err&&err.message)||err); var msg; if(err&&err.name==="AbortError"){ msg="stopped"; } else if(/HTTP 40[13]/.test(em)){ msg="check your API key"; } else if(/HTTP (429|5\d\d)/.test(em)){ msg="service busy, try again shortly"; } else { msg=esc(em).slice(0,80); } target.innerHTML = "<span style=\"color:var(--status-danger)\">Live answer unavailable ("+msg+"). Showing the knowledge base instead.</span><br><br>"+r.html+(r.links||""); });
   }
   function ask(q){
     if(coryBusy) return;
     bubble("me", esc(q));
     var t = bubble("cory","<span style=\"color:var(--text-muted)\">Looking that up...</span>");
-    if(getKey()){ setBusy(true); askLive(q,t); } else { setTimeout(function(){ var r=retrievalAnswer(q); t.innerHTML = r.html + (r.e?("<br>"+refBtn(r.e)):""); }, 120); }
+    if(getKey()){ setBusy(true); askLive(q,t); } else { setTimeout(function(){ var r=retrievalAnswer(q); t.innerHTML = r.html + (r.links||""); }, 120); }
   }
 
   function setScopeNote(){ var s=document.getElementById("cory-scope-label"); if(s) s.textContent = (scope==="all"?"All domains":(domain(scope)?domain(scope).label:scope)); }
@@ -357,6 +499,7 @@
       "<span class=\"bchip\" data-ask=\"What does the program cost and what is included?\">Pricing</span>"+
       "<span class=\"bchip\" data-ask=\"How do I handle the price objection?\">Price objection</span>"+
       "<span class=\"bchip\" data-ask=\"What are the brand colors and fonts?\">Brand basics</span>"+
+      "<span class=\"bchip\" data-ask=\"What does the 12 week curriculum cover?\">12-week plan</span>"+
       "<span class=\"bchip\" data-ask=\"Draft a short LinkedIn post inviting people to the Open House.\">Draft a post</span></div>";
     body.appendChild(c);
   }
@@ -374,7 +517,12 @@
     function send(){ var i=document.getElementById("cory-q"); var v=i.value.trim(); if(!v) return; i.value=""; ask(v); }
     document.getElementById("cory-send").addEventListener("click", send);
     document.getElementById("cory-q").addEventListener("keydown", function(e){ if(e.key==="Enter") send(); });
-    document.addEventListener("click", function(e){ var chip=e.target.closest(".bchip"); if(!chip) return; openCory(); ask(chip.getAttribute("data-ask")); });
+    document.addEventListener("click", function(e){
+      var src=e.target.closest(".cory-src");
+      if(src){ e.preventDefault(); coryOpen(src.getAttribute("data-scope"), src.getAttribute("data-q")); return; }
+      var chip=e.target.closest(".bchip"); if(!chip) return; openCory(); ask(chip.getAttribute("data-ask"));
+    });
+    document.addEventListener("keydown", function(e){ if(e.key==="Enter"){ var s=e.target&&e.target.closest&&e.target.closest(".cory-src"); if(s){ e.preventDefault(); coryOpen(s.getAttribute("data-scope"), s.getAttribute("data-q")); } } });
     document.addEventListener("keydown", function(e){ if(e.key==="Escape"){ if(coryBusy && coryCtrl){ try{ coryCtrl.abort(); }catch(err){} setBusy(false); } var p=document.getElementById("cory-panel"); if(p && p.classList.contains("open")) closeCory(); } });
     var sel=document.getElementById("cory-model"); if(sel){ sel.innerHTML = MODELS.map(function(m){ return "<option value=\""+m.id+"\">"+esc(m.label)+"</option>"; }).join(""); sel.value=getModel(); }
   }
@@ -390,5 +538,9 @@
     document.addEventListener("keydown", function(e){ if(e.key==="/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(((document.activeElement||{}).tagName)||"")){ e.preventDefault(); var s=document.getElementById("q"); if(s) s.focus(); } });
     applyRoute();
     initCory();
+    window.addEventListener("load", function(){
+      var b=document.getElementById("browse");
+      if(b && !b.hidden){ renderChart(scope, "browse-chart"); } else { renderChart("home", "home-chart"); }
+    });
   });
 })();

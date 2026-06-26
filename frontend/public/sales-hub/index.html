@@ -30,7 +30,13 @@
     <div class="home-hero">
       <p class="eyebrow">Company source of truth · search · assistant</p>
       <h1>Everything the team and our AI need, <span class="cb-grad">in one place</span></h1>
-      <p>The Colaberry knowledge base for Sales, Marketing, and Design. Search every answer in the bar above, ask Cory, and open the source documents. Built on our design system, organized for people and for AI.</p>
+      <p>The Colaberry knowledge base for Sales, Marketing, Design, Curriculum, Product, and Compliance. Search every answer in the bar above, ask Cory, and open the source documents. Built on our design system, organized for people and for AI.</p>
+    </div>
+
+    <div class="home-sec">
+      <h2>See how it fits together</h2>
+      <p class="sub">A quick map of the journey, from the free Open House to the Architect certification. Click any box to jump straight into the answers.</p>
+      <div class="chartwrap" id="home-chart" role="img" aria-label="Program journey map"></div>
     </div>
 
     <div class="home-sec">
@@ -62,6 +68,7 @@
       <button class="back" id="backHome"><span class="cb-i"><i class="ri-arrow-left-line"></i></span> Home</button>
     </div>
     <div class="bsec">
+      <div class="chartwrap chartwrap--browse" id="browse-chart" role="img" aria-label="Domain map"></div>
       <div id="kb-root"></div>
       <div class="noresults" id="noresults">No answer matches that yet. Try fewer words, switch to All, or ask Cory.</div>
       <div class="res-wrap"><div id="res-root"></div></div>
@@ -111,6 +118,7 @@
 <script src="data/curriculum-kb.js"></script>
 <script src="data/product-kb.js"></script>
 <script src="data/compliance-kb.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 <script src="assets/kb-app.js"></script>
 </body>
 </html>
