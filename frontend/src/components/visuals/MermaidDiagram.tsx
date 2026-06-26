@@ -55,7 +55,9 @@ function MermaidDiagram({ chart, caption, id }: MermaidDiagramProps): React.Reac
         // deliberately keep it out of package.json (loaded at runtime only),
         // so there is nothing to type against here. `any` is justified: the
         // module shape is external and unbundled. We still guard every call.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // (No eslint-disable here: react-scripts' eslint config does not load
+        // @typescript-eslint/no-explicit-any, so a disable comment for it would
+        // itself error — see frontend/CLAUDE.md. The bare `any` lints clean.)
         const m: any = await import(
           /* webpackIgnore: true */ MERMAID_CDN as string
         );

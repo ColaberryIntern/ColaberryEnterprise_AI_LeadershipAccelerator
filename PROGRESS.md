@@ -6740,3 +6740,9 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: ProgramRoadmap — the project build lane now branches at week 3 and the CCA-F certification lane at week 7 (was W2/W3), with updated lane labels + screen-reader timeline. Added subtle photo-watermark backgrounds to the two-door CTA cards on HomePage + PricingPage: "Join the Challenge" (individual) = single-person photo (/hero/hero-professional.jpg); "Sponsor Your Team" (employer) = team photo (/img/team-collab.jpg) — behind a strong --surface-card tint so WCAG-AA contrast is preserved.
   - Verification: TypeScript passes — tsc --noEmit clean on frontend (0).
   - Notes: watermark images are swappable placeholders.
+- [x] **Fix CRA-eslint build error: drop the no-explicit-any disable comment (MermaidDiagram)**
+  - Date: 2026-06-26
+  - Session: CC-20260625-q4m8
+  - What changed: The dev server failed to compile — "[eslint] Definition for rule '@typescript-eslint/no-explicit-any' was not found" — because react-scripts' eslint config does not load that rule, so the inline `// eslint-disable-next-line @typescript-eslint/no-explicit-any` comment in MermaidDiagram.tsx itself errored (the documented CRA gotcha in frontend/CLAUDE.md). Removed the disable comment; the bare `any` lints clean.
+  - Verification: dev server recompiled to "Compiled successfully! No issues found" (eslint + webpack clean); tsc still clean.
+  - Notes: tsc does NOT run eslint — the dev-server compile (or react-scripts build) is the check for this error class.
