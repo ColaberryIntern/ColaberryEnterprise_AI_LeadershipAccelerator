@@ -117,11 +117,12 @@ const ProgramRoadmap: React.FC<ProgramRoadmapProps> = ({ compact = false }) => {
   const donutC = 2 * Math.PI * donutR;
   const donutPct = WEEKS_COMPLETE / TOTAL_WEEKS;
 
-  // Lane control points — both lanes leave the spine early and arc to the finish.
-  const projStartX = nodeX(2);
-  const projStartY = nodeY(2);
-  const certStartX = nodeX(3);
-  const certStartY = nodeY(3);
+  // Lane branch points: the PROJECT build lane starts in week 3, and the CCA-F
+  // CERTIFICATION lane starts in week 7. Both arc out and reconverge at the finish.
+  const projStartX = nodeX(3);
+  const projStartY = nodeY(3);
+  const certStartX = nodeX(7);
+  const certStartY = nodeY(7);
 
   const ariaLabel =
     'Twelve-week AI Systems Architect roadmap: one continuous program of 12 weekly milestones (W1 through W12), grouped into four phases — Build Your AI Foundation, Create Your AI Team, Connect AI to the Real World, and Design AI That Scales. A project build lane and a CCA-F certification lane run alongside the weeks and converge at the finish: Certified Anthropic AI Systems Architect.';
@@ -420,19 +421,19 @@ const ProgramRoadmap: React.FC<ProgramRoadmapProps> = ({ compact = false }) => {
             />
             <text
               className="pr-lane-label"
-              x={projStartX + 150}
-              y={projStartY + 92}
+              x={projStartX + 30}
+              y={BASE_Y + 96}
               fill="var(--pr-cherry)"
             >
-              Project lane — your build
+              Project lane · starts week 3
             </text>
             <text
               className="pr-lane-label"
-              x={certStartX + 170}
-              y={certStartY - 102}
+              x={certStartX - 24}
+              y={certStartY - 104}
               fill="var(--pr-amber)"
             >
-              CCA-F certification lane
+              CCA-F certification lane · starts week 7
             </text>
           </g>
 
@@ -588,8 +589,8 @@ const ProgramRoadmap: React.FC<ProgramRoadmapProps> = ({ compact = false }) => {
           );
         })}
         <li>
-          A project build lane and a CCA-F certification lane converge at the finish: Certified
-          Anthropic AI Systems Architect.
+          The project build lane starts in week 3 and the CCA-F certification lane starts in week 7;
+          both converge at the finish: Certified Anthropic AI Systems Architect.
         </li>
       </ol>
     </div>

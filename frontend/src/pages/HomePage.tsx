@@ -272,7 +272,13 @@ function HomePage() {
               gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
             }}
           >
-            {DOORS.map((door) => (
+            {DOORS.map((door) => {
+              // Door A (individual / "Join the Challenge") = single-person photo;
+              // Door B (employer / "Sponsor Your Team") = team photo. Both cards sit
+              // on a light surface, so tint with --surface-card so text stays AA-readable.
+              const watermarkUrl =
+                door.tone === 'blue' ? '/img/team-collab.jpg' : '/hero/hero-professional.jpg';
+              return (
               <Card
                 key={door.title}
                 accent={door.tone}
@@ -280,13 +286,34 @@ function HomePage() {
                 hoverable
                 padded
                 className="cb-min0"
-                style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
+                style={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-5)',
+                }}
               >
-                <div>
+                {/* Subtle photo watermark — strong --surface-card tint keeps it a faint
+                    background texture so card text stays fully WCAG-AA legible. */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    zIndex: 0,
+                    backgroundImage: `linear-gradient(180deg, color-mix(in srgb, var(--surface-card) 88%, transparent), color-mix(in srgb, var(--surface-card) 94%, transparent)), url('${watermarkUrl}')`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
+                />
+                <div style={{ position: 'relative', zIndex: 1 }}>
                   <Badge tone={door.tone}>{door.badge}</Badge>
                 </div>
                 <h3
                   style={{
+                    position: 'relative',
+                    zIndex: 1,
                     fontFamily: 'var(--font-display)',
                     fontWeight: 700,
                     fontSize: 'var(--fs-h3)',
@@ -297,13 +324,13 @@ function HomePage() {
                 >
                   {door.title}
                 </h3>
-                <p style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 500, color: 'var(--text-body)', margin: 0 }}>
+                <p style={{ position: 'relative', zIndex: 1, fontSize: 'var(--fs-body-sm)', fontWeight: 500, color: 'var(--text-body)', margin: 0 }}>
                   {door.who}
                 </p>
-                <p style={{ fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+                <p style={{ position: 'relative', zIndex: 1, fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
                   {door.body}
                 </p>
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <ul style={{ position: 'relative', zIndex: 1, listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                   {door.points.map((point) => (
                     <li
                       key={point}
@@ -331,7 +358,7 @@ function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <div style={{ marginTop: 'auto', paddingTop: 'var(--space-2)' }}>
+                <div style={{ position: 'relative', zIndex: 1, marginTop: 'auto', paddingTop: 'var(--space-2)' }}>
                   <Button
                     as="a"
                     href={door.ctaHref}
@@ -343,7 +370,8 @@ function HomePage() {
                   </Button>
                 </div>
               </Card>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

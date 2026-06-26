@@ -228,9 +228,30 @@ function PricingPage() {
             }}
           >
             {/* Door A — Individual */}
-            <Card accent="red" padded elevation="md">
+            <Card
+              accent="red"
+              padded
+              elevation="md"
+              style={{ position: 'relative', overflow: 'hidden' }}
+            >
+              {/* Subtle single-person photo watermark — strong --surface-card tint keeps
+                  it a faint background texture so card text stays fully WCAG-AA legible. */}
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: 0,
+                  backgroundImage:
+                    "linear-gradient(180deg, color-mix(in srgb, var(--surface-card) 88%, transparent), color-mix(in srgb, var(--surface-card) 94%, transparent)), url('/hero/hero-professional.jpg')",
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              />
               <div
                 style={{
+                  position: 'relative',
+                  zIndex: 1,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 'var(--space-3)',
@@ -291,9 +312,30 @@ function PricingPage() {
             </Card>
 
             {/* Door B — Employer */}
-            <Card accent="blue" padded elevation="md">
+            <Card
+              accent="blue"
+              padded
+              elevation="md"
+              style={{ position: 'relative', overflow: 'hidden' }}
+            >
+              {/* Subtle team photo watermark — strong --surface-card tint keeps it a
+                  faint background texture so card text stays fully WCAG-AA legible. */}
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: 0,
+                  backgroundImage:
+                    "linear-gradient(180deg, color-mix(in srgb, var(--surface-card) 88%, transparent), color-mix(in srgb, var(--surface-card) 94%, transparent)), url('/img/team-collab.jpg')",
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              />
               <div
                 style={{
+                  position: 'relative',
+                  zIndex: 1,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 'var(--space-3)',
