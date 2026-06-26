@@ -6715,6 +6715,19 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: A prospect (CTO, Tribute Technology) replied "I don't even know what company you work for" to a Touch-2 email. Root cause: outbound emails carried no company name or website. The cold-campaign footer said only "Colaberry Enterprise AI Division | AI Leadership..." (no site, no name), and the executive_outreach path strips even that. Fix in `schedulerService.processEmailAction`: inject a sender-aware branded signature (resolved senderName + "Colaberry Inc." + enterprise.colaberry.ai + senderEmail) into EVERY send, after the exec-outreach strip so it is never removed; the plain-text body inherits it via stripHtml. Also replaced the vague `wrapEmailHtml` footer block with the CAN-SPAM/legal line. The live AI ROI Pilot was paused (96 pending deferred, reversible) while this shipped, then resumed.
   - Verification: rendered a sample email post-deploy to confirm name + Colaberry Inc. + enterprise.colaberry.ai appear (HTML + text). Backend tsc gate via Docker build.
   - Notes: Sender-aware so it is correct for any campaign, not just Ali. Matt Powell got a personal apology + re-intro reply (branded). Honors the standing rule (reference_email_signature): every ali@colaberry.com send must carry the branded block with the website.
+
+- [x] **Advisor Brain Service: idea → questions → requirements doc (Claude-backed)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-ab7x
+  - What changed: `backend/src/services/advisorBrainService.ts` (new) — two-function service: `generateClarifyingQuestions(idea, enrollmentId)` generates ~10 targeted questions via Claude; `generateRequirementsDoc(idea, answers, enrollmentId)` produces a structured requirements document. `@anthropic-ai/sdk` added to backend/package.json. `env.ts` extended with `anthropicApiKey` and `advisorClaudeModel`. `backend/src/routes/advisorRoutes.ts` (new) — two authenticated portal routes: `POST /api/portal/advisor/questions` and `POST /api/portal/advisor/requirements`, wired into `server.ts`. Unit tests: `backend/src/services/__tests__/advisorBrainService.test.ts` — 12/12 pass.
+  - Verification: `npx jest advisorBrainService.test.ts` → 12/12 pass. `npx tsc --noEmit` → exit 0. BC ticket: 9985689214.
+  - Notes: BC ticket comment deferred until Kes runs UX test. Service is stateless (no new DB tables). Requires `ANTHROPIC_API_KEY` in `.env` — returns structured AuthError (no throw) when absent. Routes are `requireParticipant`-gated. Model configurable via `ADVISOR_CLAUDE_MODEL` env var (default: `claude-sonnet-4-6`). Out of scope: wiring `ProjectDnaWizard.tsx` to these routes (separate UI ticket, blocked on Aleem's design).
+
+- [x] **advisor brain: route-order fix + 90s timeout (UX-verified)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-ab7x
+  - What changed: `server.ts` — moved `app.use(advisorRoutes)` before `app.use(adminRoutes)` to prevent global `router.use(requireAdmin)` in admin sub-routes from intercepting participant JWTs. `advisorBrainService.ts` — bumped client timeout from 30s to 90s (requirements endpoint generates 4096 tokens, exceeds 30s under load). Both endpoints curl-verified against live backend with participant JWT.
+  - Verification: `POST /api/portal/advisor/questions` → 10 Claude-generated questions (200). `POST /api/portal/advisor/requirements` → full structured doc with title, 8 TRs, 5 NFRs, MVP scope, 5 metrics, raw_markdown (200). BC ticket: 9985689214.
 - [x] PR #85 (skilljarSyncService): fix silent-no-op course-URL match + Failure-First hardening
   - Date: 2026-06-25
   - Session: CC-20260625-pr9k
