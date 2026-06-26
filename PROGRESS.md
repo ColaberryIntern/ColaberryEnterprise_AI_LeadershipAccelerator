@@ -6955,3 +6955,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: (1) Rebuilt `frontend/src/pages/portal/PortalLoginPage.tsx` on the Colaberry Design System ("Design E", BC 10031928327) — Quicksand wordmark with the cherry "C", radius-24 card + soft shadow, cherry pill action button, leaf success state, DS focus rings; all values from the global semantic tokens (`--surface-*`, `--action-*`, `--brand-accent`, `--font-logo`), replacing the old navy `--color-*`/Bootstrap card. Magic-link auth logic unchanged. (2) `frontend/src/pages/PricingPage.tsx` "The outcome" SectionFigure now points at new `frontend/public/img/outcome-builder.jpg` (a Black professional building at a laptop; Pexels free commercial license) with matching alt text, instead of the shared `/img/certificate.jpg`.
   - Verification: `tsc --noEmit` clean (0 errors); replacement image visually inspected before placing (1280x960 JPEG).
   - Notes: Deployed to prod via host `git checkout origin/main -- frontend` + nginx rebuild. The shared `/img/certificate.jpg` is left in place — InstructorPage still uses it (out of scope; only the pricing photo was flagged).
+
+- [x] Rename the public hub path /sales-hub/ -> /knowledge/ with a 301 redirect
+  - Date: 2026-06-26
+  - Session: CC-20260626-r7k2
+  - What changed: `git mv frontend/public/sales-hub frontend/public/knowledge` so the unified Knowledge Base serves at enterprise.colaberry.ai/knowledge/. Added an nginx redirect in `nginx/nginx.conf`: `/sales-hub` and `/sales-hub/*` 301 to `/knowledge/` preserving subpaths, placed before the SPA fallback (`^~` precedence). Updated the in-hub footer URL to /knowledge/. Backend route `/api/sales-hub/cory` unchanged (hub uses client-side Cory now).
+  - Verification: deployed to prod from this branch; `/knowledge/` 200 (unified hub), `/sales-hub/` 301 -> /knowledge/, `/sales-hub/sales/` 301 -> /knowledge/sales/, `/knowledge/kb.json` 200.
+  - Notes: DRI-authorized path migration. Old /sales-hub/ links keep working via the 301. The internal `knowledge/sales/` Sales sub-section keeps its name (it is the Sales domain).
