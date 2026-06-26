@@ -145,7 +145,7 @@ function ProjectDnaWizard() {
         <p className="text-muted small mb-4">Your project blueprint is ready. Every week will be personalized around it.</p>
         <button
           className="btn btn-primary px-4"
-          style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
+          style={{ background: '#FB2832', borderColor: '#FB2832' }}
           onClick={() => navigate('/portal/project/builder')}
         >
           <i className="bi bi-arrow-right me-2"></i>Go to Your Project
@@ -527,7 +527,7 @@ function ProjectDnaWizard() {
           <button
             className="btn btn-primary btn-sm"
             onClick={goNext}
-            style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
+            style={{ background: '#FB2832', borderColor: '#FB2832' }}
           >
             Next<i className="bi bi-arrow-right ms-1"></i>
           </button>
@@ -536,7 +536,7 @@ function ProjectDnaWizard() {
             className="btn btn-primary"
             onClick={handleSubmit}
             disabled={submitting}
-            style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
+            style={{ background: '#FB2832', borderColor: '#FB2832' }}
           >
             {submitting ? (
               <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving…</>
