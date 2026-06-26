@@ -6821,6 +6821,12 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: post-deploy, the 458-stuck backlog clears on the first cycle (stuck-due count -> ~0, fetchable count rises); AI ROI Pilot Touch-2 shows 99 sent.
   - Notes: Subject-matched comm-log is the proof-of-send (each touch has a unique subject per lead) so re-sending is avoided. Lesson reinforced: deploy after-hours; mid-window restarts strand in-flight sends (this reconciler now self-corrects that within one cycle).
 
+- [ ] **Week 4 Prompt Engineering content spec (BC #9984355775)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed: Created `docs/training-program-2026-q3/curriculum/week-04-prompt-engineering.md` — full Colaberry-original content spec: 6-technique PE framework, 7 Anthropic public doc resources, Architecture Day + Build Day outlines, Enterprise Prompt Library artifact spec (10-entry template + categories + acceptance criteria), assessment hooks (warmup + post quiz + survey), NotebookLM video hooks, non-goals, done criteria.
+  - Verification: committed 4de664c9, pushed to ops/spec-week04-prompt-engineering; posted to BC #9984355775 for Ali approval.
+  - Notes: Not marking complete until Ali approves the spec. Portal wiring deferred to Design E.
 - [x] **Wire Week 6 Anthropic course: confirm MCP Advanced Topics in seed (BC #9984356110)**
   - Date: 2026-06-25
   - Session: CC-20260625-c8r2
