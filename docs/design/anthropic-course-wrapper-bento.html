@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnthropicCourseWrapper — Bento (Final spec)</title>
+<link rel="stylesheet" href="./styles.css">
+<style>
+  /* ---- mirrored DS components (Card / Badge / Button) ---- */
+  .cb-card{ display:flex; flex-direction:column; background:var(--surface-card);
+    border:1px solid var(--border-subtle); border-radius:var(--radius-xl); box-shadow:var(--shadow-sm);
+    overflow:hidden; transition:box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+  .cb-card--hoverable{ cursor:pointer; }
+  .cb-card--hoverable:hover{ box-shadow:var(--shadow-lg); transform:translateY(-3px); }
+  .cb-card--accent{ border-top:4px solid var(--red-500); }
+  .cb-card__body{ padding:var(--space-6); display:flex; flex-direction:column; gap:var(--space-3); flex:1; }
+
+  .cb-badge{ display:inline-flex; align-items:center; gap:6px; font-family:var(--font-body);
+    font-weight:var(--fw-medium); font-size:var(--fs-caption); line-height:1; padding:5px 12px;
+    border-radius:var(--radius-pill); background:var(--surface-sunken); color:var(--text-body); white-space:nowrap; }
+  .cb-badge--neutral{ background:var(--surface-sunken); color:var(--text-body); }
+  .cb-badge--solid{ background:var(--red-600); color:#fff; font-weight:var(--fw-bold); }  /* red-600 + bold for AA on small pill */
+
+  .cb-btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; font-family:var(--font-body);
+    font-weight:var(--fw-bold); font-size:var(--fs-body-sm); line-height:1.2; min-height:48px; border:none;
+    border-radius:var(--radius-pill); cursor:pointer; padding:0 24px; text-decoration:none; white-space:nowrap;
+    background:var(--action-bg); color:var(--action-fg);
+    transition:background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+  .cb-btn:hover{ background:var(--action-bg-hover); color:var(--action-fg); }
+  .cb-btn:active{ background:var(--action-bg-press); transform:translateY(1px); }
+  .cb-btn:focus-visible{ outline:none; box-shadow:var(--focus-ring); }
+  .cb-btn--sm{ font-size:var(--fs-caption); min-height:38px; padding:0 16px; gap:6px; }
+  .cb-btn--primary{ background:var(--red-600); box-shadow:var(--shadow-brand); }  /* red-600: white label clears 4.5:1 */
+  .cb-btn--primary:hover{ background:var(--red-700); }
+  .cb-btn--ghost{ background:transparent; color:var(--text-strong); padding:0 12px; }
+  .cb-btn--ghost:hover{ background:var(--surface-sunken); }
+  .cb-btn--on-accent{ background:#fff; color:var(--red-700); }
+  .cb-btn--on-accent:hover{ background:rgba(255,255,255,.9); color:var(--red-700); }
+
+  /* ---- card internals ---- */
+  .acw__head{ display:flex; gap:var(--space-4); align-items:flex-start; }
+  .acw__tile{ --tile:48px; background:var(--blue-500); flex:none; }
+  .acw__head-text{ min-width:0; flex:1; }
+  .acw__topline{ display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-3); }
+  .acw__overline{ font-size:var(--fs-overline); letter-spacing:var(--ls-overline); text-transform:uppercase;
+    font-weight:var(--fw-bold); color:var(--text-muted); margin:0 0 4px; }
+  .acw__title{ font-family:var(--heading-font); font-size:var(--fs-h4); font-weight:var(--fw-bold);
+    line-height:var(--lh-snug); letter-spacing:var(--ls-tight); color:var(--text-strong); margin:0; }
+  .acw__title--sm{ font-size:var(--fs-h5); }
+  .acw__desc{ font-size:var(--fs-body-sm); line-height:var(--lh-normal); color:var(--text-muted); margin:0; }
+  .acw__meta{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3); font-size:var(--fs-caption); color:var(--text-muted); }
+  .acw__meta-item{ display:inline-flex; align-items:center; gap:6px; }
+  .acw__meta .num{ font-family:var(--font-mono); font-weight:var(--fw-medium); color:var(--text-body); }
+  .acw__divider{ width:3px; height:3px; border-radius:50%; background:var(--border-strong); }
+  .acw__foot{ display:flex; align-items:center; justify-content:flex-end; gap:var(--space-3); margin-top:auto; padding-top:var(--space-2); }
+
+  /* featured */
+  .feat .acw__tile{ --tile:60px; }
+  .feat .acw__title{ font-size:var(--fs-h3); }
+  .feat .cb-card__body{ gap:var(--space-4); padding:var(--space-8); }
+  /* compact */
+  .compact .cb-card__body{ padding:var(--space-5); gap:var(--space-3); }
+  .compact .acw__tile{ --tile:40px; }
+  .compact .acw__foot{ justify-content:flex-start; }
+
+  /* cherry anchor */
+  .stat-tile{ display:flex; align-items:center; justify-content:space-between; gap:var(--space-6); flex-wrap:wrap;
+    background:var(--red-600); color:#fff; border-radius:var(--radius-xl); padding:var(--space-6) var(--space-8); box-shadow:var(--shadow-brand); }
+  .stat-tile .label{ font-size:var(--fs-overline); letter-spacing:var(--ls-overline); text-transform:uppercase; font-weight:var(--fw-bold); margin:0 0 8px; }
+  .stat-tile .figures{ display:flex; align-items:baseline; gap:var(--space-2); flex-wrap:wrap; }
+  .stat-tile .big{ font-family:var(--font-mono); font-size:var(--fs-h3); font-weight:var(--fw-bold); line-height:1; }
+  .stat-tile .unit{ font-size:var(--fs-body-sm); }
+
+  /* ---- bento grids ---- */
+  .bento{ display:grid; gap:var(--space-5); }
+  .bento-3{ grid-template-columns:repeat(3,1fr);
+    grid-template-areas:"feat feat c2" "feat feat c3" "stat stat stat"; }
+  .bento-2{ grid-template-columns:2fr 1fr; grid-template-areas:"feat c2" "stat stat"; }
+  .bento-1{ grid-template-columns:1fr; grid-template-areas:"feat"; max-width:560px; }
+  .ga-feat{ grid-area:feat; } .ga-c2{ grid-area:c2; } .ga-c3{ grid-area:c3; } .ga-stat{ grid-area:stat; }
+  @media (max-width:760px){
+    .bento-3, .bento-2{ grid-template-columns:1fr; }
+    .bento-3{ grid-template-areas:"feat" "c2" "c3" "stat"; }
+    .bento-2{ grid-template-areas:"feat" "c2" "stat"; }
+  }
+
+  /* ---- page chrome ---- */
+  body{ background:var(--surface-subtle); }
+  .wrap{ max-width:1080px; margin:0 auto; padding:40px 24px 96px; }
+  .top{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .top h1{ font-size:var(--fs-h3); margin:0; }
+  .sub{ color:var(--text-muted); font-size:var(--fs-body-sm); margin:6px 0 0; max-width:72ch; }
+  .band{ display:flex; align-items:center; gap:12px; margin:52px 0 18px; }
+  .band .tag{ font-size:var(--fs-overline); letter-spacing:var(--ls-overline); text-transform:uppercase; font-weight:var(--fw-bold);
+    color:#fff; background:var(--neutral-900); padding:4px 10px; border-radius:var(--radius-pill); }
+  .band h2{ font-size:var(--fs-h4); margin:0; } .band p{ margin:0; color:var(--text-muted); font-size:var(--fs-caption); }
+  .theme-toggle{ display:inline-flex; align-items:center; gap:8px; }
+  .spec{ margin-top:56px; background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:var(--radius-xl); padding:var(--space-8); }
+  .spec h3{ font-size:var(--fs-h4); margin:0 0 var(--space-4); }
+  .spec ul{ margin:0; padding-left:1.1em; display:flex; flex-direction:column; gap:6px; color:var(--text-body); font-size:var(--fs-body-sm); }
+  .spec code{ background:var(--surface-sunken); padding:1px 6px; border-radius:var(--radius-xs); }
+
+  /* ===================== DARK MODE REFINEMENTS =====================
+     Soft neutral shadows are invisible on dark, so elevation comes from
+     a lifted card surface + readable borders + brightness on hover.
+     Cherry stays red-600 (AA) but gains an intentional glow. */
+  [data-theme="dark"]{
+    --surface-page:   #121212;
+    --surface-subtle: #161616;
+    --surface-card:   #212120;            /* lifted off the page so cards read */
+    --border-subtle:  rgba(255,255,255,0.10);
+  }
+  [data-theme="dark"] body{ background:var(--surface-subtle); }
+  [data-theme="dark"] .cb-card{
+    border-color:var(--border-subtle);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.45);
+  }
+  [data-theme="dark"] .cb-card--hoverable:hover{
+    background:#2A2A28; border-color:rgba(255,255,255,0.20);
+    box-shadow:0 14px 34px rgba(0,0,0,0.55); transform:translateY(-3px);
+  }
+  [data-theme="dark"] .acw__tile{ background:var(--blue-400); }       /* brighter berry on dark */
+  [data-theme="dark"] .cb-badge--neutral{ background:rgba(255,255,255,0.09); color:var(--text-body); }
+  [data-theme="dark"] .cb-btn--ghost{ color:var(--text-strong); }
+  [data-theme="dark"] .cb-btn--ghost:hover{ background:rgba(255,255,255,0.07); }
+  /* cherry CTAs/anchor: keep AA red-600, brighten via glow (not a muddy darken) */
+  [data-theme="dark"] .cb-btn--primary{ box-shadow:0 6px 22px color-mix(in srgb, var(--red-500) 42%, transparent); }
+  [data-theme="dark"] .cb-btn--primary:hover{ background:var(--red-600); box-shadow:0 10px 30px color-mix(in srgb, var(--red-500) 58%, transparent); }
+  [data-theme="dark"] .stat-tile{ box-shadow:0 12px 36px color-mix(in srgb, var(--red-500) 36%, transparent); }
+  [data-theme="dark"] .band .tag{ background:var(--surface-card); color:var(--text-strong); box-shadow:inset 0 0 0 1px var(--border-subtle); }
+  [data-theme="dark"] .spec{ box-shadow:inset 0 1px 0 rgba(255,255,255,0.04); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <h1>AnthropicCourseWrapper — Bento</h1>
+      <p class="sub">Final design spec on the Colaberry Design System. For Kes / Ali sign-off before the React port.</p>
+    </div>
+    <button class="cb-btn cb-btn--ghost cb-btn--sm theme-toggle" id="themeBtn" type="button" aria-label="Toggle dark mode">
+      <span class="cb-i"><i class="ri-contrast-2-line" aria-hidden="true"></i></span><span id="themeLabel">Light</span>
+    </button>
+  </div>
+
+  <!-- 3 COURSES -->
+  <div class="band"><span class="tag">3+ courses</span><div><h2>Full bento</h2><p>Featured entry point, supporting tiles, cherry path anchor.</p></div></div>
+
+  <div class="bento bento-3">
+    <!-- featured -->
+    <article class="cb-card cb-card--hoverable cb-card--accent feat ga-feat">
+      <div class="cb-card__body">
+        <div class="acw__head">
+          <span class="cb-icon-tile acw__tile"><span class="cb-i"><i class="ri-graduation-cap-line" aria-hidden="true"></i></span></span>
+          <div class="acw__head-text">
+            <div class="acw__topline">
+              <p class="acw__overline">Anthropic · Skilljar</p>
+              <span class="cb-badge cb-badge--solid">Start here</span>
+            </div>
+            <h3 class="acw__title cb-clamp-2">Claude Code 101: Getting Started</h3>
+          </div>
+        </div>
+        <p class="acw__desc cb-clamp-3">Learn the fundamentals of agentic coding with Claude Code — environment setup, effective prompting, tool use, and your first real multi-file workflows. The recommended entry point for Week 1.</p>
+        <div class="acw__meta">
+          <span class="cb-badge cb-badge--neutral">Course 1</span>
+          <span class="acw__meta-item"><span class="cb-i"><i class="ri-time-line" aria-hidden="true"></i></span><span class="num">45</span> min</span>
+          <span class="acw__divider" aria-hidden="true"></span>
+          <span class="acw__meta-item"><span class="cb-i"><i class="ri-user-3-line" aria-hidden="true"></i></span>Self-paced</span>
+        </div>
+        <div class="acw__foot">
+          <a href="#" class="cb-btn cb-btn--primary" aria-label="Launch Claude Code 101 — opens in new tab">Launch course <span class="cb-i"><i class="ri-external-link-line" aria-hidden="true"></i></span></a>
+        </div>
+      </div>
+    </article>
+
+    <!-- compact 2 -->
+    <article class="cb-card cb-card--hoverable cb-card--accent compact ga-c2">
+      <div class="cb-card__body">
+        <div class="acw__head">
+          <span class="cb-icon-tile acw__tile"><span class="cb-i"><i class="ri-terminal-box-line" aria-hidden="true"></i></span></span>
+          <div class="acw__head-text">
+            <p class="acw__overline">Course 2 · <span style="font-family:var(--font-mono)">60</span> min</p>
+            <h3 class="acw__title acw__title--sm cb-clamp-2">Claude Code in Action</h3>
+          </div>
+        </div>
+        <div class="acw__foot"><a href="#" class="cb-btn cb-btn--ghost cb-btn--sm" aria-label="Launch Claude Code in Action — opens in new tab">Launch <span class="cb-i"><i class="ri-arrow-right-line" aria-hidden="true"></i></span></a></div>
+      </div>
+    </article>
+
+    <!-- compact 3 -->
+    <article class="cb-card cb-card--hoverable cb-card--accent compact ga-c3">
+      <div class="cb-card__body">
+        <div class="acw__head">
+          <span class="cb-icon-tile acw__tile"><span class="cb-i"><i class="ri-sparkling-2-line" aria-hidden="true"></i></span></span>
+          <div class="acw__head-text">
+            <p class="acw__overline">Course 3 · <span style="font-family:var(--font-mono)">90</span> min</p>
+            <h3 class="acw__title acw__title--sm cb-clamp-2">Building Production Agents</h3>
+          </div>
+        </div>
+        <div class="acw__foot"><a href="#" class="cb-btn cb-btn--ghost cb-btn--sm" aria-label="Launch Building Production Agents — opens in new tab">Launch <span class="cb-i"><i class="ri-arrow-right-line" aria-hidden="true"></i></span></a></div>
+      </div>
+    </article>
+
+    <!-- cherry anchor -->
+    <div class="stat-tile ga-stat">
+      <div>
+        <p class="label">Week 1 Lab · Anthropic path</p>
+        <div class="figures"><span class="big">3</span><span class="unit">courses</span><span class="big" style="margin-left:14px">2h 30m</span><span class="unit">total · self-paced</span></div>
+      </div>
+      <a href="#" class="cb-btn cb-btn--on-accent">Start the path <span class="cb-i"><i class="ri-arrow-right-line" aria-hidden="true"></i></span></a>
+    </div>
+  </div>
+
+  <!-- 2 COURSES -->
+  <div class="band"><span class="tag">2 courses</span><div><h2>Fallback</h2><p>Featured + one supporting tile + anchor.</p></div></div>
+  <div class="bento bento-2">
+    <article class="cb-card cb-card--hoverable cb-card--accent feat ga-feat">
+      <div class="cb-card__body">
+        <div class="acw__head">
+          <span class="cb-icon-tile acw__tile"><span class="cb-i"><i class="ri-graduation-cap-line" aria-hidden="true"></i></span></span>
+          <div class="acw__head-text">
+            <div class="acw__topline"><p class="acw__overline">Anthropic · Skilljar</p><span class="cb-badge cb-badge--solid">Start here</span></div>
+            <h3 class="acw__title cb-clamp-2">Claude Code 101: Getting Started</h3>
+          </div>
+        </div>
+        <p class="acw__desc cb-clamp-3">Fundamentals of agentic coding with Claude Code — setup, prompting, tool use, and your first real workflows.</p>
+        <div class="acw__meta">
+          <span class="cb-badge cb-badge--neutral">Course 1</span>
+          <span class="acw__meta-item"><span class="cb-i"><i class="ri-time-line" aria-hidden="true"></i></span><span class="num">45</span> min</span>
+        </div>
+        <div class="acw__foot"><a href="#" class="cb-btn cb-btn--primary">Launch course <span class="cb-i"><i class="ri-external-link-line" aria-hidden="true"></i></span></a></div>
+      </div>
+    </article>
+    <article class="cb-card cb-card--hoverable cb-card--accent compact ga-c2">
+      <div class="cb-card__body">
+        <div class="acw__head">
+          <span class="cb-icon-tile acw__tile"><span class="cb-i"><i class="ri-terminal-box-line" aria-hidden="true"></i></span></span>
+          <div class="acw__head-text">
+            <p class="acw__overline">Course 2 · <span style="font-family:var(--font-mono)">60</span> min</p>
+            <h3 class="acw__title acw__title--sm cb-clamp-2">Claude Code in Action</h3>
+          </div>
+        </div>
+        <div class="acw__foot"><a href="#" class="cb-btn cb-btn--ghost cb-btn--sm">Launch <span class="cb-i"><i class="ri-arrow-right-line" aria-hidden="true"></i></span></a></div>
+      </div>
+    </article>
+    <div class="stat-tile ga-stat">
+      <div><p class="label">Week 1 Lab · Anthropic path</p>
+        <div class="figures"><span class="big">2</span><span class="unit">courses</span><span class="big" style="margin-left:14px">1h 45m</span><span class="unit">total · self-paced</span></div></div>
+      <a href="#" class="cb-btn cb-btn--on-accent">Start the path <span class="cb-i"><i class="ri-arrow-right-line" aria-hidden="true"></i></span></a>
+    </div>
+  </div>
+
+  <!-- 1 COURSE -->
+  <div class="band"><span class="tag">1 course</span><div><h2>Fallback</h2><p>Just the featured tile — no anchor (no path to summarize).</p></div></div>
+  <div class="bento bento-1">
+    <article class="cb-card cb-card--hoverable cb-card--accent feat ga-feat">
+      <div class="cb-card__body">
+        <div class="acw__head">
+          <span class="cb-icon-tile acw__tile"><span class="cb-i"><i class="ri-graduation-cap-line" aria-hidden="true"></i></span></span>
+          <div class="acw__head-text">
+            <p class="acw__overline">Anthropic · Skilljar</p>
+            <h3 class="acw__title cb-clamp-2">Claude Code 101: Getting Started</h3>
+          </div>
+        </div>
+        <p class="acw__desc cb-clamp-3">Fundamentals of agentic coding with Claude Code — setup, prompting, tool use, and your first real workflows.</p>
+        <div class="acw__meta">
+          <span class="cb-badge cb-badge--neutral">Course 1</span>
+          <span class="acw__meta-item"><span class="cb-i"><i class="ri-time-line" aria-hidden="true"></i></span><span class="num">45</span> min</span>
+        </div>
+        <div class="acw__foot"><a href="#" class="cb-btn cb-btn--primary">Launch course <span class="cb-i"><i class="ri-external-link-line" aria-hidden="true"></i></span></a></div>
+      </div>
+    </article>
+  </div>
+
+  <!-- SPEC NOTES -->
+  <div class="spec">
+    <h3>Handoff notes</h3>
+    <ul>
+      <li><strong>Tokens only</strong> — colors via semantic aliases (<code>--surface-card</code>, <code>--text-strong</code>, <code>--text-muted</code>, <code>--red-500</code>, <code>--blue-500</code>), type via <code>--fs-*</code> / Roboto + Roboto&nbsp;Mono (numerals), shape via <code>--radius-xl</code> / <code>--radius-pill</code>, motion via <code>--ease-out</code>. No raw hex.</li>
+      <li><strong>Components</strong> — <code>Card</code> (<code>--hoverable</code>, <code>--accent</code>), <code>Badge</code> (<code>neutral</code> meta, <code>solid</code> "Start here"), <code>Button</code> (<code>primary</code> featured CTA, <code>ghost</code> compact, white-on-cherry anchor CTA), <code>.cb-i</code> + RemixIcon.</li>
+      <li><strong>Color logic</strong> — cherry is reserved for emphasis (top accent, "Start here", featured CTA, the path anchor); berry-blue carries the learning icon tiles; everything else neutral. Warm, not loud.</li>
+      <li><strong>Hierarchy</strong> — featured = lowest course number ("Start here"). Switch to "next / in-progress" once progress data exists.</li>
+      <li><strong>Responsive</strong> — 3-col bento → single column under 760px; anchor wraps its CTA. Touch targets ≥38–48px.</li>
+      <li><strong>Fallbacks</strong> — 2 courses: featured + 1 compact + anchor. 1 course: featured only, no anchor.</li>
+      <li><strong>A11y</strong> — CTA <code>aria-label</code> names the course + "opens in new tab"; icons <code>aria-hidden</code>; dark mode via <code>data-theme="dark"</code>; visible focus rings from the token layer.</li>
+    </ul>
+  </div>
+
+</div>
+<script>
+  var btn=document.getElementById('themeBtn'), label=document.getElementById('themeLabel');
+  btn.addEventListener('click',function(){ var d=document.documentElement.getAttribute('data-theme')==='dark';
+    document.documentElement.setAttribute('data-theme', d?'light':'dark'); label.textContent=d?'Dark':'Light'; });
+</script>
+</body>
+</html>
