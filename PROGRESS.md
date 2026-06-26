@@ -6956,6 +6956,12 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: `tsc --noEmit` clean (0 errors); replacement image visually inspected before placing (1280x960 JPEG).
   - Notes: Deployed to prod via host `git checkout origin/main -- frontend` + nginx rebuild. The shared `/img/certificate.jpg` is left in place — InstructorPage still uses it (out of scope; only the pricing photo was flagged).
 
+- [x] **Site polish: replace 5 weak/placeholder stock photos with representative ones**
+  - Date: 2026-06-26
+  - Session: CC-20260626-p7x2
+  - What changed: Overwrote 5 placeholder images in `frontend/public/img/` (paths unchanged, so every consuming page updates): `developer-code.jpg` (was a grainy ~2003 LAN-party group → clean over-shoulder coding shot), `mentor-coaching.jpg` (was a K-12 teacher at a smartboard → diverse group with a mentor pointing at a laptop), `handshake-deal.jpg` (was a motion-blurred handshake → crisp professional handshake), `member-home.jpg` (was a faceless coffee/laptop shot → a confident Black woman professional at a laptop — Priya Nair's case-study card), `certificate.jpg` (was an older-white-couple certificate handoff → a diverse cohort building together; now InstructorPage-only). Updated 2 alts to match the new photos (`CaseStudiesPage.tsx` Priya, `InstructorPage.tsx` program figure). All sourced from Pexels (free commercial license) and visually inspected before placing.
+  - Verification: `tsc --noEmit` clean (0 errors); each replacement image inspected via image read before placing.
+  - Notes: Theme = representation + quality (Ali's recurring ask). Remaining medium photos not yet swapped (team-collab faceless, presentation reads as a theater, + the 6 hero images) and the legacy Utility/Freight pages still on old base.css — both flagged as the next polish pass.
 - [x] Rename the public hub path /sales-hub/ -> /knowledge/ with a 301 redirect
   - Date: 2026-06-26
   - Session: CC-20260626-r7k2

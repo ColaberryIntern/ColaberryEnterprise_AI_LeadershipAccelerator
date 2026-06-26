@@ -351,7 +351,7 @@ function InstructorPage() {
         <div style={container}>
           <SectionFigure
             src="/img/certificate.jpg"
-            alt="The Certified Anthropic AI Systems Architect credential"
+            alt="A cohort building together in Colaberry's 12-week AI Systems Architect program"
             eyebrow="The program he leads"
             title="One continuous 12-week path to Architect."
             body={[
