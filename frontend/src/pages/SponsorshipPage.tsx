@@ -615,7 +615,7 @@ function SponsorshipPage() {
 
             <p style={{ textAlign: 'center', fontSize: 'var(--fs-caption)', color: 'var(--neutral-400)', marginTop: 'var(--space-6)' }}>
               Prefer to start small for one person?{' '}
-              <a href="/membership" style={{ color: 'var(--text-link)', fontWeight: 'var(--fw-bold)' }}>
+              <a href="/enroll" style={{ color: 'var(--text-link)', fontWeight: 'var(--fw-bold)' }}>
                 Join the Challenge as an individual
               </a>
               .
