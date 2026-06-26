@@ -175,9 +175,9 @@ function ProjectDnaWizard() {
                   className="d-flex align-items-center justify-content-center rounded-circle fw-semibold"
                   style={{
                     width: 32, height: 32, fontSize: 13, transition: 'all 0.2s',
-                    background: completed ? 'var(--color-purple)' : active ? 'rgba(99,102,241,0.1)' : 'var(--color-bg-alt)',
-                    border: `2px solid ${completed || active ? 'var(--color-purple)' : 'var(--color-border)'}`,
-                    color: completed ? '#fff' : active ? 'var(--color-purple)' : 'var(--color-text-light)',
+                    background: completed ? '#FB2832' : active ? 'rgba(251,40,50,0.1)' : 'var(--color-bg-alt)',
+                    border: `2px solid ${completed || active ? '#FB2832' : 'var(--color-border)'}`,
+                    color: completed ? '#fff' : active ? '#FB2832' : 'var(--color-text-light)',
                   }}
                 >
                   {completed
@@ -193,7 +193,7 @@ function ProjectDnaWizard() {
               {i < STEPS.length - 1 && (
                 <div className="flex-grow-1 mx-1" style={{
                   height: 2, marginBottom: 20, transition: 'background 0.2s',
-                  background: i < step ? 'var(--color-purple)' : 'var(--color-border)',
+                  background: i < step ? '#FB2832' : 'var(--color-border)',
                 }} />
               )}
             </React.Fragment>
@@ -209,7 +209,7 @@ function ProjectDnaWizard() {
           {step === 0 && (
             <>
               <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-briefcase me-2" style={{ color: 'var(--color-purple)' }}></i>Business Context
+                <i className="bi bi-briefcase me-2" style={{ color: '#FB2832' }}></i>Business Context
               </h6>
               <div className="mb-3">
                 <label className="form-label small fw-medium">
@@ -264,8 +264,8 @@ function ProjectDnaWizard() {
                       key={v}
                       className="p-2 rounded border mb-2 d-flex align-items-center gap-2"
                       style={{
-                        borderColor: form.orientation === v ? 'var(--color-purple)' : 'var(--color-border)',
-                        background: form.orientation === v ? 'rgba(99,102,241,0.05)' : undefined,
+                        borderColor: form.orientation === v ? '#FB2832' : 'var(--color-border)',
+                        background: form.orientation === v ? 'rgba(251,40,50,0.05)' : undefined,
                         cursor: 'pointer',
                       }}
                       role="radio"
@@ -276,7 +276,7 @@ function ProjectDnaWizard() {
                     >
                       <i
                         className={`bi ${form.orientation === v ? 'bi-record-circle-fill' : 'bi-circle'}`}
-                        style={{ color: form.orientation === v ? 'var(--color-purple)' : 'var(--color-text-light)' }}
+                        style={{ color: form.orientation === v ? '#FB2832' : 'var(--color-text-light)' }}
                       ></i>
                       <div>
                         <div className="small fw-medium" style={{ textTransform: 'capitalize' }}>{v}</div>
@@ -298,8 +298,8 @@ function ProjectDnaWizard() {
                       key={v}
                       className="p-2 rounded border mb-2 d-flex align-items-center gap-2"
                       style={{
-                        borderColor: form.focus === v ? 'var(--color-purple)' : 'var(--color-border)',
-                        background: form.focus === v ? 'rgba(99,102,241,0.05)' : undefined,
+                        borderColor: form.focus === v ? '#FB2832' : 'var(--color-border)',
+                        background: form.focus === v ? 'rgba(251,40,50,0.05)' : undefined,
                         cursor: 'pointer',
                       }}
                       role="radio"
@@ -310,7 +310,7 @@ function ProjectDnaWizard() {
                     >
                       <i
                         className={`bi ${form.focus === v ? 'bi-record-circle-fill' : 'bi-circle'}`}
-                        style={{ color: form.focus === v ? 'var(--color-purple)' : 'var(--color-text-light)' }}
+                        style={{ color: form.focus === v ? '#FB2832' : 'var(--color-text-light)' }}
                       ></i>
                       <div>
                         <div className="small fw-medium" style={{ textTransform: 'capitalize' }}>{v}</div>
@@ -330,7 +330,7 @@ function ProjectDnaWizard() {
           {step === 1 && (
             <>
               <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-code-slash me-2" style={{ color: 'var(--color-purple)' }}></i>Technical Footprint
+                <i className="bi bi-code-slash me-2" style={{ color: '#FB2832' }}></i>Technical Footprint
               </h6>
               <div className="mb-4">
                 <label className="form-label small fw-medium">
@@ -344,8 +344,8 @@ function ProjectDnaWizard() {
                         <div
                           className="p-3 rounded border h-100 d-flex align-items-center gap-2"
                           style={{
-                            borderColor: sel ? 'var(--color-purple)' : 'var(--color-border)',
-                            background: sel ? 'rgba(99,102,241,0.06)' : undefined,
+                            borderColor: sel ? '#FB2832' : 'var(--color-border)',
+                            background: sel ? 'rgba(251,40,50,0.06)' : undefined,
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}
                           role="checkbox"
@@ -354,7 +354,7 @@ function ProjectDnaWizard() {
                           onClick={() => toggle('projectTypes', value)}
                           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('projectTypes', value)}
                         >
-                          <i className={`bi ${icon}`} style={{ fontSize: 18, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
+                          <i className={`bi ${icon}`} style={{ fontSize: 18, color: sel ? '#FB2832' : 'var(--color-text-light)', flexShrink: 0 }}></i>
                           <span className="small fw-medium" style={{ color: sel ? '#1e293b' : 'var(--color-text-light)' }}>{label}</span>
                         </div>
                       </div>
@@ -375,8 +375,8 @@ function ProjectDnaWizard() {
                         <div
                           className="p-2 rounded border d-flex align-items-center gap-2"
                           style={{
-                            borderColor: sel ? 'var(--color-purple)' : 'var(--color-border)',
-                            background: sel ? 'rgba(99,102,241,0.06)' : undefined,
+                            borderColor: sel ? '#FB2832' : 'var(--color-border)',
+                            background: sel ? 'rgba(251,40,50,0.06)' : undefined,
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}
                           role="checkbox"
@@ -386,7 +386,7 @@ function ProjectDnaWizard() {
                           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('dataSources', value)}
                         >
                           <i className={`bi ${sel ? 'bi-check-square-fill' : 'bi-square'}`}
-                            style={{ fontSize: 14, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
+                            style={{ fontSize: 14, color: sel ? '#FB2832' : 'var(--color-text-light)', flexShrink: 0 }}></i>
                           <span className="small" style={{ color: sel ? '#1e293b' : 'var(--color-text-light)' }}>{label}</span>
                         </div>
                       </div>
@@ -401,7 +401,7 @@ function ProjectDnaWizard() {
           {step === 2 && (
             <>
               <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-cpu me-2" style={{ color: 'var(--color-purple)' }}></i>AI Components
+                <i className="bi bi-cpu me-2" style={{ color: '#FB2832' }}></i>AI Components
               </h6>
               <div className="mb-4">
                 <label className="form-label small fw-medium">
@@ -415,8 +415,8 @@ function ProjectDnaWizard() {
                         key={value}
                         className="p-3 rounded border d-flex align-items-center gap-3"
                         style={{
-                          borderColor: sel ? 'var(--color-purple)' : 'var(--color-border)',
-                          background: sel ? 'rgba(99,102,241,0.06)' : undefined,
+                          borderColor: sel ? '#FB2832' : 'var(--color-border)',
+                          background: sel ? 'rgba(251,40,50,0.06)' : undefined,
                           cursor: 'pointer', transition: 'all 0.15s',
                         }}
                         role="checkbox"
@@ -427,7 +427,7 @@ function ProjectDnaWizard() {
                       >
                         <i
                           className={`bi ${sel ? 'bi-check-circle-fill' : 'bi-circle'}`}
-                          style={{ fontSize: 18, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}
+                          style={{ fontSize: 18, color: sel ? '#FB2832' : 'var(--color-text-light)', flexShrink: 0 }}
                         ></i>
                         <div>
                           <div className="small fw-semibold" style={{ color: '#1e293b' }}>{label}</div>
@@ -460,7 +460,7 @@ function ProjectDnaWizard() {
           {step === 3 && (
             <>
               <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-clipboard-check me-2" style={{ color: 'var(--color-purple)' }}></i>Review Your Project DNA
+                <i className="bi bi-clipboard-check me-2" style={{ color: '#FB2832' }}></i>Review Your Project DNA
               </h6>
               {[
                 {
@@ -491,7 +491,7 @@ function ProjectDnaWizard() {
                 <div key={section.title} className="mb-3 p-3 rounded"
                   style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}>
                   <div className="small fw-semibold mb-2" style={{ color: '#1e293b' }}>
-                    <i className={`bi ${section.icon} me-2`} style={{ color: 'var(--color-purple)' }}></i>
+                    <i className={`bi ${section.icon} me-2`} style={{ color: '#FB2832' }}></i>
                     {section.title}
                   </div>
                   {section.rows.map(([label, value]) => (
