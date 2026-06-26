@@ -41,12 +41,12 @@ export const NextActionCard: React.FC<{
     <div
       className={fresh ? 'ws-fresh' : undefined}
       style={{
-        background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%)',
+        background: 'linear-gradient(135deg, #FB2832 0%, #C20E1E 100%)',
         color: 'white',
         borderRadius: 8,
         padding: '1.1rem 1.25rem',
         marginBottom: '1.25rem',
-        boxShadow: '0 4px 12px rgba(26, 54, 93, 0.18)',
+        boxShadow: '0 4px 12px rgba(251, 40, 50, 0.22)',
       }}
     >
       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, marginBottom: 4 }}>
@@ -57,7 +57,7 @@ export const NextActionCard: React.FC<{
         {action.reason}
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button type="button" className="btn btn-sm" style={{ background: 'white', color: 'var(--color-primary)', fontWeight: 600 }} onClick={onGo}>
+        <button type="button" className="btn btn-sm" style={{ background: 'white', color: '#FB2832', fontWeight: 600 }} onClick={onGo}>
           <i className="bi bi-arrow-right me-1"></i>Open in {targetLabel(action.target_route)}
         </button>
         <button
@@ -114,12 +114,12 @@ export const EmptyPriorityCard: React.FC = () => (
     }}
   >
     <i className="bi bi-check2-circle" style={{ fontSize: 28, color: 'var(--color-success)' }}></i>
-    <div style={{ fontWeight: 600, color: 'var(--color-primary)', marginTop: 8 }}>You're caught up.</div>
+    <div style={{ fontWeight: 600, color: '#FB2832', marginTop: 8 }}>You're caught up.</div>
     <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginTop: 4 }}>
       Cory has nothing to surface right now. Open Critique to spot improvements, or Blueprint to start a build.
     </div>
     <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
-      <Link to="/portal/visual-workspace" className="btn btn-sm btn-outline-primary">
+      <Link to="/portal/visual-workspace" className="btn btn-sm" style={{ borderColor: '#FB2832', color: '#FB2832', border: '1px solid #FB2832' }}>
         <i className="bi bi-bullseye me-1"></i>Open Critique
       </Link>
       <Link to="/portal/project/blueprint" className="btn btn-sm btn-outline-secondary">
@@ -144,7 +144,7 @@ export const QueueRow: React.FC<{ entry: QueueEntry; first: boolean; last: boole
         width: 26,
         height: 26,
         borderRadius: '50%',
-        background: first ? 'var(--color-primary)' : 'var(--color-bg-alt)',
+        background: first ? '#FB2832' : 'var(--color-bg-alt)',
         color: first ? 'white' : 'var(--color-text-light)',
         fontWeight: 600,
         fontSize: 12,
@@ -258,7 +258,7 @@ export const Tile: React.FC<{
         onClick={onClick}
         title={tooltip}
         style={baseStyle}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-primary-light)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(43,108,176,0.08)'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#FB2832'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(251,40,50,0.08)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.boxShadow = 'none'; }}
       >
         {inner}
@@ -426,9 +426,9 @@ export const ApprovalWorkspace: React.FC<ApprovalWorkspaceProps> = ({
       </button>
       <button
         type="button"
-        className="btn btn-sm btn-outline-primary"
+        className="btn btn-sm"
         onClick={() => onCopyPrompt(item.claude_code_prompt)}
-        style={{ fontSize: 11, marginLeft: 'auto' }}
+        style={{ fontSize: 11, marginLeft: 'auto', border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
       >
         <i className={`bi ${copied ? 'bi-check-lg' : 'bi-clipboard'} me-1`}></i>
         {copied ? 'Copied!' : 'Copy Claude Code prompt'}
@@ -437,7 +437,7 @@ export const ApprovalWorkspace: React.FC<ApprovalWorkspaceProps> = ({
 
     {/* Prompt preview */}
     <pre style={{
-      background: 'var(--color-primary, #1a365d)',
+      background: '#1A1A1A',
       color: '#e2e8f0',
       fontSize: 11,
       padding: '0.65rem 0.85rem',
@@ -494,7 +494,7 @@ export const StudentQueueRow: React.FC<StudentQueueRowProps> = ({
         {/* Rank circle */}
         <span style={{
           width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-          background: isFirst ? 'var(--color-primary)' : 'var(--color-bg-alt, #f1f5f9)',
+          background: isFirst ? '#FB2832' : 'var(--color-bg-alt, #f1f5f9)',
           color: isFirst ? 'white' : 'var(--color-text-light)',
           fontWeight: 600, fontSize: 12,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -577,9 +577,9 @@ export const StudentQueueSection: React.FC<StudentQueueSectionProps> = ({
       {items.length > 0 && (
         <button
           type="button"
-          className="btn btn-sm btn-primary"
+          className="btn btn-sm"
           onClick={onEnterWalkMode}
-          style={{ fontSize: 11 }}
+          style={{ fontSize: 11, background: '#FB2832', color: 'white', border: 'none' }}
         >
           <i className="bi bi-play-fill me-1"></i>Walk my queue
         </button>
@@ -675,7 +675,7 @@ export const RunMyDayMode: React.FC<RunMyDayModeProps> = ({
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0.85rem 1.25rem',
-          background: 'var(--color-primary, #1a365d)', color: 'white',
+          background: '#FB2832', color: 'white',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <i className="bi bi-play-fill" style={{ fontSize: 14 }}></i>
@@ -714,7 +714,7 @@ export const RunMyDayMode: React.FC<RunMyDayModeProps> = ({
           </div>
 
           {/* Requirement text */}
-          <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-primary)', lineHeight: 1.45, marginBottom: 14 }}>
+          <p style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A', lineHeight: 1.45, marginBottom: 14 }}>
             {item.requirement_text}
           </p>
 
@@ -724,7 +724,7 @@ export const RunMyDayMode: React.FC<RunMyDayModeProps> = ({
               Claude Code prompt
             </div>
             <pre style={{
-              background: 'var(--color-primary, #1a365d)', color: '#e2e8f0',
+              background: '#1A1A1A', color: '#e2e8f0',
               fontSize: 11, padding: '0.85rem 1rem', borderRadius: 6,
               margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               lineHeight: 1.6, maxHeight: 160, overflowY: 'auto',
@@ -755,9 +755,9 @@ export const RunMyDayMode: React.FC<RunMyDayModeProps> = ({
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn"
               onClick={() => onCopyPrompt(item.claude_code_prompt, item.id)}
-              style={{ fontSize: 12, marginLeft: 'auto' }}
+              style={{ fontSize: 12, marginLeft: 'auto', background: '#FB2832', color: 'white', border: 'none' }}
             >
               <i className={`bi ${isCopied ? 'bi-check-lg' : 'bi-clipboard'} me-1`}></i>
               {isCopied ? 'Copied!' : 'Copy prompt'}
@@ -787,7 +787,7 @@ export const RunMyDayMode: React.FC<RunMyDayModeProps> = ({
                 key={i}
                 style={{
                   width: 8, height: 8, borderRadius: '50%',
-                  background: i === currentIndex ? 'var(--color-primary)' : 'var(--color-border)',
+                  background: i === currentIndex ? '#FB2832' : 'var(--color-border)',
                   transition: 'background 200ms',
                 }}
               />
