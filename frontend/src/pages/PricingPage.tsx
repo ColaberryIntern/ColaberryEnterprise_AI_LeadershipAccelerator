@@ -414,8 +414,8 @@ function PricingPage() {
       >
         <div style={{ maxWidth: 1080, margin: '0 auto' }}>
           <SectionFigure
-            src="/img/certificate.jpg"
-            alt="A Colaberry learner receiving the Certified Anthropic AI Systems Architect credential."
+            src="/img/outcome-builder.jpg"
+            alt="A Colaberry member building a real working AI system at their laptop."
             eyebrow="The outcome"
             title="You don't finish with a certificate. You finish as a builder."
             body={[
