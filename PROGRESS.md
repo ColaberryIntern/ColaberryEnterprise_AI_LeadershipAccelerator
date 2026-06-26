@@ -6683,3 +6683,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: `node --check` on all touched JS clean; `build-kb.js` regenerates `kb.json` deterministically (212 entries); category-key + reference integrity checks pass (110+ local refs resolve, 0 broken). DRI (Ali) approved publishing all 3 new domains.
   - Deploy: committed on `deploy/sales-hub`; host per-file checkout + nginx rebuilt (`--no-deps`).
   - Notes: Files live only on `deploy/sales-hub` (not `main`), same regression caveat as before (a main-only nginx rebuild clobbers `/sales-hub/`; PR #87 is the durable fix). Old PDF links move from `/sales-hub/downloads/` to `/sales-hub/sales/downloads/`.
+
+- [x] **Sales-hub UI: fix logo, add interactive Mermaid charts, conversational Cory with deep-link sources**
+  - Date: 2026-06-26
+  - Session: CC-20260626-kb03
+  - What changed (static, `frontend/public/sales-hub/` only): (1) Logo no longer smushed: `.tb-logo` is now `flex:none` and the tabs scroll, so the 7-tab bar cannot compress the wordmark. (2) Added Mermaid (CDN, pinned 10.9.1) with brand-colored, clickable flowcharts: a journey map on home, a domain map on All, and a chart per domain; clicking any node calls `kbChart(scope,q)` to filter the answers below (filter into charts). (3) Cory is now conversational: it leads with a sentence + the top answer, then renders clickable source cards (`.cory-src`) that close Cory, apply the domain+query filter, and open/scroll to that entry in the docs. Works in both retrieval and live modes.
+  - Verification: `node --check` clean; rendered headless in Edge to confirm the logo, colored charts (home/all/per-domain), and layout. kb.json unchanged at 212 entries.
+  - Notes: Mermaid uses `securityLevel:"loose"` for node click callbacks; node colors set via per-node `style` (classDef was overridden by the base theme). Charts degrade gracefully if the CDN is blocked.
