@@ -399,9 +399,15 @@ export default function ProjectBuilderFlow() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, color: 'var(--n900)', fontSize: 15 }}>Authorize Colaberry on GitHub</div>
                 <div style={{ fontSize: 13, color: 'var(--color-text-light)', marginTop: 2 }}>We request read access to the one repo you pick. You can revoke any time.</div>
-                <a href="/api/portal/github/oauth/start" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--cherry)', color: '#fff', borderRadius: 'var(--r-pill)', padding: '9px 18px', fontWeight: 700, fontSize: 13, marginTop: 12, textDecoration: 'none' }}>
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--cherry)', color: '#fff', border: 'none', borderRadius: 'var(--r-pill)', padding: '9px 18px', fontWeight: 700, fontSize: 13, marginTop: 12, cursor: 'pointer' }}
+                  onClick={async () => {
+                    try {
+                      const res = await portalApi.get('/api/portal/github/oauth/url');
+                      window.location.href = res.data.url;
+                    } catch { setErr('Could not start GitHub connection. Please retry.'); }
+                  }}>
                   <i className="ri-link" /> Connect repository
-                </a>
+                </button>
               </div>
             </div>
         }

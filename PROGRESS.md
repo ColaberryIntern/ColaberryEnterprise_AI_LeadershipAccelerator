@@ -6860,3 +6860,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: `docker-compose.dev.yml` — `env_file` for backend service changed from scalar `.env.dev` to list `[.env, .env.dev]` so secrets in the gitignored `.env` (ANTHROPIC_API_KEY, etc.) are automatically available in the dev container without manual injection.
   - Verification: `docker exec accelerator-dev-backend printenv ANTHROPIC_API_KEY` returns key; advisor questions endpoint responds successfully.
   - Notes: `.env` is gitignored; `.env.dev` is tracked and contains no secrets. Safe pattern.
+
+- [x] **Fix GitHub OAuth connect button — Bearer token auth via JS redirect**
+  - Date: 2026-06-26
+  - Session: CC-20260625-k3p7
+  - What changed: `backend/src/routes/participantRoutes.ts` — added `GET /api/portal/github/oauth/url` endpoint returning `{ url }` JSON (authenticated). `frontend/src/pages/portal/ProjectBuilderFlow.tsx` — replaced `<a href>` with a button that calls `portalApi.get('/api/portal/github/oauth/url')` and redirects via `window.location.href`. Plain `<a href>` navigation cannot send Authorization headers so always got 401.
+  - Verification: tsc --noEmit clean. Redirect reaches GitHub OAuth page. Full flow requires Ali to register GitHub OAuth App on production (see PR #95 notes).
+  - Notes: Production GitHub OAuth App credentials (GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_OAUTH_REDIRECT_URI) must be set on VPS by Ali — see PR #95 for setup instructions.
