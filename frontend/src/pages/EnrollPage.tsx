@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import api from '../utils/api';
-import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import { getUTMPayloadFields } from '../services/utmService';
 import { Cohort } from '../models/Cohort';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
@@ -304,8 +303,7 @@ function EnrollPage() {
             }}
           >
             Most people consume AI. Very few learn to build with it. Claim your seat
-            below — {PROGRAM_SCHEDULE.price} per participant, or redeem a code from
-            your employer.
+            below, or redeem a code from your employer.
           </p>
           {cohorts.length > 0 && (
             <div style={{ marginTop: 'var(--space-4)' }}>
@@ -607,7 +605,7 @@ function EnrollPage() {
                               marginTop: 'var(--space-1)',
                             }}
                           >
-                            Secure payment via PaySimple — {PROGRAM_SCHEDULE.price}
+                            Secure payment via PaySimple
                           </p>
                         </div>
                       </Card>

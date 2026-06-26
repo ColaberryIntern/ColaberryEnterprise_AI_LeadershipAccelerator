@@ -6758,3 +6758,9 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Replaced /img/online-presentation.jpg (was a watermarked loremflickr filler — small laptop photo on a red field) with a real full-frame photo of a room watching a presentation delivered over a video call (projector shows the remote presenter + a Zoom-style tile gallery), matching Ali's "presentation over Zoom, people watching" direction. Inspected 8 candidates and picked the on-theme one.
   - Verification: image viewed/confirmed (real full-frame, no filler/watermark field); /sponsor/dashboard hero already references this path.
   - Notes: minor corner CC-attribution watermark, heavily obscured by the 74-93% dark hero overlay; swappable placeholder pending real brand photography.
+- [x] **Remove $4,500 course price from public surfaces**
+  - Date: 2026-06-26
+  - Session: CC-20260625-q4m8
+  - What changed: Dropped the `price: '$4,500'` field from config/programSchedule.ts and removed its two consumers on EnrollPage (hero copy + PaySimple line) plus the now-unused PROGRAM_SCHEDULE import. Removed the hardcoded "$4,500 per participant" callout on AlumniChampionPage (kept the "View full pricing" link).
+  - Verification: tsc --noEmit clean; dev server "Compiled successfully"; grep confirms no $4,500 on public pages/config/components.
+  - Notes: No replacement price was given, so the figure was removed, not substituted. Left untouched (flagged to Ali): internal admin revenue/settings $4,500 default, and the sales doc docs/CorporateSponsorshipKit.md (still quotes $4,500 + the old 3-week model).

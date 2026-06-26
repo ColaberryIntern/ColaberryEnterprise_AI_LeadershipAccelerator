@@ -128,9 +128,7 @@ function AlumniChampionPage() {
                 >
                   <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 1 - Enroll Yourself</h3>
                   <div className="mb-3" style={{ background: 'rgba(59,130,246,0.08)', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(59,130,246,0.15)' }}>
-                    <span style={{ color: DARK.accent, fontWeight: 700, fontSize: '1.1rem' }}>$4,500</span>
-                    <span style={{ color: DARK.textMuted, fontSize: '0.85rem', marginLeft: 8 }}>per participant</span>
-                    <a href="/pricing" target="_blank" rel="noopener noreferrer" style={{ color: DARK.accent, fontSize: '0.85rem', marginLeft: 12, textDecoration: 'underline' }}>View full pricing</a>
+                    <a href="/pricing" target="_blank" rel="noopener noreferrer" style={{ color: DARK.accent, fontSize: '0.85rem', textDecoration: 'underline' }}>View full pricing</a>
                   </div>
                   {[
                     'Join the AI Leadership Accelerator',
