@@ -28,7 +28,7 @@ function ProjectArtifacts() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -42,7 +42,7 @@ function ProjectArtifacts() {
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
+        <h1 className="h4 fw-bold mb-0" style={{ color: '#FB2832' }}>
           <i className="bi bi-collection me-2"></i>Project Artifacts
         </h1>
         <Link to="/portal/project" className="btn btn-sm btn-outline-secondary">
@@ -53,7 +53,7 @@ function ProjectArtifacts() {
       <div className="d-flex gap-3 mb-4">
         <div className="card border-0 shadow-sm px-3 py-2">
           <span className="small text-muted">Total Artifacts</span>
-          <span className="fw-bold" style={{ color: 'var(--color-primary)' }}>{data.artifacts.length}</span>
+          <span className="fw-bold" style={{ color: '#FB2832' }}>{data.artifacts.length}</span>
         </div>
         <div className="card border-0 shadow-sm px-3 py-2">
           <span className="small text-muted">Categories</span>
@@ -61,7 +61,7 @@ function ProjectArtifacts() {
         </div>
         <div className="card border-0 shadow-sm px-3 py-2">
           <span className="small text-muted">Stage</span>
-          <span className="fw-bold text-capitalize" style={{ color: 'var(--color-primary)' }}>{data.project_stage}</span>
+          <span className="fw-bold text-capitalize" style={{ color: '#FB2832' }}>{data.project_stage}</span>
         </div>
       </div>
 

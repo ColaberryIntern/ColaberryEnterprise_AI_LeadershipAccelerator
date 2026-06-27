@@ -72,7 +72,7 @@ export default function SteeringPanel({ onAction }: Props) {
     defer_process: 'var(--color-muted, #9ca3af)',
     activate_process: 'var(--color-success)',
     add_process: 'var(--color-accent)',
-    quality_focus: 'var(--color-purple, #6366f1)',
+    quality_focus: '#FB2832',
     unknown: 'var(--color-danger)',
   };
 
@@ -80,8 +80,8 @@ export default function SteeringPanel({ onAction }: Props) {
     <div className="card border-0 shadow-sm mb-3">
       <div className="card-body p-3">
         <div className="d-flex gap-2 align-items-center mb-2">
-          <i className="bi bi-chat-dots" style={{ color: 'var(--color-primary)', fontSize: 16 }}></i>
-          <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>Steer Your Project</span>
+          <i className="bi bi-chat-dots" style={{ color: '#FB2832', fontSize: 16 }}></i>
+          <span className="fw-semibold small" style={{ color: '#FB2832' }}>Steer Your Project</span>
           <span className="text-muted" style={{ fontSize: 10 }}>Tell the system what to do next</span>
         </div>
 
@@ -97,10 +97,10 @@ export default function SteeringPanel({ onAction }: Props) {
             style={{ fontSize: 12 }}
           />
           <button
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm"
             onClick={handleSteer}
             disabled={loading || !input.trim() || applying}
-            style={{ whiteSpace: 'nowrap' }}
+            style={{ whiteSpace: 'nowrap', background: '#FB2832', color: '#fff', border: 'none' }}
           >
             {loading ? (
               <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Thinking...</>
@@ -115,7 +115,7 @@ export default function SteeringPanel({ onAction }: Props) {
           <div className="mt-3 p-3" style={{ background: 'var(--color-bg-alt, #f7fafc)', borderRadius: 8, border: '1px solid var(--color-border, #e2e8f0)' }}>
             <div className="d-flex align-items-center gap-2 mb-2">
               <i className={`bi ${intentIcons[preview.intent?.type] || 'bi-gear'}`}
-                style={{ color: intentColors[preview.intent?.type] || 'var(--color-primary)', fontSize: 18 }}></i>
+                style={{ color: intentColors[preview.intent?.type] || '#FB2832', fontSize: 18 }}></i>
               <div>
                 <div className="fw-semibold small">{preview.message}</div>
                 <div className="text-muted" style={{ fontSize: 10 }}>
@@ -139,7 +139,7 @@ export default function SteeringPanel({ onAction }: Props) {
             )}
 
             <div className="d-flex gap-2">
-              <button className="btn btn-sm btn-primary" onClick={handleApply} disabled={applying}>
+              <button className="btn btn-sm" onClick={handleApply} disabled={applying} style={{ background: '#FB2832', color: '#fff', border: 'none' }}>
                 {applying ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Applying...</> : <><i className="bi bi-check-lg me-1"></i>Confirm</>}
               </button>
               <button className="btn btn-sm btn-outline-secondary" onClick={handleCancel} disabled={applying}>

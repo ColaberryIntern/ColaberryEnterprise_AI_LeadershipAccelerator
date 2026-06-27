@@ -141,7 +141,7 @@ const IssueDetailsPanel: React.FC<Props> = ({
             marginLeft: 'auto',
           }}>{critique.severity}</span>
         </div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-primary)', lineHeight: 1.35 }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: '#FB2832', lineHeight: 1.35 }}>
           {critique.title || critique.description.split('.')[0].slice(0, 80)}
         </div>
       </div>
@@ -169,7 +169,7 @@ const IssueDetailsPanel: React.FC<Props> = ({
               padding: '0.4rem 0.55rem',
               borderRadius: 3,
               border: '1px solid var(--color-border)',
-              color: 'var(--color-primary)',
+              color: '#FB2832',
               wordBreak: 'break-all',
             }}>{critique.target_selector}</code>
           </section>
@@ -243,14 +243,16 @@ const IssueDetailsPanel: React.FC<Props> = ({
       <div className="vw-details-actions">
         <button
           type="button"
-          className="btn btn-sm btn-outline-primary w-100 mb-2"
+          className="btn btn-sm w-100 mb-2"
+          style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
           onClick={onGenerateForThisOne}
         >
           <i className="bi bi-lightning me-1"></i>Compile prompt for this issue
         </button>
         <button
           type="button"
-          className="btn btn-sm btn-primary w-100 mb-2"
+          className="btn btn-sm w-100 mb-2"
+          style={{ background: '#FB2832', color: '#fff', border: 'none' }}
           onClick={onSendToBuildCenter}
         >
           <i className="bi bi-rocket me-1"></i>Send to Blueprint

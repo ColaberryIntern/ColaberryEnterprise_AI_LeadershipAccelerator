@@ -45,7 +45,7 @@ function PortalSessionsPage() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -54,7 +54,7 @@ function PortalSessionsPage() {
 
   return (
     <>
-      <h1 className="h4 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
+      <h1 className="h4 fw-bold mb-4" style={{ color: '#FB2832' }}>
         <i className="bi bi-calendar-event me-2"></i>Sessions
       </h1>
 
@@ -79,7 +79,7 @@ function PortalSessionsPage() {
                         {session.session_type === 'lab' && <span className="badge bg-warning text-dark">Lab</span>}
                       </div>
                       <h6 className="fw-semibold mb-1">
-                        <Link to={`/portal/sessions/${session.id}`} className="text-decoration-none" style={{ color: 'var(--color-primary)' }}>
+                        <Link to={`/portal/sessions/${session.id}`} className="text-decoration-none" style={{ color: '#FB2832' }}>
                           {session.title}
                         </Link>
                       </h6>

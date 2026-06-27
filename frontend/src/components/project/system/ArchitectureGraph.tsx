@@ -80,8 +80,8 @@ export default function ArchitectureGraph({ links, usability, onNodeClick, previ
   const layers: LayerDef[] = [
     { id: 'frontend', label: 'Frontend', files: fe, status: previewLayer === 'frontend' ? 'preview' : usability.frontend || 'missing', x: 120, y: 40, shape: 'rounded', color: '#10b981' },
     { id: 'api', label: 'API Routes', files: be.filter(f => f.includes('route')), status: previewLayer === 'api' ? 'preview' : usability.backend || 'missing', x: 120, y: 110, shape: 'hexagon', color: '#3b82f6' },
-    { id: 'services', label: 'Services', files: be.filter(f => f.includes('service') || f.includes('Service')), status: previewLayer === 'services' ? 'preview' : usability.backend || 'missing', x: 120, y: 180, shape: 'rect', color: '#6366f1' },
-    { id: 'agents', label: 'Agents', files: ag, status: previewLayer === 'agents' ? 'preview' : usability.agent || 'missing', x: 120, y: 250, shape: 'circle', color: '#8b5cf6' },
+    { id: 'services', label: 'Services', files: be.filter(f => f.includes('service') || f.includes('Service')), status: previewLayer === 'services' ? 'preview' : usability.backend || 'missing', x: 120, y: 180, shape: 'rect', color: '#FB2832' },
+    { id: 'agents', label: 'Agents', files: ag, status: previewLayer === 'agents' ? 'preview' : usability.agent || 'missing', x: 120, y: 250, shape: 'circle', color: '#367895' },
     { id: 'database', label: 'Database', files: db, status: previewLayer === 'database' ? 'preview' : db.length > 0 ? 'ready' : 'missing', x: 120, y: 320, shape: 'cylinder', color: '#f59e0b' },
   ];
 

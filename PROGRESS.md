@@ -6839,3 +6839,38 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: `backend/src/seeds/seedCurriculumCourseLinks.ts` — Week 6 `link_status` changed from `pending_confirmation` to `confirmed`. URL `https://anthropic.skilljar.com/model-context-protocol-advanced-topics` was already present; ticket provided the confirmation.
   - Verification: tsc --noEmit clean; seed ran against accelerator_dev1 — Week 6 = confirmed (DB verified via psql query). Awaiting Kes PR approval.
   - Notes: One-line change in the seed; no server.ts change needed (startup seeding was wired in PR #89).
+
+- [x] **Colaberry DS pass — 9 portal pages + ProjectDnaWizard + CoryHomeParts cleanup**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Replaced all old navy/indigo design tokens with Colaberry DS cherry red `#FB2832` (brand primary) and dark cherry `#C20E1E` (accent) across 11 files. Files: `PortalDashboardPage.tsx` (10 `#6366f1` → `#FB2832`, 2 `#8b5cf6` → `#367895`), `PortalProgressPage.tsx` (3 tokens), `WalkCapsPage.tsx` (var(--color-primary), btn-primary, btn-outline-primary×2, bg-primary), `PortalLoginPage.tsx` (heading + btn-primary), `PortalAssignmentsPage.tsx` (var(--color-primary)×4, btn-primary×2), `PortalLessonPage.tsx` (radial-gradient orb, border, h5, spinner-spinners, breadcrumb, lesson header gradient, Back to Curriculum button, step indicator active state), `PortalSessionsPage.tsx` (var(--color-primary)×3), `PortalVerifyPage.tsx` (spinner + btn-primary), `WalkSummaryPage.tsx` (var(--color-primary), var(--color-primary-light), btn-primary), `ProjectDnaWizard.tsx` (btn-primary×3), `CoryHomeParts.tsx` (btn-outline-primary).
+  - Verification: Docker nginx rebuild — `Compiled successfully` (zero errors). All 9 target pages plus wizard + CoryHome now use cherry red brand palette.
+  - Notes: `PortalCurriculumPage.tsx`, `CoryHome.tsx`, and `PortalSessionDetailPage.tsx` still have old tokens — deferred (separate scope). PR pending Kes local confirmation.
+
+- [x] **Colaberry DS pass — 3 remaining portal pages (CurriculumPage, CoryHome, SessionDetailPage)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Replaced all remaining old navy/indigo tokens with Colaberry DS cherry red across 3 files: `PortalCurriculumPage.tsx` (19 instances — `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, `eef2ff`→rgba(251,40,50,0.08), `f5f3ff`→rgba(54,120,149,0.10), gradient header → flat `#FB2832`), `CoryHome.tsx` (5 instances — `var(--color-primary)`→`#FB2832`, `var(--color-primary-light)`→`#C20E1E`, 2×`btn-outline-primary`→inline cherry outline), `PortalSessionDetailPage.tsx` (6 instances — `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, gradient header → flat `#FB2832`). Zero old tokens remain in any portal page.
+  - Verification: grep zero-match on `6366f1|4f46e5|8b5cf6|btn-primary|btn-outline-primary` across all portal pages. Docker nginx rebuild in progress.
+  - Notes: DS pass is now complete across all portal pages.
+
+- [x] **Colaberry DS pass — lesson sub-components (components/portal/lesson/ + PortalMentorChat + AnthropicCourseWrapper)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Replaced all remaining old indigo/purple tokens in 15 lesson sub-components: `SectionStepLabel.tsx`, `LessonStepTracker.tsx`, `SectionOutputPanel.tsx`, `KnowledgeChecks.tsx`, `PromptTemplate.tsx`, `PromptLab.tsx`, `PromptLab.tsx`, `CodeExamples.tsx`, `ConceptV1.tsx`, `AIStrategy.tsx`, `ImplementationTask.tsx`, `LessonReactions.tsx`, `ConfusionRecoveryDrawer.tsx`, `ExecutionContextPanel.tsx`, `ReflectionQuestions.tsx`, `LLMChooser.tsx`, `PortalMentorChat.tsx`, `AnthropicCourseWrapper.tsx`. Token map: `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, `#eef2ff`→`rgba(251,40,50,0.08)`, `#f5f3ff`→`rgba(54,120,149,0.10)`, `#c7d2fe`→`rgba(251,40,50,0.25)`, `var(--color-primary)`→`#FB2832` (step tracker active dot + label), `btn-primary`→inline cherry (AnthropicCourseWrapper Launch Course CTA).
+  - Verification: grep zero-match on all old tokens across `components/portal`. Docker nginx rebuild in progress.
+  - Notes: Active step dot (Prompt Lab in tracker) now cherry red; Generate Prompt button now cherry-to-berry gradient; all lesson chrome now Colaberry DS.
+
+- [x] **Colaberry DS pass — broad frontend/src scan (workspace, project, pages/project, visualWorkspace, global.css btn overrides)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Completed full `frontend/src` DS migration pass. (1) `styles/tokens.css` + `styles/global.css` — updated `--color-primary: #FB2832` and `--color-primary-light: #C20E1E` so all `var(--color-primary)` usages cascade to cherry automatically. (2) `styles/global.css` — added `.btn-outline-primary` CSS override (cherry border/text, white-fill on hover) so Bootstrap CDN outline buttons pick up cherry without per-component edits. (3) `components/workspace/` (5 files) — all clean after subagent pass. (4) `features/visualWorkspace/` (all files) — clean. (5) `components/project/` — 14 files: replaced `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, `#1a365d`→`#FB2832`, `#2b6cb0`→`#C20E1E`, `#faf5ff`→`rgba(54,120,149,0.08)` across ArchitectureGraph, FlowVisualizer, NodeDetailsPanel, DatabaseERD, RepoComponentsPanel, ProcessVisualPanel, ProcessDatabaseGraph, BPDetailV2, DecisionGraphView, EnhancementPromptBuilder, and system sub-components. (6) `pages/project/` — 6 files: SystemView, SystemViewV2, ProjectDashboard, SystemBlueprint, SystemBuildDemo, PhantomCapsTriage. Fixed 2 duplicate `style` prop compile errors introduced by subagent (ExecutiveReadinessCard, RequirementsStatusCard).
+  - Verification: Docker nginx rebuild — `Compiled successfully`. grep zero-match on `6366f1|4f46e5|8b5cf6|eef2ff|f5f3ff|c7d2fe|1a365d|2b6cb0|faf5ff` across components/project, pages/project, components/workspace, features/visualWorkspace.
+  - Notes: DS migration is now complete across the entire portal-facing surface of frontend/src.
+
+- [x] **Fix AnthropicCoursesBento grid bug (Aleem's e0d68eb2 fix missing from PR #86)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: `frontend/src/components/portal/anthropic-bento/AnthropicCoursesBento.tsx` — wrapped both return branches in an outer `<div className="acw-ds">` so the inner `<div className="acw-bento ...">` is a genuine descendant. Root cause: CSS uses `.acw-ds .acw-bento { display: grid }` (descendant selector) but PR #86 put both classes on the same element, so `display: grid` never fired and tiles stacked in a single column.
+  - Verification: Docker rebuild exit 0. Grid fix matches Aleem's e0d68eb2 approach verbatim.
+  - Notes: Aleem's grid fix was present in his branch (e0d68eb2) but Ali's re-homed PR #86 was cut from 67fbf75 (before the fix). The bento renders for sessions with linked Skilljar courses (currently Week 1 only).

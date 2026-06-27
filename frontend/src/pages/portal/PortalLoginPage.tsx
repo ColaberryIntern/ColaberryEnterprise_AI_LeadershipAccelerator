@@ -30,7 +30,7 @@ function PortalLoginPage() {
       <div className="card border-0 shadow-sm" style={{ maxWidth: 440, width: '100%' }}>
         <div className="card-body p-4 p-md-5">
           <div className="text-center mb-4">
-            <h1 className="h4 fw-bold" style={{ color: 'var(--color-primary)' }}>Participant Portal</h1>
+            <h1 className="h4 fw-bold" style={{ color: '#FB2832' }}>Participant Portal</h1>
             <p className="text-muted small mb-0">Colaberry Enterprise AI Leadership Accelerator</p>
           </div>
 
@@ -72,9 +72,9 @@ function PortalLoginPage() {
               </div>
               <button
                 type="submit"
-                className="btn btn-primary w-100"
+                className="btn w-100"
                 disabled={loading || !email}
-                style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}
               >
                 {loading ? (
                   <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Sending...</>

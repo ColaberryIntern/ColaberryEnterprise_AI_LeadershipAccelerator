@@ -20,7 +20,7 @@ interface ChatMsg {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const AVATAR_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
+const AVATAR_COLORS = ['#FB2832', '#367895', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -201,7 +201,7 @@ function SessionChatPanel({ sessionId }: { sessionId: string }) {
         style={{ padding: '12px 16px', flexShrink: 0 }}
       >
         <span className="fw-semibold small" style={{ color: '#1e293b' }}>
-          <i className="bi bi-chat-dots me-2" style={{ color: '#6366f1' }}></i>Session Chat
+          <i className="bi bi-chat-dots me-2" style={{ color: '#FB2832' }}></i>Session Chat
         </span>
         {activeCount > 0 && (
           <span className="badge" style={{ background: '#ecfdf5', color: '#10b981', fontSize: 11 }}>
@@ -267,7 +267,7 @@ function SessionChatPanel({ sessionId }: { sessionId: string }) {
           onClick={handleSend}
           disabled={!input.trim() || sending}
           style={{
-            background: input.trim() ? '#6366f1' : '#e2e8f0',
+            background: input.trim() ? '#FB2832' : '#e2e8f0',
             color: input.trim() ? '#fff' : '#94a3b8',
             borderRadius: 8, border: 'none', padding: '6px 14px',
             fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap',
@@ -351,7 +351,7 @@ function PortalSessionDetailPage() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: '#6366f1' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -391,7 +391,7 @@ function PortalSessionDetailPage() {
           {/* Session Header Card */}
           <div
             className="card border-0 shadow-sm mb-4"
-            style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' }}
+            style={{ background: '#FB2832' }}
           >
             <div className="card-body py-4 text-white">
               <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
@@ -442,7 +442,7 @@ function PortalSessionDetailPage() {
                         border: `1px solid ${isUnder5Min ? '#fecaca' : '#e2e8f0'}`,
                       }}
                     >
-                      <div className="fw-bold" style={{ fontSize: 24, color: isUnder5Min ? '#ef4444' : '#6366f1' }}>
+                      <div className="fw-bold" style={{ fontSize: 24, color: isUnder5Min ? '#ef4444' : '#FB2832' }}>
                         {String(unit.value).padStart(2, '0')}
                       </div>
                       <div style={{ fontSize: 11, color: '#94a3b8' }}>{unit.label}</div>

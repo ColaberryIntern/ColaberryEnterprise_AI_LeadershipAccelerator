@@ -287,10 +287,10 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 20px' }}>
       {/* Header */}
       <div className="text-center mb-5">
-        <div className="mx-auto mb-3" style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #1a365d, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="mx-auto mb-3" style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #FB2832, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <i className="bi bi-rocket-takeoff" style={{ fontSize: 28, color: '#fff' }}></i>
         </div>
-        <h3 className="fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>Let's Get Your Project Started</h3>
+        <h3 className="fw-bold mb-2" style={{ color: '#FB2832' }}>Let's Get Your Project Started</h3>
       </div>
 
       {/* DECISION */}
@@ -298,11 +298,11 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
         <div className="text-center">
           <h5 className="fw-bold mb-4" style={{ fontSize: 18 }}>How would you like to start?</h5>
           <div className="d-flex flex-column gap-3" style={{ maxWidth: 460, margin: '0 auto' }}>
-            <button className="btn py-3 text-start" style={{ background: 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', paddingLeft: 20, paddingRight: 20 }} onClick={() => setStep('upload')}>
+            <button className="btn py-3 text-start" style={{ background: '#FB2832', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', paddingLeft: 20, paddingRight: 20 }} onClick={() => setStep('upload')}>
               <i className="bi bi-file-earmark-check me-2"></i>I have a Requirements document
               <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Upload your build guide and connect your repo</div>
             </button>
-            <button className="btn py-3 text-start" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)', paddingLeft: 20, paddingRight: 20 }} onClick={() => setStep('idea')}>
+            <button className="btn py-3 text-start" style={{ background: 'linear-gradient(135deg, #3b82f6, #367895)', color: '#fff', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)', paddingLeft: 20, paddingRight: 20 }} onClick={() => setStep('idea')}>
               <i className="bi bi-lightning-charge-fill me-2"></i>Build it with AI
               <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Cory will design your system from your idea</div>
             </button>
@@ -325,7 +325,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
             {error && <div className="alert alert-danger small py-2 mb-3">{error}</div>}
             <div className="d-flex justify-content-between align-items-center">
               <button className="btn btn-outline-secondary btn-sm" onClick={() => setStep('decision')}><i className="bi bi-arrow-left me-1"></i>Back</button>
-              <button className="btn btn-primary" style={{ fontSize: 13, fontWeight: 600, borderRadius: 8 }} onClick={handleIdeaSubmit} disabled={idea.trim().length < 30}>
+              <button className="btn" style={{ fontSize: 13, fontWeight: 600, borderRadius: 8, background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleIdeaSubmit} disabled={idea.trim().length < 30}>
                 Continue <i className="bi bi-arrow-right ms-1"></i>
               </button>
             </div>
@@ -411,7 +411,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
                 <div className="mb-2">
                   <textarea className="form-control mb-2" rows={2} placeholder="Anything specific to your project we should capture about this choice?" value={noteText} onChange={e => setNoteText(e.target.value)} style={{ fontSize: 13, borderRadius: 8 }} />
                   <div className="d-flex gap-2">
-                    <button className="btn btn-primary btn-sm" onClick={handleNoteSave}>Save note</button>
+                    <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleNoteSave}>Save note</button>
                     <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowNote(false)}>Cancel</button>
                   </div>
                 </div>
@@ -439,7 +439,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           )}
 
           {answeredCount >= 5 && (
-            <button className="btn w-100 py-3" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }} onClick={() => setStep('github_for_build')}>
+            <button className="btn w-100 py-3" style={{ background: 'linear-gradient(135deg, #3b82f6, #367895)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }} onClick={() => setStep('github_for_build')}>
               Continue to Repository <i className="bi bi-arrow-right ms-2"></i>
             </button>
           )}
@@ -470,7 +470,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
             {error && <div className="alert alert-danger small py-2 mb-3">{error}</div>}
             <div className="d-flex justify-content-between">
               <button className="btn btn-outline-secondary btn-sm" onClick={() => setStep('decision')}><i className="bi bi-arrow-left me-1"></i>Back</button>
-              <button className="btn btn-primary" style={{ fontWeight: 600 }} onClick={handleUploadRequirements} disabled={saving || !reqContent.trim() || !repoUrl.trim()}>
+              <button className="btn" style={{ fontWeight: 600, background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleUploadRequirements} disabled={saving || !reqContent.trim() || !repoUrl.trim()}>
                 {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving...</> : <>Continue <i className="bi bi-arrow-right ms-1"></i></>}
               </button>
             </div>
@@ -562,7 +562,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
                     <div className="d-flex gap-1">
                       {c.layers.backend > 0 && <span className="badge" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 9 }}>Backend ({c.layers.backend})</span>}
                       {c.layers.frontend > 0 && <span className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 9 }}>Frontend ({c.layers.frontend})</span>}
-                      {c.layers.agents > 0 && <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 9 }}>Agents ({c.layers.agents})</span>}
+                      {c.layers.agents > 0 && <span className="badge" style={{ background: '#36789520', color: '#367895', fontSize: 9 }}>Agents ({c.layers.agents})</span>}
                       {c.layers.models > 0 && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>Models ({c.layers.models})</span>}
                     </div>
                   </div>
@@ -617,7 +617,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           <input type="password" className="form-control mb-3" placeholder="Access token (for private repos)" value={accessToken} onChange={e => setAccessToken(e.target.value)} />
           {renderTargetTierPicker(targetMode, setTargetMode)}
           {error && <div className="alert alert-danger small py-2 mb-3">{error}</div>}
-          <button className="btn w-100 py-3" style={{ background: repoUrl.trim() ? 'linear-gradient(135deg, #3b82f6, #8b5cf6)' : '#e2e8f0', color: repoUrl.trim() ? '#fff' : '#9ca3af', fontWeight: 700, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: repoUrl.trim() ? '0 4px 15px rgba(99, 102, 241, 0.3)' : 'none' }}
+          <button className="btn w-100 py-3" style={{ background: repoUrl.trim() ? 'linear-gradient(135deg, #3b82f6, #367895)' : '#e2e8f0', color: repoUrl.trim() ? '#fff' : '#9ca3af', fontWeight: 700, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: repoUrl.trim() ? '0 4px 15px rgba(99, 102, 241, 0.3)' : 'none' }}
             onClick={handleStartBuild} disabled={saving || !repoUrl.trim()}>
             {saving ? <><span className="spinner-border spinner-border-sm me-2"></span>Starting Build...</> : <><i className="bi bi-rocket-takeoff me-2"></i>Start Building My System</>}
           </button>
@@ -663,7 +663,7 @@ function renderTargetTierPicker(
   return (
     <div className="mb-3">
       <div className="d-flex align-items-center gap-2 mb-1">
-        <span className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+        <span className="fw-semibold" style={{ fontSize: 12, color: '#FB2832' }}>
           <i className="bi bi-sliders me-1"></i>Target tier
         </span>
         <span className="text-muted" style={{ fontSize: 10 }}>What "100% complete" means for this project</span>
@@ -675,8 +675,8 @@ function renderTargetTierPicker(
             <button
               key={m.value}
               type="button"
-              className={`btn btn-sm flex-fill ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
-              style={{ fontSize: 10, padding: '6px 4px', lineHeight: 1.2 }}
+              className="btn btn-sm flex-fill"
+              style={{ fontSize: 10, padding: '6px 4px', lineHeight: 1.2, ...(active ? { background: '#FB2832', color: '#fff', border: 'none' } : { border: '1px solid #6c757d', color: '#6c757d', background: 'transparent' }) }}
               onClick={() => setTargetMode(m.value)}
               title={m.desc}
             >

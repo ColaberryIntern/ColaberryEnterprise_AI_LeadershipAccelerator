@@ -74,7 +74,7 @@ function ProjectMentorPanel() {
           <i className="bi bi-mortarboard me-2"></i>AI Project Mentor
         </div>
         <div className="card-body text-center py-4">
-          <div className="spinner-border spinner-border-sm" style={{ color: 'var(--color-primary)' }} role="status">
+          <div className="spinner-border spinner-border-sm" style={{ color: '#FB2832' }} role="status">
             <span className="visually-hidden">Analyzing project...</span>
           </div>
           <span className="small text-muted ms-2">Analyzing your project...</span>
@@ -94,7 +94,7 @@ function ProjectMentorPanel() {
     <div className="card border-0 shadow-sm mb-4">
       <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
         <span><i className="bi bi-mortarboard me-2"></i>AI Project Mentor</span>
-        <span className="badge" style={{ background: 'var(--color-primary)' }}>
+        <span className="badge" style={{ background: '#FB2832' }}>
           Stage: {stageLabel}
         </span>
       </div>
@@ -102,7 +102,7 @@ function ProjectMentorPanel() {
         {/* Portfolio Summary */}
         <div className="d-flex gap-3 mb-3 flex-wrap">
           <div className="d-flex align-items-center gap-1">
-            <i className="bi bi-collection" style={{ color: 'var(--color-primary)' }}></i>
+            <i className="bi bi-collection" style={{ color: '#FB2832' }}></i>
             <span className="small">
               <strong>{portfolio_summary.artifact_count}</strong> artifacts
             </span>
@@ -127,7 +127,7 @@ function ProjectMentorPanel() {
         {/* Recommendations */}
         {recommendations.length > 0 && (
           <div className="mb-3">
-            <h6 className="fw-semibold small mb-2" style={{ color: 'var(--color-primary)' }}>
+            <h6 className="fw-semibold small mb-2" style={{ color: '#FB2832' }}>
               <i className="bi bi-lightbulb me-1"></i>Recommendations
             </h6>
             {recommendations.map((rec, idx) => (

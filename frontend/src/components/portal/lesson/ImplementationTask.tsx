@@ -5,17 +5,17 @@ import { buildFinalPrompt } from '../../../services/promptBuilder';
 /* Friendly mentor face SVG — matches the FAB in PortalMentorChat */
 const MentorFace = ({ size = 20 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="32" cy="32" r="30" fill="#eef2ff" stroke="#c7d2fe" strokeWidth="2" />
-    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" fill="none" />
-    <circle cx="22" cy="30" r="3.5" fill="#6366f1" />
-    <circle cx="42" cy="30" r="3.5" fill="#6366f1" />
+    <circle cx="32" cy="32" r="30" fill="rgba(251,40,50,0.08)" stroke="rgba(251,40,50,0.25)" strokeWidth="2" />
+    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="#FB2832" strokeWidth="3" strokeLinecap="round" fill="none" />
+    <circle cx="22" cy="30" r="3.5" fill="#FB2832" />
+    <circle cx="42" cy="30" r="3.5" fill="#FB2832" />
     <circle cx="23.2" cy="28.8" r="1.2" fill="#fff" />
     <circle cx="43.2" cy="28.8" r="1.2" fill="#fff" />
-    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-    <rect x="7" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <rect x="51" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" fill="none" />
-    <circle cx="19" cy="45" r="2" fill="#8b5cf6" />
+    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="#FB2832" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+    <rect x="7" y="24" width="6" height="10" rx="3" fill="#367895" />
+    <rect x="51" y="24" width="6" height="10" rx="3" fill="#367895" />
+    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="#367895" strokeWidth="2" strokeLinecap="round" fill="none" />
+    <circle cx="19" cy="45" r="2" fill="#367895" />
   </svg>
 );
 
@@ -422,17 +422,17 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
   const step3Active = briefingReceived || uploads.length > 0;
 
   return (
-    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #8b5cf6' }}>
+    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #367895' }}>
       {/* Pulse animation for briefing button */}
       <style>{`@keyframes mentorPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.7; transform:scale(1.02); } }`}</style>
 
       {/* Header */}
       <div className="card-header bg-white border-bottom d-flex align-items-center gap-2" style={{ padding: '14px 20px' }}>
-        <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: '#f5f3ff' }}>
-          <i className="bi bi-rocket" style={{ color: '#8b5cf6', fontSize: 14 }}></i>
+        <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: 'rgba(54,120,149,0.10)' }}>
+          <i className="bi bi-rocket" style={{ color: '#367895', fontSize: 14 }}></i>
         </div>
         <span className="fw-semibold" style={{ color: '#1e293b', fontSize: 14 }}>Implementation Task</span>
-        <span className="badge" style={{ background: '#f5f3ff', color: '#8b5cf6', fontSize: 10 }}>Hands-On</span>
+        <span className="badge" style={{ background: 'rgba(54,120,149,0.10)', color: '#367895', fontSize: 10 }}>Hands-On</span>
         {estimatedMinutes > 0 && (
           <span className="ms-auto small" style={{ color: '#94a3b8' }}>
             <i className="bi bi-clock me-1"></i>{estimatedMinutes} min
@@ -447,11 +447,11 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
 
         {requirements.length > 0 && (
           <div className="mb-3">
-            <span className="text-uppercase fw-bold d-block mb-2" style={{ fontSize: 10, color: '#8b5cf6', letterSpacing: 1 }}>Requirements</span>
+            <span className="text-uppercase fw-bold d-block mb-2" style={{ fontSize: 10, color: '#367895', letterSpacing: 1 }}>Requirements</span>
             {requirements.map((req, ri) => (
               <div key={ri} className="d-flex align-items-start gap-2 mb-1">
                 <span className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-                  style={{ width: 18, height: 18, background: '#eef2ff', color: '#6366f1', fontSize: 10, fontWeight: 700, marginTop: 1 }}>
+                  style={{ width: 18, height: 18, background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 10, fontWeight: 700, marginTop: 1 }}>
                   {ri + 1}
                 </span>
                 <span style={{ fontSize: 12, color: '#334155' }}>{req}</span>
@@ -462,7 +462,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
 
         {tools.length > 0 && (
           <div className="mb-3">
-            <span className="text-uppercase fw-bold d-block mb-2" style={{ fontSize: 10, color: '#8b5cf6', letterSpacing: 1 }}>Tools Needed</span>
+            <span className="text-uppercase fw-bold d-block mb-2" style={{ fontSize: 10, color: '#367895', letterSpacing: 1 }}>Tools Needed</span>
             <div className="d-flex flex-wrap gap-2">
               {tools.map((tool, i) => (
                 <a
@@ -490,8 +490,8 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
           </div>
         )}
 
-        <div className="p-2 rounded mb-4" style={{ background: '#f5f3ff', border: '1px solid #ddd6fe' }}>
-          <span className="text-uppercase fw-bold d-block mb-1" style={{ fontSize: 10, color: '#8b5cf6', letterSpacing: 1 }}>Deliverable</span>
+        <div className="p-2 rounded mb-4" style={{ background: 'rgba(54,120,149,0.10)', border: '1px solid #ddd6fe' }}>
+          <span className="text-uppercase fw-bold d-block mb-1" style={{ fontSize: 10, color: '#367895', letterSpacing: 1 }}>Deliverable</span>
           <span style={{ fontSize: 12, color: '#4c1d95' }}>{deliverable}</span>
         </div>
 
@@ -576,12 +576,12 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                 style={{
                   width: 24, height: 24, flexShrink: 0,
                   background: step2Done ? '#10b981' : '#fff',
-                  border: step2Done ? 'none' : '2px solid #8b5cf6',
+                  border: step2Done ? 'none' : '2px solid #367895',
                 }}>
                 {step2Done ? (
                   <i className="bi bi-check-lg" style={{ color: '#fff', fontSize: 12 }}></i>
                 ) : (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6' }}>2</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#367895' }}>2</span>
                 )}
               </div>
             </div>
@@ -594,7 +594,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                   <button
                     className="btn btn-sm d-flex align-items-center gap-2 px-3 py-2"
                     style={{
-                      background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                      background: 'linear-gradient(135deg, #367895 0%, #FB2832 100%)',
                       color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none',
                     }}
                     onClick={requestBriefing}
@@ -612,7 +612,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                     className="btn btn-sm d-flex align-items-center gap-2 px-3 py-2"
                     disabled
                     style={{
-                      background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                      background: 'linear-gradient(135deg, #367895 0%, #FB2832 100%)',
                       color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none',
                       animation: 'mentorPulse 1.5s ease-in-out infinite',
                     }}
@@ -700,12 +700,12 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                 style={{
                   width: 24, height: 24, flexShrink: 0,
                   background: taskCompleted ? '#10b981' : '#fff',
-                  border: taskCompleted ? 'none' : `2px solid ${step3Active ? '#8b5cf6' : '#cbd5e1'}`,
+                  border: taskCompleted ? 'none' : `2px solid ${step3Active ? '#367895' : '#cbd5e1'}`,
                 }}>
                 {taskCompleted ? (
                   <i className="bi bi-check-lg" style={{ color: '#fff', fontSize: 12 }}></i>
                 ) : (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: step3Active ? '#8b5cf6' : '#94a3b8' }}>3</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: step3Active ? '#367895' : '#94a3b8' }}>3</span>
                 )}
               </div>
             </div>
@@ -750,7 +750,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                           <div className="d-flex align-items-center gap-2 p-2 rounded" style={{ background: failed ? '#fef2f2' : '#ecfdf5', border: `1px solid ${failed ? '#fecaca' : '#a7f3d0'}` }}>
                             <i className="bi bi-file-earmark-check" style={{ color: failed ? '#ef4444' : '#047857', fontSize: 14 }}></i>
                             <span style={{ fontSize: 12, color: failed ? '#991b1b' : '#047857' }}>{upload.file_name}</span>
-                            <label className="btn btn-sm ms-auto" style={{ fontSize: 11, color: '#6366f1', cursor: 'pointer', padding: '2px 8px', border: '1px solid #c7d2fe', borderRadius: 6 }}>
+                            <label className="btn btn-sm ms-auto" style={{ fontSize: 11, color: '#FB2832', cursor: 'pointer', padding: '2px 8px', border: '1px solid rgba(251,40,50,0.25)', borderRadius: 6 }}>
                               Replace
                               <input type="file" className="d-none" accept={artifact.file_types.join(',')}
                                 onChange={(e) => e.target.files?.[0] && handleFileUpload(ai, e.target.files[0])} />
@@ -758,14 +758,14 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                           </div>
                         ) : (
                           <label className="d-flex flex-column align-items-center justify-content-center p-3 rounded" style={{
-                            border: '2px dashed #c7d2fe', background: '#faf9ff', cursor: 'pointer', minHeight: 70,
+                            border: '2px dashed rgba(251,40,50,0.25)', background: '#faf9ff', cursor: 'pointer', minHeight: 70,
                           }}>
                             {uploading === ai ? (
-                              <><span className="spinner-border spinner-border-sm mb-1" style={{ width: 16, height: 16, color: '#8b5cf6' }}></span>
-                              <span style={{ fontSize: 11, color: '#8b5cf6' }}>Uploading...</span></>
+                              <><span className="spinner-border spinner-border-sm mb-1" style={{ width: 16, height: 16, color: '#367895' }}></span>
+                              <span style={{ fontSize: 11, color: '#367895' }}>Uploading...</span></>
                             ) : (
                               <>
-                                <i className="bi bi-cloud-arrow-up mb-1" style={{ fontSize: 18, color: '#8b5cf6' }}></i>
+                                <i className="bi bi-cloud-arrow-up mb-1" style={{ fontSize: 18, color: '#367895' }}></i>
                                 <span style={{ fontSize: 12, color: '#475569', fontWeight: 600 }}>Click to upload</span>
                                 <span style={{ fontSize: 10, color: '#94a3b8' }}>
                                   {artifact.file_types.join(', ')}{artifact.allow_screenshot ? ', screenshots' : ''} (max 10MB)
@@ -785,7 +785,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                   <button
                     className="btn d-flex align-items-center justify-content-center gap-2 w-100 py-2 mt-2"
                     style={{
-                      background: allArtifactsUploaded ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)' : '#94a3b8',
+                      background: allArtifactsUploaded ? 'linear-gradient(135deg, #367895 0%, #FB2832 100%)' : '#94a3b8',
                       color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none',
                     }}
                     disabled={!allArtifactsUploaded || grading}
@@ -807,8 +807,8 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                   <button
                     className="btn d-flex align-items-center justify-content-center gap-2 w-100 py-2 mt-2"
                     style={{
-                      background: '#fff', color: '#8b5cf6', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                      border: '1px dashed #c7d2fe',
+                      background: '#fff', color: '#367895', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                      border: '1px dashed rgba(251,40,50,0.25)',
                     }}
                     onClick={() => simulateSubmission(false)}
                     disabled={simulating}
@@ -842,18 +842,18 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
         {/* Grading Report Card — only show after user actively grades */}
         {hasGradedThisSession && gradingResults.length > 0 && (
           <div className="mt-4 p-3 rounded" style={{
-            background: isSimulatedResult ? '#f5f3ff' : allPassed ? '#ecfdf5' : '#fefce8',
-            border: `1px solid ${isSimulatedResult ? '#c7d2fe' : allPassed ? '#a7f3d0' : '#fde68a'}`,
+            background: isSimulatedResult ? 'rgba(54,120,149,0.10)' : allPassed ? '#ecfdf5' : '#fefce8',
+            border: `1px solid ${isSimulatedResult ? 'rgba(251,40,50,0.25)' : allPassed ? '#a7f3d0' : '#fde68a'}`,
           }}>
             {/* Score */}
             <div className="text-center mb-3">
               {isSimulatedResult ? (
                 <>
-                  <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: '#8b5cf6' }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: '#367895' }}>
                     Demo Result
                   </div>
-                  <div className="mt-2 p-2 rounded mx-auto" style={{ background: '#ede9fe', border: '1px solid #c7d2fe', maxWidth: 400 }}>
-                    <i className="bi bi-info-circle me-1" style={{ color: '#8b5cf6' }}></i>
+                  <div className="mt-2 p-2 rounded mx-auto" style={{ background: '#ede9fe', border: '1px solid rgba(251,40,50,0.25)', maxWidth: 400 }}>
+                    <i className="bi bi-info-circle me-1" style={{ color: '#367895' }}></i>
                     <span style={{ fontSize: 12, color: '#6d28d9' }}>
                       Demo Mode: This is a simulated submission. Real submission required for final validation.
                     </span>
@@ -896,7 +896,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
               }}>
                 <div className="d-flex align-items-center gap-2 mb-1">
                   {isSimulatedResult ? (
-                    <span className="badge" style={{ background: '#f5f3ff', color: '#6d28d9', fontSize: 10 }}>DEMO</span>
+                    <span className="badge" style={{ background: 'rgba(54,120,149,0.10)', color: '#6d28d9', fontSize: 10 }}>DEMO</span>
                   ) : result.passed ? (
                     <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontSize: 10 }}>PASS</span>
                   ) : (

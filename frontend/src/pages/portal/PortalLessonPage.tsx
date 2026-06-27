@@ -133,17 +133,17 @@ function PortalLessonPage() {
           {/* Animated orb */}
           <div className="position-relative mx-auto mb-4" style={{ width: 80, height: 80 }}>
             <div className="position-absolute w-100 h-100 rounded-circle" style={{
-              background: 'radial-gradient(circle, var(--color-primary-light, #2b6cb0) 0%, var(--color-primary, #1a365d) 70%)',
+              background: 'radial-gradient(circle, #C20E1E 0%, #FB2832 70%)',
               animation: 'lessonOrbPulse 2s ease-in-out infinite',
             }} />
             <div className="position-absolute w-100 h-100 rounded-circle" style={{
-              border: '2px solid var(--color-primary-light, #2b6cb0)',
+              border: '2px solid #C20E1E',
               opacity: 0.3,
               animation: 'lessonOrbRing 2s ease-in-out infinite',
             }} />
           </div>
 
-          <h5 className="fw-semibold mb-2" style={{ color: 'var(--color-primary, #1a365d)' }}>
+          <h5 className="fw-semibold mb-2" style={{ color: '#FB2832' }}>
             Building Your Lesson
           </h5>
           <p className="text-muted small mb-4" style={{ lineHeight: 1.6 }}>
@@ -166,7 +166,7 @@ function PortalLessonPage() {
               }}>
                 <div className="spinner-border spinner-border-sm" style={{
                   width: 14, height: 14, borderWidth: 2,
-                  color: 'var(--color-primary-light, #2b6cb0)',
+                  color: '#C20E1E',
                 }} role="status"><span className="visually-hidden">Loading</span></div>
                 <span className="text-muted">{step.label}</span>
               </div>
@@ -221,7 +221,7 @@ function PortalLessonPage() {
           <li className="breadcrumb-item">
             <button
               className="btn btn-link btn-sm p-0 text-decoration-none"
-              style={{ color: '#6366f1' }}
+              style={{ color: '#FB2832' }}
               onClick={() => navigate('/portal/curriculum')}
             >
               Curriculum
@@ -247,7 +247,7 @@ function PortalLessonPage() {
       {/* Lesson Header Card */}
       <div
         className="card border-0 shadow-sm mb-4"
-        style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' }}
+        style={{ background: '#FB2832' }}
       >
         <div className="card-body py-4 text-white">
           <div className="d-flex justify-content-between align-items-start">
@@ -312,7 +312,7 @@ function PortalLessonPage() {
               ) : (
                 <button
                   className="btn btn-sm px-3"
-                  style={{ background: '#6366f1', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: 13 }}
+                  style={{ background: '#FB2832', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: 13 }}
                   onClick={() => navigate('/portal/curriculum')}
                 >
                   <i className="bi bi-grid me-1"></i>Back to Curriculum
@@ -367,7 +367,7 @@ function PortalLessonPage() {
                   className="d-flex align-items-center gap-1"
                   style={{
                     fontSize: 11,
-                    color: s.status === 'completed' ? 'var(--color-accent)' : s.status === 'active' ? 'var(--color-primary)' : '#94a3b8',
+                    color: s.status === 'completed' ? 'var(--color-accent)' : s.status === 'active' ? '#FB2832' : '#94a3b8',
                   }}
                 >
                   <i className={`bi ${s.status === 'completed' ? 'bi-check-circle-fill' : s.icon}`}></i>
@@ -431,7 +431,7 @@ class LessonErrorBoundary extends React.Component<{ children: React.ReactNode },
             <i className="bi bi-exclamation-triangle" style={{ fontSize: 40, color: '#f59e0b' }}></i>
             <h5 className="fw-bold mt-3">Something went wrong loading this lesson</h5>
             <p className="text-muted small">{this.state.error}</p>
-            <button className="btn btn-sm btn-primary" onClick={() => window.location.reload()}>Reload Page</button>
+            <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={() => window.location.reload()}>Reload Page</button>
           </div>
         </div>
       );

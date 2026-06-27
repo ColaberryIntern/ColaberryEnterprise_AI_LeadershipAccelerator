@@ -86,7 +86,7 @@ export default function ProjectModeSelector({ variant = 'card', currentMode, onM
             border: '1px solid var(--color-border)',
             fontSize: 11,
             padding: '4px 10px',
-            color: 'var(--color-primary)',
+            color: '#FB2832',
             fontWeight: 500,
           }}
           onClick={() => setOpen(o => !o)}
@@ -131,7 +131,7 @@ export default function ProjectModeSelector({ variant = 'card', currentMode, onM
                       className="btn btn-sm w-100 d-flex align-items-start gap-2 mb-1 text-start"
                       style={{
                         background: active ? 'var(--color-bg-alt)' : 'transparent',
-                        border: active ? '1px solid var(--color-primary)' : '1px solid transparent',
+                        border: active ? '1px solid #FB2832' : '1px solid transparent',
                         fontSize: 11,
                         padding: '6px 8px',
                         lineHeight: 1.3,
@@ -139,11 +139,11 @@ export default function ProjectModeSelector({ variant = 'card', currentMode, onM
                       onClick={() => handleChange(m.value)}
                       disabled={saving}
                     >
-                      <i className={`bi ${m.icon}`} style={{ color: active ? 'var(--color-primary)' : '#94a3b8', fontSize: 14, marginTop: 1 }}></i>
+                      <i className={`bi ${m.icon}`} style={{ color: active ? '#FB2832' : '#94a3b8', fontSize: 14, marginTop: 1 }}></i>
                       <div className="flex-grow-1">
                         <div className="d-flex align-items-center gap-1">
-                          <span className="fw-semibold" style={{ color: active ? 'var(--color-primary)' : 'var(--color-text)' }}>{m.label}</span>
-                          {active && <i className="bi bi-check-lg" style={{ color: 'var(--color-primary)', fontSize: 12 }}></i>}
+                          <span className="fw-semibold" style={{ color: active ? '#FB2832' : 'var(--color-text)' }}>{m.label}</span>
+                          {active && <i className="bi bi-check-lg" style={{ color: '#FB2832', fontSize: 12 }}></i>}
                         </div>
                         <div className="text-muted" style={{ fontSize: 10 }}>{m.desc}</div>
                       </div>
@@ -187,7 +187,7 @@ export default function ProjectModeSelector({ variant = 'card', currentMode, onM
       <div className="card-body p-3">
         <div className="d-flex justify-content-between align-items-center mb-2">
           <div>
-            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
+            <span className="fw-semibold small" style={{ color: '#FB2832' }}>
               <i className="bi bi-sliders me-2"></i>Project Target Mode
             </span>
             <span className="text-muted ms-2" style={{ fontSize: 10 }}>
@@ -206,8 +206,8 @@ export default function ProjectModeSelector({ variant = 'card', currentMode, onM
             return (
               <button
                 key={m.value}
-                className={`btn btn-sm flex-fill ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
-                style={{ fontSize: 10, padding: '6px 8px', lineHeight: 1.3 }}
+                className={`btn btn-sm flex-fill ${active ? '' : 'btn-outline-secondary'}`}
+                style={{ fontSize: 10, padding: '6px 8px', lineHeight: 1.3, ...(active ? { background: '#FB2832', color: '#fff', border: 'none' } : {}) }}
                 onClick={() => handleChange(m.value)}
                 disabled={saving}
                 title={m.desc}

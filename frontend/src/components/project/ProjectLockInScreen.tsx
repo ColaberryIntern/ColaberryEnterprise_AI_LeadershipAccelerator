@@ -57,7 +57,7 @@ function ProjectLockInScreen() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -69,8 +69,8 @@ function ProjectLockInScreen() {
     return (
       <div className="card border-0 shadow-sm">
         <div className="card-body text-center py-5">
-          <i className="bi bi-file-earmark-code fs-1 d-block mb-3" style={{ color: 'var(--color-primary)' }}></i>
-          <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>Generate Your System Design Contract</h5>
+          <i className="bi bi-file-earmark-code fs-1 d-block mb-3" style={{ color: '#FB2832' }}></i>
+          <h5 className="fw-bold mb-2" style={{ color: '#FB2832' }}>Generate Your System Design Contract</h5>
           <p className="text-muted small mb-3">Enter your project slug to fetch the design contract from the AI Project Architect.</p>
           <div className="d-flex justify-content-center gap-2" style={{ maxWidth: 400, margin: '0 auto' }}>
             <input
@@ -80,7 +80,7 @@ function ProjectLockInScreen() {
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
             />
-            <button className="btn btn-sm btn-primary text-nowrap" onClick={handleGenerate} disabled={generating}>
+            <button className="btn btn-sm text-nowrap" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleGenerate} disabled={generating}>
               {generating ? 'Generating...' : 'Generate'}
             </button>
           </div>
@@ -95,11 +95,11 @@ function ProjectLockInScreen() {
   return (
     <>
       {/* Header */}
-      <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${isLocked ? 'var(--color-accent)' : 'var(--color-primary)'}` }}>
+      <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${isLocked ? 'var(--color-accent)' : '#FB2832'}` }}>
         <div className="card-body py-3">
           <div className="d-flex justify-content-between align-items-center">
             <div>
-              <h5 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>
+              <h5 className="fw-bold mb-1" style={{ color: '#FB2832' }}>
                 <i className="bi bi-file-earmark-check me-2"></i>
                 {c.project_name || 'System Design Contract'}
               </h5>
@@ -110,11 +110,11 @@ function ProjectLockInScreen() {
                 <span className={`badge ${contract.readiness_status === 'ready' ? 'bg-success' : 'bg-warning text-dark'}`}>
                   {contract.readiness_status === 'ready' ? 'Build Ready' : 'Not Ready'}
                 </span>
-                {isLocked && <span className="badge bg-primary">Locked</span>}
+                {isLocked && <span className="badge" style={{ background: '#FB2832' }}>Locked</span>}
               </div>
             </div>
             {!isLocked && (
-              <button className="btn btn-sm btn-primary" onClick={handleLock} disabled={locking}>
+              <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleLock} disabled={locking}>
                 {locking ? 'Locking...' : 'Confirm & Lock'}
               </button>
             )}
@@ -127,7 +127,7 @@ function ProjectLockInScreen() {
         <div className="col-md-6">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-header bg-white fw-semibold small">
-              <i className="bi bi-puzzle me-2" style={{ color: 'var(--color-primary)' }}></i>Features
+              <i className="bi bi-puzzle me-2" style={{ color: '#FB2832' }}></i>Features
             </div>
             <div className="card-body p-0">
               {c.features && Array.isArray(c.features) ? (
@@ -149,7 +149,7 @@ function ProjectLockInScreen() {
         <div className="col-md-6">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-header bg-white fw-semibold small">
-              <i className="bi bi-stars me-2" style={{ color: '#8b5cf6' }}></i>Skills
+              <i className="bi bi-stars me-2" style={{ color: '#367895' }}></i>Skills
             </div>
             <div className="card-body">
               {c.skills && Array.isArray(c.skills) ? (
@@ -173,7 +173,7 @@ function ProjectLockInScreen() {
         <div className="col-md-6">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-header bg-white fw-semibold small">
-              <i className="bi bi-diagram-3 me-2" style={{ color: 'var(--color-primary)' }}></i>Architecture
+              <i className="bi bi-diagram-3 me-2" style={{ color: '#FB2832' }}></i>Architecture
             </div>
             <div className="card-body small">
               {c.architecture ? (
@@ -249,7 +249,7 @@ function ProjectLockInScreen() {
       {c.build_readiness && (
         <div className="card border-0 shadow-sm mb-4">
           <div className="card-header bg-white fw-semibold small">
-            <i className="bi bi-rocket-takeoff me-2" style={{ color: 'var(--color-primary)' }}></i>
+            <i className="bi bi-rocket-takeoff me-2" style={{ color: '#FB2832' }}></i>
             Build Readiness
           </div>
           <div className="card-body small">

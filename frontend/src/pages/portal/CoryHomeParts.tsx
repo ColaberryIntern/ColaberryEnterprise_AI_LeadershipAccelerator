@@ -176,7 +176,7 @@ export const QueueRow: React.FC<{ entry: QueueEntry; first: boolean; last: boole
     >
       {entry.blast_radius.band} blast
     </span>
-    <button type="button" className="btn btn-sm btn-outline-primary" onClick={onGo} style={{ fontSize: 11, flexShrink: 0 }}>
+    <button type="button" className="btn btn-sm" onClick={onGo} style={{ fontSize: 11, flexShrink: 0, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}>
       Open
     </button>
   </div>

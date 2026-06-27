@@ -94,7 +94,7 @@ function GuidedExecutionPanel({ actionId }: { actionId: string }) {
     return (
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body py-4 text-center">
-          <div className="spinner-border spinner-border-sm me-2" style={{ color: 'var(--color-primary)' }} role="status">
+          <div className="spinner-border spinner-border-sm me-2" style={{ color: '#FB2832' }} role="status">
             <span className="visually-hidden">Loading...</span>
           </div>
           <span className="small text-muted">Generating execution guidance...</span>
@@ -155,7 +155,7 @@ function GuidedExecutionPanel({ actionId }: { actionId: string }) {
 function LearnTab({ lesson }: { lesson: MiniLesson }) {
   return (
     <>
-      <h6 className="fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>{lesson.title}</h6>
+      <h6 className="fw-bold mb-2" style={{ color: '#FB2832' }}>{lesson.title}</h6>
       <p className="small text-muted mb-3">{lesson.explanation}</p>
       <div className="small fw-medium mb-2">Steps:</div>
       <ol className="small mb-0">
@@ -178,7 +178,7 @@ function BuildTab({ examples }: { examples: CodeExample[] }) {
         <div key={i} className="mb-3">
           <div className="d-flex justify-content-between align-items-center mb-1">
             <div>
-              <code className="small" style={{ color: 'var(--color-primary)' }}>{ex.path}</code>
+              <code className="small" style={{ color: '#FB2832' }}>{ex.path}</code>
               <span className="badge bg-light text-dark border ms-2 small">{ex.language}</span>
             </div>
             <CopyButton text={ex.code} />
@@ -213,7 +213,7 @@ function ArtifactsTab({ context }: { context: GuidedPayload['context'] }) {
           </div>
           <div className="d-flex flex-wrap gap-2">
             {context.related_artifacts.map((a, i) => (
-              <span key={i} className="badge bg-primary py-2 px-3">{a}</span>
+              <span key={i} className="badge py-2 px-3" style={{ background: '#FB2832' }}>{a}</span>
             ))}
           </div>
         </div>
@@ -269,7 +269,7 @@ function PromptsTab({ prompts }: { prompts: Prompt[] }) {
         <div key={i} className="mb-3">
           <div className="d-flex justify-content-between align-items-center mb-1">
             <div className="small fw-medium">
-              <i className={`bi ${PROMPT_TYPE_ICONS[p.type] || 'bi-chat'} me-1`} style={{ color: 'var(--color-primary)' }}></i>
+              <i className={`bi ${PROMPT_TYPE_ICONS[p.type] || 'bi-chat'} me-1`} style={{ color: '#FB2832' }}></i>
               {p.title}
               <span className="badge bg-light text-dark border ms-2">{p.type}</span>
             </div>

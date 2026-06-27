@@ -41,7 +41,7 @@ function ProjectMentorAlerts() {
 
   return (
     <div className="mb-4">
-      <h6 className="fw-semibold small mb-3" style={{ color: 'var(--color-primary)' }}>
+      <h6 className="fw-semibold small mb-3" style={{ color: '#FB2832' }}>
         <i className="bi bi-bell me-2"></i>Mentor Alerts
         <span className="badge bg-secondary ms-2">{interventions.length}</span>
       </h6>

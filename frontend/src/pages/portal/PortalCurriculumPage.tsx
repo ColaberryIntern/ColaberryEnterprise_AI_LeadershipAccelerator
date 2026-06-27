@@ -49,24 +49,24 @@ const SKILL_LABELS: Record<string, string> = {
 };
 
 const SKILL_COLORS: Record<string, string> = {
-  strategy_trust: '#6366f1',
+  strategy_trust: '#FB2832',
   governance: '#ef4444',
   requirements: '#3b82f6',
-  build_discipline: '#8b5cf6',
+  build_discipline: '#367895',
   executive_authority: '#10b981',
 };
 
 const STATUS_CONFIG: Record<string, { icon: string; color: string; bg: string; label: string }> = {
   locked: { icon: 'bi-lock-fill', color: '#94a3b8', bg: '#f1f5f9', label: 'Locked' },
-  available: { icon: 'bi-play-circle-fill', color: '#6366f1', bg: '#eef2ff', label: 'Available' },
+  available: { icon: 'bi-play-circle-fill', color: '#FB2832', bg: 'rgba(251,40,50,0.08)', label: 'Available' },
   in_progress: { icon: 'bi-arrow-repeat', color: '#f59e0b', bg: '#fffbeb', label: 'In Progress' },
   completed: { icon: 'bi-check-circle-fill', color: '#10b981', bg: '#ecfdf5', label: 'Completed' },
 };
 
 const TYPE_BADGES: Record<string, { icon: string; color: string; bg: string }> = {
-  section: { icon: 'bi-journal-text', color: '#6366f1', bg: '#eef2ff' },
+  section: { icon: 'bi-journal-text', color: '#FB2832', bg: 'rgba(251,40,50,0.08)' },
   concept: { icon: 'bi-book', color: '#3b82f6', bg: '#eff6ff' },
-  lab: { icon: 'bi-tools', color: '#8b5cf6', bg: '#f5f3ff' },
+  lab: { icon: 'bi-tools', color: '#367895', bg: 'rgba(54,120,149,0.10)' },
   assessment: { icon: 'bi-clipboard-check', color: '#f59e0b', bg: '#fffbeb' },
   reflection: { icon: 'bi-chat-square-quote', color: '#10b981', bg: '#ecfdf5' },
 };
@@ -121,7 +121,7 @@ function CourseLinkCta({ link }: { link?: CourseLinkInfo | null }) {
 
   if (link.provider === 'colaberry_original') {
     return (
-      <span className="badge mt-2 d-inline-flex align-items-center" style={{ background: '#eef2ff', color: '#6366f1', fontSize: 11, fontWeight: 600 }}>
+      <span className="badge mt-2 d-inline-flex align-items-center" style={{ background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 11, fontWeight: 600 }}>
         <i className="bi bi-stars me-1"></i>Colaberry-original module
       </span>
     );
@@ -135,7 +135,7 @@ function CourseLinkCta({ link }: { link?: CourseLinkInfo | null }) {
         target="_blank"
         rel="noopener noreferrer"
         className="btn btn-sm mt-2 d-inline-flex align-items-center gap-1"
-        style={{ background: isCert ? '#10b981' : '#6366f1', color: '#fff', fontSize: 12, fontWeight: 600, borderRadius: 6 }}
+        style={{ background: isCert ? '#10b981' : '#FB2832', color: '#fff', fontSize: 12, fontWeight: 600, borderRadius: 6 }}
         aria-label={`${isCert ? 'Go to certification exam' : 'Open course'}: ${link.course_title ?? ''} (opens in a new tab)`}
       >
         <i className={`bi ${isCert ? 'bi-patch-check' : 'bi-box-arrow-up-right'}`}></i>
@@ -185,7 +185,7 @@ function PortalCurriculumPage() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: '#6366f1' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -217,7 +217,7 @@ function PortalCurriculumPage() {
       </div>
 
       {/* Progress Bar */}
-      <div className="card border-0 shadow-sm mb-4" style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' }}>
+      <div className="card border-0 shadow-sm mb-4" style={{ background: '#FB2832' }}>
         <div className="card-body py-3 text-white">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <span className="small fw-medium">Overall Progress</span>
@@ -239,7 +239,7 @@ function PortalCurriculumPage() {
       {/* Stats Row */}
       <div className="row g-3 mb-4">
         {[
-          { label: 'Skills / Modules', value: `${completedModules}`, sub: `of ${data.modules.length}`, icon: 'bi-layers', color: '#6366f1' },
+          { label: 'Skills / Modules', value: `${completedModules}`, sub: `of ${data.modules.length}`, icon: 'bi-layers', color: '#FB2832' },
           { label: 'Completion', value: `${Math.round(data.overall_progress)}%`, sub: `${data.completed_lessons} lessons`, icon: 'bi-graph-up-arrow', color: '#3b82f6' },
           { label: 'Lessons Done', value: `${data.completed_lessons}`, sub: `of ${data.total_lessons}`, icon: 'bi-check2-square', color: '#10b981' },
           { label: 'Time Remaining', value: `${data.hours_remaining}h`, sub: `${Math.round(data.hours_remaining * 60)} min`, icon: 'bi-clock', color: '#f59e0b' },
@@ -277,7 +277,7 @@ function PortalCurriculumPage() {
                 const pct = mod.total_lessons > 0 ? Math.round((mod.completed_lessons / mod.total_lessons) * 100) : 0;
                 const isSelected = mod.id === selectedModule;
                 const isExpanded = expandedModules.has(mod.id);
-                const skillColor = SKILL_COLORS[mod.skill_area] || '#6366f1';
+                const skillColor = SKILL_COLORS[mod.skill_area] || '#FB2832';
 
                 return (
                   <React.Fragment key={mod.id}>
@@ -331,7 +331,7 @@ function PortalCurriculumPage() {
                               {(lesson.status === 'available' || lesson.status === 'in_progress') && (
                                 <button
                                   className="btn btn-sm px-2 py-0"
-                                  style={{ fontSize: 11, background: '#6366f1', color: '#fff', borderRadius: 4 }}
+                                  style={{ fontSize: 11, background: '#FB2832', color: '#fff', borderRadius: 4 }}
                                   onClick={(e) => { e.stopPropagation(); navigate(`/portal/curriculum/lessons/${lesson.id}`); }}
                                 >
                                   {lesson.status === 'in_progress' ? 'Continue' : 'Start'}
@@ -356,7 +356,7 @@ function PortalCurriculumPage() {
                   <i className="bi bi-diagram-3 me-2"></i>Skill Genome
                 </span>
                 {genome && (
-                  <span className="badge" style={{ background: '#eef2ff', color: '#6366f1', fontSize: 10 }}>
+                  <span className="badge" style={{ background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 10 }}>
                     {genome.skills_started}/{genome.total_skills} skills
                   </span>
                 )}
@@ -368,15 +368,15 @@ function PortalCurriculumPage() {
                   {/* Overall proficiency */}
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <span className="small" style={{ color: '#64748b' }}>Overall Proficiency</span>
-                    <span className="fw-bold small" style={{ color: '#6366f1' }}>{genome.overall_proficiency}%</span>
+                    <span className="fw-bold small" style={{ color: '#FB2832' }}>{genome.overall_proficiency}%</span>
                   </div>
                   <div className="progress mb-3" style={{ height: 6, background: '#f1f5f9', borderRadius: 3 }}>
-                    <div className="progress-bar" style={{ width: `${genome.overall_proficiency}%`, background: '#6366f1', borderRadius: 3 }}></div>
+                    <div className="progress-bar" style={{ width: `${genome.overall_proficiency}%`, background: '#FB2832', borderRadius: 3 }}></div>
                   </div>
 
                   {/* Layers as accordion */}
                   {genome.layers.map((layer) => {
-                    const layerColor = SKILL_COLORS[layer.id] || '#6366f1';
+                    const layerColor = SKILL_COLORS[layer.id] || '#FB2832';
                     const isLayerExpanded = expandedLayers.has(layer.id);
                     return (
                       <div key={layer.id} className="mb-2">
@@ -469,7 +469,7 @@ function PortalCurriculumPage() {
                 /* Fallback to module-based progress if genome API not available */
                 data.modules.map((mod) => {
                   const pct = mod.total_lessons > 0 ? Math.round((mod.completed_lessons / mod.total_lessons) * 100) : 0;
-                  const color = SKILL_COLORS[mod.skill_area] || '#6366f1';
+                  const color = SKILL_COLORS[mod.skill_area] || '#FB2832';
                   return (
                     <div key={mod.skill_area} className="mb-3">
                       <div className="d-flex justify-content-between align-items-center mb-1">
@@ -499,13 +499,13 @@ function PortalCurriculumPage() {
                     <div className="d-flex align-items-center gap-2 mb-1">
                       <span
                         className="badge"
-                        style={{ background: SKILL_COLORS[activeModule.skill_area] || '#6366f1', color: '#fff', fontSize: 10 }}
+                        style={{ background: SKILL_COLORS[activeModule.skill_area] || '#FB2832', color: '#fff', fontSize: 10 }}
                       >
                         Module {activeModule.module_number}
                       </span>
                       <span
                         className="badge"
-                        style={{ background: `${SKILL_COLORS[activeModule.skill_area] || '#6366f1'}15`, color: SKILL_COLORS[activeModule.skill_area] || '#6366f1', fontSize: 10 }}
+                        style={{ background: `${SKILL_COLORS[activeModule.skill_area] || '#FB2832'}15`, color: SKILL_COLORS[activeModule.skill_area] || '#FB2832', fontSize: 10 }}
                       >
                         {SKILL_LABELS[activeModule.skill_area]}
                       </span>
@@ -515,7 +515,7 @@ function PortalCurriculumPage() {
                     <CourseLinkCta link={activeModule.course_link} />
                   </div>
                   <div className="text-end">
-                    <div className="fw-bold" style={{ fontSize: 20, color: SKILL_COLORS[activeModule.skill_area] || '#6366f1' }}>
+                    <div className="fw-bold" style={{ fontSize: 20, color: SKILL_COLORS[activeModule.skill_area] || '#FB2832' }}>
                       {activeModule.total_lessons > 0 ? Math.round((activeModule.completed_lessons / activeModule.total_lessons) * 100) : 0}%
                     </div>
                     <div className="text-muted" style={{ fontSize: 11 }}>{activeModule.completed_lessons}/{activeModule.total_lessons} complete</div>
@@ -581,7 +581,7 @@ function PortalCurriculumPage() {
                             <button
                               className="btn btn-sm px-3"
                               style={{
-                                background: '#6366f1',
+                                background: '#FB2832',
                                 color: '#fff',
                                 borderRadius: 6,
                                 fontSize: 12,

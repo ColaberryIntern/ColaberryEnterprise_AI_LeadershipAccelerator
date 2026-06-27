@@ -23,11 +23,11 @@ const LAYER_TYPE_MAP: Record<LayerMode, ReadonlyArray<string>> = {
 };
 
 const TYPE_COLOR: Record<string, string> = {
-  project: '#1a365d',
-  bp: '#2b6cb0',
+  project: '#FB2832',
+  bp: '#C20E1E',
   task: '#e53e3e',
   api: '#38a169',
-  ui_component: '#8b5cf6',
+  ui_component: '#367895',
   database_object: '#d97706',
   validation_result: '#0ea5e9',
   test: '#16a34a',

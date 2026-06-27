@@ -85,8 +85,8 @@ export default function SectionOutputPanel(props: SectionOutputPanelProps) {
         aria-expanded={open}
       >
         <div className="d-flex align-items-center gap-2">
-          <i className="bi bi-clipboard-check" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
-          <span style={{ color: 'var(--color-primary)' }}>Section Output</span>
+          <i className="bi bi-clipboard-check" style={{ color: '#FB2832', fontSize: 14 }}></i>
+          <span style={{ color: '#FB2832' }}>Section Output</span>
           <span className="badge bg-secondary" style={{ fontSize: 10 }}>{completedCount}/{rows.length}</span>
         </div>
         <i className={`bi ${open ? 'bi-chevron-up' : 'bi-chevron-down'}`} style={{ color: 'var(--color-text-light)', fontSize: 12 }}></i>

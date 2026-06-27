@@ -90,7 +90,7 @@ const MATURITY_LABELS: Record<number, string> = {
 };
 
 const MATURITY_COLORS: Record<number, string> = {
-  0: '#9ca3af', 1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#10b981', 5: '#8b5cf6',
+  0: '#9ca3af', 1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#10b981', 5: '#367895',
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -285,7 +285,7 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
 
   if (foundation.length > 0) groups.push({ key: 'foundation', title: 'Foundation', icon: 'bi-bricks', color: '#3b82f6', items: foundation, completion: calcCompletion(foundation) });
   if (usability.length > 0) groups.push({ key: 'usability', title: 'Usability', icon: 'bi-layout-wtf', color: '#10b981', items: usability, completion: calcCompletion(usability) });
-  if (intelligence.length > 0) groups.push({ key: 'intelligence', title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', items: intelligence, completion: calcCompletion(intelligence) });
+  if (intelligence.length > 0) groups.push({ key: 'intelligence', title: 'Intelligence', icon: 'bi-cpu', color: '#367895', items: intelligence, completion: calcCompletion(intelligence) });
   if (discovered.length > 0) groups.push({ key: 'discovered', title: `Discovered Pages (${discovered.length})`, icon: 'bi-search', color: '#a855f7', items: discovered, completion: calcCompletion(discovered) });
 
   return groups;
@@ -327,7 +327,7 @@ export function groupByBusinessDomain(components: SystemComponent[]): ComponentG
   if (revenue.length > 0) groups.push({ key: 'revenue', title: 'Revenue', icon: 'bi-currency-dollar', color: '#10b981', items: revenue, completion: calc(revenue) });
   if (operations.length > 0) groups.push({ key: 'operations', title: 'Operations', icon: 'bi-gear', color: '#3b82f6', items: operations, completion: calc(operations) });
   if (marketing.length > 0) groups.push({ key: 'marketing', title: 'Marketing', icon: 'bi-megaphone', color: '#f59e0b', items: marketing, completion: calc(marketing) });
-  if (product.length > 0) groups.push({ key: 'product', title: 'Product', icon: 'bi-box', color: '#8b5cf6', items: product, completion: calc(product) });
+  if (product.length > 0) groups.push({ key: 'product', title: 'Product', icon: 'bi-box', color: '#367895', items: product, completion: calc(product) });
   if (intelligence.length > 0) groups.push({ key: 'intelligence', title: 'Intelligence', icon: 'bi-cpu', color: '#06b6d4', items: intelligence, completion: calc(intelligence) });
   if (discovered.length > 0) groups.push({ key: 'discovered', title: `Discovered Pages (${discovered.length})`, icon: 'bi-search', color: '#a855f7', items: discovered, completion: calc(discovered) });
   return groups;
@@ -541,7 +541,7 @@ function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: {
       <div className="d-flex align-items-center gap-2 mb-1">
         <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor, flexShrink: 0 }}></div>
         <span className="fw-medium" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#8b5cf6', fontSize: 9 }}></i>}
+          {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#367895', fontSize: 9 }}></i>}
           {comp.ui.pages.length > 0 && !comp.isPageBP && (
             comp.ui.pages.some(p => !p.verified)
               ? <i className="bi bi-exclamation-triangle me-1" style={{ color: '#f59e0b', fontSize: 9 }} title="Unverified page"></i>
@@ -675,7 +675,7 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
   if (enhancements.length === 0) return { ...empty, isDone: true };
 
   const colorFor = (e: any) => {
-    if (e.category === 'agent' || e.category === 'autonomy_gap' || e.category === 'intelligence') return '#8b5cf6';
+    if (e.category === 'agent' || e.category === 'autonomy_gap' || e.category === 'intelligence') return '#367895';
     if (e.category === 'frontend' || e.category === 'reporting') return '#10b981';
     if (e.category === 'observability' || e.category === 'reliability' || e.category === 'performance') return '#f59e0b';
     return '#3b82f6';
@@ -1227,12 +1227,12 @@ function SystemViewV2Inner() {
     if (comp.ui.pages.length === 0 && comp.layers.frontend !== 'missing') s.push({ title: 'Connect a UI page', explanation: 'Frontend files exist but no page is linked for preview and feedback.', color: '#10b981' });
     // Agents — only when both backend and frontend are at least partial
     if (comp.layers.agent === 'missing' && comp.layers.backend !== 'missing' && comp.layers.frontend !== 'missing') {
-      s.push({ title: 'Add intelligent automation', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', action: 'agent_enhancement', color: '#8b5cf6' });
+      s.push({ title: 'Add intelligent automation', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', action: 'agent_enhancement', color: '#367895' });
     }
     // Autonomy gaps from the detail data
     if (detail?.autonomy_gaps?.length > 0 && s.length < 3) {
       const topGap = detail.autonomy_gaps[0];
-      s.push({ title: topGap.title, explanation: topGap.description?.substring(0, 100) || 'Autonomy gap detected', color: '#8b5cf6' });
+      s.push({ title: topGap.title, explanation: topGap.description?.substring(0, 100) || 'Autonomy gap detected', color: '#367895' });
     }
     return s.slice(0, 5);
   };
@@ -1645,7 +1645,7 @@ function SystemViewV2Inner() {
     // Intelligence
     const iSteps: typeof phases[0]['steps'] = [];
     if (!systemLayers.agents && systemLayers.backend) iSteps.push({ id: 'p-agents', title: 'Add AI agents', componentId: inc[0]?.id || '', promptTarget: 'agent_enhancement', done: systemLayers.agents });
-    if (iSteps.some(s => !s.done)) phases.push({ title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', steps: iSteps });
+    if (iSteps.some(s => !s.done)) phases.push({ title: 'Intelligence', icon: 'bi-cpu', color: '#367895', steps: iSteps });
     return phases;
   })();
 
@@ -1795,7 +1795,7 @@ function SystemViewV2Inner() {
             <button className={`btn btn-sm ${!isReporting ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '3px 10px' }} onClick={() => { setSystemMode('build'); setWorkTab('overview'); setCoryMode('suggestions'); }}>
               <i className="bi bi-hammer me-1"></i>Build
             </button>
-            <button className={`btn btn-sm ${isReporting ? '' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '3px 10px', ...(isReporting ? { background: '#8b5cf6', borderColor: '#8b5cf6', color: '#fff' } : {}) }} onClick={() => { setSystemMode('reporting'); setWorkTab('overview'); setCoryMode('r-insights'); }}>
+            <button className={`btn btn-sm ${isReporting ? '' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '3px 10px', ...(isReporting ? { background: '#367895', borderColor: '#367895', color: '#fff' } : {}) }} onClick={() => { setSystemMode('reporting'); setWorkTab('overview'); setCoryMode('r-insights'); }}>
               <i className="bi bi-bar-chart-line me-1"></i>Reporting
             </button>
           </div>
@@ -1850,7 +1850,7 @@ function SystemViewV2Inner() {
               links straight into the BP detail, which renders the
               Discovered / Unmapped view with the Define Component flow. */}
           {pendingDefinitionPages.length > 0 && (
-            <div className="mb-3 p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #a855f730' }}>
+            <div className="mb-3 p-3" style={{ background: 'rgba(54,120,149,0.08)', borderRadius: 8, border: '1px solid #a855f730' }}>
               <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
                 <div>
                   <div className="fw-semibold" style={{ fontSize: 12, color: '#7c3aed' }}>
@@ -1903,7 +1903,7 @@ function SystemViewV2Inner() {
                 { key: 'all', label: 'All', icon: 'bi-grid-3x3-gap', color: '#3b82f6' },
                 { key: 'backend', label: 'Backend', icon: 'bi-server', color: '#3b82f6' },
                 { key: 'frontend', label: 'Frontend', icon: 'bi-layout-wtf', color: '#10b981' },
-                { key: 'agents', label: 'Agents', icon: 'bi-cpu', color: '#8b5cf6' },
+                { key: 'agents', label: 'Agents', icon: 'bi-cpu', color: '#367895' },
                 { key: 'incomplete', label: 'In Progress', icon: 'bi-hourglass-split', color: '#f59e0b' },
                 { key: 'complete', label: 'Complete', icon: 'bi-check-circle', color: '#059669' },
               ] as Array<{ key: MapFilter; label: string; icon: string; color: string }>).map(f => (
@@ -1985,7 +1985,7 @@ function SystemViewV2Inner() {
                 <span className="fw-bold" style={{ fontSize: 15 }}>{selectedComponent.name}</span>
                 <span className="badge" style={{ background: '#a855f720', color: '#a855f7', fontSize: 9 }}>Unmapped</span>
               </div>
-              <div className="p-3 mb-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #a855f720' }}>
+              <div className="p-3 mb-3" style={{ background: 'rgba(54,120,149,0.08)', borderRadius: 8, border: '1px solid #a855f720' }}>
                 <p className="mb-2 fw-medium" style={{ fontSize: 13, color: '#7c3aed' }}><i className="bi bi-info-circle me-1"></i>Unmapped UI Layer</p>
                 {selectedComponent.frontendRoute && (
                   <div className="mb-2" style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>Route: {selectedComponent.frontendRoute}</div>
@@ -2051,7 +2051,7 @@ function SystemViewV2Inner() {
               {/* ── Header: Name + Status + Metrics ── */}
               <div className="d-flex align-items-center justify-content-between mb-3">
                 <div className="d-flex align-items-center gap-2">
-                  {selectedComponent.isPageBP && <i className="bi bi-layout-wtf" style={{ color: '#8b5cf6' }}></i>}
+                  {selectedComponent.isPageBP && <i className="bi bi-layout-wtf" style={{ color: '#367895' }}></i>}
                   <span className="fw-bold" style={{ fontSize: 15 }}>{selectedComponent.name}</span>
                   <span className="badge" style={{ background: STATUS_STYLES[selectedComponent.status].bg, color: STATUS_STYLES[selectedComponent.status].text, fontSize: 9 }}>{STATUS_STYLES[selectedComponent.status].label}</span>
                   <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
@@ -2127,7 +2127,7 @@ function SystemViewV2Inner() {
                       const SOURCE_LABELS: Record<string, { label: string; bg: string; color: string }> = {
                         build: { label: 'Build', bg: '#3b82f620', color: '#3b82f6' },
                         health: { label: 'Health', bg: '#f59e0b20', color: '#92400e' },
-                        improve: { label: 'Improve', bg: '#8b5cf620', color: '#8b5cf6' },
+                        improve: { label: 'Improve', bg: '#36789520', color: '#367895' },
                         ui: { label: 'UI', bg: '#10b98120', color: '#059669' },
                       };
                       return primary ? (
@@ -2135,7 +2135,7 @@ function SystemViewV2Inner() {
                           <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>
                             {enhanceCards.isPolish ? `Optional polish for ${selectedComponent.name}` : `Step 1 of ${tasks.length} for ${selectedComponent.name}`}
                             {usingOrchestrator && <span className="ms-2 badge" style={{ background: '#3b82f610', color: '#94a3b8', fontSize: 7 }}>Orchestrated</span>}
-                            {enhanceCards.isEnhance && <span className="ms-2 badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 7 }}>Improvement Mode</span>}
+                            {enhanceCards.isEnhance && <span className="ms-2 badge" style={{ background: '#36789520', color: '#367895', fontSize: 7 }}>Improvement Mode</span>}
                             {enhanceCards.isPolish && <span className="ms-2 badge" style={{ background: '#94a3b820', color: '#64748b', fontSize: 7 }}>Optional</span>}
                           </div>
                           <div className="d-flex align-items-center gap-2 mb-1">
@@ -2378,8 +2378,8 @@ function SystemViewV2Inner() {
                       return (
                         <div>
                           <div className="d-flex align-items-center gap-2 mb-3">
-                            <i className="bi bi-rocket-takeoff" style={{ color: polishMode ? '#64748b' : '#8b5cf6', fontSize: 16 }}></i>
-                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: polishMode ? '#64748b' : '#8b5cf6' }}>{polishMode ? 'Cory — Optional Polish' : 'Cory — Run Next Improvement'}</h6>
+                            <i className="bi bi-rocket-takeoff" style={{ color: polishMode ? '#64748b' : '#367895', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: polishMode ? '#64748b' : '#367895' }}>{polishMode ? 'Cory — Optional Polish' : 'Cory — Run Next Improvement'}</h6>
                           </div>
                           <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>{polishMode ? `Optional polish for ${selectedComponent.name}` : `Improvement 1 of ${Math.min(enhanceCards.items.length, 3)} for ${selectedComponent.name}`}</div>
                           <h6 className="fw-bold mb-1" style={{ fontSize: 15, color: 'var(--color-text)' }}>{e.title}</h6>
@@ -2492,8 +2492,8 @@ function SystemViewV2Inner() {
                             {showBuildUpNext && (
                               <div className="mt-2">
                                 {upcomingSteps.map((step: any, i: number) => (
-                                  <div key={step.prompt_target + i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${step.prompt_target === 'agent_enhancement' ? '#8b5cf6' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6'}` }}>
-                                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${step.prompt_target === 'agent_enhancement' ? '#8b5cf6' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6'}20`, color: step.prompt_target === 'agent_enhancement' ? '#8b5cf6' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                  <div key={step.prompt_target + i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${step.prompt_target === 'agent_enhancement' ? '#367895' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6'}` }}>
+                                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${step.prompt_target === 'agent_enhancement' ? '#367895' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6'}20`, color: step.prompt_target === 'agent_enhancement' ? '#367895' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                                     <div className="flex-grow-1">
                                       <div className="fw-medium" style={{ fontSize: 11 }}>{step.label}</div>
                                       <div className="text-muted" style={{ fontSize: 9 }}>
@@ -2695,7 +2695,7 @@ function SystemViewV2Inner() {
                                 )}
                                 {buildResult.parsed?.database?.length > 0 && (
                                   <div className="mb-2">
-                                    <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-database me-1" style={{ color: '#8b5cf6' }}></i>Database</div>
+                                    <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-database me-1" style={{ color: '#367895' }}></i>Database</div>
                                     <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
                                       {buildResult.parsed.database.map((d: string, i: number) => <li key={i}>{d}</li>)}
                                     </ul>
@@ -2859,13 +2859,13 @@ function SystemViewV2Inner() {
                         if ((q.reliability || 0) < 3) healthSteps.push({ title: 'Add error handling and retry logic', explanation: 'Improve graceful failure recovery and data persistence guarantees.', color: '#3b82f6', promptTarget: 'improve_reliability' });
                         if ((q.observability || 0) < 3) healthSteps.push({ title: 'Add monitoring and logging', explanation: 'No observability detected — add structured logging, metrics, and alerting.', color: '#3b82f6', promptTarget: 'monitoring_gap' });
                         if ((q.ux_exposure || 0) < 3 && selectedComponent.layers.frontend !== 'missing') healthSteps.push({ title: 'Improve user interface coverage', explanation: 'Frontend exists but UX exposure is low — expand page functionality.', color: '#10b981', promptTarget: 'frontend_exposure' });
-                        if ((q.automation || 0) < 3 && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add automation agents', explanation: 'Manual operation detected — add agents for self-managing behavior.', color: '#8b5cf6', promptTarget: 'agent_enhancement' });
+                        if ((q.automation || 0) < 3 && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add automation agents', explanation: 'Manual operation detected — add agents for self-managing behavior.', color: '#367895', promptTarget: 'agent_enhancement' });
                         if ((q.production_readiness || 0) < 5) healthSteps.push({ title: 'Improve production readiness', explanation: 'System is not production-ready — address missing layers and quality gaps.', color: '#f59e0b', promptTarget: 'optimize_performance' });
                       }
                       if (selectedComponent.layers.backend === 'missing') healthSteps.unshift({ title: 'Build backend services', explanation: 'No backend layer detected — this is the most critical gap.', color: '#ef4444', promptTarget: 'backend_improvement' });
                       if (selectedComponent.layers.frontend === 'missing' && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add frontend layer', explanation: 'Backend exists but no user interface — users cannot interact.', color: '#ef4444', promptTarget: 'frontend_exposure' });
                       (compDetail?.autonomy_gaps || []).slice(0, 2).forEach((g: any) => {
-                        if (!healthSteps.find(s => s.title === g.title)) healthSteps.push({ title: g.title, explanation: g.description?.substring(0, 120) || 'Detected gap', color: '#8b5cf6' });
+                        if (!healthSteps.find(s => s.title === g.title)) healthSteps.push({ title: g.title, explanation: g.description?.substring(0, 120) || 'Detected gap', color: '#367895' });
                       });
                     }
 
@@ -2928,8 +2928,8 @@ function SystemViewV2Inner() {
               {workTab === 'improve' && (
                 <div>
                   <div className="d-flex align-items-center gap-2 mb-3">
-                    <i className="bi bi-robot" style={{ color: '#8b5cf6', fontSize: 16 }}></i>
-                    <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#8b5cf6' }}>Cory — Path to Autonomous</h6>
+                    <i className="bi bi-robot" style={{ color: '#367895', fontSize: 16 }}></i>
+                    <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#367895' }}>Cory — Path to Autonomous</h6>
                   </div>
 
                   {(() => {
@@ -2974,9 +2974,9 @@ function SystemViewV2Inner() {
                     // reliability work — those belong on other tabs).
                     if ((baseCards.isEnhance || baseCards.isPolish) && enhanceCards.items.length === 0) {
                       return (
-                        <div className="p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf630' }}>
+                        <div className="p-3" style={{ background: 'rgba(54,120,149,0.08)', borderRadius: 8, border: '1px solid #36789530' }}>
                           <div className="d-flex align-items-center gap-2 mb-1">
-                            <i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 14 }}></i>
+                            <i className="bi bi-stars" style={{ color: '#367895', fontSize: 14 }}></i>
                             <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#7c3aed' }}>No autonomy improvements queued</h6>
                           </div>
                           <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.name} has nothing pending in the agent / intelligence / autonomy track right now. Check the <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('build')}>Build</button> or <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('health')}>Health</button> tab for other recommendations.</p>
@@ -2996,10 +2996,10 @@ function SystemViewV2Inner() {
                       if (!hasBackend) improveSteps.push({ title: 'Build backend services', explanation: 'Backend is missing — build services and routes before adding AI automation.', color: '#3b82f6', promptTarget: 'backend_improvement' });
                       if (hasBackend && !hasFrontend) improveSteps.push({ title: 'Add frontend layer', explanation: 'Frontend is missing — add a user interface before optimizing with AI.', color: '#10b981', promptTarget: 'frontend_exposure' });
                       (compDetail?.autonomy_gaps || []).slice(0, 4).forEach((g: any) => {
-                        improveSteps.push({ title: g.title, explanation: g.description?.substring(0, 150) || 'Autonomy gap — addressing this moves toward self-managing operation.', color: '#8b5cf6', gapType: g.gap_type, promptTarget: g.suggested_category === 'agent' ? 'agent_enhancement' : g.suggested_category === 'frontend' ? 'frontend_exposure' : 'backend_improvement' });
+                        improveSteps.push({ title: g.title, explanation: g.description?.substring(0, 150) || 'Autonomy gap — addressing this moves toward self-managing operation.', color: '#367895', gapType: g.gap_type, promptTarget: g.suggested_category === 'agent' ? 'agent_enhancement' : g.suggested_category === 'frontend' ? 'frontend_exposure' : 'backend_improvement' });
                       });
                       if (improveSteps.length === 0 && selectedComponent.layers.agent === 'missing' && hasBackend && hasFrontend) {
-                        improveSteps.push({ title: 'Add intelligent automation agents', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', color: '#8b5cf6', promptTarget: 'agent_enhancement' });
+                        improveSteps.push({ title: 'Add intelligent automation agents', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', color: '#367895', promptTarget: 'agent_enhancement' });
                       }
                     }
 
@@ -3661,14 +3661,14 @@ function SystemViewV2Inner() {
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 3: EXECUTION BAR + MODE TOGGLE (Cory now embedded in tabs)
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="card border-0 shadow-sm mb-4" data-testid="control-panel-section" style={{ borderLeft: `3px solid ${isReporting || autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
+      <div className="card border-0 shadow-sm mb-4" data-testid="control-panel-section" style={{ borderLeft: `3px solid ${isReporting || autonomousMode ? '#367895' : '#3b82f6'}` }}>
         <div className="card-body py-3 px-4">
           {/* Slim execution bar */}
           <div className="d-flex align-items-center justify-content-between">
             <div className="d-flex align-items-center gap-2">
-              <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 14 }}></i>
-              <span className="fw-semibold" style={{ fontSize: 12, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>Cory</span>
-              {autonomousMode && <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>Autonomous</span>}
+              <i className="bi bi-robot" style={{ color: autonomousMode ? '#367895' : '#3b82f6', fontSize: 14 }}></i>
+              <span className="fw-semibold" style={{ fontSize: 12, color: autonomousMode ? '#367895' : 'var(--color-primary)' }}>Cory</span>
+              {autonomousMode && <span className="badge" style={{ background: '#36789520', color: '#367895', fontSize: 8 }}>Autonomous</span>}
               {execQueue.length > 0 && <span className="badge bg-primary" style={{ fontSize: 8 }}>Executing {execIndex + 1}/{execQueue.length}</span>}
             </div>
             <div className="d-flex align-items-center gap-2">
@@ -3688,7 +3688,7 @@ function SystemViewV2Inner() {
                 <div className="form-check form-switch mb-0" style={{ minHeight: 0 }}>
                   <input className="form-check-input" type="checkbox" role="switch" checked={autonomousMode} onChange={() => setAutonomousMode(!autonomousMode)} style={{ cursor: 'pointer', width: 24, height: 12 }} />
                 </div>
-                <span style={{ color: autonomousMode ? '#8b5cf6' : '#9ca3af', fontWeight: autonomousMode ? 600 : 400 }}>Auto</span>
+                <span style={{ color: autonomousMode ? '#367895' : '#9ca3af', fontWeight: autonomousMode ? 600 : 400 }}>Auto</span>
               </div>
             </div>
           </div>
@@ -3697,7 +3697,7 @@ function SystemViewV2Inner() {
           {execQueue.length > 0 && (
             <div className="mt-2">
               <div className="progress" style={{ height: 3, borderRadius: 2 }}>
-                <div className="progress-bar" style={{ width: `${((execIndex + (buildResult ? 1 : 0)) / execQueue.length) * 100}%`, background: '#8b5cf6', borderRadius: 2, transition: 'width 0.5s' }}></div>
+                <div className="progress-bar" style={{ width: `${((execIndex + (buildResult ? 1 : 0)) / execQueue.length) * 100}%`, background: '#367895', borderRadius: 2, transition: 'width 0.5s' }}></div>
               </div>
               {execIndex > 0 && (
                 <div className="d-flex flex-wrap gap-1 mt-1">
@@ -3707,7 +3707,7 @@ function SystemViewV2Inner() {
                 </div>
               )}
               {buildResult && !buildResult.error && (
-                <button className="btn btn-sm w-100 mt-2" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 600, fontSize: 10 }} onClick={handleExecNext}>
+                <button className="btn btn-sm w-100 mt-2" style={{ background: '#367895', color: '#fff', fontWeight: 600, fontSize: 10 }} onClick={handleExecNext}>
                   {execIndex + 1 < execQueue.length ? <><i className="bi bi-arrow-right me-1"></i>Next Step ({execIndex + 2}/{execQueue.length})</> : <><i className="bi bi-check-circle me-1"></i>Complete Plan</>}
                 </button>
               )}
@@ -3727,8 +3727,8 @@ function SystemViewV2Inner() {
         <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={() => setDefineModal(null)}>
           <div className="modal-dialog modal-dialog-centered modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-content border-0 shadow-lg">
-              <div className="modal-header py-2" style={{ borderBottom: '3px solid #8b5cf6' }}>
-                <h6 className="modal-title fw-bold" style={{ color: '#8b5cf6' }}>
+              <div className="modal-header py-2" style={{ borderBottom: '3px solid #367895' }}>
+                <h6 className="modal-title fw-bold" style={{ color: '#367895' }}>
                   <i className="bi bi-plus-circle me-2"></i>Define Component
                 </h6>
                 <button className="btn-close" onClick={() => setDefineModal(null)}></button>

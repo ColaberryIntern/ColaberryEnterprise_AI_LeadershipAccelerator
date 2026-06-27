@@ -13,7 +13,7 @@ interface Suggestion {
 }
 
 const SYSTEM_TYPE_COLORS: Record<string, string> = {
-  agent: 'bg-primary',
+  agent: '',
   dashboard: 'bg-info text-dark',
   automation: 'bg-success',
   analytics: 'bg-warning text-dark',
@@ -56,12 +56,12 @@ function ProjectSelectionScreen({ onSelected }: { onSelected?: () => void }) {
     return (
       <div className="card border-0 shadow-sm">
         <div className="card-body text-center py-5">
-          <i className="bi bi-lightbulb fs-1 d-block mb-3" style={{ color: 'var(--color-primary)' }}></i>
-          <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>Discover Your AI Project</h5>
+          <i className="bi bi-lightbulb fs-1 d-block mb-3" style={{ color: '#FB2832' }}></i>
+          <h5 className="fw-bold mb-2" style={{ color: '#FB2832' }}>Discover Your AI Project</h5>
           <p className="text-muted small mb-3">
             Based on your Module 1 artifacts, we'll generate 5 personalized project suggestions tailored to your business context.
           </p>
-          <button className="btn btn-primary" onClick={handleGenerate} disabled={generating}>
+          <button className="btn" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleGenerate} disabled={generating}>
             {generating ? (
               <><span className="spinner-border spinner-border-sm me-2"></span>Analyzing your artifacts...</>
             ) : (
@@ -77,7 +77,7 @@ function ProjectSelectionScreen({ onSelected }: { onSelected?: () => void }) {
     <>
       {/* Header */}
       <div className="mb-4">
-        <h5 className="fw-bold" style={{ color: 'var(--color-primary)' }}>
+        <h5 className="fw-bold" style={{ color: '#FB2832' }}>
           <i className="bi bi-lightbulb me-2"></i>Choose Your AI System
         </h5>
         <p className="text-muted small mb-0">
@@ -95,7 +95,7 @@ function ProjectSelectionScreen({ onSelected }: { onSelected?: () => void }) {
                 className={`card border-0 shadow-sm h-100`}
                 style={{
                   cursor: 'pointer',
-                  borderLeft: isSelected ? '4px solid var(--color-primary)' : '4px solid transparent',
+                  borderLeft: isSelected ? '4px solid #FB2832' : '4px solid transparent',
                   background: isSelected ? 'var(--color-bg-alt)' : 'var(--color-bg)',
                   transition: 'all 0.15s ease',
                 }}
@@ -103,7 +103,7 @@ function ProjectSelectionScreen({ onSelected }: { onSelected?: () => void }) {
               >
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
-                    <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>{s.name}</h6>
+                    <h6 className="fw-bold mb-0" style={{ color: '#FB2832' }}>{s.name}</h6>
                     {isSelected && (
                       <i className="bi bi-check-circle-fill" style={{ color: 'var(--color-accent)', fontSize: '1.25rem' }}></i>
                     )}
@@ -120,7 +120,7 @@ function ProjectSelectionScreen({ onSelected }: { onSelected?: () => void }) {
 
                   <p className="small text-muted mb-2">{s.description}</p>
 
-                  <div className="small mb-2" style={{ color: 'var(--color-primary-light)' }}>
+                  <div className="small mb-2" style={{ color: '#C20E1E' }}>
                     <i className="bi bi-arrow-right-circle me-1"></i>
                     <em>{s.why_this_fits}</em>
                   </div>
@@ -149,7 +149,8 @@ function ProjectSelectionScreen({ onSelected }: { onSelected?: () => void }) {
         </button>
 
         <button
-          className="btn btn-primary"
+          className="btn"
+          style={{ background: '#FB2832', color: '#fff', border: 'none' }}
           onClick={handleSelect}
           disabled={!selected || selecting}
         >

@@ -12,7 +12,7 @@ function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, cou
   return (
     <div
       className="card border-0 shadow-sm card-lift"
-      style={{ borderLeft: '4px solid var(--color-primary)' }}
+      style={{ borderLeft: '4px solid #FB2832' }}
     >
       <div className="card-body p-3 px-md-4">
 
@@ -20,13 +20,13 @@ function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, cou
         <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
           <span
             className="badge text-uppercase"
-            style={{ background: 'var(--color-primary)', color: 'var(--color-bg)', letterSpacing: '0.03em' }}
+            style={{ background: '#FB2832', color: 'var(--color-bg)', letterSpacing: '0.03em' }}
           >
             Anthropic
           </span>
           <span
             className="badge bg-light border"
-            style={{ color: 'var(--color-primary-light)' }}
+            style={{ color: '#C20E1E' }}
           >
             <i className="bi bi-mortarboard me-1" aria-hidden="true"></i>Skilljar
           </span>
@@ -37,7 +37,7 @@ function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, cou
           )}
         </div>
 
-        {/* Title — h6 inherits navy var(--color-primary) from the global heading rule */}
+        {/* Title — h6 inherits navy #FB2832 from the global heading rule */}
         <h6 className="fw-bold mb-1" style={{ fontSize: 14, lineHeight: 1.4 }}>
           {title}
         </h6>
@@ -64,7 +64,8 @@ function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, cou
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-primary btn-sm px-3 d-inline-flex align-items-center"
+            className="btn btn-sm px-3 d-inline-flex align-items-center"
+            style={{ background: '#FB2832', color: '#fff', border: 'none' }}
             aria-label={`Launch ${title} — opens in new tab`}
           >
             <i className="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>
