@@ -32,6 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { handleOpenEnded } = require('./cb-system-handler');
+const cbControl = require('./cb-control');
 
 const ACCOUNT = '3945211';
 const BASE = `https://3.basecampapi.com/${ACCOUNT}`;
@@ -134,11 +135,43 @@ async function bcGetAll(p) {
   }
   return out;
 }
+// --- Self-reply loop guard -------------------------------------------------
+// Registry of comment IDs THIS process has posted. The dispatcher must never
+// treat its own output as an inbound @CB mention. Tracking by comment ID is
+// sanitizer-proof (Basecamp's rich-text sanitizer can strip an in-band HTML
+// marker) and identity-proof (works even when the BC token degrades to a
+// different person). Seeded from state at tick start, persisted in saveState.
+const ownComments = new Set();
+// True if this recording is OUR OWN output and must be skipped: a comment this
+// process posted (by id), or anything authored by the identity we post as.
+function isOwnOutput(rec, ownSet, postingId) {
+  if (!rec) return false;
+  if (ownSet && ownSet.has(rec.id)) return true;
+  if (postingId != null && rec.creator && rec.creator.id === postingId) return true;
+  return false;
+}
+
 async function bcPost(p, body) {
   if (DRY) { console.log('[dry] POST', p, JSON.stringify(body).slice(0, 200)); return { id: 'dry' }; }
   const r = await fetch(p.startsWith('http') ? p : BASE + p, { method: 'POST', headers: H(), body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`POST ${p} -> ${r.status} ${await r.text()}`);
-  return r.json();
+  const res = await r.json();
+  // Remember every comment we create so the next scan skips our own output.
+  if (/\/comments\.json$/.test(p) && res && typeof res.id !== 'undefined') ownComments.add(res.id);
+  return res;
+}
+
+// The Basecamp identity this process is actually posting AS (resolved once per
+// tick from /my/profile.json). The loop-safety model assumes CB posts as CB
+// System (37708014), which is NOT in ALLOWED_REQUESTER_IDS, so its own comments
+// are naturally ignored. On 2026-06-22 the BC token degraded to Ali (17454835,
+// the #1 allowed requester) after the 06-19 token rekey; every author-based
+// guard collapsed at once and CB answered itself ~60x/hr (1,245 comments). We
+// now resolve the identity each tick and HALT if it is not CB System.
+let selfId = null;
+async function resolveSelfId() {
+  try { const me = await bcGet('/my/profile.json'); return me && typeof me.id !== 'undefined' ? me.id : null; }
+  catch (e) { console.error(`  resolveSelfId failed: ${e.message}`); return null; }
 }
 
 function acquireLock() {
@@ -160,7 +193,12 @@ function loadState() {
     return s;
   } catch { return { last_tick: null, processed: {}, replyCounts: {}, alarmed: {} }; }
 }
-function saveState(s) { fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2)); }
+function saveState(s) {
+  // Persist the most recent own-comment IDs (capped to keep state bounded; only
+  // very recent IDs are ever consulted given the 2h lookback window).
+  s.ownComments = [...ownComments].slice(-3000);
+  fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2));
+}
 const mention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
 
 // --- Duplicate-reply circuit breaker ---------------------------------------
@@ -177,6 +215,27 @@ function shouldCircuitBreak(state, key, max = MAX_REPLIES_PER_COMMENT) { return 
 function recordReply(state, key) {
   if (!state.replyCounts) state.replyCounts = {};
   state.replyCounts[key] = (state.replyCounts[key] || 0) + 1;
+}
+
+// --- Runaway auto-trip (account-wide rate guard) ---------------------------
+// The per-comment circuit breaker above only caps replies to a SINGLE comment;
+// it was blind to the 2026-06-22 flood because each self-reply was a new comment
+// id. This guard watches the TOTAL reply rate across all mentions: if CB answers
+// more than CB_AUTOTRIP_MAX replies inside a rolling CB_AUTOTRIP_WINDOW, that is
+// not normal traffic — it flips the persistent kill switch OFF (cb_dispatcher_
+// enabled=false) and alarms, so a runaway stops within minutes instead of hours.
+// Defaults trip well below the observed flood rate (~4 replies / 3-min tick)
+// but above realistic bursty team usage. Tunable via env for the supervised
+// re-launch; raise once trust is established.
+const AUTOTRIP_WINDOW_MS = (Number(process.env.CB_AUTOTRIP_WINDOW_MIN) || 15) * 60 * 1000;
+const AUTOTRIP_MAX = Number(process.env.CB_AUTOTRIP_MAX_REPLIES) || 12;
+function noteReply(state) {
+  if (!Array.isArray(state.recentReplyTimes)) state.recentReplyTimes = [];
+  const now = Date.now();
+  const cutoff = now - AUTOTRIP_WINDOW_MS;
+  state.recentReplyTimes = state.recentReplyTimes.filter((t) => t >= cutoff);
+  state.recentReplyTimes.push(now);
+  return state.recentReplyTimes.length; // count within the rolling window, incl. this one
 }
 
 // Best-effort one-time alarm when the breaker trips for a key. Doubles as the
@@ -203,6 +262,66 @@ async function alarmCircuitBreak(state, m, count) {
     });
     console.error(`  circuit-break ALARM sent for ${m.key} (${count} replies)`);
   } catch (e) { console.error(`  circuit-break alarm failed: ${e.message}`); }
+}
+
+// Rate-limited alarm when the dispatcher's posting identity is not CB System
+// (token degradation). Fires at most once / 6h so a stuck token does not email
+// Ali every 3 minutes. Never throws into the tick.
+async function alarmIdentityDegraded(state, gotId) {
+  const last = state.identityAlarmedAt ? new Date(state.identityAlarmedAt).getTime() : 0;
+  if (Date.now() - last < 6 * 3600 * 1000) return;        // at most once / 6h
+  state.identityAlarmedAt = new Date().toISOString();
+  if (DRY) { console.log(`[dry] would alarm identity-degraded (got ${gotId})`); return; }
+  try {
+    if (!process.env.MANDRILL_API_KEY) { console.error('  identity alarm: MANDRILL_API_KEY unset, logged only'); return; }
+    const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    await transport.sendMail({
+      from: '"CB Dispatcher" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      subject: `[CB Dispatcher] HALTED - Basecamp token degraded (posting as ${gotId}, not CB System)`,
+      text: `The CB inbound-dispatcher resolved its Basecamp posting identity as ${gotId}, but it must post as CB System (${CB_SYSTEM_ID}).\n\nThe dispatcher has HALTED (it is posting nothing) to avoid a self-reply loop like 2026-06-22, when a degraded token made CB answer its own comments ~60x/hr (1,245 comments before it was stopped).\n\nRoot cause is almost always the BC token: the dedicated CB System token rotated/expired and the cron-env-wrapper fell back to a token that resolves to a real person. Restore a CB System (${CB_SYSTEM_ID}) token; the next tick then resumes automatically.`,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.error(`  identity-degraded ALARM sent (got ${gotId})`);
+  } catch (e) { console.error(`  identity alarm failed: ${e.message}`); }
+}
+
+// Rate-limited alarm when the runaway auto-trip flips the kill switch OFF.
+// At most once / 6h so a stuck condition does not spam Ali. Never throws.
+async function alarmAutoTrip(state, reason) {
+  const last = state.autotripAlarmedAt ? new Date(state.autotripAlarmedAt).getTime() : 0;
+  if (Date.now() - last < 6 * 3600 * 1000) return;
+  state.autotripAlarmedAt = new Date().toISOString();
+  if (DRY) { console.log(`[dry] would alarm auto-trip: ${reason}`); return; }
+  try {
+    if (!process.env.MANDRILL_API_KEY) { console.error('  auto-trip alarm: MANDRILL_API_KEY unset, logged only'); return; }
+    const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    await transport.sendMail({
+      from: '"CB Dispatcher" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      subject: '[CB Dispatcher] AUTO-TRIPPED OFF - runaway protection fired',
+      text: `The CB inbound-dispatcher auto-tripped its kill switch (cb_dispatcher_enabled is now false). CB will post nothing until you re-enable it from the CB System Command dashboard.\n\nReason: ${reason}\n\nThis fires when CB's reply rate or posting identity looks like a runaway (the 2026-06-22 self-reply flood pattern). Review the recent activity, confirm the Basecamp token still resolves to CB System (${CB_SYSTEM_ID}), then re-enable from the dashboard when it is safe.`,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.error(`  auto-trip ALARM sent: ${reason}`);
+  } catch (e) { console.error(`  auto-trip alarm failed: ${e.message}`); }
+}
+
+// Flip the persistent kill switch OFF + alarm. Used by both the runaway rate
+// guard and the identity-degradation halt. Best-effort; never throws into the tick.
+async function autoTrip(state, reason) {
+  console.error(`  AUTO-TRIP: ${reason}; flipping cb_dispatcher_enabled OFF`);
+  if (!DRY) { try { await cbControl.disable(reason); } catch (e) { console.error(`  cbControl.disable failed: ${e.message}`); } }
+  else console.log(`[dry] would flip cb_dispatcher_enabled OFF (${reason})`);
+  await alarmAutoTrip(state, reason);
 }
 
 // --- Recipes ---------------------------------------------------------------
@@ -358,6 +477,7 @@ async function findNewMentionsByFeed(state, cutoffMs) {
   const seen = new Set();
   const consider = (rec, recId, key) => {
     if (seen.has(key) || state.processed[key]) return;
+    if (isOwnOutput(rec, ownComments, selfId)) return; // never answer our own output (self-reply loop guard)
     if (new Date(rec.created_at).getTime() < cutoffMs) return;
     if (!ALLOWED_REQUESTER_IDS.has(rec.creator?.id)) return;
     if (!isCBMention(rec.content || '')) return;
@@ -459,6 +579,7 @@ async function findNewMentionsByWalk(state, cutoffMs) {
               : await bcGet(`/buckets/${bucketId}/messages/${msg.id}.json`);
             const created = new Date(fullMsg.created_at || msg.created_at).getTime();
             if (created >= cutoffMs
+                && !isOwnOutput({ id: msg.id, creator: fullMsg.creator || msg.creator }, ownComments, selfId)
                 && ALLOWED_REQUESTER_IDS.has(fullMsg.creator?.id ?? msg.creator?.id)
                 && isCBMention(fullMsg.content || '')
                 && !isAutomatedAgentCard(fullMsg.content || '')) {
@@ -516,6 +637,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
   catch (_e) { return; }
   if (!Array.isArray(comments)) return;
   for (const c of comments) {
+    if (isOwnOutput(c, ownComments, selfId)) continue; // never answer our own output (self-reply loop guard)
     if (!ALLOWED_REQUESTER_IDS.has(c.creator?.id)) continue;
     const ctime = new Date(c.created_at).getTime();
     if (ctime < cutoffMs) continue;
@@ -528,7 +650,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 }
 
 // Exported for unit tests. Guarded IIFE below only runs when executed directly.
-module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk };
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID, noteReply, AUTOTRIP_MAX, AUTOTRIP_WINDOW_MS };
 
 if (require.main !== module) return;
 
@@ -552,9 +674,45 @@ if (require.main !== module) return;
   try {
     state = loadState();
     console.log(`tick ${new Date().toISOString()}, last=${state.last_tick}`);
+    // Seed our own-comment registry so we never answer comments we posted.
+    if (Array.isArray(state.ownComments)) for (const id of state.ownComments) ownComments.add(id);
+    // KILL SWITCH: the dashboard (or a prior auto-trip) can disable the
+    // dispatcher via system_settings.cb_dispatcher_enabled. Checked before any
+    // posting work. A real run exits immediately; a --dry run keeps going so the
+    // switch never blocks observation (bcPost is a no-op under --dry anyway).
+    const control = await cbControl.isEnabled();
+    if (!control.enabled) {
+      console.log(`  KILL SWITCH OFF: cb_dispatcher_enabled=false (source=${control.source}${control.error ? `, dberr=${control.error}` : ''}).`);
+      if (!DRY) {
+        state.last_tick = new Date().toISOString();
+        saveState(state);
+        clearTimeout(timeout);
+        releaseLock();
+        await cbControl.close();
+        process.exit(0);
+      }
+      console.log('  [dry] kill switch is OFF - continuing for observation only (no posts).');
+    }
+    // Resolve who we are posting AS. The loop-safety model REQUIRES CB System.
+    // If the token has degraded to a real person, trip the kill switch + HALT
+    // (post nothing) rather than ignite a self-reply loop. Re-enable from the
+    // dashboard once a CB System token is confirmed restored.
+    selfId = await resolveSelfId();
+    if (selfId !== CB_SYSTEM_ID) {
+      console.error(`  IDENTITY DEGRADED: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}; halting tick (no posts) to avoid a self-reply loop.`);
+      await autoTrip(state, `identity_degraded: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}`);
+      await alarmIdentityDegraded(state, selfId);
+      state.last_tick = new Date().toISOString();
+      if (!DRY) saveState(state);
+      clearTimeout(timeout);
+      releaseLock();
+      await cbControl.close();
+      process.exit(0);
+    }
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
+      let repliedNow = false;
       // CIRCUIT BREAKER: if we've already replied to this exact mention key the
       // cap number of times, refuse to post again and alarm. Backstops any bug
       // that re-routes an already-answered mention into the reply path.
@@ -572,6 +730,7 @@ if (require.main !== module) return;
         try {
           await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: html });
           recordReply(state, m.key);
+          repliedNow = true;
           state.processed[m.key] = { at: new Date().toISOString(), outcome: 'replied:keyword' };
           console.log(`  keyword reply to comment ${m.comment.id} on recording ${m.recId}`);
         } catch (e) {
@@ -585,7 +744,7 @@ if (require.main !== module) return;
             bcGet, bcPost, mention,
             bucketId: m.bucketId, recId: m.recId, comment: m.comment, aliId: ALI_ID,
           });
-          if (result.ok) recordReply(state, m.key);
+          if (result.ok) { recordReply(state, m.key); repliedNow = true; }
           state.processed[m.key] = { at: new Date().toISOString(), outcome: result.ok ? 'replied:llm' : 'llm_error', summary: result.summary, error: result.error };
           console.log(`  llm handler for ${m.comment.id}: ${result.summary}`);
         } catch (e) {
@@ -595,7 +754,19 @@ if (require.main !== module) return;
           try {
             await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content) });
             recordReply(state, m.key);
+            repliedNow = true;
           } catch (_e2) {}
+        }
+      }
+      // Runaway guard: if the TOTAL reply rate crosses the threshold this tick,
+      // trip the kill switch and stop. Catches a flood the per-comment breaker
+      // misses (each self-reply is a new comment id, as on 2026-06-22).
+      if (repliedNow) {
+        const windowCount = noteReply(state);
+        if (windowCount > AUTOTRIP_MAX) {
+          await autoTrip(state, `runaway reply rate: ${windowCount} replies in ${Math.round(AUTOTRIP_WINDOW_MS / 60000)}min (cap ${AUTOTRIP_MAX})`);
+          if (!DRY) saveState(state);
+          break;
         }
       }
       // Persist after EVERY mention. If the tick later times out, already-
@@ -609,5 +780,6 @@ if (require.main !== module) return;
   } finally {
     clearTimeout(timeout);
     releaseLock();
+    await cbControl.close();
   }
 })();
