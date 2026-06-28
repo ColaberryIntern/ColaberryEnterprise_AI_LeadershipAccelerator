@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { fetchNextCohortStart } from '../../services/cohortApi';
 
 /**
  * CohortUrgency
@@ -58,6 +59,22 @@ function formatStartLine(target: Date | null): string {
   return `${WEEKDAYS[target.getDay()]}, ${MONTHS[target.getMonth()]} ${target.getDate()}`;
 }
 
+/**
+ * Parse the start date WITHOUT the UTC-midnight off-by-one. A bare "YYYY-MM-DD"
+ * handed to `new Date()` is parsed as UTC midnight, which renders as the PRIOR
+ * day in timezones behind UTC (US Central etc.) — that is why "2026-07-23"
+ * displayed as "Wed, Jul 22". Build date-only values at LOCAL midnight instead;
+ * full datetimes (with a time/offset) are parsed as-is.
+ */
+function parseStartDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  const d = m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
 const CohortUrgency: React.FC<CohortUrgencyProps> = ({
@@ -65,10 +82,25 @@ const CohortUrgency: React.FC<CohortUrgencyProps> = ({
   seatsTotal = 40,
   seatsLeft = 7,
 }) => {
-  const target = useMemo<Date | null>(() => {
-    const d = new Date(startDateISO);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }, [startDateISO]);
+  // Connect the start date to the admin cohort calendar (/admin/accelerator):
+  // fetch the next open cohort's start date and prefer it over the prop, falling
+  // back to the prop on any failure. Browser-only (effect), so first paint uses
+  // the prop and SSR stays deterministic.
+  const [liveStartISO, setLiveStartISO] = useState<string | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchNextCohortStart(controller.signal).then((iso) => {
+      if (iso) setLiveStartISO(iso);
+    });
+    return () => controller.abort();
+  }, []);
+
+  const effectiveStartISO = liveStartISO ?? startDateISO;
+
+  const target = useMemo<Date | null>(
+    () => parseStartDate(effectiveStartISO),
+    [effectiveStartISO],
+  );
 
   const targetMs = target ? target.getTime() : null;
 
