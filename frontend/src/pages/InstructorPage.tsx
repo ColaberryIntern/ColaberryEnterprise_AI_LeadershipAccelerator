@@ -232,11 +232,16 @@ function InstructorPage() {
             </div>
           </div>
 
-          {/* Photo — object-fit cover, rounded, broken-image safe */}
+          {/* Photo — links to Ali's LinkedIn; object-fit cover, rounded, broken-image safe */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div
+            <a
+              href="https://www.linkedin.com/in/ali-muwwakkil-6278992b/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Ali Muwwakkil on LinkedIn (opens in a new tab)"
               style={{
                 position: 'relative',
+                display: 'block',
                 width: 'min(360px, 80vw)',
                 aspectRatio: '4 / 5',
                 borderRadius: 'var(--radius-2xl)',
@@ -245,6 +250,7 @@ function InstructorPage() {
                 border:
                   'var(--border-1) solid color-mix(in srgb, var(--text-on-inverse) 18%, transparent)',
                 boxShadow: 'var(--shadow-xl)',
+                textDecoration: 'none',
               }}
             >
               <img
@@ -263,7 +269,32 @@ function InstructorPage() {
                   fontSize: 0,
                 }}
               />
-            </div>
+              {/* LinkedIn affordance — signals the photo is clickable */}
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  bottom: '12px',
+                  right: '12px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 11px',
+                  borderRadius: 'var(--radius-pill)',
+                  background: 'color-mix(in srgb, var(--neutral-1000) 70%, transparent)',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-body)',
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.8 0 0 .78 0 1.74v20.52C0 23.22.8 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.74V1.74C24 .78 23.2 0 22.22 0z" />
+                </svg>
+                View on LinkedIn
+              </span>
+            </a>
           </div>
         </div>
       </section>
