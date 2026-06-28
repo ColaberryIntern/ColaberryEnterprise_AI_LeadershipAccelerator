@@ -40,9 +40,9 @@ colors/fonts/shape/nav globally, so every page starts at **~** (brand) before an
 | AdminDashboardPage | ✓ | ✓ | ✓ | ✓ | ✓ | ☐ | ✓ | ✓ |
 | AdminLeadsPage | ✓ | ✓ | ✓ | ✓ | ✓ | ☐ | ✓ | ✓ |
 | AdminPipelinePage | ✓ | ✓ | ✓ | ✓ | ✓ | ☐ | ✓ | ✓ |
-| AdminOpportunitiesPage | ~ | ☐ | ☐ | ☐ | ☐ | ☐ | ✓ | ☐ |
-| AdminRevenueDashboardPage | ~ | ☐ | ☐ | ☐ | ☐ | ☐ | ✓ | ☐ |
-| CEOCommandCenter | ~ | ☐ | ☐ | ☐ | ☐ | ☐ | ✓ | ☐ |
+| AdminOpportunitiesPage | ✓ | ✓ | ✓ | ✓ | ✓ | ☐ | ✓ | ✓ |
+| AdminRevenueDashboardPage | ✓ | ✓ | ✓ | ✓ | ✓ | ☐ | ✓ | ✓ |
+| CEOCommandCenter (header+KPIs; dark tab panels deferred) | ✓ | ✓ | ✓ | ✓ | ✓ | ☐ | ✓ | ✓ |
 | GovernanceCommandCenter | ~ | ☐ | ☐ | ☐ | ☐ | ☐ | ✓ | ☐ |
 | InboxCOSPage | ~ | ☐ | ☐ | ☐ | ☐ | ☐ | ✓ | ☐ |
 | AdminTrustCenterPage | ~ | ☐ | ☐ | ☐ | ☐ | ☐ | ✓ | ☐ |
@@ -64,3 +64,4 @@ AdminSequencesPage, AdminGeneratorPage, AdminAISettingsPage — all **~** (found
 - 2026-06-28 (CC-20260628-k7p2): Foundation landed + AdminReportsPage converted (maker). Separate checker audited; 3 findings fixed.
 - 2026-06-28 (CC-20260628-k7p2): Dev visual review — branch built clean (prod build green) + run as a throwaway review container on the dev2 network (`http://95.216.199.47:9990`). Playwright screenshots captured 8 pages → `docs/screenshots/2026-06-28-brand-review/`. Confirmed live: cherry/Roboto/rounded brand, new collapsible+search sidebar with cherry active state + auto-expand, branded StatCards + per-page TrustBadge on the converted Reports page. Notes: (a) dev2 backend lacks `/api/admin/trust/*` + reports data, so those pages show error/empty states (data gap, not a frontend defect); (b) FOUND pre-existing UX bug in `AdminTrustCenterPage` — it fires a toast on every failed 30s poll (toast spam when backend is down); fix when branding that page (toast once / inline error).
 - 2026-06-28 (CC-20260628-k7p2): Batch 1a — Dashboard, Leads, Pipeline converted (3 parallel maker subagents) → PageHeader + StatCards + StatusBadge + SectionCard + per-page TrustBadge, all hardcoded hex → tokens, pipeline stage colors → `--chart-N`. Separate checker subagent: all PASS (no build-breakers, hooks ordered, tags balanced, no hex); one icon nit (`flow-chart` → `record-circle-line`) fixed. tsc clean. 4/42 pages now fully converted.
+- 2026-06-28 (CC-20260628-k7p2): Batch 1b — Opportunities, Revenue, CEO Command converted (3 parallel makers) → PageHeader + StatCards + StatusBadge + (Section)Card + per-page TrustBadge; chart/funnel series → `--chart-N`. CEO: header + 6 KPI tiles + status pill converted; its dark-themed tab panels (Goals/Directives/Dept/Workforce/Audit) intentionally DEFERRED to a dark→light re-theme pass. Separate checker: all 3 SHIP, no issues. 7/42 pages converted (CEO header-level).
