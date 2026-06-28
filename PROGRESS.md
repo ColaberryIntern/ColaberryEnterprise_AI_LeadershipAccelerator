@@ -10,6 +10,22 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Admin UI rebrand foundation + Trust layer + collapsible sidebar (Colaberry brand) (2026-06-28)
+- [x] **Branded the admin shell to the Colaberry design system + redesigned the sidebar + per-page trust primitives**
+  - Date: 2026-06-28
+  - Session: CC-20260628-k7p2
+  - Branch: `workstream/admin-brand-redesign` (isolated git worktree off origin/main; the main tree was on an unrelated branch with 629 dirty files)
+  - What changed:
+    - `frontend/src/styles/brand-bridge.css` (new): one reversible seam mapping the legacy admin tokens (`--color-primary` navy / Segoe) onto the already-vendored Colaberry brand (`src/colaberry/`): cherry `#FB2832` primary, leaf/berry accents, Roboto + Roboto Mono, rounded radii; plus Bootstrap 5.3 `--bs-*` overrides (buttons, forms, nav tabs/pills, pagination, badges, progress). Imported last in `index.tsx` so it wins all collisions.
+    - `frontend/src/styles/admin-shell.css` (new): styles for the shared shell primitives + the redesigned sidebar (brand-ink chrome, cherry active accent, search, collapsible groups).
+    - `frontend/src/components/admin/shell/` (new): `PageHeader`, `StatCard`, `StatusBadge`, `SectionCard`, `TrustBadge` + `trust.ts` (the `TrustSignal` L0→L1→L2→L3 model) + barrel `index.ts`. `TrustBadge` delivers the "trust on every page" requirement (Basecamp 10027085963).
+    - `frontend/src/components/Layout/AdminLayout.tsx` + `adminNav.ts` (new): sidebar rewritten to collapsible/accordion groups + "jump to" search + RemixIcon glyphs; active group auto-expands; collapse state persists in `localStorage`. Immersive mode (`/admin/intelligence`), SafeModeBanner, ErrorBoundary, Outlet, and logout all preserved.
+    - `frontend/src/pages/admin/AdminReportsPage.tsx`: first per-page conversion to the new shell (PageHeader + 4 StatCards + StatusBadge + SectionCard + a report-health `TrustSignal`); removed hardcoded navy hex and the double container.
+    - `docs/admin-redesign/LEDGER.md` (new): the Loop Architect state ledger + per-page "top-notch" rubric for the remaining ~41 pages (Basecamp 10028907149).
+  - Why: Ali directed a full rebrand to the Colaberry design system (Basecamp 10031928327), trust signals on every page (10027085963), looped to top-notch UI/UX (10028907149); the left sidebar (30+ links across 9 groups) had grown too long to scan.
+  - Verification: `tsc --noEmit` clean on every changed file (run in a `node:20` Docker container since this host has no local node; the only errors are 2 pre-existing recharts `Formatter` type mismatches in untouched IntelScatter/Waterfall charts). A separate checker subagent (maker/checker per the Loop Architect) audited the diff — no build-breakers, no circular CSS vars, all referenced tokens resolve — and its 3 findings (immersive-bg hex, detail-card primitive, neutral-badge contrast) were fixed. Visual review via dev deploy is pending.
+  - Notes: the brand icon set is RemixIcon (already vendored via `src/colaberry/tokens/fonts.css`), not Lucide — so NO new npm dependency was added (plan had assumed lucide-react). The foundation re-skins every admin page globally; the existing `AdminTrustCenterPage` already provides the L0 Trust Command Center hub. Per-page PageHeader/Trust migration continues via the LEDGER loop (1 of ~42 pages converted this session).
+
 ### Dev environment bootstrap — admin seed, student portal tokens, GitHub PAT inject, Docker network fix (2026-06-23)
 - [x] **Fixed stale Docker dev backend (accelerator_prod → accelerator_dev1 + network)**
   - Date: 2026-06-23
