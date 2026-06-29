@@ -8,16 +8,18 @@ export interface OpenCohort {
   id: string;
   name: string;
   start_date: string; // 'YYYY-MM-DD'
+  core_day?: string | null; // e.g. 'Monday and Thursday'
+  core_time?: string | null; // e.g. '6:30 PM - 8:30 PM CST'
   max_seats: number;
   seats_taken: number;
 }
 
-// The next open cohort's start date ('YYYY-MM-DD'), so public surfaces can show
-// the same start date the admin manages instead of a hardcoded value. Picks the
-// earliest open cohort whose start date is today or later. Returns null on any
-// failure (network, bad shape, none upcoming) so callers fall back to their own
-// default — this never throws and never blocks render.
-export async function fetchNextCohortStart(signal?: AbortSignal): Promise<string | null> {
+// The next open cohort (earliest start date that is today or later), so public
+// surfaces can show the same start date AND live-session schedule the admin
+// manages instead of hardcoded values. Returns null on any failure (network,
+// bad shape, none upcoming) so callers fall back to their own defaults — never
+// throws, never blocks render.
+export async function fetchNextCohort(signal?: AbortSignal): Promise<OpenCohort | null> {
   try {
     const res = await api.get('/api/cohorts', { signal, timeout: 12000 });
     const cohorts: OpenCohort[] = Array.isArray(res?.data?.cohorts) ? res.data.cohorts : [];
@@ -25,8 +27,14 @@ export async function fetchNextCohortStart(signal?: AbortSignal): Promise<string
     const upcoming = cohorts
       .filter((c) => typeof c?.start_date === 'string' && c.start_date >= todayISO)
       .sort((a, b) => a.start_date.localeCompare(b.start_date));
-    return upcoming[0]?.start_date ?? null;
+    return upcoming[0] ?? null;
   } catch {
     return null;
   }
+}
+
+// Convenience: just the next open cohort's start date ('YYYY-MM-DD'), or null.
+export async function fetchNextCohortStart(signal?: AbortSignal): Promise<string | null> {
+  const c = await fetchNextCohort(signal);
+  return c ? c.start_date : null;
 }
