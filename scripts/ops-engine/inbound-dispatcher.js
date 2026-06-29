@@ -78,6 +78,17 @@ function isCBMention(content) {
 // with, or the co-occurrence of the three structural labels they always carry
 // (so a human who merely types "anticipated goal" in prose is not suppressed).
 const AUTOMATED_CARD_HEADER_RE = /^\s*CB System\s*:\s*automated response/i;
+// CB's OWN AI task-runner output (runCbAiTasks.js / runCbAiTasksGeneric.js).
+// Those runners post their "starting" + "deliverable" + "error" comments under a
+// real person's identity (the task reviewer), so isOwnOutput (which keys on the
+// posting identity / comment id) does NOT catch them, and each one opens with a
+// "CB System ..." header that trips the plain-text isCBMention. They are status
+// announcements, never requests, so the dispatcher must skip them. Not doing so
+// flooded LandJet on 2026-06-29: one runner batch posted 13 "starting this task"
+// notes, the dispatcher answered all 13 in a single tick, and the runaway guard
+// tripped the kill switch. Anchored at the start so the phrase appearing inside a
+// human's prose does not get suppressed.
+const CB_RUNNER_OUTPUT_RE = /^\s*CB System (is starting this task|first-pass deliverable|hit an error drafting)/i;
 function isAutomatedAgentCard(content) {
   if (!content) return false;
   const stripped = content
@@ -86,6 +97,7 @@ function isAutomatedAgentCard(content) {
     .replace(/\s+/g, ' ')
     .trim();
   if (AUTOMATED_CARD_HEADER_RE.test(stripped)) return true;
+  if (CB_RUNNER_OUTPUT_RE.test(stripped)) return true;
   // Structural fallback: the card always pairs an "Anticipated goal" with a
   // "Proposed plan" and a "Claude Code prompt" block. All three together is a
   // machine-generated card; any one alone is too loose to suppress on.

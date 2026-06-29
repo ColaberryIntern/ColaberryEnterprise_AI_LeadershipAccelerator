@@ -60,3 +60,35 @@ test('empty / null content is safe', () => {
   assert.equal(isAutomatedAgentCard(null), false);
   assert.equal(isAutomatedAgentCard(undefined), false);
 });
+
+// --- 2026-06-29 regression: CB's OWN AI task-runner output -------------------
+// runCbAiTasks.js / runCbAiTasksGeneric.js post their "starting" + "deliverable"
+// + "error" comments under the task reviewer's REAL identity, so isOwnOutput
+// (keyed on posting identity / comment id) misses them, and each opens with a
+// "CB System ..." header that trips the plain-text isCBMention. The dispatcher
+// answered a 13-comment LandJet runner batch in one tick and the runaway guard
+// tripped the kill switch (02:51 UTC). The guard must skip these announcements.
+const RUNNER_STARTING = '<div><strong>CB System is starting this task now.</strong></div><div>Drafting a first-pass deliverable for Ali to review. Anything outbound (client email, social post, etc.) is marked "[DRAFT - Ali reviews + sends]" - CB never sends external communications, only drafts them.</div><div>Output will land here as a follow-up comment within ~2 minutes.</div>';
+const RUNNER_DELIVERABLE = '<div><strong>CB System first-pass deliverable</strong> (Ali reviews + refines + marks complete)</div><div>...content...</div><div>Reply to revise or tag <code>@CB System</code> to ask for changes.</div>';
+const RUNNER_ERROR = '<div><strong>CB System hit an error drafting this.</strong></div><div>some message</div><div>Will retry on next nightly run.</div>';
+
+test('skips CB task-runner "starting this task" announcement', () => {
+  assert.equal(isAutomatedAgentCard(RUNNER_STARTING), true);
+});
+
+test('skips CB task-runner "first-pass deliverable" comment', () => {
+  assert.equal(isAutomatedAgentCard(RUNNER_DELIVERABLE), true);
+});
+
+test('skips CB task-runner "hit an error" comment', () => {
+  assert.equal(isAutomatedAgentCard(RUNNER_ERROR), true);
+});
+
+test('runner output still trips isCBMention (so the guard, not the filter, stops it)', () => {
+  assert.equal(isCBMention(RUNNER_STARTING), true);
+});
+
+test('does NOT suppress a human who references the runner phrase mid-sentence', () => {
+  assert.equal(isAutomatedAgentCard('<div>@CB did the CB System first-pass deliverable land for the LandJet task yet?</div>'), false);
+  assert.equal(isAutomatedAgentCard('<div>CB, is the system starting this task or not?</div>'), false);
+});
