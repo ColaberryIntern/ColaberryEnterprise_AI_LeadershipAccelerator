@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Cell,
 } from 'recharts';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
-const COLORS = ['#0d6efd', '#198754', '#6f42c1', '#fd7e14', '#0dcaf0', '#dc3545', '#ffc107', '#20c997'];
+const COLORS = [
+  'var(--chart-1)', 'var(--chart-3)', 'var(--chart-5)', 'var(--chart-4)',
+  'var(--chart-6)', 'var(--chart-2)', 'var(--chart-7)', 'var(--chart-8)',
+];
 
 interface InsightEntry {
   value: string;
@@ -36,6 +40,8 @@ interface DailyTrend {
   outcome: string;
   count: string;
 }
+
+type BadgeTone = 'success' | 'warning' | 'neutral';
 
 function AdminICPInsightsPage() {
   const [summary, setSummary] = useState<Record<string, any> | null>(null);
@@ -84,7 +90,7 @@ function AdminICPInsightsPage() {
   };
 
   // Aggregate outcome stats for charts
-  const outcomeChartData = React.useMemo(() => {
+  const outcomeChartData = useMemo(() => {
     const byOutcome: Record<string, number> = {};
     for (const s of outcomeStats) {
       byOutcome[s.outcome] = (byOutcome[s.outcome] || 0) + parseInt(s.count, 10);
@@ -94,7 +100,7 @@ function AdminICPInsightsPage() {
       .sort((a, b) => b.value - a.value);
   }, [outcomeStats]);
 
-  const channelChartData = React.useMemo(() => {
+  const channelChartData = useMemo(() => {
     const byChannel: Record<string, number> = {};
     for (const s of outcomeStats) {
       byChannel[s.channel] = (byChannel[s.channel] || 0) + parseInt(s.count, 10);
@@ -103,7 +109,7 @@ function AdminICPInsightsPage() {
   }, [outcomeStats]);
 
   // Build daily trend chart data
-  const trendChartData = React.useMemo(() => {
+  const trendChartData = useMemo(() => {
     const dateMap: Record<string, Record<string, number>> = {};
     for (const d of dailyTrend) {
       const date = d.date?.substring(0, 10) || '';
@@ -115,27 +121,39 @@ function AdminICPInsightsPage() {
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [dailyTrend]);
 
+  // Per-page trust signal — ICP analytics are recomputed from live interaction outcomes.
+  const trust: TrustSignal = useMemo(() => {
+    const totalOutcomes = summary?._stats?.total_outcomes ?? 0;
+    const lastComputed = summary?._stats?.last_computed ?? null;
+    return {
+      level: 'live',
+      source: 'ICP analytics',
+      updatedAt: new Date().toISOString(),
+      summary: `${recommendations.length} targeting recommendations from ${Number(totalOutcomes).toLocaleString()} interaction outcomes.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Freshness',
+          status: 'live',
+          evidence: [
+            { label: 'Last computed', value: lastComputed ? new Date(lastComputed).toLocaleDateString() : 'Never' },
+          ],
+        },
+      ],
+    };
+  }, [summary, recommendations.length]);
+
   const formatPercent = (v: number) => `${(v * 100).toFixed(1)}%`;
   const confidenceLabel = (c: number) => {
     if (c >= 0.3) return 'High';
     if (c >= 0.15) return 'Medium';
     return 'Low';
   };
-  const confidenceColor = (c: number) => {
+  const confidenceTone = (c: number): BadgeTone => {
     if (c >= 0.3) return 'success';
     if (c >= 0.15) return 'warning';
-    return 'secondary';
+    return 'neutral';
   };
-
-  if (loading) {
-    return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    );
-  }
 
   const metricLabels: Record<string, string> = {
     response_rate: 'Response Rate',
@@ -152,230 +170,226 @@ function AdminICPInsightsPage() {
     industry_x_title: 'Industry + Title',
   };
 
+  if (loading) {
+    return (
+      <>
+        <PageHeader
+          title="ICP Insights"
+          icon="lightbulb-line"
+          subtitle="Targeting intelligence computed from interaction outcomes by industry, title, company size, and source."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Insights' }]}
+          trust={trust}
+        />
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Insights' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          ICP Insights & Intelligence
-        </h1>
-        <button
-          className="btn btn-outline-primary"
-          onClick={handleCompute}
-          disabled={computing}
-        >
-          {computing ? 'Computing...' : 'Recompute Insights'}
-        </button>
-      </div>
+      <PageHeader
+        title="ICP Insights"
+        icon="lightbulb-line"
+        subtitle="Targeting intelligence computed from interaction outcomes by industry, title, company size, and source."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Insights' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-outline-primary btn-sm" onClick={handleCompute} disabled={computing}>
+            <i className="ri-refresh-line" aria-hidden="true" /> {computing ? 'Computing...' : 'Recompute Insights'}
+          </button>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Total Interactions"
+              value={(summary?._stats?.total_outcomes ?? 0).toLocaleString()}
+              icon="exchange-line"
+              tone="primary"
+            />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Last 90 Days"
+              value={(summary?._stats?.recent_outcomes_90d ?? 0).toLocaleString()}
+              icon="calendar-check-line"
+              tone="success"
+            />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Top Recommendations"
+              value={recommendations.length}
+              icon="medal-line"
+              tone="info"
+            />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Last Computed"
+              value={summary?._stats?.last_computed
+                ? new Date(summary._stats.last_computed).toLocaleDateString()
+                : 'Never'}
+              icon="time-line"
+              tone="neutral"
+            />
+          </div>
+        </div>
+      </PageHeader>
 
       {/* Filters */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-body py-3">
-          <div className="row g-3 align-items-end">
-            <div className="col-md-3">
-              <label className="form-label small fw-bold">Campaign Type</label>
-              <select
-                className="form-select form-select-sm"
-                value={campaignType}
-                onChange={(e) => setCampaignType(e.target.value)}
-              >
-                <option value="all">All Campaigns</option>
-                <option value="cold_outbound">Cold Outbound</option>
-                <option value="warm_nurture">Warm Nurture</option>
-              </select>
-            </div>
-            <div className="col-md-3">
-              <label className="form-label small fw-bold">Metric</label>
-              <select
-                className="form-select form-select-sm"
-                value={metricName}
-                onChange={(e) => setMetricName(e.target.value)}
-              >
-                {Object.entries(metricLabels).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-3">
-              <label className="form-label small fw-bold">Period</label>
-              <select
-                className="form-select form-select-sm"
-                value={periodDays}
-                onChange={(e) => setPeriodDays(parseInt(e.target.value, 10))}
-              >
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={90}>Last 90 days</option>
-              </select>
-            </div>
+      <SectionCard className="mb-4">
+        <div className="row g-3 align-items-end">
+          <div className="col-md-3">
+            <label className="form-label small fw-bold">Campaign Type</label>
+            <select
+              className="form-select form-select-sm"
+              value={campaignType}
+              onChange={(e) => setCampaignType(e.target.value)}
+            >
+              <option value="all">All Campaigns</option>
+              <option value="cold_outbound">Cold Outbound</option>
+              <option value="warm_nurture">Warm Nurture</option>
+            </select>
+          </div>
+          <div className="col-md-3">
+            <label className="form-label small fw-bold">Metric</label>
+            <select
+              className="form-select form-select-sm"
+              value={metricName}
+              onChange={(e) => setMetricName(e.target.value)}
+            >
+              {Object.entries(metricLabels).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-3">
+            <label className="form-label small fw-bold">Period</label>
+            <select
+              className="form-select form-select-sm"
+              value={periodDays}
+              onChange={(e) => setPeriodDays(parseInt(e.target.value, 10))}
+            >
+              <option value={7}>Last 7 days</option>
+              <option value={30}>Last 30 days</option>
+              <option value={90}>Last 90 days</option>
+            </select>
           </div>
         </div>
-      </div>
-
-      {/* Stats Overview */}
-      <div className="row g-4 mb-4">
-        <div className="col-md-3">
-          <div className="card admin-table-card h-100">
-            <div className="card-body text-center">
-              <div className="text-muted small">Total Interactions</div>
-              <div className="fs-2 fw-bold" style={{ color: 'var(--color-primary)' }}>
-                {summary?._stats?.total_outcomes?.toLocaleString() || 0}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card admin-table-card h-100">
-            <div className="card-body text-center">
-              <div className="text-muted small">Last 90 Days</div>
-              <div className="fs-2 fw-bold text-success">
-                {summary?._stats?.recent_outcomes_90d?.toLocaleString() || 0}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card admin-table-card h-100">
-            <div className="card-body text-center">
-              <div className="text-muted small">Top Recommendations</div>
-              <div className="fs-2 fw-bold text-primary">
-                {recommendations.length}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card admin-table-card h-100">
-            <div className="card-body text-center">
-              <div className="text-muted small">Last Computed</div>
-              <div className="fs-6 fw-bold text-muted mt-2">
-                {summary?._stats?.last_computed
-                  ? new Date(summary._stats.last_computed).toLocaleDateString()
-                  : 'Never'}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </SectionCard>
 
       {/* Targeting Recommendations */}
       {recommendations.length > 0 && (
-        <div className="card admin-table-card mb-4">
-          <div className="card-header fw-bold py-3">
-            Targeting Recommendations — {metricLabels[metricName]}
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th style={{ width: 50 }}>#</th>
-                    <th>Segment</th>
-                    <th>Dimension</th>
-                    <th className="text-end">{metricLabels[metricName]}</th>
-                    <th className="text-end">Sample Size</th>
-                    <th className="text-center">Confidence</th>
+        <SectionCard
+          title={`Targeting Recommendations — ${metricLabels[metricName]}`}
+          icon="focus-3-line"
+          padded={false}
+          className="mb-4"
+        >
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th style={{ width: 50 }}>#</th>
+                  <th>Segment</th>
+                  <th>Dimension</th>
+                  <th className="text-end">{metricLabels[metricName]}</th>
+                  <th className="text-end">Sample Size</th>
+                  <th className="text-center">Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendations.map((rec) => (
+                  <tr key={`${rec.dimension_type}-${rec.dimension_value}`}>
+                    <td>
+                      <span className="badge rounded-pill" style={{ background: 'var(--red-500)' }}>{rec.rank}</span>
+                    </td>
+                    <td className="fw-bold">{rec.dimension_value}</td>
+                    <td className="text-muted small">{dimensionLabels[rec.dimension_type] || rec.dimension_type}</td>
+                    <td className="text-end fw-bold">{formatPercent(rec.metric_value)}</td>
+                    <td className="text-end">{rec.sample_size}</td>
+                    <td className="text-center">
+                      <StatusBadge label={confidenceLabel(rec.confidence)} tone={confidenceTone(rec.confidence)} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {recommendations.map((rec) => (
-                    <tr key={`${rec.dimension_type}-${rec.dimension_value}`}>
-                      <td>
-                        <span className="badge bg-primary rounded-pill">{rec.rank}</span>
-                      </td>
-                      <td className="fw-bold">{rec.dimension_value}</td>
-                      <td className="text-muted small">{dimensionLabels[rec.dimension_type] || rec.dimension_type}</td>
-                      <td className="text-end fw-bold">{formatPercent(rec.metric_value)}</td>
-                      <td className="text-end">{rec.sample_size}</td>
-                      <td className="text-center">
-                        <span className={`badge rounded-pill bg-${confidenceColor(rec.confidence)}`}>
-                          {confidenceLabel(rec.confidence)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* Outcome Distribution + Channel Distribution */}
       <div className="row g-4 mb-4">
         <div className="col-md-6">
-          <div className="card admin-table-card h-100">
-            <div className="card-header fw-bold py-3">Outcome Distribution</div>
-            <div className="card-body">
-              {outcomeChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={outcomeChartData} layout="vertical" margin={{ left: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#0d6efd">
-                      {outcomeChartData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-muted small text-center mb-0">No outcome data yet. Interactions will appear here as campaigns run.</p>
-              )}
-            </div>
-          </div>
+          <SectionCard title="Outcome Distribution" icon="pie-chart-line" className="h-100">
+            {outcomeChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={outcomeChartData} layout="vertical" margin={{ left: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="var(--chart-1)">
+                    {outcomeChartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-muted small text-center mb-0">No outcome data yet. Interactions will appear here as campaigns run.</p>
+            )}
+          </SectionCard>
         </div>
         <div className="col-md-6">
-          <div className="card admin-table-card h-100">
-            <div className="card-header fw-bold py-3">Channel Distribution</div>
-            <div className="card-body">
-              {channelChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={channelChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#198754">
-                      {channelChartData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-muted small text-center mb-0">No channel data yet.</p>
-              )}
-            </div>
-          </div>
+          <SectionCard title="Channel Distribution" icon="bar-chart-grouped-line" className="h-100">
+            {channelChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={channelChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="var(--chart-3)">
+                    {channelChartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-muted small text-center mb-0">No channel data yet.</p>
+            )}
+          </SectionCard>
         </div>
       </div>
 
       {/* Daily Trend */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-header fw-bold py-3">Daily Interaction Trend</div>
-        <div className="card-body">
-          {trendChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={trendChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="sent" stroke="#0d6efd" strokeWidth={2} dot={{ r: 3 }} name="Sent" />
-                <Line type="monotone" dataKey="opened" stroke="#198754" strokeWidth={2} dot={{ r: 3 }} name="Opened" />
-                <Line type="monotone" dataKey="clicked" stroke="#fd7e14" strokeWidth={2} dot={{ r: 3 }} name="Clicked" />
-                <Line type="monotone" dataKey="replied" stroke="#6f42c1" strokeWidth={2} dot={{ r: 3 }} name="Replied" />
-                <Line type="monotone" dataKey="bounced" stroke="#dc3545" strokeWidth={2} dot={{ r: 3 }} name="Bounced" />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted small text-center mb-0">No daily trend data yet.</p>
-          )}
-        </div>
-      </div>
+      <SectionCard title="Daily Interaction Trend" icon="line-chart-line" className="mb-4">
+        {trendChartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={trendChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Line type="monotone" dataKey="sent" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} name="Sent" />
+              <Line type="monotone" dataKey="opened" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} name="Opened" />
+              <Line type="monotone" dataKey="clicked" stroke="var(--chart-4)" strokeWidth={2} dot={{ r: 3 }} name="Clicked" />
+              <Line type="monotone" dataKey="replied" stroke="var(--chart-5)" strokeWidth={2} dot={{ r: 3 }} name="Replied" />
+              <Line type="monotone" dataKey="bounced" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} name="Bounced" />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-muted small text-center mb-0">No daily trend data yet.</p>
+        )}
+      </SectionCard>
 
       {/* Dimension Breakdowns */}
       {summary && ['industry', 'title_category', 'company_size', 'source_type'].map((dim) => {
@@ -389,106 +403,102 @@ function AdminICPInsightsPage() {
         }));
 
         return (
-          <div key={dim} className="card admin-table-card mb-4">
-            <div className="card-header fw-bold py-3">
-              {dimensionLabels[dim]} — {metricLabels[metricName]}
-            </div>
-            <div className="card-body">
-              <div className="row">
-                <div className="col-md-7">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={chartData} layout="vertical" margin={{ left: 100 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" unit="%" />
-                      <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(value: any) => [`${value}%`, metricLabels[metricName]]} />
-                      <Bar dataKey="rate" fill="#0d6efd">
-                        {chartData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="col-md-5">
-                  <table className="table table-sm small mb-0">
-                    <thead>
-                      <tr>
-                        <th>{dimensionLabels[dim]}</th>
-                        <th className="text-end">Rate</th>
-                        <th className="text-end">n</th>
-                        <th className="text-center">Conf.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dimData.map((d) => (
-                        <tr key={d.value}>
-                          <td>{d.value}</td>
-                          <td className="text-end fw-bold">{formatPercent(d.rate)}</td>
-                          <td className="text-end">{d.sample_size}</td>
-                          <td className="text-center">
-                            <span className={`badge rounded-pill bg-${confidenceColor(d.confidence)}`}>
-                              {confidenceLabel(d.confidence)}
-                            </span>
-                          </td>
-                        </tr>
+          <SectionCard
+            key={dim}
+            title={`${dimensionLabels[dim]} — ${metricLabels[metricName]}`}
+            icon="bar-chart-horizontal-line"
+            className="mb-4"
+          >
+            <div className="row">
+              <div className="col-md-7">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={chartData} layout="vertical" margin={{ left: 100 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" unit="%" />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value: any) => [`${value}%`, metricLabels[metricName]]} />
+                    <Bar dataKey="rate" fill="var(--chart-1)">
+                      {chartData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="col-md-5">
+                <table className="table table-sm small mb-0">
+                  <thead>
+                    <tr>
+                      <th>{dimensionLabels[dim]}</th>
+                      <th className="text-end">Rate</th>
+                      <th className="text-end">n</th>
+                      <th className="text-center">Conf.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dimData.map((d) => (
+                      <tr key={d.value}>
+                        <td>{d.value}</td>
+                        <td className="text-end fw-bold">{formatPercent(d.rate)}</td>
+                        <td className="text-end">{d.sample_size}</td>
+                        <td className="text-center">
+                          <StatusBadge label={confidenceLabel(d.confidence)} tone={confidenceTone(d.confidence)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          </div>
+          </SectionCard>
         );
       })}
 
       {/* Cross-dimensional: Industry x Title */}
       {summary?.industry_x_title?.response_rate?.length > 0 && (
-        <div className="card admin-table-card mb-4">
-          <div className="card-header fw-bold py-3">
-            Industry + Title Combinations — Response Rate
+        <SectionCard
+          title="Industry + Title Combinations — Response Rate"
+          icon="grid-line"
+          padded={false}
+          className="mb-4"
+        >
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Industry</th>
+                  <th>Title Category</th>
+                  <th className="text-end">Response Rate</th>
+                  <th className="text-end">Sample Size</th>
+                  <th className="text-center">Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(summary!.industry_x_title.response_rate as InsightEntry[]).map((d) => {
+                  const [industry, title] = d.value.split('::');
+                  return (
+                    <tr key={d.value}>
+                      <td>{industry}</td>
+                      <td>{title}</td>
+                      <td className="text-end fw-bold">{formatPercent(d.rate)}</td>
+                      <td className="text-end">{d.sample_size}</td>
+                      <td className="text-center">
+                        <StatusBadge label={confidenceLabel(d.confidence)} tone={confidenceTone(d.confidence)} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Industry</th>
-                    <th>Title Category</th>
-                    <th className="text-end">Response Rate</th>
-                    <th className="text-end">Sample Size</th>
-                    <th className="text-center">Confidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(summary!.industry_x_title.response_rate as InsightEntry[]).map((d) => {
-                    const [industry, title] = d.value.split('::');
-                    return (
-                      <tr key={d.value}>
-                        <td>{industry}</td>
-                        <td>{title}</td>
-                        <td className="text-end fw-bold">{formatPercent(d.rate)}</td>
-                        <td className="text-end">{d.sample_size}</td>
-                        <td className="text-center">
-                          <span className={`badge rounded-pill bg-${confidenceColor(d.confidence)}`}>
-                            {confidenceLabel(d.confidence)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* Empty state */}
       {recommendations.length === 0 && outcomeChartData.length === 0 && (
-        <div className="card admin-table-card mb-4">
-          <div className="card-body text-center py-5">
-            <h5 className="text-muted">No Insight Data Yet</h5>
+        <SectionCard className="mb-4">
+          <div className="text-center py-5">
+            <h5 style={{ color: 'var(--text-muted)' }}>No Insight Data Yet</h5>
             <p className="text-muted small mb-3">
               Insights are computed from interaction outcomes. As campaigns send emails, make calls, and track opens/clicks,
               the system will automatically aggregate performance data by industry, title, company size, and source type.
@@ -497,7 +507,7 @@ function AdminICPInsightsPage() {
               Insights are automatically computed daily at 2 AM, or you can click "Recompute Insights" above to generate them now.
             </p>
           </div>
-        </div>
+        </SectionCard>
       )}
     </>
   );
