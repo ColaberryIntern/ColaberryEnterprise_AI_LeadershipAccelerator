@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, June 28, 2026 at 11:39 PM</div>
-    <div><span class="sid">CC-20260628-k7p2</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Monday, June 29, 2026 at 5:18 PM</div>
+    <div><span class="sid">CC-20260628-k7p2</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -86,7 +86,22 @@
           <div class="row"><span class="k">What changed</span><span class="v">converted `AdminReportsPage`, `AdminDashboardPage`, `AdminLeadsPage`, `AdminPipelinePage`, `AdminOpportunitiesPage`, `AdminRevenueDashboardPage`, `CEOCommandCenter` (header + KPI tiles; dark tab panels deferred), `GovernanceCommandCenter`, and `inbox/InboxCOSPage` to the shared shell — each now uses `PageHeader` (with a per-page `TrustBadge`), `StatCard` KPIs, `StatusBadge`, and `SectionCard`; all hand-rolled hex replaced with brand tokens (chart/funnel/stage series → `--chart-N`).</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">built by maker subagents, each audited by a SEPARATE checker subagent (maker/checker per the Loop Architect) — all PASS; `tsc --noEmit` clean on every page (node:20 Docker; only the 2 pre-existing recharts errors remain); grep-verified no hardcoded hex / no `react-hooks` eslint-disable / no dangling removed symbols. Built + run as a live dev review container (`http://95.216.199.47:9990`, dev2 network); all 9 routes serve HTTP 200.</span></div>
           
-        <div class="row"><span class="k">Notes</span><span class="v">state ledger at `docs/admin-redesign/LEDGER.md` tracks all ~42 pages. Remaining: Batch 2 (~30 top-level pages), Batch 3 (sub-tab hubs), CEO/Governance dark-panel re-theme, and the `AdminTrustCenterPage` toast-per-poll fix — all queued in the ledger for clean resumption.</span></div>
+        <div class="row"><span class="k">Notes</span><span class="v">state ledger at `docs/admin-redesign/LEDGER.md` tracks all pages. Remaining after Batch 1: the rest of the route-level pages (done in Waves 2–7 below), Batch 3 (sub-tab hubs), CEO/Governance dark-panel re-theme.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Per-page loop Waves 2–7 — ALL 44 navigable admin pages converted to the brand shell**</h2>
+          <span class="badge">2026-06-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">converted every remaining route-level admin page to the shared shell (`PageHeader` + per-page `TrustBadge`, `StatCard` KPIs, `StatusBadge`, `SectionCard`; all hand-rolled hex → brand/chart tokens, RemixIcon glyphs). Pages: War Room, Visitors, Funnel, Campaigns, Communications, ICP Insights, Sources, Ingest Logs, Routing Rules, Autonomous, Marketing, Missed Opportunities, Content Queue, Tickets, Settings, Apollo, Import, Event Ledger, Projects, CB System, Lead/Cohort/Campaign Detail, Sequences, Governance Policy, Generator, Accelerator, AI Settings (surgical header), Orchestration (surgical header), Trust Center, Campaign Builder, Automation, Intelligence Discovery, Intelligence Settings, Agent Orphans (+ the 9 Batch‑1 pages above). Only intentionally untouched: `AdminLoginPage` (already brand-styled by the foundation) and the immersive `IntelligenceOSPage` (bespoke full-screen design).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">built by maker subagents in waves of ~5, each gated by `tsc --noEmit` (clean — only the 2 pre-existing recharts errors) + a grep for build-breakers (no `react-hooks` eslint-disable, no raw hex, no dangling removed symbols); high-traffic pages also passed a separate checker subagent. Each wave was built + run as a live dev review container (`http://95.216.199.47:9990`, dev2 network) — the nginx multi-stage prod build (npm ci + react-scripts build + eslint) is GREEN; all routes serve HTTP 200. Spot-checked screenshots (login, dashboard, list pages, tab-heavy command centers) show no layout regression.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">REMAINING (queued in the ledger): Batch 3 — the sub-tab *content* components inside the hub pages (`ai-settings/*` ~20, `orchestration/*`+`builder/*` ~43, `intelligence/tabs/*` ~20, `inbox/*` ~6) which already inherit the foundation brand globally; and the CEO/Governance dark command-center panel re-theme (dark→light). 15 commits on `workstream/admin-brand-redesign`.</span></div>
           
         </div>
       </article>
