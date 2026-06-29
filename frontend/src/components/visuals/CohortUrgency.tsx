@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchNextCohortStart } from '../../services/cohortApi';
+import { fetchNextCohort, OpenCohort } from '../../services/cohortApi';
 
 /**
  * CohortUrgency
@@ -86,16 +86,23 @@ const CohortUrgency: React.FC<CohortUrgencyProps> = ({
   // fetch the next open cohort's start date and prefer it over the prop, falling
   // back to the prop on any failure. Browser-only (effect), so first paint uses
   // the prop and SSR stays deterministic.
-  const [liveStartISO, setLiveStartISO] = useState<string | null>(null);
+  const [liveCohort, setLiveCohort] = useState<OpenCohort | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    fetchNextCohortStart(controller.signal).then((iso) => {
-      if (iso) setLiveStartISO(iso);
+    fetchNextCohort(controller.signal).then((c) => {
+      if (c) setLiveCohort(c);
     });
     return () => controller.abort();
   }, []);
 
-  const effectiveStartISO = liveStartISO ?? startDateISO;
+  const effectiveStartISO = liveCohort?.start_date ?? startDateISO;
+
+  // Live-session cadence — admin-driven from the cohort record, with a truthful
+  // fallback so the line never goes blank if the fetch fails.
+  const scheduleLine =
+    liveCohort && liveCohort.core_day && liveCohort.core_time
+      ? `${liveCohort.core_day} · ${liveCohort.core_time}`
+      : 'Monday and Thursday · 6:30 PM - 8:30 PM CST';
 
   const target = useMemo<Date | null>(
     () => parseStartDate(effectiveStartISO),
@@ -234,6 +241,16 @@ const CohortUrgency: React.FC<CohortUrgencyProps> = ({
         }
         .cu__heading b { color: var(--neutral-0); font-weight: var(--fw-black); white-space: nowrap; }
         .cu__date { color: color-mix(in srgb, var(--brand-secondary) 70%, var(--neutral-0)); white-space: nowrap; }
+        .cu__schedule {
+          display: flex; align-items: center; gap: var(--space-2);
+          margin: calc(var(--space-5) * -1) 0 var(--space-6);
+          font-size: var(--fs-caption); font-weight: var(--fw-medium);
+          color: color-mix(in srgb, var(--neutral-0) 80%, transparent);
+        }
+        .cu__schedule-dot {
+          width: 6px; height: 6px; border-radius: var(--radius-circle);
+          background: var(--brand-secondary); flex: none;
+        }
 
         .cu__countdown {
           display: grid;
@@ -331,6 +348,11 @@ const CohortUrgency: React.FC<CohortUrgencyProps> = ({
           <h2 id="cu-heading" className="cu__heading">
             Next <b>12-week cohort</b> starts <span className="cu__date">{startLine}</span>
           </h2>
+
+          <p className="cu__schedule">
+            <span className="cu__schedule-dot" aria-hidden="true" />
+            Live sessions · {scheduleLine}
+          </p>
 
           <div className="cu__scarcity">
             <div className="cu__scarcity-top">

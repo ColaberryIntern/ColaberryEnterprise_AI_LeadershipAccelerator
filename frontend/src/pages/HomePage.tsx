@@ -49,8 +49,8 @@ const STEPS: Step[] = [
   },
   {
     n: '02',
-    title: 'They learn off-the-job',
-    body: 'No one leaves their desk. Your people progress through the 12-week build path on their own time, around the work they already do.',
+    title: 'They learn in the evenings',
+    body: 'Two live sessions a week — Monday & Thursday, 6:30–8:30 PM CST — plus self-paced build work around the job they already do. The sessions are after hours, so nobody comes off work.',
   },
   {
     n: '03',

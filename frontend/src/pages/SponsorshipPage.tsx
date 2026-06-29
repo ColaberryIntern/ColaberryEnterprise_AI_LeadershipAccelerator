@@ -10,6 +10,8 @@ import CohortUrgency from '../components/visuals/CohortUrgency';
 import PartnerStrip from '../components/visuals/PartnerStrip';
 import MermaidDiagram from '../components/visuals/MermaidDiagram';
 import SectionFigure from '../components/visuals/SectionFigure';
+import StrategyCallModal from '../components/StrategyCallModal';
+import OpenHouseModal from '../components/membership/OpenHouseModal';
 
 /* ------------------------------------------------------------------ *
  * Sponsor Your Team — The AI Builder Challenge
@@ -278,6 +280,8 @@ const SCOPED_CSS = `
 
 function SponsorshipPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [showBooking, setShowBooking] = useState(false);
+  const [showInfoSession, setShowInfoSession] = useState(false);
 
   return (
     <>
@@ -349,13 +353,25 @@ function SponsorshipPage() {
                 flexWrap: 'wrap',
               }}
             >
-              <Button as="a" href="#sponsor-inquiry" variant="primary" size="lg">
-                Sponsor Your Team
+              <Button variant="primary" size="lg" onClick={() => setShowBooking(true)} data-track="sponsor_hero_book_call">
+                Book a Strategy Call
               </Button>
-              <Button as="a" href="#how-it-works" variant="outline" size="lg" className="cb-btn--on-dark">
-                See how it works
+              <Button variant="outline" size="lg" className="cb-btn--on-dark" onClick={() => setShowInfoSession(true)} data-track="sponsor_hero_info_session">
+                Attend a Live Info Session
               </Button>
             </div>
+            <p
+              style={{
+                fontSize: 'var(--fs-caption)',
+                color: 'color-mix(in srgb, var(--text-on-inverse) 72%, transparent)',
+                margin: 'var(--space-4) 0 0',
+              }}
+            >
+              Ready to sponsor?{' '}
+              <a href="#sponsor-inquiry" style={{ color: 'var(--neutral-0)', fontWeight: 'var(--fw-bold)' }}>
+                Jump to seat tiers &rarr;
+              </a>
+            </p>
             <p
               style={{
                 fontSize: 'var(--fs-caption)',
@@ -715,6 +731,20 @@ function SponsorshipPage() {
           </div>
         </section>
       </div>
+
+      {/* Employer first-touch: book a meeting (primary) or a live info session
+          (secondary) — the info session registers to the SAME open-house event,
+          employer-framed via an open_house_* lead formType. */}
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
+      <OpenHouseModal
+        show={showInfoSession}
+        onClose={() => setShowInfoSession(false)}
+        personaSlug="employer_info_session"
+        submitLabel="Reserve my info-session seat"
+        title="Reserve your Live Info Session seat"
+        subtitle="A free, live online session — see the program your team would join and how the talent-discovery works. No pitch."
+        successMessage="You’re registered. We’ll email you the Live Info Session details shortly."
+      />
     </>
   );
 }
