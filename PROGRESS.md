@@ -5915,3 +5915,93 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: Added a second hard rule (section 0d) + pure predicate `isBasecampDirectComment()` in `backend/src/services/inbox/hardRuleEngine.ts`. A Basecamp comment notification (subject contains `Re:`) routes to INBOX when the body directly addresses Ali — a greeting verb + "Ali" ("Hi/Hello/Hey/Dear/Thanks Ali", "Good morning Ali"), a line opening with "Ali,"/"Ali:", or an inline "@Ali". Deliberately bounded to avoid re-flooding: subscribed-thread status updates that never address Ali stay automation, and the standard BC footer ("...sent to Ali Muwwakkil, ...") does NOT trigger it (the anchors require a greeting/line-leading/@-form the footer can't satisfy). Formal @mentions/assignments remain covered by the section-0c subject rule.
   - Verification: `hardRuleEngine.test.ts` now 16/16 pass — added 8 comment cases incl. the real BC footer string (must not match), a status update (must not match), a greeting to a different person (must not match), and positive greeting/line-leading/@Ali cases. `tsc --noEmit` clean for inbox/hardRule files.
   - Notes: Verified against a real subscribed-thread (Refactored/Xprize daily-update thread) where every comment carries the footer but none address Ali — confirms blanket "all Re: comments → INBOX" would flood, so the rule is intentionally narrow. If even this proves too noisy, removing the section-0d block reverts it. Ships with the section-0c change on next backend build.
+
+- [x] Design E major upgrade + Integration Blueprint checklist run
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Per CEO feedback, heavily upgraded `design-e-colaberry-ds.html` (1215->1815 lines): robust Schedule (Month/Week/Agenda, navigate all 12 weeks + past/future, per-entry points + completion state, points HUD); Classroom rebuilt as a social-media-style feed (likeable assignments, embedded video players with watched-state, SkillsJar = link-out + required certificate upload, Lab "Generate lab brief" -> pretty HTML lab doc + copyable Claude Code prompt + on-site scored acceptance checks, on-site quiz scoring); points/XP made prominent everywhere with +N pts toasts, XP bar, level-up celebration (Apprentice->Builder->Architect->Principal Architect); per-type completion-validation gates (video watched / test passed / survey submitted / lab checks / cert uploaded) with Skip=no-points; more inline-SVG icons + completion motion (reduced-motion safe). Pulled the Basecamp "Program Integration Blueprint" doc (project 47502609, doc 10014362657) and produced `CHECKLIST_vs_DESIGN_E.html` running that blueprint + the four-system fusion matrix against Design E (24 reflected / 11 partial / 6 gap / 5 backend, with prioritized gap-closers).
+  - Verification: design-e valid single self-contained file (1815 lines, one </html>, JS verified by building agent). Checklist report renders. Opened Design E in browser per request.
+  - Notes: Top gaps to close next per the checklist: cert-track depth (practice tests + W10-12 sprint + claudecertifications.com link), explicit Lab-Engine requirement binding, drip/unlock rules, membership surface ($149/$199), optional Card Table/Hill Chart/Check-ins, peer DMs (P2). User will send more screenshots of liked pieces from other designs to fold into E.
+
+- [x] Design E split-screen UX + liked-layout gaps closed
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Reworked design-e-colaberry-ds.html for side-by-side-with-Claude-Code use: collapsible left nav (icon-rail, persisted), full responsive reflow below ~1100/760px. Classroom: removed the right XP sidebar (video + materials now full width), slim collapsible XP strip + "how completion works" popover, and prev/next week navigation (+ week picker) to reach any of the 12 weeks' work. Closed the liked-layout gaps from the screenshots: Projects "Your builds" + 4-step new-build wizard; Portfolio readiness ring + per-dimension gradient bars + Export + Tier A grades + Tier B showcase reel; Schedule Week view as a real time-grid (9/11/14/16 x Mon-Fri, Architecture/Build Day labels, color types, states).
+  - Verification: single self-contained file, JS parses clean (node --check), all drill-downs/points/gates preserved. Opened in browser.
+  - Notes: Built for ~half-screen width next to Claude Code. Checklist gaps still open (cert-track depth, Lab-Engine requirement binding, drip rules, membership surface) tracked in CHECKLIST_vs_DESIGN_E.html.
+
+- [x] Design E: FB-feed classroom, streaks, deep-link nav, quiz/survey depth, no locks
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: design-e-colaberry-ds.html (now ~2450 lines): deep-link nav from Path week items + Schedule entries into the Classroom (scroll-to + highlight the clicked card); daily-streak gamification (flame, 7-day row, claim-today bonus points, come-back nudge); surveys expanded to a 5+ question material-feedback loop (clarity/usefulness/enjoyment ratings + NPS + MC + open text); quiz expanded to 7 questions with 70% pass; comments view+post inline thread on every card; thumbnails resized to FB proportions (centered ~600px column, uniform ~300px media); video thumbnails use real-person remote portrait photos with SVG onerror fallback; removed ALL locking (every week/item openable in any order, points gated only by real completion). Also neutralized the residual 'lock' task-state and reworded the Governance readiness copy.
+  - Verification: inline script parses clean (node --check); opened in browser.
+  - Notes: Tradeoff: video presenter thumbnails use remote photo URLs (Unsplash/randomuser) so they show a real person when online, with inline-SVG fallback offline. Everything else still self-contained.
+
+- [x] Design E: live classes + AI video critique + peer/social/site posts + contacts rail + countdowns + group chat
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: design-e-colaberry-ds.html (~2900 lines). Classroom feed: pinned live-class card with live countdown; AI Video Critique (record-for-extra-points task + full IPBC-style graded-video detail: AI mentor score + sub-scores, CAI delivery feedback, transcript w/ filler highlights, optimized answer, most-used-words cloud, comments + disclaimer); peer-videos-for-this-section grid (learn from cohort); social-media posting tasks with max-exposure instructions; Colaberry-site "Featured" posts that surface per matching section. Shell: FB-style right Contacts rail (collapsible like the left, 3-col grid, 1:1 chat dock, "Find people" to friend across cohorts, Cohort 1 auto-friended); top-bar Next class + Next event live countdown chips; new Group Chat/Rooms view (Discord/Zoom-style text channels + voice/video rooms w/ participant tiles, create-room).
+  - Verification: inline script parses clean (node --check) across all iterations.
+  - Notes: remote portrait URLs used for real-person video/contact thumbnails (online) with SVG fallback. Reduced-motion-safe ticking countdowns.
+
+- [x] Design E: native Basecamp-style project interior (MyDay vibe)
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Overhauled the project workspace drill-down in design-e-colaberry-ds.html into a native PM surface for the Recipe Concierge build: project header (stage, timeframe, GitHub status, live preview, progress, "no Basecamp" caption); a MyDay-style "Your next action" card with urgency + Copy Claude Code prompt / Open workspace / Mark done / Skip; summary stat tiles (open/today/overdue/done/requirements verified); four to-do lists with progress pies and tasks (checkbox, due-state, assignee, requirement tag, per-task Prompt/Workspace/Notes/Done/Skip); inline task detail with linked 4-state requirement, copyable prompt, resources, comment thread; live recompute on completion.
+  - Verification: inline script parses clean (node --check); opened in browser.
+  - Notes: Built to mirror the employee MyDay look-and-feel but on-brand/calm, everything connected natively (tasks tie to the requirements 4-state + readiness), no Basecamp.
+
+- [x] Design E: lists ordered by urgency + Skool-style Community with categories
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Project interior now orders to-do lists by their most-urgent open task (re-sorts live on completion). Community screen overhauled to a Skool-style hub: write-something composer, next-event countdown strip, category filter pills (human: General Discussion/Wins/Support Needed/Introductions + assignment-sourced: Build Logs/Showcase-Artifacts/Video Critiques/Week 5-MCP with per-post source tags), Skool-style post cards (author+level, pinned, media, like/comment/commenter-avatars/new-comment), and a right info sidebar (about, links, member/online/mentor stats, leaderboard teaser). Responsive sidebar for split-screen.
+  - Verification: inline script parses clean (node --check); opened in browser.
+  - Notes: assignment-sourced posts (build logs, artifacts, graded critique videos, social shares) flow into the community by category.
+
+- [x] Design E: project interior reskinned to FB vibe + unified build template
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Refactored builds into a registry (BUILDS = recipe/prompt/foundation) all driven through one interior template via openProject(id). Unified "Your builds" cards (single buildCardHtml: cover + avatar + descriptor + progress + stat pills); added 2nd active build "Prompt Library Studio". Project interior reskinned to social/card vibe: FB-style group header (cover+avatar), a build ACTIVITY FEED (commits, requirement->VERIFIED, completions, coach notes, shared preview) styled like Community cards with like+comment, plus the soft-card next-action, stat tiles, and lists-first to-do lists (kept urgency ordering, color-coded actions, drill-down, task detail, show-completed). Completed Foundation Sprint opens same template read-only.
+  - Verification: inline script parses clean (node --check); opened in browser.
+  - Notes: all active + completed builds now use one consistent format; project no longer the odd PM-styled screen.
+
+- [x] Design E: Today master timeline + feed filters + project-as-timeline
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Today is now the master infinite-scroll timeline (top hero+queue, then a 35-item mixed pool revealed in batches of 6 via IntersectionObserver: classroom assignments, project tasks, community posts, joinable Group Chat sessions, friend sign-ins with Say-hi/Message). Added detailed "Customize feed" filter (per-type toggles by Classroom/Projects/Community/Group Chat/People + presets incl Bus mode, persisted). Reworked project interior: removed the disliked build-activity block; opening a build renders a compact header + a single build TIMELINE; clicking any timeline item (Today or Project) opens one shared right-side detail panel (task detail w/ requirement 4-state, copyable prompt, color-coded actions, notes). All builds use the same timeline interior.
+  - Verification: inline script parses clean (node --check); opened in browser.
+  - Notes: unified timeline language across Today + Project for smooth transitions; no emoji (waving-hand is inline SVG).
+
+- [x] Design E: unified Today/Project cards to Classroom style + Certification Prep
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Factored the Classroom feed card into a shared feedShell()/feedThumb() and re-rendered the Today master timeline and Project build timeline through it so all three screens share one FB card look (media thumbnails, header, status/points pill, like/comment/action bar). Added a "Cert Prep" left-nav item + #view-certprep: a CCA-F readiness header (ring + 5-domain breakdown + practice-test + claudecertifications.com link) over a feed of 10 seeded cert-prep MCQ cards scored on-card with points/explanations; injected cert-prep question cards into the Today timeline (answerable inline) with a "Certification prep" toggle in the Customize-feed filter; cert progress reflects into the Path Certification lane.
+  - Verification: inline script parses clean (node --check); opened in browser.
+  - Notes: Today, Classroom, Project, and Cert Prep now all read as the same Facebook-style feed.
+
+- [x] Design E: project interior back to section-scoped lists + centered Today timeline
+  - Date: 2026-06-24
+  - Session: CC-20260624-p7k2
+  - What changed: Reverted the project interior from the single build-timeline back to the lists-first format (urgency-ordered lists, progress, inline next-urgent task w/ color-coded actions, drill-down, shared right-side task detail), now scoped to the CURRENT SECTION by default with a section selector to view others. Centered the Today "Your timeline" column in the middle of the content area to match the Classroom/Project feeds.
+  - Verification: inline script parses clean (node --check); opened in browser.
+
+- [x] CB System kill switch + runaway auto-trip (dashboard shutoff)
+  - Date: 2026-06-25
+  - Session: CC-20260625-k9r4
+  - What changed: Added a master on/off control for the CB @CB dispatcher, sourced from the audited `system_settings` table so the dashboard and the host-cron dispatcher share one truth. New `scripts/ops-engine/cb-control.js` (Sequelize read/write of `cb_dispatcher_enabled` + `cb_dispatcher_last_trip`, local-cache fail-safe: never returns enabled unless positively confirmed; stale/absent cache => fail closed). Wired into `inbound-dispatcher.js`: reads the flag at tick start and halts (no posts) when off; a rolling-window runaway guard (`noteReply`, default >12 replies / 15 min, env-tunable via CB_AUTOTRIP_MAX / CB_AUTOTRIP_WINDOW_MIN) and the existing identity-degradation halt now both FLIP the flag OFF + alarm, so a flood stops within minutes and requires a deliberate dashboard re-enable. Backend `GET/POST /api/admin/cb-system/control` (Zod-validated boolean, audited via settingsService). Dashboard `CbSystemCommand.tsx` gains a prominent ENABLED/DISABLED card with Turn on/off (confirm-on-enable) + last-trip reason. Default is OFF (fail-safe).
+  - Verification: TypeScript passes (frontend tsc clean; backend tsc clean for touched files — 2 pre-existing unrelated `classify` redeclare errors in interview-prep test files remain); ops-engine 28/28 node:test green (9 new: cb-control fail-safe + auto-trip window); backend jest 5/5 green (cbSystemControl.test.ts: GET/POST contract + 400 on bad body).
+  - Notes: Build-locally-first per Ali; NOT yet deployed. Root cause of the 2026-06-22 flood is a degraded BC token resolving to Ali (17454835) not CB System (37708014) — live token still resolves to Ali and the self-loop fix (4bacc414) is NOT on prod yet. Re-activation is gated on Phase 1 (durable CB System token via a dedicated advisor-vault operator, likely Vishnu's 37708014 account) + deploying the fix. This change is the dashboard safety net for that supervised re-launch.
+
+- [x] Phase 1 prep: durable CB System token plumbing (staged, not deployed)
+  - Date: 2026-06-26
+  - Session: CC-20260625-k9r4
+  - What changed: New `scripts/refreshCbSystemToken.sh` — mints a CB System (37708014) Basecamp token from a dedicated advisor-vault operator, asserts `/my/profile.json` resolves to 37708014 before writing (refuses any other identity), and writes to a dedicated `tmp/ops-engine/cb-system-token.cache` (never touches CCPP/Ali's token). DRY-RUN by default; `--commit` writes; intended cron every 3 days. Added a fail-closed CB-System path to `scripts/cron-env-wrapper.sh`: jobs that set `CB_USE_SYSTEM_TOKEN=1` use ONLY the CB System token cache and never fall back to the CCPP/Ali token (posting as a real person is the flood condition) — if the CB token is absent/stale the job does not run.
+  - Verification: both scripts pass `bash -n`. Confirmed live-prod facts behind this design: BC id 37708014 = "CB System" system account (email vishnu@colaberry.com); the advisor's static CB bearer is 401/expired; no advisor operator currently holds a 37708014 grant (so a fresh OAuth consent is required); advisor connect flow live (303), colaberry.com auto-provisions an operator.
+  - Notes: `OPERATOR` in refreshCbSystemToken.sh is a placeholder pending Ali's one-time OAuth consent of the CB System account; I detect the new operator id from the vault post-consent and fill it in. Nothing deployed; awaiting the OAuth + deploy go-ahead.
+
+- [x] Inbox COS: fix Basecamp @mention/assignment routing (wrong sender domain)
+  - Date: 2026-06-29
+  - Session: CC-20260629-k7n4
+  - What changed: `backend/src/services/inbox/hardRuleEngine.ts` gated all Basecamp detection on `/3\.basecamp\.com/` (legacy Basecamp Classic host), but live Basecamp sends from `notifications@app.basecamp.com`. So `isBasecampDirectMention`/`isBasecampDirectComment` returned false for every real notification, and @mentions/assignments fell through to the List-Unsubscribe hard rule -> AUTOMATION -> auto-archived (the 2026-06-24 fix 148c7c8e was effectively dead code; its tests used the wrong domain too, so they stayed green while prod stayed broken). Extracted `isBasecampSender()` matching any `*.basecamp.com` subdomain (anchored to reject look-alikes like `basecamp.com.evil.io` / `notbasecamp.com`), used it in rules 0c/0d, and widened the AUTO_NOTIFICATION_SENDERS basecamp branch the same way.
+  - Verification: backend jest `hardRuleEngine.test.ts` 23/23 green — added an `isBasecampSender` suite + a regression test built from the real archived `app.basecamp.com` SAM.gov @mention + a legacy-domain-still-matches test, and corrected the `BC` test constant to the real sender; `tsc --noEmit` clean for the changed files.
+  - Notes: NOT yet deployed (prod deploys are after-hours) — until deployed, the running COS keeps archiving new BC @mentions. No selective no-deploy interim exists (List-Unsubscribe rule #4 fires before user-defined rules #6; a VIP entry would also pull in all digests), so the deploy is the fix. Separately restored 156 wrongly-archived human @mention/assignment threads (Jun 15-29) to INBOX via Gmail labels — safe because the COS Gmail sync only ingests `messageAdded` (not label changes) and only classifies emails with no existing classification row. The Gmail relabeling is an inbox cleanup (no shipped code), logged here only for traceability.
