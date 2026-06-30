@@ -6839,3 +6839,22 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: `backend/src/seeds/seedCurriculumCourseLinks.ts` — Week 6 `link_status` changed from `pending_confirmation` to `confirmed`. URL `https://anthropic.skilljar.com/model-context-protocol-advanced-topics` was already present; ticket provided the confirmation.
   - Verification: tsc --noEmit clean; seed ran against accelerator_dev1 — Week 6 = confirmed (DB verified via psql query). Awaiting Kes PR approval.
   - Notes: One-line change in the seed; no server.ts change needed (startup seeding was wired in PR #89).
+
+---
+
+## Current Focus
+Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to all portal-facing pages.
+
+### Portal DS Token Migration — cherry red primary (#FB2832) (2026-06-30)
+- [x] **Apply Colaberry DS (Aleem) cherry-red primary to all portal pages (BC #9985689231)**
+  - Date: 2026-06-30
+  - Session: CC-20260630-p4r1
+  - What changed:
+    - `frontend/src/styles/tokens.css` — `--color-primary: #FB2832` (was navy `#1a365d`); `--color-primary-light: #C20E1E` (was `#2b6cb0`).
+    - `frontend/src/styles/global.css` — removed the `:root` override block that was shadowing `tokens.css` with navy values; `tokens.css` is now the single source of truth.
+    - `frontend/src/pages/portal/PortalCurriculumPage.tsx` — progress header banner, spinner, Skills stats card, genome proficiency bar, lesson Start/Continue buttons, Skilljar CTA button, cert button → `var(--color-primary)`; "Colaberry-original" badge → `var(--color-purple)`; all `#1e293b` text → `var(--color-text)`.
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx` — session header: core sessions → `var(--color-primary)` red, lab sessions → purple gradient; session title `<h4>` → explicit `color: '#fff'` (fixed cherry-red bleed from global h1-h6 rule); countdown timer, chat button → primary; Topics `<li>` items → `var(--color-text)`.
+    - `frontend/src/pages/project/SystemBuildDemo.tsx` — header avatar circle, progress bar → `var(--color-primary)`; ROI card gradient → `linear-gradient(var(--color-primary), var(--color-primary-light))`.
+    - `frontend/src/pages/portal/ProjectDnaWizard.tsx` — 11 instances of `#1e293b` heading text → `var(--color-text)`.
+  - Verification: `tsc --noEmit` clean; Docker nginx rebuilt twice (exit 0 both times); confirmed in browser — curriculum banner red, core session header red, lab session header purple, session title white on colored background, ROI card red. DevTools computed styles verified h4 `color: rgb(255,255,255)` wins over global rule.
+  - Notes: Root cause of prior missing brand color — `global.css` imported `tokens.css` then immediately re-declared `--color-primary: #1a365d` in its own `:root` block, nullifying the cherry red. Semantic purple preserved for lab sessions, skill-area badges, and ProjectDNA stepper (by design).
