@@ -59,6 +59,29 @@ probe_bc_token() {
   [ "$code" = "200" ]
 }
 
+# CB System identity preference (fail-closed). Jobs that MUST post as the CB
+# System account (37708014) — the @CB inbound-dispatcher and the CB task runners
+# — set CB_USE_SYSTEM_TOKEN=1 on their cron line. For those jobs we use ONLY the
+# dedicated CB System token (kept fresh by refreshCbSystemToken.sh) and NEVER
+# fall back to the CCPP/Ali token: posting as a real person is exactly the
+# 2026-06-22 self-reply flood condition. If the CB System token is absent or
+# stale, the job does not run (the dispatcher's own identity-halt is then just a
+# second layer of the same guarantee). refreshCbSystemToken.sh asserts the cached
+# token resolves to 37708014 before writing, so a 200 here is trustworthy.
+CB_SYSTEM_TOKEN_CACHE=/opt/colaberry-accelerator/tmp/ops-engine/cb-system-token.cache
+if [ "${CB_USE_SYSTEM_TOKEN:-}" = "1" ]; then
+  if [ -f "$CB_SYSTEM_TOKEN_CACHE" ]; then
+    export BASECAMP_ACCESS_TOKEN="$(cat "$CB_SYSTEM_TOKEN_CACHE" 2>/dev/null)"
+  else
+    export BASECAMP_ACCESS_TOKEN=""
+  fi
+  if probe_bc_token; then
+    exec node "$@"
+  fi
+  echo "[cron-env-wrapper] CB System token missing/stale; refusing to run '$*' as a non-CB identity (fail-closed)" >&2
+  exit 0
+fi
+
 # Token resolution order, cheapest first:
 #   1. Container env token (from the eval above).
 #   2. File-cached last-known-good token (avoids a CCPP roundtrip every tick).
