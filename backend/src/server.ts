@@ -25,6 +25,7 @@ import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
 import { seedCurriculumTypeDefinitions } from './seeds/seedCurriculumTypeDefinitions';
+import { seedCurriculumCourseLinks } from './seeds/seedCurriculumCourseLinks';
 import { seedAllCampaigns } from './seeds/seedAllCampaigns';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
@@ -611,6 +612,7 @@ async function start(): Promise<void> {
   await seedProgramCurriculum();
   await seedDepartments();
   await seedCurriculumTypeDefinitions();
+  await seedCurriculumCourseLinks();
 
   // Seed landing pages and migrate existing campaign deployments
   try {
