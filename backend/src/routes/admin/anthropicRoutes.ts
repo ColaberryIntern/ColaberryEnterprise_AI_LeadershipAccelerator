@@ -93,8 +93,9 @@ router.post('/api/admin/sync/anthropic-catalog', requireAdmin, async (_req: Requ
       results: result.results,
     });
   } catch (err: any) {
+    // err: any — Express handler rejections are untyped at the JS boundary; read err.message only.
     console.error('[anthropicRoutes] catalog scrape failed:', err.message);
-    res.status(500).json({ ok: false, error: err.message });
+    res.status(500).json({ ok: false, error: 'Manual catalog scrape failed' });
   }
 });
 

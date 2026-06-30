@@ -133,6 +133,11 @@ async function syncCourse(course: ScrapedCourse): Promise<CourseScrapResult> {
     const existing = await AnthropicContentRegistry.findOne({ where: { url: course.url } });
 
     if (!existing) {
+      // A brand-new course whose page didn't scrape (empty outline = failed
+      // fetch / selector miss) is created quietly: flagging change_detected off
+      // an empty outline would fire a low-quality alert. The next successful
+      // scrape detects the real outline and flags the change then.
+      const hasOutline = Boolean(course.outline);
       await AnthropicContentRegistry.create({
         content_type: 'course',
         title: course.title,
@@ -140,15 +145,17 @@ async function syncCourse(course: ScrapedCourse): Promise<CourseScrapResult> {
         outline: course.outline || null,
         content_hash: outlineHash,
         last_checked: new Date(),
-        change_detected: true,
-        change_summary: {
-          detected_at: new Date().toISOString(),
-          detection_method: 'content_hash',
-          previous_value: null,
-          current_value: outlineHash,
-        },
+        change_detected: hasOutline,
+        change_summary: hasOutline
+          ? {
+              detected_at: new Date().toISOString(),
+              detection_method: 'content_hash',
+              previous_value: null,
+              current_value: outlineHash,
+            }
+          : null,
       });
-      log('info', 'course_created', { url: course.url, outcome: 'success' });
+      log('info', 'course_created', { url: course.url, outcome: 'success', change_flagged: hasOutline });
       return { url: course.url, outcome: 'created' };
     }
 
@@ -210,6 +217,11 @@ export async function runCatalogScraper(): Promise<CatalogScraperRunResult> {
   try {
     const rows = await CurriculumCourseLink.findAll({
       where: { provider: 'skilljar' },
+      // Deterministic order so the de-dup below is first-wins-stable: if two
+      // week-rows ever normalize to one course URL with differing titles, the
+      // lowest module_number wins consistently (no Postgres row-order flake
+      // flipping titleChanged and firing a false alert).
+      order: [['module_number', 'ASC']],
     });
 
     const withUrls = rows.filter((r) => r.course_url && normalizeCourseUrl(r.course_url) !== '');

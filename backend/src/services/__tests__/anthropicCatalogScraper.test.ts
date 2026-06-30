@@ -189,6 +189,11 @@ describe('runCatalogScraper', () => {
     // All three rows normalize to one course → one create, count not inflated.
     expect(result.courses_found).toBe(1);
     expect(AnthropicContentRegistry.create).toHaveBeenCalledTimes(1);
+    // De-dup is first-wins; it must read rows in a deterministic module order
+    // so the surviving title is stable across runs.
+    expect(CurriculumCourseLink.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ order: [['module_number', 'ASC']] }),
+    );
   });
 
   it('falls back to KNOWN_CATALOG when curriculum_course_links query fails (failure path)', async () => {
@@ -223,11 +228,12 @@ describe('runCatalogScraper', () => {
 
     const result = await runCatalogScraper();
 
-    // Run completes; course is created with empty outline
+    // Run completes; course is created with empty outline but NOT flagged as a
+    // change (an empty outline is a failed scrape, not a real curriculum change).
     expect(result.errors).toBe(0);
     expect(result.created).toBe(1);
     expect(AnthropicContentRegistry.create).toHaveBeenCalledWith(
-      expect.objectContaining({ outline: null }),
+      expect.objectContaining({ outline: null, change_detected: false, change_summary: null }),
     );
   });
 
