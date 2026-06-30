@@ -10,6 +10,50 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Admin UI rebrand foundation + Trust layer + collapsible sidebar (Colaberry brand) (2026-06-28)
+- [x] **Branded the admin shell to the Colaberry design system + redesigned the sidebar + per-page trust primitives**
+  - Date: 2026-06-28
+  - Session: CC-20260628-k7p2
+  - Branch: `workstream/admin-brand-redesign` (isolated git worktree off origin/main; the main tree was on an unrelated branch with 629 dirty files)
+  - What changed:
+    - `frontend/src/styles/brand-bridge.css` (new): one reversible seam mapping the legacy admin tokens (`--color-primary` navy / Segoe) onto the already-vendored Colaberry brand (`src/colaberry/`): cherry `#FB2832` primary, leaf/berry accents, Roboto + Roboto Mono, rounded radii; plus Bootstrap 5.3 `--bs-*` overrides (buttons, forms, nav tabs/pills, pagination, badges, progress). Imported last in `index.tsx` so it wins all collisions.
+    - `frontend/src/styles/admin-shell.css` (new): styles for the shared shell primitives + the redesigned sidebar (brand-ink chrome, cherry active accent, search, collapsible groups).
+    - `frontend/src/components/admin/shell/` (new): `PageHeader`, `StatCard`, `StatusBadge`, `SectionCard`, `TrustBadge` + `trust.ts` (the `TrustSignal` L0→L1→L2→L3 model) + barrel `index.ts`. `TrustBadge` delivers the "trust on every page" requirement (Basecamp 10027085963).
+    - `frontend/src/components/Layout/AdminLayout.tsx` + `adminNav.ts` (new): sidebar rewritten to collapsible/accordion groups + "jump to" search + RemixIcon glyphs; active group auto-expands; collapse state persists in `localStorage`. Immersive mode (`/admin/intelligence`), SafeModeBanner, ErrorBoundary, Outlet, and logout all preserved.
+    - `frontend/src/pages/admin/AdminReportsPage.tsx`: first per-page conversion to the new shell (PageHeader + 4 StatCards + StatusBadge + SectionCard + a report-health `TrustSignal`); removed hardcoded navy hex and the double container.
+    - `docs/admin-redesign/LEDGER.md` (new): the Loop Architect state ledger + per-page "top-notch" rubric for the remaining ~41 pages (Basecamp 10028907149).
+  - Why: Ali directed a full rebrand to the Colaberry design system (Basecamp 10031928327), trust signals on every page (10027085963), looped to top-notch UI/UX (10028907149); the left sidebar (30+ links across 9 groups) had grown too long to scan.
+  - Verification: `tsc --noEmit` clean on every changed file (run in a `node:20` Docker container since this host has no local node; the only errors are 2 pre-existing recharts `Formatter` type mismatches in untouched IntelScatter/Waterfall charts). A separate checker subagent (maker/checker per the Loop Architect) audited the diff — no build-breakers, no circular CSS vars, all referenced tokens resolve — and its 3 findings (immersive-bg hex, detail-card primitive, neutral-badge contrast) were fixed. Visual review via dev deploy is pending.
+  - Notes: the brand icon set is RemixIcon (already vendored via `src/colaberry/tokens/fonts.css`), not Lucide — so NO new npm dependency was added (plan had assumed lucide-react). The foundation re-skins every admin page globally; the existing `AdminTrustCenterPage` already provides the L0 Trust Command Center hub. Per-page PageHeader/Trust migration continues via the LEDGER loop.
+
+- [x] **Per-page loop Batch 1 — 9 high-traffic admin pages converted to the brand shell**
+  - Date: 2026-06-28
+  - Session: CC-20260628-k7p2
+  - What changed: converted `AdminReportsPage`, `AdminDashboardPage`, `AdminLeadsPage`, `AdminPipelinePage`, `AdminOpportunitiesPage`, `AdminRevenueDashboardPage`, `CEOCommandCenter` (header + KPI tiles; dark tab panels deferred), `GovernanceCommandCenter`, and `inbox/InboxCOSPage` to the shared shell — each now uses `PageHeader` (with a per-page `TrustBadge`), `StatCard` KPIs, `StatusBadge`, and `SectionCard`; all hand-rolled hex replaced with brand tokens (chart/funnel/stage series → `--chart-N`).
+  - Why: the per-page leg of the rebrand (Basecamp 10031928327 / 10027085963 / 10028907149) — bring the most-used admin surfaces fully onto the design system + trust layer.
+  - Verification: built by maker subagents, each audited by a SEPARATE checker subagent (maker/checker per the Loop Architect) — all PASS; `tsc --noEmit` clean on every page (node:20 Docker; only the 2 pre-existing recharts errors remain); grep-verified no hardcoded hex / no `react-hooks` eslint-disable / no dangling removed symbols. Built + run as a live dev review container (`http://95.216.199.47:9990`, dev2 network); all 9 routes serve HTTP 200.
+  - Notes: state ledger at `docs/admin-redesign/LEDGER.md` tracks all pages. Remaining after Batch 1: the rest of the route-level pages (done in Waves 2–7 below), Batch 3 (sub-tab hubs), CEO/Governance dark-panel re-theme.
+
+- [x] **Per-page loop Waves 2–7 — ALL 44 navigable admin pages converted to the brand shell**
+  - Date: 2026-06-29
+  - Session: CC-20260628-k7p2
+  - What changed: converted every remaining route-level admin page to the shared shell (`PageHeader` + per-page `TrustBadge`, `StatCard` KPIs, `StatusBadge`, `SectionCard`; all hand-rolled hex → brand/chart tokens, RemixIcon glyphs). Pages: War Room, Visitors, Funnel, Campaigns, Communications, ICP Insights, Sources, Ingest Logs, Routing Rules, Autonomous, Marketing, Missed Opportunities, Content Queue, Tickets, Settings, Apollo, Import, Event Ledger, Projects, CB System, Lead/Cohort/Campaign Detail, Sequences, Governance Policy, Generator, Accelerator, AI Settings (surgical header), Orchestration (surgical header), Trust Center, Campaign Builder, Automation, Intelligence Discovery, Intelligence Settings, Agent Orphans (+ the 9 Batch‑1 pages above). Only intentionally untouched: `AdminLoginPage` (already brand-styled by the foundation) and the immersive `IntelligenceOSPage` (bespoke full-screen design).
+  - Also fixed: `AdminTrustCenterPage` toast-per-poll bug — a one-shot `failureAnnouncedRef` guard makes the failure surface an inline banner at most once per outage and re-arm on a successful poll (was firing a toast on every 30s tick when the backend was down).
+  - Why: the per-page leg of the rebrand (Basecamp 10031928327 / 10027085963 / 10028907149) — bring every navigable admin surface fully onto the design system + trust layer.
+  - Verification: built by maker subagents in waves of ~5, each gated by `tsc --noEmit` (clean — only the 2 pre-existing recharts errors) + a grep for build-breakers (no `react-hooks` eslint-disable, no raw hex, no dangling removed symbols); high-traffic pages also passed a separate checker subagent. Each wave was built + run as a live dev review container (`http://95.216.199.47:9990`, dev2 network) — the nginx multi-stage prod build (npm ci + react-scripts build + eslint) is GREEN; all routes serve HTTP 200. Spot-checked screenshots (login, dashboard, list pages, tab-heavy command centers) show no layout regression.
+  - Notes: REMAINING (queued in the ledger): Batch 3 — the sub-tab *content* components inside the hub pages; and the CEO/Governance dark command-center panel re-theme (dark→light). (Both completed in the entries below.)
+
+- [x] **Batch 3 + orchestration full rebrand + CEO dark→light — brand migration COMPLETE across every admin surface**
+  - Date: 2026-06-30
+  - Session: CC-20260628-k7p2
+  - What changed:
+    - **ai-settings + inbox sub-tab components** (Batch 3a/3b): all hardcoded hex → brand/chart/status tokens across 8 `ai-settings/*` files + 2 `inbox/*` files (light rubric — no PageHeader, since the parent hub owns it). `intelligence/tabs/*` were already hex-free.
+    - **Orchestration workspace — full cherry rebrand** (Ali's decision): re-pointed the scoped `.orch-engine` token block in `frontend/src/styles/orchestration.css` to the brand tokens (cherry/leaf/berry + Roboto) and rebranded all other CSS colors (badges, tables, buttons, alerts, Apple-blue→cherry); debranded all 22 `orchestration/*`+`builder/*` component files (200 hardcoded hex → brand/chart/status tokens; mascot SVGs → chart tokens; `${color}20` hex-alpha → `color-mix`). The whole orchestration dir is now 0 hardcoded hex.
+    - **CEO Command Center — dark→light re-theme** (Ali's decision): converted the dark glassmorphism tab panels (Mission Control / Goals / Directives / Department / Workforce / Audit) to light brand surfaces by re-pointing the page's color constants (BG/CARD→surface tokens, TEXT_*→ink, RED/GREEN/AMBER/BLUE/PURPLE→brand, `${color}20` fills→a `softFill` color-mix helper). Governance had no dark panels (already light).
+  - Why: the final legs of the rebrand (Basecamp 10031928327 / 10027085963 / 10028907149) — bring the sub-tab content + the two bespoke scoped subsystems (orchestration workspace, CEO command center) onto the Colaberry brand per Ali's explicit decisions.
+  - Verification: ~15 maker subagents across the batches, each gated by `tsc --noEmit` (clean — only the 2 pre-existing recharts errors) + grep (whole `ai-settings/`, `inbox/` touched files, and the entire `orchestration/` dir verified 0 hardcoded hex and 0 `react-hooks` eslint-disable). Rebuilt + run as the live dev review container (`http://95.216.199.47:9990`) — the nginx multi-stage prod build (npm ci + react-scripts build + eslint) is GREEN; routes serve HTTP 200.
+  - Notes: **The Colaberry brand migration of the admin is complete** — every navigable page + all sub-tab content + the orchestration builder workspace + the CEO command center are on-brand. The ONLY surfaces intentionally left: `IntelligenceOSPage` (immersive full-screen bespoke design) and `AdminLoginPage` (already brand-styled by the foundation). 18 commits on `workstream/admin-brand-redesign`.
+
 ### Dev environment bootstrap — admin seed, student portal tokens, GitHub PAT inject, Docker network fix (2026-06-23)
 - [x] **Fixed stale Docker dev backend (accelerator_prod → accelerator_dev1 + network)**
   - Date: 2026-06-23

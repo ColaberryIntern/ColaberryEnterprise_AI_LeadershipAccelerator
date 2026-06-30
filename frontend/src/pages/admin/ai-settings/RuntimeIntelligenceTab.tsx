@@ -161,7 +161,7 @@ const RuntimeIntelligenceTab: React.FC = () => {
                     style={{
                       flex: 1,
                       height: `${Math.max(4, (t.total_executions / maxTrendExec) * 100)}%`,
-                      backgroundColor: t.success_rate >= 80 ? 'var(--color-accent)' : t.success_rate >= 50 ? '#f6ad55' : 'var(--color-secondary)',
+                      backgroundColor: t.success_rate >= 80 ? 'var(--status-success)' : t.success_rate >= 50 ? 'var(--status-warning)' : 'var(--status-danger)',
                       borderRadius: 2,
                       minWidth: 4,
                     }}

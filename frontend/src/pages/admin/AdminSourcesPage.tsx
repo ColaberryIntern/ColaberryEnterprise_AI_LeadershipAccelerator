@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
 interface EntryPoint {
   id: string;
@@ -70,6 +71,40 @@ export default function AdminSourcesPage() {
     }
   };
 
+  const summary = useMemo(() => {
+    const total = sources.length;
+    const active = sources.filter((s) => s.is_active).length;
+    const inactive = total - active;
+    const entryPoints = sources.reduce((acc, s) => acc + (s.entryPoints || []).length, 0);
+    return { total, active, inactive, entryPoints };
+  }, [sources]);
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from configured lead sources.
+  const trust: TrustSignal = useMemo(() => {
+    const { total, active, inactive, entryPoints } = summary;
+    const level: TrustLevel = 'live';
+    return {
+      level,
+      score: total === 0 ? 0 : Math.round((active / total) * 100),
+      source: 'lead sources',
+      updatedAt: new Date().toISOString(),
+      summary: `${total} source${total === 1 ? '' : 's'} configured, ${active} active, ${entryPoints} entry point${entryPoints === 1 ? '' : 's'}.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: 'live',
+          score: total === 0 ? 0 : Math.round((active / total) * 100),
+          evidence: [
+            { label: 'Active', value: `${active}/${total}` },
+            { label: 'Inactive', value: String(inactive) },
+            { label: 'Entry points', value: String(entryPoints) },
+          ],
+        },
+      ],
+    };
+  }, [summary]);
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -81,65 +116,82 @@ export default function AdminSourcesPage() {
   }
 
   return (
-    <div className="container-fluid py-4">
-      <Breadcrumb items={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Lead Sources' }]} />
-
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="h3 mb-1">Lead Sources</h1>
-          <p className="text-muted mb-0 small">Configure sites, forms, and webhook integrations that feed leads into the system.</p>
+    <>
+      <PageHeader
+        title="Sources"
+        icon="upload-cloud-2-line"
+        subtitle="Configure sites, forms, and webhook integrations that feed leads into the system."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Sources' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-primary btn-sm" onClick={() => setShowNewSource(true)}>
+            <i className="ri-add-line" aria-hidden="true" /> New Source
+          </button>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Sources" value={summary.total} icon="global-line" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Active" value={summary.active} icon="checkbox-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Inactive" value={summary.inactive} icon="pause-circle-line" tone={summary.inactive ? 'warning' : 'neutral'} />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Entry Points" value={summary.entryPoints} icon="links-line" tone="info" />
+          </div>
         </div>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowNewSource(true)}>
-          + New Source
-        </button>
-      </div>
+      </PageHeader>
 
       {error && <div className="alert alert-danger py-2">{error}</div>}
 
       {showNewSource && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-semibold">New Source</div>
-          <div className="card-body">
-            <div className="row g-2">
-              <div className="col-md-4">
-                <label className="form-label small fw-medium">Slug</label>
-                <input className="form-control form-control-sm" value={newSource.slug}
-                  onChange={(e) => setNewSource({ ...newSource, slug: e.target.value })}
-                  placeholder="trustbeforeintelligence" />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label small fw-medium">Name</label>
-                <input className="form-control form-control-sm" value={newSource.name}
-                  onChange={(e) => setNewSource({ ...newSource, name: e.target.value })}
-                  placeholder="Trust Before Intelligence" />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label small fw-medium">Domain</label>
-                <input className="form-control form-control-sm" value={newSource.domain}
-                  onChange={(e) => setNewSource({ ...newSource, domain: e.target.value })}
-                  placeholder="trustbeforeintelligence.ai" />
-              </div>
+        <SectionCard title="New Source" icon="add-circle-line" className="mb-4">
+          <div className="row g-2">
+            <div className="col-md-4">
+              <label className="form-label small fw-medium">Slug</label>
+              <input className="form-control form-control-sm" value={newSource.slug}
+                onChange={(e) => setNewSource({ ...newSource, slug: e.target.value })}
+                placeholder="trustbeforeintelligence" />
             </div>
-            <div className="mt-3 d-flex gap-2">
-              <button className="btn btn-sm btn-primary" onClick={createSource}>Create</button>
-              <button className="btn btn-sm btn-outline-secondary" onClick={() => setShowNewSource(false)}>Cancel</button>
+            <div className="col-md-4">
+              <label className="form-label small fw-medium">Name</label>
+              <input className="form-control form-control-sm" value={newSource.name}
+                onChange={(e) => setNewSource({ ...newSource, name: e.target.value })}
+                placeholder="Trust Before Intelligence" />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small fw-medium">Domain</label>
+              <input className="form-control form-control-sm" value={newSource.domain}
+                onChange={(e) => setNewSource({ ...newSource, domain: e.target.value })}
+                placeholder="trustbeforeintelligence.ai" />
             </div>
           </div>
-        </div>
+          <div className="mt-3 d-flex gap-2">
+            <button className="btn btn-sm btn-primary" onClick={createSource}>Create</button>
+            <button className="btn btn-sm btn-outline-secondary" onClick={() => setShowNewSource(false)}>Cancel</button>
+          </div>
+        </SectionCard>
       )}
 
       {sources.map((source) => (
-        <div key={source.id} className="card border-0 shadow-sm mb-3">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
+        <SectionCard key={source.id} padded={false} className="mb-3">
+          <div className="admin-section-card__head">
             <div>
               <span className="fw-semibold">{source.name}</span>
               <span className="text-muted ms-2 small">{source.slug} · {source.domain}</span>
-              {!source.is_active && <span className="badge bg-secondary ms-2">inactive</span>}
+              {!source.is_active && <span className="ms-2"><StatusBadge label="inactive" tone="warning" /></span>}
             </div>
-            <button className="btn btn-sm btn-outline-secondary"
-              onClick={() => setShowNewEntry(source.id)}>+ Entry Point</button>
+            <div className="admin-section-card__actions">
+              <button className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowNewEntry(source.id)}>
+                <i className="ri-add-line" aria-hidden="true" /> Entry Point
+              </button>
+            </div>
           </div>
-          <div className="card-body p-0">
+          <div>
             {showNewEntry === source.id && (
               <div className="p-3 border-bottom">
                 <div className="row g-2">
@@ -202,7 +254,7 @@ export default function AdminSourcesPage() {
               </table>
             </div>
           </div>
-        </div>
+        </SectionCard>
       ))}
 
       {sources.length === 0 && (
@@ -210,6 +262,6 @@ export default function AdminSourcesPage() {
           No sources configured yet. Click <strong>New Source</strong> to add one, or run <code>npm run seed:sources</code>.
         </div>
       )}
-    </div>
+    </>
   );
 }

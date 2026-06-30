@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/ToastProvider';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 import OverviewTab from '../../components/campaign/OverviewTab';
 import AnalyticsTab from '../../components/campaign/AnalyticsTab';
 import TargetingTab from '../../components/campaign/TargetingTab';
@@ -102,8 +103,10 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'settings', label: 'Settings' },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'secondary',
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
+const STATUS_TONE: Record<string, BadgeTone> = {
+  draft: 'neutral',
   active: 'success',
   paused: 'warning',
   completed: 'info',
@@ -268,6 +271,24 @@ function AdminCampaignDetailPage() {
     }
   };
 
+  // Per-page trust signal — kept BEFORE any early return so hook order is stable.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'campaign',
+    updatedAt: new Date().toISOString(),
+    summary: campaign
+      ? `Live campaign engine state, leads, and analytics for "${campaign.name}".`
+      : 'Live campaign engine state, leads, and analytics.',
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Freshness',
+        status: 'live',
+        evidence: [{ label: 'Source', value: 'campaign engine' }],
+      },
+    ],
+  }), [campaign]);
+
   if (loading || !campaign) {
     return (
       <div className="text-center py-5">
@@ -280,69 +301,81 @@ function AdminCampaignDetailPage() {
 
   const isTestMode = campaign.settings?.test_mode_enabled;
 
+  const budgetValue = campaign.budget_total
+    ? `$${campaign.budget_spent?.toFixed(0) ?? 0} / $${campaign.budget_total.toFixed(0)}`
+    : '—';
+
   return (
     <div>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns', to: '/admin/campaigns' }, { label: campaign.name }]} />
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-start mb-3">
-        <div>
-          <h2 className="mb-1">{campaign.name}</h2>
+      <PageHeader
+        title={campaign.name || 'Campaign Detail'}
+        icon="megaphone-line"
+        subtitle={campaign.description || `Created ${new Date(campaign.created_at).toLocaleDateString()}`}
+        breadcrumb={[
+          { label: 'Admin', to: '/admin/dashboard' },
+          { label: 'Campaigns', to: '/admin/campaigns' },
+          { label: 'Detail' },
+        ]}
+        trust={trust}
+        actions={
           <div className="d-flex gap-2 align-items-center flex-wrap">
-            <span className={`badge rounded-pill bg-${STATUS_COLORS[campaign.status] || 'secondary'}`}>
-              {campaign.status}
-            </span>
-            <span className="badge bg-light text-dark border">{(campaign.type || '').replace(/_/g, ' ')}</span>
-            {isTestMode && (
-              <span className="badge bg-danger">TEST MODE</span>
+            <StatusBadge label={campaign.status} tone={STATUS_TONE[campaign.status] || 'neutral'} />
+            {campaign.type && <StatusBadge label={(campaign.type || '').replace(/_/g, ' ')} tone="neutral" />}
+            {isTestMode && <StatusBadge label="Test Mode" tone="danger" icon="flask-line" />}
+            {campaign.status === 'draft' && (
+              <button className="btn btn-success btn-sm" onClick={() => handleLifecycle('activate')}>
+                Activate
+              </button>
             )}
-            {campaign.budget_total && (
-              <span className="text-muted small">
-                Budget: ${campaign.budget_spent?.toFixed(0)} / ${campaign.budget_total?.toFixed(0)}
-              </span>
+            {campaign.status === 'active' && (
+              <button className="btn btn-warning btn-sm" onClick={() => handleLifecycle('pause')}>
+                Pause
+              </button>
             )}
-            <span className="text-muted small">
-              Created {new Date(campaign.created_at).toLocaleDateString()}
-            </span>
+            {campaign.status === 'paused' && (
+              <button className="btn btn-success btn-sm" onClick={() => handleLifecycle('activate')}>
+                Resume
+              </button>
+            )}
+            {(campaign.status === 'active' || campaign.status === 'paused') && (
+              <button className="btn btn-info btn-sm" onClick={() => handleLifecycle('complete')}>
+                Complete
+              </button>
+            )}
+            <button
+              className="btn btn-outline-info btn-sm"
+              onClick={handleRunCampaignTest}
+              disabled={testRunning}
+            >
+              {testRunning ? 'Testing...' : 'Run Campaign Test'}
+            </button>
+            {testResult && (
+              <StatusBadge
+                label={`QA: ${testResult.score}/100`}
+                tone={testResult.status === 'passed' ? 'success' : testResult.status === 'partial' ? 'warning' : 'danger'}
+              />
+            )}
+            <button className="btn btn-outline-danger btn-sm" onClick={() => setShowDeleteConfirm(true)}>
+              Delete
+            </button>
+          </div>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Total Leads" value={stats?.total_leads ?? campaign.lead_count ?? 0} icon="user-follow-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="AI Generated" value={stats?.ai_generated_count ?? 0} icon="robot-2-line" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Total Actions" value={stats?.total_actions ?? 0} icon="send-plane-line" tone="neutral" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Budget" value={budgetValue} icon="money-dollar-circle-line" tone="success" />
           </div>
         </div>
-        <div className="d-flex gap-2">
-          {campaign.status === 'draft' && (
-            <button className="btn btn-success btn-sm" onClick={() => handleLifecycle('activate')}>
-              Activate
-            </button>
-          )}
-          {campaign.status === 'active' && (
-            <button className="btn btn-warning btn-sm" onClick={() => handleLifecycle('pause')}>
-              Pause
-            </button>
-          )}
-          {campaign.status === 'paused' && (
-            <button className="btn btn-success btn-sm" onClick={() => handleLifecycle('activate')}>
-              Resume
-            </button>
-          )}
-          {(campaign.status === 'active' || campaign.status === 'paused') && (
-            <button className="btn btn-info btn-sm" onClick={() => handleLifecycle('complete')}>
-              Complete
-            </button>
-          )}
-          <button
-            className="btn btn-outline-info btn-sm"
-            onClick={handleRunCampaignTest}
-            disabled={testRunning}
-          >
-            {testRunning ? 'Testing...' : 'Run Campaign Test'}
-          </button>
-          {testResult && (
-            <span className={`badge bg-${testResult.status === 'passed' ? 'success' : testResult.status === 'partial' ? 'warning' : 'danger'} align-self-center`}>
-              QA: {testResult.score}/100
-            </span>
-          )}
-          <button className="btn btn-outline-danger btn-sm" onClick={() => setShowDeleteConfirm(true)}>
-            Delete
-          </button>
-        </div>
-      </div>
+      </PageHeader>
 
       {/* Tab Navigation */}
       <ul className="nav nav-tabs nav-tabs-scrollable mb-4">

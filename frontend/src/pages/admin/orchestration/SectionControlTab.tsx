@@ -198,7 +198,7 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
                       return (
                         <tr key={lesson.id}>
                           <td>{lesson.lesson_number}</td>
-                          <td className="fw-medium" style={{ maxWidth: 200, cursor: 'pointer', color: 'var(--color-primary-light, #2b6cb0)' }}
+                          <td className="fw-medium" style={{ maxWidth: 200, cursor: 'pointer', color: 'var(--red-500)' }}
                             onClick={() => onNavigateToMiniSections?.(lesson.id)}
                             title="View mini-sections">{lesson.title}</td>
                           <td style={{ maxWidth: 250, fontSize: 12 }}>
@@ -211,7 +211,7 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
                             {lesson.build_phase_flag && <span className="badge bg-success me-1" style={{ fontSize: 10 }}>Build</span>}
                             {lesson.presentation_phase_flag && <span className="badge bg-warning text-dark me-1" style={{ fontSize: 10 }}>Present</span>}
                             {(varCount + artCount + skillCount) > 0 && (
-                              <span className="badge me-1" style={{ fontSize: 10, background: 'rgba(128,90,213,0.15)', color: '#553c9a' }}>
+                              <span className="badge me-1" style={{ fontSize: 10, background: 'color-mix(in srgb, var(--chart-5) 15%, transparent)', color: 'var(--chart-5)' }}>
                                 {varCount}V {artCount}A {skillCount}S
                               </span>
                             )}

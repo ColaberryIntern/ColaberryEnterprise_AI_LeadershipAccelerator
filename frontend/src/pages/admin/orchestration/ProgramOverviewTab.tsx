@@ -131,7 +131,7 @@ const ProgramOverviewTab: React.FC<Props> = ({ token, apiUrl }) => {
               </div>
             </div>
             {idx < sessions.length - 1 && (
-              <div className="d-flex align-items-center" style={{ fontSize: 24, color: 'var(--color-text-light, #718096)' }}>&rarr;</div>
+              <div className="d-flex align-items-center" style={{ fontSize: 24, color: 'var(--text-muted)' }}>&rarr;</div>
             )}
           </React.Fragment>
         ))}

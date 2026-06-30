@@ -9,9 +9,9 @@ interface Props {
 }
 
 const STATUS_ICON: Record<string, { icon: string; color: string }> = {
-  pass: { icon: 'bi-check-circle-fill', color: 'var(--color-accent, #38a169)' },
-  warning: { icon: 'bi-exclamation-triangle-fill', color: '#d69e2e' },
-  fail: { icon: 'bi-x-circle-fill', color: 'var(--color-secondary, #e53e3e)' },
+  pass: { icon: 'bi-check-circle-fill', color: 'var(--status-success)' },
+  warning: { icon: 'bi-exclamation-triangle-fill', color: 'var(--status-warning)' },
+  fail: { icon: 'bi-x-circle-fill', color: 'var(--status-danger)' },
 };
 
 function StatusIcon({ status }: { status: 'pass' | 'warning' | 'fail' }) {
@@ -26,7 +26,7 @@ function CategoryCard({ category }: { category: DiagnosticCategory }) {
     <div className="border rounded mb-2">
       <div
         className="d-flex align-items-center gap-2 px-3 py-2"
-        style={{ cursor: 'pointer', backgroundColor: expanded ? 'var(--color-bg-alt, #f7fafc)' : 'transparent' }}
+        style={{ cursor: 'pointer', backgroundColor: expanded ? 'var(--neutral-50)' : 'transparent' }}
         onClick={() => setExpanded(!expanded)}
       >
         <StatusIcon status={category.status} />
@@ -37,7 +37,7 @@ function CategoryCard({ category }: { category: DiagnosticCategory }) {
         <span style={{ fontSize: 11 }}>{expanded ? '\u25B2' : '\u25BC'}</span>
       </div>
       {expanded && (
-        <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+        <div className="px-3 py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
           {category.details.length === 0 ? (
             <p className="text-muted small mb-0">No details available.</p>
           ) : (
