@@ -76,8 +76,9 @@ router.get('/api/admin/anthropic/change-events', requireAdmin, async (req: Reque
 });
 
 // Catalog scraper — weekly recommended; run manually or via external cron.
-// Scrapes https://www.anthropic.com/learn, extracts course titles/URLs/outlines,
-// diffs against registry. Falls back to hardcoded catalog on fetch failure.
+// Reads tracked course URLs from curriculum_course_links (provider='skilljar'),
+// scrapes each course page's outline, and diffs against the registry. Falls
+// back to the hardcoded KNOWN_CATALOG when curriculum_course_links is unavailable.
 router.post('/api/admin/sync/anthropic-catalog', requireAdmin, async (_req: Request, res: Response) => {
   try {
     const result = await runCatalogScraper();

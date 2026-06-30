@@ -80,6 +80,7 @@ async function scrapeOutline(courseUrl: string): Promise<string> {
   try {
     resp = await fetchWithTimeout(courseUrl);
   } catch (err: any) {
+    // err: any — fetch/abort throw sites are untyped at the JS boundary; read via err.name/err.message only.
     const error_class = err.name === 'AbortError' ? 'TimeoutError' : 'NetworkError';
     log('warn', 'outline_fetch_failed', { url: courseUrl, error_class, message: err.message });
     return '';
@@ -151,6 +152,18 @@ async function syncCourse(course: ScrapedCourse): Promise<CourseScrapResult> {
       return { url: course.url, outcome: 'created' };
     }
 
+    // Guard: a fresh scrape that yields an empty outline almost always means a
+    // failed fetch or a selector miss, not that Anthropic deleted the whole
+    // outline. Never overwrite a previously-good outline with empty or flag a
+    // change off it — that would fire a false curriculum-change alert, the exact
+    // failure mode this monitor exists to prevent. Bump last_checked and move on.
+    const existingHasContent = Boolean(existing.outline) || Boolean(existing.content_hash);
+    if (!course.outline && existingHasContent) {
+      await existing.update({ last_checked: new Date() });
+      log('warn', 'outline_empty_skipped', { url: course.url, outcome: 'partial' });
+      return { url: course.url, outcome: 'unchanged' };
+    }
+
     const titleChanged = existing.title !== course.title;
     const outlineChanged = existing.content_hash !== outlineHash;
 
@@ -179,6 +192,7 @@ async function syncCourse(course: ScrapedCourse): Promise<CourseScrapResult> {
     log('info', 'course_updated', { url: course.url, title_changed: titleChanged, outline_changed: outlineChanged, outcome: 'success' });
     return { url: course.url, outcome: 'updated' };
   } catch (err: any) {
+    // err: any — Sequelize/DB rejections are untyped at the JS boundary; read err.message only.
     log('error', 'course_sync_failed', { url: course.url, error_class: 'DatabaseError', message: err.message, outcome: 'failure' });
     return { url: course.url, outcome: 'error', error_class: 'DatabaseError' };
   }
@@ -206,6 +220,7 @@ export async function runCatalogScraper(): Promise<CatalogScraperRunResult> {
       source = 'fallback';
     }
   } catch (err: any) {
+    // err: any — Sequelize/DB rejections are untyped at the JS boundary; read err.message only.
     log('error', 'curriculum_links_fetch_failed', { error_class: 'DatabaseError', message: err.message, outcome: 'partial' });
     source = 'fallback';
   }
@@ -214,6 +229,17 @@ export async function runCatalogScraper(): Promise<CatalogScraperRunResult> {
     log('warn', 'using_fallback_catalog', { courses: KNOWN_CATALOG.length });
     coursesToWatch = (KNOWN_CATALOG as KnownCourse[]).map((c) => ({ title: c.title, url: c.url }));
   }
+
+  // De-duplicate by normalized URL: curriculum_course_links maps many week-rows
+  // onto the same course, which would otherwise inflate courses_found and
+  // produce a created+unchanged pair for one course within a single run.
+  const seenUrls = new Set<string>();
+  coursesToWatch = coursesToWatch.filter((c) => {
+    const key = normalizeCourseUrl(c.url);
+    if (!key || seenUrls.has(key)) return false;
+    seenUrls.add(key);
+    return true;
+  });
 
   // Step 2: fetch outline for each course and sync to registry
   const results: CourseScrapResult[] = [];
