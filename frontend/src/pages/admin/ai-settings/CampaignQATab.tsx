@@ -136,9 +136,9 @@ function CampaignQATab() {
       {/* KPI Row */}
       <div className="row g-3 mb-4">
         {kpi('Tested Today', summary.campaigns_tested_today, 'var(--color-primary)')}
-        {kpi('Pass Rate', `${summary.pass_rate}%`, summary.pass_rate >= 80 ? 'var(--color-accent)' : summary.pass_rate >= 50 ? '#e0a800' : 'var(--color-secondary)')}
-        {kpi('Failures', summary.failures_today, summary.failures_today > 0 ? 'var(--color-secondary)' : 'var(--color-accent)')}
-        {kpi('Avg Score', summary.avg_score, summary.avg_score >= 80 ? 'var(--color-accent)' : summary.avg_score >= 50 ? '#e0a800' : 'var(--color-secondary)')}
+        {kpi('Pass Rate', `${summary.pass_rate}%`, summary.pass_rate >= 80 ? 'var(--status-success)' : summary.pass_rate >= 50 ? 'var(--status-warning)' : 'var(--status-danger)')}
+        {kpi('Failures', summary.failures_today, summary.failures_today > 0 ? 'var(--status-danger)' : 'var(--status-success)')}
+        {kpi('Avg Score', summary.avg_score, summary.avg_score >= 80 ? 'var(--status-success)' : summary.avg_score >= 50 ? 'var(--status-warning)' : 'var(--status-danger)')}
       </div>
 
       <div className="row g-3">

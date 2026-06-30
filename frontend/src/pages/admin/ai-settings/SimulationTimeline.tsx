@@ -24,19 +24,19 @@ interface SimStep {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#adb5bd',
-  waiting: '#0d6efd',
-  executing: '#0d6efd',
-  sent: '#198754',
-  responded: '#0dcaf0',
-  skipped: '#ffc107',
-  failed: '#dc3545',
+  pending: 'var(--text-muted)',
+  waiting: 'var(--status-info)',
+  executing: 'var(--status-info)',
+  sent: 'var(--status-success)',
+  responded: 'var(--status-info)',
+  skipped: 'var(--status-warning)',
+  failed: 'var(--status-danger)',
 };
 
 const CHANNEL_ICONS: Record<string, string> = {
-  email: '\u2709',
-  sms: '\ud83d\udcf1',
-  voice: '\ud83d\udcde',
+  email: 'ri-mail-line',
+  sms: 'ri-smartphone-line',
+  voice: 'ri-phone-line',
 };
 
 function formatDelay(ms: number): string {
@@ -68,13 +68,13 @@ export default function SimulationTimeline({
           top: 8,
           bottom: 8,
           width: 2,
-          backgroundColor: 'var(--color-border, #e2e8f0)',
+          backgroundColor: 'var(--border-subtle)',
         }}
       />
 
       {steps.map((step) => {
         const isCurrent = step.step_index === currentStepIndex;
-        const dotColor = STATUS_COLORS[step.status] || '#adb5bd';
+        const dotColor = STATUS_COLORS[step.status] || 'var(--text-muted)';
         const isClickable = onJump && step.status === 'pending';
 
         return (
@@ -96,7 +96,7 @@ export default function SimulationTimeline({
                 width: isCurrent ? 14 : 10,
                 height: isCurrent ? 14 : 10,
                 backgroundColor: dotColor,
-                border: `2px solid ${isCurrent ? 'white' : dotColor}`,
+                border: `2px solid ${isCurrent ? 'var(--surface-card)' : dotColor}`,
                 boxShadow: isCurrent ? `0 0 0 2px ${dotColor}` : 'none',
                 transition: 'all 0.2s',
               }}
@@ -114,7 +114,9 @@ export default function SimulationTimeline({
                 <div className="d-flex justify-content-between align-items-center">
                   <div className="d-flex gap-2 align-items-center">
                     <span className="small fw-bold text-muted">#{step.step_index + 1}</span>
-                    <span style={{ fontSize: '1rem' }}>{CHANNEL_ICONS[step.channel] || ''}</span>
+                    {CHANNEL_ICONS[step.channel] && (
+                      <i className={CHANNEL_ICONS[step.channel]} style={{ fontSize: '1rem' }} aria-hidden="true" />
+                    )}
                     <span className="badge bg-secondary" style={{ fontSize: '0.6rem', textTransform: 'uppercase' }}>
                       {step.channel}
                     </span>
@@ -140,7 +142,7 @@ export default function SimulationTimeline({
                       style={{
                         fontSize: '0.6rem',
                         backgroundColor: dotColor,
-                        color: step.status === 'waiting' || step.status === 'executing' ? '#fff' : undefined,
+                        color: step.status === 'waiting' || step.status === 'executing' ? 'var(--surface-card)' : undefined,
                       }}
                     >
                       {step.status}
