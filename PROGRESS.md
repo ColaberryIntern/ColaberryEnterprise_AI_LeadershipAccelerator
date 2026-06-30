@@ -6827,6 +6827,23 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: `backend/src/server.ts` — added import + `await seedCurriculumCourseLinks()` call in the startup seed sequence (after `seedCurriculumTypeDefinitions`). The `curriculum_course_links` table is the actual delivery mechanism for Skilljar course CTAs on `PortalCurriculumPage.tsx`; it was missing from both dev DBs because the seed was never wired into server startup. Week 5 (Introduction to Model Context Protocol, `https://anthropic.skilljar.com/introduction-to-model-context-protocol`) is already `confirmed` in the seed data; no code change needed to the seed itself.
   - Verification: `tsc --noEmit` clean; seed ran locally (12 rows upserted, accelerator_dev); Week 5 = `confirmed` in DB; Jest 18/18 pass (seedCurriculumCourseLinks + courseLinkService + updateCourseLink).
   - Notes: The `wireWeek5` script approach was ruled out — no Week 5 LiveSession exists in the DB (old 5-session curriculum only). The correct path is `curriculum_course_links` → `courseLinkService` → `PortalCurriculumPage.tsx`. Needs prod deploy to go live on enterprise.colaberry.com.
+- [x] **Drop Skilljar API track; replace with public catalog scraper**
+  - Date: 2026-06-30
+  - Session: CC-20260630-8x2m
+  - What changed:
+    - DELETED: `backend/src/services/skilljarSyncService.ts`, `backend/src/models/StudentSkilljarProgress.ts`, `backend/src/services/__tests__/skilljarSyncService.test.ts`, `backend/src/services/lib/__tests__/skilljarCourseMatch.test.ts`, `backend/src/services/lib/skilljarCourseMatch.ts`
+    - CREATED: `backend/src/services/lib/catalogFallback.ts` — hardcoded last-known-good catalog (5 courses, outlines, URL normalization utilities)
+    - CREATED: `backend/src/services/anthropicCatalogScraper.ts` — scrapes `https://www.anthropic.com/learn`, extracts course titles/URLs/outlines via cheerio, diffs against `anthropic_content_registry`, falls back to KNOWN_CATALOG on failure
+    - CREATED: `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` — 10 test cases (happy path, fallback on 503, fallback on empty catalog, fallback on ECONNREFUSED, change detection, idempotency, DB error handling, boundary checks)
+    - CREATED: `backend/src/seeds/migrations/add_outline_to_anthropic_content_registry.sql` — idempotent migration adding `outline TEXT NULL` column
+    - UPDATED: `backend/src/models/AnthropicContentRegistry.ts` — added `outline` attribute and Sequelize column definition
+    - UPDATED: `backend/src/routes/admin/anthropicRoutes.ts` — added `POST /api/admin/sync/anthropic-catalog` route
+    - UPDATED: `backend/src/seeds/seedAnthropicContentRegistry.ts` — removed Skilljar course rows (now scraper-owned); kept docs/news hubs
+    - UPDATED: `backend/src/models/index.ts` — removed StudentSkilljarProgress import/export
+    - UPDATED: `backend/src/config/env.ts` — removed skilljarApiKey / skilljarBaseUrl
+  - Verification: `tsc --noEmit` passes clean (exit code 0).
+  - Notes: Ali confirmed Skilljar API access is not coming. Course rows in `anthropic_content_registry` now populated on demand via `POST /api/admin/sync/anthropic-catalog`. Weekly cron should call that route. The `curriculum_course_links` table is unchanged — still the student-facing link source, still manually updated by Kes via `updateCourseLink.ts`. Migration must be applied on prod before deploy: `add_outline_to_anthropic_content_registry.sql`.
+
 - [ ] **Week 4 Prompt Engineering content spec (BC #9984355775)**
   - Date: 2026-06-25
   - Session: CC-20260625-c8r2
@@ -6839,3 +6856,10 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: `backend/src/seeds/seedCurriculumCourseLinks.ts` — Week 6 `link_status` changed from `pending_confirmation` to `confirmed`. URL `https://anthropic.skilljar.com/model-context-protocol-advanced-topics` was already present; ticket provided the confirmation.
   - Verification: tsc --noEmit clean; seed ran against accelerator_dev1 — Week 6 = confirmed (DB verified via psql query). Awaiting Kes PR approval.
   - Notes: One-line change in the seed; no server.ts change needed (startup seeding was wired in PR #89).
+
+- [x] **Catalog scraper scoped to curriculum_course_links (correction to CC-20260630-8x2m)**
+  - Date: 2026-06-30
+  - Session: CC-20260630-8x2m
+  - What changed: Rewrote `backend/src/services/anthropicCatalogScraper.ts` — removed catalog page scraping logic entirely; scraper now reads tracked URLs from `curriculum_course_links WHERE provider='skilljar'` (the program's authoritative week→course map) rather than sweeping the full public catalog. Updated `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` to match (9 test cases: happy path, idempotency, change detection, DB fallback, empty-DB fallback, unreachable course page, registry write failure, null-URL exclusion, KNOWN_CATALOG boundary check).
+  - Verification: `tsc --noEmit` passes clean (exit code 0).
+  - Notes: First version incorrectly scraped all courses from anthropic.com/learn. Correct scope: only the specific courses assigned in the accelerator program, as defined in curriculum_course_links. KNOWN_CATALOG in catalogFallback.ts remains the fallback when the DB is unavailable.

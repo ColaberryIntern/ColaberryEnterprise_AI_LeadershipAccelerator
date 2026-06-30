@@ -5,6 +5,7 @@ import AnthropicChangeEvent from '../../models/AnthropicChangeEvent';
 import { runContentWatcher } from '../../services/anthropicContentWatcher';
 import { runChangeDetector } from '../../services/anthropicChangeDetector';
 import { runCurriculumImpactAgent } from '../../services/anthropicCurriculumImpactAgent';
+import { runCatalogScraper } from '../../services/anthropicCatalogScraper';
 
 const router = Router();
 
@@ -70,6 +71,28 @@ router.get('/api/admin/anthropic/change-events', requireAdmin, async (req: Reque
     res.json({ ok: true, count: rows.length, rows });
   } catch (err: any) {
     console.error('[anthropicRoutes] change-events fetch failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Catalog scraper — weekly recommended; run manually or via external cron.
+// Scrapes https://www.anthropic.com/learn, extracts course titles/URLs/outlines,
+// diffs against registry. Falls back to hardcoded catalog on fetch failure.
+router.post('/api/admin/sync/anthropic-catalog', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const result = await runCatalogScraper();
+    res.json({
+      ok: true,
+      source: result.source,
+      courses_found: result.courses_found,
+      created: result.created,
+      updated: result.updated,
+      unchanged: result.unchanged,
+      errors: result.errors,
+      results: result.results,
+    });
+  } catch (err: any) {
+    console.error('[anthropicRoutes] catalog scrape failed:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

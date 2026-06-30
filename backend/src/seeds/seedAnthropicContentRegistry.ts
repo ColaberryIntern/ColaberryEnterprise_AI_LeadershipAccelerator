@@ -1,13 +1,16 @@
 /**
- * Seed the anthropic_content_registry table with the 6 confirmed URLs.
+ * Seed the anthropic_content_registry table with non-course content hubs.
  *
- * Idempotent: upserts on url (unique constraint), so re-running never duplicates rows.
- * All 5 Skilljar course URLs confirmed as of 2026-06-18. Partner portal URL remains
- * a PLACEHOLDER until Anthropic confirms the partner portal URL post 2026-06-12.
+ * Course rows are now populated and maintained by the catalog scraper
+ * (anthropicCatalogScraper.ts / POST /api/admin/sync/anthropic-catalog).
+ * Run the scraper after this seed to populate course entries.
+ *
+ * Idempotent: upserts on url (unique constraint); re-running never duplicates rows.
  *
  * Run: `npx ts-node backend/src/seeds/seedAnthropicContentRegistry.ts`
  *
- * Output: writes/updates rows in anthropic_content_registry, prints final row count.
+ * Before running on prod, apply the migration:
+ *   backend/src/seeds/migrations/add_outline_to_anthropic_content_registry.sql
  */
 
 import path from 'path';
@@ -23,34 +26,8 @@ interface SeedRow {
   url: string;
 }
 
+// Only non-course rows. Courses are discovered and upserted by the scraper.
 const ROWS: SeedRow[] = [
-  // 5 confirmed partner-required Skilljar courses
-  {
-    content_type: 'course',
-    title: 'Introduction to Agent Skills',
-    url: 'https://anthropic.skilljar.com/introduction-to-agent-skills',
-  },
-  {
-    content_type: 'course',
-    title: 'Claude with the Anthropic API',
-    url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
-  },
-  {
-    content_type: 'course',
-    title: 'Introduction to Model Context Protocol',
-    url: 'https://anthropic.skilljar.com/introduction-to-model-context-protocol',
-  },
-  {
-    content_type: 'course',
-    title: 'Claude Code in Action',
-    url: 'https://anthropic.skilljar.com/claude-code-in-action',
-  },
-  {
-    content_type: 'course',
-    title: 'Claude Code 101',
-    url: 'https://anthropic.skilljar.com/claude-code-101',
-  },
-  // Public content hubs
   {
     content_type: 'document',
     title: 'Anthropic Documentation',
@@ -60,14 +37,6 @@ const ROWS: SeedRow[] = [
     content_type: 'news',
     title: 'Anthropic News',
     url: 'https://www.anthropic.com/news',
-  },
-  // Partner portal — URL TBD until partner status confirmed 2026-06-12.
-  // Row is seeded as a placeholder so the watcher schema is populated;
-  // update the url column once the real URL is known.
-  {
-    content_type: 'partner-portal',
-    title: 'Anthropic Partner Portal (PLACEHOLDER — update url after 2026-06-12)',
-    url: 'https://partners.anthropic.com/PLACEHOLDER',
   },
 ];
 
@@ -95,6 +64,8 @@ async function run(): Promise<void> {
     { type: QueryTypes.SELECT },
   );
   console.log(`[seedAnthropicContentRegistry] done — ${(countResult as any).count} total rows`);
+  console.log('[seedAnthropicContentRegistry] Run the catalog scraper to populate course rows:');
+  console.log('  POST /api/admin/sync/anthropic-catalog');
 
   await sequelize.close();
 }
