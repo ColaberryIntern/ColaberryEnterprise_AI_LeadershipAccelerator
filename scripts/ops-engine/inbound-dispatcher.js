@@ -33,6 +33,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { handleOpenEnded } = require('./cb-system-handler');
 const cbControl = require('./cb-control');
+const cbPeople = require('./cb-people');
 
 const ACCOUNT = '3945211';
 const BASE = `https://3.basecampapi.com/${ACCOUNT}`;
@@ -211,7 +212,13 @@ function saveState(s) {
   s.ownComments = [...ownComments].slice(-3000);
   fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2));
 }
-const mention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
+// Build an @-mention for a specific person. `ref` may be a comment's `creator`
+// object (carries attachable_sgid, zero network), a name/email/id resolved via
+// the per-tick people cache, or a raw sgid. Falls back to Ali when the ref is
+// absent or unresolved, so a no-arg `mention()` keeps the original behavior.
+// Previously this ALWAYS emitted Ali's sgid, so a reply to anyone else tagged
+// Ali and left the real person untagged.
+const mention = (ref) => cbPeople.mentionFor(ref, { fallbackSgid: ALI_SGID });
 
 // --- Duplicate-reply circuit breaker ---------------------------------------
 // Defense-in-depth backstop, independent of the processed-dedup. The 2026-06-15
@@ -338,8 +345,8 @@ async function autoTrip(state, reason) {
 
 // --- Recipes ---------------------------------------------------------------
 
-function recipeHelp() {
-  return `<div>${mention()} CB System dispatcher v1 - keyword recipes (LLM dispatcher not yet wired):</div>
+function recipeHelp(requester) {
+  return `<div>${mention(requester)} CB System dispatcher v1 - keyword recipes (LLM dispatcher not yet wired):</div>
 <ul>
   <li><code>@CBSystem grep:&lt;pattern&gt;</code> - ripgrep the codebase, return first 50 matches</li>
   <li><code>@CBSystem ccpp:&lt;SQL&gt;</code> - read-only CCPP query (production DB)</li>
@@ -354,20 +361,20 @@ function runCmd(cmd, args, timeoutMs) {
   return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-function recipeGrep(pattern) {
+function recipeGrep(pattern, requester) {
   const r = runCmd('rg', ['--color', 'never', '-n', '--max-count', '50', pattern, '.'], 60000);
   const lines = (r.stdout || '').split('\n').filter(Boolean).slice(0, 50);
   return lines.length
-    ? `<div>${mention()} <code>grep:${pattern}</code> -> ${lines.length} matches:</div><pre>${lines.map(l => l.replace(/</g, '&lt;')).join('\n')}</pre>`
-    : `<div>${mention()} <code>grep:${pattern}</code> -> no matches.</div>`;
+    ? `<div>${mention(requester)} <code>grep:${pattern}</code> -> ${lines.length} matches:</div><pre>${lines.map(l => l.replace(/</g, '&lt;')).join('\n')}</pre>`
+    : `<div>${mention(requester)} <code>grep:${pattern}</code> -> no matches.</div>`;
 }
 
-function recipeUnknown(raw) {
+function recipeUnknown(raw, requester) {
   // Friendlier "queued for next Ali session" acknowledgment instead of error-tone.
   // Per @CB System scope expansion doctrine 2026-05-30: for open-ended requests
   // (anything beyond v1 keyword recipes), CB System acknowledges within 3 min and
   // the actual execution happens in Ali's next Claude Code chat session.
-  return `<div>${mention()} I see your request: <em>"${raw.slice(0, 300).replace(/</g, '&lt;')}"</em></div>
+  return `<div>${mention(requester)} I see your request: <em>"${raw.slice(0, 300).replace(/</g, '&lt;')}"</em></div>
 <div><br></div>
 <div>This needs a real tool run (research, email draft, calendar booking, CCPP lookup, etc.) which the cron-driven dispatcher can not do solo yet. <strong>Queued for the next live session</strong> - Ali will see this when he is next in Claude Code and the response will land here as a follow-up comment.</div>
 <div><br></div>
@@ -384,7 +391,7 @@ function recipeUnknown(raw) {
 // with the recipe-list reply when he sent real work. (Bug confirmed 2026-05-31
 // on comment 9946342528: PMO system-prompt spec sent to CB but routed to
 // help-recipe reply because "help" appeared in the body.)
-function classifyKeyword(text) {
+function classifyKeyword(text, requester) {
   // Strip HTML, strip the BC mention attachment, normalize whitespace.
   const stripped = text
     .replace(/<bc-attachment[^>]*content-type="application\/vnd\.basecamp\.mention"[^>]*>[\s\S]*?<\/bc-attachment>/gi, ' ')
@@ -400,14 +407,14 @@ function classifyKeyword(text) {
   if (m) {
     const kind = m[1].toLowerCase();
     const arg = (m[2] || '').trim();
-    if (kind === 'grep') return recipeGrep(arg);
-    if (kind === 'ccpp') return `<div>${mention()} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
-    if (kind === 'gmail') return `<div>${mention()} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
+    if (kind === 'grep') return recipeGrep(arg, requester);
+    if (kind === 'ccpp') return `<div>${mention(requester)} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
+    if (kind === 'gmail') return `<div>${mention(requester)} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
   }
   // Help recipe: only when the message is JUST "help" (after stripping
   // mention + CB prefix), nothing more. Anything substantive falls through
   // to the LLM handler.
-  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp();
+  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp(requester);
   return null;
 }
 
@@ -721,6 +728,11 @@ if (require.main !== module) return;
       await cbControl.close();
       process.exit(0);
     }
+    // Warm the people cache once per tick so @-mentions resolve to the real
+    // person (by name/email/id) and not just the requester's own object-sgid.
+    // Best-effort: ensurePeopleLoaded swallows its own errors, so a /people.json
+    // hiccup degrades mentions to the Ali fallback rather than breaking the tick.
+    try { await cbPeople.ensurePeopleLoaded({ bcGet: bcGetAll }); } catch (_e) {}
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
@@ -736,7 +748,7 @@ if (require.main !== module) return;
         if (!DRY) saveState(state);
         continue;
       }
-      const html = classifyKeyword(m.comment.content);
+      const html = classifyKeyword(m.comment.content, m.comment.creator);
       if (html) {
         // Fixed keyword recipe matched -> single-shot reply.
         try {
