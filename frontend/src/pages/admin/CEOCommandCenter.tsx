@@ -108,24 +108,30 @@ interface Ticket {
 /*  Colors & Constants                                                 */
 /* ------------------------------------------------------------------ */
 
-const BG = '#0a0e17';
-const CARD_BG = '#111827';
-const CARD_BORDER = 'rgba(255,255,255,0.08)';
-const CARD_GLASS = 'rgba(255,255,255,0.03)';
-const TEXT_WHITE = '#ffffff';
-const TEXT_GRAY = '#9ca3af';
-const TEXT_MUTED = '#6b7280';
-const GREEN = '#38a169';
-const AMBER = '#f59e0b';
-const RED = '#e53e3e';
-const BLUE = '#3b82f6';
-const PURPLE = '#8b5cf6';
+// Light Colaberry brand surfaces
+const BG = 'var(--surface-subtle)';
+const CARD_BG = 'var(--surface-card)';
+const CARD_BORDER = 'var(--border-subtle)';
+const CARD_GLASS = 'var(--surface-card)';
+const TEXT_WHITE = 'var(--text-strong)';
+const TEXT_GRAY = 'var(--text-body)';
+const TEXT_MUTED = 'var(--text-muted)';
+const GREEN = 'var(--status-success)';
+const AMBER = 'var(--status-warning)';
+const RED = 'var(--red-500)';
+const BLUE = 'var(--blue-500)';
+const PURPLE = 'var(--chart-5)';
+
+// Soft, brand-tinted translucent fill for a status/priority pill background.
+function softFill(color: string): string {
+  return `color-mix(in srgb, ${color} 12%, white)`;
+}
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: RED,
-  high: '#f97316',
+  high: 'var(--amber-500)',
   medium: BLUE,
-  low: '#6b7280',
+  low: 'var(--text-muted)',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -446,9 +452,9 @@ export default function CEOCommandCenter() {
   // Offline overlay
   const offlineOverlay = (
     <div style={{
-      position: 'absolute', inset: 0, background: 'rgba(10,14,23,0.85)',
+      position: 'absolute', inset: 0, background: 'color-mix(in srgb, var(--surface-subtle) 75%, transparent)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      borderRadius: 12, zIndex: 5, backdropFilter: 'blur(4px)',
+      borderRadius: 12, zIndex: 5, backdropFilter: 'blur(2px)',
     }}>
       <span style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: 500 }}>Enable system to view</span>
     </div>
@@ -519,8 +525,8 @@ export default function CEOCommandCenter() {
           50% { opacity: 0.4; }
         }
         @keyframes cmdGlow {
-          0%, 100% { box-shadow: 0 0 0 rgba(59,130,246,0); }
-          50% { box-shadow: 0 0 20px rgba(59,130,246,0.15); }
+          0%, 100% { box-shadow: 0 0 0 rgba(54,120,149,0); }
+          50% { box-shadow: 0 0 20px rgba(54,120,149,0.12); }
         }
         @keyframes cmdProgressRing {
           from { stroke-dashoffset: 314; }
@@ -533,8 +539,8 @@ export default function CEOCommandCenter() {
         .cmd-fade-6 { animation: cmdFadeIn 0.5s ease-out 0.6s both; }
         .cmd-fade-7 { animation: cmdFadeIn 0.5s ease-out 0.7s both; }
         .cmd-card:hover {
-          border-color: rgba(255,255,255,0.15) !important;
-          box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05) !important;
+          border-color: var(--border-default) !important;
+          box-shadow: 0 4px 16px rgba(15,15,15,0.08), 0 0 0 1px var(--border-subtle) !important;
         }
         .cmd-pulse { animation: cmdPulse 2s ease-in-out infinite; }
         .cmd-glow { animation: cmdGlow 3s ease-in-out infinite; }
@@ -545,10 +551,10 @@ export default function CEOCommandCenter() {
         .cmd-toggle-thumb {
           width: 22px; height: 22px; border-radius: 50%; background: white;
           position: absolute; top: 3px; transition: left 0.3s ease;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          box-shadow: 0 1px 3px rgba(15,15,15,0.25);
         }
-        .cmd-dir-row:hover { background: rgba(255,255,255,0.04) !important; }
-        .cmd-audit-row:hover { background: rgba(255,255,255,0.03) !important; }
+        .cmd-dir-row:hover { background: var(--surface-subtle) !important; }
+        .cmd-audit-row:hover { background: var(--surface-subtle) !important; }
         @media (prefers-reduced-motion: reduce) {
           .cmd-fade-1, .cmd-fade-2, .cmd-fade-3, .cmd-fade-4,
           .cmd-fade-5, .cmd-fade-6, .cmd-fade-7 { animation: none; opacity: 1; transform: none; }
@@ -705,7 +711,7 @@ export default function CEOCommandCenter() {
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                               <button onClick={() => handleUpdateGoal(goal.id)} style={{ ...btnSmall, background: GREEN }}>Save</button>
-                              <button onClick={() => { setEditingGoal(null); setEditGoalData({}); }} style={{ ...btnSmall, background: '#374151' }}>Cancel</button>
+                              <button onClick={() => { setEditingGoal(null); setEditGoalData({}); }} style={{ ...btnSmall, ...btnNeutral }}>Cancel</button>
                             </div>
                           </div>
                         );
@@ -721,7 +727,7 @@ export default function CEOCommandCenter() {
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                             {/* Progress ring */}
                             <svg width={80} height={80} style={{ flexShrink: 0 }}>
-                              <circle cx={40} cy={40} r={34} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={6} />
+                              <circle cx={40} cy={40} r={34} fill="none" stroke="var(--neutral-200)" strokeWidth={6} />
                               <circle
                                 cx={40} cy={40} r={34} fill="none"
                                 stroke={ringColor} strokeWidth={6}
@@ -740,7 +746,7 @@ export default function CEOCommandCenter() {
                               <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                                 <span style={{
                                   fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 8,
-                                  background: `${PRIORITY_COLORS[goal.priority] || BLUE}20`,
+                                  background: softFill(PRIORITY_COLORS[goal.priority] || BLUE),
                                   color: PRIORITY_COLORS[goal.priority] || BLUE,
                                   textTransform: 'uppercase',
                                 }}>
@@ -748,7 +754,7 @@ export default function CEOCommandCenter() {
                                 </span>
                                 <span style={{
                                   fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 8,
-                                  background: `${STATUS_COLORS[goal.status] || TEXT_MUTED}20`,
+                                  background: softFill(STATUS_COLORS[goal.status] || TEXT_MUTED),
                                   color: STATUS_COLORS[goal.status] || TEXT_MUTED,
                                 }}>
                                   {(goal.status || '').replace(/_/g, ' ')}
@@ -810,7 +816,7 @@ export default function CEOCommandCenter() {
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={handleAddGoal} style={{ ...btnSmall, background: GREEN }}>Create</button>
-                          <button onClick={() => setAddingGoal(false)} style={{ ...btnSmall, background: '#374151' }}>Cancel</button>
+                          <button onClick={() => setAddingGoal(false)} style={{ ...btnSmall, ...btnNeutral }}>Cancel</button>
                         </div>
                       </div>
                     ) : (
@@ -855,8 +861,8 @@ export default function CEOCommandCenter() {
                         key={tab}
                         onClick={() => setDirectiveFilter(tab)}
                         style={{
-                          background: directiveFilter === tab ? 'rgba(255,255,255,0.1)' : 'transparent',
-                          border: `1px solid ${directiveFilter === tab ? 'rgba(255,255,255,0.2)' : 'transparent'}`,
+                          background: directiveFilter === tab ? 'var(--surface-sunken)' : 'transparent',
+                          border: `1px solid ${directiveFilter === tab ? 'var(--border-subtle)' : 'transparent'}`,
                           borderRadius: 8, padding: '6px 14px',
                           color: directiveFilter === tab ? TEXT_WHITE : TEXT_MUTED,
                           fontSize: 12, fontWeight: 500, cursor: 'pointer',
@@ -866,7 +872,7 @@ export default function CEOCommandCenter() {
                         {tab}
                         {tab === 'proposed' && proposedDirectives > 0 && (
                           <span style={{
-                            marginLeft: 6, background: AMBER, color: '#000', fontSize: 10,
+                            marginLeft: 6, background: AMBER, color: 'var(--text-on-accent)', fontSize: 10,
                             fontWeight: 700, borderRadius: 6, padding: '1px 5px',
                           }}>{proposedDirectives}</span>
                         )}
@@ -891,7 +897,7 @@ export default function CEOCommandCenter() {
                           style={{
                             display: 'flex', alignItems: 'center', gap: 10,
                             padding: '12px 14px', borderRadius: 8, cursor: 'pointer',
-                            background: selectedDirective?.id === d.id ? 'rgba(255,255,255,0.06)' : 'transparent',
+                            background: selectedDirective?.id === d.id ? 'var(--surface-subtle)' : 'transparent',
                             borderLeft: `3px solid ${STATUS_COLORS[d.status] || TEXT_MUTED}`,
                             marginBottom: 4,
                           }}
@@ -914,7 +920,7 @@ export default function CEOCommandCenter() {
                             <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>
                               <span style={{
                                 fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 6,
-                                background: `${PRIORITY_COLORS[d.priority] || BLUE}20`,
+                                background: softFill(PRIORITY_COLORS[d.priority] || BLUE),
                                 color: PRIORITY_COLORS[d.priority] || BLUE,
                                 textTransform: 'uppercase',
                               }}>
@@ -923,7 +929,7 @@ export default function CEOCommandCenter() {
                               {d.target_department && (
                                 <span style={{
                                   fontSize: 9, padding: '1px 6px', borderRadius: 6,
-                                  background: 'rgba(139,92,246,0.15)', color: PURPLE,
+                                  background: softFill(PURPLE), color: PURPLE,
                                 }}>
                                   {d.target_department}
                                 </span>
@@ -951,7 +957,7 @@ export default function CEOCommandCenter() {
                           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                             <span style={{
                               fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 8,
-                              background: `${STATUS_COLORS[selectedDirective.status] || TEXT_MUTED}20`,
+                              background: softFill(STATUS_COLORS[selectedDirective.status] || TEXT_MUTED),
                               color: STATUS_COLORS[selectedDirective.status] || TEXT_MUTED,
                               textTransform: 'uppercase',
                             }}>
@@ -959,14 +965,14 @@ export default function CEOCommandCenter() {
                             </span>
                             <span style={{
                               fontSize: 10, padding: '3px 10px', borderRadius: 8,
-                              background: 'rgba(59,130,246,0.12)', color: BLUE,
+                              background: softFill(BLUE), color: BLUE,
                             }}>
                               Source: {selectedDirective.source || 'CEO_AGENT'}
                             </span>
                             {selectedDirective.target_department && (
                               <span style={{
                                 fontSize: 10, padding: '3px 10px', borderRadius: 8,
-                                background: 'rgba(139,92,246,0.12)', color: PURPLE,
+                                background: softFill(PURPLE), color: PURPLE,
                               }}>
                                 Dept: {selectedDirective.target_department}
                               </span>
@@ -978,7 +984,7 @@ export default function CEOCommandCenter() {
                             <div style={{ marginBottom: 16 }}>
                               <div style={{ fontSize: 11, color: TEXT_MUTED, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Constraints</div>
                               <pre style={{
-                                background: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: 12,
+                                background: 'var(--surface-sunken)', borderRadius: 8, padding: 12,
                                 fontSize: 11, color: TEXT_GRAY, overflowX: 'auto',
                                 border: `1px solid ${CARD_BORDER}`, margin: 0,
                                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -1024,7 +1030,9 @@ export default function CEOCommandCenter() {
                                   onClick={() => rejectReason.trim() && handleRejectDirective(selectedDirective.id)}
                                   disabled={!rejectReason.trim()}
                                   style={{
-                                    ...btnSmall, background: rejectReason.trim() ? RED : '#374151',
+                                    ...btnSmall,
+                                    background: rejectReason.trim() ? RED : 'var(--neutral-300)',
+                                    color: rejectReason.trim() ? '#fff' : 'var(--text-muted)',
                                     flex: 1, padding: '10px 0', fontSize: 13,
                                     cursor: rejectReason.trim() ? 'pointer' : 'not-allowed',
                                   }}
@@ -1088,7 +1096,7 @@ export default function CEOCommandCenter() {
                               <span style={{ fontSize: 11, color: TEXT_MUTED }}>Health Score</span>
                               <span style={{ fontSize: 11, fontWeight: 600, color: healthColor(healthScore) }}>{healthScore}/100</span>
                             </div>
-                            <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3 }}>
+                            <div style={{ height: 6, background: 'var(--surface-sunken)', borderRadius: 3 }}>
                               <div style={{
                                 height: '100%', borderRadius: 3, width: `${healthScore}%`,
                                 background: `linear-gradient(90deg, ${RED}, ${AMBER}, ${GREEN})`,
@@ -1108,7 +1116,7 @@ export default function CEOCommandCenter() {
                                   ${(budget.spent || 0).toLocaleString()} / ${(budget.allocated || 0).toLocaleString()}
                                 </span>
                               </div>
-                              <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2 }}>
+                              <div style={{ height: 4, background: 'var(--surface-sunken)', borderRadius: 2 }}>
                                 <div style={{
                                   height: '100%', borderRadius: 2, width: `${Math.min(budgetPctLocal, 100)}%`,
                                   background: budgetPctLocal > 90 ? RED : budgetPctLocal > 70 ? AMBER : BLUE,
@@ -1163,7 +1171,7 @@ export default function CEOCommandCenter() {
               {/* ============================================================ */}
               <div className="cmd-fade-5" style={sectionStyle}>
                 <div style={{
-                  background: 'linear-gradient(135deg, rgba(17,24,39,1) 0%, rgba(30,41,59,1) 100%)',
+                  background: 'var(--surface-card)',
                   borderRadius: 16, padding: 28, border: `1px solid ${CARD_BORDER}`,
                   position: 'relative',
                 }}>
@@ -1181,7 +1189,7 @@ export default function CEOCommandCenter() {
                   {/* Stacked distribution bar */}
                   {(workforce?.total ?? 0) > 0 && (
                     <div style={{ marginBottom: 24 }}>
-                      <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
+                      <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', background: 'var(--surface-sunken)' }}>
                         {(workforce?.healthy ?? 0) > 0 && (
                           <div style={{ width: `${((workforce?.healthy ?? 0) / (workforce?.total ?? 1)) * 100}%`, background: GREEN, transition: 'width 0.6s ease' }} />
                         )}
@@ -1283,7 +1291,7 @@ export default function CEOCommandCenter() {
                               <td style={{ ...tdStyle, width: 140 }}>
                                 <span style={{
                                   fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
-                                  background: `${typeColor}20`, color: typeColor,
+                                  background: softFill(typeColor), color: typeColor,
                                 }}>
                                   {(entry.event_type || '').replace(/_/g, ' ')}
                                 </span>
@@ -1373,7 +1381,7 @@ function LegendDot({ label, color }: { label: string; color: string }) {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: 'rgba(0,0,0,0.3)',
+  background: 'var(--surface-card)',
   border: `1px solid ${CARD_BORDER}`,
   borderRadius: 8,
   padding: '8px 12px',
@@ -1392,6 +1400,13 @@ const btnSmall: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   fontFamily: "'Inter', system-ui, sans-serif",
+};
+
+// Neutral (secondary) button on a light surface — overrides btnSmall's white text.
+const btnNeutral: React.CSSProperties = {
+  background: 'var(--surface-sunken)',
+  color: 'var(--text-body)',
+  border: '1px solid var(--border-subtle)',
 };
 
 const thStyle: React.CSSProperties = {
