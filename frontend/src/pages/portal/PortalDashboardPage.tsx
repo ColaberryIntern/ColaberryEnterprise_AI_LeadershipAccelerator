@@ -52,10 +52,10 @@ function useCountdown(targetDate: string | null): { days: number; hours: number;
 }
 
 const SKILL_COLORS: Record<string, string> = {
-  strategy_trust: '#6366f1',
+  strategy_trust: '#FB2832',
   governance: '#ef4444',
   requirements: '#3b82f6',
-  build_discipline: '#8b5cf6',
+  build_discipline: '#367895',
   executive_authority: '#10b981',
 };
 
@@ -95,7 +95,7 @@ function PortalDashboardPage() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: '#6366f1' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -120,10 +120,10 @@ function PortalDashboardPage() {
       {/* Score Cards */}
       <div className="row g-3 mb-4">
         {[
-          { label: 'Readiness', value: enrollment.readiness_score ?? 0, color: '#6366f1', icon: 'bi-speedometer2' },
+          { label: 'Readiness', value: enrollment.readiness_score ?? 0, color: '#FB2832', icon: 'bi-speedometer2' },
           { label: 'Attendance', value: enrollment.attendance_score ?? 0, color: '#10b981', icon: 'bi-people' },
           { label: 'Prework', value: enrollment.prework_score ?? 0, color: '#3b82f6', icon: 'bi-journal-check' },
-          { label: 'Assignments', value: enrollment.assignment_score ?? 0, color: '#8b5cf6', icon: 'bi-file-earmark-check' },
+          { label: 'Assignments', value: enrollment.assignment_score ?? 0, color: '#367895', icon: 'bi-file-earmark-check' },
         ].map((card) => (
           <div className="col-6 col-md-3" key={card.label}>
             <div className="card border-0 shadow-sm h-100">
@@ -155,7 +155,7 @@ function PortalDashboardPage() {
                 </span>
                 <button
                   className="btn btn-sm px-2 py-0"
-                  style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}
+                  style={{ fontSize: 11, color: '#FB2832', fontWeight: 600 }}
                   onClick={() => navigate('/portal/curriculum')}
                 >
                   View All <i className="bi bi-arrow-right"></i>
@@ -164,14 +164,14 @@ function PortalDashboardPage() {
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <span className="small text-muted">{curriculum.completed_lessons}/{curriculum.total_lessons} lessons</span>
-                  <span className="fw-bold" style={{ color: '#6366f1' }}>{Math.round(curriculum.overall_progress)}%</span>
+                  <span className="fw-bold" style={{ color: '#FB2832' }}>{Math.round(curriculum.overall_progress)}%</span>
                 </div>
                 <div className="progress mb-3" style={{ height: 8, background: '#f1f5f9', borderRadius: 4 }}>
-                  <div className="progress-bar" style={{ width: `${curriculum.overall_progress}%`, background: '#6366f1', borderRadius: 4 }}></div>
+                  <div className="progress-bar" style={{ width: `${curriculum.overall_progress}%`, background: '#FB2832', borderRadius: 4 }}></div>
                 </div>
                 {curriculum.modules.map((mod) => {
                   const pct = mod.total_lessons > 0 ? Math.round((mod.completed_lessons / mod.total_lessons) * 100) : 0;
-                  const color = SKILL_COLORS[mod.skill_area] || '#6366f1';
+                  const color = SKILL_COLORS[mod.skill_area] || '#FB2832';
                   return (
                     <div key={mod.module_number} className="d-flex align-items-center gap-2 mb-2">
                       <div
@@ -235,7 +235,7 @@ function PortalDashboardPage() {
                             border: '1px solid #e2e8f0',
                           }}
                         >
-                          <div className="fw-bold" style={{ fontSize: 20, color: '#6366f1' }}>
+                          <div className="fw-bold" style={{ fontSize: 20, color: '#FB2832' }}>
                             {String(unit.value).padStart(2, '0')}
                           </div>
                           <div style={{ fontSize: 10, color: '#94a3b8' }}>{unit.label}</div>
@@ -282,7 +282,7 @@ function PortalDashboardPage() {
                       rel="noopener noreferrer"
                       className={`btn btn-sm px-3 ${readiness && !readiness.ready ? 'disabled' : ''}`}
                       style={{
-                        background: readiness && !readiness.ready ? '#e2e8f0' : '#6366f1',
+                        background: readiness && !readiness.ready ? '#e2e8f0' : '#FB2832',
                         color: readiness && !readiness.ready ? '#94a3b8' : '#fff',
                         borderRadius: 6,
                         fontWeight: 600,
@@ -318,7 +318,7 @@ function PortalDashboardPage() {
             <div className="card-body">
               <div className="d-flex justify-content-between small mb-2">
                 <span>{progress.completed_sessions} of {progress.total_sessions} sessions completed</span>
-                <span className="fw-semibold" style={{ color: '#6366f1' }}>
+                <span className="fw-semibold" style={{ color: '#FB2832' }}>
                   {progress.total_sessions > 0 ? Math.round((progress.completed_sessions / progress.total_sessions) * 100) : 0}%
                 </span>
               </div>
@@ -328,7 +328,7 @@ function PortalDashboardPage() {
                   role="progressbar"
                   style={{
                     width: `${progress.total_sessions > 0 ? (progress.completed_sessions / progress.total_sessions) * 100 : 0}%`,
-                    background: '#6366f1',
+                    background: '#FB2832',
                     borderRadius: 4,
                   }}
                   aria-valuenow={progress.completed_sessions}

@@ -39,7 +39,7 @@ function PortalVerifyPage() {
         <div className="card-body p-4 p-md-5 text-center">
           {verifying && !error ? (
             <>
-              <div className="spinner-border mb-3" style={{ color: 'var(--color-primary)' }} role="status">
+              <div className="spinner-border mb-3" style={{ color: '#FB2832' }} role="status">
                 <span className="visually-hidden">Verifying...</span>
               </div>
               <h2 className="h5 fw-semibold">Verifying Your Access</h2>
@@ -54,7 +54,7 @@ function PortalVerifyPage() {
               </div>
               <h2 className="h5 fw-semibold">Verification Failed</h2>
               <p className="text-muted small">{error}</p>
-              <a href="/portal/login" className="btn btn-primary btn-sm" style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}>
+              <a href="/portal/login" className="btn btn-sm" style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}>
                 Request New Link
               </a>
             </>

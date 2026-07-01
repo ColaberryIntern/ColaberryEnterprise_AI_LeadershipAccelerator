@@ -30,7 +30,7 @@ export default function RequirementsSectionBreakdown({ sections, requirements, c
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body p-3">
           <div className="d-flex justify-content-between align-items-center mb-2">
-            <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)', fontSize: 14 }}>
+            <h6 className="fw-semibold mb-0" style={{ color: '#FB2832', fontSize: 14 }}>
               <i className="bi bi-speedometer2 me-2"></i>Requirements Progress
             </h6>
             <span className="fw-bold" style={{ fontSize: 20, color: completionPct >= 75 ? 'var(--color-accent)' : completionPct >= 40 ? '#f59e0b' : 'var(--color-secondary)' }}>
@@ -55,7 +55,7 @@ export default function RequirementsSectionBreakdown({ sections, requirements, c
               <div className="progress" style={{ height: 5 }}>
                 <div className="progress-bar" style={{
                   width: `${section.pct}%`,
-                  background: section.pct >= 100 ? 'var(--color-accent)' : 'var(--color-primary-light)',
+                  background: section.pct >= 100 ? 'var(--color-accent)' : '#C20E1E',
                 }} />
                 {section.in_progress > 0 && (
                   <div className="progress-bar" style={{
@@ -72,11 +72,11 @@ export default function RequirementsSectionBreakdown({ sections, requirements, c
 
       {/* Next Action */}
       {nextAction && (
-        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid var(--color-primary-light)' }}>
+        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #C20E1E' }}>
           <div className="card-body p-3">
             <div className="d-flex align-items-center gap-2 mb-1">
-              <i className="bi bi-arrow-right-circle-fill" style={{ color: 'var(--color-primary-light)', fontSize: 16 }}></i>
-              <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>Next Action</span>
+              <i className="bi bi-arrow-right-circle-fill" style={{ color: '#C20E1E', fontSize: 16 }}></i>
+              <span className="fw-semibold small" style={{ color: '#FB2832' }}>Next Action</span>
             </div>
             <p className="mb-0 small text-muted">{nextAction}</p>
           </div>
@@ -86,7 +86,7 @@ export default function RequirementsSectionBreakdown({ sections, requirements, c
       {/* Requirements List */}
       <div className="card border-0 shadow-sm">
         <div className="card-body p-3">
-          <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)', fontSize: 14 }}>
+          <h6 className="fw-semibold mb-3" style={{ color: '#FB2832', fontSize: 14 }}>
             <i className="bi bi-list-check me-2"></i>All Requirements ({requirements.length})
           </h6>
           <div style={{ maxHeight: 400, overflowY: 'auto' }}>
@@ -96,7 +96,7 @@ export default function RequirementsSectionBreakdown({ sections, requirements, c
                   {req.status === 'completed' ? '✅' : req.status === 'in_progress' ? '🔄' : '⬜'}
                 </span>
                 <div className="flex-grow-1">
-                  <span className="fw-medium" style={{ color: 'var(--color-primary)' }}>{req.key}</span>
+                  <span className="fw-medium" style={{ color: '#FB2832' }}>{req.key}</span>
                   <span className="text-muted ms-2">{req.text}</span>
                   {req.files.length > 0 && (
                     <div className="mt-1">

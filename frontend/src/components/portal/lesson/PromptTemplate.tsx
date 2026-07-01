@@ -248,18 +248,18 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
 
   return (
     <>
-      <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #8b5cf6' }}>
+      <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #367895' }}>
         <div className="card-header bg-white border-bottom d-flex align-items-center justify-content-between" style={{ padding: '14px 20px' }}>
           <div className="d-flex align-items-center gap-2">
-            <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: '#f5f3ff' }}>
-              <i className="bi bi-terminal" style={{ color: '#8b5cf6', fontSize: 14 }}></i>
+            <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: 'rgba(54,120,149,0.10)' }}>
+              <i className="bi bi-terminal" style={{ color: '#367895', fontSize: 14 }}></i>
             </div>
             <span className="fw-semibold" style={{ color: '#1e293b', fontSize: 14 }}>Prompt Template</span>
-            <span className="badge" style={{ background: '#f5f3ff', color: '#8b5cf6', fontSize: 10 }}>Interactive</span>
+            <span className="badge" style={{ background: 'rgba(54,120,149,0.10)', color: '#367895', fontSize: 10 }}>Interactive</span>
           </div>
           <button
             className="btn btn-sm"
-            style={{ fontSize: 11, color: copied ? '#10b981' : '#6366f1', border: 'none', background: 'none' }}
+            style={{ fontSize: 11, color: copied ? '#10b981' : '#FB2832', border: 'none', background: 'none' }}
             onClick={handleCopy}
           >
             <i className={`bi ${copied ? 'bi-check-lg' : 'bi-clipboard'} me-1`}></i>
@@ -287,7 +287,7 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
             <button
               className="btn d-flex align-items-center gap-2 px-3 py-2"
               style={{
-                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                background: 'linear-gradient(135deg, #367895 0%, #FB2832 100%)',
                 color: '#fff',
                 borderRadius: 8,
                 fontSize: 13,
@@ -318,11 +318,11 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
                 className="btn d-flex align-items-center gap-2 px-3 py-2"
                 style={{
                   background: '#fff',
-                  color: '#6366f1',
+                  color: '#FB2832',
                   borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 600,
-                  border: '1px solid #c7d2fe',
+                  border: '1px solid rgba(251,40,50,0.25)',
                 }}
                 onClick={openEditModal}
               >
@@ -361,7 +361,7 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
           >
             <div className="d-flex align-items-center justify-content-between px-4 py-3" style={{ borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
               <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-sliders" style={{ color: '#8b5cf6', fontSize: 16 }}></i>
+                <i className="bi bi-sliders" style={{ color: '#367895', fontSize: 16 }}></i>
                 <span className="fw-semibold" style={{ fontSize: 14, color: '#1e293b' }}>Review Parameters</span>
               </div>
               <button
@@ -427,7 +427,7 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
                 className="btn d-flex align-items-center gap-2 px-4 py-2"
                 style={{
                   background: allModalFilled
-                    ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                    ? 'linear-gradient(135deg, #367895 0%, #FB2832 100%)'
                     : '#94a3b8',
                   color: '#fff',
                   borderRadius: 8,

@@ -44,8 +44,8 @@ export default function CodeExamples({ data }: CodeExamplesProps) {
                 style={{
                   fontSize: 12,
                   fontWeight: activeTab === i ? 600 : 400,
-                  color: activeTab === i ? '#6366f1' : '#64748b',
-                  borderBottom: activeTab === i ? '2px solid #6366f1' : '2px solid transparent',
+                  color: activeTab === i ? '#FB2832' : '#64748b',
+                  borderBottom: activeTab === i ? '2px solid #FB2832' : '2px solid transparent',
                   background: 'none',
                 }}
                 onClick={() => setActiveTab(i)}
@@ -90,7 +90,7 @@ export default function CodeExamples({ data }: CodeExamplesProps) {
             </div>
             {data.snippets[activeTab].explanation && (
               <div className="d-flex align-items-start gap-2 p-3 rounded" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                <i className="bi bi-info-circle flex-shrink-0" style={{ color: '#6366f1', fontSize: 14, marginTop: 2 }}></i>
+                <i className="bi bi-info-circle flex-shrink-0" style={{ color: '#FB2832', fontSize: 14, marginTop: 2 }}></i>
                 <span style={{ fontSize: 13, color: '#475569', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
                   {data.snippets[activeTab].explanation}
                 </span>

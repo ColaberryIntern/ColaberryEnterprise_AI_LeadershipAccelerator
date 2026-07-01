@@ -92,8 +92,8 @@ const ReadinessDrawer: React.FC<Props> = ({ open, onClose }) => {
         background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)',
         borderRadius: 5, padding: '0.7rem 0.85rem', fontSize: 12, color: 'var(--color-text-light)',
       }}>
-        <strong style={{ color: 'var(--color-primary)' }}>Want to improve readiness?</strong>{' '}
-        Open <Link to="/portal/visual-workspace" onClick={onClose} style={{ color: 'var(--color-primary-light)' }}>Critique</Link> to spot missing pieces, or hand off Cory's <Link to="/portal/project/blueprint" onClick={onClose} style={{ color: 'var(--color-primary-light)' }}>next action</Link>.
+        <strong style={{ color: '#FB2832' }}>Want to improve readiness?</strong>{' '}
+        Open <Link to="/portal/visual-workspace" onClick={onClose} style={{ color: '#C20E1E' }}>Critique</Link> to spot missing pieces, or hand off Cory's <Link to="/portal/project/blueprint" onClick={onClose} style={{ color: '#C20E1E' }}>next action</Link>.
       </section>
     </Drawer>
   );

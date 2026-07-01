@@ -426,14 +426,14 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                 </button>
                 <div className="d-flex gap-2">
                   <button className="btn btn-outline-secondary btn-sm" onClick={onClose}>Cancel</button>
-                  <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', border: '1px solid #6366f140', fontWeight: 600 }} onClick={async () => {
+                  <button className="btn btn-sm" style={{ background: '#FB283220', color: '#FB2832', border: '1px solid #FB283240', fontWeight: 600 }} onClick={async () => {
                     const proc = processData || {};
                     const featSummary = (proc.features || []).slice(0, 5).map((f: any) => `- ${f.name}: ${f.description || ''}`).join('\n');
                     const learnPrompt = `You are operating in LEARN MODE.\n\nDO NOT write code. Your ONLY job is to help the learner UNDERSTAND what this step is, why it matters, and how it connects to the overall system.\n\n# PROJECT CONTEXT\n\n${projectContext || 'No project system prompt set yet.'}\n\n# BUSINESS PROCESS: "${proc.name || 'Unknown'}"\n\n${proc.description || ''}\n\nFeatures:\n${featSummary || '- No features listed'}\n\nCurrent State: Readiness ${proc.metrics?.system_readiness || 0}%, Quality ${proc.metrics?.quality_score || 0}%, L${proc.maturity?.level || 1} ${proc.maturity?.label || 'Prototype'}\n\n# STEP: ${actionLabel}\n\n${prompt?.prompt_text ? prompt.prompt_text.split('\n').filter((l: string) => /^\d\./.test(l)).join('\n') : ''}\n\n# TEACH: Start with the big picture, then this process, then this step. One concept at a time. Ask questions to check understanding.`;
                     await copyToClipboard(learnPrompt);
                     window.open('https://chatgpt.com', '_blank');
                     const el = document.createElement('div');
-                    el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px"><i class="bi bi-mortarboard me-2"></i>Learn prompt copied — paste in ChatGPT</div>';
+                    el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px"><i class="bi bi-mortarboard me-2"></i>Learn prompt copied — paste in ChatGPT</div>';
                     document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
                   }}>
                     <i className="bi bi-mortarboard me-1"></i>Learn This Step

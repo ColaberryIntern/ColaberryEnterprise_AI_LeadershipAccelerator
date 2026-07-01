@@ -26,7 +26,7 @@ function ProjectProgress({ currentStage }: ProjectProgressProps) {
           <div
             className="progress-bar"
             role="progressbar"
-            style={{ width: `${pct}%`, background: 'var(--color-primary)' }}
+            style={{ width: `${pct}%`, background: '#FB2832' }}
             aria-valuenow={pct}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -39,7 +39,7 @@ function ProjectProgress({ currentStage }: ProjectProgressProps) {
             const color = isComplete
               ? 'var(--color-accent)'
               : isCurrent
-                ? 'var(--color-primary)'
+                ? '#FB2832'
                 : 'var(--color-text-light)';
             return (
               <div key={stage.key} className="text-center" style={{ minWidth: 70 }}>

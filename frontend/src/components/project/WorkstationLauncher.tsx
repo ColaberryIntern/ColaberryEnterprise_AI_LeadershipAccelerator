@@ -36,7 +36,7 @@ export default function WorkstationLauncher({ compact = false }: WorkstationLaun
       const toast = document.createElement('div');
       toast.innerHTML = `
         <div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;
-          background:#1a365d;color:#fff;padding:14px 24px;border-radius:10px;
+          background:#FB2832;color:#fff;padding:14px 24px;border-radius:10px;
           box-shadow:0 4px 20px rgba(0,0,0,0.25);font-size:14px;font-weight:500;
           display:flex;align-items:center;gap:10px;max-width:480px;
           animation:wkToastIn 0.3s ease">
@@ -109,7 +109,7 @@ export default function WorkstationLauncher({ compact = false }: WorkstationLaun
     <div className="card border-0 shadow-sm">
       <div className="card-body p-3">
         <div className="d-flex align-items-center justify-content-between mb-3">
-          <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary, #1a365d)', fontSize: 14 }}>
+          <h6 className="fw-semibold mb-0" style={{ color: '#FB2832', fontSize: 14 }}>
             <i className="bi bi-terminal me-2"></i>AI Workstation
           </h6>
           <button

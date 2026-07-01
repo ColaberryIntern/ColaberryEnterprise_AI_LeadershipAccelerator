@@ -5,8 +5,8 @@
 
 :root {
   /* === Brand Colors === */
-  --color-primary: #1a365d;
-  --color-primary-light: #2b6cb0;
+  --color-primary: #FB2832;
+  --color-primary-light: #C20E1E;
   --color-secondary: #e53e3e;
   --color-accent: #38a169;
 
@@ -71,4 +71,46 @@
   /* === Transitions === */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.3s ease;
+
+  /* ── Design E — Colaberry brand palette (cherry / leaf / berry) ───────── */
+  --cherry: #FB2832;
+  --cherry-text: #E5121D;
+  --cherry-deep: #C20E1E;
+  --cherry-bg: #FFF0F1;
+  --leaf: #77BB4A;
+  --leaf-action: #5BA63C;
+  --leaf-text: #468A2E;
+  --leaf-bg: #F1F9EA;
+  --berry: #367895;
+  --berry-hover: #2E6A86;
+  --berry-bg: #EAF2F6;
+  --amber: #E8920C;
+  --amber-text: #B5710A;
+  --amber-bg: #FDF4E6;
+  /* requirement 4-state status */
+  --status-unmapped-text: #6B6B6B;
+  --status-unmapped-bg: #F1F1F0;
+  --status-matched-text: #2E6A86;
+  --status-matched-bg: #EAF2F6;
+  --status-partial-text: #B5710A;
+  --status-partial-bg: #FDF4E6;
+  --status-verified-text: #468A2E;
+  --status-verified-bg: #F1F9EA;
+  /* neutral scale */
+  --n50: #F8F8F7;
+  --n100: #F1F1F0;
+  --n200: #E4E4E3;
+  --n300: #D8D8D8;
+  --n700: #4A4A4A;
+  --n900: #1A1A1A;
+  /* radius scale */
+  --r-4: 4px;
+  --r-8: 8px;
+  --r-12: 12px;
+  --r-16: 16px;
+  --r-24: 24px;
+  --r-32: 32px;
+  --r-pill: 999px;
+  /* mono font */
+  --font-mono-de: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
 }

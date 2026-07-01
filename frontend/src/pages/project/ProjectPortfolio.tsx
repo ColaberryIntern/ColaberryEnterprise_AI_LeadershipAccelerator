@@ -28,7 +28,7 @@ function ProjectPortfolio() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Generating portfolio...</span>
         </div>
         <p className="small text-muted mt-3">Generating portfolio — this may take a moment...</p>
@@ -43,12 +43,13 @@ function ProjectPortfolio() {
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
+        <h1 className="h4 fw-bold mb-0" style={{ color: '#FB2832' }}>
           <i className="bi bi-briefcase me-2"></i>Enterprise AI Portfolio
         </h1>
         <div className="d-flex gap-2">
           <button
-            className="btn btn-sm btn-outline-primary"
+            className="btn btn-sm"
+            style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
             onClick={handleRefresh}
             disabled={refreshing}
           >

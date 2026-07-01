@@ -89,8 +89,8 @@ const VisualReviewWorkspace: React.FC = () => {
         </div>
         <Link
           to="/portal/visual-workspace"
-          className="btn btn-sm btn-primary"
-          style={{ whiteSpace: 'nowrap' }}
+          className="btn btn-sm"
+          style={{ whiteSpace: 'nowrap', background: '#FB2832', color: '#fff', border: 'none' }}
         >
           <i className="bi bi-bullseye me-1"></i>Open Critique workspace
         </Link>
@@ -117,7 +117,7 @@ const VisualReviewWorkspace: React.FC = () => {
                 disabled={!!session.data}
               />
               {!session.data && (
-                <button className="btn btn-sm btn-primary" onClick={() => void openNewSession()}>Open review</button>
+                <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={() => void openNewSession()}>Open review</button>
               )}
               {session.data && (
                 <button className="btn btn-sm btn-outline-secondary" onClick={() => setActiveId(null)}>Close</button>
@@ -165,7 +165,7 @@ const RecentSessionsList: React.FC<{ sessions: SessionStub[]; onPick: (id: strin
               <div className="fw-semibold">{s.page_route}</div>
               <div className="text-muted">{s.status} · {new Date(s.opened_at).toLocaleString()}</div>
             </div>
-            <button className="btn btn-sm btn-outline-primary" onClick={() => onPick(s.id)}>Open</button>
+            <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={() => onPick(s.id)}>Open</button>
           </li>
         ))}
       </ul>
@@ -248,7 +248,8 @@ const CritiquePanel: React.FC<{
           onChange={e => setDescription(e.target.value)}
         />
         <button
-          className="btn btn-sm btn-primary w-100 mb-3"
+          className="btn btn-sm w-100 mb-3"
+          style={{ background: '#FB2832', color: '#fff', border: 'none' }}
           onClick={() => void submit()}
           disabled={submitting || !description.trim()}
         >{submitting ? 'Saving…' : 'Add critique + generate suggestions'}</button>
@@ -291,7 +292,7 @@ const CritiquePanel: React.FC<{
         ))}
 
         {data.critiques.length > 0 && (
-          <button className="btn btn-sm btn-outline-primary w-100 mt-2" onClick={() => void onGenerate()} disabled={loading}>
+          <button className="btn btn-sm w-100 mt-2" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={() => void onGenerate()} disabled={loading}>
             <i className="bi bi-lightning me-1"></i>Generate Claude prompt from accepted suggestions
           </button>
         )}

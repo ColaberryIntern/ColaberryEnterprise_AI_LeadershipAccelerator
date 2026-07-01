@@ -208,6 +208,8 @@ function AnthropicCoursesBento({ courses, pathLabel }: Props) {
   // 2+ courses: featured + compact tiles + cherry path anchor.
   // CSS custom property drives the featured tile's row-span (see CSS);
   // cast the style object since CSSProperties has no index signature for vars.
+  // acw-ds is the outer scope wrapper; acw-bento is its descendant so the
+  // CSS selector `.acw-ds .acw-bento { display: grid }` correctly fires.
   const gridStyle = { '--compact-rows': String(compacts.length) } as React.CSSProperties;
   return (
     <div className="acw-ds">

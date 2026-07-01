@@ -42,9 +42,9 @@ const AnnotationPin: React.FC<Props> = ({ index, pin, severity, active, resolved
         color: 'white',
         fontSize: 11,
         fontWeight: 600,
-        border: active ? '2px solid var(--color-primary)' : '2px solid white',
+        border: active ? '2px solid #FB2832' : '2px solid white',
         boxShadow: active
-          ? '0 0 0 3px rgba(43, 108, 176, 0.25), 0 2px 6px rgba(0,0,0,0.18)'
+          ? '0 0 0 3px rgba(194,14,30,0.25), 0 2px 6px rgba(0,0,0,0.18)'
           : '0 2px 6px rgba(0,0,0,0.18)',
         display: 'flex',
         alignItems: 'center',

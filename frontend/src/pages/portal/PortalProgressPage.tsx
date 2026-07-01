@@ -31,7 +31,7 @@ function PortalProgressPage() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -45,8 +45,8 @@ function PortalProgressPage() {
   const { scores, attendance_history } = data;
 
   const scoreItems = [
-    { label: 'Overall Readiness', value: scores.readiness_score, color: '#1a365d', weight: 'Weighted composite' },
-    { label: 'Prework Completion', value: scores.prework_score, color: '#2b6cb0', weight: '30% weight' },
+    { label: 'Overall Readiness', value: scores.readiness_score, color: '#FB2832', weight: 'Weighted composite' },
+    { label: 'Prework Completion', value: scores.prework_score, color: '#FB2832', weight: '30% weight' },
     { label: 'Attendance', value: scores.attendance_score, color: '#38a169', weight: '40% weight' },
     { label: 'Assignment Performance', value: scores.assignment_score, color: '#805ad5', weight: '30% weight' },
   ];
@@ -60,7 +60,7 @@ function PortalProgressPage() {
 
   return (
     <>
-      <h1 className="h4 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
+      <h1 className="h4 fw-bold mb-4" style={{ color: '#FB2832' }}>
         <i className="bi bi-graph-up me-2"></i>My Progress
       </h1>
 

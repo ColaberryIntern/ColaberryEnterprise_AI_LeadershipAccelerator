@@ -48,7 +48,7 @@ function ArtifactCategoryBoard({ grouped }: ArtifactCategoryBoardProps) {
     <>
       {categories.map(category => (
         <div key={category} className="mb-4">
-          <h6 className="fw-semibold text-capitalize mb-3" style={{ color: 'var(--color-primary)' }}>
+          <h6 className="fw-semibold text-capitalize mb-3" style={{ color: '#FB2832' }}>
             <i className={`${CATEGORY_ICONS[category] || 'bi-folder'} me-2`}></i>
             {category}
             <span className="badge bg-light text-dark ms-2">{grouped[category].length}</span>

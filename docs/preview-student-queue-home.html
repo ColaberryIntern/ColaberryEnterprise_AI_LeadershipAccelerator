@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CoryHome — Student Queue (Colaberry DS)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&family=Quicksand:wght@700&display=swap" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+  <style>
+    /* ── Colaberry Design System tokens ── */
+    :root {
+      --red-500:#FB2832; --red-50:#FFF0F1; --red-100:#FFDBDD; --red-600:#E5121D; --red-700:#C20E1E;
+      --green-500:#77BB4A; --green-50:#F1F9EA; --green-600:#5BA63C; --green-700:#468A2E;
+      --blue-500:#367895; --blue-50:#EAF2F6; --blue-600:#2E6A86;
+      --amber-500:#E8920C; --amber-50:#FCF1DD;
+      --neutral-0:#FFFFFF; --neutral-50:#F8F8F7; --neutral-100:#F1F1F0;
+      --neutral-200:#E4E4E3; --neutral-300:#D8D8D8; --neutral-400:#B4B4B4;
+      --neutral-600:#6B6B6B; --neutral-700:#4A4A4A; --neutral-800:#2B2B2B; --neutral-900:#1A1A1A;
+
+      /* Semantic */
+      --brand-primary:   var(--red-500);
+      --surface-page:    var(--neutral-0);
+      --surface-subtle:  var(--neutral-50);
+      --surface-card:    var(--neutral-0);
+      --surface-sunken:  var(--neutral-100);
+      --surface-brand:   var(--red-500);
+      --surface-brand-subtle: var(--red-50);
+      --surface-green-subtle: var(--green-50);
+      --surface-blue-subtle:  var(--blue-50);
+      --text-strong:  var(--neutral-900);
+      --text-body:    var(--neutral-800);
+      --text-muted:   var(--neutral-600);
+      --text-subtle:  var(--neutral-700);
+      --border-subtle:  var(--neutral-200);
+      --border-default: var(--neutral-300);
+      --action-bg:      var(--red-500);
+      --action-bg-hover:var(--red-600);
+      --action-fg:      var(--neutral-0);
+      --status-success: var(--green-600);
+      --status-danger:  var(--red-600);
+      --status-info:    var(--blue-500);
+      --status-warning: var(--amber-500);
+      --focus-ring: 0 0 0 3px rgba(54,120,149,0.35);
+
+      /* Typography */
+      --font-body:    'Roboto', system-ui, sans-serif;
+      --font-mono:    'Roboto Mono', monospace;
+      --fw-regular:400; --fw-medium:500; --fw-bold:700; --fw-black:900;
+      --fs-h3:28px; --fs-h4:22px; --fs-body:18px; --fs-body-sm:16px; --fs-caption:14px; --fs-overline:12px;
+      --lh-heading:1.2; --lh-normal:1.5; --lh-relaxed:1.65;
+      --ls-tight:-0.01em; --ls-overline:0.08em;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--neutral-100); color: var(--text-body);
+      font-family: var(--font-body); font-size: var(--fs-body-sm); line-height: var(--lh-normal);
+    }
+
+    /* ── Nav ── */
+    .nav {
+      background: var(--neutral-900); color: var(--neutral-0);
+      padding: 0 1.5rem; height: 52px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand { font-family: var(--font-body); font-weight: var(--fw-bold); font-size: 15px; letter-spacing: var(--ls-tight); }
+    .nav-links { display: flex; gap: 1.75rem; }
+    .nav-links a { color: rgba(255,255,255,0.65); text-decoration: none; font-size: 13px; font-weight: var(--fw-medium); }
+    .nav-links a.active { color: #fff; border-bottom: 2px solid var(--red-500); padding-bottom: 4px; }
+    .nav-right { font-size: 12px; color: rgba(255,255,255,0.55); }
+
+    /* ── Layout ── */
+    .layout { display: flex; min-height: calc(100vh - 52px); }
+    .sidebar {
+      width: 220px; background: var(--surface-page);
+      border-right: 1px solid var(--border-subtle); padding: 1.5rem 0; flex-shrink: 0;
+    }
+    .sidebar-item {
+      padding: 0.5rem 1.25rem; font-size: 13px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+      font-weight: var(--fw-medium);
+    }
+    .sidebar-item.active {
+      color: var(--red-500); font-weight: var(--fw-bold);
+      background: var(--surface-brand-subtle);
+      border-right: 3px solid var(--red-500);
+    }
+    .sidebar-item i { font-size: 15px; }
+    .main { flex: 1; overflow-y: auto; }
+    .main-inner { max-width: 1080px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    /* ── Tab switcher ── */
+    .view-tabs { display: flex; gap: 6px; margin-bottom: 2rem; flex-wrap: wrap; }
+    .view-tab {
+      padding: 0.4rem 1.1rem; font-size: 12px; font-weight: var(--fw-bold);
+      border-radius: 6px; cursor: pointer; border: 1.5px solid var(--border-default);
+      background: var(--surface-card); color: var(--text-muted); letter-spacing: var(--ls-overline);
+      text-transform: uppercase; transition: all 0.15s;
+    }
+    .view-tab.active { background: var(--red-500); color: #fff; border-color: var(--red-500); }
+
+    /* ── Overline / eyebrow ── */
+    .overline {
+      font-size: var(--fs-overline); font-weight: var(--fw-bold);
+      text-transform: uppercase; letter-spacing: var(--ls-overline);
+      color: var(--red-500); margin-bottom: 4px;
+    }
+
+    /* ── Greeting ── */
+    .greeting-name { color: var(--red-500); }
+    .greeting-h { font-size: 26px; font-weight: var(--fw-bold); color: var(--text-strong); letter-spacing: var(--ls-tight); margin: 0 0 4px; }
+    .greeting-sub { font-size: 13px; color: var(--text-muted); margin: 0; }
+
+    /* ── Priority card (cherry) ── */
+    .priority-card {
+      background: var(--red-500); color: #fff;
+      border-radius: 10px; padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem; box-shadow: 0 4px 16px rgba(251,40,50,0.22);
+    }
+    .priority-card .title { font-size: 18px; font-weight: var(--fw-bold); margin: 6px 0 8px; line-height: var(--lh-heading); }
+    .priority-card .reason { font-size: 13px; opacity: 0.92; margin-bottom: 12px; line-height: var(--lh-relaxed); }
+    .btn-on-cherry {
+      background: #fff; color: var(--red-500); border: none; border-radius: 6px;
+      padding: 0.35rem 0.95rem; font-size: 12px; font-weight: var(--fw-bold);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-ghost-cherry {
+      background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.45);
+      border-radius: 6px; padding: 0.3rem 0.85rem; font-size: 11px; font-weight: var(--fw-bold);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .pill-on-cherry {
+      background: rgba(255,255,255,0.18); padding: 0.25rem 0.6rem;
+      border-radius: 9999px; font-size: 11px; font-weight: var(--fw-bold);
+    }
+
+    /* ── Tiles ── */
+    .tile {
+      background: var(--surface-card); border: 1px solid var(--border-subtle);
+      border-radius: 8px; padding: 1rem 1.1rem; height: 100%;
+    }
+    .tile-label {
+      font-size: var(--fs-overline); text-transform: uppercase;
+      letter-spacing: var(--ls-overline); color: var(--text-muted); font-weight: var(--fw-bold);
+    }
+    .tile-value { font-size: 26px; font-weight: var(--fw-bold); margin-top: 4px; line-height: 1.1; }
+    .tile-footer { font-size: 12px; margin-top: 4px; font-weight: var(--fw-medium); color: var(--text-muted); }
+
+    /* ── Row grid ── */
+    .row { display: flex; flex-wrap: wrap; margin: 0 -8px; }
+    .col-3 { flex: 0 0 33.33%; max-width: 33.33%; padding: 0 8px; margin-bottom: 16px; }
+    .col-7 { flex: 0 0 58.33%; max-width: 58.33%; padding: 0 8px; margin-bottom: 16px; }
+    .col-5 { flex: 0 0 41.67%; max-width: 41.67%; padding: 0 8px; margin-bottom: 16px; }
+
+    /* ── Section header ── */
+    .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .section-title {
+      font-size: var(--fs-overline); font-weight: var(--fw-bold);
+      text-transform: uppercase; letter-spacing: var(--ls-overline); color: var(--text-muted);
+      margin: 0;
+    }
+    .section-badge {
+      font-size: 10px; background: var(--surface-sunken); color: var(--text-muted);
+      padding: 1px 7px; border-radius: 9999px; font-weight: var(--fw-bold);
+    }
+    .section-aside { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+
+    /* ── Primary button (cherry) ── */
+    .btn-primary {
+      background: var(--red-500); color: #fff; border: none; border-radius: 6px;
+      padding: 0.35rem 1rem; font-size: 12px; font-weight: var(--fw-bold);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--font-body);
+    }
+    .btn-primary:hover { background: var(--red-600); }
+    .btn-secondary {
+      background: var(--surface-card); color: var(--text-body); border: 1.5px solid var(--border-default);
+      border-radius: 6px; padding: 0.35rem 1rem; font-size: 12px; font-weight: var(--fw-medium);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-body);
+    }
+    .btn-success {
+      background: var(--green-600); color: #fff; border: none; border-radius: 6px;
+      padding: 0.35rem 1rem; font-size: 12px; font-weight: var(--fw-bold);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-body);
+    }
+    .btn-danger-ghost {
+      background: transparent; color: var(--red-600); border: 1.5px solid var(--red-100);
+      border-radius: 6px; padding: 0.35rem 1rem; font-size: 12px; font-weight: var(--fw-bold);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-body);
+    }
+    .btn-outline {
+      background: transparent; color: var(--blue-500); border: 1.5px solid var(--blue-500);
+      border-radius: 6px; padding: 0.35rem 1rem; font-size: 12px; font-weight: var(--fw-bold);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-body);
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface-card); border: 1px solid var(--border-subtle);
+      border-radius: 8px; overflow: hidden;
+    }
+
+    /* ── Student queue rows ── */
+    .sq-row { border-bottom: 1px solid var(--border-subtle); }
+    .sq-row:last-child { border-bottom: none; }
+    .sq-row-btn {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+      background: none; border: none; padding: 0.75rem 1rem; cursor: pointer; text-align: left;
+      font-family: var(--font-body);
+    }
+    .sq-row-btn:hover { background: var(--surface-subtle); }
+    .rank-circle {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: var(--fw-bold); font-size: 12px;
+    }
+    .rank-circle.rank-1 { background: var(--red-500); color: #fff; }
+    .rank-circle.rank-n { background: var(--neutral-200); color: var(--text-muted); }
+    .sq-row-text { flex: 1; min-width: 0; }
+    .sq-row-title {
+      font-size: 13px; font-weight: var(--fw-medium); color: var(--text-strong);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;
+    }
+    .sq-row-meta { font-size: 11px; color: var(--text-muted); }
+    .sq-row-meta .status-badge {
+      font-weight: var(--fw-bold); margin-right: 4px;
+    }
+    .urgency-track { width: 32px; height: 4px; background: var(--border-subtle); border-radius: 2px; flex-shrink: 0; }
+    .urgency-fill { height: 100%; border-radius: 2px; }
+
+    /* ── Approval workspace ── */
+    .approval-workspace {
+      background: var(--surface-subtle); border-top: 1px solid var(--border-subtle); padding: 1rem 1.1rem;
+    }
+    .approval-req-text {
+      font-size: 13px; color: var(--text-muted); line-height: var(--lh-relaxed); margin-bottom: 12px;
+    }
+    .action-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    .prompt-label {
+      font-size: var(--fs-overline); font-weight: var(--fw-bold); text-transform: uppercase;
+      letter-spacing: var(--ls-overline); color: var(--text-muted); margin-bottom: 6px;
+    }
+    .prompt-block {
+      background: var(--neutral-900); color: #e2e8f0; border-radius: 6px;
+      padding: 0.85rem 1rem; margin: 0; font-family: var(--font-mono); font-size: 11px;
+      line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+      max-height: 130px; overflow-y: auto;
+    }
+
+    /* ── Run My Day modal ── */
+    .rmd-backdrop {
+      background: rgba(10,10,10,0.88); border-radius: 10px;
+      padding: 2rem; margin-bottom: 1.5rem;
+    }
+    .rmd-card { background: var(--surface-card); border-radius: 10px; overflow: hidden; max-width: 680px; margin: 0 auto; box-shadow: 0 24px 60px rgba(0,0,0,0.35); }
+    .rmd-header {
+      background: var(--red-500); color: #fff;
+      padding: 0.9rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+    }
+    .rmd-header-left { display: flex; align-items: center; gap: 10px; }
+    .rmd-header-left .label { font-size: 13px; font-weight: var(--fw-bold); }
+    .rmd-header-left .counter { font-size: 11px; opacity: 0.75; }
+    .rmd-exit {
+      background: transparent; border: 1.5px solid rgba(255,255,255,0.4); color: #fff;
+      border-radius: 5px; padding: 0.2rem 0.75rem; font-size: 11px; font-weight: var(--fw-bold);
+      cursor: pointer; font-family: var(--font-body);
+    }
+    .rmd-body { padding: 1.5rem 1.5rem 1.1rem; }
+    .rmd-cat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .cat-pill {
+      background: var(--surface-sunken); color: var(--text-muted); border-radius: 5px;
+      padding: 0.2rem 0.6rem; font-size: 11px; font-weight: var(--fw-bold);
+      text-transform: uppercase; letter-spacing: var(--ls-overline);
+    }
+    .urgency-label { font-size: 11px; font-weight: var(--fw-bold); }
+    .status-label { font-size: 11px; font-weight: var(--fw-bold); margin-left: auto; }
+    .rmd-req-text {
+      font-size: 16px; font-weight: var(--fw-bold); color: var(--text-strong);
+      line-height: var(--lh-heading); margin-bottom: 16px;
+    }
+    .rmd-prompt-section { margin-bottom: 16px; }
+    .rmd-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .rmd-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-subtle);
+      background: var(--surface-subtle);
+    }
+    .dot-nav { display: flex; gap: 6px; align-items: center; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.active { background: var(--red-500); }
+    .dot.inactive { background: var(--border-default); }
+
+    /* ── Keyboard hint ── */
+    .kbd-hint {
+      background: var(--surface-card); border: 1px solid var(--border-subtle);
+      border-radius: 8px; padding: 1rem 1.25rem; font-size: 12px; color: var(--text-muted);
+      margin-top: 1rem;
+    }
+    .kbd-hint strong { color: var(--text-strong); }
+    kbd {
+      background: var(--neutral-100); border: 1px solid var(--border-default); border-radius: 3px;
+      padding: 1px 5px; font-family: var(--font-mono); font-size: 11px; color: var(--text-body);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav">
+  <div class="nav-brand">Accelerator Portal</div>
+  <div class="nav-links">
+    <a href="#" class="active">Home</a>
+    <a href="#">Critique</a>
+    <a href="#">Blueprint</a>
+    <a href="#">System</a>
+    <a href="#">Sessions</a>
+  </div>
+  <div class="nav-right">Test Corp &nbsp;·&nbsp; Sign Out</div>
+</nav>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-item active"><i class="bi bi-house-door-fill"></i> Home</div>
+    <div class="sidebar-item"><i class="bi bi-map"></i> Blueprint</div>
+    <div class="sidebar-item"><i class="bi bi-book"></i> Curriculum</div>
+    <div class="sidebar-item"><i class="bi bi-github"></i> GitHub</div>
+    <div class="sidebar-item"><i class="bi bi-collection"></i> Portfolio</div>
+    <div class="sidebar-item"><i class="bi bi-people"></i> Community</div>
+    <hr style="margin:0.75rem 1.25rem;border-color:var(--border-subtle)" />
+    <div class="sidebar-item"><i class="bi bi-gear"></i> Settings</div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="main-inner">
+
+      <!-- Tab switcher -->
+      <div class="view-tabs">
+        <div class="view-tab active" onclick="show('normal')">Normal view</div>
+        <div class="view-tab" onclick="show('expanded')">Queue item expanded</div>
+        <div class="view-tab" onclick="show('runmyday')">Run My Day modal</div>
+      </div>
+
+
+      <!-- ═══════════════════ NORMAL VIEW ═══════════════════ -->
+      <div id="v-normal">
+        <div class="overline">STUDENT PLATFORM · HOME</div>
+        <h1 class="greeting-h">Good morning, <span class="greeting-name">Test Corp</span>.</h1>
+        <p class="greeting-sub" style="margin-bottom:1.5rem">5 items in your build queue · no blockers.</p>
+
+        <!-- Today's One Priority -->
+        <div class="priority-card">
+          <div class="overline" style="color:rgba(255,255,255,0.7)">Today's one priority</div>
+          <div class="title">Implement user authentication with JWT and role-based access</div>
+          <div class="reason">This is your #1 unmatched requirement. Until auth is live, no other user-facing feature can be safely tested or verified against your project.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn-on-cherry"><i class="bi bi-arrow-right"></i> Open in Blueprint</button>
+            <button class="btn-ghost-cherry"><i class="bi bi-info-circle"></i> Why this next?</button>
+            <span class="pill-on-cherry" style="margin-left:auto">urgency 88</span>
+          </div>
+        </div>
+
+        <!-- 3-tile row -->
+        <div class="row" style="margin-bottom:0">
+          <div class="col-3">
+            <div class="tile">
+              <div class="tile-label">Readiness</div>
+              <div class="tile-value" style="color:var(--amber-500)">24%</div>
+              <div class="tile-footer" style="color:var(--amber-500)">Needs attention</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="tile">
+              <div class="tile-label">Coverage</div>
+              <div class="tile-value" style="color:var(--blue-500)">3 / 12</div>
+              <div class="tile-footer">3 of 12 requirements matched</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="tile">
+              <div class="tile-label">Health</div>
+              <div class="tile-value" style="color:var(--green-600)">91%</div>
+              <div class="tile-footer">Stable</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Student Build Queue ─── -->
+        <section style="margin-top:1.75rem;margin-bottom:1.5rem">
+          <div class="section-header">
+            <h2 class="section-title">Your build queue</h2>
+            <span class="section-badge">5</span>
+            <span class="section-aside">ranked by urgency</span>
+            <button class="btn-primary" onclick="show('runmyday')" style="margin-left:8px">
+              <i class="bi bi-play-fill"></i> Walk my queue
+            </button>
+          </div>
+
+          <div class="card">
+            <!-- Item 1 -->
+            <div class="sq-row">
+              <button class="sq-row-btn" onclick="show('expanded')">
+                <span class="rank-circle rank-1">1</span>
+                <div class="sq-row-text">
+                  <div class="sq-row-title"><i class="bi bi-hammer" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Implement user authentication with JWT and role-based access</div>
+                  <div class="sq-row-meta"><span class="status-badge" style="color:var(--red-600)">Not started</span>· urgency 88</div>
+                </div>
+                <div class="urgency-track"><div class="urgency-fill" style="width:88%;background:var(--red-500)"></div></div>
+                <i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i>
+              </button>
+            </div>
+            <!-- Item 2 -->
+            <div class="sq-row">
+              <button class="sq-row-btn">
+                <span class="rank-circle rank-n">2</span>
+                <div class="sq-row-text">
+                  <div class="sq-row-title"><i class="bi bi-plug" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Wire GitHub OAuth integration for repository connection</div>
+                  <div class="sq-row-meta"><span class="status-badge" style="color:var(--amber-500)">In progress</span>· urgency 65</div>
+                </div>
+                <div class="urgency-track"><div class="urgency-fill" style="width:65%;background:var(--amber-500)"></div></div>
+                <i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i>
+              </button>
+            </div>
+            <!-- Item 3 -->
+            <div class="sq-row">
+              <button class="sq-row-btn">
+                <span class="rank-circle rank-n">3</span>
+                <div class="sq-row-text">
+                  <div class="sq-row-title"><i class="bi bi-cloud-upload" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Configure Docker deployment with environment variable management</div>
+                  <div class="sq-row-meta"><span class="status-badge" style="color:var(--red-600)">Not started</span>· urgency 60</div>
+                </div>
+                <div class="urgency-track"><div class="urgency-fill" style="width:60%;background:var(--red-500)"></div></div>
+                <i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i>
+              </button>
+            </div>
+            <!-- Item 4 -->
+            <div class="sq-row">
+              <button class="sq-row-btn">
+                <span class="rank-circle rank-n">4</span>
+                <div class="sq-row-text">
+                  <div class="sq-row-title"><i class="bi bi-check2-square" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Write unit tests for core business logic services</div>
+                  <div class="sq-row-meta"><span class="status-badge" style="color:var(--blue-500)">Matched</span>· urgency 38</div>
+                </div>
+                <div class="urgency-track"><div class="urgency-fill" style="width:38%;background:var(--blue-500)"></div></div>
+                <i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i>
+              </button>
+            </div>
+            <!-- Item 5 -->
+            <div class="sq-row">
+              <button class="sq-row-btn">
+                <span class="rank-circle rank-n">5</span>
+                <div class="sq-row-text">
+                  <div class="sq-row-title"><i class="bi bi-palette" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Build responsive dashboard layout with navigation sidebar</div>
+                  <div class="sq-row-meta"><span class="status-badge" style="color:var(--amber-500)">In progress</span>· urgency 32</div>
+                </div>
+                <div class="urgency-track"><div class="urgency-fill" style="width:32%;background:var(--neutral-400)"></div></div>
+                <i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Active build + Verification -->
+        <div class="row">
+          <div class="col-7">
+            <div class="section-header"><h2 class="section-title">Active build</h2></div>
+            <div class="card" style="padding:1rem;font-size:13px;color:var(--text-muted)">
+              No active build. Pick a queue item to start.
+            </div>
+          </div>
+          <div class="col-5">
+            <div class="section-header"><h2 class="section-title">Verification</h2></div>
+            <div class="card" style="padding:1rem">
+              <div style="display:flex;gap:1.5rem;justify-content:space-around;text-align:center">
+                <div><div style="font-size:24px;font-weight:700;color:var(--amber-500)">4</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Pending</div></div>
+                <div><div style="font-size:24px;font-weight:700;color:var(--green-600)">3</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Passing</div></div>
+                <div><div style="font-size:24px;font-weight:700;color:var(--red-500)">1</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Failing</div></div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:8px">24h pass rate: <strong>75%</strong></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /v-normal -->
+
+
+      <!-- ═══════════════════ EXPANDED VIEW ═══════════════════ -->
+      <div id="v-expanded" style="display:none">
+        <div class="overline">STUDENT PLATFORM · HOME</div>
+        <h1 class="greeting-h">Good morning, <span class="greeting-name">Test Corp</span>.</h1>
+        <p class="greeting-sub" style="margin-bottom:1.5rem">5 items in your build queue.</p>
+
+        <div class="priority-card">
+          <div class="overline" style="color:rgba(255,255,255,0.7)">Today's one priority</div>
+          <div class="title">Implement user authentication with JWT and role-based access</div>
+          <div class="reason">This is your #1 unmatched requirement. Until auth is live, no other user-facing feature can be safely tested.</div>
+          <button class="btn-on-cherry"><i class="bi bi-arrow-right"></i> Open in Blueprint</button>
+        </div>
+
+        <section style="margin-bottom:1.5rem">
+          <div class="section-header">
+            <h2 class="section-title">Your build queue</h2>
+            <span class="section-badge">5</span>
+            <span class="section-aside">ranked by urgency</span>
+            <button class="btn-primary" onclick="show('runmyday')" style="margin-left:8px"><i class="bi bi-play-fill"></i> Walk my queue</button>
+          </div>
+
+          <div class="card">
+            <!-- Item 1 — EXPANDED -->
+            <div class="sq-row">
+              <button class="sq-row-btn" onclick="show('normal')" style="background:var(--red-50)">
+                <span class="rank-circle rank-1">1</span>
+                <div class="sq-row-text">
+                  <div class="sq-row-title" style="color:var(--red-600)"><i class="bi bi-hammer" style="font-size:11px;margin-right:4px"></i>Implement user authentication with JWT and role-based access</div>
+                  <div class="sq-row-meta"><span class="status-badge" style="color:var(--red-600)">Not started</span>· urgency 88</div>
+                </div>
+                <div class="urgency-track"><div class="urgency-fill" style="width:88%;background:var(--red-500)"></div></div>
+                <i class="bi bi-chevron-up" style="font-size:11px;color:var(--red-500)"></i>
+              </button>
+
+              <!-- Approval Workspace -->
+              <div class="approval-workspace">
+                <div class="approval-req-text">
+                  Implement user authentication with JWT and role-based access control. The system must support at minimum two roles: student and admin. Token expiry should be 24 hours with refresh support.
+                </div>
+                <div class="action-bar">
+                  <button class="btn-success"><i class="bi bi-check-lg"></i> Mark done</button>
+                  <button class="btn-secondary"><i class="bi bi-arrow-down"></i> Defer</button>
+                  <button class="btn-danger-ghost"><i class="bi bi-flag"></i> Flag blocker</button>
+                  <button class="btn-outline" style="margin-left:auto" onclick="copyPrompt(this)"><i class="bi bi-clipboard"></i> Copy Claude Code prompt</button>
+                </div>
+                <div class="prompt-label">Claude Code prompt</div>
+                <pre class="prompt-block">claude --project . "Implement this requirement: Implement user authentication with JWT and role-based access control.
+
+Steps:
+1. Read the existing codebase to understand patterns.
+2. Implement the requirement following those patterns.
+3. Write a brief test if logic is non-trivial.
+4. Commit with message: feat: implement JWT auth with role-based access"</pre>
+              </div>
+            </div>
+
+            <!-- Items 2–4 collapsed -->
+            <div class="sq-row"><button class="sq-row-btn"><span class="rank-circle rank-n">2</span><div class="sq-row-text"><div class="sq-row-title"><i class="bi bi-plug" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Wire GitHub OAuth integration for repository connection</div><div class="sq-row-meta"><span class="status-badge" style="color:var(--amber-500)">In progress</span>· urgency 65</div></div><div class="urgency-track"><div class="urgency-fill" style="width:65%;background:var(--amber-500)"></div></div><i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i></button></div>
+            <div class="sq-row"><button class="sq-row-btn"><span class="rank-circle rank-n">3</span><div class="sq-row-text"><div class="sq-row-title"><i class="bi bi-cloud-upload" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Configure Docker deployment with environment variable management</div><div class="sq-row-meta"><span class="status-badge" style="color:var(--red-600)">Not started</span>· urgency 60</div></div><div class="urgency-track"><div class="urgency-fill" style="width:60%;background:var(--red-500)"></div></div><i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i></button></div>
+            <div class="sq-row"><button class="sq-row-btn"><span class="rank-circle rank-n">4</span><div class="sq-row-text"><div class="sq-row-title"><i class="bi bi-check2-square" style="color:var(--text-muted);font-size:11px;margin-right:4px"></i>Write unit tests for core business logic services</div><div class="sq-row-meta"><span class="status-badge" style="color:var(--blue-500)">Matched</span>· urgency 38</div></div><div class="urgency-track"><div class="urgency-fill" style="width:38%;background:var(--blue-500)"></div></div><i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-muted)"></i></button></div>
+          </div>
+        </section>
+      </div><!-- /v-expanded -->
+
+
+      <!-- ═══════════════════ RUN MY DAY ═══════════════════ -->
+      <div id="v-runmyday" style="display:none">
+        <div class="overline">STUDENT PLATFORM · HOME</div>
+        <h1 class="greeting-h">Good morning, <span class="greeting-name">Test Corp</span>.</h1>
+        <p class="greeting-sub" style="margin-bottom:1.5rem">Run My Day mode — walking 5 items.</p>
+
+        <!-- Modal backdrop (simulated inline) -->
+        <div class="rmd-backdrop">
+          <div class="rmd-card">
+            <div class="rmd-header">
+              <div class="rmd-header-left">
+                <i class="bi bi-play-fill"></i>
+                <span class="label">Run My Day</span>
+                <span class="counter">1 of 5</span>
+              </div>
+              <button class="rmd-exit" onclick="show('normal')">Exit</button>
+            </div>
+
+            <div class="rmd-body">
+              <div class="rmd-cat-row">
+                <span class="cat-pill"><i class="bi bi-hammer" style="margin-right:4px"></i>build</span>
+                <span class="urgency-label" style="color:var(--red-500)">urgency 88</span>
+                <span class="status-label" style="color:var(--red-600)">Not started</span>
+              </div>
+
+              <p class="rmd-req-text">
+                Implement user authentication with JWT and role-based access control. The system must support at minimum two roles: student and admin.
+              </p>
+
+              <div class="rmd-prompt-section">
+                <div class="prompt-label">Claude Code prompt</div>
+                <pre class="prompt-block" style="max-height:160px;border-radius:6px">claude --project . "Implement this requirement: Implement user authentication with JWT and role-based access control.
+
+Steps:
+1. Read the existing codebase to understand patterns.
+2. Implement the requirement following those patterns.
+3. Write a brief test if logic is non-trivial.
+4. Commit with message: feat: implement JWT auth with role-based access"</pre>
+              </div>
+
+              <div class="rmd-actions">
+                <button class="btn-success"><i class="bi bi-check-lg"></i> Mark done</button>
+                <button class="btn-secondary"><i class="bi bi-arrow-down"></i> Defer</button>
+                <button class="btn-primary" style="margin-left:auto" onclick="copyPrompt(this)"><i class="bi bi-clipboard"></i> Copy prompt</button>
+              </div>
+            </div>
+
+            <div class="rmd-footer">
+              <button class="btn-secondary" disabled style="opacity:0.45"><i class="bi bi-arrow-left"></i> Prev</button>
+              <div class="dot-nav">
+                <div class="dot active"></div>
+                <div class="dot inactive"></div>
+                <div class="dot inactive"></div>
+                <div class="dot inactive"></div>
+                <div class="dot inactive"></div>
+              </div>
+              <button class="btn-secondary">Next <i class="bi bi-arrow-right"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kbd-hint">
+          <strong>Keyboard shortcuts (live in portal):</strong> &nbsp;
+          <kbd>→</kbd> Next &nbsp;
+          <kbd>←</kbd> Prev &nbsp;
+          <kbd>Space</kbd> Copy prompt &nbsp;
+          <kbd>Esc</kbd> Exit
+        </div>
+      </div><!-- /v-runmyday -->
+
+    </div>
+  </div>
+</div>
+
+<script>
+function show(name) {
+  ['normal','expanded','runmyday'].forEach(n => {
+    document.getElementById('v-' + n).style.display = n === name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.view-tab').forEach((el, i) => {
+    el.classList.toggle('active', ['normal','expanded','runmyday'][i] === name);
+  });
+}
+
+function copyPrompt(btn) {
+  const container = btn.closest('.approval-workspace, .rmd-body');
+  const block = container && container.querySelector('.prompt-block');
+  if (!block) return;
+  navigator.clipboard.writeText(block.textContent.trim()).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
+    const prevBg = btn.style.background;
+    btn.style.background = 'var(--green-600)';
+    btn.style.borderColor = 'var(--green-600)';
+    btn.style.color = '#fff';
+    setTimeout(() => {
+      btn.innerHTML = orig;
+      btn.style.background = prevBg;
+      btn.style.borderColor = '';
+      btn.style.color = '';
+    }, 2000);
+  });
+}
+</script>
+</body>
+</html>

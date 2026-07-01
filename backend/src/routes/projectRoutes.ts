@@ -11590,4 +11590,37 @@ router.get('/api/portal/project/handoff/summary', requireParticipant, async (req
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Student Task Lists (Project Builder Flow) ────────────────────────────────
+// Returns StudentTaskList rows with nested StudentTask rows for the student's
+// active project. StudentTaskList/StudentTask models land with
+// feat/wire-project-dna-requirements (#93); until that merges, returns [].
+
+router.get('/api/portal/project/tasks', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.json({ taskLists: [] }); return; }
+
+    // Dynamic import — models absent before PR #93 merges; fails safe to empty
+    const models = await import('../models');
+    const StudentTaskList = (models as any).StudentTaskList;
+    const StudentTask = (models as any).StudentTask;
+    if (!StudentTaskList || !StudentTask) { res.json({ taskLists: [] }); return; }
+
+    const lists = await StudentTaskList.findAll({
+      where: { project_id: (project as any).id },
+      order: [['position', 'ASC']],
+      include: [{ model: StudentTask, as: 'tasks', order: [['position', 'ASC']] }],
+    });
+
+    res.json({ taskLists: lists });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'backend', event: 'project_tasks_fetch_failed',
+      outcome: 'failure', error_class: err.constructor?.name ?? 'Error',
+      context: { message: err.message },
+    }));
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

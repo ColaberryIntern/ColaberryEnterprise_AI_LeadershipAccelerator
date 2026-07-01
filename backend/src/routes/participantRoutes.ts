@@ -5,6 +5,7 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
+import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
@@ -27,6 +28,7 @@ import {
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import projectRoutes from './projectRoutes';
+import studentOpsRoutes from './studentOpsRoutes';
 
 const router = Router();
 
@@ -155,8 +157,13 @@ router.post('/api/portal/project-dna', requireParticipant, async (req, res) => {
     return;
   }
   try {
-    const record = await saveProjectDna(req.participant!.sub, parse.data);
+    const enrollmentId = req.participant!.sub;
+    const record = await saveProjectDna(enrollmentId, parse.data);
     res.status(201).json(record);
+    // Fire-and-forget: kick off requirements generation; does not block the response
+    startRequirementsGeneration(enrollmentId).catch(err =>
+      console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'requirements_gen_trigger_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message, enrollment_id: enrollmentId } }))
+    );
   } catch (err: any) {
     const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
     console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'project_dna_save_failed', correlation_id: correlationId, outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
@@ -178,6 +185,9 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
 
 // Project endpoints
 router.use(projectRoutes);
+
+// Student CB-System operating model (priority queue, Run My Day, decisions)
+router.use(studentOpsRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);
@@ -203,6 +213,12 @@ router.get('/api/portal/submissions/:submissionId/mentor-feedback', requireParti
 router.get('/api/portal/github/oauth/start', requireParticipant, async (req, res) => {
   const { buildOAuthUrl } = await import('../services/githubIntegrationService');
   res.redirect(buildOAuthUrl(req.participant!.sub));
+});
+
+// Returns the OAuth URL as JSON so SPA clients can redirect via JS (Bearer token auth)
+router.get('/api/portal/github/oauth/url', requireParticipant, async (req, res) => {
+  const { buildOAuthUrl } = await import('../services/githubIntegrationService');
+  res.json({ url: buildOAuthUrl(req.participant!.sub) });
 });
 
 // Callback from GitHub — no session cookie present, identity comes from state param

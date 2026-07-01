@@ -196,8 +196,8 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
                           style={{
                             width: 22,
                             height: 22,
-                            background: '#eef2ff',
-                            color: '#6366f1',
+                            background: 'rgba(251,40,50,0.08)',
+                            color: '#FB2832',
                             fontSize: 11,
                             fontWeight: 700,
                             marginTop: 1,
@@ -249,7 +249,7 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
           <button
             className="btn d-flex align-items-center gap-2 px-4 py-2 w-100 justify-content-center"
             style={{
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              background: 'linear-gradient(135deg, #FB2832 0%, #367895 100%)',
               color: '#fff',
               borderRadius: 8,
               fontSize: 13,

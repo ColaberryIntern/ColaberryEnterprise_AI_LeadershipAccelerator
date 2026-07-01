@@ -169,6 +169,21 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Per-week Skilljar CourseLink: deep-link delivery wired into portal curriculum (2026-06-17)
+- [x] **CourseLink catalog (Postgres) + fail-soft service join + portal week CTA, implementing BC decision 9985688697 (Skilljar delivery = deep-link)**
+  - Date: 2026-06-17
+  - Session: CC-20260617-r3m8
+  - What changed:
+    - `backend/src/seeds/seedCurriculumCourseLinks.ts` (new): idempotent `CREATE TABLE IF NOT EXISTS curriculum_course_links` (unique on `module_number` 1-12 = week) + upsert of 12 rows mirroring `scripts/lib/curriculumWeeks.js` WEEKS. Exports `COURSE_LINK_ROWS`. Confirmed/pending split per the decision: registry-confirmed Skilljar URLs for weeks 2/3/5/8 = `confirmed`; constructed-but-unverified slugs for weeks 1/6/7 = `pending_confirmation` (Kes to confirm against live catalog); Colaberry-original weeks 4/9/10/11 = `not_applicable` (no Skilljar course); week 12 = external CCA-F exam, `confirmed`.
+    - `backend/src/models/CurriculumCourseLink.ts` (new): Sequelize model for the table (declare-typed, `timestamps:false`), with exported `CourseLinkProvider`/`CourseLinkStatus` union types.
+    - `backend/src/models/index.ts`: imported + exported `CurriculumCourseLink`.
+    - `backend/src/services/courseLinkService.ts` (new): `getCourseLinkMap()` returns `Map<module_number, CourseLink>`. Fail-soft (failure-first): a missing/unseeded catalog or a DB hiccup logs a structured warning (`error_class` SchemaNotReady|DbError) and returns an empty map rather than 500-ing the curriculum page. No retries — a missing catalog is a deploy/seed step, not a transient fault.
+    - `backend/src/services/curriculumService.ts`: `getParticipantCurriculum()` now attaches `course_link` (or null) to each module by `module_number` via `getCourseLinkMap()`. No controller change — the response passes straight through `handleGetCurriculum`. `getModulesForCohort()` (the admin/cohort module list, `GET .../admin .../modules/:cohortId`) attaches the same `course_link`, so admins see per-week confirmed/pending/original status.
+    - `backend/src/scripts/updateCourseLink.ts` (new): one-command operator script to flip a week's link URL/status/title without a code edit/PR — `npx ts-node backend/src/scripts/updateCourseLink.ts --week 7 --url https://... --status confirmed`. Pure `parseArgs`/`validateUpdate` exported for tests; idempotent UPDATE-by-module_number; errors clearly if the row is missing (seed first). Built so Kes can confirm weeks 1/6/7 himself.
+    - `frontend/src/pages/portal/PortalCurriculumPage.tsx`: added `CourseLinkInfo` type + `course_link?` on `ModuleSummary`, and a `CourseLinkCta` component rendered in the module detail-pane header — a real "Open course on Skilljar" / "Go to CCA-F exam" link (new tab, `rel="noopener noreferrer"`, aria-label) for `confirmed`; a "course link coming soon" pill for `pending_confirmation`; a muted "Colaberry-original module" tag otherwise. No dead link is ever shipped.
+  - Why: BC ticket 9985688697 chose deep-link delivery for Skilljar on enterprise.colaberry.com; this wires the per-week `CourseLink` the spec (§6.C/§7) calls for, gating Epic 3. The catalog table is also the seam to add SSO later without touching delivery.
+  - Verification: structural/manual review only — `node`/`tsc`/`jest` are not on PATH on this Windows host (same constraint noted on prior entries). Run on a box with deps: `cd backend; npx tsc --noEmit; npx jest courseLinkService seedCurriculumCourseLinks` and `cd frontend; npx tsc --noEmit`. Tests added: `backend/src/services/__tests__/courseLinkService.test.ts` (happy / empty-catalog boundary / fail-soft on missing-table + generic DB error); `backend/src/seeds/__tests__/seedCurriculumCourseLinks.test.ts` (12 unique weeks; URL-present iff not colaberry_original; confirmed={2,3,5,8} / pending={1,6,7}; Skilljar host + CCA-F host; provider/status enums); `backend/src/scripts/__tests__/updateCourseLink.test.ts` (parseArgs + validateUpdate: happy / week-range boundary / no-field, non-https, unknown-status failures). Add `updateCourseLink` to the jest run.
+  - Notes: DEPLOY = run the seed before/with the backend deploy — `npx ts-node backend/src/seeds/seedCurriculumCourseLinks.ts` (or `node /app/dist/seeds/seedCurriculumCourseLinks.js` in the prod container), then `docker compose up -d --build backend frontend`. OPEN (Kes): confirm weeks 1/6/7 Skilljar slugs against the live catalog, then flip those rows to `confirmed` (re-run the seed — idempotent upsert). Catalog is cohort-agnostic (keyed by `module_number`); revisit if a future cohort runs a different blueprint.
 ### Cora knowledge base — structured Q&A for inbox agent migration (2026-06-16)
 - [x] **`coraKnowledgeBase.ts` — ground-up knowledge base for Cora (Executive AI Build Accelerator)**
   - Date: 2026-06-16
@@ -6215,6 +6230,36 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - Session: CC-20260617-9k2x
   - What changed: The Launch PMO/Readiness dashboard had a Curriculum Readiness KPI but no equivalent for the two website lists, even though their todos already counted toward overall readiness. Added a generic `computeListReadiness(state, matcher)` to `backend/src/scripts/lib/launchPmoDashboardHtml.js` (same units + divide-by-zero/missing-list guard as the existing `computeCurriculumReadiness`, which is left untouched so this adds no refactor to a tested path). `buildView` now exposes `websiteTraining` (matcher `/training\.colaberry/i`) and `websiteEnterprise` (`/enterprise\.colaberry/i`), each `{pct,done,total,present,hasData}`. Rendered two KPI tiles ("Website (training) Readiness", "Website (enterprise) Readiness") beside Curriculum, mirroring its `done / total tasks ready` subtext + progress bar + "no website data" empty state. Bumped `.kpis` grid `repeat(5,1fr)` -> `repeat(7,1fr)` (the row was full at 5). No change to overall-readiness math or the daily email. FQDN matchers (not bare `/website/i`) so the two site lists never cross-match. **New tests in `backend/src/__tests__/scripts/launchPmoDashboardHtml.test.ts`** (8 cases): per-site pct, cross-match guard, rounding, 0/0 guard, missing-list, both-tiles render + hover title, empty/absent "no website data" labels.
   - Verification: jest/ts-jest cannot install in this local env (`omit=dev`), deferred to CI per the established pattern (cf. CC-20260615-e9k2). Exercised the actual pure fns + renderer via scratch `tmp/verifyWebsiteReadiness.js` - 9 assertions (per-site %, cross-match, rounding, both guards, both-tiles render, empty labels, em-dash-free HTML, 7-tile count) -> ALL PASSED. `npx tsc --noEmit` clean on the touched test file (repo-wide axios/playwright "Cannot find module" errors are pre-existing optional-dep noise).
+  - Notes: NOT yet deployed - awaiting Ali's go on commit + prod deploy. Data source = live BC todo done/total per list (same units as every other area), so the tiles reflect real launch progress once the weekday heartbeat renders. Two website lists in project 47502609 confirmed via list_project_todolists (training `9946468999`, enterprise `9946469009`). Could not read the BC todo's own comment thread (the Colaberry MCP surface exposes no comment-read tool); acceptance criteria were inferred from the curriculum pattern + Tejesh brief and confirmed with Ali in-session (interpretation: BC-todo completion % tile; scope: both sites). Layout: 7 KPI tiles now; if `repeat(7,1fr)` reads cramped for the exec audience, reflow to 4-wide is a one-line follow-up.
+
+- [x] **Portfolio GitHub Sync Agent (PR #70) + local test coverage sprint + seedCurriculum hardened with Skilljar URLs (CC-20260622-k7m2)**
+  - Date: 2026-06-22 / 2026-06-23
+  - Session: CC-20260622-k7m2
+  - What changed:
+    - `backend/src/services/githubIntegrationService.ts`: added `syncAllActiveStudentGitHubActivity()` — batch sync across all active enrollments with per-student failure isolation; added `import { Op } from 'sequelize'` and `Enrollment` model.
+    - `backend/src/services/__tests__/githubIntegrationService.test.ts`: rewrote with correct ts-jest hoisting pattern (jest.mock before imports, require() inside tests); 10/10 tests pass including 3 new tests for `syncAllActiveStudentGitHubActivity` (happy path, failure isolation, empty-enrollment no-op).
+    - `backend/src/services/schedulerService.ts`: added `PortfolioGitHubSyncAgent` cron at `15 2 * * *` using lazy `import()` pattern.
+    - `backend/src/services/agentRegistrySeed.ts`: added registry entry with `agent_type: 'github_automation'`, `trigger_type: 'cron'`, `schedule: '15 2 * * *'`, `category: 'accelerator'`.
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx`: fixed React hooks violation — moved `useCountdown` call and all derived state above early returns using optional chaining; added `AnthropicCourseWrapper` import and split Materials section to render Skilljar courses as branded cards vs. plain list for others.
+    - `frontend/src/components/portal/AnthropicCourseWrapper.tsx` (new): Anthropic/Skilljar branded course card with "Launch Course" CTA, ported from `feature/anthropic-course-wrapper`.
+    - `backend/src/seeds/seedCurriculum.ts`: baked Skilljar URLs for sessions 2, 3, 4 directly into seed data so they survive backend restarts on any branch — prevents wireWeek backfill from being wiped on branch switch.
+  - Verification: `tsc --noEmit` clean (frontend + backend); 10/10 Jest tests pass (`githubIntegrationService.test.ts`); 18/18 Jest tests pass for PR #37 suite (`courseLinkService`, `seedCurriculumCourseLinks`, `updateCourseLink`); browser-verified sessions 2, 3, 4 each show correct Skilljar course cards with "Launch Course" buttons at `localhost:3002`.
+  - Notes: GITHUB_ACCESS_TOKEN in `.env` is test scaffolding only — prod uses per-student OAuth tokens in `github_connections.access_token_encrypted`. Skilljar "Launch Course" links navigate correctly but may require Skilljar login (Anthropic partner SSO status for Colaberry unconfirmed — open task). Jest version was 25.0.0 vs ts-jest 29.x; fixed by `npm install` in `backend/`.
+
+  **PR local test audit — updated 2026-06-23 (CC-20260622-k7m2)**
+
+  | PR | Title | Status | Test type | Locally verified? | Evidence |
+  |---|---|---|---|---|---|
+  | #70 | Portfolio GitHub Sync Agent | OPEN | Unit tests (Jest) | ✅ Yes | 10/10 tests pass |
+  | #57 | AnthropicCourseWrapper + hooks fix | OPEN | Browser | ✅ Yes | Screenshots in BC ticket 9946499773; hooks fix browser-confirmed this session |
+  | #43 | Wire Week 1 Skilljar courses | OPEN | Browser | ✅ Yes | Session 2 shows Claude Code 101 + Claude Code in Action cards with Launch Course buttons |
+  | #45 | Wire Week 2 Skilljar courses | OPEN | Browser + DB | ✅ Yes | Session 3 shows Introduction to Agent Skills card; DB verified |
+  | #48 | Wire Week 3 Skilljar courses | OPEN | Browser + DB | ✅ Yes | Session 4 shows Building with the Claude API card; DB verified |
+  | #37 | Per-week Skilljar CourseLink (Curriculum page CTA) | OPEN | tsc + Jest | ✅ Yes | tsc clean (frontend + backend); 18/18 Jest tests pass |
+  | #16 | (unit tests via shared file) | OPEN | Unit tests | ✅ Yes | Tests pass via shared test file |
+  | #1–#15, #17–#36, #38–#42, #44, #46–#47, #49–#56, #58–#69 | Various | OPEN/MERGED | — | ❌ Not yet | — |
+
+  **PRs with locally-verified tests: 7 of 15 open PRs tested** — #70, #57, #43, #45, #48, #37, #16
   - Notes: Committed to `main` from an isolated worktree (off `origin/main`) so the concurrent instance's uncommitted work in the primary tree was never touched. Data source = live BC todo done/total per list (same units as every other area), so the tiles reflect real launch progress once the weekday heartbeat renders. Two website lists in project 47502609 confirmed via list_project_todolists (training `9946468999`, enterprise `9946469009`). Could not read the BC todo's own comment thread (the Colaberry MCP surface exposes no comment-read tool); acceptance criteria were inferred from the curriculum pattern + Tejesh brief and confirmed with Ali in-session (interpretation: BC-todo completion % tile; scope: both sites). Layout: 7 KPI tiles now; if `repeat(7,1fr)` reads cramped for the exec audience, reflow to 4-wide is a one-line follow-up.
 
 - [x] **AI Membership persona landing pages — 3 pages from Sohail's copy (BC todo 9946499609).**
@@ -6781,6 +6826,12 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: npx tsc --noEmit passes (exit 0); static render-check (DOM mirrors component output) loads the real anthropicBento.css and renders the 3-course Week 1 bento correctly in browser; faithful 1:1 of the already-approved docs/design mockup. Kes to pull and test locally per his comment.
   - Notes: 3 logged implementation assumptions (no governance boundary crossed): (1) RemixIcon (DS default) swapped for Bootstrap Icons, already loaded by the portal, to avoid a new icon-font dependency; (2) "Start the path" anchor CTA points at the featured (lowest-numbered) course URL since no separate path URL exists yet — spec flagged this destination as TBD; (3) generalized the spec's fixed 3-up grid to featured-spans-compacts so 4+ courses never break (pixel-identical to the spec at exactly 3). HARDEN: compact ghost CTA bumped 38px->44px to meet the DS/WCAG touch goal; prefers-reduced-motion disables hover transforms. Dark-mode tokens included but inert (portal has no dark toggle yet). Branch workstream/design-system-anthropic-wrapper (PR #82 -> staging); pushed from fork remote (aleemcolaberry) since the account is read-only on the org repo.
 
+- [x] AnthropicCoursesBento: fix grid not applying (same-element scope/grid selector collision) (BC 9946499773)
+  - Date: 2026-06-25
+  - Session: CC-20260625-Q7m4
+  - What changed: Headless-render verification (Edge --screenshot on the real anthropicBento.css) caught the bento stacking to one column instead of the 2-col featured+compacts grid. Root cause: `.acw-ds` scope class and `.acw-bento` grid class were on the SAME element, but the CSS targets them as `.acw-ds .acw-bento` / `.acw-ds .ga-feat` (descendant), so the grid container + grid-area rules never matched (cards still styled since they ARE descendants). Fix: nest the grid as a child of the `.acw-ds` wrapper in AnthropicCoursesBento.tsx (two elements, not one combined node); CSS unchanged.
+  - Verification: npx tsc --noEmit passes (exit 0); re-rendered headless screenshot confirms all 4 states correct — 3-course full bento (featured spans 2 stacked compacts + full-width cherry anchor), 2-course fallback, 1-course featured-only, and dark mode.
+  - Notes: BUILD-BREAK-HARDEN — the break was only visible by rendering, not by tsc; static visual verification added value over type-checking alone. Icon glyphs blank in the headless shot only because the Bootstrap Icons CDN font is network-blocked in headless; they load in the portal which already links the font.
 - [x] AnthropicCoursesBento: heuristic + WCAG re-audit, fixes, and org-branch re-home into staging (BC 9946499812 / 9946499773)
   - Date: 2026-06-25
   - Session: CC-20260625-q4r9
@@ -6871,6 +6922,81 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: Found the send queue clogged with phantom work: 456 of 458 "due" email actions had already been emailed (matching outbound communication_log) but their row never flipped pending->sent (process restarted between send and status-update, incl. mid-window deploys), leaving them stuck at attempts_made >= max_attempts where the fetch (`attempts_made < max_attempts`) skips them forever. The AI ROI Pilot's Touch-2 was actually complete (all 99 emailed; 36 stranded). Fix: new `reconcileStrandedSends()` in schedulerService runs at the top of `processScheduledActions` every cycle: UPDATE pending email rows -> 'sent' (sent_at from the comm-log) WHERE a matching outbound comm-log exists (lead+campaign+subject, created_at >= row created_at, so re-enrollments are not mismarked). Idempotent, ~0 rows steady-state, non-blocking. Unclogs the fetch + makes metrics honest + prevents recurrence.
   - Verification: post-deploy, the 458-stuck backlog clears on the first cycle (stuck-due count -> ~0, fetchable count rises); AI ROI Pilot Touch-2 shows 99 sent.
   - Notes: Subject-matched comm-log is the proof-of-send (each touch has a unique subject per lead) so re-sending is avoided. Lesson reinforced: deploy after-hours; mid-window restarts strand in-flight sends (this reconciler now self-corrects that within one cycle).
+
+### Epic 1 — GitHub push → requirement VERIFIED (2026-06-25)
+- [x] **GitHub push ingest loop: push → requirement VERIFIED (BC #9985689253)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-k3p7
+  - What changed:
+    - `backend/src/routes/webhookRoutes.ts` (modified): push webhook handler now fires two additional fire-and-forget calls after `syncStudentActivity`: (1) `matchRecentCommitsToBPs(enrollmentId, projectId)` — existing keyword+AI matcher for students with Capability-based requirements; (2) `verifyRequirementsFromCommits(projectId, commits, headSha)` — new commit-message key matcher for DNA wizard students whose RequirementsMap rows have `capability_id = null`.
+    - `backend/src/services/githubIntegrationService.ts` (modified): added `verifyRequirementsFromCommits(projectId, commits, headSha)` — scans commit messages for requirement key patterns (e.g. `AUTH.001`, `[AUTH.001]`), queries RequirementsMap WHERE `capability_id IS NULL AND requirement_key IN (found keys)`, flips matches to `status = 'verified'`, stores `verified_by = 'github_push'`, `last_verified_at = now()`, `metadata.github_push_sha`. Idempotent.
+    - `backend/src/services/__tests__/githubIngestService.test.ts` (new): 7 unit tests — empty commits early return, no key in message (no DB call), key match flips to verified, multiple commits/multiple keys, idempotency, no matching rows, DB error propagation.
+  - Verification: `npx tsc --noEmit` clean (no source errors); `npx jest githubIngestService` 7/7 pass.
+  - Notes: `matchRecentCommitsToBPs` covers existing students with Capabilities (re-fetches commit details from GitHub API — extra round-trip but reuses proven logic). `verifyRequirementsFromCommits` covers new DNA wizard students via commit message key parsing. Deferred: file-path-based auto-matching without commit message discipline (requires `requirementsGenerationService` to emit expected file paths per key — separate follow-up).
+### Epic 1 — ProjectDnaWizard → Requirements → Native Student Tasks (2026-06-25)
+- [x] **Wire ProjectDna → requirements generation → student task lists (BC #9985689231)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed:
+    - `backend/src/models/StudentTaskList.ts` (new): Sequelize model for `student_task_lists` table — one row per requirements cluster per project (unique on `project_id + cluster`). Fields: `project_id`, `enrollment_id`, `cluster`, `title`, `status` (not_started/in_progress/complete), `position`.
+    - `backend/src/models/StudentTask.ts` (new): Sequelize model for `student_tasks` table — one row per requirement per project (unique on `project_id + requirement_key`). Fields: `task_list_id`, `project_id`, `requirement_map_id` (FK to requirements_maps), `requirement_key`, `title`, `description`, `status` (not_started/in_progress/complete/blocked), `position`.
+    - `backend/src/services/studentTaskService.ts` (new): `createTasksFromRequirements(projectId)` — reads all active RequirementsMap rows for the project, groups by cluster prefix (e.g., `AUTH.001` → cluster `AUTH`), creates/finds one `StudentTaskList` per cluster and one `StudentTask` per requirement. Idempotent via `findOrCreate` on unique keys.
+    - `backend/src/models/index.ts` (modified): imports + associations for `StudentTaskList` and `StudentTask`; exports added.
+    - `backend/src/routes/participantRoutes.ts` (modified): `POST /api/portal/project-dna` now fires `startRequirementsGeneration(enrollmentId)` fire-and-forget after DNA save returns 201.
+    - `backend/src/services/requirementsGenerationService.ts` (modified): `executeJob()` now calls `createTasksFromRequirements(project.id)` fire-and-forget after job is marked `completed` and portfolio refresh fires.
+    - `backend/src/services/__tests__/studentTaskService.test.ts` (new): 7 unit tests — happy path, empty requirements, project not found, cluster derivation, idempotency, title truncation, error propagation.
+  - Verification: `npx tsc --noEmit` clean (0 errors); `npx jest studentTaskService` 7/7 pass.
+- [x] **DB migration + trigger chain smoke test + post-DNA success screen (BC #9985689231)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-k3p7
+  - What changed:
+    - `backend/src/seeds/seedStudentTasks.ts` (new): idempotent raw-SQL migration (`CREATE TABLE IF NOT EXISTS`) for `student_task_lists` and `student_tasks`, with all FK constraints, indexes, and ENUM checks. Run manually against `accelerator_dev1`; both tables confirmed via psql.
+    - `frontend/src/pages/portal/ProjectDnaWizard.tsx` (modified): post-DNA `done` state redesigned — added two info cards ("Generating your requirements document — 15–30 min background" and "Your project tasks will be ready shortly after — one task list per system area") so students understand what happens next. CTA button now navigates to `/portal/home` (was `/portal/project/blueprint`). Footer: "You can leave this page — your requirements will be ready when you come back."
+    - End-to-end trigger chain verified locally: `POST /api/portal/project-dna` → 201 → `startRequirementsGeneration` fires in background → job row created → `executeJob` runs → reaches OpenAI (returns 401 with no local key, as expected). Success screen confirmed in browser (Docker nginx rebuild).
+  - Verification: `tsc --noEmit` clean; nginx container rebuilt and success screen confirmed live at `localhost:9999/portal/project-builder` — Kes confirmed via screenshot.
+  - Notes: OpenAI 401 is expected in local dev (no API key in container env). Full task seeding path (requirements → tasks) requires prod deploy with a real OpenAI key. `seedStudentTasks.ts` not yet wired into server startup — must be run manually or wired to auto-run at boot (pending approval).
+  - Notes: Tables are not yet created in DB — Sequelize models define the schema but migrations must be run on dev and prod via `sync({alter: true})` or raw DDL. Task seeding runs after requirements generation job completes (~15-30 min latency on first submit). Fire-and-forget means DNA save returns instantly.
+- [x] **Wire Week 5 Anthropic course: seed curriculum_course_links into server startup (BC #9984355973)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed: `backend/src/server.ts` — added import + `await seedCurriculumCourseLinks()` call in the startup seed sequence (after `seedCurriculumTypeDefinitions`). The `curriculum_course_links` table is the actual delivery mechanism for Skilljar course CTAs on `PortalCurriculumPage.tsx`; it was missing from both dev DBs because the seed was never wired into server startup. Week 5 (Introduction to Model Context Protocol, `https://anthropic.skilljar.com/introduction-to-model-context-protocol`) is already `confirmed` in the seed data; no code change needed to the seed itself.
+  - Verification: `tsc --noEmit` clean; seed ran locally (12 rows upserted, accelerator_dev); Week 5 = `confirmed` in DB; Jest 18/18 pass (seedCurriculumCourseLinks + courseLinkService + updateCourseLink).
+  - Notes: The `wireWeek5` script approach was ruled out — no Week 5 LiveSession exists in the DB (old 5-session curriculum only). The correct path is `curriculum_course_links` → `courseLinkService` → `PortalCurriculumPage.tsx`. Needs prod deploy to go live on enterprise.colaberry.com.
+- [x] **Student CB-System Phase 1: priority queue + approval workspace + Run My Day on CoryHome (BC #9985689397)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: (1) `backend/src/routes/studentOpsRoutes.ts` — NEW. `GET /api/portal/student-ops/my-queue` reads `RequirementsMap` rows for student's active project, scores by urgency (status base + staleness + category bonus), returns ranked items with deterministic Claude Code prompt per category. `POST /api/portal/student-ops/decide` handles done (verified) and flag-blocker (unmatched). Mounted in `participantRoutes.ts`. (2) `frontend/src/pages/portal/CoryHomeParts.tsx` — Added `StudentQueueItem` type, `ApprovalWorkspace` (inline 4-action panel), `StudentQueueRow` (collapsible), `StudentQueueSection` (list + Walk My Queue button), `RunMyDayMode` (full-screen walk modal, keyboard ArrowLeft/Right/Space/Escape). (3) `frontend/src/pages/portal/CoryHome.tsx` — state, fetch effect, all handlers, keyboard listener, mounts `StudentQueueSection` + `RunMyDayMode` overlay.
+  - Verification: `tsc --noEmit` clean (backend + frontend); Docker build clean; `/portal/home` 200; `/api/portal/student-ops/my-queue` returns 401 for unauthenticated call (route live, auth enforced).
+  - Notes: RequirementsMap is task source for v0 (no StudentTask model — deferred). Prompts are deterministic templates per category. Defer is in-memory. StudentTask model + LLM prompts + metrics deferred.
+- [x] **Drop Skilljar API track; replace with public catalog scraper**
+  - Date: 2026-06-30
+  - Session: CC-20260630-8x2m
+  - What changed:
+    - DELETED: `backend/src/services/skilljarSyncService.ts`, `backend/src/models/StudentSkilljarProgress.ts`, `backend/src/services/__tests__/skilljarSyncService.test.ts`, `backend/src/services/lib/__tests__/skilljarCourseMatch.test.ts`, `backend/src/services/lib/skilljarCourseMatch.ts`
+    - CREATED: `backend/src/services/lib/catalogFallback.ts` — hardcoded last-known-good catalog (5 courses, outlines, URL normalization utilities)
+    - CREATED: `backend/src/services/anthropicCatalogScraper.ts` — scrapes `https://www.anthropic.com/learn`, extracts course titles/URLs/outlines via cheerio, diffs against `anthropic_content_registry`, falls back to KNOWN_CATALOG on failure
+    - CREATED: `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` — 10 test cases (happy path, fallback on 503, fallback on empty catalog, fallback on ECONNREFUSED, change detection, idempotency, DB error handling, boundary checks)
+    - CREATED: `backend/src/seeds/migrations/add_outline_to_anthropic_content_registry.sql` — idempotent migration adding `outline TEXT NULL` column
+    - UPDATED: `backend/src/models/AnthropicContentRegistry.ts` — added `outline` attribute and Sequelize column definition
+    - UPDATED: `backend/src/routes/admin/anthropicRoutes.ts` — added `POST /api/admin/sync/anthropic-catalog` route
+    - UPDATED: `backend/src/seeds/seedAnthropicContentRegistry.ts` — removed Skilljar course rows (now scraper-owned); kept docs/news hubs
+    - UPDATED: `backend/src/models/index.ts` — removed StudentSkilljarProgress import/export
+    - UPDATED: `backend/src/config/env.ts` — removed skilljarApiKey / skilljarBaseUrl
+  - Verification: `tsc --noEmit` passes clean (exit code 0).
+  - Notes: Ali confirmed Skilljar API access is not coming. Course rows in `anthropic_content_registry` now populated on demand via `POST /api/admin/sync/anthropic-catalog`. Weekly cron should call that route. The `curriculum_course_links` table is unchanged — still the student-facing link source, still manually updated by Kes via `updateCourseLink.ts`. Migration must be applied on prod before deploy: `add_outline_to_anthropic_content_registry.sql`.
+
+- [ ] **Week 4 Prompt Engineering content spec (BC #9984355775)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed: Created `docs/training-program-2026-q3/curriculum/week-04-prompt-engineering.md` — full Colaberry-original content spec: 6-technique PE framework, 7 Anthropic public doc resources, Architecture Day + Build Day outlines, Enterprise Prompt Library artifact spec (10-entry template + categories + acceptance criteria), assessment hooks (warmup + post quiz + survey), NotebookLM video hooks, non-goals, done criteria.
+  - Verification: committed 4de664c9, pushed to ops/spec-week04-prompt-engineering; posted to BC #9984355775 for Ali approval.
+  - Notes: Not marking complete until Ali approves the spec. Portal wiring deferred to Design E.
+- [x] **Wire Week 6 Anthropic course: confirm MCP Advanced Topics in seed (BC #9984356110)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed: `backend/src/seeds/seedCurriculumCourseLinks.ts` — Week 6 `link_status` changed from `pending_confirmation` to `confirmed`. URL `https://anthropic.skilljar.com/model-context-protocol-advanced-topics` was already present; ticket provided the confirmation.
+  - Verification: tsc --noEmit clean; seed ran against accelerator_dev1 — Week 6 = confirmed (DB verified via psql query). Awaiting Kes PR approval.
+  - Notes: One-line change in the seed; no server.ts change needed (startup seeding was wired in PR #89).
 - [x] **Rebuild SponsorshipPage as flagship "Sponsor Your Team: The AI Builder Challenge" (Door B)**
   - Date: 2026-06-25
   - Session: CC-20260625-9q4f
@@ -7152,6 +7278,13 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: branch-vs-main diff was purely the CB additions (main had never touched these files); wrapper retains both DATABASE_URL + CB blocks; dispatcher retains RUNNER guard + identity halt; all syntax clean; 12/12 automated-card-guard tests pass in the deps-present tree (bare worktree fails only on missing node_modules). Prod git pull + cache regen + re-enable in same session.
   - Notes: Root process fix - CB stabilization now lives in main, not a side branch. Dispatcher cron was temp-disabled during the restore to stop the Ali-identity posting.
 
+- [x] Auto-sync main → staging via GitHub Action + MERGE_WORKFLOW.md update
+  - Date: 2026-07-01
+  - Session: CC-20260701-w2k9
+  - What changed: (1) Resynced staging from main directly (was 69 commits behind; merge + push to origin/staging). (2) Added `.github/workflows/sync-main-to-staging.yml` — fires on every push to main; clean merge path pushes directly to staging, conflict path opens a `sync/main-to-staging-*` PR for manual review. (3) Updated `MERGE_WORKFLOW.md` with back-merge section documenting the Action behavior, manual fallback four-command sequence, and rule that conflict PRs must be resolved before cutting new feature branches.
+  - Verification: staging push confirmed (810253e0); workflow file created; MERGE_WORKFLOW.md updated; tsc not applicable (YAML + MD only). PR pending Kes approval.
+  - Notes: Ali explicitly delegated the resync and automation in BC thread "Adopt the new PR merge workflow". Supersedes the old CLAUDE.md "remind Ali to sync" rule — Action makes drift structurally impossible.
+
 - [x] CB System @-mentions resolve the real person (not always Ali)
   - Date: 2026-06-30
   - Session: CC-20260630-m4k7
@@ -7159,6 +7292,107 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: ops-engine node:test 45/45 green (12 new in `__tests__/cb-people.test.js`, incl. regression "replying to a non-Ali requester tags that person, not Ali"); `node --check` clean on all three files. DEPLOYED to prod host 2026-06-30 (per Ali, deploy-now-to-test): on-host node --check + full require-chain load + live functional check (Aleem object -> Aleem tag, no-arg -> Ali fallback); dispatcher cron ticking every 3 min, cb_dispatcher_enabled=true, posting identity = CB System 37708014. Committed to main from a clean worktree off origin/main (the handler change was applied to main's current handler, NOT the stale workstream/interview-prep-report copy which would have reverted the sanitizer/create_task/forced-reply work).
   - Notes: No-arg `mention()` stays backward compatible (still tags Ali). Source: BC todo 10048624254 ("Enable SGID lookup for Basecamp integration") - framed as needing external access/config, but the real gap was a hardcoded sgid, not a permission to enable.
 
+### Epic 1 — Project Builder Flow UI (2026-06-26)
+- [x] **Project Builder Flow: 7-screen wizard + Design E tokens (Design gate BC#9985689170)**
+  - Date: 2026-06-26
+  - Session: CC-20260625-k3p7
+  - What changed:
+    - `frontend/public/index.html` (modified): added Remix Icon CDN + Google Fonts (Roboto, Roboto Mono, Quicksand) for Design E.
+    - `frontend/src/styles/tokens.css` (modified): added Design E brand token block — cherry, leaf, berry, amber, 4-state status tokens, neutral scale (n50–n900), radius scale (r-4 through r-pill), mono font var.
+    - `frontend/src/pages/portal/ProjectBuilderFlow.tsx` (new, 464 lines): 7-screen wizard — Add project (DNA chips readback), Your idea, Sharpening questions (generated by advisor brain), Requirements doc (4-state status chips), Task list (reads GET /api/portal/project/tasks), Connect GitHub (OAuth + status check), Done screen (next action + Claude Code prompt block). Aside panel: project info card, synced loop progress, readiness gauge (SVG circle). Navigates to /portal/project/builder after DNA wizard completes.
+    - `frontend/src/routes/portalRoutes.tsx` (modified): added Route for /portal/project/builder → ProjectBuilderFlow.
+    - `frontend/src/pages/portal/ProjectDnaWizard.tsx` (modified): success screen now navigates to /portal/project/builder instead of /portal/project/blueprint.
+    - `backend/src/routes/projectRoutes.ts` (modified): added GET /api/portal/project/tasks endpoint — returns StudentTaskList+StudentTask rows; fails safe to empty array until feat/wire-project-dna-requirements (#93) merges (models loaded via dynamic import with null-check).
+  - Verification: `tsc --noEmit` clean on both backend and frontend (exit code 0). Route wired. Wizard reaches done screen in browser via /portal/project/builder.
+  - Notes: GitHub OAuth returns to /portal/home?github_connected=1; detect on next builder load via URL param (sets step=5 with connected state). Task list shows "generating" placeholder until PR #93 merges. Design E tokens additive (no existing --color-* conflicts). Remix icons loaded globally — required for ri-* classes in the new wizard.
+
+- [x] **Dev env: load .env into backend container so ANTHROPIC_API_KEY is available locally**
+  - Date: 2026-06-26
+  - Session: CC-20260625-k3p7
+  - What changed: `docker-compose.dev.yml` — `env_file` for backend service changed from scalar `.env.dev` to list `[.env, .env.dev]` so secrets in the gitignored `.env` (ANTHROPIC_API_KEY, etc.) are automatically available in the dev container without manual injection.
+  - Verification: `docker exec accelerator-dev-backend printenv ANTHROPIC_API_KEY` returns key; advisor questions endpoint responds successfully.
+  - Notes: `.env` is gitignored; `.env.dev` is tracked and contains no secrets. Safe pattern.
+
+- [x] **Fix GitHub OAuth connect button — Bearer token auth via JS redirect**
+  - Date: 2026-06-26
+  - Session: CC-20260625-k3p7
+  - What changed: `backend/src/routes/participantRoutes.ts` — added `GET /api/portal/github/oauth/url` endpoint returning `{ url }` JSON (authenticated). `frontend/src/pages/portal/ProjectBuilderFlow.tsx` — replaced `<a href>` with a button that calls `portalApi.get('/api/portal/github/oauth/url')` and redirects via `window.location.href`. Plain `<a href>` navigation cannot send Authorization headers so always got 401.
+  - Verification: tsc --noEmit clean. Redirect reaches GitHub OAuth page. Full flow requires Ali to register GitHub OAuth App on production (see PR #95 notes).
+  - Notes: Production GitHub OAuth App credentials (GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_OAUTH_REDIRECT_URI) must be set on VPS by Ali — see PR #95 for setup instructions.
+
+- [x] **Colaberry DS pass — 9 portal pages + ProjectDnaWizard + CoryHomeParts cleanup**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Replaced all old navy/indigo design tokens with Colaberry DS cherry red `#FB2832` (brand primary) and dark cherry `#C20E1E` (accent) across 11 files. Files: `PortalDashboardPage.tsx` (10 `#6366f1` → `#FB2832`, 2 `#8b5cf6` → `#367895`), `PortalProgressPage.tsx` (3 tokens), `WalkCapsPage.tsx` (var(--color-primary), btn-primary, btn-outline-primary×2, bg-primary), `PortalLoginPage.tsx` (heading + btn-primary), `PortalAssignmentsPage.tsx` (var(--color-primary)×4, btn-primary×2), `PortalLessonPage.tsx` (radial-gradient orb, border, h5, spinner-spinners, breadcrumb, lesson header gradient, Back to Curriculum button, step indicator active state), `PortalSessionsPage.tsx` (var(--color-primary)×3), `PortalVerifyPage.tsx` (spinner + btn-primary), `WalkSummaryPage.tsx` (var(--color-primary), var(--color-primary-light), btn-primary), `ProjectDnaWizard.tsx` (btn-primary×3), `CoryHomeParts.tsx` (btn-outline-primary).
+  - Verification: Docker nginx rebuild — `Compiled successfully` (zero errors). All 9 target pages plus wizard + CoryHome now use cherry red brand palette.
+  - Notes: `PortalCurriculumPage.tsx`, `CoryHome.tsx`, and `PortalSessionDetailPage.tsx` still have old tokens — deferred (separate scope). PR pending Kes local confirmation.
+
+- [x] **Colaberry DS pass — 3 remaining portal pages (CurriculumPage, CoryHome, SessionDetailPage)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Replaced all remaining old navy/indigo tokens with Colaberry DS cherry red across 3 files: `PortalCurriculumPage.tsx` (19 instances — `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, `eef2ff`→rgba(251,40,50,0.08), `f5f3ff`→rgba(54,120,149,0.10), gradient header → flat `#FB2832`), `CoryHome.tsx` (5 instances — `var(--color-primary)`→`#FB2832`, `var(--color-primary-light)`→`#C20E1E`, 2×`btn-outline-primary`→inline cherry outline), `PortalSessionDetailPage.tsx` (6 instances — `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, gradient header → flat `#FB2832`). Zero old tokens remain in any portal page.
+  - Verification: grep zero-match on `6366f1|4f46e5|8b5cf6|btn-primary|btn-outline-primary` across all portal pages. Docker nginx rebuild in progress.
+  - Notes: DS pass is now complete across all portal pages.
+
+- [x] **Colaberry DS pass — lesson sub-components (components/portal/lesson/ + PortalMentorChat + AnthropicCourseWrapper)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Replaced all remaining old indigo/purple tokens in 15 lesson sub-components: `SectionStepLabel.tsx`, `LessonStepTracker.tsx`, `SectionOutputPanel.tsx`, `KnowledgeChecks.tsx`, `PromptTemplate.tsx`, `PromptLab.tsx`, `PromptLab.tsx`, `CodeExamples.tsx`, `ConceptV1.tsx`, `AIStrategy.tsx`, `ImplementationTask.tsx`, `LessonReactions.tsx`, `ConfusionRecoveryDrawer.tsx`, `ExecutionContextPanel.tsx`, `ReflectionQuestions.tsx`, `LLMChooser.tsx`, `PortalMentorChat.tsx`, `AnthropicCourseWrapper.tsx`. Token map: `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, `#eef2ff`→`rgba(251,40,50,0.08)`, `#f5f3ff`→`rgba(54,120,149,0.10)`, `#c7d2fe`→`rgba(251,40,50,0.25)`, `var(--color-primary)`→`#FB2832` (step tracker active dot + label), `btn-primary`→inline cherry (AnthropicCourseWrapper Launch Course CTA).
+  - Verification: grep zero-match on all old tokens across `components/portal`. Docker nginx rebuild in progress.
+  - Notes: Active step dot (Prompt Lab in tracker) now cherry red; Generate Prompt button now cherry-to-berry gradient; all lesson chrome now Colaberry DS.
+
+- [x] **Colaberry DS pass — broad frontend/src scan (workspace, project, pages/project, visualWorkspace, global.css btn overrides)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: Completed full `frontend/src` DS migration pass. (1) `styles/tokens.css` + `styles/global.css` — updated `--color-primary: #FB2832` and `--color-primary-light: #C20E1E` so all `var(--color-primary)` usages cascade to cherry automatically. (2) `styles/global.css` — added `.btn-outline-primary` CSS override (cherry border/text, white-fill on hover) so Bootstrap CDN outline buttons pick up cherry without per-component edits. (3) `components/workspace/` (5 files) — all clean after subagent pass. (4) `features/visualWorkspace/` (all files) — clean. (5) `components/project/` — 14 files: replaced `#6366f1`→`#FB2832`, `#8b5cf6`→`#367895`, `#1a365d`→`#FB2832`, `#2b6cb0`→`#C20E1E`, `#faf5ff`→`rgba(54,120,149,0.08)` across ArchitectureGraph, FlowVisualizer, NodeDetailsPanel, DatabaseERD, RepoComponentsPanel, ProcessVisualPanel, ProcessDatabaseGraph, BPDetailV2, DecisionGraphView, EnhancementPromptBuilder, and system sub-components. (6) `pages/project/` — 6 files: SystemView, SystemViewV2, ProjectDashboard, SystemBlueprint, SystemBuildDemo, PhantomCapsTriage. Fixed 2 duplicate `style` prop compile errors introduced by subagent (ExecutiveReadinessCard, RequirementsStatusCard).
+  - Verification: Docker nginx rebuild — `Compiled successfully`. grep zero-match on `6366f1|4f46e5|8b5cf6|eef2ff|f5f3ff|c7d2fe|1a365d|2b6cb0|faf5ff` across components/project, pages/project, components/workspace, features/visualWorkspace.
+  - Notes: DS migration is now complete across the entire portal-facing surface of frontend/src.
+
+- [x] **Fix AnthropicCoursesBento grid bug (Aleem's e0d68eb2 fix missing from PR #86)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: `frontend/src/components/portal/anthropic-bento/AnthropicCoursesBento.tsx` — wrapped both return branches in an outer `<div className="acw-ds">` so the inner `<div className="acw-bento ...">` is a genuine descendant. Root cause: CSS uses `.acw-ds .acw-bento { display: grid }` (descendant selector) but PR #86 put both classes on the same element, so `display: grid` never fired and tiles stacked in a single column.
+  - Verification: Docker rebuild exit 0. Grid fix matches Aleem's e0d68eb2 approach verbatim.
+  - Notes: Aleem's grid fix was present in his branch (e0d68eb2) but Ali's re-homed PR #86 was cut from 67fbf75 (before the fix). The bento renders for sessions with linked Skilljar courses (currently Week 1 only).
+
+- [x] **Catalog scraper scoped to curriculum_course_links (correction to CC-20260630-8x2m)**
+  - Date: 2026-06-30
+  - Session: CC-20260630-8x2m
+  - What changed: Rewrote `backend/src/services/anthropicCatalogScraper.ts` — removed catalog page scraping logic entirely; scraper now reads tracked URLs from `curriculum_course_links WHERE provider='skilljar'` (the program's authoritative week→course map) rather than sweeping the full public catalog. Updated `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` to match (9 test cases: happy path, idempotency, change detection, DB fallback, empty-DB fallback, unreachable course page, registry write failure, null-URL exclusion, KNOWN_CATALOG boundary check).
+  - Verification: `tsc --noEmit` passes clean (exit code 0).
+  - Notes: First version incorrectly scraped all courses from anthropic.com/learn. Correct scope: only the specific courses assigned in the accelerator program, as defined in curriculum_course_links. KNOWN_CATALOG in catalogFallback.ts remains the fallback when the DB is unavailable.
+
+- [x] **PR #110 remediation: kill the content_hash collision between catalog scraper and content watcher**
+  - Date: 2026-06-30
+  - Session: CC-20260630-rp10
+  - What changed:
+    - `backend/src/services/anthropicContentWatcher.ts` — `runContentWatcher()` now queries `findAll({ where: { content_type: { [Op.ne]: 'course' } } })` (added `import { Op } from 'sequelize'`). Course rows are owned exclusively by `anthropicCatalogScraper`, which hashes the course OUTLINE into `content_hash`; the watcher hashes the FULL page body into the same column. Without this filter the two services overwrote each other's hash on every run and perpetually flipped `change_detected=true`, firing false curriculum-change alerts to Ali via `anthropicChangeDetector` → `anthropicCurriculumImpactAgent`. This also matches the product intent: course rows alert only on real outline/link changes, not arbitrary page churn.
+    - `backend/src/services/anthropicCatalogScraper.ts` — (1) false-alert guard: a fresh scrape that yields an empty outline (failed fetch / selector miss) on an existing course no longer overwrites the stored good outline or flags a change — it bumps `last_checked` only. (2) de-dup `coursesToWatch` by `normalizeCourseUrl` before the sync loop (curriculum_course_links maps many week-rows onto one course, which inflated counts). (3) added `any`-justification comments on the three catch clauses per CLAUDE.md.
+    - `backend/src/routes/admin/anthropicRoutes.ts` — corrected the stale comment on the catalog route (it reads tracked URLs from curriculum_course_links, it does not scrape /learn).
+    - `backend/src/__tests__/services/anthropicContentWatcher.test.ts` — new test asserting the watcher excludes `content_type='course'` (collision proof).
+    - `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` — new tests for the empty-outline false-alert guard and the URL de-dup.
+  - Verification: `tsc --noEmit` exit 0; Jest 27/27 pass (`anthropicContentWatcher` + `anthropicCatalogScraper` suites, including the 3 new tests). Resolves the major finding from the pr-approval-review verdict on PR #110.
+  - Notes: Driven by the remediate-pr loop in an isolated worktree off `origin/workstream/anthropic-catalog-scraper`. Prod still requires `add_outline_to_anthropic_content_registry.sql` applied before deploy (unchanged from the base PR).
+  - Follow-up (commit ac704cd5, same session): cleared the remaining false-alert nits from the second pr-approval-review pass — (1) `ORDER BY module_number ASC` on the `curriculum_course_links` read so the first-wins de-dup is deterministic (no Postgres row-order flake flipping a title); (2) a brand-new course created with an empty (failed-scrape) outline is created quietly (`change_detected:false`), not flagged — the next successful scrape flags the real change; (3) `POST /api/admin/sync/anthropic-catalog` catch now carries the `any`-justification comment and returns a generic 500 (stops leaking `err.message`), matching the sibling impact route. Tests updated to assert the quiet empty-create and deterministic ordering. Verification: `tsc --noEmit` exit 0; Jest 27/27; all 4 GitHub CI checks green on both commits. Fresh pr-approval-review verdict: APPROVE_WITH_NITS, 0 blockers, 0 majors.
+
+---
+
+## Current Focus
+Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to all portal-facing pages.
+
+### Portal DS Token Migration — cherry red primary (#FB2832) (2026-06-30)
+- [x] **Apply Colaberry DS (Aleem) cherry-red primary to all portal pages (BC #9985689231)**
+  - Date: 2026-06-30
+  - Session: CC-20260630-p4r1
+  - What changed:
+    - `frontend/src/styles/tokens.css` — `--color-primary: #FB2832` (was navy `#1a365d`); `--color-primary-light: #C20E1E` (was `#2b6cb0`).
+    - `frontend/src/styles/global.css` — removed the `:root` override block that was shadowing `tokens.css` with navy values; `tokens.css` is now the single source of truth.
+    - `frontend/src/pages/portal/PortalCurriculumPage.tsx` — progress header banner, spinner, Skills stats card, genome proficiency bar, lesson Start/Continue buttons, Skilljar CTA button, cert button → `var(--color-primary)`; "Colaberry-original" badge → `var(--color-purple)`; all `#1e293b` text → `var(--color-text)`.
+    - `frontend/src/pages/portal/PortalSessionDetailPage.tsx` — session header: core sessions → `var(--color-primary)` red, lab sessions → purple gradient; session title `<h4>` → explicit `color: '#fff'` (fixed cherry-red bleed from global h1-h6 rule); countdown timer, chat button → primary; Topics `<li>` items → `var(--color-text)`.
+    - `frontend/src/pages/project/SystemBuildDemo.tsx` — header avatar circle, progress bar → `var(--color-primary)`; ROI card gradient → `linear-gradient(var(--color-primary), var(--color-primary-light))`.
+    - `frontend/src/pages/portal/ProjectDnaWizard.tsx` — 11 instances of `#1e293b` heading text → `var(--color-text)`.
+  - Verification: `tsc --noEmit` clean; Docker nginx rebuilt twice (exit 0 both times); confirmed in browser — curriculum banner red, core session header red, lab session header purple, session title white on colored background, ROI card red. DevTools computed styles verified h4 `color: rgb(255,255,255)` wins over global rule.
+  - Notes: Root cause of prior missing brand color — `global.css` imported `tokens.css` then immediately re-declared `--color-primary: #1a365d` in its own `:root` block, nullifying the cherry red. Semantic purple preserved for lab sessions, skill-area badges, and ProjectDNA stepper (by design).
 - [x] Extract Anthropic catalog scraper onto main + wire weekly scheduler (prod deploy pending, after-hours)
   - Date: 2026-07-01
   - Session: CC-20260701-q9r3
