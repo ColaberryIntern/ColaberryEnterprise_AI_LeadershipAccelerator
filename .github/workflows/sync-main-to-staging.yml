@@ -1,0 +1,72 @@
+name: Sync main → staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync:
+    name: Back-merge main into staging
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout staging
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git bot identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch main
+        run: git fetch origin main
+
+      - name: Check if staging already contains main
+        id: check
+        run: |
+          BEHIND=$(git rev-list --count HEAD..origin/main)
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "staging is $BEHIND commits behind main"
+
+      - name: Merge main into staging (clean path)
+        if: steps.check.outputs.behind != '0'
+        id: merge
+        run: |
+          if git merge origin/main --no-edit; then
+            git push origin staging
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+            echo "Merged main into staging cleanly and pushed."
+          else
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+            echo "Merge conflict detected — will open a PR for manual review."
+          fi
+
+      - name: Open PR for manual review (conflict path)
+        if: steps.check.outputs.behind != '0' && steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="sync/main-to-staging-$(date +%Y%m%d-%H%M)"
+          git checkout -b "$BRANCH" origin/main
+          git push origin "$BRANCH"
+          gh pr create \
+            --base staging \
+            --head "$BRANCH" \
+            --title "chore: sync main → staging (conflict — manual review needed)" \
+            --body "$(cat <<'EOF'
+Automated sync of main → staging detected merge conflicts and could not auto-merge.
+
+**Action required:** resolve conflicts and merge this PR before cutting any new feature branches.
+
+Triggered by push to main: ${{ github.sha }}
+EOF
+)"

@@ -47,6 +47,38 @@ gh pr create --base main --head staging --title "Promote staging -> main"
 # Ali reviews + approves, then merges
 ```
 
+## Back-merge: syncing main → staging after every production merge
+
+Every merge to `main` (hotfixes, direct commits, any promotion) must be reflected back into
+`staging` so the integration base never drifts. **This is automated** via a GitHub Action
+(`.github/workflows/sync-main-to-staging.yml`) that fires on every push to `main`.
+
+### What the Action does
+
+1. Detects how far behind `staging` is.
+2. If staging already contains all of main → no-op (nothing to do).
+3. If a clean fast-forward or no-conflict merge is possible → merges directly into `staging` and pushes.
+4. If there are merge conflicts → opens a `sync/main-to-staging-*` PR for manual review.
+
+### Manual fallback (if the Action fails or is disabled)
+
+Run these four commands locally:
+
+```bash
+git checkout staging && git pull
+git merge origin/main --no-edit
+git push origin staging
+git checkout -     # return to your feature branch
+```
+
+Then verify `git rev-list --count staging..origin/main` returns `0`.
+
+### Rule
+
+After Ali merges `staging → main`, the back-merge happens automatically via the Action.
+If the Action opens a conflict PR, Ali or Kes resolves it before cutting any new feature branches.
+The manual fallback is the documented path if the Action is unavailable.
+
 ## Why Kes cannot merge to `main`
 
 `main` branch protection requires **1 approving review**, and GitHub does not let an
