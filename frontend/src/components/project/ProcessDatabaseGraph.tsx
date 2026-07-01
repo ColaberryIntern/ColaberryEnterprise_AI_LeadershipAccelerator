@@ -149,14 +149,14 @@ export default function ProcessDatabaseGraph({ models, services, repoUrl }: Prop
                   onMouseEnter={() => setHovered(n.id)} onMouseLeave={() => setHovered(null)}>
                   {isModel ? (
                     <>{/* Cylinder shape for DB */}
-                      <ellipse cx={n.x} cy={n.y - size * 0.3} rx={size * 0.7} ry={size * 0.25} fill={fill} stroke={isSelectedNode ? '#1a365d' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
+                      <ellipse cx={n.x} cy={n.y - size * 0.3} rx={size * 0.7} ry={size * 0.25} fill={fill} stroke={isSelectedNode ? '#FB2832' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
                       <rect x={n.x - size * 0.7} y={n.y - size * 0.3} width={size * 1.4} height={size * 0.6} fill={fill} stroke="none" />
-                      <ellipse cx={n.x} cy={n.y + size * 0.3} rx={size * 0.7} ry={size * 0.25} fill={fill} stroke={isSelectedNode ? '#1a365d' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
-                      <line x1={n.x - size * 0.7} y1={n.y - size * 0.3} x2={n.x - size * 0.7} y2={n.y + size * 0.3} stroke={isSelectedNode ? '#1a365d' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
-                      <line x1={n.x + size * 0.7} y1={n.y - size * 0.3} x2={n.x + size * 0.7} y2={n.y + size * 0.3} stroke={isSelectedNode ? '#1a365d' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
+                      <ellipse cx={n.x} cy={n.y + size * 0.3} rx={size * 0.7} ry={size * 0.25} fill={fill} stroke={isSelectedNode ? '#FB2832' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
+                      <line x1={n.x - size * 0.7} y1={n.y - size * 0.3} x2={n.x - size * 0.7} y2={n.y + size * 0.3} stroke={isSelectedNode ? '#FB2832' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
+                      <line x1={n.x + size * 0.7} y1={n.y - size * 0.3} x2={n.x + size * 0.7} y2={n.y + size * 0.3} stroke={isSelectedNode ? '#FB2832' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
                     </>
                   ) : (
-                    <rect x={n.x - size * 0.8} y={n.y - size * 0.5} width={size * 1.6} height={size} rx={4} fill={fill} stroke={isSelectedNode ? '#1a365d' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
+                    <rect x={n.x - size * 0.8} y={n.y - size * 0.5} width={size * 1.6} height={size} rx={4} fill={fill} stroke={isSelectedNode ? '#FB2832' : '#fff'} strokeWidth={isSelectedNode ? 3 : 1.5} />
                   )}
                   <text x={n.x} y={n.y + size + 12} textAnchor="middle" fontSize={9} fill="#374151" fontWeight={isHovered ? 700 : 400}>{n.label.replace(/\.(ts|tsx)$/, '')}</text>
                 </g>

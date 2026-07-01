@@ -1,8 +1,8 @@
 @import './tokens.css';
 
 :root {
-  --color-primary: #1a365d;
-  --color-primary-light: #2b6cb0;
+  --color-primary: #FB2832;
+  --color-primary-light: #C20E1E;
   --color-secondary: #e53e3e;
   --color-accent: #38a169;
   --color-bg: #ffffff;
@@ -34,6 +34,11 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-primary);
+}
+
+.text-white h1, .text-white h2, .text-white h3,
+.text-white h4, .text-white h5, .text-white h6 {
+  color: inherit;
 }
 
 a {
@@ -68,6 +73,17 @@ a:hover {
 .btn-primary:hover {
   background-color: var(--color-primary-light) !important;
   border-color: var(--color-primary-light) !important;
+}
+
+.btn-outline-primary {
+  color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: #fff !important;
 }
 
 .btn-accent {

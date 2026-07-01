@@ -92,9 +92,9 @@ Do NOT give a direct answer \u2014 guide thinking with the Socratic method.`;
                         <button
                           className="btn btn-sm d-flex align-items-center gap-1"
                           style={{
-                            background: '#eef2ff',
-                            color: '#6366f1',
-                            border: '1px solid #c7d2fe',
+                            background: 'rgba(251,40,50,0.08)',
+                            color: '#FB2832',
+                            border: '1px solid rgba(251,40,50,0.25)',
                             borderRadius: 6,
                             fontSize: 11,
                             fontWeight: 600,
@@ -114,9 +114,9 @@ Do NOT give a direct answer \u2014 guide thinking with the Socratic method.`;
                     <button
                       className="btn btn-sm d-flex align-items-center gap-1 mb-2"
                       style={{
-                        background: '#eef2ff',
-                        color: '#6366f1',
-                        border: '1px solid #c7d2fe',
+                        background: 'rgba(251,40,50,0.08)',
+                        color: '#FB2832',
+                        border: '1px solid rgba(251,40,50,0.25)',
                         borderRadius: 6,
                         fontSize: 11,
                         fontWeight: 600,

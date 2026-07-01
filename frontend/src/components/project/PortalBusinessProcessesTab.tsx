@@ -37,7 +37,7 @@ export default function PortalBusinessProcessesTab({ initialSelectedId }: { init
   if (processes.length === 0) return (
     <div className="text-center py-5">
       <i className="bi bi-diagram-3 d-block mb-3" style={{ fontSize: 40, color: 'var(--color-text-light)' }}></i>
-      <h6 className="fw-semibold" style={{ color: 'var(--color-primary)' }}>No Business Processes Yet</h6>
+      <h6 className="fw-semibold" style={{ color: '#FB2832' }}>No Business Processes Yet</h6>
       <p className="text-muted small mb-0">Upload your requirements document and click "Extract Requirements" on the Requirements tab to generate business processes.</p>
     </div>
   );
@@ -63,7 +63,7 @@ export default function PortalBusinessProcessesTab({ initialSelectedId }: { init
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Business Processes</h6>
+          <h6 className="fw-bold mb-0" style={{ color: '#FB2832' }}>Business Processes</h6>
           <p className="text-muted small mb-0">
             {processes.filter((p: any) => p.usability?.usable).length}/{processes.length} processes completed · {matchedReqs}/{totalReqs} requirements
           </p>
@@ -78,7 +78,7 @@ export default function PortalBusinessProcessesTab({ initialSelectedId }: { init
               { key: 'frontend', label: 'Frontend', icon: 'bi-palette' },
               { key: 'agents', label: 'Agents', icon: 'bi-cpu' },
             ] as const).map(f => (
-              <button key={f.key} className={`btn btn-sm ${layerFilter === f.key ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10 }}
+              <button key={f.key} className="btn btn-sm" style={{ fontSize: 10, background: layerFilter === f.key ? '#FB2832' : 'transparent', color: layerFilter === f.key ? '#fff' : undefined, border: layerFilter === f.key ? 'none' : undefined }}
                 onClick={() => setLayerFilter(f.key as any)}>
                 {f.icon && <i className={`bi ${f.icon} me-1`}></i>}{f.label}
               </button>
@@ -86,7 +86,7 @@ export default function PortalBusinessProcessesTab({ initialSelectedId }: { init
           </div>
           <div className="btn-group btn-group-sm">
             {(['active', 'deferred', 'all'] as const).map(f => (
-              <button key={f} className={`btn btn-sm ${lifecycleFilter === f ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10 }}
+              <button key={f} className="btn btn-sm" style={{ fontSize: 10, background: lifecycleFilter === f ? '#FB2832' : 'transparent', color: lifecycleFilter === f ? '#fff' : undefined, border: lifecycleFilter === f ? 'none' : undefined }}
                 onClick={() => setLifecycleFilter(f)}>{f.charAt(0).toUpperCase() + f.slice(1)}</button>
             ))}
           </div>
@@ -117,7 +117,7 @@ export default function PortalBusinessProcessesTab({ initialSelectedId }: { init
               const d = r.data;
               const el = document.createElement('div');
               const dbg = d._debug ? ` [${d._debug.uncatCount} uncat, ${d._debug.otherProcessCount} targets, ${d._debug.llmCategories || 0} LLM cats${d._debug.llmError ? ', ERR: ' + d._debug.llmError.substring(0, 60) : ''}]` : '';
-              const color = (d.matched + d.clustered) > 0 ? '#1a365d' : '#92400e';
+              const color = (d.matched + d.clustered) > 0 ? '#FB2832' : '#92400e';
               el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:${color};color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px;max-width:600px"><i class="bi bi-${(d.matched + d.clustered) > 0 ? 'check-circle' : 'exclamation-triangle'} me-2"></i>Reclassified: ${d.matched} matched to existing, ${d.clustered} clustered into ${d.new_processes?.length || 0} new processes, ${d.remaining} remaining${dbg}</div>`;
               document.body.appendChild(el); setTimeout(() => el.remove(), 5000);
               load();
@@ -150,7 +150,7 @@ export default function PortalBusinessProcessesTab({ initialSelectedId }: { init
           const u = p.usability || {};
           const usable = u.usable;
           const readiness = m.system_readiness || 0;
-          const matColors: Record<number, string> = { 0: '#9ca3af', 1: 'var(--color-danger)', 2: 'var(--color-warning)', 3: '#3b82f6', 4: 'var(--color-success)', 5: '#8b5cf6' };
+          const matColors: Record<number, string> = { 0: '#9ca3af', 1: 'var(--color-danger)', 2: 'var(--color-warning)', 3: '#3b82f6', 4: 'var(--color-success)', 5: '#367895' };
           const matColor = matColors[mat.level] || '#9ca3af';
           const statusDot = (s: string) => ({ ready: 'var(--color-success)', partial: 'var(--color-warning)', missing: 'var(--color-danger)' }[s] || '#9ca3af');
 
@@ -160,20 +160,20 @@ export default function PortalBusinessProcessesTab({ initialSelectedId }: { init
             <div key={p.id} className="col-md-6 col-lg-4">
               <div className={`card border-0 shadow-sm h-100`}
                 style={{
-                  borderLeft: isPageBP ? '4px solid #8b5cf6' : `4px solid ${matColor}`,
-                  background: isPageBP ? '#faf5ff' : undefined,
+                  borderLeft: isPageBP ? '4px solid #367895' : `4px solid ${matColor}`,
+                  background: isPageBP ? 'rgba(54,120,149,0.06)' : undefined,
                   cursor: 'pointer',
-                  outline: isSelected ? `2px solid ${isPageBP ? '#8b5cf6' : 'var(--color-primary-light)'}` : 'none',
+                  outline: isSelected ? `2px solid ${isPageBP ? '#367895' : '#C20E1E'}` : 'none',
                 }}
                 onClick={() => { setSelected(isSelected ? null : p.id); if (!isSelected) setTimeout(() => document.getElementById('bp-detail-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }}>
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div className="d-flex align-items-center gap-2">
                       {p.priority_rank && (
-                        <span className="badge" style={{ background: isPageBP ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontSize: 10, fontWeight: 700, minWidth: 22, textAlign: 'center' }} title={p.priority_reason || ''}>#{p.priority_rank}</span>
+                        <span className="badge" style={{ background: isPageBP ? '#367895' : '#FB2832', color: '#fff', fontSize: 10, fontWeight: 700, minWidth: 22, textAlign: 'center' }} title={p.priority_reason || ''}>#{p.priority_rank}</span>
                       )}
-                      {isPageBP && <i className="bi bi-layout-wtf" style={{ color: '#8b5cf6', fontSize: 12 }}></i>}
-                      <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: isPageBP ? '#8b5cf6' : 'var(--color-primary)' }}>{p.name}</h6>
+                      {isPageBP && <i className="bi bi-layout-wtf" style={{ color: '#367895', fontSize: 12 }}></i>}
+                      <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: isPageBP ? '#367895' : '#FB2832' }}>{p.name}</h6>
                     </div>
                     <div className="d-flex align-items-center gap-1">
                       {p.effective_mode && p.effective_mode !== 'production' && (

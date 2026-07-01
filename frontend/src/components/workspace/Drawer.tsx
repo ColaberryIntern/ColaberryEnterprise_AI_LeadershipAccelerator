@@ -97,7 +97,7 @@ const Drawer: React.FC<Props> = ({ open, onClose, eyebrow, title, titleBadge, su
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
               <h3 style={{
-                fontSize: 17, fontWeight: 600, color: 'var(--color-primary)',
+                fontSize: 17, fontWeight: 600, color: '#FB2832',
                 margin: 0, letterSpacing: '-0.01em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{title}</h3>

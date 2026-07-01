@@ -180,7 +180,7 @@ function ProjectDnaWizard() {
         <div className="text-center">
           <button
             className="btn btn-primary px-4"
-            style={{ background: '#FB2832', borderColor: '#FB2832' }}
+            style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}
             onClick={() => navigate('/portal/home')}
           >
             <i className="bi bi-house me-2"></i>Back to Home
@@ -566,7 +566,7 @@ function ProjectDnaWizard() {
           <button
             className="btn btn-primary btn-sm"
             onClick={goNext}
-            style={{ background: '#FB2832', borderColor: '#FB2832' }}
+            style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}
           >
             Next<i className="bi bi-arrow-right ms-1"></i>
           </button>
@@ -575,7 +575,7 @@ function ProjectDnaWizard() {
             className="btn btn-primary"
             onClick={handleSubmit}
             disabled={submitting}
-            style={{ background: '#FB2832', borderColor: '#FB2832' }}
+            style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}
           >
             {submitting ? (
               <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving…</>

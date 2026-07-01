@@ -396,7 +396,7 @@ const CoryHome: React.FC = () => {
             Welcome
           </div>
           <h1 style={{
-            fontSize: 22, fontWeight: 600, color: 'var(--color-primary)',
+            fontSize: 22, fontWeight: 600, color: '#FB2832',
             margin: '4px 0 6px', letterSpacing: '-0.01em',
           }}>
             Let&rsquo;s start by capturing what you want to build.
@@ -433,7 +433,7 @@ const CoryHome: React.FC = () => {
         <div className="alert alert-warning">
           <strong>Could not load operational state.</strong>
           <div style={{ fontSize: 13, color: 'var(--color-text-light)', marginTop: 4 }}>{error}</div>
-          <button className="btn btn-sm btn-outline-primary mt-2" onClick={() => void refresh()}>Try again</button>
+          <button className="btn btn-sm mt-2" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={() => void refresh()}>Try again</button>
         </div>
       </div>
     );
@@ -453,8 +453,8 @@ const CoryHome: React.FC = () => {
       {/* Greeting */}
       <header style={{ marginBottom: '1.5rem' }}>
         <div className="d-flex justify-content-end mb-2"><ProjectSwitcher /></div>
-        <div style={{ fontSize: 22, fontWeight: 600, color: 'var(--color-primary)', letterSpacing: '-0.01em' }}>
-          {greetingFor(new Date())}, <span style={{ color: 'var(--color-primary-light)' }}>{greetingName}</span>.
+        <div style={{ fontSize: 22, fontWeight: 600, color: '#FB2832', letterSpacing: '-0.01em' }}>
+          {greetingFor(new Date())}, <span style={{ color: '#C20E1E' }}>{greetingName}</span>.
         </div>
         <div style={{ fontSize: 13, color: 'var(--color-text-light)', marginTop: 4 }}>
           {oneLineStatus}
@@ -523,7 +523,7 @@ const CoryHome: React.FC = () => {
             value={state.coverage.requirements_total > 0
               ? `${state.coverage.score}%`
               : '—'}
-            valueColor="var(--color-primary)"
+            valueColor="#FB2832"
             footer={state.coverage.requirements_total > 0
               ? `${state.coverage.requirements_matched} of ${state.coverage.requirements_total} requirements matched`
               : 'No requirements extracted yet'}
@@ -642,7 +642,7 @@ const CoryHome: React.FC = () => {
               <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginTop: 4 }}>
                 Started {new Date(state.active_build.started_at).toLocaleString()} · target <code>{state.active_build.target_ref}</code>
               </div>
-              <Link to="/portal/project/blueprint" className="btn btn-sm btn-outline-primary mt-2">
+              <Link to="/portal/project/blueprint" className="btn btn-sm mt-2" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}>
                 <i className="bi bi-arrow-right me-1"></i>Continue in Blueprint
               </Link>
             </div>

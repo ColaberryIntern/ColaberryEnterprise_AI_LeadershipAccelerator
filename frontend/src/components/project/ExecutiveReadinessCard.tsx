@@ -54,7 +54,7 @@ function ExecutiveReadinessCard({ maturityScore, executiveUpdatedAt }: Props) {
   return (
     <div className="card border-0 shadow-sm h-100">
       <div className="card-body py-3 text-center">
-        <div className="small fw-semibold mb-2" style={{ color: 'var(--color-primary)' }}>
+        <div className="small fw-semibold mb-2" style={{ color: '#FB2832' }}>
           Executive Readiness
         </div>
 

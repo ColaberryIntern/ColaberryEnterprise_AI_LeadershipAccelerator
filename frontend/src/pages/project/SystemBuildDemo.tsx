@@ -27,7 +27,7 @@ const SCRIPTED_PHASES = [
   },
   {
     id: 'capabilities', title: 'Designing Capabilities', subtitle: 'Creating intelligent features for your system',
-    icon: 'bi-puzzle', color: '#8b5cf6',
+    icon: 'bi-puzzle', color: '#367895',
     steps: ['Intelligent automation engine', 'Real-time data processing', 'Decision support system', 'Workflow orchestration', 'Reporting & analytics'],
     stepDelay: 1000,
   },
@@ -120,7 +120,17 @@ export default function SystemBuildDemo() {
         const res = await portalApi.get('/api/portal/project/architect-status');
         setBuildMessage(res.data.message || 'Building...');
         if (res.data.complete) { clearInterval(pollRef.current); setBuildComplete(true); }
-      } catch {}
+        if (res.data.phase === 'failed') {
+          clearInterval(pollRef.current);
+          setBuildMessage('Requirements generation failed — please return to the project builder and try again.');
+        }
+      } catch (err: any) {
+        if (err?.response?.status === 404) {
+          clearInterval(pollRef.current);
+          setBuildMessage('No active project found. Please complete the project builder first.');
+        }
+        // other errors: keep polling silently
+      }
     }, 10000);
 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -174,7 +184,7 @@ export default function SystemBuildDemo() {
       {/* Header */}
       <div className="d-flex align-items-center justify-content-between px-4 py-3" style={{ background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
         <div className="d-flex align-items-center gap-3">
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#FB2832', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <i className="bi bi-robot" style={{ fontSize: 18, color: '#fff' }}></i>
           </div>
           <div>
@@ -195,7 +205,7 @@ export default function SystemBuildDemo() {
       {/* Progress */}
       <div className="px-4 py-2" style={{ background: '#fff', borderBottom: '1px solid #f1f5f9' }}>
         <div className="progress" style={{ height: 4, borderRadius: 4 }}>
-          <div className="progress-bar" style={{ width: `${progress}%`, background: progress === 100 ? '#10b981' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)', borderRadius: 4, transition: 'width 0.6s ease' }}></div>
+          <div className="progress-bar" style={{ width: `${progress}%`, background: progress === 100 ? '#10b981' : '#FB2832', borderRadius: 4, transition: 'width 0.6s ease' }}></div>
         </div>
       </div>
 
@@ -270,9 +280,9 @@ export default function SystemBuildDemo() {
             )}
 
             {!buildComplete && (
-              <div className="text-center mb-4 p-3" style={{ background: '#f0f4ff', borderRadius: 12, border: '1px solid #bfdbfe' }}>
-                <div className="spinner-border text-primary mb-2" style={{ width: 24, height: 24 }}></div>
-                <p className="mb-0" style={{ fontSize: 12, color: '#3b82f6' }}>Requirements document still generating — you can explore your system preview below</p>
+              <div className="text-center mb-4 p-3" style={{ background: 'rgba(251,40,50,0.04)', borderRadius: 12, border: '1px solid rgba(251,40,50,0.2)' }}>
+                <div className="spinner-border mb-2" style={{ width: 24, height: 24, color: '#FB2832' }}></div>
+                <p className="mb-0" style={{ fontSize: 12, color: '#FB2832' }}>Requirements document still generating — you can explore your system preview below</p>
               </div>
             )}
 
@@ -280,7 +290,7 @@ export default function SystemBuildDemo() {
               <>
                 {/* ROI Analysis */}
                 {roi && (
-                  <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #1a365d, #2b6cb0)', color: '#fff' }}>
+                  <div className="card border-0 shadow-sm mb-3" style={{ background: '#FB2832', color: '#fff' }}>
                     <div className="card-body p-4">
                       <h6 className="fw-bold mb-3" style={{ fontSize: 14, color: '#fff' }}><i className="bi bi-graph-up-arrow me-2"></i>Cost & ROI Analysis</h6>
                       <div className="row g-3 mb-3">
@@ -325,7 +335,7 @@ export default function SystemBuildDemo() {
                 <div className="card border-0 shadow-sm mb-3">
                   <div className="card-body p-3">
                     <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}><i className="bi bi-diagram-3 me-2" style={{ color: '#3b82f6' }}></i>Your AI Organization</h6>
+                      <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}><i className="bi bi-diagram-3 me-2" style={{ color: '#FB2832' }}></i>Your AI Organization</h6>
                       <span className="text-muted" style={{ fontSize: 10 }}>{totalAgents} agents · {departments.length} departments · Drag to explore</span>
                     </div>
                     <AgentNetworkGraph departments={departments} width={640} height={380} />
@@ -343,7 +353,7 @@ export default function SystemBuildDemo() {
                 {/* Department Details — expandable */}
                 <div className="card border-0 shadow-sm mb-3">
                   <div className="card-body p-3">
-                    <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}><i className="bi bi-people me-2" style={{ color: '#8b5cf6' }}></i>Team Breakdown</h6>
+                    <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}><i className="bi bi-people me-2" style={{ color: '#FB2832' }}></i>Team Breakdown</h6>
                     {departments.map((dept, di) => {
                       const isExpanded = expandedDept === dept.name;
                       return (
@@ -415,14 +425,14 @@ export default function SystemBuildDemo() {
                           </div>
                         </div>
                         <div className="col-3 text-center">
-                          <div className="p-2" style={{ background: '#3b82f615', borderRadius: 6 }}>
-                            <div className="fw-bold" style={{ fontSize: 16, color: '#3b82f6' }}>{100 - hitlSummary.human_oversight}%</div>
+                          <div className="p-2" style={{ background: 'rgba(251,40,50,0.06)', borderRadius: 6 }}>
+                            <div className="fw-bold" style={{ fontSize: 16, color: '#FB2832' }}>{100 - hitlSummary.human_oversight}%</div>
                             <div style={{ fontSize: 9, color: '#64748b' }}>Autonomous</div>
                           </div>
                         </div>
                         <div className="col-3 text-center">
-                          <div className="p-2" style={{ background: '#8b5cf615', borderRadius: 6 }}>
-                            <div className="fw-bold" style={{ fontSize: 16, color: '#8b5cf6' }}>{hitlSummary.human_oversight}%</div>
+                          <div className="p-2" style={{ background: 'rgba(251,40,50,0.04)', borderRadius: 6 }}>
+                            <div className="fw-bold" style={{ fontSize: 16, color: '#C20E1E' }}>{hitlSummary.human_oversight}%</div>
                             <div style={{ fontSize: 9, color: '#64748b' }}>Oversight</div>
                           </div>
                         </div>

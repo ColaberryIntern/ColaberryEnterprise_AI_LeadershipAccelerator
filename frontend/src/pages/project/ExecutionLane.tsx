@@ -189,7 +189,7 @@ const ExecutionLane: React.FC = () => {
         <div className="alert alert-warning">
           <strong>Could not load operational state.</strong>
           <div style={{ fontSize: 13, color: 'var(--color-text-light)', marginTop: 4 }}>{error}</div>
-          <button className="btn btn-sm btn-outline-primary mt-2" onClick={() => void refresh()}>Try again</button>
+          <button className="btn btn-sm mt-2" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={() => void refresh()}>Try again</button>
         </div>
       </div>
     );
@@ -207,13 +207,13 @@ const ExecutionLane: React.FC = () => {
           Blueprint
         </div>
         <h2 style={{
-          fontSize: 22, fontWeight: 600, color: 'var(--color-primary)',
+          fontSize: 22, fontWeight: 600, color: '#FB2832',
           letterSpacing: '-0.01em', marginTop: 4, marginBottom: 4,
         }}>
           Execute the next step.
         </h2>
         <div style={{ fontSize: 13, color: 'var(--color-text-light)' }}>
-          Cory decides what's next. This page walks you through running it. <Link to="/portal/home" style={{ color: 'var(--color-primary-light)' }}>Open Home</Link> to see the queue.
+          Cory decides what's next. This page walks you through running it. <Link to="/portal/home" style={{ color: '#C20E1E' }}>Open Home</Link> to see the queue.
         </div>
       </header>
 
@@ -250,7 +250,8 @@ const ExecutionLane: React.FC = () => {
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <button
                 type="button"
-                className={`btn btn-sm ${copyOk ? 'btn-success' : 'btn-primary'}`}
+                className={`btn btn-sm ${copyOk ? 'btn-success' : ''}`}
+                style={copyOk ? {} : { background: '#FB2832', color: '#fff', border: 'none' }}
                 onClick={() => void handleCopy()}
                 disabled={!displayedPrompt}
               >
@@ -259,7 +260,8 @@ const ExecutionLane: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="btn btn-sm btn-outline-primary"
+                className="btn btn-sm"
+                style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                 onClick={() => displayedPrompt && window.open(`data:text/plain;charset=utf-8,${encodeURIComponent(displayedPrompt)}`, '_blank')}
                 disabled={!displayedPrompt}
               >
@@ -299,7 +301,8 @@ const ExecutionLane: React.FC = () => {
             <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
               <button
                 type="button"
-                className="btn btn-sm btn-primary"
+                className="btn btn-sm"
+                style={{ background: '#FB2832', color: '#fff', border: 'none' }}
                 onClick={() => void submitReport()}
                 disabled={!reportText.trim() || submittingReport}
               >
@@ -341,7 +344,7 @@ const ExecutionLane: React.FC = () => {
                 <i className="bi bi-check2-circle me-1"></i>
                 {completing ? 'Completing…' : 'Complete & continue'}
               </button>
-              <Link to="/portal/visual-workspace" className="btn btn-sm btn-outline-primary">
+              <Link to="/portal/visual-workspace" className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}>
                 <i className="bi bi-bullseye me-1"></i>Back to Critique
               </Link>
               <Link to="/portal/home" className="btn btn-sm btn-outline-secondary">
@@ -378,14 +381,14 @@ const Step: React.FC<{
   <section style={{ marginBottom: '1.5rem' }}>
     <header style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 }}>
       <span style={{
-        background: 'var(--color-primary)', color: 'white',
+        background: '#FB2832', color: 'white',
         width: 28, height: 28, borderRadius: '50%',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         fontWeight: 600, fontSize: 13, flexShrink: 0,
       }}>{n}</span>
       <div>
         <h3 style={{
-          fontSize: 15, fontWeight: 600, color: 'var(--color-primary)',
+          fontSize: 15, fontWeight: 600, color: '#FB2832',
           margin: 0, lineHeight: 1.3,
         }}>{title}</h3>
         <div style={{ fontSize: 12, color: 'var(--color-text-light)', marginTop: 2 }}>{subtitle}</div>
@@ -464,12 +467,12 @@ const TaskCard: React.FC<{ next: NextActionProfile | null; promptSource: 'critiq
     <div>
       {actionType && (
         <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginBottom: 6 }}>
-          Action type: <code style={{ color: 'var(--color-primary)' }}>{actionType}</code>
+          Action type: <code style={{ color: '#FB2832' }}>{actionType}</code>
         </div>
       )}
       {reqKey && (
         <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginBottom: 6 }}>
-          Requirement: <code style={{ color: 'var(--color-primary)' }}>{reqKey}</code>
+          Requirement: <code style={{ color: '#FB2832' }}>{reqKey}</code>
         </div>
       )}
       {files && files.length > 0 ? (
@@ -479,7 +482,7 @@ const TaskCard: React.FC<{ next: NextActionProfile | null; promptSource: 'critiq
           </div>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
             {files.slice(0, 6).map(f => (
-              <li key={f}><code style={{ color: 'var(--color-primary-light)' }}>{f}</code></li>
+              <li key={f}><code style={{ color: '#C20E1E' }}>{f}</code></li>
             ))}
           </ul>
           {files.length > 6 && (
@@ -563,7 +566,7 @@ const VerifyCard: React.FC<{
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-light)', fontWeight: 600 }}>
           Recent verifications
         </div>
-        <div style={{ fontSize: 22, fontWeight: 600, color: 'var(--color-primary)' }}>
+        <div style={{ fontSize: 22, fontWeight: 600, color: '#FB2832' }}>
           {Math.round((passRate || 0) * 100)}%
         </div>
         <div style={{ fontSize: 11, color: 'var(--color-text-light)' }}>passing</div>
@@ -584,17 +587,17 @@ const EmptyState: React.FC = () => (
     textAlign: 'center',
   }}>
     <i className="bi bi-check2-circle" style={{ fontSize: 36, color: 'var(--color-success)' }}></i>
-    <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-primary)', marginTop: 12 }}>
+    <div style={{ fontSize: 16, fontWeight: 600, color: '#FB2832', marginTop: 12 }}>
       Nothing to execute right now.
     </div>
     <div style={{ fontSize: 13, color: 'var(--color-text-light)', marginTop: 6, maxWidth: 480, margin: '6px auto 0' }}>
       Cory has no pending action and no Critique handoff is waiting. Pin some critique on a page, or check back when Cory queues something next.
     </div>
     <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 18 }}>
-      <Link to="/portal/visual-workspace" className="btn btn-sm btn-primary">
+      <Link to="/portal/visual-workspace" className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }}>
         <i className="bi bi-bullseye me-1"></i>Open Critique
       </Link>
-      <Link to="/portal/home" className="btn btn-sm btn-outline-primary">
+      <Link to="/portal/home" className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}>
         <i className="bi bi-house me-1"></i>Open Home
       </Link>
     </div>

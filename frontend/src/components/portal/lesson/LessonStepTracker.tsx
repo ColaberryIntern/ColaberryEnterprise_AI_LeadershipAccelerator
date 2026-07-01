@@ -17,7 +17,7 @@ export default function LessonStepTracker({ steps, currentStepIndex }: LessonSte
 
   return (
     <div className="mb-4" role="navigation" aria-label="Lesson progress">
-      <div className="small fw-semibold mb-2" style={{ color: 'var(--color-primary)', fontSize: 12 }}>
+      <div className="small fw-semibold mb-2" style={{ color: '#FB2832', fontSize: 12 }}>
         Step {currentStepIndex + 1} of {steps.length} — {steps[currentStepIndex]?.label}
       </div>
       <div className="d-flex align-items-center flex-wrap gap-1">
@@ -33,7 +33,7 @@ export default function LessonStepTracker({ steps, currentStepIndex }: LessonSte
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            background: isCompleted ? 'var(--color-accent)' : isActive ? 'var(--color-primary)' : '#f1f5f9',
+            background: isCompleted ? 'var(--color-accent)' : isActive ? '#FB2832' : '#f1f5f9',
             color: isCompleted || isActive ? '#fff' : 'var(--color-text-light)',
             fontSize: 13,
             transition: 'background 0.2s ease',
@@ -42,7 +42,7 @@ export default function LessonStepTracker({ steps, currentStepIndex }: LessonSte
           const labelColor = isCompleted
             ? 'var(--color-accent)'
             : isActive
-              ? 'var(--color-primary)'
+              ? '#FB2832'
               : 'var(--color-text-light)';
 
           return (

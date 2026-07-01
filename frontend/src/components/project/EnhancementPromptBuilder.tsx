@@ -64,7 +64,7 @@ const AGENT_TYPE_LABELS: Record<string, string> = {
   analytics: 'Analytics',
 };
 
-function showToast(msg: string, color: string = '#1a365d') {
+function showToast(msg: string, color: string = '#FB2832') {
   const el = document.createElement('div');
   el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:${color};color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
   document.body.appendChild(el);
@@ -177,7 +177,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
         const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
         document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
       }
-      showToast(`Prompt copied (${totalSelected} items) — paste into Claude Code`, '#8b5cf6');
+      showToast(`Prompt copied (${totalSelected} items) — paste into Claude Code`, '#367895');
     } catch {
       showToast('Failed to generate prompt', 'var(--color-danger)');
     } finally { setGenerating(false); }
@@ -210,7 +210,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
   // improvement options. Polish mode (auto-complete BPs not yet user-verified)
   // uses softer copy so the user doesn't read this as "you're missing something."
   if (isEnhanceMode) {
-    const headerColor = isPolishMode ? '#64748b' : '#8b5cf6';
+    const headerColor = isPolishMode ? '#64748b' : '#367895';
     return (
       <div>
         <div className="d-flex align-items-center gap-2 mb-2">
@@ -225,7 +225,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
             ? `${processName} looks built — these are optional refinements you can pick up if you have time.`
             : `${processName} is built. Pick the improvements you want to run next — each generates a Claude Code prompt that takes the system further.`}
         </p>
-        <div className="p-2" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
+        <div className="p-2" style={{ background: 'rgba(54,120,149,0.08)', borderRadius: 8, border: '1px solid #36789520' }}>
           {enhancements.map(e => {
             const isSelected = selectedEnhancements.has(e.key);
             const agentSelected = e.suggested_agent ? selectedAgents.has(e.suggested_agent.name) : false;
@@ -239,7 +239,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
                     onChange={() => toggleEnhancement(e.key)}
                     style={{ flexShrink: 0 }}
                   />
-                  <i className={`bi ${e.gap_type ? GAP_TYPE_ICONS[e.gap_type] || 'bi-gear' : 'bi-stars'}`} style={{ color: '#8b5cf6', marginTop: 2, flexShrink: 0 }}></i>
+                  <i className={`bi ${e.gap_type ? GAP_TYPE_ICONS[e.gap_type] || 'bi-gear' : 'bi-stars'}`} style={{ color: '#367895', marginTop: 2, flexShrink: 0 }}></i>
                   <div className="flex-grow-1">
                     <div className="d-flex justify-content-between align-items-start">
                       <span className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>{e.label}</span>
@@ -247,7 +247,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
                     </div>
                     <div className="text-muted" style={{ fontSize: 10 }}>{e.description}</div>
                     <div className="d-flex gap-1 mt-1">
-                      <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>{e.gap_type || e.category}</span>
+                      <span className="badge" style={{ background: '#36789520', color: '#367895', fontSize: 8 }}>{e.gap_type || e.category}</span>
                       <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 8 }}>Severity: {e.severity}/10</span>
                       <button className="btn btn-sm btn-link p-0 ms-auto" style={{ fontSize: 9 }} onClick={() => onPreview(e.prompt_target, e.label)}>
                         <i className="bi bi-eye me-1"></i>Preview
@@ -289,7 +289,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
           <div className="flex-grow-1"></div>
           <button
             className="btn btn-sm"
-            style={{ background: isPolishMode ? '#64748b' : '#8b5cf6', color: '#fff', fontWeight: 700, fontSize: 11 }}
+            style={{ background: isPolishMode ? '#64748b' : '#367895', color: '#fff', fontWeight: 700, fontSize: 11 }}
             disabled={totalSelected === 0 || generating}
             onClick={handleGenerate}
           >
@@ -356,15 +356,15 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
       {gaps.length > 0 && (
         <div className="mb-3">
           <div className="d-flex align-items-center gap-2 mb-2">
-            <h6 className="fw-semibold mb-0" style={{ fontSize: 12, color: '#8b5cf6' }}>
+            <h6 className="fw-semibold mb-0" style={{ fontSize: 12, color: '#367895' }}>
               <i className="bi bi-rocket-takeoff me-1"></i>Path to Autonomous
             </h6>
-            <span className="badge" style={{ background: '#8b5cf6', color: '#fff', fontSize: 9 }}>{gaps.length}</span>
+            <span className="badge" style={{ background: '#367895', color: '#fff', fontSize: 9 }}>{gaps.length}</span>
           </div>
           <p className="text-muted mb-2" style={{ fontSize: 10 }}>
             Gaps detected in this process. Select items to include in a combined prompt for Claude Code.
           </p>
-          <div className="p-2" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
+          <div className="p-2" style={{ background: 'rgba(54,120,149,0.08)', borderRadius: 8, border: '1px solid #36789520' }}>
             {gaps.map(gap => {
               const isSelected = selectedGaps.has(gap.gap_id);
               const agentSelected = gap.suggested_agent ? selectedAgents.has(gap.suggested_agent.name) : false;
@@ -378,12 +378,12 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
                       onChange={() => toggleGap(gap.gap_id)}
                       style={{ flexShrink: 0 }}
                     />
-                    <i className={`bi ${GAP_TYPE_ICONS[gap.gap_type] || 'bi-gear'}`} style={{ color: '#8b5cf6', marginTop: 2, flexShrink: 0 }}></i>
+                    <i className={`bi ${GAP_TYPE_ICONS[gap.gap_type] || 'bi-gear'}`} style={{ color: '#367895', marginTop: 2, flexShrink: 0 }}></i>
                     <div className="flex-grow-1">
                       <div className="fw-medium" style={{ fontSize: 11 }}>{gap.title}</div>
                       <div className="text-muted" style={{ fontSize: 10 }}>{gap.description}</div>
                       <div className="d-flex gap-1 mt-1">
-                        <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>{gap.gap_type}</span>
+                        <span className="badge" style={{ background: '#36789520', color: '#367895', fontSize: 8 }}>{gap.gap_type}</span>
                         <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 8 }}>Severity: {gap.severity}/10</span>
                       </div>
                     </div>
@@ -426,7 +426,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
         <div className="flex-grow-1"></div>
         <button
           className="btn btn-sm"
-          style={{ background: '#8b5cf6', color: '#fff', fontWeight: 700, fontSize: 11 }}
+          style={{ background: '#367895', color: '#fff', fontWeight: 700, fontSize: 11 }}
           disabled={totalSelected === 0 || generating}
           onClick={handleGenerate}
         >

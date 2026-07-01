@@ -19,7 +19,7 @@ export default function EmptyState({ icon, title, description, actionLabel, onAc
       <h5 className="text-muted fw-semibold mb-2">{title}</h5>
       {description && <p className="text-muted small mb-3">{description}</p>}
       {actionLabel && onAction && (
-        <button className="btn btn-outline-primary btn-sm" onClick={onAction}>
+        <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={onAction}>
           {actionLabel}
         </button>
       )}
