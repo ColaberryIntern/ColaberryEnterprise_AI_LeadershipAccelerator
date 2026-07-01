@@ -6,8 +6,18 @@ import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
 import { handleApolloPhoneReveal } from '../controllers/apolloWebhookController';
 import { handleAdvisoryWebhook, handleAdvisoryWebhookHead } from '../controllers/advisorySyncController';
+import { handleBuildPlanWebhook, handleBuildPlanWebhookHead } from '../controllers/buildPlanWebhookController';
 
 const router = Router();
+
+// Capture the raw body alongside the parsed one so HMAC can be verified over
+// the exact bytes the sender signed (re-serializing a parsed body is lossy
+// across languages). Used by the build-plan webhook.
+const jsonWithRawBody = express.json({
+  verify: (req, _res, buf) => {
+    (req as unknown as { rawBody: Buffer }).rawBody = buf;
+  },
+});
 
 // PaySimple payment webhook — JSON body
 router.post('/api/webhook/paysimple', express.json(), handlePaySimpleWebhook);
@@ -32,5 +42,11 @@ router.post('/api/webhook/apollo/phone-reveal', express.json(), handleApolloPhon
 // Advisory sync webhook — Agent Foundry (AI Workforce Designer) events
 router.head('/api/webhooks/advisory', handleAdvisoryWebhookHead);
 router.post('/api/webhooks/advisory', express.json(), handleAdvisoryWebhook);
+
+// Build-plan webhook — Story-Driven Build engine (AI Project Architect) pushes a
+// generated deep_plan.json to be ingested as native student sprints/tasks.
+// Raw-body JSON so HMAC verifies over the exact signed bytes.
+router.head('/api/webhooks/build-plan', handleBuildPlanWebhookHead);
+router.post('/api/webhooks/build-plan', jsonWithRawBody, handleBuildPlanWebhook);
 
 export default router;
