@@ -32,7 +32,8 @@ const LOG_PATH = path.resolve(REPO, 'tmp/ops-engine/cb-handler-log.jsonl');
 // the VPS host directly, not inside the backend container).
 const OpenAI = require(path.resolve(REPO, 'node_modules/openai')).default;
 const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
-const { sanitizeReplyHtml, looksLikeToolCallLeak } = require('./cb-reply-sanitizer');
+const { looksLikeToolCallLeak } = require('./cb-reply-sanitizer');
+const { composeReplyBody } = require('./cb-reply-body');
 const cbPeople = require('./cb-people');
 
 // Durable self-improvement lessons. Each confirmed failure pattern gets one
@@ -469,30 +470,14 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, requesterRef,
   // Scoped to THIS project so first names are unambiguous; null on miss/ambiguity.
   const resolveMention = (name) => cbPeople.resolveSgidSync(name, { bucketId });
 
-  const MENTION_RE = /content-type="application\/vnd\.basecamp\.mention"/;
-
-  // The single choke point every CB reply passes through.
-  //  1. Runs the deterministic sanitizer (kills leaked tool-call scaffolding).
-  //  2. Guarantees the requester is @-mentioned exactly once so the right
-  //     person is notified (the "tagged Ram, not Ali" contract).
+  // The single choke point every CB reply passes through. composeReplyBody
+  // sanitizes leaked tool-call scaffolding, resolves any @Name the model wrote
+  // into a real mention, and guarantees the requester is @-mentioned EXACTLY
+  // ONCE (promoting a leading "Aleem, ..." prose address to the tag instead of
+  // rendering the name twice - the fix for the "Aleem Aleem" doubling defect).
   async function basecamp_reply({ content_html }) {
-    const { html: cleaned, wasLeak } = sanitizeReplyHtml(content_html);
+    const { body, wasLeak } = composeReplyBody(content_html, { resolveMention, mention, requesterRef });
     if (wasLeak) sideEffects.qualityFlags.push('tool_call_leak_sanitized');
-    let body = cleaned;
-    // Recovered plain-text (e.g. from a leak) has newlines, no markup: keep
-    // the paragraph breaks by promoting them to <br>.
-    if (!/<[a-z][\s\S]*>/i.test(body)) body = body.replace(/\n/g, '<br>');
-    // Resolve any @Name the model wrote in the body into a REAL Basecamp mention
-    // so that person (Sohail, Sai, ...) is actually notified, not left as plain
-    // text. Unresolved/ambiguous names stay text; never mis-tagged, never Ali.
-    body = cbPeople.injectMentions(body, resolveMention);
-    if (!MENTION_RE.test(body)) {
-      // Tag the ACTUAL requester (off comment.creator's attachable_sgid), not
-      // always Ali. This is the "tagged Ram, not Ali" contract: mention() was
-      // hardcoded to Ali, so this auto-inject tagged Ali for everyone.
-      // mention(requesterRef) falls back to Ali only when the ref is unresolved.
-      body = `<div>${mention(requesterRef)} ${body}</div>`;
-    }
     await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: body });
     sideEffects.repliedHtml = body;
     return { ok: true };
