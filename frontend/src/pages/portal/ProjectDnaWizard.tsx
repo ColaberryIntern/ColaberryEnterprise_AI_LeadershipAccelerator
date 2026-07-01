@@ -136,59 +136,20 @@ function ProjectDnaWizard() {
 
   if (done) {
     return (
-      <div className="py-5" style={{ maxWidth: 560, margin: '0 auto' }}>
-        {/* Confirmed */}
-        <div className="text-center mb-4">
-          <span className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
-            style={{ width: 64, height: 64, background: 'var(--color-success-bg)' }}>
-            <i className="bi bi-check-lg" style={{ fontSize: 32, color: 'var(--color-success)' }}></i>
-          </span>
-          <h2 className="h5 fw-bold mb-1" style={{ color: '#1e293b' }}>Project DNA Saved</h2>
-          <p className="text-muted small mb-0">Your project context is locked in.</p>
-        </div>
-
-        {/* What's happening now */}
-        <div className="rounded-3 p-4 mb-4" style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}>
-          <div className="d-flex align-items-start gap-3 mb-3">
-            <span className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-              style={{ width: 36, height: 36, background: 'rgba(251,40,50,0.1)' }}>
-              <i className="bi bi-cpu" style={{ color: '#FB2832', fontSize: 16 }}></i>
-            </span>
-            <div>
-              <p className="fw-semibold small mb-1" style={{ color: '#1e293b' }}>Generating your requirements document</p>
-              <p className="text-muted small mb-0">
-                An AI architect is analysing your DNA and building a full system requirements spec — architecture, data flows, integrations, and implementation roadmap.
-                This runs in the background and takes <strong>15–30 minutes</strong>.
-              </p>
-            </div>
-          </div>
-          <div className="d-flex align-items-start gap-3">
-            <span className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-              style={{ width: 36, height: 36, background: 'rgba(251,40,50,0.1)' }}>
-              <i className="bi bi-list-check" style={{ color: '#FB2832', fontSize: 16 }}></i>
-            </span>
-            <div>
-              <p className="fw-semibold small mb-1" style={{ color: '#1e293b' }}>Your project tasks will be ready shortly after</p>
-              <p className="text-muted small mb-0">
-                Once the requirements doc is complete, your personalised task board is created automatically — one task list per system area.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* CTA */}
-        <div className="text-center">
-          <button
-            className="btn btn-primary px-4"
-            style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}
-            onClick={() => navigate('/portal/home')}
-          >
-            <i className="bi bi-house me-2"></i>Back to Home
-          </button>
-          <p className="text-muted small mt-3 mb-0">
-            You can leave this page — your requirements will be ready when you come back.
-          </p>
-        </div>
+      <div className="text-center py-5">
+        <span className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+          style={{ width: 64, height: 64, background: 'var(--color-success-bg)' }}>
+          <i className="bi bi-check-lg" style={{ fontSize: 32, color: 'var(--color-success)' }}></i>
+        </span>
+        <h2 className="h5 fw-bold mb-2" style={{ color: 'var(--color-text)' }}>Project DNA Saved</h2>
+        <p className="text-muted small mb-4">Your project blueprint is ready. Every week will be personalized around it.</p>
+        <button
+          className="btn btn-primary px-4"
+          style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
+          onClick={() => navigate('/portal/project/blueprint')}
+        >
+          <i className="bi bi-arrow-right me-2"></i>Go to Your Project
+        </button>
       </div>
     );
   }
@@ -198,7 +159,7 @@ function ProjectDnaWizard() {
   return (
     <div style={{ maxWidth: 680, margin: '0 auto' }}>
       <div className="mb-4">
-        <h1 className="h4 fw-bold mb-1" style={{ color: '#1e293b' }}>Project DNA Wizard</h1>
+        <h1 className="h4 fw-bold mb-1" style={{ color: 'var(--color-text)' }}>Project DNA Wizard</h1>
         <p className="text-muted small mb-0">Define your project to personalize your 12-week AI Systems build.</p>
       </div>
 
@@ -214,9 +175,9 @@ function ProjectDnaWizard() {
                   className="d-flex align-items-center justify-content-center rounded-circle fw-semibold"
                   style={{
                     width: 32, height: 32, fontSize: 13, transition: 'all 0.2s',
-                    background: completed ? '#FB2832' : active ? 'rgba(251,40,50,0.1)' : 'var(--color-bg-alt)',
-                    border: `2px solid ${completed || active ? '#FB2832' : 'var(--color-border)'}`,
-                    color: completed ? '#fff' : active ? '#FB2832' : 'var(--color-text-light)',
+                    background: completed ? 'var(--color-purple)' : active ? 'rgba(99,102,241,0.1)' : 'var(--color-bg-alt)',
+                    border: `2px solid ${completed || active ? 'var(--color-purple)' : 'var(--color-border)'}`,
+                    color: completed ? '#fff' : active ? 'var(--color-purple)' : 'var(--color-text-light)',
                   }}
                 >
                   {completed
@@ -226,13 +187,13 @@ function ProjectDnaWizard() {
                 <span className="mt-1" style={{
                   fontSize: 11, whiteSpace: 'nowrap',
                   fontWeight: active ? 600 : 400,
-                  color: active ? '#1e293b' : 'var(--color-text-light)',
+                  color: active ? 'var(--color-text)' : 'var(--color-text-light)',
                 }}>{label}</span>
               </div>
               {i < STEPS.length - 1 && (
                 <div className="flex-grow-1 mx-1" style={{
                   height: 2, marginBottom: 20, transition: 'background 0.2s',
-                  background: i < step ? '#FB2832' : 'var(--color-border)',
+                  background: i < step ? 'var(--color-purple)' : 'var(--color-border)',
                 }} />
               )}
             </React.Fragment>
@@ -247,8 +208,8 @@ function ProjectDnaWizard() {
           {/* ── Step 0: Business ── */}
           {step === 0 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-briefcase me-2" style={{ color: '#FB2832' }}></i>Business Context
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+                <i className="bi bi-briefcase me-2" style={{ color: 'var(--color-purple)' }}></i>Business Context
               </h6>
               <div className="mb-3">
                 <label className="form-label small fw-medium">
@@ -303,8 +264,8 @@ function ProjectDnaWizard() {
                       key={v}
                       className="p-2 rounded border mb-2 d-flex align-items-center gap-2"
                       style={{
-                        borderColor: form.orientation === v ? '#FB2832' : 'var(--color-border)',
-                        background: form.orientation === v ? 'rgba(251,40,50,0.05)' : undefined,
+                        borderColor: form.orientation === v ? 'var(--color-purple)' : 'var(--color-border)',
+                        background: form.orientation === v ? 'rgba(99,102,241,0.05)' : undefined,
                         cursor: 'pointer',
                       }}
                       role="radio"
@@ -315,7 +276,7 @@ function ProjectDnaWizard() {
                     >
                       <i
                         className={`bi ${form.orientation === v ? 'bi-record-circle-fill' : 'bi-circle'}`}
-                        style={{ color: form.orientation === v ? '#FB2832' : 'var(--color-text-light)' }}
+                        style={{ color: form.orientation === v ? 'var(--color-purple)' : 'var(--color-text-light)' }}
                       ></i>
                       <div>
                         <div className="small fw-medium" style={{ textTransform: 'capitalize' }}>{v}</div>
@@ -337,8 +298,8 @@ function ProjectDnaWizard() {
                       key={v}
                       className="p-2 rounded border mb-2 d-flex align-items-center gap-2"
                       style={{
-                        borderColor: form.focus === v ? '#FB2832' : 'var(--color-border)',
-                        background: form.focus === v ? 'rgba(251,40,50,0.05)' : undefined,
+                        borderColor: form.focus === v ? 'var(--color-purple)' : 'var(--color-border)',
+                        background: form.focus === v ? 'rgba(99,102,241,0.05)' : undefined,
                         cursor: 'pointer',
                       }}
                       role="radio"
@@ -349,7 +310,7 @@ function ProjectDnaWizard() {
                     >
                       <i
                         className={`bi ${form.focus === v ? 'bi-record-circle-fill' : 'bi-circle'}`}
-                        style={{ color: form.focus === v ? '#FB2832' : 'var(--color-text-light)' }}
+                        style={{ color: form.focus === v ? 'var(--color-purple)' : 'var(--color-text-light)' }}
                       ></i>
                       <div>
                         <div className="small fw-medium" style={{ textTransform: 'capitalize' }}>{v}</div>
@@ -368,8 +329,8 @@ function ProjectDnaWizard() {
           {/* ── Step 1: Technical ── */}
           {step === 1 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-code-slash me-2" style={{ color: '#FB2832' }}></i>Technical Footprint
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+                <i className="bi bi-code-slash me-2" style={{ color: 'var(--color-purple)' }}></i>Technical Footprint
               </h6>
               <div className="mb-4">
                 <label className="form-label small fw-medium">
@@ -383,8 +344,8 @@ function ProjectDnaWizard() {
                         <div
                           className="p-3 rounded border h-100 d-flex align-items-center gap-2"
                           style={{
-                            borderColor: sel ? '#FB2832' : 'var(--color-border)',
-                            background: sel ? 'rgba(251,40,50,0.06)' : undefined,
+                            borderColor: sel ? 'var(--color-purple)' : 'var(--color-border)',
+                            background: sel ? 'rgba(99,102,241,0.06)' : undefined,
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}
                           role="checkbox"
@@ -393,8 +354,8 @@ function ProjectDnaWizard() {
                           onClick={() => toggle('projectTypes', value)}
                           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('projectTypes', value)}
                         >
-                          <i className={`bi ${icon}`} style={{ fontSize: 18, color: sel ? '#FB2832' : 'var(--color-text-light)', flexShrink: 0 }}></i>
-                          <span className="small fw-medium" style={{ color: sel ? '#1e293b' : 'var(--color-text-light)' }}>{label}</span>
+                          <i className={`bi ${icon}`} style={{ fontSize: 18, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
+                          <span className="small fw-medium" style={{ color: sel ? 'var(--color-text)' : 'var(--color-text-light)' }}>{label}</span>
                         </div>
                       </div>
                     );
@@ -414,8 +375,8 @@ function ProjectDnaWizard() {
                         <div
                           className="p-2 rounded border d-flex align-items-center gap-2"
                           style={{
-                            borderColor: sel ? '#FB2832' : 'var(--color-border)',
-                            background: sel ? 'rgba(251,40,50,0.06)' : undefined,
+                            borderColor: sel ? 'var(--color-purple)' : 'var(--color-border)',
+                            background: sel ? 'rgba(99,102,241,0.06)' : undefined,
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}
                           role="checkbox"
@@ -425,8 +386,8 @@ function ProjectDnaWizard() {
                           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('dataSources', value)}
                         >
                           <i className={`bi ${sel ? 'bi-check-square-fill' : 'bi-square'}`}
-                            style={{ fontSize: 14, color: sel ? '#FB2832' : 'var(--color-text-light)', flexShrink: 0 }}></i>
-                          <span className="small" style={{ color: sel ? '#1e293b' : 'var(--color-text-light)' }}>{label}</span>
+                            style={{ fontSize: 14, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
+                          <span className="small" style={{ color: sel ? 'var(--color-text)' : 'var(--color-text-light)' }}>{label}</span>
                         </div>
                       </div>
                     );
@@ -439,8 +400,8 @@ function ProjectDnaWizard() {
           {/* ── Step 2: AI Components + Track ── */}
           {step === 2 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-cpu me-2" style={{ color: '#FB2832' }}></i>AI Components
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+                <i className="bi bi-cpu me-2" style={{ color: 'var(--color-purple)' }}></i>AI Components
               </h6>
               <div className="mb-4">
                 <label className="form-label small fw-medium">
@@ -454,8 +415,8 @@ function ProjectDnaWizard() {
                         key={value}
                         className="p-3 rounded border d-flex align-items-center gap-3"
                         style={{
-                          borderColor: sel ? '#FB2832' : 'var(--color-border)',
-                          background: sel ? 'rgba(251,40,50,0.06)' : undefined,
+                          borderColor: sel ? 'var(--color-purple)' : 'var(--color-border)',
+                          background: sel ? 'rgba(99,102,241,0.06)' : undefined,
                           cursor: 'pointer', transition: 'all 0.15s',
                         }}
                         role="checkbox"
@@ -466,10 +427,10 @@ function ProjectDnaWizard() {
                       >
                         <i
                           className={`bi ${sel ? 'bi-check-circle-fill' : 'bi-circle'}`}
-                          style={{ fontSize: 18, color: sel ? '#FB2832' : 'var(--color-text-light)', flexShrink: 0 }}
+                          style={{ fontSize: 18, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}
                         ></i>
                         <div>
-                          <div className="small fw-semibold" style={{ color: '#1e293b' }}>{label}</div>
+                          <div className="small fw-semibold" style={{ color: 'var(--color-text)' }}>{label}</div>
                           <div style={{ fontSize: 11, color: 'var(--color-text-light)' }}>{desc}</div>
                         </div>
                       </div>
@@ -498,8 +459,8 @@ function ProjectDnaWizard() {
           {/* ── Step 3: Review ── */}
           {step === 3 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
-                <i className="bi bi-clipboard-check me-2" style={{ color: '#FB2832' }}></i>Review Your Project DNA
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+                <i className="bi bi-clipboard-check me-2" style={{ color: 'var(--color-purple)' }}></i>Review Your Project DNA
               </h6>
               {[
                 {
@@ -529,14 +490,14 @@ function ProjectDnaWizard() {
               ].map((section) => (
                 <div key={section.title} className="mb-3 p-3 rounded"
                   style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}>
-                  <div className="small fw-semibold mb-2" style={{ color: '#1e293b' }}>
-                    <i className={`bi ${section.icon} me-2`} style={{ color: '#FB2832' }}></i>
+                  <div className="small fw-semibold mb-2" style={{ color: 'var(--color-text)' }}>
+                    <i className={`bi ${section.icon} me-2`} style={{ color: 'var(--color-purple)' }}></i>
                     {section.title}
                   </div>
                   {section.rows.map(([label, value]) => (
                     <div key={label} className="d-flex gap-2 mb-1" style={{ fontSize: 13 }}>
                       <span className="text-muted" style={{ minWidth: 120, flexShrink: 0 }}>{label}:</span>
-                      <span style={{ color: '#1e293b', wordBreak: 'break-word' }}>{value || '—'}</span>
+                      <span style={{ color: 'var(--color-text)', wordBreak: 'break-word' }}>{value || '—'}</span>
                     </div>
                   ))}
                 </div>
@@ -566,7 +527,7 @@ function ProjectDnaWizard() {
           <button
             className="btn btn-primary btn-sm"
             onClick={goNext}
-            style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}
+            style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
           >
             Next<i className="bi bi-arrow-right ms-1"></i>
           </button>
@@ -575,7 +536,7 @@ function ProjectDnaWizard() {
             className="btn btn-primary"
             onClick={handleSubmit}
             disabled={submitting}
-            style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}
+            style={{ background: 'var(--color-purple)', borderColor: 'var(--color-purple)' }}
           >
             {submitting ? (
               <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving…</>
