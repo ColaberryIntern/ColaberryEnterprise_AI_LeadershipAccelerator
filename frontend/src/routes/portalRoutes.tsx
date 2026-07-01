@@ -26,6 +26,7 @@ import WalkCapsPage from '../pages/portal/WalkCapsPage';
 import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
 import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
+import TodayShell from '../pages/portal/today/TodayShell';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 import ExecutionLane from '../pages/project/ExecutionLane';
@@ -36,6 +37,9 @@ const portalRoutes = (
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
     <Route element={<PortalProtectedRoute />}>
+      {/* Today shell (Design E onboarding experience) renders its own chrome,
+          so it sits outside PortalLayout. */}
+      <Route path="/portal/today" element={<TodayShell />} />
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />

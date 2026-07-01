@@ -370,6 +370,36 @@ async function ensureIngestionSchema() {
 // Explicit migration: ensure composite index for the admin communications
 // AI events telemetry table (TBI audit P1). Explicit idempotent creation because prod does
 // not run sequelize.sync (DB_BOOT_SYNC is off by default); columns mirror the AiEvent model.
+async function ensureStudentTaskMergeSchema() {
+  // Unified StudentTask (F): relax requirement_key to nullable and add the
+  // story-driven columns so requirement-based tasks (Kes's ProjectDnaWizard
+  // path) and story/engine-based tasks live in one table. Idempotent. The
+  // partial unique on (project_id, story_id) keeps engine upserts idempotent
+  // without affecting requirement-based rows (story_id NULL).
+  const statements = [
+    `ALTER TABLE student_tasks ALTER COLUMN requirement_key DROP NOT NULL`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS story_id VARCHAR(60)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS narrative TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS owner_agent VARCHAR(120)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS acceptance JSONB`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS build TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS vibe TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS trust TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(30)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS fulfills JSONB`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS release_key VARCHAR(60)`,
+    `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] student-task merge schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureOnboardingProfileSchema() {
   // Background onboarding profile (S4): resume/LinkedIn + derived prefill that
   // seeds the ProjectDnaWizard. Idempotent.
@@ -668,6 +698,8 @@ async function start(): Promise<void> {
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
   await ensureOnboardingProfileSchema();
+  // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
+  await ensureStudentTaskMergeSchema();
   // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
   try {
     const { ensureConsentSchema } = await import('./services/consentService');
