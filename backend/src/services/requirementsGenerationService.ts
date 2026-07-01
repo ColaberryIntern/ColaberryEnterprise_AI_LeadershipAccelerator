@@ -20,6 +20,7 @@ import { buildProjectRequirementsContext } from './projectRequirementsContextSer
 import { createNewVersion } from './artifactVersionService';
 import { attachArtifactToProject, createProjectForEnrollment, getProjectByEnrollment } from './projectService';
 import { refreshProjectOutputs } from './portfolioEnhancementService';
+import { createTasksFromRequirements } from './studentTaskService';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from './openaiInstrumented';
 
@@ -314,6 +315,13 @@ async function executeJob(jobId: string, enrollmentId: string): Promise<void> {
     refreshProjectOutputs(enrollmentId).catch(err =>
       console.error('[RequirementsGen] Portfolio refresh failed:', err.message)
     );
+
+    // Seed native task lists from requirements clusters (non-blocking)
+    if (project) {
+      createTasksFromRequirements(project.id).catch(err =>
+        console.error('[RequirementsGen] Task seeding failed:', err.message)
+      );
+    }
   } catch (err: any) {
     console.error(`[RequirementsGen] Job ${jobId} failed:`, err.message);
     await job.update({

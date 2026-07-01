@@ -6781,6 +6781,12 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: npx tsc --noEmit passes (exit 0); static render-check (DOM mirrors component output) loads the real anthropicBento.css and renders the 3-course Week 1 bento correctly in browser; faithful 1:1 of the already-approved docs/design mockup. Kes to pull and test locally per his comment.
   - Notes: 3 logged implementation assumptions (no governance boundary crossed): (1) RemixIcon (DS default) swapped for Bootstrap Icons, already loaded by the portal, to avoid a new icon-font dependency; (2) "Start the path" anchor CTA points at the featured (lowest-numbered) course URL since no separate path URL exists yet — spec flagged this destination as TBD; (3) generalized the spec's fixed 3-up grid to featured-spans-compacts so 4+ courses never break (pixel-identical to the spec at exactly 3). HARDEN: compact ghost CTA bumped 38px->44px to meet the DS/WCAG touch goal; prefers-reduced-motion disables hover transforms. Dark-mode tokens included but inert (portal has no dark toggle yet). Branch workstream/design-system-anthropic-wrapper (PR #82 -> staging); pushed from fork remote (aleemcolaberry) since the account is read-only on the org repo.
 
+- [x] AnthropicCoursesBento: fix grid not applying (same-element scope/grid selector collision) (BC 9946499773)
+  - Date: 2026-06-25
+  - Session: CC-20260625-Q7m4
+  - What changed: Headless-render verification (Edge --screenshot on the real anthropicBento.css) caught the bento stacking to one column instead of the 2-col featured+compacts grid. Root cause: `.acw-ds` scope class and `.acw-bento` grid class were on the SAME element, but the CSS targets them as `.acw-ds .acw-bento` / `.acw-ds .ga-feat` (descendant), so the grid container + grid-area rules never matched (cards still styled since they ARE descendants). Fix: nest the grid as a child of the `.acw-ds` wrapper in AnthropicCoursesBento.tsx (two elements, not one combined node); CSS unchanged.
+  - Verification: npx tsc --noEmit passes (exit 0); re-rendered headless screenshot confirms all 4 states correct — 3-course full bento (featured spans 2 stacked compacts + full-width cherry anchor), 2-course fallback, 1-course featured-only, and dark mode.
+  - Notes: BUILD-BREAK-HARDEN — the break was only visible by rendering, not by tsc; static visual verification added value over type-checking alone. Icon glyphs blank in the headless shot only because the Bootstrap Icons CDN font is network-blocked in headless; they load in the portal which already links the font.
 - [x] AnthropicCoursesBento: heuristic + WCAG re-audit, fixes, and org-branch re-home into staging (BC 9946499812 / 9946499773)
   - Date: 2026-06-25
   - Session: CC-20260625-q4r9
@@ -6882,6 +6888,29 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
     - `backend/src/services/__tests__/githubIngestService.test.ts` (new): 7 unit tests — empty commits early return, no key in message (no DB call), key match flips to verified, multiple commits/multiple keys, idempotency, no matching rows, DB error propagation.
   - Verification: `npx tsc --noEmit` clean (no source errors); `npx jest githubIngestService` 7/7 pass.
   - Notes: `matchRecentCommitsToBPs` covers existing students with Capabilities (re-fetches commit details from GitHub API — extra round-trip but reuses proven logic). `verifyRequirementsFromCommits` covers new DNA wizard students via commit message key parsing. Deferred: file-path-based auto-matching without commit message discipline (requires `requirementsGenerationService` to emit expected file paths per key — separate follow-up).
+### Epic 1 — ProjectDnaWizard → Requirements → Native Student Tasks (2026-06-25)
+- [x] **Wire ProjectDna → requirements generation → student task lists (BC #9985689231)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed:
+    - `backend/src/models/StudentTaskList.ts` (new): Sequelize model for `student_task_lists` table — one row per requirements cluster per project (unique on `project_id + cluster`). Fields: `project_id`, `enrollment_id`, `cluster`, `title`, `status` (not_started/in_progress/complete), `position`.
+    - `backend/src/models/StudentTask.ts` (new): Sequelize model for `student_tasks` table — one row per requirement per project (unique on `project_id + requirement_key`). Fields: `task_list_id`, `project_id`, `requirement_map_id` (FK to requirements_maps), `requirement_key`, `title`, `description`, `status` (not_started/in_progress/complete/blocked), `position`.
+    - `backend/src/services/studentTaskService.ts` (new): `createTasksFromRequirements(projectId)` — reads all active RequirementsMap rows for the project, groups by cluster prefix (e.g., `AUTH.001` → cluster `AUTH`), creates/finds one `StudentTaskList` per cluster and one `StudentTask` per requirement. Idempotent via `findOrCreate` on unique keys.
+    - `backend/src/models/index.ts` (modified): imports + associations for `StudentTaskList` and `StudentTask`; exports added.
+    - `backend/src/routes/participantRoutes.ts` (modified): `POST /api/portal/project-dna` now fires `startRequirementsGeneration(enrollmentId)` fire-and-forget after DNA save returns 201.
+    - `backend/src/services/requirementsGenerationService.ts` (modified): `executeJob()` now calls `createTasksFromRequirements(project.id)` fire-and-forget after job is marked `completed` and portfolio refresh fires.
+    - `backend/src/services/__tests__/studentTaskService.test.ts` (new): 7 unit tests — happy path, empty requirements, project not found, cluster derivation, idempotency, title truncation, error propagation.
+  - Verification: `npx tsc --noEmit` clean (0 errors); `npx jest studentTaskService` 7/7 pass.
+- [x] **DB migration + trigger chain smoke test + post-DNA success screen (BC #9985689231)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-k3p7
+  - What changed:
+    - `backend/src/seeds/seedStudentTasks.ts` (new): idempotent raw-SQL migration (`CREATE TABLE IF NOT EXISTS`) for `student_task_lists` and `student_tasks`, with all FK constraints, indexes, and ENUM checks. Run manually against `accelerator_dev1`; both tables confirmed via psql.
+    - `frontend/src/pages/portal/ProjectDnaWizard.tsx` (modified): post-DNA `done` state redesigned — added two info cards ("Generating your requirements document — 15–30 min background" and "Your project tasks will be ready shortly after — one task list per system area") so students understand what happens next. CTA button now navigates to `/portal/home` (was `/portal/project/blueprint`). Footer: "You can leave this page — your requirements will be ready when you come back."
+    - End-to-end trigger chain verified locally: `POST /api/portal/project-dna` → 201 → `startRequirementsGeneration` fires in background → job row created → `executeJob` runs → reaches OpenAI (returns 401 with no local key, as expected). Success screen confirmed in browser (Docker nginx rebuild).
+  - Verification: `tsc --noEmit` clean; nginx container rebuilt and success screen confirmed live at `localhost:9999/portal/project-builder` — Kes confirmed via screenshot.
+  - Notes: OpenAI 401 is expected in local dev (no API key in container env). Full task seeding path (requirements → tasks) requires prod deploy with a real OpenAI key. `seedStudentTasks.ts` not yet wired into server startup — must be run manually or wired to auto-run at boot (pending approval).
+  - Notes: Tables are not yet created in DB — Sequelize models define the schema but migrations must be run on dev and prod via `sync({alter: true})` or raw DDL. Task seeding runs after requirements generation job completes (~15-30 min latency on first submit). Fire-and-forget means DNA save returns instantly.
 - [x] **Wire Week 5 Anthropic course: seed curriculum_course_links into server startup (BC #9984355973)**
   - Date: 2026-06-25
   - Session: CC-20260625-c8r2
