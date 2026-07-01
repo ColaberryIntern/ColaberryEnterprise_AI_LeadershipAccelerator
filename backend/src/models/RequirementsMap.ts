@@ -10,6 +10,7 @@ export interface RequirementsMapAttributes {
   github_file_paths?: string[];
   confidence_score?: number;
   status?: string;
+  state?: string;
   verified_by?: string;
   metadata?: Record<string, any>;
   verification_status?: string;
@@ -37,6 +38,7 @@ class RequirementsMap extends Model<RequirementsMapAttributes> implements Requir
   declare github_file_paths: string[];
   declare confidence_score: number;
   declare status: string;
+  declare state: string;
   declare verified_by: string;
   declare metadata: Record<string, any>;
   declare verification_status: string;
@@ -93,6 +95,13 @@ RequirementsMap.init(
       type: DataTypes.STRING(30),
       allowNull: false,
       defaultValue: 'unmatched',
+    },
+    // BPOS 4-state lifecycle (2026-07-01), additive alongside `status`:
+    // unmapped -> planned -> built -> verified. See docs/student-platform-sync/.
+    state: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'unmapped',
     },
     verified_by: {
       type: DataTypes.STRING(50),

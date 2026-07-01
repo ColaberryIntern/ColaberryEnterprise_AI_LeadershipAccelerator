@@ -106,6 +106,59 @@ app.use(errorHandler);
 
 // Explicit migration: AI Ops Command Center (Phase 0) — create the 4 ops tables.
 //
+// Student build-sync layer (2026-07-01): student_sprints + student_tasks +
+// requirements_maps.state (BPOS 4-state). Raw idempotent SQL for the same
+// reason as the ops schema below (sync({alter}) is unreliable on the large
+// model graph). Additive & reversible. See docs/student-platform-sync/.
+async function ensureStudentTaskSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS student_sprints (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       project_id UUID NOT NULL,
+       key VARCHAR(20) NOT NULL,
+       name VARCHAR(255) NOT NULL,
+       goal TEXT,
+       demo TEXT,
+       week_start INTEGER,
+       week_end INTEGER,
+       is_active BOOLEAN NOT NULL DEFAULT true,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS student_sprints_unique_project_key ON student_sprints (project_id, key)`,
+    `CREATE INDEX IF NOT EXISTS idx_student_sprints_project ON student_sprints (project_id)`,
+    `CREATE TABLE IF NOT EXISTS student_tasks (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       project_id UUID NOT NULL,
+       sprint_id UUID,
+       story_id VARCHAR(60) NOT NULL,
+       title VARCHAR(500) NOT NULL,
+       narrative TEXT,
+       fulfills JSONB NOT NULL DEFAULT '[]'::jsonb,
+       owner_agent VARCHAR(255),
+       acceptance JSONB NOT NULL DEFAULT '[]'::jsonb,
+       build TEXT,
+       vibe TEXT,
+       trust TEXT,
+       execution_mode VARCHAR(20) NOT NULL DEFAULT 'ai_with_approval',
+       status VARCHAR(20) NOT NULL DEFAULT 'todo',
+       due_on DATE,
+       assignee VARCHAR(255),
+       verifier_score INTEGER,
+       completed_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_project_story ON student_tasks (project_id, story_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_student_tasks_project_sprint ON student_tasks (project_id, sprint_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_student_tasks_project_status ON student_tasks (project_id, status)`,
+    `ALTER TABLE requirements_maps ADD COLUMN IF NOT EXISTS state VARCHAR(20) NOT NULL DEFAULT 'unmapped'`,
+  ];
+  for (const stmt of statements) {
+    await sequelize.query(stmt);
+  }
+}
+
 // Why explicit instead of `sequelize.sync({ alter: true })`: that path is
 // unreliable on prod because the alter pass hits a pre-existing index
 // conflict elsewhere in the 215-model graph and the fallback create-only
@@ -517,6 +570,7 @@ async function start(): Promise<void> {
   // Ops Command Center schema — explicit creation because alter sync hits
   // pre-existing index conflicts elsewhere and never reaches the ops_* models.
   await ensureOpsCommandCenterSchema();
+  await ensureStudentTaskSchema();
   // Missed Opportunities Report schema (idempotent, before alter sync).
   await ensureMissedOpportunitiesSchema();
   // Seed v0 automation rules (idempotent).

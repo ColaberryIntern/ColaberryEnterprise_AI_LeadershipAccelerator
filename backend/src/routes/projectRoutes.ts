@@ -20,6 +20,79 @@ async function findOwnedCapability(enrollmentId: string, capabilityId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Build-plan ingest — receive a Story-Driven Build engine plan (deep_plan.json)
+// and materialize it as native student objects (sprints/tasks/requirements).
+// See docs/student-platform-sync/01-adapter-contract.md.
+// ---------------------------------------------------------------------------
+router.post('/api/portal/project/build-plan', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { z } = await import('zod');
+    const AcceptanceSchema = z.object({
+      scenario: z.string(),
+      trust: z.boolean().optional(),
+      given: z.string().optional(),
+      when: z.string().optional(),
+      then: z.string().optional(),
+    });
+    const PlanSchema = z.object({
+      reqs: z.array(z.object({
+        id: z.string(),
+        priority: z.string().optional(),
+        statement: z.string(),
+        acceptance: z.array(z.string()).optional(),
+        cluster: z.string().optional(),
+      })).optional(),
+      stories: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        fulfills: z.array(z.string()).optional(),
+        owner_agent: z.string().optional(),
+        narrative: z.string().optional(),
+        acceptance: z.array(AcceptanceSchema).optional(),
+        build: z.string().optional(),
+        vibe: z.string().optional(),
+        trust: z.string().optional(),
+        release: z.string().optional(),
+      })).optional(),
+      releases: z.array(z.object({
+        key: z.string(),
+        name: z.string().optional(),
+        goal: z.string().optional(),
+        demo: z.string().optional(),
+        stories: z.array(z.string()).optional(),
+        weeks: z.array(z.number()).optional(),
+      })).optional(),
+      trace: z.object({ ok: z.boolean().optional() }).optional(),
+    });
+
+    const parsed = PlanSchema.safeParse(req.body?.plan);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid build plan', issues: parsed.error.issues });
+      return;
+    }
+    const plan = parsed.data;
+
+    // Fail-closed on the deterministic traceability gate (same invariant the engine enforces).
+    if (plan.trace && plan.trace.ok === false) {
+      res.status(422).json({ error: 'Build plan failed the traceability gate (trace.ok=false); not ingested.' });
+      return;
+    }
+
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) {
+      res.status(404).json({ error: 'No active project for this enrollment' });
+      return;
+    }
+
+    const { ingestBuildPlan } = await import('../services/buildPlanIngestService');
+    const counts = await ingestBuildPlan((project as any).id, plan as any);
+    res.json({ ok: true, projectId: (project as any).id, ...counts });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Project Setup Flow (user-driven input)
 // ---------------------------------------------------------------------------
 

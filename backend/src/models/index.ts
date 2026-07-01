@@ -156,6 +156,8 @@ import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
 import RequirementsMap from './RequirementsMap';
 import Capability from './Capability';
+import StudentSprint from './StudentSprint';
+import StudentTask from './StudentTask';
 import Feature from './Feature';
 import NextAction from './NextAction';
 import VerificationLog from './VerificationLog';
@@ -709,6 +711,14 @@ Project.hasMany(RequirementsMap, { foreignKey: 'project_id', as: 'requirementsMa
 RequirementsMap.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 RequirementsMap.belongsTo(ArtifactDefinition, { foreignKey: 'source_artifact_id', as: 'sourceArtifact' });
 
+// --- Student Build Sync (sprints + tasks) ---
+Project.hasMany(StudentSprint, { foreignKey: 'project_id', as: 'sprints' });
+StudentSprint.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Project.hasMany(StudentTask, { foreignKey: 'project_id', as: 'tasks' });
+StudentTask.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+StudentSprint.hasMany(StudentTask, { foreignKey: 'sprint_id', as: 'tasks' });
+StudentTask.belongsTo(StudentSprint, { foreignKey: 'sprint_id', as: 'sprint' });
+
 // --- Next Action ---
 Project.hasMany(NextAction, { foreignKey: 'project_id', as: 'nextActions' });
 NextAction.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
@@ -969,6 +979,8 @@ export {
   ArtifactRelationship,
   RequirementsMap,
   Capability,
+  StudentSprint,
+  StudentTask,
   Feature,
   NextAction,
   VerificationLog,
