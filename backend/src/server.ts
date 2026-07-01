@@ -370,6 +370,32 @@ async function ensureIngestionSchema() {
 // Explicit migration: ensure composite index for the admin communications
 // AI events telemetry table (TBI audit P1). Explicit idempotent creation because prod does
 // not run sequelize.sync (DB_BOOT_SYNC is off by default); columns mirror the AiEvent model.
+async function ensurePointsSchema() {
+  // Append-only student points ledger (S2). Idempotent create + unique index so
+  // pointsService.award is idempotent per (enrollment_id, event_key).
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS student_points_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       event_type VARCHAR(60) NOT NULL,
+       event_key VARCHAR(120) NOT NULL,
+       points INTEGER NOT NULL DEFAULT 0,
+       metadata JSONB,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS student_points_events_unique ON student_points_events (enrollment_id, event_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_student_points_events_enrollment ON student_points_events (enrollment_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] points schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureFreeTierSchema() {
   // Free/guest tier support: a `tier` column on enrollments, and a nullable
   // cohort_id so self-serve free (non-member) accounts can exist without a
@@ -585,6 +611,8 @@ async function start(): Promise<void> {
   await ensureAiEventsSchema();
   // Free/guest tier: enrollments.tier column + nullable cohort_id (idempotent).
   await ensureFreeTierSchema();
+  // Student points ledger (idempotent).
+  await ensurePointsSchema();
   // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
   try {
     const { ensureConsentSchema } = await import('./services/consentService');

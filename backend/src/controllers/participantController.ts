@@ -6,6 +6,14 @@ import {
   getParticipantProgress,
 } from '../services/participantService';
 import { createFreeAccount } from '../services/freeSignupService';
+import { getPointsSummary } from '../services/pointsService';
+
+export async function handleGetPoints(req: Request, res: Response, next: NextFunction) {
+  try {
+    const summary = await getPointsSummary(req.participant!.sub);
+    res.json(summary);
+  } catch (err) { next(err); }
+}
 
 export async function handleFreeSignup(req: Request, res: Response, next: NextFunction) {
   try {

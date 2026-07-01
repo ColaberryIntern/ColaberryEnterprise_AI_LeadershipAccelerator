@@ -7,7 +7,7 @@ import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
-  handleFreeSignup,
+  handleFreeSignup, handleGetPoints,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
@@ -49,6 +49,7 @@ router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
+router.get('/api/portal/points', requireParticipant, handleGetPoints);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);
