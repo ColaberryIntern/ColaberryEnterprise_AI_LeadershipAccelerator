@@ -32,6 +32,7 @@ const LOG_PATH = path.resolve(REPO, 'tmp/ops-engine/cb-handler-log.jsonl');
 // the VPS host directly, not inside the backend container).
 const OpenAI = require(path.resolve(REPO, 'node_modules/openai')).default;
 const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+const cbPeople = require('./cb-people');
 let validateBeforeSend;
 try {
   ({ validateBeforeSend } = require(path.resolve(REPO, 'backend/src/scripts/lib/mandrillPreflight')));
@@ -63,6 +64,7 @@ HARD CONSTRAINTS (violations are production defects)
 
 TOOL PICKING GUIDE
 - basecamp_reply: ALWAYS call this at least once per invocation, as the visible response in the thread. Brief acknowledgement + what you did or queued. Use Basecamp HTML (<div>, <strong>, <em>, <br>, <ul><li>). Sign off as "CB System" only if the thread is with someone other than Ali, otherwise no signoff.
+- TAGGING PEOPLE: to notify a teammate, write @ then their name (first name is enough, e.g. @Sohail, @Sai, or @Ali). CB converts it into a real Basecamp mention that actually notifies them, but ONLY if they are a member of this project. If a name does not resolve (not on the project, or ambiguous) it stays as plain text with no false notification, so prefer a first name that is unique on the project. Do NOT hand-write <bc-attachment> tags; just write @Name.
 - email_ali: when Ali asked you to email him something (a summary, research notes, a draft). Recipient is locked to ali@colaberry.com.
 - queue_followup: when the request needs work you cannot do in this turn (live research, cross-system lookups, external comms drafting, calendar booking). Creates a Basecamp todo in the same project, assigned to Ali, with your notes so Claude Code can finish it in his next session.
 - exit_intern_preview: when Ali asks you to remove, exit, terminate, kick out, or place-out an intern. PREVIEW ONLY - it does NOT execute the exit. Returns the CCPP candidate and the Basecamp todos that would be affected. You MUST follow exit_intern_preview with a basecamp_reply that shows Ali the preview AND the exact CLI command he can run to confirm. The execution is intentionally outside your reach - personnel actions need a human in the loop.
@@ -425,11 +427,14 @@ function appendLog(entry) {
 }
 
 // Build the toolImpls closure that has access to bc functions + state.
-function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId }) {
+function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, resolveMention, invocationId }) {
   const sideEffects = { repliedHtml: null, emailMessageId: null, followupTodoId: null };
 
   async function basecamp_reply({ content_html }) {
-    const html = stripEmDashes(content_html);
+    // Turn any plain-text @Name the model wrote into a REAL Basecamp mention so
+    // the person is actually notified. Unresolved/ambiguous names stay plain
+    // text (never mis-tagged, never defaulted to Ali).
+    const html = cbPeople.injectMentions(stripEmDashes(content_html), resolveMention || (() => null));
     await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: html });
     sideEffects.repliedHtml = html;
     return { ok: true };
@@ -795,6 +800,12 @@ async function handleOpenEnded(ctx) {
   const isAli = requesterId === aliId;
   const availableTools = filterToolsForRequester(requesterId, aliId);
 
+  // Warm the PROJECT roster so @Name mentions in the reply resolve to the real
+  // person (a mention only notifies a project member). Best-effort: on failure
+  // ensurePeopleLoaded caches empty and mentions degrade to plain text.
+  try { await cbPeople.ensurePeopleLoaded({ bcGet: ctx.bcGetAll || bcGet, bucketId }); } catch (_e) {}
+  const resolveMention = (name) => cbPeople.resolveSgidSync(name, { bucketId });
+
   if (!process.env.OPENAI_API_KEY) {
     appendLog({ invocationId, comment_id: comment.id, status: 'no_api_key' });
     return { ok: false, summary: 'OPENAI_API_KEY not set' };
@@ -841,7 +852,7 @@ Decide and act. Always end with basecamp_reply, then finish.`;
     { role: 'user', content: userMessage },
   ];
 
-  const { impls, sideEffects } = buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId });
+  const { impls, sideEffects } = buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, resolveMention, invocationId });
   const toolsCalled = [];
   let finished = false;
   let lastError = null;

@@ -32,6 +32,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { handleOpenEnded } = require('./cb-system-handler');
+const cbControl = require('./cb-control');
+const cbPeople = require('./cb-people');
 
 const ACCOUNT = '3945211';
 const BASE = `https://3.basecampapi.com/${ACCOUNT}`;
@@ -77,6 +79,17 @@ function isCBMention(content) {
 // with, or the co-occurrence of the three structural labels they always carry
 // (so a human who merely types "anticipated goal" in prose is not suppressed).
 const AUTOMATED_CARD_HEADER_RE = /^\s*CB System\s*:\s*automated response/i;
+// CB's OWN AI task-runner output (runCbAiTasks.js / runCbAiTasksGeneric.js).
+// Those runners post their "starting" + "deliverable" + "error" comments under a
+// real person's identity (the task reviewer), so isOwnOutput (which keys on the
+// posting identity / comment id) does NOT catch them, and each one opens with a
+// "CB System ..." header that trips the plain-text isCBMention. They are status
+// announcements, never requests, so the dispatcher must skip them. Not doing so
+// flooded LandJet on 2026-06-29: one runner batch posted 13 "starting this task"
+// notes, the dispatcher answered all 13 in a single tick, and the runaway guard
+// tripped the kill switch. Anchored at the start so the phrase appearing inside a
+// human's prose does not get suppressed.
+const CB_RUNNER_OUTPUT_RE = /^\s*CB System (is starting this task|first-pass deliverable|hit an error drafting)/i;
 function isAutomatedAgentCard(content) {
   if (!content) return false;
   const stripped = content
@@ -85,6 +98,7 @@ function isAutomatedAgentCard(content) {
     .replace(/\s+/g, ' ')
     .trim();
   if (AUTOMATED_CARD_HEADER_RE.test(stripped)) return true;
+  if (CB_RUNNER_OUTPUT_RE.test(stripped)) return true;
   // Structural fallback: the card always pairs an "Anticipated goal" with a
   // "Proposed plan" and a "Claude Code prompt" block. All three together is a
   // machine-generated card; any one alone is too loose to suppress on.
@@ -198,7 +212,14 @@ function saveState(s) {
   s.ownComments = [...ownComments].slice(-3000);
   fs.writeFileSync(STATE_PATH, JSON.stringify(s, null, 2));
 }
-const mention = () => `<bc-attachment sgid="${ALI_SGID}" content-type="application/vnd.basecamp.mention"></bc-attachment>`;
+// Build an @-mention for a specific person. `ref` may be a comment's `creator`
+// object (carries attachable_sgid, zero network), a name/email/id resolved via
+// the project people cache (see cb-people; the handler warms it per bucket), or
+// a raw sgid. Falls back to Ali ONLY for a no-arg `mention()` (system closure
+// notes / graceful replies) - named @-tokens that miss stay plain text rather
+// than mis-tagging Ali. Previously this ALWAYS emitted Ali's sgid, so a reply to
+// anyone else tagged Ali and left the real person untagged.
+const mention = (ref) => cbPeople.mentionFor(ref, { fallbackSgid: ALI_SGID });
 
 // --- Duplicate-reply circuit breaker ---------------------------------------
 // Defense-in-depth backstop, independent of the processed-dedup. The 2026-06-15
@@ -214,6 +235,27 @@ function shouldCircuitBreak(state, key, max = MAX_REPLIES_PER_COMMENT) { return 
 function recordReply(state, key) {
   if (!state.replyCounts) state.replyCounts = {};
   state.replyCounts[key] = (state.replyCounts[key] || 0) + 1;
+}
+
+// --- Runaway auto-trip (account-wide rate guard) ---------------------------
+// The per-comment circuit breaker above only caps replies to a SINGLE comment;
+// it was blind to the 2026-06-22 flood because each self-reply was a new comment
+// id. This guard watches the TOTAL reply rate across all mentions: if CB answers
+// more than CB_AUTOTRIP_MAX replies inside a rolling CB_AUTOTRIP_WINDOW, that is
+// not normal traffic — it flips the persistent kill switch OFF (cb_dispatcher_
+// enabled=false) and alarms, so a runaway stops within minutes instead of hours.
+// Defaults trip well below the observed flood rate (~4 replies / 3-min tick)
+// but above realistic bursty team usage. Tunable via env for the supervised
+// re-launch; raise once trust is established.
+const AUTOTRIP_WINDOW_MS = (Number(process.env.CB_AUTOTRIP_WINDOW_MIN) || 15) * 60 * 1000;
+const AUTOTRIP_MAX = Number(process.env.CB_AUTOTRIP_MAX_REPLIES) || 12;
+function noteReply(state) {
+  if (!Array.isArray(state.recentReplyTimes)) state.recentReplyTimes = [];
+  const now = Date.now();
+  const cutoff = now - AUTOTRIP_WINDOW_MS;
+  state.recentReplyTimes = state.recentReplyTimes.filter((t) => t >= cutoff);
+  state.recentReplyTimes.push(now);
+  return state.recentReplyTimes.length; // count within the rolling window, incl. this one
 }
 
 // Best-effort one-time alarm when the breaker trips for a key. Doubles as the
@@ -268,10 +310,44 @@ async function alarmIdentityDegraded(state, gotId) {
   } catch (e) { console.error(`  identity alarm failed: ${e.message}`); }
 }
 
+// Rate-limited alarm when the runaway auto-trip flips the kill switch OFF.
+// At most once / 6h so a stuck condition does not spam Ali. Never throws.
+async function alarmAutoTrip(state, reason) {
+  const last = state.autotripAlarmedAt ? new Date(state.autotripAlarmedAt).getTime() : 0;
+  if (Date.now() - last < 6 * 3600 * 1000) return;
+  state.autotripAlarmedAt = new Date().toISOString();
+  if (DRY) { console.log(`[dry] would alarm auto-trip: ${reason}`); return; }
+  try {
+    if (!process.env.MANDRILL_API_KEY) { console.error('  auto-trip alarm: MANDRILL_API_KEY unset, logged only'); return; }
+    const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+    const transport = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com', port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+    });
+    await transport.sendMail({
+      from: '"CB Dispatcher" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      subject: '[CB Dispatcher] AUTO-TRIPPED OFF - runaway protection fired',
+      text: `The CB inbound-dispatcher auto-tripped its kill switch (cb_dispatcher_enabled is now false). CB will post nothing until you re-enable it from the CB System Command dashboard.\n\nReason: ${reason}\n\nThis fires when CB's reply rate or posting identity looks like a runaway (the 2026-06-22 self-reply flood pattern). Review the recent activity, confirm the Basecamp token still resolves to CB System (${CB_SYSTEM_ID}), then re-enable from the dashboard when it is safe.`,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.error(`  auto-trip ALARM sent: ${reason}`);
+  } catch (e) { console.error(`  auto-trip alarm failed: ${e.message}`); }
+}
+
+// Flip the persistent kill switch OFF + alarm. Used by both the runaway rate
+// guard and the identity-degradation halt. Best-effort; never throws into the tick.
+async function autoTrip(state, reason) {
+  console.error(`  AUTO-TRIP: ${reason}; flipping cb_dispatcher_enabled OFF`);
+  if (!DRY) { try { await cbControl.disable(reason); } catch (e) { console.error(`  cbControl.disable failed: ${e.message}`); } }
+  else console.log(`[dry] would flip cb_dispatcher_enabled OFF (${reason})`);
+  await alarmAutoTrip(state, reason);
+}
+
 // --- Recipes ---------------------------------------------------------------
 
-function recipeHelp() {
-  return `<div>${mention()} CB System dispatcher v1 - keyword recipes (LLM dispatcher not yet wired):</div>
+function recipeHelp(requester) {
+  return `<div>${mention(requester)} CB System dispatcher v1 - keyword recipes (LLM dispatcher not yet wired):</div>
 <ul>
   <li><code>@CBSystem grep:&lt;pattern&gt;</code> - ripgrep the codebase, return first 50 matches</li>
   <li><code>@CBSystem ccpp:&lt;SQL&gt;</code> - read-only CCPP query (production DB)</li>
@@ -286,20 +362,20 @@ function runCmd(cmd, args, timeoutMs) {
   return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-function recipeGrep(pattern) {
+function recipeGrep(pattern, requester) {
   const r = runCmd('rg', ['--color', 'never', '-n', '--max-count', '50', pattern, '.'], 60000);
   const lines = (r.stdout || '').split('\n').filter(Boolean).slice(0, 50);
   return lines.length
-    ? `<div>${mention()} <code>grep:${pattern}</code> -> ${lines.length} matches:</div><pre>${lines.map(l => l.replace(/</g, '&lt;')).join('\n')}</pre>`
-    : `<div>${mention()} <code>grep:${pattern}</code> -> no matches.</div>`;
+    ? `<div>${mention(requester)} <code>grep:${pattern}</code> -> ${lines.length} matches:</div><pre>${lines.map(l => l.replace(/</g, '&lt;')).join('\n')}</pre>`
+    : `<div>${mention(requester)} <code>grep:${pattern}</code> -> no matches.</div>`;
 }
 
-function recipeUnknown(raw) {
+function recipeUnknown(raw, requester) {
   // Friendlier "queued for next Ali session" acknowledgment instead of error-tone.
   // Per @CB System scope expansion doctrine 2026-05-30: for open-ended requests
   // (anything beyond v1 keyword recipes), CB System acknowledges within 3 min and
   // the actual execution happens in Ali's next Claude Code chat session.
-  return `<div>${mention()} I see your request: <em>"${raw.slice(0, 300).replace(/</g, '&lt;')}"</em></div>
+  return `<div>${mention(requester)} I see your request: <em>"${raw.slice(0, 300).replace(/</g, '&lt;')}"</em></div>
 <div><br></div>
 <div>This needs a real tool run (research, email draft, calendar booking, CCPP lookup, etc.) which the cron-driven dispatcher can not do solo yet. <strong>Queued for the next live session</strong> - Ali will see this when he is next in Claude Code and the response will land here as a follow-up comment.</div>
 <div><br></div>
@@ -316,7 +392,7 @@ function recipeUnknown(raw) {
 // with the recipe-list reply when he sent real work. (Bug confirmed 2026-05-31
 // on comment 9946342528: PMO system-prompt spec sent to CB but routed to
 // help-recipe reply because "help" appeared in the body.)
-function classifyKeyword(text) {
+function classifyKeyword(text, requester) {
   // Strip HTML, strip the BC mention attachment, normalize whitespace.
   const stripped = text
     .replace(/<bc-attachment[^>]*content-type="application\/vnd\.basecamp\.mention"[^>]*>[\s\S]*?<\/bc-attachment>/gi, ' ')
@@ -332,14 +408,14 @@ function classifyKeyword(text) {
   if (m) {
     const kind = m[1].toLowerCase();
     const arg = (m[2] || '').trim();
-    if (kind === 'grep') return recipeGrep(arg);
-    if (kind === 'ccpp') return `<div>${mention()} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
-    if (kind === 'gmail') return `<div>${mention()} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
+    if (kind === 'grep') return recipeGrep(arg, requester);
+    if (kind === 'ccpp') return `<div>${mention(requester)} <code>ccpp:</code> recipe placeholder. CCPP exec from this worker requires SSH-to-prod wiring; until that lands, this reply is a heartbeat. Your query: <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
+    if (kind === 'gmail') return `<div>${mention(requester)} <code>gmail:</code> recipe placeholder. Gmail MCP is not callable from this worker (separate context). Heartbeat: query was <em>${arg.slice(0, 300).replace(/</g, '&lt;')}</em></div>`;
   }
   // Help recipe: only when the message is JUST "help" (after stripping
   // mention + CB prefix), nothing more. Anything substantive falls through
   // to the LLM handler.
-  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp();
+  if (/^help[.!?]?$/i.test(cmd)) return recipeHelp(requester);
   return null;
 }
 
@@ -594,7 +670,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 }
 
 // Exported for unit tests. Guarded IIFE below only runs when executed directly.
-module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID };
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID, noteReply, AUTOTRIP_MAX, AUTOTRIP_WINDOW_MS };
 
 if (require.main !== module) return;
 
@@ -620,22 +696,48 @@ if (require.main !== module) return;
     console.log(`tick ${new Date().toISOString()}, last=${state.last_tick}`);
     // Seed our own-comment registry so we never answer comments we posted.
     if (Array.isArray(state.ownComments)) for (const id of state.ownComments) ownComments.add(id);
+    // KILL SWITCH: the dashboard (or a prior auto-trip) can disable the
+    // dispatcher via system_settings.cb_dispatcher_enabled. Checked before any
+    // posting work. A real run exits immediately; a --dry run keeps going so the
+    // switch never blocks observation (bcPost is a no-op under --dry anyway).
+    const control = await cbControl.isEnabled();
+    if (!control.enabled) {
+      console.log(`  KILL SWITCH OFF: cb_dispatcher_enabled=false (source=${control.source}${control.error ? `, dberr=${control.error}` : ''}).`);
+      if (!DRY) {
+        state.last_tick = new Date().toISOString();
+        saveState(state);
+        clearTimeout(timeout);
+        releaseLock();
+        await cbControl.close();
+        process.exit(0);
+      }
+      console.log('  [dry] kill switch is OFF - continuing for observation only (no posts).');
+    }
     // Resolve who we are posting AS. The loop-safety model REQUIRES CB System.
-    // If the token has degraded to a real person, HALT (post nothing) rather
-    // than ignite a self-reply loop. Resumes automatically once the token is fixed.
+    // If the token has degraded to a real person, trip the kill switch + HALT
+    // (post nothing) rather than ignite a self-reply loop. Re-enable from the
+    // dashboard once a CB System token is confirmed restored.
     selfId = await resolveSelfId();
     if (selfId !== CB_SYSTEM_ID) {
       console.error(`  IDENTITY DEGRADED: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}; halting tick (no posts) to avoid a self-reply loop.`);
+      await autoTrip(state, `identity_degraded: posting as ${selfId}, expected CB System ${CB_SYSTEM_ID}`);
       await alarmIdentityDegraded(state, selfId);
       state.last_tick = new Date().toISOString();
       if (!DRY) saveState(state);
       clearTimeout(timeout);
       releaseLock();
+      await cbControl.close();
       process.exit(0);
     }
+    // People-cache warming is now PROJECT-scoped and happens inside the handler
+    // (ensurePeopleLoaded({ bucketId })), so @Name resolves against the right
+    // ~25-person roster and first names are unambiguous. We no longer pull the
+    // 1295-person account list every tick (that was many paginated calls of
+    // rate-limit pressure and still could not disambiguate first names).
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
+      let repliedNow = false;
       // CIRCUIT BREAKER: if we've already replied to this exact mention key the
       // cap number of times, refuse to post again and alarm. Backstops any bug
       // that re-routes an already-answered mention into the reply path.
@@ -647,12 +749,13 @@ if (require.main !== module) return;
         if (!DRY) saveState(state);
         continue;
       }
-      const html = classifyKeyword(m.comment.content);
+      const html = classifyKeyword(m.comment.content, m.comment.creator);
       if (html) {
         // Fixed keyword recipe matched -> single-shot reply.
         try {
           await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: html });
           recordReply(state, m.key);
+          repliedNow = true;
           state.processed[m.key] = { at: new Date().toISOString(), outcome: 'replied:keyword' };
           console.log(`  keyword reply to comment ${m.comment.id} on recording ${m.recId}`);
         } catch (e) {
@@ -663,10 +766,10 @@ if (require.main !== module) return;
         // Open-ended -> hand off to LLM handler. It posts its own replies.
         try {
           const result = await handleOpenEnded({
-            bcGet, bcPost, mention,
+            bcGet, bcGetAll, bcPost, mention,
             bucketId: m.bucketId, recId: m.recId, comment: m.comment, aliId: ALI_ID,
           });
-          if (result.ok) recordReply(state, m.key);
+          if (result.ok) { recordReply(state, m.key); repliedNow = true; }
           state.processed[m.key] = { at: new Date().toISOString(), outcome: result.ok ? 'replied:llm' : 'llm_error', summary: result.summary, error: result.error };
           console.log(`  llm handler for ${m.comment.id}: ${result.summary}`);
         } catch (e) {
@@ -676,7 +779,19 @@ if (require.main !== module) return;
           try {
             await bcPost(`/buckets/${m.bucketId}/recordings/${m.recId}/comments.json`, { content: recipeUnknown(m.comment.content) });
             recordReply(state, m.key);
+            repliedNow = true;
           } catch (_e2) {}
+        }
+      }
+      // Runaway guard: if the TOTAL reply rate crosses the threshold this tick,
+      // trip the kill switch and stop. Catches a flood the per-comment breaker
+      // misses (each self-reply is a new comment id, as on 2026-06-22).
+      if (repliedNow) {
+        const windowCount = noteReply(state);
+        if (windowCount > AUTOTRIP_MAX) {
+          await autoTrip(state, `runaway reply rate: ${windowCount} replies in ${Math.round(AUTOTRIP_WINDOW_MS / 60000)}min (cap ${AUTOTRIP_MAX})`);
+          if (!DRY) saveState(state);
+          break;
         }
       }
       // Persist after EVERY mention. If the tick later times out, already-
@@ -690,5 +805,6 @@ if (require.main !== module) return;
   } finally {
     clearTimeout(timeout);
     releaseLock();
+    await cbControl.close();
   }
 })();
