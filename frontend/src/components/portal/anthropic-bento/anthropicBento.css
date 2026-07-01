@@ -128,7 +128,9 @@
   box-shadow: var(--shadow-sm); overflow: hidden;
   transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
-.acw-ds .cb-card--hoverable { cursor: pointer; }
+/* Hover lift is a hint only — the card body is not itself clickable
+   (the CTA link is the action), so no pointer cursor: a pointer on a
+   non-interactive surface is a false affordance. */
 .acw-ds .cb-card--hoverable:hover { box-shadow: var(--shadow-lg); transform: translateY(-3px); }
 .acw-ds .cb-card--accent { border-top: 4px solid var(--red-500); }
 .acw-ds .cb-card__body {
@@ -161,6 +163,13 @@
 .acw-ds .cb-btn--ghost:hover { background: var(--surface-sunken); color: var(--text-strong); }
 .acw-ds .cb-btn--on-accent { background: #fff; color: var(--red-700); }
 .acw-ds .cb-btn--on-accent:hover { background: rgba(255,255,255,0.9); color: var(--red-700); }
+/* The default blue focus ring sits on the cherry (red-600) path tile,
+   where it can fall below the 3:1 non-text contrast bar (WCAG 1.4.11).
+   Give this button a white ring banded by red-700 so it reads on red. */
+.acw-ds .cb-btn--on-accent:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--red-700);
+}
 
 /* ---- card internals ----------------------------------------- */
 .acw-ds .acw__head { display: flex; gap: var(--space-4); align-items: flex-start; }

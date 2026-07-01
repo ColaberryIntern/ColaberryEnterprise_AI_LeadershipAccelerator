@@ -1,54 +1,87 @@
 import React, { useState, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
-import { STANDARD_CTAS } from '../config/programSchedule';
-import StrategyCallModal from '../components/StrategyCallModal';
+import { Button, ButtonProps } from '../colaberry/components/core/Button';
+import { Badge } from '../colaberry/components/core/Badge';
+import { Card } from '../colaberry/components/core/Card';
+
+// ExecutiveROICalculatorPage — /executive-roi-calculator
+// REFRAME: from a generic "productivity savings" model to a SPONSOR ROI /
+// TALENT-DISCOVERY calculator. The frame is now: a sponsored seat block is a
+// fraction of the cost of a single bad senior hire — and it tells you who your
+// real AI builders are before you bet a salary on the wrong person.
+// DS-only, semantic tokens only. Default export + component name preserved.
+
+// CtaButton: the DS Button only forwards href + on* handlers to its host element
+// (it drops React Router's `to`), so we route via href + onClick.
+interface CtaButtonProps extends Omit<ButtonProps, 'href' | 'onClick'> {
+  to: string;
+}
+function CtaButton({ to, children, ...rest }: CtaButtonProps) {
+  const navigate = useNavigate();
+  return (
+    <Button
+      href={to}
+      onClick={(e: React.MouseEvent<HTMLElement>) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+        e.preventDefault();
+        navigate(to);
+      }}
+      {...rest}
+    >
+      {children}
+    </Button>
+  );
+}
 
 /* ── Calculation ─────────────────────────────────────────────────── */
 
-function calculateROI(
-  employees: number,
-  hoursSaved: number,
-  hourlyCost: number,
-  weeks: number,
-  investment: number,
-) {
-  const weeklySavings = employees * hoursSaved * hourlyCost;
-  const annualSavings = Math.round(weeklySavings * weeks);
-  const roiMultiple = weeklySavings > 0 ? annualSavings / investment : 0;
-  const breakEvenWeeks = weeklySavings > 0 ? investment / weeklySavings : 999;
-  const threeYearImpact = annualSavings * 3;
+interface SponsorROI {
+  seatBlockCost: number;
+  badHireCost: number;
+  buildersSurfaced: number;
+  costPerBuilder: number;
+  netAvoidedCost: number;
+  roiMultiple: number;
+}
+
+// Cost of a bad senior hire, widely modeled at ~30% of first-year salary in
+// direct costs plus ramp, severance, and re-hire — we expose salary + a
+// multiplier so the sponsor can model their own assumption.
+function calculateSponsorROI(
+  seats: number,
+  seatPrice: number,
+  baseSalary: number,
+  badHireMultiplier: number,
+  builderRate: number,
+): SponsorROI {
+  const seatBlockCost = seats * seatPrice;
+  const badHireCost = Math.round(baseSalary * badHireMultiplier);
+  const buildersSurfaced = Math.max(0, Math.round(seats * (builderRate / 100)));
+  const costPerBuilder = buildersSurfaced > 0 ? Math.round(seatBlockCost / buildersSurfaced) : 0;
+  // Value framed as: the seat block costs less than one bad hire it helps you avoid.
+  const netAvoidedCost = badHireCost - seatBlockCost;
+  const roiMultiple = seatBlockCost > 0 ? badHireCost / seatBlockCost : 0;
   return {
-    weeklySavings,
-    annualSavings,
+    seatBlockCost,
+    badHireCost,
+    buildersSurfaced,
+    costPerBuilder,
+    netAvoidedCost,
     roiMultiple: Math.round(roiMultiple * 10) / 10,
-    breakEvenWeeks: Math.round(breakEvenWeeks * 10) / 10,
-    threeYearImpact,
   };
 }
 
-/* ── Color helpers ───────────────────────────────────────────────── */
-
-function savingsColor(v: number): string {
-  if (v >= 250_000) return '#38a169';
-  if (v >= 100_000) return '#2b6cb0';
-  return '#718096';
-}
+/* ── Color helpers (semantic tokens) ─────────────────────────────── */
 
 function roiColor(v: number): string {
-  if (v >= 3) return '#38a169';
-  if (v >= 1.5) return '#dd6b20';
-  return '#e53e3e';
+  if (v >= 3) return 'var(--status-success)';
+  if (v >= 1.5) return 'var(--status-warning)';
+  return 'var(--status-danger)';
 }
 
-function breakEvenColor(v: number): string {
-  if (v < 10) return '#38a169';
-  if (v <= 20) return '#dd6b20';
-  return '#e53e3e';
-}
-
-function threeYearColor(v: number): string {
-  return v >= 500_000 ? '#38a169' : '#718096';
+function avoidedColor(v: number): string {
+  return v > 0 ? 'var(--status-success)' : 'var(--status-danger)';
 }
 
 /* ── Currency formatter ──────────────────────────────────────────── */
@@ -57,15 +90,7 @@ const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD',
 
 /* ── Slider component ────────────────────────────────────────────── */
 
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  format,
-  onChange,
-}: {
+interface SliderProps {
   label: string;
   value: number;
   min: number;
@@ -73,30 +98,28 @@ function Slider({
   step: number;
   format: (v: number) => string;
   onChange: (v: number) => void;
-}) {
+}
+
+function Slider({ label, value, min, max, step, format, onChange }: SliderProps) {
   return (
-    <div className="mb-4">
-      <div className="d-flex justify-content-between align-items-baseline mb-1">
-        <label className="form-label small fw-medium mb-0" style={{ color: 'var(--color-text)' }}>
-          {label}
-        </label>
-        <span className="fw-bold" style={{ color: 'var(--color-primary)', fontSize: '1.1rem' }}>
-          {format(value)}
-        </span>
+    <div className="cbroi-slider">
+      <div className="cbroi-slider-top">
+        <label className="cbroi-slider-label">{label}</label>
+        <span className="cbroi-slider-val">{format(value)}</span>
       </div>
       <input
         type="range"
-        className="form-range"
         min={min}
         max={max}
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        style={{ accentColor: 'var(--color-primary)' }}
+        aria-label={label}
+        style={{ accentColor: 'var(--brand-accent)', width: '100%' }}
       />
-      <div className="d-flex justify-content-between">
-        <span className="text-muted" style={{ fontSize: '0.75rem' }}>{format(min)}</span>
-        <span className="text-muted" style={{ fontSize: '0.75rem' }}>{format(max)}</span>
+      <div className="cbroi-slider-scale">
+        <span>{format(min)}</span>
+        <span>{format(max)}</span>
       </div>
     </div>
   );
@@ -104,205 +127,206 @@ function Slider({
 
 /* ── Metric card ─────────────────────────────────────────────────── */
 
-function MetricCard({
-  title,
-  value,
-  color,
-  glow,
-}: {
+interface MetricCardProps {
   title: string;
   value: string;
   color: string;
-  glow?: boolean;
-}) {
+  note?: string;
+}
+
+function MetricCard({ title, value, color, note }: MetricCardProps) {
   return (
-    <div
-      className="card border-0 shadow-sm mb-3"
-      style={{
-        transition: 'box-shadow 0.3s ease',
-        boxShadow: glow ? `0 0 20px ${color}33, 0 4px 12px rgba(0,0,0,0.08)` : undefined,
-      }}
-    >
-      <div className="card-body text-center py-4">
-        <div className="text-muted small fw-medium mb-2">{title}</div>
-        <div
-          className="fw-bold"
-          style={{
-            fontSize: '2.25rem',
-            lineHeight: 1.1,
-            color,
-            transition: 'color 0.3s ease',
-          }}
-        >
-          {value}
-        </div>
-      </div>
-    </div>
+    <Card elevation="sm" className="cbroi-metric">
+      <div className="cbroi-metric-title">{title}</div>
+      <div className="cbroi-metric-value" style={{ color }}>{value}</div>
+      {note && <div className="cbroi-metric-note">{note}</div>}
+    </Card>
   );
 }
+
+const CSS = `
+.cbroi-root{font-family:var(--font-body);color:var(--text-body);background:var(--surface-page);line-height:var(--lh-relaxed);-webkit-font-smoothing:antialiased}
+.cbroi-root *{box-sizing:border-box}
+.cbroi-root h1,.cbroi-root h2,.cbroi-root h3{font-family:var(--font-display);color:var(--text-strong);margin:0;line-height:var(--lh-heading);letter-spacing:var(--ls-tight)}
+.cbroi-wrap{max-width:var(--container-lg);margin:0 auto;padding:0 var(--space-6)}
+.cbroi-eyebrow{font-size:var(--fs-overline);font-weight:var(--fw-bold);letter-spacing:var(--ls-overline);text-transform:uppercase;color:var(--brand-accent)}
+.cbroi-sec{padding:var(--space-16) 0 var(--space-24)}
+.cbroi-h2{font-size:var(--fs-h2);font-weight:var(--fw-bold)}
+.cbroi-lead{font-size:var(--fs-body-lg);line-height:var(--lh-normal);color:var(--text-muted)}
+.cbroi-mt2{margin-top:var(--space-2)}
+.cbroi-mt4{margin-top:var(--space-4)}
+
+/* HERO */
+.cbroi-hero{background:var(--surface-inverse);color:var(--text-on-inverse);padding:var(--space-20) 0;text-align:center}
+.cbroi-hero h1{color:var(--text-on-inverse);font-size:var(--fs-hero-fluid);font-weight:var(--fw-black);max-width:20ch;margin:var(--space-4) auto 0}
+.cbroi-hero .cbroi-eyebrow{color:var(--red-300)}
+.cbroi-hero .cbroi-lead{color:var(--neutral-300);max-width:60ch;margin:var(--space-5) auto 0}
+
+/* CALCULATOR LAYOUT */
+.cbroi-grid{display:grid;grid-template-columns:5fr 7fr;gap:var(--space-8);align-items:start}
+.cbroi-panel{padding:var(--space-8)}
+.cbroi-panel h2{font-size:var(--fs-h5);font-weight:var(--fw-bold)}
+.cbroi-sliders{margin-top:var(--space-6);display:flex;flex-direction:column;gap:var(--space-6)}
+.cbroi-slider-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--space-2)}
+.cbroi-slider-label{font-size:var(--fs-body-sm);font-weight:var(--fw-medium);color:var(--text-body);margin:0}
+.cbroi-slider-val{font-family:var(--font-display);font-weight:var(--fw-bold);color:var(--brand-accent);font-size:var(--fs-h5)}
+.cbroi-slider-scale{display:flex;justify-content:space-between;margin-top:var(--space-1);font-size:var(--fs-caption);color:var(--text-muted)}
+
+.cbroi-results h2{font-size:var(--fs-h5);font-weight:var(--fw-bold);margin-bottom:var(--space-4)}
+.cbroi-metrics{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}
+.cbroi-metric{padding:var(--space-6);text-align:center}
+.cbroi-metric-title{font-size:var(--fs-caption);font-weight:var(--fw-medium);color:var(--text-muted);text-transform:uppercase;letter-spacing:var(--ls-wide)}
+.cbroi-metric-value{font-family:var(--font-display);font-weight:var(--fw-black);font-size:var(--fs-h2);line-height:1.05;margin-top:var(--space-2)}
+.cbroi-metric-note{font-size:var(--fs-caption);color:var(--text-muted);margin-top:var(--space-2)}
+.cbroi-summary{margin-top:var(--space-4);padding:var(--space-6);border-left:var(--border-3) solid var(--brand-accent);background:var(--surface-subtle);border-radius:var(--radius-md)}
+.cbroi-summary p{margin:0;font-size:var(--fs-body-sm);color:var(--text-body)}
+
+/* CLOSING */
+.cbroi-closing{text-align:center}
+.cbroi-closing h2{font-size:var(--fs-h2);max-width:24ch;margin:0 auto}
+.cbroi-closing .cbroi-lead{max-width:56ch;margin:var(--space-4) auto var(--space-8)}
+.cbroi-closing-cta{display:flex;gap:var(--space-4);justify-content:center;flex-wrap:wrap}
+
+@media(max-width:900px){
+  .cbroi-grid{grid-template-columns:1fr}
+  .cbroi-metrics{grid-template-columns:1fr}
+}
+`;
 
 /* ── Page component ──────────────────────────────────────────────── */
 
 function ExecutiveROICalculatorPage() {
   const [searchParams] = useSearchParams();
-  const [showBooking, setShowBooking] = useState(false);
   const p = (key: string, fallback: number) => {
     const v = Number(searchParams.get(key));
     return v > 0 ? v : fallback;
   };
 
-  const [employees, setEmployees] = useState(() => p('employees', 15));
-  const [hoursSaved, setHoursSaved] = useState(() => p('hours', 5));
-  const [hourlyCost, setHourlyCost] = useState(() => p('cost', 70));
-  const [weeks, setWeeks] = useState(() => p('weeks', 52));
-  const [investment, setInvestment] = useState(() => p('investment', 15000));
+  const [seats, setSeats] = useState(() => p('seats', 25));
+  const [seatPrice, setSeatPrice] = useState(() => p('seatprice', 1500));
+  const [baseSalary, setBaseSalary] = useState(() => p('salary', 160000));
+  const [badHireMultiplier, setBadHireMultiplier] = useState(() => p('multiplier', 1));
+  const [builderRate, setBuilderRate] = useState(() => p('builderrate', 20));
 
   const roi = useMemo(
-    () => calculateROI(employees, hoursSaved, hourlyCost, weeks, investment),
-    [employees, hoursSaved, hourlyCost, weeks, investment],
+    () => calculateSponsorROI(seats, seatPrice, baseSalary, badHireMultiplier, builderRate),
+    [seats, seatPrice, baseSalary, badHireMultiplier, builderRate],
   );
 
   return (
-    <>
+    <div className="cbroi-root">
+      <style>{CSS}</style>
       <SEOHead
-        title="Executive AI ROI Calculator"
-        description="Estimate the financial impact of building internal AI execution capability. Interactive ROI modeling for enterprise leaders."
+        title="Sponsor ROI & Talent-Discovery Calculator"
+        description="Model the ROI of sponsoring a seat block in the Colaberry AI Challenge: a fraction of the cost of one bad senior hire, and it surfaces who your real AI builders are before you bet a salary on the wrong person."
       />
 
-      {/* Header */}
-      <section className="section-alt" style={{ paddingBottom: '2rem' }}>
-        <div className="container text-center">
-          <h1 className="display-5 fw-bold mb-3" style={{ color: 'var(--color-primary)' }}>
-            Executive AI ROI Calculator
-          </h1>
-          <p className="lead mb-2" style={{ color: 'var(--color-text-light)' }}>
-            Estimate the financial impact of building internal AI execution capability.
-          </p>
-          <p className="small" style={{ color: 'var(--color-text-light)', maxWidth: '600px', margin: '0 auto' }}>
-            Small workflow automation gains compound into enterprise-level financial impact.
-            Adjust the inputs below to model your organization's potential.
+      {/* HERO */}
+      <header className="cbroi-hero">
+        <div className="cbroi-wrap">
+          <div className="cbroi-eyebrow">Sponsor ROI · Talent Discovery</div>
+          <h1 className="cb-balance">A seat block costs less than one bad hire — and tells you who can actually build.</h1>
+          <p className="cbroi-lead">
+            You can spend a senior salary hiring an AI builder you hope is real, or sponsor a block of seats and
+            watch your real builders surface on a leaderboard first. Model both below.
           </p>
         </div>
-      </section>
+      </header>
 
-      {/* Calculator */}
-      <section className="section" style={{ paddingTop: '2rem' }}>
-        <div className="container">
-          <div className="row g-4 g-lg-5">
-            {/* Left — Sliders */}
-            <div className="col-lg-5">
-              <div className="card border-0 shadow-sm p-4">
-                <h2 className="h6 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
-                  Model Inputs
-                </h2>
-
+      {/* CALCULATOR */}
+      <section className="cbroi-sec">
+        <div className="cbroi-wrap">
+          <div className="cbroi-grid">
+            {/* Inputs */}
+            <Card elevation="sm" className="cbroi-panel">
+              <Badge tone="blue" outline>Model Inputs</Badge>
+              <h2 className="cbroi-mt2">Your sponsorship &amp; hiring assumptions</h2>
+              <div className="cbroi-sliders">
                 <Slider
-                  label="Employees Impacted"
-                  value={employees}
-                  min={1}
-                  max={200}
-                  step={1}
-                  format={(v) => String(v)}
-                  onChange={setEmployees}
-                />
-
-                <Slider
-                  label="Hours Saved Per Week (per employee)"
-                  value={hoursSaved}
-                  min={1}
-                  max={20}
-                  step={1}
-                  format={(v) => String(v)}
-                  onChange={setHoursSaved}
-                />
-
-                <Slider
-                  label="Average Fully Loaded Hourly Cost ($)"
-                  value={hourlyCost}
-                  min={30}
-                  max={150}
+                  label="Seats in your block"
+                  value={seats}
+                  min={5}
+                  max={250}
                   step={5}
-                  format={(v) => `$${v}`}
-                  onChange={setHourlyCost}
-                />
-
-                <Slider
-                  label="Weeks Per Year"
-                  value={weeks}
-                  min={40}
-                  max={52}
-                  step={1}
                   format={(v) => String(v)}
-                  onChange={setWeeks}
+                  onChange={setSeats}
                 />
-
                 <Slider
-                  label="Program Investment ($)"
-                  value={investment}
-                  min={5000}
-                  max={50000}
-                  step={1000}
+                  label="Price per sponsored seat (annual)"
+                  value={seatPrice}
+                  min={500}
+                  max={3000}
+                  step={100}
                   format={(v) => fmt.format(v)}
-                  onChange={setInvestment}
+                  onChange={setSeatPrice}
+                />
+                <Slider
+                  label="Base salary of an AI hire you’d otherwise make"
+                  value={baseSalary}
+                  min={80000}
+                  max={300000}
+                  step={5000}
+                  format={(v) => fmt.format(v)}
+                  onChange={setBaseSalary}
+                />
+                <Slider
+                  label="Cost of a bad hire (× salary)"
+                  value={badHireMultiplier}
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  format={(v) => `${v.toFixed(1)}×`}
+                  onChange={setBadHireMultiplier}
+                />
+                <Slider
+                  label="Share of seats who emerge as real builders (%)"
+                  value={builderRate}
+                  min={5}
+                  max={50}
+                  step={1}
+                  format={(v) => `${v}%`}
+                  onChange={setBuilderRate}
                 />
               </div>
-            </div>
+            </Card>
 
-            {/* Right — Dashboard */}
-            <div className="col-lg-7">
-              <h2 className="h6 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
-                Projected Financial Impact
-              </h2>
-
-              <div className="row g-3">
-                <div className="col-sm-6">
-                  <MetricCard
-                    title="Annual Recurring Savings"
-                    value={fmt.format(roi.annualSavings)}
-                    color={savingsColor(roi.annualSavings)}
-                  />
-                </div>
-                <div className="col-sm-6">
-                  <MetricCard
-                    title="ROI Multiple"
-                    value={`${roi.roiMultiple}x`}
-                    color={roiColor(roi.roiMultiple)}
-                    glow={roi.roiMultiple >= 3}
-                  />
-                </div>
-                <div className="col-sm-6">
-                  <MetricCard
-                    title="Break-even Timeline"
-                    value={`${roi.breakEvenWeeks} weeks`}
-                    color={breakEvenColor(roi.breakEvenWeeks)}
-                  />
-                </div>
-                <div className="col-sm-6">
-                  <MetricCard
-                    title="3-Year Financial Impact"
-                    value={fmt.format(roi.threeYearImpact)}
-                    color={threeYearColor(roi.threeYearImpact)}
-                    glow={roi.threeYearImpact >= 500_000}
-                  />
-                </div>
+            {/* Results */}
+            <div className="cbroi-results">
+              <h2>What the seat block buys you</h2>
+              <div className="cbroi-metrics">
+                <MetricCard
+                  title="Your seat block"
+                  value={fmt.format(roi.seatBlockCost)}
+                  color="var(--text-strong)"
+                  note={`${seats} seats × ${fmt.format(seatPrice)}`}
+                />
+                <MetricCard
+                  title="One bad AI hire"
+                  value={fmt.format(roi.badHireCost)}
+                  color="var(--status-danger)"
+                  note={`${badHireMultiplier.toFixed(1)}× a ${fmt.format(baseSalary)} salary`}
+                />
+                <MetricCard
+                  title="Builders surfaced"
+                  value={String(roi.buildersSurfaced)}
+                  color="var(--brand-accent)"
+                  note={roi.costPerBuilder > 0 ? `${fmt.format(roi.costPerBuilder)} per builder identified` : 'Raise the builder rate'}
+                />
+                <MetricCard
+                  title="Cost avoided vs one bad hire"
+                  value={`${roi.roiMultiple}×`}
+                  color={roiColor(roi.roiMultiple)}
+                  note={roi.netAvoidedCost >= 0 ? `${fmt.format(roi.netAvoidedCost)} less than a bad hire` : 'Above one bad hire'}
+                />
               </div>
 
-              {/* Summary callout */}
-              <div
-                className="card border-0 mt-3 p-3"
-                style={{
-                  background: roi.roiMultiple >= 3
-                    ? 'linear-gradient(135deg, rgba(56,161,105,0.08) 0%, rgba(56,161,105,0.02) 100%)'
-                    : 'var(--color-bg-alt)',
-                  borderLeft: `4px solid ${roiColor(roi.roiMultiple)}`,
-                  transition: 'background 0.3s ease, border-color 0.3s ease',
-                }}
-              >
-                <p className="mb-0 small" style={{ color: 'var(--color-text)' }}>
-                  With <strong>{employees} employees</strong> saving <strong>{hoursSaved} hours/week</strong>,
-                  your organization recovers <strong>{fmt.format(roi.weeklySavings)}/week</strong> in
-                  productivity — paying back the program investment
-                  in <strong>{roi.breakEvenWeeks} weeks</strong>.
+              <div className="cbroi-summary" style={{ borderLeftColor: roiColor(roi.roiMultiple) }}>
+                <p>
+                  Sponsoring <strong>{seats} seats</strong> costs <strong>{fmt.format(roi.seatBlockCost)}</strong> —
+                  about <strong style={{ color: avoidedColor(roi.netAvoidedCost) }}>{roi.roiMultiple}×</strong> cheaper than
+                  the <strong>{fmt.format(roi.badHireCost)}</strong> a single mis-hire would cost you. Along the way it
+                  surfaces an estimated <strong>{roi.buildersSurfaced} real AI builders</strong> already on your
+                  payroll — without taking anyone off the job.
                 </p>
               </div>
             </div>
@@ -310,29 +334,26 @@ function ExecutiveROICalculatorPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="section-alt text-center">
-        <div className="container" style={{ maxWidth: '600px' }}>
-          <h2 className="h4 fw-bold mb-3" style={{ color: 'var(--color-primary)' }}>
-            Ready to Capture This ROI?
-          </h2>
-          <p className="text-muted mb-4">
-            Download the Executive Briefing or schedule a strategy call
-            to discuss how the program maps to your organization.
+      {/* CLOSING */}
+      <section className="cbroi-sec" style={{ background: 'var(--surface-subtle)' }}>
+        <div className="cbroi-wrap cbroi-closing">
+          <div className="cbroi-eyebrow">Pick Your Door</div>
+          <h2 className="cb-balance cbroi-mt4">Sponsor your team — or join the Challenge yourself.</h2>
+          <p className="cbroi-lead">
+            Sponsor a seat block to discover the AI builders already inside your company, or join the same class
+            as an individual. One program, two doors, one leaderboard.
           </p>
-          <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center">
-            <Link to="/#download-overview" className="btn btn-primary btn-lg">
-              {STANDARD_CTAS.primary}
-            </Link>
-            <button className="btn btn-outline-primary btn-lg" onClick={() => setShowBooking(true)}>
-              {STANDARD_CTAS.secondary}
-            </button>
+          <div className="cbroi-closing-cta">
+            <CtaButton to="/sponsorship" size="lg" trailingIcon={<span aria-hidden>→</span>}>
+              Sponsor Your Team
+            </CtaButton>
+            <CtaButton to="/enroll" size="lg" variant="outline">
+              Join the Challenge
+            </CtaButton>
           </div>
         </div>
       </section>
-
-      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/executive-roi-calculator" />
-    </>
+    </div>
   );
 }
 

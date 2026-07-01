@@ -3,11 +3,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 interface Props { token: string; apiUrl: string; }
 
 const layerColors: Record<string, string> = {
-  strategy_trust: '#1a365d',
-  governance: '#c53030',
-  requirements: '#2b6cb0',
-  build_discipline: '#38a169',
-  executive_authority: '#805ad5',
+  strategy_trust: 'var(--chart-1)',
+  governance: 'var(--chart-7)',
+  requirements: 'var(--chart-2)',
+  build_discipline: 'var(--chart-3)',
+  executive_authority: 'var(--chart-5)',
 };
 
 const layerLabels: Record<string, string> = {
@@ -87,7 +87,7 @@ const SkillControlTab: React.FC<Props> = ({ token, apiUrl }) => {
         return (
           <div key={layerId} className="card border-0 shadow-sm mb-3">
             <div className="card-header bg-white d-flex align-items-center gap-2">
-              <span style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: layerColors[layerId] || '#718096', display: 'inline-block' }}></span>
+              <span style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: layerColors[layerId] || 'var(--text-muted)', display: 'inline-block' }}></span>
               <span className="fw-semibold" style={{ fontSize: 14 }}>{layerLabels[layerId] || layerId}</span>
               <span className="badge bg-secondary ms-auto" style={{ fontSize: 11 }}>{domains.length} domains</span>
             </div>

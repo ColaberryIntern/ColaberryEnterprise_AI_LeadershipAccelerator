@@ -59,18 +59,18 @@ function CollapsibleSection({ icon, title, count, color, children, warningCount 
       <button
         className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 w-100"
         onClick={() => setOpen(!open)}
-        style={{ fontSize: 11, color: 'var(--color-text, #2d3748)' }}
+        style={{ fontSize: 11, color: 'var(--color-text, var(--text-body))' }}
       >
         <i className={`bi bi-chevron-${open ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
         <i className={`bi ${icon}`} style={{ color, fontSize: 11 }}></i>
         <span className="fw-medium">{title}</span>
         {count > 0 && (
-          <span className="badge ms-auto" style={{ fontSize: 8, background: `${color}18`, color, border: `1px solid ${color}30` }}>
+          <span className="badge ms-auto" style={{ fontSize: 8, background: `color-mix(in srgb, ${color} 9%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 19%, transparent)` }}>
             {count}
           </span>
         )}
         {(warningCount || 0) > 0 && (
-          <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)', marginLeft: count > 0 ? 4 : 'auto' }}>
+          <span className="badge" style={{ fontSize: 8, background: 'var(--status-danger-bg)', color: 'var(--status-danger)', border: '1px solid var(--status-danger-bg)', marginLeft: count > 0 ? 4 : 'auto' }}>
             {warningCount}
           </span>
         )}
@@ -110,7 +110,7 @@ export default function SectionIntelligencePanel({
         onClick={() => setCollapsed(!collapsed)}
       >
         <span className="fw-semibold small">
-          <i className="bi bi-cpu me-1" style={{ color: 'var(--color-primary, #1a365d)' }}></i>
+          <i className="bi bi-cpu me-1" style={{ color: 'var(--color-primary, var(--red-500))' }}></i>
           Section Intelligence
         </span>
         <i className={`bi bi-chevron-${collapsed ? 'right' : 'down'} text-muted`} style={{ fontSize: 11 }}></i>
@@ -119,25 +119,25 @@ export default function SectionIntelligencePanel({
       {!collapsed && (
         <div className="card-body py-2" style={{ fontSize: 10 }}>
           {lessonTitle && (
-            <div className="fw-semibold mb-2" style={{ fontSize: 11, color: 'var(--color-primary, #1a365d)' }}>
+            <div className="fw-semibold mb-2" style={{ fontSize: 11, color: 'var(--color-primary, var(--red-500))' }}>
               {lessonTitle}
             </div>
           )}
 
           {/* Variables — Enhanced with Flow Categories */}
-          <CollapsibleSection icon="bi-braces" title="Variables" count={totalVarCount} color="#0d6efd" warningCount={vfMissing}>
+          <CollapsibleSection icon="bi-braces" title="Variables" count={totalVarCount} color="var(--blue-500)" warningCount={vfMissing}>
             {variableFlow ? (
               <div className="d-flex flex-column gap-2">
                 {/* Missing Variables — Warning */}
                 {vfMissing > 0 && (
-                  <div className="p-1 rounded" style={{ background: 'rgba(220,53,69,0.08)', border: '1px solid rgba(220,53,69,0.15)' }}>
-                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dc3545' }}>
+                  <div className="p-1 rounded" style={{ background: 'var(--status-danger-bg)', border: '1px solid var(--status-danger-bg)' }}>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: 'var(--status-danger)' }}>
                       <i className="bi bi-exclamation-triangle me-1"></i>
                       {vfMissing} missing variable{vfMissing > 1 ? 's' : ''}
                     </div>
                     <div className="d-flex flex-wrap gap-1">
                       {variableFlow.missing.map(v => (
-                        <span key={v.key} className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                        <span key={v.key} className="badge" style={{ fontSize: 8, background: 'var(--status-danger-bg)', color: 'var(--status-danger)', border: '1px solid var(--status-danger-bg)' }}>
                           {v.key}
                         </span>
                       ))}
@@ -148,12 +148,12 @@ export default function SectionIntelligencePanel({
                 {/* Required — referenced in prompts */}
                 {vfRequired > 0 && (
                   <div>
-                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#0d6efd' }}>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: 'var(--blue-500)' }}>
                       <i className="bi bi-arrow-down-left me-1"></i>Required ({vfRequired})
                     </div>
                     <div className="d-flex flex-wrap gap-1">
                       {variableFlow.required.map(v => (
-                        <span key={v.key} className="badge" title={`Used in: ${v.usedIn.join(', ')}`} style={{ fontSize: 8, background: 'rgba(13,110,253,0.1)', color: '#0d6efd', border: '1px solid rgba(13,110,253,0.2)' }}>
+                        <span key={v.key} className="badge" title={`Used in: ${v.usedIn.join(', ')}`} style={{ fontSize: 8, background: 'var(--status-info-bg)', color: 'var(--blue-500)', border: '1px solid var(--status-info-bg)' }}>
                           {v.key}
                         </span>
                       ))}
@@ -164,12 +164,12 @@ export default function SectionIntelligencePanel({
                 {/* Produced — created by this section */}
                 {vfProduced > 0 && (
                   <div>
-                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dd6b20' }}>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: 'var(--status-warning)' }}>
                       <i className="bi bi-arrow-up-right me-1"></i>Produced ({vfProduced})
                     </div>
                     <div className="d-flex flex-wrap gap-1">
                       {variableFlow.produced.map(v => (
-                        <span key={v.key} className="badge" title={`Produced by: ${v.producedBy}`} style={{ fontSize: 8, background: 'rgba(221,107,32,0.1)', color: '#dd6b20', border: '1px solid rgba(221,107,32,0.2)' }}>
+                        <span key={v.key} className="badge" title={`Produced by: ${v.producedBy}`} style={{ fontSize: 8, background: 'var(--status-warning-bg)', color: 'var(--status-warning)', border: '1px solid var(--status-warning-bg)' }}>
                           {v.key}
                         </span>
                       ))}
@@ -180,12 +180,12 @@ export default function SectionIntelligencePanel({
                 {/* Available — from prior sections + system */}
                 {vfAvailable > 0 && (
                   <div>
-                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#38a169' }}>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: 'var(--status-success)' }}>
                       <i className="bi bi-check-circle me-1"></i>Available ({vfAvailable})
                     </div>
                     <div className="d-flex flex-wrap gap-1">
                       {variableFlow.available.slice(0, 15).map(v => (
-                        <span key={v.key} className="badge" title={`From: ${v.source} (${v.scope})`} style={{ fontSize: 8, background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                        <span key={v.key} className="badge" title={`From: ${v.source} (${v.scope})`} style={{ fontSize: 8, background: 'var(--status-success-bg)', color: 'var(--status-success)', border: '1px solid var(--status-success-bg)' }}>
                           {v.key}
                         </span>
                       ))}
@@ -204,7 +204,7 @@ export default function SectionIntelligencePanel({
               /* Fallback: flat list when flow data not available */
               <div className="d-flex flex-wrap gap-1">
                 {sectionVariableKeys.map(k => (
-                  <span key={k} className="badge" style={{ fontSize: 8, background: 'rgba(13,110,253,0.1)', color: '#0d6efd', border: '1px solid rgba(13,110,253,0.2)' }}>
+                  <span key={k} className="badge" style={{ fontSize: 8, background: 'var(--status-info-bg)', color: 'var(--blue-500)', border: '1px solid var(--status-info-bg)' }}>
                     {resolveLabel(k, variableOptions)}
                   </span>
                 ))}
@@ -214,7 +214,7 @@ export default function SectionIntelligencePanel({
           </CollapsibleSection>
 
           {/* Skills Covered */}
-          <CollapsibleSection icon="bi-award" title="Skills" count={sectionSkillIds.length} color="#38a169">
+          <CollapsibleSection icon="bi-award" title="Skills" count={sectionSkillIds.length} color="var(--status-success)">
             <div className="d-flex flex-column gap-1">
               {sectionSkillIds.map(id => {
                 const matchedEntry = skillGraph?.find(s => {
@@ -226,14 +226,14 @@ export default function SectionIntelligencePanel({
                 const sectionRole = lessonId ? matchedEntry?.sections?.find(sec => sec.lesson_id === lessonId)?.role : undefined;
                 const skillType = matchedEntry?.skill_type || 'core';
                 const typeLabel = skillType === 'core' ? 'C' : skillType === 'supporting' ? 'S' : 'A';
-                const typeColor = skillType === 'core' ? '#38a169' : skillType === 'supporting' ? '#0d6efd' : '#7c3aed';
+                const typeColor = skillType === 'core' ? 'var(--status-success)' : skillType === 'supporting' ? 'var(--blue-500)' : 'var(--chart-5)';
 
                 return (
                   <div key={id} className="d-flex align-items-center gap-1">
-                    <span className="badge" style={{ fontSize: 7, background: `${typeColor}20`, color: typeColor, border: `1px solid ${typeColor}40`, minWidth: 14, textAlign: 'center' }}>
+                    <span className="badge" style={{ fontSize: 7, background: `color-mix(in srgb, ${typeColor} 13%, transparent)`, color: typeColor, border: `1px solid color-mix(in srgb, ${typeColor} 25%, transparent)`, minWidth: 14, textAlign: 'center' }}>
                       {typeLabel}
                     </span>
-                    <span className="badge" style={{ fontSize: 8, background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                    <span className="badge" style={{ fontSize: 8, background: 'var(--status-success-bg)', color: 'var(--status-success)', border: '1px solid var(--status-success-bg)' }}>
                       {resolveLabel(id, skillOptions)}
                     </span>
                     {sectionCount > 1 && (
@@ -242,8 +242,8 @@ export default function SectionIntelligencePanel({
                     {sectionRole && (
                       <span className="badge ms-auto" style={{
                         fontSize: 7,
-                        background: sectionRole === 'introduced' ? 'rgba(56,161,105,0.15)' : sectionRole === 'reinforced' ? 'rgba(13,110,253,0.15)' : 'rgba(124,58,237,0.15)',
-                        color: sectionRole === 'introduced' ? '#38a169' : sectionRole === 'reinforced' ? '#0d6efd' : '#7c3aed',
+                        background: sectionRole === 'introduced' ? 'var(--status-success-bg)' : sectionRole === 'reinforced' ? 'var(--status-info-bg)' : 'color-mix(in srgb, var(--chart-5) 15%, transparent)',
+                        color: sectionRole === 'introduced' ? 'var(--status-success)' : sectionRole === 'reinforced' ? 'var(--blue-500)' : 'var(--chart-5)',
                         border: 'none',
                       }}>
                         {sectionRole === 'introduced' ? 'Introduced' : sectionRole === 'reinforced' ? 'Reinforced' : 'Mastered'}
@@ -257,14 +257,14 @@ export default function SectionIntelligencePanel({
           </CollapsibleSection>
 
           {/* Artifacts */}
-          <CollapsibleSection icon="bi-box" title="Artifacts" count={sectionArtifactIds.length} color="#dd6b20">
+          <CollapsibleSection icon="bi-box" title="Artifacts" count={sectionArtifactIds.length} color="var(--status-warning)">
             <div className="d-flex flex-column gap-1">
               {sectionArtifactIds.map(id => {
                 const flowEntry = artifactFlow?.find(a => a.artifact_id === id);
                 const isProducer = flowEntry?.produced_by?.lesson_id === lessonId;
                 const isConsumer = !isProducer && flowEntry?.produced_by != null;
                 const downstreamCount = flowEntry?.consumed_by?.length || 0;
-                const dirColor = isProducer ? '#dd6b20' : isConsumer ? '#0d6efd' : '#718096';
+                const dirColor = isProducer ? 'var(--status-warning)' : isConsumer ? 'var(--blue-500)' : 'var(--text-muted)';
                 const dirLabel = isProducer ? 'Produces' : isConsumer ? 'Uses' : '';
                 const dirIcon = isProducer ? 'bi-arrow-up-right' : isConsumer ? 'bi-arrow-down-left' : '';
 
@@ -273,7 +273,7 @@ export default function SectionIntelligencePanel({
                     {dirIcon && (
                       <i className={`bi ${dirIcon}`} style={{ fontSize: 8, color: dirColor }}></i>
                     )}
-                    <span className="badge" style={{ fontSize: 8, background: `${dirColor}18`, color: dirColor, border: `1px solid ${dirColor}30` }}>
+                    <span className="badge" style={{ fontSize: 8, background: `color-mix(in srgb, ${dirColor} 9%, transparent)`, color: dirColor, border: `1px solid color-mix(in srgb, ${dirColor} 19%, transparent)` }}>
                       {resolveLabel(id, artifactOptions)}
                     </span>
                     {dirLabel && (
@@ -293,14 +293,14 @@ export default function SectionIntelligencePanel({
           </CollapsibleSection>
 
           {/* Mini-Section Flow */}
-          <CollapsibleSection icon="bi-arrow-right-circle" title="Pipeline Flow" count={miniSections.length} color="#7c3aed">
+          <CollapsibleSection icon="bi-arrow-right-circle" title="Pipeline Flow" count={miniSections.length} color="var(--chart-5)">
             <div className="d-flex flex-column gap-1">
               {miniSections.map((ms, i) => {
                 const icon = TYPE_ICONS[ms.mini_section_type] || 'bi-circle';
                 return (
                   <div key={ms.id} className="d-flex align-items-center gap-1" style={{ fontSize: 9 }}>
                     <span className="badge bg-light text-muted border" style={{ fontSize: 7, minWidth: 14 }}>{i + 1}</span>
-                    <i className={`bi ${icon}`} style={{ fontSize: 10, color: '#7c3aed' }}></i>
+                    <i className={`bi ${icon}`} style={{ fontSize: 10, color: 'var(--chart-5)' }}></i>
                     <span className="text-truncate">{ms.title || 'Untitled'}</span>
                     {ms.quality_score != null && (
                       <span className="ms-auto text-muted" style={{ fontSize: 8 }}>{Math.round(ms.quality_score)}%</span>
@@ -319,17 +319,17 @@ export default function SectionIntelligencePanel({
                 icon="bi-arrow-repeat"
                 title="Reconciliation"
                 count={variableReconciliation.undefined_refs.length + variableReconciliation.orphaned_defs.length}
-                color="#6c757d"
+                color="var(--text-muted)"
               >
                 <div className="d-flex flex-column gap-2">
                   {variableReconciliation.undefined_refs.length > 0 && (
                     <div>
-                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dc3545' }}>
+                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: 'var(--status-danger)' }}>
                         Undefined variables ({variableReconciliation.undefined_refs.length})
                       </div>
                       {variableReconciliation.undefined_refs.map(r => (
                         <div key={r.key} className="d-flex align-items-center gap-1 mb-1">
-                          <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                          <span className="badge" style={{ fontSize: 8, background: 'var(--status-danger-bg)', color: 'var(--status-danger)', border: '1px solid var(--status-danger-bg)' }}>
                             {r.key}
                           </span>
                           <span className="text-muted" style={{ fontSize: 7 }}>{r.used_in_sections.join(', ')}</span>
@@ -339,12 +339,12 @@ export default function SectionIntelligencePanel({
                   )}
                   {variableReconciliation.orphaned_defs.length > 0 && (
                     <div>
-                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#6c757d' }}>
+                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
                         Unused definitions ({variableReconciliation.orphaned_defs.length})
                       </div>
                       {variableReconciliation.orphaned_defs.map(d => (
                         <div key={d.key} className="d-flex align-items-center gap-1 mb-1">
-                          <span className="badge" style={{ fontSize: 8, background: 'rgba(108,117,125,0.1)', color: '#6c757d', border: '1px solid rgba(108,117,125,0.2)' }}>
+                          <span className="badge" style={{ fontSize: 8, background: 'var(--surface-subtle)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
                             {d.key}
                           </span>
                           <span className="text-muted" style={{ fontSize: 7 }}>{d.display_name}</span>
@@ -373,12 +373,12 @@ export default function SectionIntelligencePanel({
             icon="bi-shield-check"
             title="System Health"
             count={controlTower?.diagnostics ? 1 : 0}
-            color="#38a169"
+            color="var(--status-success)"
             warningCount={controlTower?.diagnostics?.issues?.filter(i => i.severity === 'critical').length}
           >
             {controlTower?.diagnostics ? (() => {
               const d = controlTower.diagnostics!;
-              const scoreColor = d.system_health_score > 80 ? '#38a169' : d.system_health_score > 50 ? '#dd6b20' : '#dc3545';
+              const scoreColor = d.system_health_score > 80 ? 'var(--status-success)' : d.system_health_score > 50 ? 'var(--status-warning)' : 'var(--status-danger)';
               return (
                 <div className="d-flex flex-column gap-2">
                   <div className="d-flex align-items-center gap-2">
@@ -391,22 +391,22 @@ export default function SectionIntelligencePanel({
                   </div>
                   <div className="d-flex flex-wrap gap-1">
                     {d.summary.missing_count > 0 && (
-                      <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                      <span className="badge" style={{ fontSize: 8, background: 'var(--status-danger-bg)', color: 'var(--status-danger)', border: '1px solid var(--status-danger-bg)' }}>
                         {d.summary.missing_count} missing
                       </span>
                     )}
                     {d.summary.timeline_violations > 0 && (
-                      <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                      <span className="badge" style={{ fontSize: 8, background: 'var(--status-danger-bg)', color: 'var(--status-danger)', border: '1px solid var(--status-danger-bg)' }}>
                         {d.summary.timeline_violations} timeline
                       </span>
                     )}
                     {d.summary.undefined_count > 0 && (
-                      <span className="badge" style={{ fontSize: 8, background: 'rgba(221,107,32,0.1)', color: '#dd6b20', border: '1px solid rgba(221,107,32,0.2)' }}>
+                      <span className="badge" style={{ fontSize: 8, background: 'var(--status-warning-bg)', color: 'var(--status-warning)', border: '1px solid var(--status-warning-bg)' }}>
                         {d.summary.undefined_count} undefined
                       </span>
                     )}
                     {d.summary.orphaned_count > 0 && (
-                      <span className="badge" style={{ fontSize: 8, background: 'rgba(108,117,125,0.1)', color: '#6c757d', border: '1px solid rgba(108,117,125,0.2)' }}>
+                      <span className="badge" style={{ fontSize: 8, background: 'var(--surface-subtle)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
                         {d.summary.orphaned_count} orphaned
                       </span>
                     )}
@@ -416,10 +416,10 @@ export default function SectionIntelligencePanel({
                   </div>
                   {d.issues.filter(i => i.severity === 'critical').length > 0 && (
                     <div>
-                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dc3545' }}>Critical Issues</div>
+                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: 'var(--status-danger)' }}>Critical Issues</div>
                       {d.issues.filter(i => i.severity === 'critical').map((issue, idx) => (
                         <div key={idx} className="d-flex align-items-start gap-1 mb-1" style={{ fontSize: 9 }}>
-                          <i className="bi bi-exclamation-triangle" style={{ color: '#dc3545', fontSize: 9 }}></i>
+                          <i className="bi bi-exclamation-triangle" style={{ color: 'var(--status-danger)', fontSize: 9 }}></i>
                           <span>{issue.message}</span>
                         </div>
                       ))}
@@ -448,7 +448,7 @@ export default function SectionIntelligencePanel({
             icon="bi-list-check"
             title="Variable Trace"
             count={controlTower?.variableTrace?.trace?.length || 0}
-            color="#0d6efd"
+            color="var(--blue-500)"
             warningCount={controlTower?.variableTrace?.missing_count}
           >
             {controlTower?.variableTrace ? (() => {
@@ -456,20 +456,20 @@ export default function SectionIntelligencePanel({
               return (
                 <div className="d-flex flex-column gap-1">
                   <div className="d-flex gap-1 mb-1" style={{ fontSize: 8 }}>
-                    <span className="badge" style={{ background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                    <span className="badge" style={{ background: 'var(--status-success-bg)', color: 'var(--status-success)', border: '1px solid var(--status-success-bg)' }}>
                       {t.resolved_count} resolved
                     </span>
                     {t.missing_count > 0 && (
-                      <span className="badge" style={{ background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                      <span className="badge" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)', border: '1px solid var(--status-danger-bg)' }}>
                         {t.missing_count} missing
                       </span>
                     )}
                   </div>
                   {t.trace.map(v => {
-                    const statusColor = v.status === 'resolved' ? '#38a169' : v.status === 'missing' ? '#dc3545' : '#dd6b20';
+                    const statusColor = v.status === 'resolved' ? 'var(--status-success)' : v.status === 'missing' ? 'var(--status-danger)' : 'var(--status-warning)';
                     return (
                       <div key={v.key} className="d-flex align-items-center gap-1" style={{ fontSize: 9 }}>
-                        <span className="badge" style={{ fontSize: 8, background: `${statusColor}15`, color: statusColor, border: `1px solid ${statusColor}30`, minWidth: 10 }}>
+                        <span className="badge" style={{ fontSize: 8, background: `color-mix(in srgb, ${statusColor} 8%, transparent)`, color: statusColor, border: `1px solid color-mix(in srgb, ${statusColor} 19%, transparent)`, minWidth: 10 }}>
                           {v.status === 'resolved' ? '\u2713' : v.status === 'missing' ? '\u2717' : '!'}
                         </span>
                         <span className="fw-medium">{v.key}</span>
@@ -501,29 +501,29 @@ export default function SectionIntelligencePanel({
             icon="bi-tools"
             title="Repair Plan"
             count={controlTower?.repairPlan?.impact_summary?.total_actions || 0}
-            color="#dd6b20"
+            color="var(--status-warning)"
             warningCount={controlTower?.repairPlan?.impact_summary?.blocked_actions}
           >
             {controlTower?.repairPlan ? (() => {
               const p = controlTower.repairPlan!;
-              const riskColor = p.overall_risk_level === 'low' ? '#38a169' : p.overall_risk_level === 'medium' ? '#dd6b20' : '#dc3545';
+              const riskColor = p.overall_risk_level === 'low' ? 'var(--status-success)' : p.overall_risk_level === 'medium' ? 'var(--status-warning)' : 'var(--status-danger)';
               return (
                 <div className="d-flex flex-column gap-2">
                   <div className="d-flex flex-wrap gap-1" style={{ fontSize: 8 }}>
-                    <span className="badge" style={{ background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                    <span className="badge" style={{ background: 'var(--status-success-bg)', color: 'var(--status-success)', border: '1px solid var(--status-success-bg)' }}>
                       {p.impact_summary.safe_actions} safe
                     </span>
                     {p.impact_summary.blocked_actions > 0 && (
-                      <span className="badge" style={{ background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                      <span className="badge" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)', border: '1px solid var(--status-danger-bg)' }}>
                         {p.impact_summary.blocked_actions} blocked
                       </span>
                     )}
-                    <span className="badge" style={{ background: `${riskColor}15`, color: riskColor, border: `1px solid ${riskColor}30` }}>
+                    <span className="badge" style={{ background: `color-mix(in srgb, ${riskColor} 8%, transparent)`, color: riskColor, border: `1px solid color-mix(in srgb, ${riskColor} 19%, transparent)` }}>
                       risk: {p.overall_risk_level}
                     </span>
                   </div>
                   {p.actions.slice(0, 10).map((action, idx) => {
-                    const actRiskColor = action.risk_level === 'low' ? '#38a169' : action.risk_level === 'medium' ? '#dd6b20' : '#dc3545';
+                    const actRiskColor = action.risk_level === 'low' ? 'var(--status-success)' : action.risk_level === 'medium' ? 'var(--status-warning)' : 'var(--status-danger)';
                     return (
                       <div
                         key={idx}
@@ -531,7 +531,7 @@ export default function SectionIntelligencePanel({
                         style={{ fontSize: 9, opacity: action.blocked ? 0.5 : 1 }}
                       >
                         {action.blocked ? (
-                          <i className="bi bi-lock" style={{ fontSize: 9, color: '#dc3545' }}></i>
+                          <i className="bi bi-lock" style={{ fontSize: 9, color: 'var(--status-danger)' }}></i>
                         ) : (
                           <i className="bi bi-wrench" style={{ fontSize: 9, color: actRiskColor }}></i>
                         )}
@@ -585,13 +585,13 @@ export default function SectionIntelligencePanel({
           {editing && (
             <>
               <hr className="my-2" style={{ opacity: 0.15 }} />
-              <div className="fw-semibold mb-1" style={{ fontSize: 10, color: 'var(--color-text-light, #718096)' }}>
+              <div className="fw-semibold mb-1" style={{ fontSize: 10, color: 'var(--color-text-light, var(--text-muted))' }}>
                 <i className="bi bi-activity me-1"></i>Diagnostics
                 {editing.title && <span className="fw-normal ms-1">— {editing.title}</span>}
               </div>
 
               {/* Validation */}
-              <CollapsibleSection icon="bi-check-circle" title="Validation" count={0} color="#0d6efd">
+              <CollapsibleSection icon="bi-check-circle" title="Validation" count={0} color="var(--blue-500)">
                 <ValidationSection
                   editing={editing}
                   dryRun={dryRun || null}
@@ -602,7 +602,7 @@ export default function SectionIntelligencePanel({
 
               {/* Quality Score */}
               {editing.id && (
-                <CollapsibleSection icon="bi-graph-up" title="Quality Score" count={0} color="#38a169">
+                <CollapsibleSection icon="bi-graph-up" title="Quality Score" count={0} color="var(--status-success)">
                   <QualityScoreSection
                     miniSectionId={editing.id}
                     qualityBreakdown={qualityBreakdown || null}
@@ -614,7 +614,7 @@ export default function SectionIntelligencePanel({
 
               {/* Improve to 100 */}
               {editing.id && (
-                <CollapsibleSection icon="bi-lightbulb" title="Improve to 100" count={suggestions?.length || 0} color="#dd6b20">
+                <CollapsibleSection icon="bi-lightbulb" title="Improve to 100" count={suggestions?.length || 0} color="var(--status-warning)">
                   <SuggestionSection
                     miniSectionId={editing.id}
                     suggestions={suggestions || []}

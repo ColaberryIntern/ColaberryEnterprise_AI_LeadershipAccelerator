@@ -3,6 +3,12 @@ import rateLimit from 'express-rate-limit';
 import { submitLead } from '../controllers/leadController';
 import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
+import { handleSalesHubCory } from '../controllers/salesHubCoryController';
+import { handleSponsorInquiry } from '../controllers/sponsorController';
+import {
+  handleGetLeaderboard,
+  handleGetSponsorDashboard,
+} from '../controllers/challengeController';
 
 const leadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -25,8 +31,32 @@ const ingestRateLimiter = rateLimit({
 
 const router = Router();
 
+// Sales-hub Cory RAG endpoint. Registered here (an early, public router) on
+// purpose: on the deployed server, routers mounted after leadRoutes sit behind
+// a broad auth guard, so a public endpoint must be reachable before them.
+const coryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded' },
+});
+
 router.post('/api/leads', leadRateLimiter, submitLead);
 router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipKit);
+// Door B "Sponsor Your Team" inquiry — public, must stay on leadRoutes (mounted
+// before the auth guard). Reuses the lead rate limiter.
+router.post('/api/sponsor-inquiry', leadRateLimiter, handleSponsorInquiry);
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
+router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
+
+// One Class, Many Doors — read-only Challenge leaderboard + Sponsor dashboard.
+// Registered here (an early, public router) on purpose: routers mounted after
+// leadRoutes sit behind a broad auth guard on the deployed server, so these
+// public read surfaces must be reachable before them. The dashboard enforces a
+// per-sponsor access token in its controller (real-auth follow-up documented
+// there); the leaderboard is fully public.
+router.get('/api/challenge/leaderboard', handleGetLeaderboard);
+router.get('/api/sponsor/dashboard', handleGetSponsorDashboard);
 
 export default router;

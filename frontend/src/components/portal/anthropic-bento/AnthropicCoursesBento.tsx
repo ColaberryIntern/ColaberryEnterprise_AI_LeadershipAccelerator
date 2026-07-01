@@ -196,10 +196,8 @@ function AnthropicCoursesBento({ courses, pathLabel }: Props) {
   // 1 course: featured tile only — no anchor (no path to summarize).
   if (compacts.length === 0) {
     return (
-      <div className="acw-ds">
-        <div className="acw-bento acw-bento--single">
-          <FeaturedTile course={featured} showStartHere={false} />
-        </div>
+      <div className="acw-ds acw-bento acw-bento--single" role="group" aria-label={`${label} — 1 course`}>
+        <FeaturedTile course={featured} showStartHere={false} />
       </div>
     );
   }
@@ -209,14 +207,17 @@ function AnthropicCoursesBento({ courses, pathLabel }: Props) {
   // cast the style object since CSSProperties has no index signature for vars.
   const gridStyle = { '--compact-rows': String(compacts.length) } as React.CSSProperties;
   return (
-    <div className="acw-ds">
-      <div className="acw-bento acw-bento--multi" style={gridStyle}>
-        <FeaturedTile course={featured} showStartHere />
-        {compacts.map((c, i) => (
-          <CompactTile key={c.url || i} course={c} iconName={COMPACT_ICONS[i % COMPACT_ICONS.length]} />
-        ))}
-        <PathAnchor count={courses.length} total={totalMinutes(courses)} href={featured.url} label={label} />
-      </div>
+    <div
+      className="acw-ds acw-bento acw-bento--multi"
+      style={gridStyle}
+      role="group"
+      aria-label={`${label} — ${courses.length} courses`}
+    >
+      <FeaturedTile course={featured} showStartHere />
+      {compacts.map((c, i) => (
+        <CompactTile key={c.url || i} course={c} iconName={COMPACT_ICONS[i % COMPACT_ICONS.length]} />
+      ))}
+      <PathAnchor count={courses.length} total={totalMinutes(courses)} href={featured.url} label={label} />
     </div>
   );
 }

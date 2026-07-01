@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
-import Breadcrumb from '../../components/ui/Breadcrumb';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import AdminCurriculumTab from './AdminCurriculumTab';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface Cohort {
   id: string;
@@ -339,23 +340,27 @@ function AdminAcceleratorPage() {
 
   // -- Helpers --
 
+  type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
   const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      scheduled: 'bg-info', live: 'bg-danger', completed: 'bg-success', cancelled: 'bg-secondary',
-      present: 'bg-success', absent: 'bg-danger', excused: 'bg-warning text-dark', late: 'bg-info',
-      pending: 'bg-warning text-dark', submitted: 'bg-info', reviewed: 'bg-success', flagged: 'bg-danger',
+    // Tones for labels the shared StatusBadge auto-mapper doesn't recognize.
+    const tones: Record<string, BadgeTone> = {
+      scheduled: 'info', live: 'danger', completed: 'success', cancelled: 'neutral',
+      present: 'success', absent: 'danger', excused: 'warning', late: 'info',
+      pending: 'warning', submitted: 'info', reviewed: 'success', flagged: 'danger',
+      core: 'primary', lab: 'info',
     };
-    return <span className={`badge ${colors[status] || 'bg-secondary'}`}>{status}</span>;
+    return <StatusBadge label={status} tone={tones[status]} />;
   };
 
   const paymentBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      paid: 'bg-success', pending_invoice: 'bg-warning text-dark', failed: 'bg-danger',
+    const tones: Record<string, BadgeTone> = {
+      paid: 'success', pending_invoice: 'warning', failed: 'danger',
     };
     const labels: Record<string, string> = {
       paid: 'Paid', pending_invoice: 'Pending Invoice', failed: 'Failed',
     };
-    return <span className={`badge ${colors[status] || 'bg-secondary'}`}>{labels[status] || status}</span>;
+    return <StatusBadge label={labels[status] || status} tone={tones[status]} />;
   };
 
   const readinessColor = (score: number | null) => {
@@ -367,6 +372,18 @@ function AdminAcceleratorPage() {
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
   const formatDateTime = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+  // Per-page trust signal — declared before any early return so hook order is stable.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'accelerator program',
+    updatedAt: new Date().toISOString(),
+    summary: 'Live cohort sessions, attendance, submissions, and readiness scores.',
+    href: '/admin/trust',
+    pillars: [
+      { name: 'Freshness', status: 'live', evidence: [{ label: 'Window', value: 'real-time' }] },
+    ],
+  }), []);
 
   if (loading) {
     return (
@@ -380,46 +397,67 @@ function AdminAcceleratorPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Accelerator' }]} />
-
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Accelerator Program
-        </h1>
-        <select
-          className="form-select form-select-sm"
-          style={{ width: 'auto' }}
-          value={selectedCohortId}
-          onChange={(e) => setSelectedCohortId(e.target.value)}
-        >
-          {cohorts.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Stats Cards */}
-      {dashboard && (
-        <div className="row g-3 mb-4">
-          {[
-            { label: 'Sessions', value: `${dashboard.stats.completed_sessions}/${dashboard.stats.total_sessions}`, sub: 'completed' },
-            { label: 'Enrollments', value: dashboard.stats.total_enrollments, sub: 'active' },
-            { label: 'Avg Readiness', value: `${dashboard.stats.avg_readiness}%`, sub: 'score' },
-            { label: 'Avg Attendance', value: `${dashboard.stats.avg_attendance}%`, sub: 'rate' },
-          ].map((card, i) => (
-            <div key={i} className="col-6 col-lg-3">
-              <div className="card border-0 shadow-sm">
-                <div className="card-body text-center py-3">
-                  <div className="small text-muted mb-1">{card.label}</div>
-                  <div className="h4 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>{card.value}</div>
-                  <div className="small text-muted">{card.sub}</div>
-                </div>
-              </div>
+      <PageHeader
+        title="Accelerator"
+        icon="graduation-cap-line"
+        subtitle="Cohort sessions, attendance, submissions, and executive readiness."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Accelerator' }]}
+        trust={trust}
+        actions={
+          <select
+            className="form-select form-select-sm"
+            style={{ width: 'auto' }}
+            value={selectedCohortId}
+            onChange={(e) => setSelectedCohortId(e.target.value)}
+            aria-label="Select cohort"
+          >
+            {cohorts.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        }
+      >
+        {dashboard && (
+          <div className="row g-3">
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Sessions"
+                value={`${dashboard.stats.completed_sessions}/${dashboard.stats.total_sessions}`}
+                icon="calendar-check-line"
+                tone="primary"
+                hint="completed"
+              />
             </div>
-          ))}
-        </div>
-      )}
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Enrollments"
+                value={dashboard.stats.total_enrollments}
+                icon="group-line"
+                tone="info"
+                hint="active"
+              />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Avg Readiness"
+                value={`${dashboard.stats.avg_readiness}%`}
+                icon="shield-check-line"
+                tone="success"
+                hint="score"
+              />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Avg Attendance"
+                value={`${dashboard.stats.avg_attendance}%`}
+                icon="user-follow-line"
+                tone="warning"
+                hint="rate"
+              />
+            </div>
+          </div>
+        )}
+      </PageHeader>
 
       {/* Tabs */}
       <ul className="nav nav-tabs mb-4">
@@ -437,17 +475,18 @@ function AdminAcceleratorPage() {
 
       {/* Tab Content */}
       {activeTab === 'sessions' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
-            <span className="fw-semibold">Sessions ({sessions.length})</span>
+        <SectionCard
+          title={`Sessions (${sessions.length})`}
+          padded={false}
+          actions={
             <button
               className="btn btn-primary btn-sm"
               onClick={() => { resetSessionForm(); setEditingSession(null); setShowSessionModal(true); }}
             >
-              + Add Session
+              <i className="ri-add-line" aria-hidden="true" /> Add Session
             </button>
-          </div>
-          <div className="card-body p-0">
+          }
+        >
             <div className="table-responsive">
               <table className="table table-hover mb-0">
                 <thead className="table-light">
@@ -498,14 +537,14 @@ function AdminAcceleratorPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+        </SectionCard>
       )}
 
       {activeTab === 'participants' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <span className="fw-semibold">Enrollments ({filteredEnrollments.length})</span>
+        <SectionCard
+          title={`Enrollments (${filteredEnrollments.length})`}
+          padded={false}
+          actions={
             <div className="d-flex gap-2 align-items-center">
               <select className="form-select form-select-sm" style={{ width: 'auto' }} value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as any)}>
                 <option value="all">All Payments</option>
@@ -519,8 +558,8 @@ function AdminAcceleratorPage() {
                 <option value="disabled">Portal Disabled</option>
               </select>
             </div>
-          </div>
-          <div className="card-body p-0">
+          }
+        >
             {enrollmentsLoading ? (
               <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>
             ) : (
@@ -548,11 +587,11 @@ function AdminAcceleratorPage() {
                         <td>
                           {e.portal_enabled ? (
                             <button className="btn btn-outline-danger btn-sm" onClick={() => handleTogglePortal(e.id, false)}>
-                              <i className="bi bi-lock me-1"></i>Revoke
+                              <i className="ri-lock-line me-1" aria-hidden="true"></i>Revoke
                             </button>
                           ) : (
                             <button className="btn btn-success btn-sm" onClick={() => handleTogglePortal(e.id, true)}>
-                              <i className="bi bi-unlock me-1"></i>Enable Portal
+                              <i className="ri-lock-unlock-line me-1" aria-hidden="true"></i>Enable Portal
                             </button>
                           )}
                         </td>
@@ -563,14 +602,14 @@ function AdminAcceleratorPage() {
                 </table>
               </div>
             )}
-          </div>
-        </div>
+        </SectionCard>
       )}
 
       {activeTab === 'attendance' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <span className="fw-semibold">Attendance</span>
+        <SectionCard
+          title="Attendance"
+          padded={false}
+          actions={
             <div className="d-flex gap-2 align-items-center">
               <select
                 className="form-select form-select-sm"
@@ -590,8 +629,8 @@ function AdminAcceleratorPage() {
                 </>
               )}
             </div>
-          </div>
-          <div className="card-body p-0">
+          }
+        >
             {!selectedSessionId ? (
               <div className="text-center text-muted py-4">Select a session to manage attendance</div>
             ) : attendanceLoading ? (
@@ -636,14 +675,14 @@ function AdminAcceleratorPage() {
                 </table>
               </div>
             )}
-          </div>
-        </div>
+        </SectionCard>
       )}
 
       {activeTab === 'submissions' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <span className="fw-semibold">Submissions</span>
+        <SectionCard
+          title="Submissions"
+          padded={false}
+          actions={
             <select
               className="form-select form-select-sm"
               style={{ width: 'auto' }}
@@ -655,8 +694,8 @@ function AdminAcceleratorPage() {
                 <option key={s.id} value={s.id}>#{s.session_number} - {s.title}</option>
               ))}
             </select>
-          </div>
-          <div className="card-body p-0">
+          }
+        >
             {!selectedSessionId ? (
               <div className="text-center text-muted py-4">Select a session to view submissions</div>
             ) : submissionsLoading ? (
@@ -682,7 +721,7 @@ function AdminAcceleratorPage() {
                       <tr key={sub.id}>
                         <td className="fw-medium">{sub.enrollment?.full_name || 'Unknown'}</td>
                         <td>{sub.title}</td>
-                        <td><span className="badge bg-secondary">{sub.assignment_type.replace(/_/g, ' ')}</span></td>
+                        <td><StatusBadge label={sub.assignment_type.replace(/_/g, ' ')} tone="neutral" /></td>
                         <td>{statusBadge(sub.status)}</td>
                         <td>{sub.score != null ? `${sub.score}/100` : '-'}</td>
                         <td className="small">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : '-'}</td>
@@ -702,14 +741,14 @@ function AdminAcceleratorPage() {
                 </table>
               </div>
             )}
-          </div>
-        </div>
+        </SectionCard>
       )}
 
       {activeTab === 'readiness' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
-            <span className="fw-semibold">Executive Readiness</span>
+        <SectionCard
+          title="Executive Readiness"
+          padded={false}
+          actions={
             <button
               className="btn btn-primary btn-sm"
               onClick={handleRecomputeAll}
@@ -717,8 +756,8 @@ function AdminAcceleratorPage() {
             >
               {readinessLoading ? 'Computing...' : 'Recompute All'}
             </button>
-          </div>
-          <div className="card-body p-0">
+          }
+        >
             <div className="table-responsive">
               <table className="table table-hover mb-0">
                 <thead className="table-light">
@@ -748,15 +787,14 @@ function AdminAcceleratorPage() {
                         </span>
                       </td>
                       <td>
-                        <span className="badge bg-primary">Level {e.maturity_level || 0}</span>
+                        <StatusBadge label={`Level ${e.maturity_level || 0}`} tone="primary" />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+        </SectionCard>
       )}
 
       {activeTab === 'curriculum' && (
@@ -770,7 +808,7 @@ function AdminAcceleratorPage() {
       {/* Session Create/Edit Modal */}
       {showSessionModal && (
         <>
-          <div className="modal-backdrop show" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} />
+          <div className="modal-backdrop show" />
           <div className="modal show d-block" role="dialog" aria-modal="true">
             <div className="modal-dialog">
               <div className="modal-content">

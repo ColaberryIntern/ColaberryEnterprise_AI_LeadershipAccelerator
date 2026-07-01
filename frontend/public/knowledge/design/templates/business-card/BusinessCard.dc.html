@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Sales · Business Card" description="Standard 3.5×2in business card — front + back, print-ready with bleed-safe layout." -->
+<helmet>
+<script src="./ds-base.js"></script>
+<style>
+  @media print { @page { size:auto; margin:12mm; } body{background:#fff!important;} .bc-stage{padding:0!important;gap:18px!important;} .bc{box-shadow:none!important;border:1px solid #ddd;} }
+</style>
+</helmet>
+<div class="bc-stage" style="background:var(--surface-subtle);min-height:100vh;display:flex;flex-wrap:wrap;gap:36px;align-items:center;justify-content:center;padding:40px;font-family:var(--font-body)">
+
+  <!-- FRONT -->
+  <div class="bc" data-export="colaberry-business-card-front" data-export-w="1050" style="width:525px;height:300px;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-lg);background:var(--surface-card);display:flex;flex-direction:column;justify-content:space-between;padding:36px 40px">
+    <img src="../../assets/logo/colaberry-horizontal.png" alt="Colaberry" style="height:30px;align-self:flex-start">
+    <div>
+      <div style="font-family:var(--font-display);font-weight:900;font-size:26px;color:var(--text-strong);letter-spacing:-.01em;line-height:1">Ada Lovelace</div>
+      <div style="font-size:14px;color:var(--red-500);font-weight:500;margin-top:5px">Admissions Advisor</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--text-muted)">
+      <span style="display:flex;align-items:center;gap:8px"><span class="cb-i" style="color:var(--blue-500);font-size:15px"><i class="ri-mail-line"></i></span>ada@colaberry.com</span>
+      <span style="display:flex;align-items:center;gap:8px"><span class="cb-i" style="color:var(--blue-500);font-size:15px"><i class="ri-phone-line"></i></span>(972) 992-1024</span>
+      <span style="display:flex;align-items:center;gap:8px"><span class="cb-i" style="color:var(--blue-500);font-size:15px"><i class="ri-global-line"></i></span>training.colaberry.com</span>
+    </div>
+  </div>
+
+  <!-- BACK -->
+  <div class="bc" data-export="colaberry-business-card-back" data-export-w="1050" style="width:525px;height:300px;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-lg);background:linear-gradient(150deg,var(--red-500),var(--red-700));display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:36px;color:#fff">
+    <img src="../../assets/logo/colaberry-mark-white.png" alt="" style="height:72px;margin-bottom:18px">
+    <div style="font-family:var(--font-display);font-weight:900;font-size:22px;letter-spacing:-.01em;line-height:1.15;max-width:22ch">Future-proof your career in data &amp; AI</div>
+    <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.85;margin-top:14px">School of Data Science &amp; Analytics</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

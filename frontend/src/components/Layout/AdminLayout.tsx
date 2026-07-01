@@ -1,104 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import SafeModeBanner from '../admin/SafeModeBanner';
+import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, NavLink as NavLinkT } from './adminNav';
 
-interface NavLink { path: string; label: string; icon: string; }
-interface NavSection { label: string | null; links: NavLink[]; }
+const COLLAPSE_KEY = 'admin.nav.collapsed.v1';
 
-const adminNavSections: NavSection[] = [
-  { label: null, links: [
-    { path: '/admin/trust', label: 'Trust Center', icon: 'shield-lock' },
-    { path: '/admin/dashboard', label: 'Dashboard', icon: 'grid' },
-    { path: '/admin/war-room', label: 'War Room', icon: 'activity' },
-  ]},
-  { label: 'Revenue', links: [
-    { path: '/admin/revenue', label: 'Revenue', icon: 'currency-dollar' },
-    { path: '/admin/pipeline', label: 'Pipeline', icon: 'funnel' },
-    { path: '/admin/opportunities', label: 'Opportunities', icon: 'graph-up-arrow' },
-    { path: '/admin/leads', label: 'Leads', icon: 'people' },
-  ]},
-  { label: 'Campaigns', links: [
-    { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone' },
-    { path: '/admin/communications', label: 'Communications', icon: 'chat-dots' },
-    { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast' },
-    { path: '/admin/visitors', label: 'Visitors', icon: 'eye' },
-    { path: '/admin/funnel', label: 'Funnel', icon: 'funnel' },
-  ]},
-  { label: 'Lead Ingestion', links: [
-    { path: '/admin/sources', label: 'Sources', icon: 'cloud-upload' },
-    { path: '/admin/ingest-logs', label: 'Ingest Logs', icon: 'list-check' },
-    { path: '/admin/routing-rules', label: 'Routing Rules', icon: 'diagram-3' },
-    { path: '/admin/autonomous', label: 'Autonomous', icon: 'lightbulb' },
-  ]},
-  { label: 'Program', links: [
-    { path: '/admin/accelerator', label: 'Accelerator', icon: 'mortarboard' },
-    { path: '/admin/orchestration', label: 'Orchestration', icon: 'diagram-3' },
-    { path: '/admin/projects', label: 'Projects', icon: 'rocket' },
-  ]},
-  { label: 'Intelligence', links: [
-    { path: '/admin/ceo', label: 'CEO Command', icon: 'rocket-takeoff' },
-    { path: '/admin/cb-system', label: 'CB System', icon: 'robot' },
-    { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
-    { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
-    { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
-    { path: '/admin/governance-policy', label: 'Governance Policies', icon: 'shield-check' },
-    // Agent Orphans page hidden from nav (2026-05-26) — operator decided
-    // per-project admin triage doesn't scale; auto-attribute on brownfield
-    // scan + inline portal corrections instead. Route + backend kept live.
-  ]},
-  { label: null, links: [
-    { path: '/admin/inbox', label: 'Inbox COS', icon: 'envelope-open' },
-    { path: '/admin/missed-opportunities', label: 'Missed Opportunities', icon: 'envelope-exclamation' },
-    { path: '/admin/content-queue', label: 'Content Queue', icon: 'clipboard2-check' },
-  ]},
-  { label: 'System', links: [
-    { path: '/admin/tickets', label: 'Tickets', icon: 'clipboard-check' },
-    { path: '/admin/reports', label: 'Automated Reports', icon: 'envelope-open' },
-    { path: '/admin/settings', label: 'Settings', icon: 'gear' },
-  ]},
-];
-
-const iconPaths: Record<string, string> = {
-  grid: 'M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z',
-  'currency-dollar': 'M4 10.781c.148 1.667 1.513 2.85 3.591 3.003V15h1.043v-1.216c2.27-.179 3.678-1.438 3.678-3.3 0-1.59-.947-2.51-2.956-3.028l-.722-.187V3.467c1.122.11 1.879.714 2.07 1.616h1.47c-.166-1.6-1.54-2.748-3.54-2.875V1H7.591v1.233c-1.939.23-3.27 1.472-3.27 3.156 0 1.454.966 2.483 2.661 2.917l.61.162v4.031c-1.149-.17-1.94-.8-2.131-1.718H4zm3.391-3.836c-1.043-.263-1.6-.825-1.6-1.616 0-.944.704-1.641 1.8-1.828v3.495l-.2-.05zm1.591 1.872c1.287.323 1.852.859 1.852 1.769 0 1.097-.826 1.828-2.2 1.939V8.73l.348.086z',
-  megaphone: 'M13 2.5a1.5 1.5 0 0 1 3 0v11a1.5 1.5 0 0 1-3 0v-11zm-1 .724c-2.067.95-4.539 1.481-7 1.656v6.237a25.222 25.222 0 0 1 1.088.085c2.053.204 4.038.668 5.912 1.56V3.224zm-8 7.841V4.934c-.68.027-1.399.043-2.008.053A2.02 2.02 0 0 0 0 7v2c0 1.106.896 1.996 1.994 2.009a68.14 68.14 0 0 1 .496.008 64 64 0 0 1 1.51.048zm1.39 1.081c.285.021.569.047.85.078l.253 1.69a1 1 0 0 1-.983 1.187h-.548a1 1 0 0 1-.916-1.405l.347-.808a65 65 0 0 1 .997-.742z',
-  funnel: 'M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z',
-  people: 'M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1h8zm-7.978-1A.261.261 0 0 1 7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002a.274.274 0 0 1-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM6.936 9.28a5.88 5.88 0 0 0-1.23-.247A7.35 7.35 0 0 0 5 9c-4 0-5 3-5 4 0 .667.333 1 1 1h4.216A2.238 2.238 0 0 1 5 13c0-.779.357-1.85 1.084-2.79.243-.314.52-.6.834-.86zM4.92 10A5.493 5.493 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0zm3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
-  rocket: 'M8 8c.828 0 1.5-.895 1.5-2S8.828 4 8 4s-1.5.895-1.5 2S7.172 8 8 8zm0 1a2.5 2.5 0 0 0 2.5-3c0-1.463-.463-2.525-1.171-3.223C8.623 2.07 7.856 2 8 2c-.144 0-.917.07-1.623.777C5.67 3.475 5.207 4.537 5.207 6A2.5 2.5 0 0 0 8 9zm5.854 1.854a.5.5 0 0 0 0-.708c-.698-.698-3.232-.498-4.354-.498-.5 0-.5 1-.5 1s.2 3.656.498 4.354a.5.5 0 0 0 .708 0l3.648-4.148zm-11.708 0a.5.5 0 0 1 0-.708c.698-.698 3.232-.498 4.354-.498.5 0 .5 1 .5 1s-.2 3.656-.498 4.354a.5.5 0 0 1-.708 0L2.146 10.854z',
-  'list-check': 'M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3.854 2.146a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 3.293l1.146-1.147a.5.5 0 0 1 .708 0zm0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 7.293l1.146-1.147a.5.5 0 0 1 .708 0zm0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0z',
-  lightbulb: 'M2 6a6 6 0 1 1 10.174 4.31c-.203.196-.359.4-.453.619l-.762 1.769A.5.5 0 0 1 10.5 13a.5.5 0 0 1 0 1 .5.5 0 0 1 0 1l-.224.447a1 1 0 0 1-.894.553H6.618a1 1 0 0 1-.894-.553L5.5 15a.5.5 0 0 1 0-1 .5.5 0 0 1 0-1 .5.5 0 0 1-.46-.302l-.761-1.77a1.964 1.964 0 0 0-.453-.618A5.984 5.984 0 0 1 2 6zm6-5a5 5 0 0 0-3.479 8.592c.263.254.514.564.676.941L5.83 12h4.342l.632-1.467c.162-.377.413-.687.676-.941A5 5 0 0 0 8 1z',
-  'envelope-exclamation': 'M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2H2Zm3.708 6.208L1 11.105V5.383l4.708 2.825ZM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2-7-4.2Z M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm-3.5-2a.5.5 0 0 0-.5.5v1.5a.5.5 0 0 0 1 0V11a.5.5 0 0 0-.5-.5Zm0 4a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1Z',
-  journal: 'M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-1h1v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v1H1V2a2 2 0 0 1 2-2z M1 5v-.5a.5.5 0 0 1 1 0V5h.5a.5.5 0 0 1 0 1H2v.5a.5.5 0 0 1-1 0V6h-.5a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0V8h.5a.5.5 0 0 1 0 1H2v.5a.5.5 0 0 1-1 0V9h-.5a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0v.5h.5a.5.5 0 0 1 0 1H2v.5a.5.5 0 0 1-1 0v-.5h-.5a.5.5 0 0 1 0-1H1z',
-  'cloud-upload': 'M4.406 1.342A5.53 5.53 0 0 1 8 0c2.69 0 4.923 2 5.166 4.579C14.758 4.804 16 6.137 16 7.773 16 9.569 14.502 11 12.687 11H10a.5.5 0 0 1 0-1h2.688C13.979 10 15 8.988 15 7.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 2.825 10.328 1 8 1a4.53 4.53 0 0 0-2.941 1.1c-.757.652-1.153 1.438-1.153 2.055v.448l-.445.049C2.064 4.805 1 5.952 1 7.318 1 8.785 2.23 10 3.781 10H6a.5.5 0 0 1 0 1H3.781C1.708 11 0 9.366 0 7.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383zm.653 4.879a.5.5 0 0 0 .707 0L8 3.988l2.234 2.233a.5.5 0 0 0 .707-.708l-2.587-2.587a.5.5 0 0 0-.708 0L5.06 5.513a.5.5 0 0 0 0 .708zM8 4.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5z',
-  'graph-up-arrow': 'M0 0h1v15.5a.5.5 0 0 0 .5.5H16v-1H1V0H0zm10 3.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V4.9l-3.613 4.417a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61L13.445 4H10.5a.5.5 0 0 1-.5-.5z',
-  mortarboard: 'M8.211 2.047a.5.5 0 0 0-.422 0l-7.185 3.397a.5.5 0 0 0-.065.87L7.789 10.5a.5.5 0 0 0 .422 0l7.25-4.186a.5.5 0 0 0-.065-.87L8.211 2.047zM6.5 12v1.375A.5.5 0 0 0 7 13.9l1-.5 1 .5a.5.5 0 0 0 .5-.525V12l-2 1.155L6.5 12z',
-  'diagram-3': 'M6 3.5A1.5 1.5 0 0 1 7.5 2h1A1.5 1.5 0 0 1 10 3.5v1A1.5 1.5 0 0 1 8.5 6v1H14a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0V8h-5v.5a.5.5 0 0 1-1 0V8h-5v.5a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 2 7h5.5V6A1.5 1.5 0 0 1 6 4.5v-1zM8.5 5a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1zM0 11.5A1.5 1.5 0 0 1 1.5 10h1A1.5 1.5 0 0 1 4 11.5v1A1.5 1.5 0 0 1 2.5 14h-1A1.5 1.5 0 0 1 0 12.5v-1zm1.5-.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zm4.5.5A1.5 1.5 0 0 1 7.5 10h1a1.5 1.5 0 0 1 1.5 1.5v1A1.5 1.5 0 0 1 8.5 14h-1A1.5 1.5 0 0 1 6 12.5v-1zm1.5-.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1zm4.5.5a1.5 1.5 0 0 1 1.5-1.5h1a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5v-1zm1.5-.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5h-1z',
-  cpu: 'M5 0a.5.5 0 0 1 .5.5V2h1V.5a.5.5 0 0 1 1 0V2h1V.5a.5.5 0 0 1 1 0V2h1V.5a.5.5 0 0 1 1 0V2A2.5 2.5 0 0 1 14 4.5h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14a2.5 2.5 0 0 1-2.5 2.5v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14A2.5 2.5 0 0 1 2 11.5H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2A2.5 2.5 0 0 1 4.5 2V.5A.5.5 0 0 1 5 0zm-.5 3A1.5 1.5 0 0 0 3 4.5v7A1.5 1.5 0 0 0 4.5 13h7a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 11.5 3h-7zM5 6.5A1.5 1.5 0 0 1 6.5 5h3A1.5 1.5 0 0 1 11 6.5v3A1.5 1.5 0 0 1 9.5 11h-3A1.5 1.5 0 0 1 5 9.5v-3zM6.5 6a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z',
-  brain: 'M9.5 2a.5.5 0 0 1 .5.5v.25c0 .138.112.25.25.25h.25a.5.5 0 0 1 0 1h-.25A.25.25 0 0 0 10 4.25v.25a.5.5 0 0 1-1 0v-.25a.25.25 0 0 0-.25-.25H8.5a.5.5 0 0 1 0-1h.25A.25.25 0 0 0 9 2.75V2.5a.5.5 0 0 1 .5-.5zM6 7a3 3 0 0 1 5.83-.75c.092-.16.22-.3.377-.405A2.5 2.5 0 0 1 14.5 4.5a.5.5 0 0 1 .5.5 3 3 0 0 1-3 3h-.168A2.5 2.5 0 0 1 9 10.5a.5.5 0 0 1-1 0A2.5 2.5 0 0 1 5.168 8H5a3 3 0 0 1-3-3 .5.5 0 0 1 .5-.5A2.5 2.5 0 0 1 5 7h1z',
-  'chat-dots': 'M5 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M2.165 15.803l.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.272.362a21.673 21.673 0 0 0 .693-.125z',
-  broadcast: 'M3.05 3.05a7 7 0 0 0 0 9.9.5.5 0 0 1-.707.707 8 8 0 0 1 0-11.314.5.5 0 0 1 .707.707zm2.122 2.122a4 4 0 0 0 0 5.656.5.5 0 1 1-.708.708 5 5 0 0 1 0-7.072.5.5 0 0 1 .708.708zm5.656-.708a.5.5 0 0 1 .708 0 5 5 0 0 1 0 7.072.5.5 0 1 1-.708-.708 4 4 0 0 0 0-5.656.5.5 0 0 1 0-.708zm2.122-2.12a.5.5 0 0 1 .707 0 8 8 0 0 1 0 11.313.5.5 0 0 1-.707-.707 7 7 0 0 0 0-9.9.5.5 0 0 1 0-.707zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z',
-  'shield-lock': 'M5.338 1.59a61.44 61.44 0 0 0-2.837.856.481.481 0 0 0-.328.39c-.554 4.157.726 7.19 2.253 9.188a10.725 10.725 0 0 0 2.287 2.233c.346.244.652.42.893.533.12.057.218.095.293.118a.55.55 0 0 0 .101.025.615.615 0 0 0 .1-.025c.076-.023.174-.061.294-.118.24-.113.547-.29.893-.533a10.726 10.726 0 0 0 2.287-2.233c1.527-1.997 2.807-5.031 2.253-9.188a.48.48 0 0 0-.328-.39c-.651-.213-1.75-.56-2.837-.855C6.845 1.133 5.658 1 8 1c-2.342 0-1.155.133 2.662.59zM8 0c2.632 0 1.344.133-2.662.59A61.44 61.44 0 0 0 2.501.952a1.481 1.481 0 0 0-1.005 1.2C.94 6.33 2.293 9.63 3.943 11.773a11.725 11.725 0 0 0 2.506 2.445c.37.261.711.464 1.004.63.144.082.271.148.382.199a1.517 1.517 0 0 0 .33.108 1.517 1.517 0 0 0 .33-.108c.111-.051.238-.117.382-.199.293-.166.634-.369 1.004-.63a11.725 11.725 0 0 0 2.506-2.445C14.206 9.63 15.56 6.33 15.004 2.152a1.481 1.481 0 0 0-1.005-1.2 62.456 62.456 0 0 0-2.837-.856C8.656.133 10.632 0 8 0zm0 5.5a1.5 1.5 0 0 1 .5 2.915V10.5a.5.5 0 0 1-1 0V8.415A1.5 1.5 0 0 1 8 5.5z',
-  'clipboard-check': 'M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3zM6 1.5A.5.5 0 0 1 6.5 1h3a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1zM4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708z',
-  gear: 'M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.421 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z',
-};
-
-function AdminIcon({ name }: { name: string }) {
-  if (name === 'eye') {
-    return (
-      <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-        <circle cx="12" cy="12" r="3"/>
-      </svg>
-    );
-  }
-  const path = iconPaths[name];
-  if (!path) return null;
+function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean; onNavigate: () => void }) {
   return (
-    <svg className="admin-nav-icon" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-      <path d={path} />
-    </svg>
+    <Link
+      to={link.path}
+      className={`admin-nav-link${active ? ' active' : ''}`}
+      onClick={onNavigate}
+      aria-current={active ? 'page' : undefined}
+    >
+      <i className={`ri-${link.icon} admin-nav-ricon`} aria-hidden="true" />
+      <span>{link.label}</span>
+    </Link>
   );
 }
 
@@ -107,94 +26,137 @@ function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
-  const handleLogout = () => {
-    logout();
-    navigate('/admin/login');
-  };
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + '/');
 
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+  // Which group contains the active route (so we can auto-expand it).
+  // Depend on the pathname string (not the isActive closure) so the memo
+  // recomputes on navigation without needing the react-hooks deps lint.
+  const activeGroup = useMemo(
+    () => NAV_GROUPS.find((g) => g.links.some((l) => isActive(l.path)))?.label ?? null,
+    [location.pathname],
+  );
+
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    // Default: collapse every group except the one holding the current route.
+    const init: Record<string, boolean> = {};
+    NAV_GROUPS.forEach((g) => { if (g.label) init[g.label] = true; });
+    return init;
+  });
+
+  // Keep the active group open as the route changes.
+  useEffect(() => {
+    if (activeGroup) setCollapsed((c) => (c[activeGroup] ? { ...c, [activeGroup]: false } : c));
+  }, [activeGroup]);
+
+  useEffect(() => {
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch { /* ignore */ }
+  }, [collapsed]);
+
+  const toggleGroup = (label: string) =>
+    setCollapsed((c) => ({ ...c, [label]: !c[label] }));
+
+  const handleLogout = () => { logout(); navigate('/admin/login'); };
+  const closeMobile = () => setSidebarOpen(false);
+
+  const q = query.trim().toLowerCase();
+  const searchResults = q
+    ? ALL_LINKS.filter((l) => l.label.toLowerCase().includes(q))
+    : null;
 
   // Intelligence OS page gets full-screen treatment (no sidebar, no padding)
   const isImmersive = location.pathname === '/admin/intelligence';
 
   return (
     <div className="d-flex min-vh-100">
-      {/* Sidebar Backdrop (mobile) */}
       {sidebarOpen && !isImmersive && (
-        <div
-          className="admin-sidebar-backdrop"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="admin-sidebar-backdrop" onClick={closeMobile} />
       )}
 
-      {/* Sidebar — fully unmounted on immersive pages */}
       {!isImmersive && (
         <aside
           className={`admin-sidebar${sidebarOpen ? ' open' : ''}`}
           role="navigation"
           aria-label="Admin navigation"
         >
-          {/* Brand */}
           <div className="admin-sidebar-brand">
-            <img
-              src="/colaberry-icon.png"
-              alt=""
-              width="32"
-              height="32"
-              className="logo-light"
-            />
-            <span className="text-white fw-bold" style={{ fontSize: '1rem' }}>
-              Colaberry Admin
-            </span>
+            <img src="/colaberry-icon.png" alt="" width="30" height="30" className="logo-light" />
+            <span className="admin-sidebar-brand__name">Colaberry Admin</span>
           </div>
 
-          {/* Nav Links */}
+          <div className="admin-nav-search">
+            <i className="ri-search-line" aria-hidden="true" />
+            <input
+              type="search"
+              className="admin-nav-search__input"
+              placeholder="Jump to…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search navigation"
+            />
+          </div>
+
           <nav className="admin-nav-section">
-            {adminNavSections.map((section, idx) => (
-              <React.Fragment key={section.label || 'top'}>
-                {section.label && (
-                  <div className={`admin-nav-label${idx > 0 ? ' mt-3' : ''}`}>{section.label}</div>
+            {searchResults ? (
+              <div className="admin-nav-group">
+                {searchResults.length === 0 && (
+                  <div className="admin-nav-empty">No matches</div>
                 )}
-                {section.links.map((link) => (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
-                    onClick={() => setSidebarOpen(false)}
-                    aria-current={isActive(link.path) ? 'page' : undefined}
-                  >
-                    <AdminIcon name={link.icon} />
-                    {link.label}
-                  </Link>
+                {searchResults.map((link) => (
+                  <NavItem key={link.path} link={link} active={isActive(link.path)} onNavigate={closeMobile} />
                 ))}
-              </React.Fragment>
-            ))}
+              </div>
+            ) : (
+              <>
+                <div className="admin-nav-group admin-nav-group--pinned">
+                  {PINNED_LINKS.map((link) => (
+                    <NavItem key={link.path} link={link} active={isActive(link.path)} onNavigate={closeMobile} />
+                  ))}
+                </div>
+
+                {NAV_GROUPS.map((group) => {
+                  const label = group.label as string;
+                  const isCollapsed = !!collapsed[label];
+                  const groupActive = group.links.some((l) => isActive(l.path));
+                  return (
+                    <div className="admin-nav-group" key={label}>
+                      <button
+                        type="button"
+                        className={`admin-nav-group__header${groupActive ? ' has-active' : ''}`}
+                        onClick={() => toggleGroup(label)}
+                        aria-expanded={!isCollapsed}
+                      >
+                        <span>{label}</span>
+                        <i className={`ri-arrow-${isCollapsed ? 'right' : 'down'}-s-line`} aria-hidden="true" />
+                      </button>
+                      {!isCollapsed && group.links.map((link) => (
+                        <NavItem key={link.path} link={link} active={isActive(link.path)} onNavigate={closeMobile} />
+                      ))}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </nav>
 
-          {/* Footer */}
           <div className="admin-sidebar-footer">
-            <button
-              className="btn btn-sm w-100"
-              onClick={handleLogout}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                color: 'rgba(255,255,255,0.7)',
-                border: '1px solid rgba(255,255,255,0.15)',
-              }}
-            >
-              Logout
+            <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
+              <i className="ri-logout-box-r-line" aria-hidden="true" /> Logout
             </button>
           </div>
         </aside>
       )}
 
-      {/* Main Content */}
       <div
         className={`${isImmersive ? '' : 'admin-content'} flex-grow-1`}
-        style={isImmersive ? { minHeight: '100vh', background: '#f0f2f5' } : undefined}
+        style={isImmersive ? { minHeight: '100vh', background: 'var(--surface-subtle)' } : undefined}
       >
-        {/* Mobile Header — hidden on immersive pages */}
         {!isImmersive && (
           <div className="admin-mobile-header">
             <button
@@ -202,18 +164,14 @@ function AdminLayout() {
               onClick={() => setSidebarOpen(!sidebarOpen)}
               aria-label="Toggle sidebar"
             >
-              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                <path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
-              </svg>
+              <i className="ri-menu-line" aria-hidden="true" />
             </button>
-            <span className="fw-bold" style={{ color: 'var(--color-primary)' }}>Colaberry Admin</span>
+            <span className="fw-bold" style={{ color: 'var(--red-500)' }}>Colaberry Admin</span>
           </div>
         )}
 
-        {/* Safe Mode Banner */}
         {!isImmersive && <SafeModeBanner />}
 
-        {/* Page Content */}
         <div className={isImmersive ? '' : 'container-fluid px-4 py-4'}>
           <ErrorBoundary>
             <Outlet />
