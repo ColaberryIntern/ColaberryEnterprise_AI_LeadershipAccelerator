@@ -2653,6 +2653,25 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Anthropic curriculum impact agent: nightly at 03:00 UTC');
 
+  // Anthropic catalog scraper (course rows) — weekly, Monday 01:45 UTC.
+  // Scrapes each tracked course page's outline (curriculum_course_links where
+  // provider='skilljar'), diffs the SHA-256 against anthropic_content_registry,
+  // and flags change_detected on any course whose outline or link shifted. Runs
+  // before the 02:00 content watcher and 02:30 L2 detector so that night's
+  // detector + 03:00 L3 impact agent pick up the flagged course rows in the same
+  // cycle. Falls back to the hardcoded KNOWN_CATALOG when curriculum_course_links
+  // is unavailable, so a scrape/DB failure never leaves course links unwatched.
+  cron.schedule('45 1 * * 1', () => {
+    instrumentCronJob('AnthropicCatalogScraper', async () => {
+      const { runCatalogScraper } = require('./anthropicCatalogScraper');
+      const result = await runCatalogScraper();
+      console.log(`[Scheduler] AnthropicCatalogScraper: source=${result.source} found=${result.courses_found} created=${result.created} updated=${result.updated} unchanged=${result.unchanged} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic catalog scraper error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic catalog scraper: weekly Monday 01:45 UTC');
+
   // Family Command Center daily + weekly: moved to host crontab on the VPS using
   // /opt/colaberry-accelerator/scripts/cron-env-wrapper.sh (CC-20260609-em4f).
   // Rationale: the raw .js script files in backend/src/scripts/ are NOT copied

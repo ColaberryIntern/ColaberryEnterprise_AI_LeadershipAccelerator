@@ -189,9 +189,10 @@ function AnthropicCoursesBento({ courses, pathLabel }: Props) {
   const compacts = ordered.slice(1);
   const label = pathLabel || 'Anthropic · Skilljar path';
 
-  // `.acw-ds` is the scope/token wrapper; the grid is a child of it so the
-  // descendant CSS selectors (`.acw-ds .acw-bento`, `.acw-ds .ga-feat`, …)
-  // all resolve — keep these on separate elements, not one combined node.
+  // `.acw-ds` is the scope/token wrapper; the grid MUST be a child of it (not the
+  // same element) so the descendant CSS selectors (`.acw-ds .acw-bento`,
+  // `.acw-ds .ga-feat`, …) resolve. Collapsing them onto one node silently drops
+  // `display: grid` and the bento stacks into a single column.
 
   // 1 course: featured tile only — no anchor (no path to summarize).
   if (compacts.length === 0) {
