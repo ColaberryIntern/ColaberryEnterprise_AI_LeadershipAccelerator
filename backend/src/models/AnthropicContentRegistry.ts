@@ -15,6 +15,7 @@ export interface AnthropicContentRegistryAttributes {
   content_type: AnthropicContentType;
   title: string;
   url: string;
+  outline?: string | null;
   last_checked?: Date | null;
   last_modified?: Date | null;
   change_detected?: boolean;
@@ -31,6 +32,7 @@ class AnthropicContentRegistry
   declare content_type: AnthropicContentType;
   declare title: string;
   declare url: string;
+  declare outline: string | null;
   declare last_checked: Date | null;
   declare last_modified: Date | null;
   declare change_detected: boolean;
@@ -59,6 +61,11 @@ AnthropicContentRegistry.init(
       type: DataTypes.STRING(1000),
       allowNull: false,
       unique: true,
+    },
+    outline: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
     },
     last_checked: {
       type: DataTypes.DATE,
