@@ -458,10 +458,10 @@ export default function CampaignSimulatorPanel({
                                   width: 8,
                                   height: 8,
                                   backgroundColor: currentStep.details.skipped || currentStep.details.simulated
-                                    ? '#ffc107'
+                                    ? 'var(--status-warning)'
                                     : currentStep.status === 'failed'
-                                    ? '#dc3545'
-                                    : '#198754',
+                                    ? 'var(--status-danger)'
+                                    : 'var(--status-success)',
                                 }}
                                 title={currentStep.details.skipped ? 'Skipped' : currentStep.details.simulated ? 'Simulated' : currentStep.status === 'failed' ? 'Failed' : 'Delivered'}
                               />

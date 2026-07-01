@@ -18,12 +18,14 @@ import participantRoutes from './routes/participantRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import v1Routes from './routes/v1Routes';
+import advisorRoutes from './routes/advisorRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
 import { seedCurriculumTypeDefinitions } from './seeds/seedCurriculumTypeDefinitions';
+import { seedCurriculumCourseLinks } from './seeds/seedCurriculumCourseLinks';
 import { seedAllCampaigns } from './seeds/seedAllCampaigns';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
@@ -61,6 +63,7 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
 app.use(v1Routes);
@@ -609,6 +612,7 @@ async function start(): Promise<void> {
   await seedProgramCurriculum();
   await seedDepartments();
   await seedCurriculumTypeDefinitions();
+  await seedCurriculumCourseLinks();
 
   // Seed landing pages and migrate existing campaign deployments
   try {

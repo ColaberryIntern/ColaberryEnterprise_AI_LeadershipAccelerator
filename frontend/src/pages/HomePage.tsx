@@ -1,568 +1,592 @@
-import React, { useState, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
 import SEOHead from '../components/SEOHead';
-import StrategyCallModal from '../components/StrategyCallModal';
-import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
-import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
-import { validateForm } from '../utils/formValidation';
-import { getUTMParams, getAdvisoryUrl } from '../services/utmService';
-import TrustBadges from '../components/TrustBadges';
-import LiveDemoStrip from '../components/LiveDemoStrip';
-import IndustryDemoGrid from '../components/IndustryDemoGrid';
-import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
-import ArtifactValueBlock from '../components/ArtifactValueBlock';
-import ROIHighlightSection from '../components/ROIHighlightSection';
-import DreamBigSection from '../components/DreamBigSection';
-import HomeLearningMediaSection from '../components/HomeLearningMediaSection';
-import api from '../utils/api';
+import { Button } from '../colaberry/components/core/Button';
+import { Card } from '../colaberry/components/core/Card';
+import { Badge } from '../colaberry/components/core/Badge';
+import ProgramRoadmap from '../components/visuals/ProgramRoadmap';
+import PartnerStrip from '../components/visuals/PartnerStrip';
+import CohortUrgency from '../components/visuals/CohortUrgency';
+import EmployerDashboardPreview from '../components/visuals/EmployerDashboardPreview';
+import { StatCounter } from '../components/visuals/charts';
 
-const CoryDemoContainer = React.lazy(() => import('../components/demo/CoryDemoContainer'));
-const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
+/**
+ * HomePage — enterprise.colaberry.ai, employer-led.
+ *
+ * Research-validated message (maker/checker, 2026-06-29): the enterprise site
+ * FOREGROUNDS the employer talent-discovery proposition — "Find out who your
+ * real AI builders are, without taking anyone off the job" — and keeps the
+ * individual door clearly secondary (never deleted).
+ *
+ * The unique proposition: sponsor a team into one continuous 12-week, build-first
+ * program; employees learn on their own time (no one comes off the job), ship a
+ * real deployed AI build at Demo Day, and the employer watches every builder
+ * climb a company-scoped leaderboard — capability revealed by OUTPUT, not
+ * inferred from resumes. Reassignable annual seats keep the capability with the
+ * company even if a person leaves, for a fraction of the cost of one AI hire.
+ *
+ * Built on the Colaberry design system: semantic tokens only, executive register.
+ * Section order: hero (employer) + trust strip → how it works (5 steps) →
+ * why it works (4 pillars) → dashboard preview → 12-week roadmap → partner strip
+ * → build-vs-buy cost band → outcomes → cohort urgency → individual door
+ * (secondary) → brand band → final CTA.
+ */
+
+const SPONSOR_PATH = '/sponsorship';
+const INDIVIDUAL_PATH = '/enroll';
+const DESIGNER_PATH = '/ai-workforce-designer';
+
+interface Step {
+  n: string;
+  title: string;
+  body: string;
+}
+
+const STEPS: Step[] = [
+  {
+    n: '01',
+    title: 'Sponsor seats',
+    body: 'Buy a block of annual seats for your organization. One invoice, one cohort — and the seats are reassignable, so a seat is never wasted when someone moves on.',
+  },
+  {
+    n: '02',
+    title: 'They learn in the evenings',
+    body: 'Two live sessions a week — Monday & Thursday, 6:30–8:30 PM CST — plus self-paced build work around the job they already do. The sessions are after hours, so nobody comes off work.',
+  },
+  {
+    n: '03',
+    title: 'They build with Claude Code',
+    body: 'Hands-on in Anthropic-partner training — real, guided work with Claude Code, the same tools teams ship with in production.',
+  },
+  {
+    n: '04',
+    title: 'You watch the leaderboard',
+    body: 'A company-scoped leaderboard shows who is actually shipping — real progress and real output, in real time, from one dashboard.',
+  },
+  {
+    n: '05',
+    title: 'They ship at Demo Day',
+    body: 'Top builders present a real, deployed AI product. You discover the talent you already employ — proven by what they built, not what they claim.',
+  },
+];
+
+interface Pillar {
+  tone: 'red' | 'blue' | 'green';
+  title: string;
+  body: string;
+}
+
+const PILLARS: Pillar[] = [
+  {
+    tone: 'red',
+    title: 'Discover the builders you already employ',
+    body: 'Your next AI builders may already be on your payroll — the hard workers with the drive but not yet the title or credential. The program surfaces them by having them build, so capability is revealed by output, not inferred from a resume.',
+  },
+  {
+    tone: 'blue',
+    title: 'Nobody comes off the job',
+    body: 'No one leaves their desk and no billable hours are lost. People learn on their own time, around the work they already do, across one continuous 12-week program. Minimal disruption by design.',
+  },
+  {
+    tone: 'green',
+    title: 'Proven output, not resumes',
+    body: 'Every seat ends in a real, deployed AI build presented at Demo Day — capability you can see and use, not a completion certificate. A shipped artifact is the hardest credential to fake.',
+  },
+  {
+    tone: 'red',
+    title: 'A reassignable capability asset',
+    body: 'Annual seats are reassignable, so the capability stays with your company even if the person leaves — the "what if they quit" question, answered. Graduates earn the Certified Anthropic AI Systems Architect credential (CCA-F prep).',
+  },
+];
+
+interface Outcome {
+  value: string;
+  label: string;
+  accent?: string;
+}
+
+const OUTCOMES: Outcome[] = [
+  { value: '12', label: 'weeks, one continuous program — four phases, one credential', accent: 'var(--brand-accent)' },
+  { value: '5,000+', label: 'careers launched through hands-on, build-first programs', accent: 'var(--chart-3)' },
+  { value: 'Since 2012', label: 'building real careers in data and AI', accent: 'var(--chart-1)' },
+  { value: 'CCA-F', label: 'Certified Anthropic AI Systems Architect — what builders graduate as', accent: 'var(--chart-4)' },
+];
+
+const h2Style: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontWeight: 900,
+  fontSize: 'var(--fs-h2)',
+  lineHeight: 'var(--lh-heading)',
+  letterSpacing: 'var(--ls-tight)',
+  color: 'var(--text-strong)',
+  margin: '0 0 var(--space-4)',
+};
 
 function HomePage() {
-  const navigate = useNavigate();
-  const [showBooking, setShowBooking] = useState(false);
-  const [briefingSubmitting, setBriefingSubmitting] = useState(false);
-  const [briefingErrors, setBriefingErrors] = useState<Record<string, string>>({});
-  const [briefingServerError, setBriefingServerError] = useState('');
-
-  const [briefingForm, setBriefingForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    company: '',
-    title: '',
-    companySize: '',
-    evaluating90Days: false,
-    primaryObjective: '',
-    willSeekCorporateSponsorship: false,
-    timeline: '',
-  });
-
-  const handleBriefingChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-    setBriefingForm((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-    if (briefingErrors[name]) setBriefingErrors((prev) => ({ ...prev, [name]: '' }));
-  };
-
-  const handleBriefingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBriefingServerError('');
-
-    const errs = validateForm(
-      briefingForm as unknown as Record<string, unknown>,
-      { required: ['fullName', 'email', 'company', 'title'], email: ['email'], phone: ['phone'] },
-    );
-    if (Object.keys(errs).length > 0) {
-      setBriefingErrors(errs);
-      return;
-    }
-
-    setBriefingSubmitting(true);
-    try {
-      const lead: EnterpriseLead = {
-        fullName: briefingForm.fullName,
-        email: briefingForm.email,
-        phone: briefingForm.phone,
-        company: briefingForm.company,
-        title: briefingForm.title,
-        companySize: briefingForm.companySize,
-        willSeekCorporateSponsorship: briefingForm.willSeekCorporateSponsorship,
-        primaryObjective: briefingForm.primaryObjective ? [briefingForm.primaryObjective] : undefined,
-        timeline: briefingForm.timeline,
-        formType: 'executive_overview_download',
-        ...getUTMParams(),
-        pageOrigin: window.location.href,
-      };
-      const payload = toLeadPayload(lead);
-      payload.evaluating_90_days = briefingForm.evaluating90Days;
-      payload.corporate_sponsorship_interest = briefingForm.willSeekCorporateSponsorship;
-      payload.timeline = briefingForm.timeline;
-      await api.post('/api/leads', payload);
-      navigate('/executive-overview/thank-you', { state: { name: briefingForm.fullName, email: briefingForm.email, company: briefingForm.company, phone: briefingForm.phone } });
-    } catch (err: any) {
-      if (err.response?.status === 400 && err.response?.data?.details) {
-        const fieldErrors: Record<string, string> = {};
-        err.response.data.details.forEach((d: { field: string; message: string }) => {
-          fieldErrors[d.field] = d.message;
-        });
-        setBriefingErrors(fieldErrors);
-      } else {
-        setBriefingServerError('Something went wrong. Please try again later.');
-      }
-    } finally {
-      setBriefingSubmitting(false);
-    }
-  };
-
-  const industries = [
-    { icon: '💻', name: 'Technology' },
-    { icon: '🏦', name: 'Finance & Banking' },
-    { icon: '🏥', name: 'Healthcare & Life Sciences' },
-    { icon: '🏭', name: 'Manufacturing' },
-    { icon: '⚡', name: 'Energy & Utilities' },
-    { icon: '🛒', name: 'Retail & eCommerce' },
-    { icon: '🏛️', name: 'Government & Public Sector' },
-    { icon: '🚚', name: 'Logistics & Supply Chain' },
-  ];
-
   return (
     <>
       <SEOHead
-        title="Home"
-        description={`Colaberry Enterprise AI Leadership Accelerator — ${PROGRAM_SCHEDULE.heroTagline} for Business, Product, and Technical Leaders and Teams. Deploy a real AI system in 3 weeks. POCs, Roadmaps, and Architecture internally.`}
+        title="Find out who your real AI builders are"
+        description="Find out who your real AI builders are — without taking anyone off the job. Sponsor your team into a 12-week, build-first program: they learn on their own time, ship a real AI build at Demo Day, and you watch every builder climb a company leaderboard. Individuals can join the same cohort too."
       />
 
-      {/* Hero Section */}
-      <div
-        className="text-center py-5"
+      {/* ============================ HERO (EMPLOYER-LED) ============================ */}
+      <section
+        aria-label="Find out who your real AI builders are, without taking anyone off the job."
         style={{
-          background: 'linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.88)), url("https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1920&q=80") center/cover no-repeat',
-          color: '#fff',
-          minHeight: 480,
-          display: 'flex',
-          alignItems: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          background:
+            'radial-gradient(1200px 600px at 70% -10%, color-mix(in srgb, var(--brand-accent) 22%, transparent), transparent 60%), var(--surface-inverse)',
+          color: 'var(--text-on-inverse)',
+          padding: 'var(--space-32) 0 var(--space-20)',
         }}
       >
-        <div className="container" style={{ maxWidth: 800 }}>
-          <span className="badge bg-success mb-3" style={{ fontSize: 12, padding: '6px 14px' }}>Free - No signup required</span>
-          <h1 className="fw-bold mb-3 text-white" style={{ fontSize: 'clamp(28px, 5vw, 48px)', lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
-            Design Your AI-Powered Organization in 5 Minutes
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 78%, transparent), color-mix(in srgb, var(--surface-inverse) 92%, transparent)), url('/hero/hero-home.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div
+          className="container"
+          style={{ position: 'relative', zIndex: 1, maxWidth: 1000, paddingInline: 'var(--space-6)', textAlign: 'center' }}
+        >
+          <Badge solid style={{ marginBottom: 'var(--space-6)' }}>
+            AI capability, built from the inside
+          </Badge>
+          <h1
+            className="cb-balance"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 900,
+              fontSize: 'var(--fs-hero-fluid)',
+              lineHeight: 'var(--lh-tight)',
+              letterSpacing: 'var(--ls-tighter)',
+              margin: '0 0 var(--space-6)',
+              color: 'var(--text-on-inverse)',
+            }}
+          >
+            Find out who your real AI builders are —{' '}
+            <span style={{ color: 'var(--brand-accent)' }}>without taking anyone off the job.</span>
           </h1>
-          <p className="mb-4" style={{ fontSize: 18, color: '#e2e8f0', maxWidth: 600, margin: '0 auto', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-            See your AI workforce, watch it operate, and understand the impact before you build anything.
-          </p>
-          <div className="d-flex flex-wrap justify-content-center gap-3">
-            <a
-              href={getAdvisoryUrl()}
-              className="btn btn-lg text-white fw-semibold"
-              style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', border: 'none', borderRadius: 8, padding: '14px 36px', fontSize: 17, boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)' }}
-              data-track="hero_design_ai_org"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Design My AI Organization
-            </a>
-            <button
-              className="btn btn-lg btn-outline-light fw-semibold"
-              style={{ borderRadius: 8, padding: '14px 28px', fontSize: 17 }}
-              onClick={() => setShowBooking(true)}
-              data-track="hero_book_strategy_call"
-            >
-              Book a Strategy Call
-            </button>
-          </div>
-          <TrustBadges />
-        </div>
-      </div>
-
-      <LiveDemoStrip />
-
-      {/* Cory AI Intelligence Demo */}
-      <Suspense
-        fallback={
-          <section className="section-alt py-5" aria-label="Loading demo">
-            <div className="container">
-              <div className="placeholder-glow text-center">
-                <span className="placeholder col-6 mb-3" style={{ height: 24 }}></span>
-                <span className="placeholder col-8 mb-4" style={{ height: 16 }}></span>
-                <div className="row g-4">
-                  <div className="col-md-4"><span className="placeholder col-12" style={{ height: 300 }}></span></div>
-                  <div className="col-md-8"><span className="placeholder col-12" style={{ height: 300 }}></span></div>
-                </div>
-              </div>
-            </div>
-          </section>
-        }
-      >
-        <CoryDemoContainer onOpenBooking={() => setShowBooking(true)} />
-      </Suspense>
-
-      {/* Dream Big — Ideation → Plan → Build → Deploy */}
-      <DreamBigSection onOpenBooking={() => setShowBooking(true)} />
-
-      {/* Learning Media — Video + Podcast */}
-      <HomeLearningMediaSection podcastUrl="/assets/Build_Working_AI_Without_Writing_Code.m4a" />
-
-      {/* Intelligence Demo — Interactive Funnel */}
-      <Suspense
-        fallback={
-          <section className="section py-5" aria-label="Loading intelligence demo">
-            <div className="container">
-              <div className="placeholder-glow text-center">
-                <span className="placeholder col-6 mb-3" style={{ height: 24 }}></span>
-                <span className="placeholder col-8 mb-4" style={{ height: 16 }}></span>
-                <div className="row g-4">
-                  <div className="col-lg-7"><span className="placeholder col-12" style={{ height: 400 }}></span></div>
-                  <div className="col-lg-5"><span className="placeholder col-12" style={{ height: 400 }}></span></div>
-                </div>
-              </div>
-            </div>
-          </section>
-        }
-      >
-        <IntelligenceDemoSection onOpenBooking={() => setShowBooking(true)} />
-      </Suspense>
-
-      {/* Executive Problem Section */}
-      <section className="section-alt" aria-label="The Challenge">
-        <div className="container content-medium">
-          <h2 className="text-center mb-4">Your Board Expects AI Results — Not Another Strategy Deck</h2>
-          <p className="text-center text-muted mb-4">
-            The gap between AI strategy and AI deployment is where initiatives die. Every quarter without a live system is a quarter your competitors pull ahead.
-          </p>
-          <ul className="list-unstyled fs-5">
-            <li className="mb-3">📊 Board expecting deployed AI — not another feasibility study</li>
-            <li className="mb-3">💸 The challenge is moving from AI strategy to deployed systems quickly</li>
-            <li className="mb-3">⏳ Internal AI hires take 6–18 months to find and another 6 to deliver</li>
-            <li className="mb-3">🔄 Pilot projects die in committee — no one owns the deployment path</li>
-            <li className="mb-3">📋 Your team can evaluate AI vendors but can't build or validate what they propose</li>
-          </ul>
-        </div>
-      </section>
-
-      {/* AI Organization Preview */}
-      <div className="container py-5">
-        <div className="text-center mb-4">
-          <h2 className="fw-bold" style={{ color: 'var(--color-primary, #1a365d)' }}>
-            What Your AI Organization Will Look Like
-          </h2>
-          <p className="text-muted">Three intelligent agents working together, 24/7</p>
-        </div>
-        <div className="row g-4 justify-content-center mb-4">
-          {[
-            { icon: '\u{1F9E0}', name: 'Strategy Agent', desc: 'Analyzes your market, identifies opportunities, and recommends actions' },
-            { icon: '\u2699\uFE0F', name: 'Operations Agent', desc: 'Automates workflows, monitors systems, and optimizes processes' },
-            { icon: '\u{1F91D}', name: 'Customer Agent', desc: 'Handles outreach, nurtures leads, and books meetings autonomously' },
-          ].map((agent, i) => (
-            <div key={i} className="col-md-4">
-              <div className="card border-0 shadow-sm h-100 text-center p-4">
-                <div style={{ fontSize: 40 }}>{agent.icon}</div>
-                <h5 className="fw-bold mt-2">{agent.name}</h5>
-                <p className="text-muted small">{agent.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="text-center">
-          <a
-            href={getAdvisoryUrl()}
-            className="btn btn-primary"
-            data-track="section_cta_design_ai_org"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ borderRadius: 8, padding: '10px 28px' }}
+          <p
+            style={{
+              fontSize: 'var(--fs-body-lg)',
+              lineHeight: 'var(--lh-relaxed)',
+              color: 'color-mix(in srgb, var(--text-on-inverse) 84%, transparent)',
+              maxWidth: 760,
+              margin: '0 auto var(--space-8)',
+            }}
           >
-            See yours in 5 minutes &rarr;
-          </a>
-        </div>
-
-        <IndustryDemoGrid trackContext="homepage" />
-      </div>
-
-      {/* Enterprise Solution Section */}
-      <section className="section" aria-label="The Solution">
-        <div className="container">
-          <div className="row align-items-center g-5">
-            <div className="col-lg-6">
-              <h2 className="mb-3">⚡ What Your Team Deploys in 3 Weeks</h2>
-              <p className="text-muted mb-4">
-                {PROGRAM_SCHEDULE.totalSessions} focused sessions over {PROGRAM_SCHEDULE.totalWeeks} weeks. Your team deploys a real system with production-ready output.
-              </p>
-              {[
-                '✅ A live AI system',
-                '✅ A 90-Day AI expansion roadmap',
-                '✅ An executive report ready for board review',
-                '✅ Production AI architecture patterns your team can replicate',
-                '✅ Ongoing access to deployment support and the AI Advisory Labs',
-              ].map((outcome) => (
-                <div className="p-3 bg-white rounded shadow-sm text-start fs-5 mb-3" key={outcome}>
-                  {outcome}
-                </div>
-              ))}
-            </div>
-            <div className="col-lg-6">
-              <div className="img-accent-frame">
-                <img
-                  src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80"
-                  alt="Developer at a professional multi-monitor workstation with code and dashboards"
-                  className="img-feature img-feature-tall"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <ArtifactValueBlock />
-
-      <ROIHighlightSection
-        headline="See the Financial Impact in 60 Seconds."
-        subtext="Small workflow automation gains compound into enterprise-level financial results."
-        presetValues={{ employees: 25, hours: 5 }}
-      />
-
-      <div className="container" style={{ maxWidth: 900 }}>
-        <IndustryDemoGrid trackContext="homepage_mid" />
-      </div>
-
-      {/* Why Enterprise Leaders Choose Colaberry */}
-      <section className="section-alt" aria-label="Why Colaberry">
-        <div className="container">
-          <h2 className="text-center mb-5">Why Enterprise Leaders Choose Colaberry</h2>
-          <div className="row g-4">
-            {[
-              {
-                icon: '🏛️',
-                title: 'Built for Deployers, Not Dabblers',
-                description:
-                  'Designed for Directors, VPs, and CTOs who need to ship. Every session addresses the deployment and architectural decisions leaders actually face.',
-                color: '#1a365d',
-              },
-              {
-                icon: '🏗️',
-                title: 'Ship in 3 Weeks, Not 3 Quarters',
-                description:
-                  'Participants deploy real AI systems using production-grade architecture patterns — not toy demos. Work ships during the program, not after.',
-                color: '#e53e3e',
-              },
-              {
-                icon: '📦',
-                title: 'Executive Sponsorship Support Kit',
-                description:
-                  'Includes cost justification templates, ROI calculators, vendor evaluation frameworks, and approval process guides for internal budget approval.',
-                color: '#38a169',
-              },
-              {
-                icon: '🌐',
-                title: 'Post-Deployment Support',
-                description:
-                  'Access to ongoing deployment support, peer cohort sessions, and Colaberry\'s enterprise AI architecture network beyond the accelerator.',
-                color: '#805ad5',
-              },
-            ].map((item) => (
-              <div className="col-md-6 col-lg-3" key={item.title}>
-                <div className="card card-lift h-100 border-0 shadow-sm text-center p-4" style={{ borderTop: `4px solid ${item.color}` }}>
-                  <div
-                    className="fs-3 mb-3 d-inline-flex align-items-center justify-content-center mx-auto"
-                    style={{ width: '56px', height: '56px', borderRadius: '50%', background: `${item.color}15` }}
-                    aria-hidden="true"
-                  >{item.icon}</div>
-                  <h3 className="h5">{item.title}</h3>
-                  <p className="text-muted">{item.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <AdvisoryCTABlock />
-
-      {/* Target Industries */}
-      <section
-        className="img-section-bg section"
-        aria-label="Target Industries"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1920&q=80)' }}
-      >
-        <div className="container text-center">
-          <h2 className="mb-4">🌍 Deploying AI Across Industries</h2>
-          <p className="text-muted mb-5" style={{ maxWidth: '650px', margin: '0 auto' }}>
-            Our accelerator serves technical leaders in the sectors where
-            enterprise AI is creating the most impact.
+            Sponsor your team into one continuous 12-week, build-first program and discover the
+            people already on your payroll who can actually ship AI. They learn on their own time,
+            around the work they already do, and prove it by deploying a real build at Demo Day —
+            for a fraction of the cost of hiring one AI engineer.
           </p>
-          <div className="row g-4">
-            {industries.map((industry) => (
-              <div className="col-md-3 col-6" key={industry.name}>
-                <div className="card card-lift border-0 shadow-sm p-4 text-center" style={{ borderTop: '3px solid var(--color-primary-light)' }}>
-                  <div className="fs-1 mb-2" aria-hidden="true">{industry.icon}</div>
-                  <h3 className="h6 mb-0">{industry.name}</h3>
-                </div>
-              </div>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 'var(--space-5)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Button as="a" href={SPONSOR_PATH} size="lg" data-track="hero_sponsor_team">
+              Sponsor Your Team
+            </Button>
+            <a
+              href={INDIVIDUAL_PATH}
+              data-track="hero_individual_link"
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 'var(--fs-body-sm)',
+                fontWeight: 600,
+                color: 'color-mix(in srgb, var(--text-on-inverse) 86%, transparent)',
+                textDecoration: 'none',
+              }}
+            >
+              Just want to join yourself? Enroll &rarr;
+            </a>
+          </div>
+          {/* Trust strip — truthful credibility signal, raised high */}
+          <p
+            style={{
+              marginTop: 'var(--space-8)',
+              fontSize: 'var(--fs-caption)',
+              fontWeight: 600,
+              letterSpacing: 'var(--ls-wide)',
+              color: 'color-mix(in srgb, var(--text-on-inverse) 66%, transparent)',
+            }}
+          >
+            Since 2012 &nbsp;·&nbsp; 5,000+ careers launched &nbsp;·&nbsp; Anthropic / Claude Code partner
+          </p>
+        </div>
+      </section>
+
+      {/* =================== HOW IT WORKS (5 STEPS, lifted up) =================== */}
+      <section
+        aria-label="How it works for employers"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto var(--space-16)' }}>
+            <Badge tone="blue" style={{ marginBottom: 'var(--space-4)' }}>
+              For employers
+            </Badge>
+            <h2 style={h2Style}>From a block of seats to proven builders</h2>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+              Five steps from purchase to proof. No one leaves their desk — and you find out who your
+              real AI builders are.
+            </p>
+          </div>
+
+          <ol
+            style={{
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            }}
+          >
+            {STEPS.map((step) => (
+              <li key={step.n} className="cb-min0">
+                <Card elevation="sm" padded style={{ height: '100%' }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 44,
+                      height: 44,
+                      borderRadius: 'var(--radius-pill)',
+                      background: 'var(--surface-brand-subtle)',
+                      color: 'var(--brand-accent)',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      fontSize: 'var(--fs-body-sm)',
+                      marginBottom: 'var(--space-4)',
+                    }}
+                  >
+                    {step.n}
+                  </span>
+                  <h3
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontWeight: 700,
+                      fontSize: 'var(--fs-h5)',
+                      lineHeight: 'var(--lh-snug)',
+                      color: 'var(--text-strong)',
+                      margin: '0 0 var(--space-2)',
+                    }}
+                  >
+                    {step.title}
+                  </h3>
+                  <p style={{ fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', margin: 0 }}>
+                    {step.body}
+                  </p>
+                </Card>
+              </li>
+            ))}
+          </ol>
+
+          <div style={{ textAlign: 'center', marginTop: 'var(--space-12)' }}>
+            <Button as="a" href={SPONSOR_PATH} size="lg" data-track="howitworks_sponsor_team">
+              Sponsor Your Team
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ==================== WHY IT WORKS (4 PILLARS) ==================== */}
+      <section
+        aria-label="Why it works"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto var(--space-16)' }}>
+            <h2 style={h2Style}>A talent-discovery engine, not another training line item</h2>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+              The value is not the course. It is finding the people who can build — and keeping that
+              capability inside your company.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            }}
+          >
+            {PILLARS.map((pillar) => (
+              <Card key={pillar.title} accent={pillar.tone} elevation="md" padded hoverable style={{ height: '100%' }}>
+                <h3
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 700,
+                    fontSize: 'var(--fs-h5)',
+                    lineHeight: 'var(--lh-snug)',
+                    color: 'var(--text-strong)',
+                    margin: '0 0 var(--space-3)',
+                  }}
+                >
+                  {pillar.title}
+                </h3>
+                <p style={{ fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+                  {pillar.body}
+                </p>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Executive Overview Download */}
-      <section className="section-alt py-5" id="download-overview" aria-label="Download Executive Overview">
-        <div className="container" style={{ maxWidth: '1100px' }}>
-          <div className="bg-white rounded-4 shadow p-4 p-md-5">
+      {/* ==================== EMPLOYER DASHBOARD PREVIEW ==================== */}
+      <section
+        aria-label="Watch every builder from one dashboard"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto var(--space-12)' }}>
+            <Badge tone="blue" style={{ marginBottom: 'var(--space-4)' }}>
+              Watch the progress
+            </Badge>
+            <h2 style={h2Style}>See exactly who is building — in real time</h2>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+              A company-scoped view of the people who choose to build: their progress, what they have
+              shipped, and who is climbing toward Demo Day. Proof you can see, not self-reported.
+            </p>
+          </div>
+          <EmployerDashboardPreview />
+        </div>
+      </section>
 
-            {/* Section Header */}
-            <div className="text-center mb-5">
-              <span className="badge rounded-pill px-3 py-2 mb-3 d-inline-block" style={{ background: '#fff3cd', color: '#856404', fontSize: '0.85rem' }}>
-                Next Cohort Enrollment Open
-              </span>
-              <h2 className="mb-3" style={{ fontSize: '2rem' }}>AI System Blueprint</h2>
-              <p className="text-muted mb-0" style={{ maxWidth: '680px', margin: '0 auto', fontSize: '1.1rem' }}>
-                The deployment playbook for CTOs, CIOs, and Directors ready to ship their first AI system in 3 weeks.
-              </p>
-            </div>
+      {/* ============ THE 12-WEEK ROADMAP ============ */}
+      <section
+        aria-label="The 12-week path"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1200, paddingInline: 'var(--space-6)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto var(--space-12)' }}>
+            <Badge tone="warning" style={{ marginBottom: 'var(--space-4)' }}>
+              The program
+            </Badge>
+            <h2 className="cb-balance" style={h2Style}>
+              One continuous 12-week path to Certified Anthropic AI Systems Architect
+            </h2>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+              Never a quick course. The four phases simply group the twelve weeks, while a real
+              project lane and a CCA-F certification lane run alongside and converge at the finish.
+            </p>
+          </div>
 
-            {/* Value Preview Cards */}
-            <div className="row g-4 mb-5">
-              {[
-                { icon: '📅', title: `${PROGRAM_SCHEDULE.totalWeeks}-Week Deployment Timeline`, description: 'Clear session-by-session transformation path' },
-                { icon: '💰', title: 'Build vs Buy Cost Analysis', description: 'Build vs outsource cost analysis' },
-                { icon: '🏢', title: 'Deployment Case Studies', description: 'Documented deployment results' },
-                { icon: '🧱', title: 'Production Architecture Blueprint', description: 'Learn / Build / Manage model' },
-              ].map((item) => (
-                <div className="col-md-6 col-lg-3" key={item.title}>
-                  <div className="card card-lift h-100 border text-center p-3">
-                    <div className="fs-2 mb-2" aria-hidden="true">{item.icon}</div>
-                    <div className="fw-bold small mb-1">{item.title}</div>
-                    <div className="text-muted" style={{ fontSize: '0.8rem' }}>{item.description}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <ProgramRoadmap />
+        </div>
+      </section>
 
-            {/* Structured Briefing Form */}
-            {briefingServerError && (
-              <div className="alert alert-danger" role="alert">{briefingServerError}</div>
-            )}
-            <form onSubmit={handleBriefingSubmit} noValidate>
-              {/* Identity */}
-              <p className="fw-semibold small text-muted text-uppercase mb-3">Contact Information</p>
-              <div className="row g-3 mb-4">
-                <div className="col-md-4">
-                  <label htmlFor="bp-fullName" className="form-label small fw-medium">Full Name <span className="text-danger">*</span></label>
-                  <input type="text" className={`form-control form-control-sm ${briefingErrors.fullName ? 'is-invalid' : ''}`} id="bp-fullName" name="fullName" value={briefingForm.fullName} onChange={handleBriefingChange} required />
-                  {briefingErrors.fullName && <div className="invalid-feedback">{briefingErrors.fullName}</div>}
-                </div>
-                <div className="col-md-4">
-                  <label htmlFor="bp-email" className="form-label small fw-medium">Work Email <span className="text-danger">*</span></label>
-                  <input type="email" className={`form-control form-control-sm ${briefingErrors.email ? 'is-invalid' : ''}`} id="bp-email" name="email" value={briefingForm.email} onChange={handleBriefingChange} required />
-                  {briefingErrors.email && <div className="invalid-feedback">{briefingErrors.email}</div>}
-                </div>
-                <div className="col-md-4">
-                  <label htmlFor="bp-phone" className="form-label small fw-medium">Phone</label>
-                  <input type="tel" className={`form-control form-control-sm ${briefingErrors.phone ? 'is-invalid' : ''}`} id="bp-phone" name="phone" value={briefingForm.phone} onChange={handleBriefingChange} />
-                  {briefingErrors.phone && <div className="invalid-feedback">{briefingErrors.phone}</div>}
-                </div>
-              </div>
+      {/* ==================== ANTHROPIC PARTNER STRIP ==================== */}
+      <section
+        aria-label="Anthropic partnership"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-16) 0' }}
+      >
+        <div className="container" style={{ paddingInline: 'var(--space-6)' }}>
+          <PartnerStrip />
+        </div>
+      </section>
 
-              {/* Company */}
-              <p className="fw-semibold small text-muted text-uppercase mb-3">Organization</p>
-              <div className="row g-3 mb-4">
-                <div className="col-md-4">
-                  <label htmlFor="bp-company" className="form-label small fw-medium">Company <span className="text-danger">*</span></label>
-                  <input type="text" className={`form-control form-control-sm ${briefingErrors.company ? 'is-invalid' : ''}`} id="bp-company" name="company" value={briefingForm.company} onChange={handleBriefingChange} required />
-                  {briefingErrors.company && <div className="invalid-feedback">{briefingErrors.company}</div>}
-                </div>
-                <div className="col-md-4">
-                  <label htmlFor="bp-title" className="form-label small fw-medium">Title <span className="text-danger">*</span></label>
-                  <input type="text" className={`form-control form-control-sm ${briefingErrors.title ? 'is-invalid' : ''}`} id="bp-title" name="title" value={briefingForm.title} onChange={handleBriefingChange} required />
-                  {briefingErrors.title && <div className="invalid-feedback">{briefingErrors.title}</div>}
-                </div>
-                <div className="col-md-4">
-                  <label htmlFor="bp-companySize" className="form-label small fw-medium">Company Size</label>
-                  <select className="form-select form-select-sm" id="bp-companySize" name="companySize" value={briefingForm.companySize} onChange={handleBriefingChange}>
-                    <option value="">Select...</option>
-                    <option value="1-49">1-49</option>
-                    <option value="50-249">50-249</option>
-                    <option value="250-999">250-999</option>
-                    <option value="1000-4999">1,000-4,999</option>
-                    <option value="5000+">5,000+</option>
-                  </select>
-                </div>
-              </div>
+      {/* ==================== BUILD-VS-BUY COST BAND ==================== */}
+      <section
+        aria-label="Build AI capability in-house"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 880, paddingInline: 'var(--space-6)', textAlign: 'center' }}>
+          <Badge tone="green" style={{ marginBottom: 'var(--space-4)' }}>
+            Build, don&rsquo;t buy
+          </Badge>
+          <h2 className="cb-balance" style={{ ...h2Style, margin: '0 auto var(--space-5)', maxWidth: 760 }}>
+            Grow AI builders in-house, instead of hiring them
+          </h2>
+          <p
+            style={{
+              fontSize: 'var(--fs-body-lg)',
+              lineHeight: 'var(--lh-relaxed)',
+              color: 'var(--text-muted)',
+              maxWidth: 660,
+              margin: '0 auto var(--space-8)',
+            }}
+          >
+            Upskilling a team for AI used to mean an expensive new req or pulling people off billable
+            work. Sponsor your team instead: reach your whole organization for less than the recruiting
+            fee on a single AI engineer, with no one coming off the floor — and because seats are
+            reassignable, the capability you build stays a company asset, not a personal perk.
+          </p>
+          <Button as="a" href={SPONSOR_PATH} size="lg" data-track="costband_sponsor_team">
+            Sponsor Your Team
+          </Button>
+        </div>
+      </section>
 
-              {/* AI Initiative */}
-              <p className="fw-semibold small text-muted text-uppercase mb-3">AI Initiative</p>
-              <div className="row g-3 mb-4">
-                <div className="col-md-4">
-                  <label htmlFor="bp-primaryObjective" className="form-label small fw-medium">Primary Objective</label>
-                  <select className="form-select form-select-sm" id="bp-primaryObjective" name="primaryObjective" value={briefingForm.primaryObjective} onChange={handleBriefingChange}>
-                    <option value="">Select...</option>
-                    <option value="Build internal AI capability">Build internal AI capability</option>
-                    <option value="Evaluate AI vendors">Evaluate AI vendors</option>
-                    <option value="Deploy AI POC">Deploy AI POC</option>
-                    <option value="Train leadership team">Train leadership team</option>
-                    <option value="AI governance">AI governance & compliance</option>
-                  </select>
-                </div>
-                <div className="col-md-4">
-                  <label htmlFor="bp-timeline" className="form-label small fw-medium">Timeline</label>
-                  <select className="form-select form-select-sm" id="bp-timeline" name="timeline" value={briefingForm.timeline} onChange={handleBriefingChange}>
-                    <option value="">Select...</option>
-                    <option value="immediate">Next 30 days</option>
-                    <option value="quarter">This quarter</option>
-                    <option value="6months">Within 6 months</option>
-                    <option value="exploring">Just exploring</option>
-                  </select>
-                </div>
-                <div className="col-md-4 d-flex flex-column justify-content-end gap-2">
-                  <div className="form-check">
-                    <input type="checkbox" className="form-check-input" id="bp-evaluating" name="evaluating90Days" checked={briefingForm.evaluating90Days} onChange={handleBriefingChange} />
-                    <label className="form-check-label small" htmlFor="bp-evaluating">Evaluating within 90 days</label>
-                  </div>
-                </div>
-              </div>
+      {/* ====================== OUTCOMES STAT ROW ====================== */}
+      <section
+        aria-label="Outcomes"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-20) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto var(--space-12)' }}>
+            <h2 style={h2Style}>Built for outcomes, proven since 2012</h2>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0 }}>
+              A build-first track record, an Anthropic-partner curriculum, and a credential that says
+              your people can ship.
+            </p>
+          </div>
 
-              <p className="text-muted small text-center mb-3">
-                Organizations evaluating AI deployment within 90 days receive priority strategy sessions.
-              </p>
-              <button type="submit" className="btn btn-hero-primary btn-lg w-100" disabled={briefingSubmitting}>
-                {briefingSubmitting ? 'Submitting...' : 'Download System Blueprint & Schedule Strategy Call →'}
-              </button>
-            </form>
-
-            {/* Enterprise Trust Strip */}
-            <div className="text-center mt-4 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-              <p className="fw-semibold small mb-1">
-                Enterprise Data Respect Policy
-              </p>
-              <p className="text-muted small mb-0">
-                We never sell your information. Your data is used solely to deliver requested materials.
-              </p>
-            </div>
-
+          <div
+            style={{
+              display: 'grid',
+              gap: 'var(--space-6)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            }}
+          >
+            {OUTCOMES.map((item) => (
+              <StatCounter key={item.label} value={item.value} label={item.label} accent={item.accent} />
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Strategy Call CTA */}
+      {/* ===================== COHORT URGENCY ===================== */}
       <section
-        className="text-light text-center"
-        aria-label="Schedule Strategy Call"
+        aria-label="Next cohort"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+          <CohortUrgency startDateISO="2026-07-23" seatsTotal={40} seatsLeft={7} />
+        </div>
+      </section>
+
+      {/* ============== INDIVIDUAL DOOR (SECONDARY) ============== */}
+      <section
+        aria-label="Prefer to join on your own"
+        style={{ background: 'var(--surface-page)', padding: 'var(--space-20) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 880, paddingInline: 'var(--space-6)' }}>
+          <Card elevation="sm" padded style={{ textAlign: 'center' }}>
+            <Badge tone="red" style={{ marginBottom: 'var(--space-4)' }}>
+              One class, many doors
+            </Badge>
+            <h2 style={{ ...h2Style, fontSize: 'var(--fs-h3)', margin: '0 0 var(--space-3)' }}>
+              Prefer to walk in yourself?
+            </h2>
+            <p
+              style={{
+                fontSize: 'var(--fs-body)',
+                lineHeight: 'var(--lh-relaxed)',
+                color: 'var(--text-muted)',
+                maxWidth: 620,
+                margin: '0 auto var(--space-6)',
+              }}
+            >
+              Same cohort, same standard, same credential. Working professionals and career-changers
+              can enter the 12-week Challenge on their own schedule and graduate a Certified Anthropic
+              AI Systems Architect.
+            </p>
+            <Button as="a" href={INDIVIDUAL_PATH} tone="red" data-track="individual_door_enroll">
+              Join the Challenge
+            </Button>
+          </Card>
+        </div>
+      </section>
+
+      {/* ====================== BRAND-LINE BAND ====================== */}
+      <section
+        aria-label="What we stand for"
         style={{
-          background: 'linear-gradient(135deg, #0f1b2d 0%, #1a365d 50%, #1e3a5f 100%)',
-          padding: '5rem 0',
+          background: 'var(--surface-brand)',
+          color: 'var(--text-on-accent)',
+          padding: 'var(--space-24) 0',
         }}
       >
-        <div className="container" style={{ maxWidth: '750px' }}>
-          <h2 className="text-light mb-3" style={{ fontSize: '2rem' }}>
-            Ready to Deploy Your First AI System?
-          </h2>
-          <p className="mb-4" style={{ opacity: 0.85, fontSize: '1.1rem' }}>
-            Schedule a 30-minute executive strategy session to map your first system, timeline, and team requirements.
-          </p>
-          <p className="mb-4 small" style={{ opacity: 0.6 }}>
-            Most executives schedule this call immediately after reviewing the briefing.
-          </p>
-          <button
-            className="btn btn-hero-primary btn-lg px-5"
-            onClick={() => setShowBooking(true)}
+        <div className="container" style={{ maxWidth: 880, paddingInline: 'var(--space-6)', textAlign: 'center' }}>
+          <p
+            className="cb-balance"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 900,
+              fontSize: 'var(--fs-h2)',
+              lineHeight: 'var(--lh-snug)',
+              letterSpacing: 'var(--ls-tight)',
+              margin: '0 0 var(--space-6)',
+              color: 'var(--text-on-accent)',
+            }}
           >
-            {STANDARD_CTAS.secondary}
-          </button>
-          <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
-            <span className="small">✓ 30-minute focused session</span>
-            <span className="small">✓ No obligation</span>
-            <span className="small">✓ Deployment-first discussion</span>
-          </div>
+            The best AI builder on your team may not have the title yet.
+          </p>
+          <p
+            style={{
+              fontSize: 'var(--fs-h4)',
+              fontWeight: 500,
+              lineHeight: 'var(--lh-snug)',
+              margin: 0,
+              color: 'color-mix(in srgb, var(--text-on-accent) 88%, transparent)',
+            }}
+          >
+            Learn With Claude. Build Through Colaberry. Deploy In The Real World.
+          </p>
         </div>
       </section>
 
-      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/" />
+      {/* ====================== FINAL CTA ====================== */}
+      <section
+        aria-label="Get started"
+        style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}
+      >
+        <div className="container" style={{ maxWidth: 820, paddingInline: 'var(--space-6)', textAlign: 'center' }}>
+          <h2 className="cb-balance" style={{ ...h2Style, margin: '0 0 var(--space-5)' }}>
+            Find out who your real AI builders are.
+          </h2>
+          <p
+            style={{
+              fontSize: 'var(--fs-body-lg)',
+              lineHeight: 'var(--lh-relaxed)',
+              color: 'var(--text-muted)',
+              maxWidth: 640,
+              margin: '0 auto var(--space-10)',
+            }}
+          >
+            Sponsor your team and watch them build — without taking anyone off the job. Or walk in
+            yourself. Either way, the work is real and the credential is earned.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', alignItems: 'center', justifyContent: 'center' }}>
+            <Button as="a" href={SPONSOR_PATH} size="lg" data-track="final_sponsor_team">
+              Sponsor Your Team
+            </Button>
+            <a
+              href={INDIVIDUAL_PATH}
+              data-track="final_individual_link"
+              style={{ fontFamily: 'var(--font-body)', fontSize: 'var(--fs-body-sm)', fontWeight: 600, color: 'var(--text-link)', textDecoration: 'none' }}
+            >
+              Just want to join yourself? Enroll &rarr;
+            </a>
+          </div>
+          <p style={{ marginTop: 'var(--space-8)', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            Still exploring? See your team as an AI-powered org with the{' '}
+            <a href={DESIGNER_PATH} style={{ color: 'var(--text-link)', fontWeight: 500 }} data-track="secondary_workforce_designer">
+              AI Workforce Designer
+            </a>
+            .
+          </p>
+        </div>
+      </section>
     </>
   );
 }

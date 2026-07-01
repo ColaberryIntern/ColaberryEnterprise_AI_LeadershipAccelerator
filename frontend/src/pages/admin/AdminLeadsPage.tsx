@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
 import BatchActionBar from '../../components/admin/BatchActionBar';
 import TemperatureBadge from '../../components/TemperatureBadge';
-import Breadcrumb from '../../components/ui/Breadcrumb';
 import TableSkeleton from '../../components/ui/TableSkeleton';
 import Pagination from '../../components/ui/Pagination';
 import useDebounce from '../../hooks/useDebounce';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
 interface LeadStats {
   total: number;
@@ -173,6 +174,31 @@ function AdminLeadsPage() {
 
   const hasFilters = search || statusFilter || sourceFilter || scoreMin || scoreMax || dateFrom || dateTo;
 
+  // Per-page trust signal (Basecamp todo 10027085963) derived from live lead pipeline health.
+  const trust: TrustSignal = useMemo(() => {
+    const totalLeads = stats?.total ?? 0;
+    const newLeads = stats?.byStatus.new ?? 0;
+    const highIntent = stats?.highIntent ?? 0;
+    const level: TrustLevel = totalLeads > 0 ? 'live' : 'unverified';
+    return {
+      level,
+      source: 'leads table',
+      updatedAt: new Date().toISOString(),
+      summary: `${totalLeads} leads in pipeline, ${newLeads} new, ${highIntent} high-intent.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Pipeline',
+          status: level,
+          evidence: [
+            { label: 'Total', value: String(totalLeads) },
+            { label: 'New', value: String(newLeads) },
+          ],
+        },
+      ],
+    };
+  }, [stats]);
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -192,88 +218,69 @@ function AdminLeadsPage() {
   if (loading) {
     return (
       <>
-        <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads' }]} />
-        <div className="card admin-table-card">
-          <div className="card-body p-0">
-            <TableSkeleton rows={8} columns={7} />
-          </div>
-        </div>
+        <PageHeader
+          title="Lead Management"
+          icon="group-line"
+          subtitle="Track, qualify, and convert every inbound lead across all sources."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Leads' }]}
+          trust={trust}
+        />
+        <SectionCard padded={false}>
+          <TableSkeleton rows={8} columns={7} />
+        </SectionCard>
       </>
     );
   }
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Lead Management
-        </h1>
-        <div className="d-flex gap-2">
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
-            + Add Lead
-          </button>
-          <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/import')}>
-            Import CSV
-          </button>
-          <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/apollo')}>
-            Apollo Enrich
-          </button>
-          <button className="btn btn-outline-secondary btn-sm" onClick={handleExport}>
-            Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      {stats && (
-        <div className="row g-3 mb-4">
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #4a5568' }}>
-                <div className="text-muted small">Total</div>
-                <div className="h4 fw-bold mb-0">{stats.total}</div>
-              </div>
+      <PageHeader
+        title="Lead Management"
+        icon="group-line"
+        subtitle="Track, qualify, and convert every inbound lead across all sources."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Leads' }]}
+        trust={trust}
+        actions={
+          <>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+              + Add Lead
+            </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/import')}>
+              Import CSV
+            </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/apollo')}>
+              Apollo Enrich
+            </button>
+            <button className="btn btn-outline-secondary btn-sm" onClick={handleExport}>
+              Export CSV
+            </button>
+          </>
+        }
+      >
+        {stats && (
+          <div className="row g-3">
+            <div className="col-6 col-md">
+              <StatCard label="Total" value={stats.total} icon="group-line" tone="neutral" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="New" value={stats.byStatus.new || 0} icon="user-add-line" tone="info" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="High-Intent" value={stats.highIntent} icon="fire-line" tone="danger" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="This Month" value={stats.thisMonth} icon="calendar-line" tone="primary" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="Conversion" value={stats.conversionRate} unit="%" icon="line-chart-line" tone="success" />
             </div>
           </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #0dcaf0' }}>
-                <div className="text-muted small">New</div>
-                <div className="h4 fw-bold mb-0" style={{ color: '#0dcaf0' }}>{stats.byStatus.new || 0}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #dc3545', background: 'linear-gradient(135deg, rgba(220,53,69,0.04) 0%, transparent 100%)' }}>
-                <div className="text-muted small">High-Intent</div>
-                <div className="h4 fw-bold mb-0 text-danger">{stats.highIntent}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #6f42c1' }}>
-                <div className="text-muted small">This Month</div>
-                <div className="h4 fw-bold mb-0" style={{ color: '#6f42c1' }}>{stats.thisMonth}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #198754' }}>
-                <div className="text-muted small">Conversion</div>
-                <div className="h4 fw-bold mb-0 text-success">{stats.conversionRate}%</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </PageHeader>
 
       {/* Filters */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-body">
+      <div className="mb-4">
+        <SectionCard>
           <div className="row g-3 align-items-end">
             <div className="col-md-3">
               <label className="form-label small text-muted">Search</label>
@@ -371,7 +378,7 @@ function AdminLeadsPage() {
               </div>
             )}
           </div>
-        </div>
+        </SectionCard>
       </div>
 
       {/* Batch Actions */}
@@ -384,13 +391,9 @@ function AdminLeadsPage() {
       )}
 
       {/* Leads Table */}
-      <div className="card admin-table-card">
-        <div className="card-header fw-bold fs-6 py-3 d-flex justify-content-between">
-          <span>Leads ({total})</span>
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover table-striped mb-0">
+      <SectionCard title={`Leads (${total})`} padded={false}>
+        <div className="table-responsive">
+          <table className="table table-hover table-striped mb-0">
               <thead className="table-light">
                 <tr>
                   <th style={{ width: '40px' }}>
@@ -483,7 +486,7 @@ function AdminLeadsPage() {
                         </select>
                       </td>
                       <td>
-                        <span className="badge bg-light text-dark">{lead.form_type || lead.source}</span>
+                        <StatusBadge label={lead.form_type || lead.source} tone="neutral" />
                       </td>
                       <td className="text-nowrap small">{formatDate(lead.created_at)}</td>
                       <td>
@@ -500,14 +503,13 @@ function AdminLeadsPage() {
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* Pagination */}
-        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
-          <span className="text-muted small">Page {page} of {totalPages}</span>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-        </div>
-      </div>
+          {/* Pagination */}
+          <div className="d-flex justify-content-between align-items-center p-3 border-top">
+            <span className="text-muted small">Page {page} of {totalPages}</span>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        </SectionCard>
 
       {showAddModal && (
         <QuickAddLeadModal

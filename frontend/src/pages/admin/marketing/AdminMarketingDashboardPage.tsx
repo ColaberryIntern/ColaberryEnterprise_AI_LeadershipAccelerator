@@ -3,6 +3,8 @@ import {
   FunnelChart, Funnel, Tooltip, ResponsiveContainer, LabelList, Cell,
 } from 'recharts';
 import api from '../../../utils/api';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../components/admin/shell';
+import { TrustSignal } from '../../../components/admin/shell/trust';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
 const OpenclawTab = lazy(() => import('../../../components/admin/intelligence/tabs/OpenclawTab'));
@@ -64,7 +66,10 @@ interface ChannelROI {
 
 type SortKey = keyof CampaignMetric;
 
-const FUNNEL_COLORS = ['#2b6cb0', '#38a169', '#dd6b20', '#1a365d'];
+// Funnel segment colors drawn from the shared chart palette (brand tokens).
+const FUNNEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-7)'];
+
+type BadgeTone = 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral';
 
 const CAMPAIGN_TYPES = [
   { value: 'warm_nurture', label: 'Warm Nurture' },
@@ -88,16 +93,16 @@ const CHANNELS = [
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function intentBadge(pct: number) {
-  if (pct >= 40) return 'bg-success';
-  if (pct >= 20) return 'bg-warning text-dark';
-  return 'bg-danger';
+function intentTone(pct: number): BadgeTone {
+  if (pct >= 40) return 'success';
+  if (pct >= 20) return 'warning';
+  return 'danger';
 }
 
-function conversionBadge(rate: number) {
-  if (rate >= 5) return 'bg-success';
-  if (rate >= 2) return 'bg-warning text-dark';
-  return 'bg-danger';
+function conversionTone(rate: number): BadgeTone {
+  if (rate >= 5) return 'success';
+  if (rate >= 2) return 'warning';
+  return 'danger';
 }
 
 function fmt$(n: number) {
@@ -428,11 +433,9 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
               <div>
                 <h5 className="modal-title fw-semibold mb-1">{c.name}</h5>
                 <div className="d-flex gap-2 align-items-center">
-                  <span className={`badge ${isActive ? 'bg-success' : 'bg-secondary'}`}>
-                    {isActive ? 'Active' : c.status || 'Draft'}
-                  </span>
+                  <StatusBadge label={isActive ? 'Active' : c.status || 'Draft'} tone={isActive ? 'success' : 'neutral'} />
                   {c.channel && (
-                    <span className="badge bg-info text-dark">{c.channel.replace(/_/g, ' ')}</span>
+                    <StatusBadge label={c.channel.replace(/_/g, ' ')} tone="info" />
                   )}
                   <span className="text-muted small">{c.type.replace(/_/g, ' ')}</span>
                 </div>
@@ -662,15 +665,13 @@ function CampaignLinkRegistryTab() {
       )}
 
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Campaign Link Registry
-        </h1>
+        <h2 className="h4 fw-bold mb-0">Campaign Link Registry</h2>
         <div className="d-flex gap-2">
           <button className="btn btn-sm btn-outline-primary" onClick={fetchCampaigns} disabled={loading}>
-            {loading ? 'Loading...' : 'Refresh'}
+            <i className="ri-refresh-line" aria-hidden="true" /> {loading ? 'Loading...' : 'Refresh'}
           </button>
           <button className="btn btn-sm btn-primary" onClick={() => setShowCreate(true)}>
-            + Create Campaign
+            <i className="ri-add-line" aria-hidden="true" /> Create Campaign
           </button>
         </div>
       </div>
@@ -680,40 +681,39 @@ function CampaignLinkRegistryTab() {
         <div className="row g-3 mb-4">
           {channelROI.map(ch => (
             <div className="col-6 col-lg-3" key={ch.channel}>
-              <div className="card border-0 shadow-sm">
-                <div className="card-body p-3">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="small fw-semibold text-uppercase">{ch.channel.replace(/_/g, ' ')}</span>
-                    <span className="badge bg-secondary">{ch.campaign_count}</span>
-                  </div>
-                  <div className="d-flex justify-content-between small">
-                    <span className="text-muted">Spend</span>
-                    <span className="fw-medium">{fmt$(ch.total_budget_spent)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between small">
-                    <span className="text-muted">Revenue</span>
-                    <span className="fw-medium">{fmt$(ch.total_revenue)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between small">
-                    <span className="text-muted">ROI</span>
-                    <span className={`fw-bold ${ch.roi > 0 ? 'text-success' : ch.roi < 0 ? 'text-danger' : ''}`}>
-                      {ch.roi > 0 ? '+' : ''}{(ch.roi * 100).toFixed(0)}%
-                    </span>
-                  </div>
+              <SectionCard>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span className="small fw-semibold text-uppercase">{ch.channel.replace(/_/g, ' ')}</span>
+                  <StatusBadge label={String(ch.campaign_count)} tone="neutral" />
                 </div>
-              </div>
+                <div className="d-flex justify-content-between small">
+                  <span className="text-muted">Spend</span>
+                  <span className="fw-medium">{fmt$(ch.total_budget_spent)}</span>
+                </div>
+                <div className="d-flex justify-content-between small">
+                  <span className="text-muted">Revenue</span>
+                  <span className="fw-medium">{fmt$(ch.total_revenue)}</span>
+                </div>
+                <div className="d-flex justify-content-between small">
+                  <span className="text-muted">ROI</span>
+                  <span className={`fw-bold ${ch.roi > 0 ? 'text-success' : ch.roi < 0 ? 'text-danger' : ''}`}>
+                    {ch.roi > 0 ? '+' : ''}{(ch.roi * 100).toFixed(0)}%
+                  </span>
+                </div>
+              </SectionCard>
             </div>
           ))}
         </div>
       )}
 
       {/* Campaign Registry Table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>Registered Campaigns</span>
-          <small className="text-muted fw-normal">{campaigns.length} campaigns</small>
-        </div>
-        <div className="card-body p-0">
+      <SectionCard
+        title="Registered Campaigns"
+        icon="links-line"
+        padded={false}
+        actions={<small className="text-muted fw-normal">{campaigns.length} campaigns</small>}
+      >
+        <div>
           {loading ? (
             <div className="p-4 text-center">
               <div className="spinner-border spinner-border-sm me-2" role="status">
@@ -746,30 +746,28 @@ function CampaignLinkRegistryTab() {
                     const isActive = c.status === 'active';
                     return (
                       <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setDetailCampaign(c)}>
-                        <td className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>
+                        <td className="fw-medium text-primary">
                           {c.name}
                         </td>
                         <td>
                           {c.channel
-                            ? <span className="badge bg-info text-dark">{c.channel.replace(/_/g, ' ')}</span>
+                            ? <StatusBadge label={c.channel.replace(/_/g, ' ')} tone="info" />
                             : <span className="text-muted">{'\u2014'}</span>}
                         </td>
                         <td>
-                          <span className={`badge ${isActive ? 'bg-success' : 'bg-secondary'}`}>
-                            {isActive ? 'Active' : c.status || 'Draft'}
-                          </span>
+                          <StatusBadge label={isActive ? 'Active' : c.status || 'Draft'} tone={isActive ? 'success' : 'neutral'} />
                         </td>
                         <td className="small">{c.destination_path || '\u2014'}</td>
-                        <td className="text-end fw-medium" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}>
+                        <td className="text-end fw-medium text-primary text-decoration-underline" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer' }}>
                           {campaignKPIs[c.id]?.visitors || 0}
                         </td>
-                        <td className="text-end fw-medium" style={{ color: (campaignKPIs[c.id]?.engaged || 0) > 0 ? '#8b5cf6' : undefined }}>
+                        <td className="text-end fw-medium" style={{ color: (campaignKPIs[c.id]?.engaged || 0) > 0 ? 'var(--chart-5)' : undefined }}>
                           {campaignKPIs[c.id]?.engaged || 0}
                         </td>
-                        <td className="text-end fw-medium" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}>
+                        <td className="text-end fw-medium text-primary text-decoration-underline" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer' }}>
                           {campaignKPIs[c.id]?.leads || 0}
                         </td>
-                        <td className="text-end fw-medium" style={{ color: (campaignKPIs[c.id]?.enrollments || 0) > 0 ? '#198754' : undefined }}>
+                        <td className={`text-end fw-medium ${(campaignKPIs[c.id]?.enrollments || 0) > 0 ? 'text-success' : ''}`}>
                           {campaignKPIs[c.id]?.enrollments || 0}
                         </td>
                         <td onClick={e => e.stopPropagation()}>
@@ -794,7 +792,7 @@ function CampaignLinkRegistryTab() {
             </div>
           )}
         </div>
-      </div>
+      </SectionCard>
 
       {/* Drill-down modal */}
       {drillDown && (
@@ -958,13 +956,13 @@ function RevenueIntelligenceTab() {
     ];
   }, [totals]);
 
-  const kpiCards = [
-    { label: 'Total Visitors', value: totals.visitors.toLocaleString(), color: 'var(--color-primary-light)' },
-    { label: 'Total Leads', value: totals.leads.toLocaleString(), color: 'var(--color-accent)' },
-    { label: 'High Intent %', value: `${avgIntentPct}%`, color: '#805ad5' },
-    { label: 'Total Revenue', value: fmt$(totals.revenue), color: 'var(--color-secondary)' },
-    { label: 'Enrollments', value: totals.enrollments.toLocaleString(), color: 'var(--color-primary)' },
-    { label: 'Conversion Rate', value: `${overallConversion}%`, color: overallConversion >= 5 ? 'var(--color-accent)' : overallConversion >= 2 ? '#d69e2e' : 'var(--color-secondary)' },
+  const kpiCards: { label: string; value: string; icon: string; tone: BadgeTone }[] = [
+    { label: 'Total Visitors', value: totals.visitors.toLocaleString(), icon: 'group-line', tone: 'info' },
+    { label: 'Total Leads', value: totals.leads.toLocaleString(), icon: 'user-add-line', tone: 'success' },
+    { label: 'High Intent %', value: `${avgIntentPct}%`, icon: 'fire-line', tone: 'primary' },
+    { label: 'Total Revenue', value: fmt$(totals.revenue), icon: 'money-dollar-circle-line', tone: 'success' },
+    { label: 'Enrollments', value: totals.enrollments.toLocaleString(), icon: 'graduation-cap-line', tone: 'primary' },
+    { label: 'Conversion Rate', value: `${overallConversion}%`, icon: 'percent-line', tone: overallConversion >= 5 ? 'success' : overallConversion >= 2 ? 'warning' : 'danger' },
   ];
 
   const SortTh = ({ k, children }: { k: SortKey; children: React.ReactNode }) => (
@@ -980,11 +978,9 @@ function RevenueIntelligenceTab() {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Revenue Intelligence
-        </h1>
+        <h2 className="h4 fw-bold mb-0">Revenue Intelligence</h2>
         <button className="btn btn-sm btn-outline-primary" onClick={fetchData} disabled={loading}>
-          {loading ? 'Loading...' : 'Refresh'}
+          <i className="ri-refresh-line" aria-hidden="true" /> {loading ? 'Loading...' : 'Refresh'}
         </button>
       </div>
 
@@ -1020,51 +1016,41 @@ function RevenueIntelligenceTab() {
       <div className="row g-3 mb-4">
         {kpiCards.map((kpi) => (
           <div className="col-6 col-lg-2" key={kpi.label}>
-            <div className="card border-0 shadow-sm">
-              <div className="card-body text-center p-3">
-                <div className="small text-muted mb-1">{kpi.label}</div>
-                <div className="h4 fw-bold mb-0" style={{ color: kpi.color }}>
-                  {loading ? '-' : kpi.value}
-                </div>
-              </div>
-            </div>
+            <StatCard label={kpi.label} value={loading ? '-' : kpi.value} icon={kpi.icon} tone={kpi.tone} />
           </div>
         ))}
       </div>
 
       {/* Funnel Visualization */}
       {!loading && funnelData.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-semibold">Conversion Funnel</div>
-          <div className="card-body">
-            <div className="d-flex justify-content-center gap-4 mb-3 flex-wrap">
-              {funnelData.map((stage, i) => (
-                <div key={stage.name} className="text-center">
-                  <div className="small text-muted">{stage.name}</div>
-                  <div className="fw-bold" style={{ color: FUNNEL_COLORS[i], fontSize: '1.1rem' }}>
-                    {stage.value.toLocaleString()}
-                  </div>
-                  {i < funnelConversions.length && (
-                    <div className="text-muted" style={{ fontSize: '0.65rem' }}>
-                      {funnelConversions[i].label}: {funnelConversions[i].pct}%
-                    </div>
-                  )}
+        <SectionCard title="Conversion Funnel" icon="filter-3-line" className="mb-4">
+          <div className="d-flex justify-content-center gap-4 mb-3 flex-wrap">
+            {funnelData.map((stage, i) => (
+              <div key={stage.name} className="text-center">
+                <div className="small text-muted">{stage.name}</div>
+                <div className="fw-bold" style={{ color: FUNNEL_COLORS[i], fontSize: '1.1rem' }}>
+                  {stage.value.toLocaleString()}
                 </div>
-              ))}
-            </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <FunnelChart>
-                <Tooltip formatter={(value: any) => [Number(value).toLocaleString(), 'Count']} />
-                <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                  <LabelList position="center" fill="#fff" fontSize={12} fontWeight={600} />
-                  {funnelData.map((_, i) => (
-                    <Cell key={i} fill={FUNNEL_COLORS[i]} />
-                  ))}
-                </Funnel>
-              </FunnelChart>
-            </ResponsiveContainer>
+                {i < funnelConversions.length && (
+                  <div className="text-muted" style={{ fontSize: '0.65rem' }}>
+                    {funnelConversions[i].label}: {funnelConversions[i].pct}%
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <FunnelChart>
+              <Tooltip formatter={(value: any) => [Number(value).toLocaleString(), 'Count']} />
+              <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                <LabelList position="center" fill="var(--text-on-accent)" fontSize={12} fontWeight={600} />
+                {funnelData.map((_, i) => (
+                  <Cell key={i} fill={FUNNEL_COLORS[i]} />
+                ))}
+              </Funnel>
+            </FunnelChart>
+          </ResponsiveContainer>
+        </SectionCard>
       )}
 
       {/* Error State */}
@@ -1076,12 +1062,13 @@ function RevenueIntelligenceTab() {
       )}
 
       {/* Campaign Performance Table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>Campaign Performance</span>
-          <small className="text-muted fw-normal">{campaigns.length} campaigns</small>
-        </div>
-        <div className="card-body p-0">
+      <SectionCard
+        title="Campaign Performance"
+        icon="bar-chart-2-line"
+        padded={false}
+        actions={<small className="text-muted fw-normal">{campaigns.length} campaigns</small>}
+      >
+        <div>
           {loading ? (
             <div className="p-4 text-center">
               <div className="spinner-border spinner-border-sm me-2" role="status">
@@ -1119,7 +1106,7 @@ function RevenueIntelligenceTab() {
                 <tbody>
                   {sorted.map((c) => (
                     <tr key={c.campaign_id} style={{ cursor: 'pointer' }} onClick={() => openCampaignDetail(c.campaign_id)}>
-                      <td className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>
+                      <td className="fw-medium text-primary">
                         {c.campaign_name || c.campaign_id}
                       </td>
                       {hasMetadata && <td className="text-muted">{c.campaign_type || '\u2014'}</td>}
@@ -1127,9 +1114,7 @@ function RevenueIntelligenceTab() {
                       {hasMetadata && <td className="text-muted">{c.creative || '\u2014'}</td>}
                       <td>{c.visitors_count.toLocaleString()}</td>
                       <td>
-                        <span className={`badge ${intentBadge(c.high_intent_pct)}`}>
-                          {c.high_intent_pct}%
-                        </span>
+                        <StatusBadge label={`${c.high_intent_pct}%`} tone={intentTone(c.high_intent_pct)} />
                       </td>
                       <td>{c.leads_count}</td>
                       <td className={c.strategy_calls > 0 ? 'fw-bold' : ''}>
@@ -1143,9 +1128,7 @@ function RevenueIntelligenceTab() {
                       <td>{c.lead_to_call_pct}%</td>
                       <td>{c.call_to_enroll_pct}%</td>
                       <td>
-                        <span className={`badge ${conversionBadge(c.conversion_rate)}`}>
-                          {c.conversion_rate}%
-                        </span>
+                        <StatusBadge label={`${c.conversion_rate}%`} tone={conversionTone(c.conversion_rate)} />
                       </td>
                     </tr>
                   ))}
@@ -1154,7 +1137,7 @@ function RevenueIntelligenceTab() {
             </div>
           )}
         </div>
-      </div>
+      </SectionCard>
       {selectedCampaign && (
         <CampaignDetailModal
           campaign={selectedCampaign}
@@ -1172,43 +1155,67 @@ function RevenueIntelligenceTab() {
 function AdminMarketingDashboardPage() {
   const [activeTab, setActiveTab] = useState<'funnel' | 'revenue' | 'registry' | 'outreach'>('funnel');
 
+  /* ---------- per-page trust signal ---------- */
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'marketing',
+    updatedAt: new Date().toISOString(),
+    summary: 'Live marketing funnel, revenue intelligence, campaign registry, and AI outreach.',
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Freshness',
+        status: 'live',
+        evidence: [{ label: 'Source', value: 'marketing' }],
+      },
+    ],
+  }), []);
+
   return (
-    <div>
-      {/* Tab Navigation */}
-      <ul className="nav nav-tabs mb-4">
-        <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === 'funnel' ? 'active' : ''}`}
-            onClick={() => setActiveTab('funnel')}
-          >
-            Marketing Funnel
-          </button>
-        </li>
-        <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === 'revenue' ? 'active' : ''}`}
-            onClick={() => setActiveTab('revenue')}
-          >
-            Revenue Intelligence
-          </button>
-        </li>
-        <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === 'registry' ? 'active' : ''}`}
-            onClick={() => setActiveTab('registry')}
-          >
-            Campaign Link Registry
-          </button>
-        </li>
-        <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === 'outreach' ? 'active' : ''}`}
-            onClick={() => setActiveTab('outreach')}
-          >
-            AI Outreach
-          </button>
-        </li>
-      </ul>
+    <>
+      <PageHeader
+        title="Marketing"
+        icon="broadcast-line"
+        subtitle="Funnel performance, revenue intelligence, campaign tracking links, and AI outreach."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing' }]}
+        trust={trust}
+      >
+        {/* Tab Navigation */}
+        <ul className="nav nav-tabs">
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === 'funnel' ? 'active' : ''}`}
+              onClick={() => setActiveTab('funnel')}
+            >
+              Marketing Funnel
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === 'revenue' ? 'active' : ''}`}
+              onClick={() => setActiveTab('revenue')}
+            >
+              Revenue Intelligence
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === 'registry' ? 'active' : ''}`}
+              onClick={() => setActiveTab('registry')}
+            >
+              Campaign Link Registry
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === 'outreach' ? 'active' : ''}`}
+              onClick={() => setActiveTab('outreach')}
+            >
+              AI Outreach
+            </button>
+          </li>
+        </ul>
+      </PageHeader>
 
       {activeTab === 'funnel' && (
         <div style={{ height: 'calc(100vh - 170px)', minHeight: 400 }}>
@@ -1236,7 +1243,7 @@ function AdminMarketingDashboardPage() {
           <OpenclawTab />
         </Suspense>
       )}
-    </div>
+    </>
   );
 }
 

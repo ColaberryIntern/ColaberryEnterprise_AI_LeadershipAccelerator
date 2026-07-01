@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -10,6 +10,8 @@ import {
   Legend,
 } from 'recharts';
 import api from '../../utils/api';
+import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
+import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
 /**
  * Trust Command Center (/admin/trust) — read-only view backing the TBI compliance audit
@@ -70,6 +72,12 @@ interface CostBreakdown { windowDays: number; totalUsd: number; rows: CostRow[];
 interface ValueRow { workflowId: string; events: number; minutes: number; valueUsd: number; }
 interface AiValue { windowDays: number; hourlyRateUsd: number; hoursSaved: number; valueUsd: number; costUsd: number; netUsd: number; roiMultiple: number | null; estimate: boolean; rows: ValueRow[]; }
 
+// Brand chart palette (replaces hardcoded berry-style hex). One token per series.
+const CHART_GENERATIONS = 'var(--chart-1)';
+const CHART_CONVERSATIONS = 'var(--chart-3)';
+const CHART_AGENT_RUNS = 'var(--chart-4)';
+const CHART_GRID = 'var(--border-subtle)';
+
 function barClass(score: number): string {
   if (score >= 80) return 'bg-success';
   if (score >= 50) return 'bg-warning';
@@ -122,24 +130,6 @@ function ScoreBar({ d, onClick }: { d: DimensionScore; onClick?: () => void }) {
     );
   }
   return <div className="mb-2" title={d.evidence || undefined}>{inner}</div>;
-}
-
-function Tile({ label, value, state, onClick }: { label: string; value: React.ReactNode; state: MetricState; onClick?: () => void }) {
-  const body = (
-    <div className="card-body">
-      <div className="text-muted small text-uppercase">{label}<StateBadge state={state} />{onClick && <span className="text-muted ms-1" aria-hidden="true">&rsaquo;</span>}</div>
-      <div className="fs-3 fw-bold">{value}</div>
-    </div>
-  );
-  return (
-    <div className="col">
-      {onClick ? (
-        <button type="button" onClick={onClick} className="card h-100 shadow-sm w-100 border-0 text-reset text-start p-0">{body}</button>
-      ) : (
-        <div className="card h-100 shadow-sm">{body}</div>
-      )}
-    </div>
-  );
 }
 
 function DetailDrawer({ kind, detail, cost, value, loading, onClose, onOpenDimension }: {
@@ -263,6 +253,11 @@ function AdminTrustCenterPage() {
   const [cost, setCost] = useState<CostBreakdown | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
+  // One-shot poll-failure guard: the 30s poll must surface a failure AT MOST ONCE,
+  // not once per tick. We keep the failure in the inline `error` banner and flip this
+  // ref so a repeated failure does not re-announce. A later successful poll clears it.
+  const failureAnnouncedRef = useRef(false);
+
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -282,9 +277,19 @@ function AdminTrustCenterPage() {
         setObservability(ob.data);
         setActions(ac.data.actions || []);
         setValue(val.data);
+        // Poll recovered — clear the banner and re-arm the one-shot guard so the
+        // NEXT distinct failure streak is allowed to surface again.
         setError(null);
+        failureAnnouncedRef.current = false;
       } catch {
-        if (active) setError('Could not load trust metrics.');
+        if (!active) return;
+        // Surface the failure at most once per streak. Setting the inline banner is
+        // idempotent; the ref guard ensures we don't re-fire any louder notification
+        // (toast) on every interval tick while the backend stays down.
+        if (!failureAnnouncedRef.current) {
+          failureAnnouncedRef.current = true;
+          setError('Could not load trust metrics. Showing the last good snapshot; will retry automatically.');
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -293,6 +298,27 @@ function AdminTrustCenterPage() {
     const timer = setInterval(load, 30000);
     return () => { active = false; clearInterval(timer); };
   }, []);
+
+  // Page-level trust signal derived from the composite score (level by score threshold).
+  // Must live above the early `if (loading) return` so hook order is stable.
+  const trust: TrustSignal = useMemo(() => {
+    const score = overview?.compositeTrustScore ?? 0;
+    const level: TrustLevel = score >= 95 ? 'verified' : score >= 80 ? 'live' : score >= 50 ? 'stale' : 'unverified';
+    return {
+      level,
+      score,
+      source: 'TBI audit',
+      updatedAt: new Date().toISOString(),
+      summary: overview ? `Composite trust ${score}/100 · ${overview.recommendation}` : 'Trust metrics unavailable.',
+      href: '/admin/trust',
+      pillars: (overview?.dimensions || []).map((d) => ({
+        name: d.label,
+        score: d.score,
+        status: d.score >= 80 ? 'live' : d.score >= 50 ? 'stale' : 'unverified',
+        evidence: d.evidence ? [{ label: 'Evidence', value: d.evidence }] : undefined,
+      })),
+    };
+  }, [overview]);
 
   const openDimension = async (key: string) => {
     setDrawerKind('dimension');
@@ -330,68 +356,73 @@ function AdminTrustCenterPage() {
   if (loading) return <div className="p-4 text-muted">Loading Trust Command Center…</div>;
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-1">
-        <h1 className="h3 mb-0">Trust Command Center</h1>
-        <span className="text-muted small">TBI compliance · docs/trust-audit</span>
-      </div>
-      <p className="text-muted small">
-        Read-only. <span className="badge bg-success-subtle text-success-emphasis">live</span> = queried now ·{' '}
-        <span className="badge bg-secondary-subtle text-secondary-emphasis">baseline</span> = audit score ·{' '}
-        <span className="badge bg-warning-subtle text-warning-emphasis">placeholder</span> = not yet instrumented.
-        {' '}<span className="text-primary">Click any dimension or the cost tile for the criterion-level breakdown.</span>
-      </p>
+    <>
+      <PageHeader
+        title="Trust Command Center"
+        icon="shield-check-line"
+        subtitle="TBI compliance audit — composite trust score, live AI activity, governance posture, and the criterion-level drill-down. Read-only."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Trust Center' }]}
+        trust={trust}
+      >
+        <p className="text-muted small mb-0">
+          <span className="badge bg-success-subtle text-success-emphasis">live</span> = queried now ·{' '}
+          <span className="badge bg-secondary-subtle text-secondary-emphasis">baseline</span> = audit score ·{' '}
+          <span className="badge bg-warning-subtle text-warning-emphasis">placeholder</span> = not yet instrumented.
+          {' '}<span className="text-primary">Click any dimension or the cost tile for the criterion-level breakdown.</span>
+        </p>
+      </PageHeader>
 
-      {error && <div className="alert alert-warning py-2">{error}</div>}
+      {error && (
+        <div className="alert alert-warning d-flex align-items-center gap-2 py-2" role="alert">
+          <i className="ri-error-warning-line" aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* Row: composite score + recommendation + top risks */}
       {overview && (
         <div className="row g-3 mb-3">
           <div className="col-md-3">
-            <div className="card h-100 shadow-sm text-center">
-              <div className="card-body">
+            <SectionCard className="h-100">
+              <div className="text-center">
                 <div className="text-muted small text-uppercase">Composite Trust</div>
-                <div className={`display-4 fw-bold text-${overview.band === 'green' ? 'success' : overview.band === 'amber' ? 'warning' : 'danger'}`}>
+                <div className={`display-4 fw-bold text-${bandColor(overview.band)}`}>
                   {overview.compositeTrustScore}
                 </div>
                 <div className="text-muted small">/ 100</div>
                 <div className="mt-2 small">INPACT ≈ {overview.inpactEstimatePct}% · GOALS ≈ {overview.goalsEstimate}/25</div>
               </div>
-            </div>
+            </SectionCard>
           </div>
           <div className="col-md-4">
-            <div className="card h-100 shadow-sm">
-              <div className="card-body">
-                <div className="text-muted small text-uppercase">Executive recommendation</div>
-                <div className="fs-5 fw-bold text-danger">{overview.recommendation}</div>
-                <div className="small text-muted">{overview.maturityLevel}</div>
-                <div className="small mt-2">Production gate (INPACT ≥ 86%, GOALS ≥ 21/25) <span className="fw-semibold text-danger">not met</span>.</div>
-              </div>
-            </div>
+            <SectionCard className="h-100">
+              <div className="text-muted small text-uppercase">Executive recommendation</div>
+              <div className="fs-5 fw-bold text-danger">{overview.recommendation}</div>
+              <div className="small text-muted">{overview.maturityLevel}</div>
+              <div className="small mt-2">Production gate (INPACT ≥ 86%, GOALS ≥ 21/25) <span className="fw-semibold text-danger">not met</span>.</div>
+            </SectionCard>
           </div>
           <div className="col-md-5">
-            <div className="card h-100 shadow-sm">
-              <div className="card-body">
-                <div className="text-muted small text-uppercase">Next actions to raise the score</div>
-                {actions.length === 0 ? (
-                  <div className="small text-muted mt-1">All tracked criteria are met.</div>
-                ) : (
-                  <ol className="small mb-0 ps-3">
-                    {actions.slice(0, 6).map((a) => (
-                      <li key={a.dimensionKey + a.label} className="mb-1">
-                        <button
-                          type="button"
-                          className="btn btn-link p-0 text-start text-reset text-decoration-none align-baseline"
-                          onClick={() => openDimension(a.dimensionKey)}
-                        >
-                          <span className="fw-semibold">{a.dimension}:</span> {a.remediation}
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            </div>
+            <SectionCard className="h-100">
+              <div className="text-muted small text-uppercase">Next actions to raise the score</div>
+              {actions.length === 0 ? (
+                <div className="small text-muted mt-1">All tracked criteria are met.</div>
+              ) : (
+                <ol className="small mb-0 ps-3">
+                  {actions.slice(0, 6).map((a) => (
+                    <li key={a.dimensionKey + a.label} className="mb-1">
+                      <button
+                        type="button"
+                        className="btn btn-link p-0 text-start text-reset text-decoration-none align-baseline"
+                        onClick={() => openDimension(a.dimensionKey)}
+                      >
+                        <span className="fw-semibold">{a.dimension}:</span> {a.remediation}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </SectionCard>
           </div>
         </div>
       )}
@@ -399,12 +430,44 @@ function AdminTrustCenterPage() {
       {/* Row: live activity tiles */}
       {activity && (
         <div className="row row-cols-2 row-cols-md-6 g-3 mb-3">
-          <Tile label="Conversations 24h" value={activity.conversations24h.value} state={activity.conversations24h.state} />
-          <Tile label="Generations 24h" value={activity.generations24h.value} state={activity.generations24h.state} />
-          <Tile label="Agent runs 24h" value={activity.agentRuns24h.value} state={activity.agentRuns24h.state} />
-          <Tile label="Errors 24h" value={activity.errors24h.value} state={activity.errors24h.state} />
-          <Tile label="AI cost 24h" value={activity.costUsd24h.value === null ? '—' : `$${activity.costUsd24h.value}`} state={activity.costUsd24h.state} onClick={openCost} />
-          <Tile label="AI value 30d" value={value ? `$${value.valueUsd.toLocaleString()}` : '—'} state="live" onClick={value ? openValue : undefined} />
+          <div className="col">
+            <StatCard label="Conversations 24h" value={activity.conversations24h.value} icon="chat-3-line" tone="info" hint={activity.conversations24h.state} />
+          </div>
+          <div className="col">
+            <StatCard label="Generations 24h" value={activity.generations24h.value} icon="sparkling-2-line" tone="primary" hint={activity.generations24h.state} />
+          </div>
+          <div className="col">
+            <StatCard label="Agent runs 24h" value={activity.agentRuns24h.value} icon="robot-2-line" tone="info" hint={activity.agentRuns24h.state} />
+          </div>
+          <div className="col">
+            <StatCard label="Errors 24h" value={activity.errors24h.value} icon="error-warning-line" tone={activity.errors24h.value ? 'danger' : 'success'} hint={activity.errors24h.state} />
+          </div>
+          <div className="col">
+            <button type="button" onClick={openCost} className="btn p-0 border-0 w-100 text-start" title="View AI cost by workflow">
+              <StatCard
+                label="AI cost 24h"
+                value={activity.costUsd24h.value === null ? '—' : `$${activity.costUsd24h.value}`}
+                icon="money-dollar-circle-line"
+                tone="warning"
+                hint={`${activity.costUsd24h.state} · click for breakdown`}
+              />
+            </button>
+          </div>
+          <div className="col">
+            {value ? (
+              <button type="button" onClick={openValue} className="btn p-0 border-0 w-100 text-start" title="View AI value by workflow">
+                <StatCard
+                  label="AI value 30d"
+                  value={`$${value.valueUsd.toLocaleString()}`}
+                  icon="funds-line"
+                  tone="success"
+                  hint="live · click for breakdown"
+                />
+              </button>
+            ) : (
+              <StatCard label="AI value 30d" value="—" icon="funds-line" tone="success" hint="live" />
+            )}
+          </div>
         </div>
       )}
 
@@ -412,68 +475,56 @@ function AdminTrustCenterPage() {
         {/* Trust dimensions */}
         {overview && (
           <div className="col-md-4">
-            <div className="card h-100 shadow-sm">
-              <div className="card-body">
-                <h2 className="h6">Trust by dimension</h2>
-                {overview.dimensions.map((d) => <ScoreBar key={d.key} d={d} onClick={() => openDimension(d.key)} />)}
-                <div className="text-muted" style={{ fontSize: '0.7rem' }}>{overview.baselineSource}</div>
-              </div>
-            </div>
+            <SectionCard title="Trust by dimension" icon="shield-star-line" className="h-100">
+              {overview.dimensions.map((d) => <ScoreBar key={d.key} d={d} onClick={() => openDimension(d.key)} />)}
+              <div className="text-muted" style={{ fontSize: '0.7rem' }}>{overview.baselineSource}</div>
+            </SectionCard>
           </div>
         )}
 
         {/* Observability dimensions */}
         {observability && (
           <div className="col-md-4">
-            <div className="card h-100 shadow-sm">
-              <div className="card-body">
-                <h2 className="h6">Observability coverage</h2>
-                {observability.dimensions.map((d) => <ScoreBar key={d.key} d={d} />)}
-                <div className="d-flex justify-content-between small mt-2">
-                  <span>Audited generations 24h<StateBadge state={observability.auditedGenerations24h.state} /></span>
-                  <span className="fw-semibold">{observability.auditedGenerations24h.value}</span>
-                </div>
-                <div className="text-muted" style={{ fontSize: '0.7rem' }}>{observability.note}</div>
+            <SectionCard title="Observability coverage" icon="eye-line" className="h-100">
+              {observability.dimensions.map((d) => <ScoreBar key={d.key} d={d} />)}
+              <div className="d-flex justify-content-between small mt-2">
+                <span>Audited generations 24h<StateBadge state={observability.auditedGenerations24h.state} /></span>
+                <span className="fw-semibold">{observability.auditedGenerations24h.value}</span>
               </div>
-            </div>
+              <div className="text-muted" style={{ fontSize: '0.7rem' }}>{observability.note}</div>
+            </SectionCard>
           </div>
         )}
 
         {/* Governance status */}
         {governance && (
           <div className="col-md-4">
-            <div className="card h-100 shadow-sm">
-              <div className="card-body">
-                <h2 className="h6">Governance status</h2>
-                <div className="d-flex justify-content-between mb-2"><span>Kill switch</span><YesNo v={governance.killSwitchActive} /></div>
-                <div className="d-flex justify-content-between mb-2"><span>Safe mode</span><YesNo v={governance.safeModeActive} /></div>
-                <div className="d-flex justify-content-between mb-2 small"><span>Blocked agent writes 24h<StateBadge state={governance.blockedAgentWrites24h.state} /></span><span className="fw-semibold">{governance.blockedAgentWrites24h.value}</span></div>
-                <div className="alert alert-danger py-2 small mb-0 mt-2">{governance.killSwitchGatesActions.note}</div>
-              </div>
-            </div>
+            <SectionCard title="Governance status" icon="git-repository-private-line" className="h-100">
+              <div className="d-flex justify-content-between mb-2"><span>Kill switch</span><YesNo v={governance.killSwitchActive} /></div>
+              <div className="d-flex justify-content-between mb-2"><span>Safe mode</span><YesNo v={governance.safeModeActive} /></div>
+              <div className="d-flex justify-content-between mb-2 small"><span>Blocked agent writes 24h<StateBadge state={governance.blockedAgentWrites24h.state} /></span><span className="fw-semibold">{governance.blockedAgentWrites24h.value}</span></div>
+              <div className="alert alert-danger py-2 small mb-0 mt-2">{governance.killSwitchGatesActions.note}</div>
+            </SectionCard>
           </div>
         )}
       </div>
 
       {/* Activity trend */}
       {activity && activity.trend.length > 0 && (
-        <div className="card shadow-sm mt-3">
-          <div className="card-body">
-            <h2 className="h6">AI activity — last 7 days</h2>
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={activity.trend} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="generations" stroke="#2b6cb0" strokeWidth={2} />
-                <Line type="monotone" dataKey="conversations" stroke="#38a169" strokeWidth={2} />
-                <Line type="monotone" dataKey="agentRuns" stroke="#dd6b20" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <SectionCard title="AI activity — last 7 days" icon="line-chart-line" className="mt-3">
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={activity.trend} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="generations" stroke={CHART_GENERATIONS} strokeWidth={2} />
+              <Line type="monotone" dataKey="conversations" stroke={CHART_CONVERSATIONS} strokeWidth={2} />
+              <Line type="monotone" dataKey="agentRuns" stroke={CHART_AGENT_RUNS} strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </SectionCard>
       )}
 
       <DetailDrawer
@@ -485,7 +536,7 @@ function AdminTrustCenterPage() {
         onClose={closeDrawer}
         onOpenDimension={openDimension}
       />
-    </div>
+    </>
   );
 }
 

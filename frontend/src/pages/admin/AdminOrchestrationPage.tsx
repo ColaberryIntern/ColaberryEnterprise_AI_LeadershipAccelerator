@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { PageHeader, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 import ErrorBoundary from '../../components/ui/ErrorBoundary';
 import ProgramOverviewTab from './orchestration/ProgramOverviewTab';
 import SessionControlTab from './orchestration/SessionControlTab';
@@ -44,47 +46,54 @@ export default function AdminOrchestrationPage() {
     setActiveTab('mini-sections');
   };
 
+  // Per-page trust signal (Basecamp todo 10027085963) — the orchestration engine
+  // is the live source of record for program-wide AI curriculum configuration.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'orchestration',
+    updatedAt: new Date().toISOString(),
+    summary: 'Live program-wide AI curriculum configuration: sessions, sections, artifacts, skills, and gating.',
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Configuration Source',
+        status: 'live',
+        evidence: [{ label: 'Backed by', value: 'orchestration engine config' }],
+      },
+    ],
+  }), []);
+
   const tabProps = { token: token || '', apiUrl: API };
 
   return (
     <div className="orch-engine">
       <div className="container-fluid py-4" style={{ maxWidth: activeTab === 'mini-sections' ? 1600 : 1200 }}>
 
-        {/* Header */}
-        <div className="d-flex align-items-center justify-content-between mb-4">
-          <div>
-            <h5 className="fw-semibold mb-1" style={{ color: 'var(--orch-text)' }}>
-              Orchestration Engine
-            </h5>
-            <p className="mb-0" style={{ color: 'var(--orch-text-muted)', fontSize: 13 }}>
-              Program-wide AI curriculum configuration
-            </p>
-          </div>
-          <div className="d-flex align-items-center gap-2">
-            <span className="orch-badge" style={{ fontSize: 11 }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: 'var(--orch-accent-green)', display: 'inline-block',
-              }} />
-              System Online
-            </span>
-          </div>
-        </div>
+        <PageHeader
+          title="Orchestration"
+          icon="git-branch-line"
+          subtitle="Program-wide AI curriculum configuration."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Orchestration' }]}
+          trust={trust}
+          actions={<StatusBadge label="System Online" tone="success" icon="pulse-line" />}
+        />
 
         {/* Tab Navigation */}
-        <div className="orch-tab-nav mb-4">
-          <div className="d-flex flex-wrap gap-0">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                className={`orch-tab-btn ${activeTab === tab.id ? 'orch-tab-btn-active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+        <SectionCard padded={false} className="mb-4">
+          <div className="orch-tab-nav">
+            <div className="d-flex flex-wrap gap-0">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  className={`orch-tab-btn ${activeTab === tab.id ? 'orch-tab-btn-active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </SectionCard>
 
         {/* Tab Content */}
         <ErrorBoundary key={activeTab}>
