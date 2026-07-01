@@ -211,6 +211,12 @@ router.get('/api/portal/github/oauth/start', requireParticipant, async (req, res
   res.redirect(buildOAuthUrl(req.participant!.sub));
 });
 
+// Returns the OAuth URL as JSON so SPA clients can redirect via JS (Bearer token auth)
+router.get('/api/portal/github/oauth/url', requireParticipant, async (req, res) => {
+  const { buildOAuthUrl } = await import('../services/githubIntegrationService');
+  res.json({ url: buildOAuthUrl(req.participant!.sub) });
+});
+
 // Callback from GitHub — no session cookie present, identity comes from state param
 router.get('/api/portal/github/oauth/callback', async (req, res) => {
   const { code, state: enrollmentId } = req.query;
