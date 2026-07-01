@@ -199,9 +199,6 @@ import RawLeadPayload from './RawLeadPayload';
 import AnthropicContentRegistry from './AnthropicContentRegistry';
 import AnthropicChangeEvent from './AnthropicChangeEvent';
 
-// Skilljar Progress Tracking
-import StudentSkilljarProgress from './StudentSkilljarProgress';
-
 // Enrollment Tracking
 import EnrollmentLead from './EnrollmentLead';
 
@@ -1126,7 +1123,6 @@ export {
   EnrollmentLead,
   StudentTaskList,
   StudentTask,
-  StudentSkilljarProgress,
 };
 
 // --- Enrollment Lead associations ---

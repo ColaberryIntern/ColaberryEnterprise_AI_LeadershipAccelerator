@@ -6923,6 +6923,22 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: (1) `backend/src/routes/studentOpsRoutes.ts` — NEW. `GET /api/portal/student-ops/my-queue` reads `RequirementsMap` rows for student's active project, scores by urgency (status base + staleness + category bonus), returns ranked items with deterministic Claude Code prompt per category. `POST /api/portal/student-ops/decide` handles done (verified) and flag-blocker (unmatched). Mounted in `participantRoutes.ts`. (2) `frontend/src/pages/portal/CoryHomeParts.tsx` — Added `StudentQueueItem` type, `ApprovalWorkspace` (inline 4-action panel), `StudentQueueRow` (collapsible), `StudentQueueSection` (list + Walk My Queue button), `RunMyDayMode` (full-screen walk modal, keyboard ArrowLeft/Right/Space/Escape). (3) `frontend/src/pages/portal/CoryHome.tsx` — state, fetch effect, all handlers, keyboard listener, mounts `StudentQueueSection` + `RunMyDayMode` overlay.
   - Verification: `tsc --noEmit` clean (backend + frontend); Docker build clean; `/portal/home` 200; `/api/portal/student-ops/my-queue` returns 401 for unauthenticated call (route live, auth enforced).
   - Notes: RequirementsMap is task source for v0 (no StudentTask model — deferred). Prompts are deterministic templates per category. Defer is in-memory. StudentTask model + LLM prompts + metrics deferred.
+- [x] **Drop Skilljar API track; replace with public catalog scraper**
+  - Date: 2026-06-30
+  - Session: CC-20260630-8x2m
+  - What changed:
+    - DELETED: `backend/src/services/skilljarSyncService.ts`, `backend/src/models/StudentSkilljarProgress.ts`, `backend/src/services/__tests__/skilljarSyncService.test.ts`, `backend/src/services/lib/__tests__/skilljarCourseMatch.test.ts`, `backend/src/services/lib/skilljarCourseMatch.ts`
+    - CREATED: `backend/src/services/lib/catalogFallback.ts` — hardcoded last-known-good catalog (5 courses, outlines, URL normalization utilities)
+    - CREATED: `backend/src/services/anthropicCatalogScraper.ts` — scrapes `https://www.anthropic.com/learn`, extracts course titles/URLs/outlines via cheerio, diffs against `anthropic_content_registry`, falls back to KNOWN_CATALOG on failure
+    - CREATED: `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` — 10 test cases (happy path, fallback on 503, fallback on empty catalog, fallback on ECONNREFUSED, change detection, idempotency, DB error handling, boundary checks)
+    - CREATED: `backend/src/seeds/migrations/add_outline_to_anthropic_content_registry.sql` — idempotent migration adding `outline TEXT NULL` column
+    - UPDATED: `backend/src/models/AnthropicContentRegistry.ts` — added `outline` attribute and Sequelize column definition
+    - UPDATED: `backend/src/routes/admin/anthropicRoutes.ts` — added `POST /api/admin/sync/anthropic-catalog` route
+    - UPDATED: `backend/src/seeds/seedAnthropicContentRegistry.ts` — removed Skilljar course rows (now scraper-owned); kept docs/news hubs
+    - UPDATED: `backend/src/models/index.ts` — removed StudentSkilljarProgress import/export
+    - UPDATED: `backend/src/config/env.ts` — removed skilljarApiKey / skilljarBaseUrl
+  - Verification: `tsc --noEmit` passes clean (exit code 0).
+  - Notes: Ali confirmed Skilljar API access is not coming. Course rows in `anthropic_content_registry` now populated on demand via `POST /api/admin/sync/anthropic-catalog`. Weekly cron should call that route. The `curriculum_course_links` table is unchanged — still the student-facing link source, still manually updated by Kes via `updateCourseLink.ts`. Migration must be applied on prod before deploy: `add_outline_to_anthropic_content_registry.sql`.
 
 - [ ] **Week 4 Prompt Engineering content spec (BC #9984355775)**
   - Date: 2026-06-25
@@ -7293,3 +7309,23 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: `frontend/src/components/portal/anthropic-bento/AnthropicCoursesBento.tsx` — wrapped both return branches in an outer `<div className="acw-ds">` so the inner `<div className="acw-bento ...">` is a genuine descendant. Root cause: CSS uses `.acw-ds .acw-bento { display: grid }` (descendant selector) but PR #86 put both classes on the same element, so `display: grid` never fired and tiles stacked in a single column.
   - Verification: Docker rebuild exit 0. Grid fix matches Aleem's e0d68eb2 approach verbatim.
   - Notes: Aleem's grid fix was present in his branch (e0d68eb2) but Ali's re-homed PR #86 was cut from 67fbf75 (before the fix). The bento renders for sessions with linked Skilljar courses (currently Week 1 only).
+
+- [x] **Catalog scraper scoped to curriculum_course_links (correction to CC-20260630-8x2m)**
+  - Date: 2026-06-30
+  - Session: CC-20260630-8x2m
+  - What changed: Rewrote `backend/src/services/anthropicCatalogScraper.ts` — removed catalog page scraping logic entirely; scraper now reads tracked URLs from `curriculum_course_links WHERE provider='skilljar'` (the program's authoritative week→course map) rather than sweeping the full public catalog. Updated `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` to match (9 test cases: happy path, idempotency, change detection, DB fallback, empty-DB fallback, unreachable course page, registry write failure, null-URL exclusion, KNOWN_CATALOG boundary check).
+  - Verification: `tsc --noEmit` passes clean (exit code 0).
+  - Notes: First version incorrectly scraped all courses from anthropic.com/learn. Correct scope: only the specific courses assigned in the accelerator program, as defined in curriculum_course_links. KNOWN_CATALOG in catalogFallback.ts remains the fallback when the DB is unavailable.
+
+- [x] **PR #110 remediation: kill the content_hash collision between catalog scraper and content watcher**
+  - Date: 2026-06-30
+  - Session: CC-20260630-rp10
+  - What changed:
+    - `backend/src/services/anthropicContentWatcher.ts` — `runContentWatcher()` now queries `findAll({ where: { content_type: { [Op.ne]: 'course' } } })` (added `import { Op } from 'sequelize'`). Course rows are owned exclusively by `anthropicCatalogScraper`, which hashes the course OUTLINE into `content_hash`; the watcher hashes the FULL page body into the same column. Without this filter the two services overwrote each other's hash on every run and perpetually flipped `change_detected=true`, firing false curriculum-change alerts to Ali via `anthropicChangeDetector` → `anthropicCurriculumImpactAgent`. This also matches the product intent: course rows alert only on real outline/link changes, not arbitrary page churn.
+    - `backend/src/services/anthropicCatalogScraper.ts` — (1) false-alert guard: a fresh scrape that yields an empty outline (failed fetch / selector miss) on an existing course no longer overwrites the stored good outline or flags a change — it bumps `last_checked` only. (2) de-dup `coursesToWatch` by `normalizeCourseUrl` before the sync loop (curriculum_course_links maps many week-rows onto one course, which inflated counts). (3) added `any`-justification comments on the three catch clauses per CLAUDE.md.
+    - `backend/src/routes/admin/anthropicRoutes.ts` — corrected the stale comment on the catalog route (it reads tracked URLs from curriculum_course_links, it does not scrape /learn).
+    - `backend/src/__tests__/services/anthropicContentWatcher.test.ts` — new test asserting the watcher excludes `content_type='course'` (collision proof).
+    - `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` — new tests for the empty-outline false-alert guard and the URL de-dup.
+  - Verification: `tsc --noEmit` exit 0; Jest 27/27 pass (`anthropicContentWatcher` + `anthropicCatalogScraper` suites, including the 3 new tests). Resolves the major finding from the pr-approval-review verdict on PR #110.
+  - Notes: Driven by the remediate-pr loop in an isolated worktree off `origin/workstream/anthropic-catalog-scraper`. Prod still requires `add_outline_to_anthropic_content_registry.sql` applied before deploy (unchanged from the base PR).
+  - Follow-up (commit ac704cd5, same session): cleared the remaining false-alert nits from the second pr-approval-review pass — (1) `ORDER BY module_number ASC` on the `curriculum_course_links` read so the first-wins de-dup is deterministic (no Postgres row-order flake flipping a title); (2) a brand-new course created with an empty (failed-scrape) outline is created quietly (`change_detected:false`), not flagged — the next successful scrape flags the real change; (3) `POST /api/admin/sync/anthropic-catalog` catch now carries the `any`-justification comment and returns a generic 500 (stops leaking `err.message`), matching the sibling impact route. Tests updated to assert the quiet empty-create and deterministic ordering. Verification: `tsc --noEmit` exit 0; Jest 27/27; all 4 GitHub CI checks green on both commits. Fresh pr-approval-review verdict: APPROVE_WITH_NITS, 0 blockers, 0 majors.
