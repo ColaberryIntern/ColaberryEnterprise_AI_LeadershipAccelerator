@@ -6917,6 +6917,13 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - What changed: `backend/src/server.ts` — added import + `await seedCurriculumCourseLinks()` call in the startup seed sequence (after `seedCurriculumTypeDefinitions`). The `curriculum_course_links` table is the actual delivery mechanism for Skilljar course CTAs on `PortalCurriculumPage.tsx`; it was missing from both dev DBs because the seed was never wired into server startup. Week 5 (Introduction to Model Context Protocol, `https://anthropic.skilljar.com/introduction-to-model-context-protocol`) is already `confirmed` in the seed data; no code change needed to the seed itself.
   - Verification: `tsc --noEmit` clean; seed ran locally (12 rows upserted, accelerator_dev); Week 5 = `confirmed` in DB; Jest 18/18 pass (seedCurriculumCourseLinks + courseLinkService + updateCourseLink).
   - Notes: The `wireWeek5` script approach was ruled out — no Week 5 LiveSession exists in the DB (old 5-session curriculum only). The correct path is `curriculum_course_links` → `courseLinkService` → `PortalCurriculumPage.tsx`. Needs prod deploy to go live on enterprise.colaberry.com.
+- [x] **Student CB-System Phase 1: priority queue + approval workspace + Run My Day on CoryHome (BC #9985689397)**
+  - Date: 2026-06-26
+  - Session: CC-20260626-8t4p
+  - What changed: (1) `backend/src/routes/studentOpsRoutes.ts` — NEW. `GET /api/portal/student-ops/my-queue` reads `RequirementsMap` rows for student's active project, scores by urgency (status base + staleness + category bonus), returns ranked items with deterministic Claude Code prompt per category. `POST /api/portal/student-ops/decide` handles done (verified) and flag-blocker (unmatched). Mounted in `participantRoutes.ts`. (2) `frontend/src/pages/portal/CoryHomeParts.tsx` — Added `StudentQueueItem` type, `ApprovalWorkspace` (inline 4-action panel), `StudentQueueRow` (collapsible), `StudentQueueSection` (list + Walk My Queue button), `RunMyDayMode` (full-screen walk modal, keyboard ArrowLeft/Right/Space/Escape). (3) `frontend/src/pages/portal/CoryHome.tsx` — state, fetch effect, all handlers, keyboard listener, mounts `StudentQueueSection` + `RunMyDayMode` overlay.
+  - Verification: `tsc --noEmit` clean (backend + frontend); Docker build clean; `/portal/home` 200; `/api/portal/student-ops/my-queue` returns 401 for unauthenticated call (route live, auth enforced).
+  - Notes: RequirementsMap is task source for v0 (no StudentTask model — deferred). Prompts are deterministic templates per category. Defer is in-memory. StudentTask model + LLM prompts + metrics deferred.
+
 - [ ] **Week 4 Prompt Engineering content spec (BC #9984355775)**
   - Date: 2026-06-25
   - Session: CC-20260625-c8r2
