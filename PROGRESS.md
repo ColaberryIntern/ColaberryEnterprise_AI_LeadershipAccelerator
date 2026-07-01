@@ -7406,3 +7406,10 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: `frontend/src/components/portal/anthropic-bento/AnthropicCoursesBento.tsx` — both return blocks (1-course and 2+-course) put `acw-ds`, `acw-bento`, and `acw-bento--single/--multi` on the SAME element, but the grid CSS targets the grid as a descendant (`.acw-ds .acw-bento { display: grid }`). An element is not a descendant of itself, so `display:grid` never applied and the bento fell back to single-column block stacking in production. Wrapped the `.acw-bento` grid in an outer `.acw-ds` scope div so the grid is now a descendant, keeping the WCAG hardening (role="group" + aria-label) on the inner grid div. Ports Aleem's staging fix e0d68eb2 to main; CSS unchanged (descendant selectors already correct on main).
   - Verification: frontend `tsc --noEmit -p frontend/tsconfig.json` clean (exit 0, 0 errors) in a worktree off origin/main; the identical structural fix already shipped to `staging` via PR #82 (CRA build + Docker tsc gate passed there).
   - Notes: Prod `main` shipped the collapsed markup wired into `PortalSessionDetailPage.tsx:604`; surgical port so BC todo 9946499773 ("Create AnthropicCourseWrapper.tsx UI") can close. NOT deployed yet — prod deploys are after-hours; deploy `nginx` (frontend is baked into the nginx image) then mark todo complete.
+
+- [x] Version-control the Ali Task Agent (ATA) - prod-only code into repo
+  - Date: 2026-07-01
+  - Session: CC-20260701-z3f8
+  - What changed: committed 12 ATA files (runAliTaskAgent.js + lib/aliTaskAgent/* + scripts/ata-report-digest.sh, 1223 lines) that ran on prod via cron but were never in git
+  - Verification: secret-scan clean; branch workstream/ali-task-agent pushed for PR to main
+  - Notes: no behavior change - already running under ATA_ENABLED + report-digest cron (CC-20260630-h3v9); found during staging/prod reconciliation
