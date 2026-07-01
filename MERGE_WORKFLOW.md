@@ -76,7 +76,10 @@ Then verify `git rev-list --count staging..origin/main` returns `0`.
 ### Rule
 
 After Ali merges `staging → main`, the back-merge happens automatically via the Action.
-If the Action opens a conflict PR, Ali or Kes resolves it before cutting any new feature branches.
+If the Action opens a conflict PR, **Kes resolves it** — staging is Kes's domain (unprotected,
+write access), and Kes knows what feature branches are in flight. Ali only needs to weigh in if
+the conflict involves a production-critical change that requires his judgment on which version wins.
+Resolve the conflict PR before cutting any new feature branches.
 The manual fallback is the documented path if the Action is unavailable.
 
 ## Why Kes cannot merge to `main`
