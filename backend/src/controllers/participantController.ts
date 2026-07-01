@@ -7,11 +7,27 @@ import {
 } from '../services/participantService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
+import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
 
 export async function handleGetPoints(req: Request, res: Response, next: NextFunction) {
   try {
     const summary = await getPointsSummary(req.participant!.sub);
     res.json(summary);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
+  try {
+    const schedule = await getOnboardingSchedule(req.participant!.sub);
+    res.json(schedule);
+  } catch (err) { next(err); }
+}
+
+export async function handleRsvpOpenHouse(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await rsvpToOpenHouse(req.participant!.sub, req.params.id);
+    if (!result.ok) return res.status(404).json({ error: 'Open house not found' });
+    res.json(result);
   } catch (err) { next(err); }
 }
 

@@ -1,7 +1,7 @@
-import { resolveEventPoints, award, getPointsSummary, POINT_EVENTS } from '../pointsService';
+import { resolveEventPoints, award, getPointsSummary, hasAwarded, POINT_EVENTS } from '../pointsService';
 import { StudentPointsEvent } from '../../models';
 
-jest.mock('../../models', () => ({ StudentPointsEvent: { findOrCreate: jest.fn(), findAll: jest.fn() } }));
+jest.mock('../../models', () => ({ StudentPointsEvent: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn() } }));
 
 describe('pointsService', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -40,6 +40,15 @@ describe('pointsService', () => {
       await award('enr-1', { eventType: 'open_house_rsvp', eventKey: 'open_house_rsvp:evt-42' });
       const arg = (StudentPointsEvent.findOrCreate as jest.Mock).mock.calls[0][0];
       expect(arg.where.event_key).toBe('open_house_rsvp:evt-42');
+    });
+  });
+
+  describe('hasAwarded', () => {
+    it('true when a matching event row exists, false otherwise', async () => {
+      (StudentPointsEvent.findOne as jest.Mock).mockResolvedValueOnce({ id: 'e1' });
+      expect(await hasAwarded('enr-1', 'open_house_rsvp:oh-9')).toBe(true);
+      (StudentPointsEvent.findOne as jest.Mock).mockResolvedValueOnce(null);
+      expect(await hasAwarded('enr-1', 'open_house_rsvp:oh-9')).toBe(false);
     });
   });
 

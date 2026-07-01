@@ -370,6 +370,32 @@ async function ensureIngestionSchema() {
 // Explicit migration: ensure composite index for the admin communications
 // AI events telemetry table (TBI audit P1). Explicit idempotent creation because prod does
 // not run sequelize.sync (DB_BOOT_SYNC is off by default); columns mirror the AiEvent model.
+async function ensureOpenHouseSchema() {
+  // Cohort-agnostic open house / info sessions (S3). Guests RSVP before joining.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS open_house_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       title VARCHAR(255) NOT NULL,
+       description TEXT,
+       starts_at TIMESTAMPTZ NOT NULL,
+       timezone VARCHAR(60) NOT NULL DEFAULT 'America/Chicago',
+       registration_url VARCHAR(500),
+       meeting_link VARCHAR(500),
+       status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_open_house_events_status_starts ON open_house_events (status, starts_at)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] open-house schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensurePointsSchema() {
   // Append-only student points ledger (S2). Idempotent create + unique index so
   // pointsService.award is idempotent per (enrollment_id, event_key).
@@ -613,6 +639,8 @@ async function start(): Promise<void> {
   await ensureFreeTierSchema();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+  // Open house events (idempotent).
+  await ensureOpenHouseSchema();
   // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
   try {
     const { ensureConsentSchema } = await import('./services/consentService');

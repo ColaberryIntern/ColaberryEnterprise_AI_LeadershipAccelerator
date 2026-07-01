@@ -272,6 +272,7 @@ import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
+import OpenHouseEvent from './OpenHouseEvent';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -1127,6 +1128,7 @@ export {
   StudentTaskList,
   StudentTask,
   StudentPointsEvent,
+  OpenHouseEvent,
 };
 
 // --- Enrollment Lead associations ---

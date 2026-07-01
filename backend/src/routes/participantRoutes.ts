@@ -8,6 +8,7 @@ import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
   handleFreeSignup, handleGetPoints,
+  handleGetOnboardingSchedule, handleRsvpOpenHouse,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
@@ -50,6 +51,8 @@ router.post('/api/portal/submissions', requireParticipant, handleCreateSubmissio
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
 router.get('/api/portal/points', requireParticipant, handleGetPoints);
+router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
+router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);

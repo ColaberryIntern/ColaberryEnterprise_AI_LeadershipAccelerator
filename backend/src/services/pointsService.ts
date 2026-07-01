@@ -55,6 +55,12 @@ export async function award(enrollmentId: string, input: AwardInput): Promise<{ 
   return { awarded: created, points: created ? points : 0 };
 }
 
+/** Whether a specific event has already been awarded to an enrollment (idempotency check). */
+export async function hasAwarded(enrollmentId: string, eventKey: string): Promise<boolean> {
+  const row = await StudentPointsEvent.findOne({ where: { enrollment_id: enrollmentId, event_key: eventKey } });
+  return !!row;
+}
+
 /** Total points + full event history for an enrollment (newest first). */
 export async function getPointsSummary(enrollmentId: string): Promise<PointsSummary> {
   const rows = await StudentPointsEvent.findAll({
