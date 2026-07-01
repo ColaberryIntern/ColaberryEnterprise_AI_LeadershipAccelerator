@@ -21,6 +21,7 @@ import { createNewVersion } from './artifactVersionService';
 import { attachArtifactToProject, createProjectForEnrollment, getProjectByEnrollment } from './projectService';
 import { refreshProjectOutputs } from './portfolioEnhancementService';
 import { createTasksFromRequirements } from './studentTaskService';
+import { materializeRequirementsFromDocument } from './requirementsMaterializeService';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from './openaiInstrumented';
 
@@ -316,11 +317,15 @@ async function executeJob(jobId: string, enrollmentId: string): Promise<void> {
       console.error('[RequirementsGen] Portfolio refresh failed:', err.message)
     );
 
-    // Seed native task lists from requirements clusters (non-blocking)
+    // Parse the generated spec into keyed RequirementsMap rows (the missing
+    // link), THEN seed native task lists from those clusters. Non-blocking and
+    // non-fatal — a parse/seed failure never fails the completed generation job.
     if (project) {
-      createTasksFromRequirements(project.id).catch(err =>
-        console.error('[RequirementsGen] Task seeding failed:', err.message)
-      );
+      materializeRequirementsFromDocument(project.id, document)
+        .then(() => createTasksFromRequirements(project.id))
+        .catch(err =>
+          console.error('[RequirementsGen] Requirement materialize / task seeding failed:', err.message)
+        );
     }
   } catch (err: any) {
     console.error(`[RequirementsGen] Job ${jobId} failed:`, err.message);
