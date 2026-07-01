@@ -14,8 +14,9 @@ services:
     container_name: accelerator-dev-backend
     restart: always
     env_file:
-      - .env
       - .env.dev
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@accelerator-db:5432/accelerator_dev1
       INTELLIGENCE_ENGINE_URL: http://accelerator-dev-intelligence:5000
