@@ -7171,6 +7171,13 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: branch-vs-main diff was purely the CB additions (main had never touched these files); wrapper retains both DATABASE_URL + CB blocks; dispatcher retains RUNNER guard + identity halt; all syntax clean; 12/12 automated-card-guard tests pass in the deps-present tree (bare worktree fails only on missing node_modules). Prod git pull + cache regen + re-enable in same session.
   - Notes: Root process fix - CB stabilization now lives in main, not a side branch. Dispatcher cron was temp-disabled during the restore to stop the Ali-identity posting.
 
+- [x] Auto-sync main → staging via GitHub Action + MERGE_WORKFLOW.md update
+  - Date: 2026-07-01
+  - Session: CC-20260701-w2k9
+  - What changed: (1) Resynced staging from main directly (was 69 commits behind; merge + push to origin/staging). (2) Added `.github/workflows/sync-main-to-staging.yml` — fires on every push to main; clean merge path pushes directly to staging, conflict path opens a `sync/main-to-staging-*` PR for manual review. (3) Updated `MERGE_WORKFLOW.md` with back-merge section documenting the Action behavior, manual fallback four-command sequence, and rule that conflict PRs must be resolved before cutting new feature branches.
+  - Verification: staging push confirmed (810253e0); workflow file created; MERGE_WORKFLOW.md updated; tsc not applicable (YAML + MD only). PR pending Kes approval.
+  - Notes: Ali explicitly delegated the resync and automation in BC thread "Adopt the new PR merge workflow". Supersedes the old CLAUDE.md "remind Ali to sync" rule — Action makes drift structurally impossible.
+
 - [x] CB System @-mentions resolve the real person (not always Ali)
   - Date: 2026-06-30
   - Session: CC-20260630-m4k7
