@@ -189,11 +189,18 @@ function AnthropicCoursesBento({ courses, pathLabel }: Props) {
   const compacts = ordered.slice(1);
   const label = pathLabel || 'Anthropic · Skilljar path';
 
+  // `.acw-ds` is the scope/token wrapper; the grid MUST be a child of it (not the
+  // same element) so the descendant CSS selectors (`.acw-ds .acw-bento`,
+  // `.acw-ds .ga-feat`, …) resolve. Collapsing them onto one node silently drops
+  // `display: grid` and the bento stacks into a single column.
+
   // 1 course: featured tile only — no anchor (no path to summarize).
   if (compacts.length === 0) {
     return (
-      <div className="acw-ds acw-bento acw-bento--single" role="group" aria-label={`${label} — 1 course`}>
-        <FeaturedTile course={featured} showStartHere={false} />
+      <div className="acw-ds">
+        <div className="acw-bento acw-bento--single" role="group" aria-label={`${label} — 1 course`}>
+          <FeaturedTile course={featured} showStartHere={false} />
+        </div>
       </div>
     );
   }
@@ -203,17 +210,19 @@ function AnthropicCoursesBento({ courses, pathLabel }: Props) {
   // cast the style object since CSSProperties has no index signature for vars.
   const gridStyle = { '--compact-rows': String(compacts.length) } as React.CSSProperties;
   return (
-    <div
-      className="acw-ds acw-bento acw-bento--multi"
-      style={gridStyle}
-      role="group"
-      aria-label={`${label} — ${courses.length} courses`}
-    >
-      <FeaturedTile course={featured} showStartHere />
-      {compacts.map((c, i) => (
-        <CompactTile key={c.url || i} course={c} iconName={COMPACT_ICONS[i % COMPACT_ICONS.length]} />
-      ))}
-      <PathAnchor count={courses.length} total={totalMinutes(courses)} href={featured.url} label={label} />
+    <div className="acw-ds">
+      <div
+        className="acw-bento acw-bento--multi"
+        style={gridStyle}
+        role="group"
+        aria-label={`${label} — ${courses.length} courses`}
+      >
+        <FeaturedTile course={featured} showStartHere />
+        {compacts.map((c, i) => (
+          <CompactTile key={c.url || i} course={c} iconName={COMPACT_ICONS[i % COMPACT_ICONS.length]} />
+        ))}
+        <PathAnchor count={courses.length} total={totalMinutes(courses)} href={featured.url} label={label} />
+      </div>
     </div>
   );
 }
