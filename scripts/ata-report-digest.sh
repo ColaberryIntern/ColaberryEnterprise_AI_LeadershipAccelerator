@@ -16,6 +16,10 @@
 # flock prevents overlapping runs. On any resolve/dump failure it exits non-zero
 # without sending a partial digest.
 set -o pipefail
+# cron runs with a minimal PATH; pin the standard locations so node/docker/flock
+# resolve the same as an interactive shell (this stack has a history of silent
+# cron failures from a bare environment).
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ROOT=/opt/colaberry-accelerator
 cd "$ROOT" || exit 1
 mkdir -p "$ROOT/tmp"
