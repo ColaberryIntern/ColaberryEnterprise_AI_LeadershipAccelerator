@@ -5,6 +5,21 @@ import {
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
   getParticipantProgress,
 } from '../services/participantService';
+import { createFreeAccount } from '../services/freeSignupService';
+
+export async function handleFreeSignup(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { full_name, email } = req.body || {};
+    if (!full_name || !email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'full_name and email are required' });
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
+      return res.status(400).json({ error: 'A valid email is required' });
+    }
+    const result = await createFreeAccount({ full_name: String(full_name), email });
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (err) { next(err); }
+}
 
 export async function handleRequestMagicLink(req: Request, res: Response, next: NextFunction) {
   try {

@@ -9,7 +9,7 @@ export interface EnrollmentAttributes {
   title?: string;
   phone?: string;
   company_size?: string;
-  cohort_id: string;
+  cohort_id?: string | null;
   paysimple_invoice_id?: string;
   paysimple_customer_id?: string;
   paysimple_external_id?: string;
@@ -23,6 +23,7 @@ export interface EnrollmentAttributes {
   payment_method: 'credit_card' | 'ach' | 'invoice';
   payment_mode?: 'test' | 'live';
   status?: 'active' | 'completed' | 'withdrawn' | 'suspended';
+  tier?: 'guest' | 'member';
   readiness_score?: number;
   prework_score?: number;
   attendance_score?: number;
@@ -60,6 +61,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare payment_method: 'credit_card' | 'ach' | 'invoice';
   declare payment_mode: 'test' | 'live';
   declare status: 'active' | 'completed' | 'withdrawn' | 'suspended';
+  declare tier: 'guest' | 'member';
   declare readiness_score: number;
   declare prework_score: number;
   declare attendance_score: number;
@@ -107,8 +109,9 @@ Enrollment.init(
       allowNull: true,
     },
     cohort_id: {
+      // Nullable so free/guest (non-member) accounts can exist without a cohort.
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: { model: 'cohorts', key: 'id' },
     },
     paysimple_invoice_id: {
@@ -168,6 +171,14 @@ Enrollment.init(
       type: DataTypes.ENUM('active', 'completed', 'withdrawn', 'suspended'),
       allowNull: false,
       defaultValue: 'active',
+    },
+    tier: {
+      // Membership tier: 'member' = enrolled/paid student; 'guest' = free
+      // self-serve preview account (0 points, no cohort). Source of truth for
+      // access level — payment_status is not meaningful for guests.
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'member',
     },
     readiness_score: {
       type: DataTypes.FLOAT,

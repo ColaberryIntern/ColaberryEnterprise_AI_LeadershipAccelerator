@@ -7,6 +7,7 @@ import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
+  handleFreeSignup,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
@@ -33,6 +34,7 @@ import studentOpsRoutes from './studentOpsRoutes';
 const router = Router();
 
 // Public auth endpoints
+router.post('/api/portal/free-signup', handleFreeSignup); // self-serve free/guest account
 router.post('/api/portal/request-link', handleRequestMagicLink);
 router.get('/api/portal/verify', handleVerifyMagicLink);
 

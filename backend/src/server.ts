@@ -370,6 +370,23 @@ async function ensureIngestionSchema() {
 // Explicit migration: ensure composite index for the admin communications
 // AI events telemetry table (TBI audit P1). Explicit idempotent creation because prod does
 // not run sequelize.sync (DB_BOOT_SYNC is off by default); columns mirror the AiEvent model.
+async function ensureFreeTierSchema() {
+  // Free/guest tier support: a `tier` column on enrollments, and a nullable
+  // cohort_id so self-serve free (non-member) accounts can exist without a
+  // cohort. Idempotent — both statements are safe to re-run.
+  const statements = [
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'member'`,
+    `ALTER TABLE enrollments ALTER COLUMN cohort_id DROP NOT NULL`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] free-tier schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureAiEventsSchema() {
   try {
     await sequelize.query(`
@@ -566,6 +583,8 @@ async function start(): Promise<void> {
   await ensureMissedOpportunitiesSchema();
   // AI events telemetry table (TBI audit P1) — explicit because prod does not run sync.
   await ensureAiEventsSchema();
+  // Free/guest tier: enrollments.tier column + nullable cohort_id (idempotent).
+  await ensureFreeTierSchema();
   // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
   try {
     const { ensureConsentSchema } = await import('./services/consentService');
