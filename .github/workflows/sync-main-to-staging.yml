@@ -1,4 +1,4 @@
-name: Sync main → staging
+name: Sync main to staging
 
 on:
   push:
@@ -54,6 +54,7 @@ jobs:
         if: steps.check.outputs.behind != '0' && steps.merge.outputs.result == 'conflict'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
         run: |
           BRANCH="sync/main-to-staging-$(date +%Y%m%d-%H%M)"
           git checkout -b "$BRANCH" origin/main
@@ -61,12 +62,5 @@ jobs:
           gh pr create \
             --base staging \
             --head "$BRANCH" \
-            --title "chore: sync main → staging (conflict — manual review needed)" \
-            --body "$(cat <<'EOF'
-Automated sync of main → staging detected merge conflicts and could not auto-merge.
-
-**Action required:** resolve conflicts and merge this PR before cutting any new feature branches.
-
-Triggered by push to main: ${{ github.sha }}
-EOF
-)"
+            --title "chore: sync main to staging (conflict - manual review needed)" \
+            --body "Automated sync of main to staging detected merge conflicts and could not auto-merge. Action required: Kes resolves conflicts and merges this PR before cutting any new feature branches. Triggered by commit $SHA."
