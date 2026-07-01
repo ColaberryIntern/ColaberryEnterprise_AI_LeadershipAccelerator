@@ -370,6 +370,31 @@ async function ensureIngestionSchema() {
 // Explicit migration: ensure composite index for the admin communications
 // AI events telemetry table (TBI audit P1). Explicit idempotent creation because prod does
 // not run sequelize.sync (DB_BOOT_SYNC is off by default); columns mirror the AiEvent model.
+async function ensureOnboardingProfileSchema() {
+  // Background onboarding profile (S4): resume/LinkedIn + derived prefill that
+  // seeds the ProjectDnaWizard. Idempotent.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS onboarding_profiles (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       resume_text TEXT,
+       linkedin_url VARCHAR(500),
+       prefill JSONB,
+       extracted JSONB,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS onboarding_profiles_unique_enrollment ON onboarding_profiles (enrollment_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] onboarding-profile schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureOpenHouseSchema() {
   // Cohort-agnostic open house / info sessions (S3). Guests RSVP before joining.
   const statements = [
@@ -641,6 +666,8 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
+  // Onboarding profile (resume/LinkedIn prefill) (idempotent).
+  await ensureOnboardingProfileSchema();
   // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
   try {
     const { ensureConsentSchema } = await import('./services/consentService');

@@ -9,6 +9,7 @@ import { startRequirementsGeneration } from '../services/requirementsGenerationS
 import {
   handleFreeSignup, handleGetPoints,
   handleGetOnboardingSchedule, handleRsvpOpenHouse,
+  handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
@@ -53,6 +54,8 @@ router.get('/api/portal/progress', requireParticipant, handleGetProgress);
 router.get('/api/portal/points', requireParticipant, handleGetPoints);
 router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
+router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
+router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);

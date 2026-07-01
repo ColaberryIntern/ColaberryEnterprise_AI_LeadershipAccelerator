@@ -273,6 +273,7 @@ import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
 import OpenHouseEvent from './OpenHouseEvent';
+import OnboardingProfile from './OnboardingProfile';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -876,6 +877,8 @@ RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'st
 StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
 Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
 StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(OnboardingProfile, { foreignKey: 'enrollment_id', as: 'onboardingProfile', onDelete: 'CASCADE' });
+OnboardingProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // Capability Agent Map associations
 Capability.hasMany(CapabilityAgentMap, { foreignKey: 'capability_id', as: 'agentMaps' });
@@ -1129,6 +1132,7 @@ export {
   StudentTask,
   StudentPointsEvent,
   OpenHouseEvent,
+  OnboardingProfile,
 };
 
 // --- Enrollment Lead associations ---

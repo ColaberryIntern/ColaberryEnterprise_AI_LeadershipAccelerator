@@ -8,6 +8,26 @@ import {
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
+import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
+
+export async function handleIngestBackground(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { resume_text, linkedin_url } = req.body || {};
+    const result = await ingestBackground(req.participant!.sub, {
+      resumeText: typeof resume_text === 'string' ? resume_text : undefined,
+      linkedinUrl: typeof linkedin_url === 'string' ? linkedin_url : undefined,
+    });
+    if (!result.ok) return res.status(400).json({ error: 'Provide resume_text and/or linkedin_url' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetOnboardingProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const profile = await getOnboardingProfile(req.participant!.sub);
+    res.json(profile);
+  } catch (err) { next(err); }
+}
 
 export async function handleGetPoints(req: Request, res: Response, next: NextFunction) {
   try {
