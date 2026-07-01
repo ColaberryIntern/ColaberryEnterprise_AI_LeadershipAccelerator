@@ -18,17 +18,17 @@ import { PromptOption } from './types';
 /* Mentor face SVG — matches the FAB in PortalMentorChat for admin preview */
 const PreviewMentorFace = ({ size = 40 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="32" cy="32" r="30" fill="#eef2ff" stroke="#c7d2fe" strokeWidth="2" />
-    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" fill="none" />
-    <circle cx="22" cy="30" r="3.5" fill="#6366f1" />
-    <circle cx="42" cy="30" r="3.5" fill="#6366f1" />
-    <circle cx="23.2" cy="28.8" r="1.2" fill="#fff" />
-    <circle cx="43.2" cy="28.8" r="1.2" fill="#fff" />
-    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-    <rect x="7" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <rect x="51" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" fill="none" />
-    <circle cx="19" cy="45" r="2" fill="#8b5cf6" />
+    <circle cx="32" cy="32" r="30" fill="var(--neutral-50)" stroke="var(--border-subtle)" strokeWidth="2" />
+    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="var(--chart-5)" strokeWidth="3" strokeLinecap="round" fill="none" />
+    <circle cx="22" cy="30" r="3.5" fill="var(--chart-5)" />
+    <circle cx="42" cy="30" r="3.5" fill="var(--chart-5)" />
+    <circle cx="23.2" cy="28.8" r="1.2" fill="var(--surface-card)" />
+    <circle cx="43.2" cy="28.8" r="1.2" fill="var(--surface-card)" />
+    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="var(--chart-5)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+    <rect x="7" y="24" width="6" height="10" rx="3" fill="var(--chart-7)" />
+    <rect x="51" y="24" width="6" height="10" rx="3" fill="var(--chart-7)" />
+    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="var(--chart-7)" strokeWidth="2" strokeLinecap="round" fill="none" />
+    <circle cx="19" cy="45" r="2" fill="var(--chart-7)" />
   </svg>
 );
 
@@ -141,8 +141,8 @@ function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, wor
               width: 48,
               height: 48,
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-              border: '3px solid #fff',
+              background: 'linear-gradient(135deg, var(--chart-5) 0%, var(--chart-7) 100%)',
+              border: '3px solid var(--surface-card)',
               boxShadow: '0 4px 20px rgba(99,102,241,0.45)',
               display: 'flex',
               alignItems: 'center',
@@ -275,7 +275,7 @@ export default function ObjectConfigEngine(props: Props) {
                     style={{ cursor: 'pointer' }}
                     onClick={() => props.onSelectMiniSection?.(ms.id)}
                   >
-                    <i className={`bi ${typeIcon}`} style={{ fontSize: 13, color: 'var(--color-primary-light, #2b6cb0)' }}></i>
+                    <i className={`bi ${typeIcon}`} style={{ fontSize: 13, color: 'var(--red-500)' }}></i>
                     <span className="fw-semibold small">{type.studentLabel}</span>
                     <span className="text-muted ms-1" style={{ fontSize: 10 }}>{ms.title}</span>
                     <span className="ms-auto" style={{ fontSize: 11 }}>{'\u25BC'}</span>
@@ -309,7 +309,7 @@ export default function ObjectConfigEngine(props: Props) {
       <div className="border rounded mb-2">
         <div
           className="d-flex align-items-center gap-2 px-3 py-2"
-          style={{ cursor: 'pointer', backgroundColor: expanded[key] ? 'var(--color-bg-alt, #f7fafc)' : 'transparent' }}
+          style={{ cursor: 'pointer', backgroundColor: expanded[key] ? 'var(--neutral-50)' : 'transparent' }}
           onClick={() => toggle(key)}
         >
           <i className={`bi ${icon}`} style={{ fontSize: 13 }}></i>
@@ -317,7 +317,7 @@ export default function ObjectConfigEngine(props: Props) {
           <span className="ms-auto" style={{ fontSize: 11 }}>{expanded[key] ? '\u25B2' : '\u25BC'}</span>
         </div>
         {expanded[key] && (
-          <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+          <div className="px-3 py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             {content}
           </div>
         )}
@@ -415,7 +415,7 @@ export default function ObjectConfigEngine(props: Props) {
                 className="d-flex align-items-center gap-2 px-3 py-2"
                 style={{
                   cursor: (typeMiniSection || isActive) ? 'pointer' : 'default',
-                  backgroundColor: isActive ? 'var(--color-bg-alt, #f7fafc)' : 'transparent',
+                  backgroundColor: isActive ? 'var(--neutral-50)' : 'transparent',
                 }}
                 onClick={() => {
                   if (props.onSelectMiniSection) {
@@ -427,7 +427,7 @@ export default function ObjectConfigEngine(props: Props) {
                   }
                 }}
               >
-                <i className={`bi ${typeIcon}`} style={{ fontSize: 13, color: isActive ? 'var(--color-primary-light, #2b6cb0)' : undefined }}></i>
+                <i className={`bi ${typeIcon}`} style={{ fontSize: 13, color: isActive ? 'var(--red-500)' : undefined }}></i>
                 <span className="fw-semibold small">{type.studentLabel}</span>
                 {msTitle && <span className="text-muted ms-1 text-truncate" style={{ fontSize: 10, maxWidth: 200 }}>{msTitle}</span>}
                 <span className="ms-auto" style={{ fontSize: 11 }}>{isActive ? '\u25B2' : '\u25BC'}</span>
@@ -435,7 +435,7 @@ export default function ObjectConfigEngine(props: Props) {
 
               {/* Section content — only shown for active type */}
               {isActive && editing && (
-                <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+                <div className="px-3 py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   {/* Title & Details */}
                   <div className="row g-2 mb-3">
                     <div className="col-md-8">
@@ -456,7 +456,7 @@ export default function ObjectConfigEngine(props: Props) {
                   {typePromptPairs.length > 0 && (
                     <div className="mb-3 border-top pt-2">
                       <div className="d-flex align-items-center gap-2 mb-2">
-                        <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
+                        <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--red-500)' }}></i>
                         <span className="fw-semibold small">Prompts</span>
                         <span className="text-muted" style={{ fontSize: 10 }}>Use <code style={{ fontSize: 10 }}>{'{{variable_key}}'}</code> for dynamic values</span>
                       </div>
@@ -547,13 +547,13 @@ export default function ObjectConfigEngine(props: Props) {
                       <KnowledgeCheckSection editing={editing} onUpdate={props.onUpdate} />
 
                       {/* Confusion Recovery indicator */}
-                      <div className="mt-3 p-2 rounded" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                      <div className="mt-3 p-2 rounded" style={{ background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning)' }}>
                         <div className="d-flex align-items-center gap-2 mb-1">
                           <span style={{ fontSize: 14 }}>💡</span>
-                          <span className="fw-semibold small" style={{ color: '#92400e' }}>Confusion Recovery</span>
-                          <span className="badge" style={{ fontSize: 8, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>Automatic</span>
+                          <span className="fw-semibold small" style={{ color: 'var(--status-warning)' }}>Confusion Recovery</span>
+                          <span className="badge" style={{ fontSize: 8, background: 'var(--status-warning-bg)', color: 'var(--status-warning)', border: '1px solid var(--status-warning)' }}>Automatic</span>
                         </div>
-                        <p className="small mb-0" style={{ color: '#78350f', fontSize: 10, lineHeight: 1.5 }}>
+                        <p className="small mb-0" style={{ color: 'var(--status-warning)', fontSize: 10, lineHeight: 1.5 }}>
                           When a student answers incorrectly, a recovery drawer opens automatically with:
                           alternative explanation, step-by-step breakdown, real-world example, and common misconceptions.
                           Uses the AI Mentor with question context — no additional prompt needed.

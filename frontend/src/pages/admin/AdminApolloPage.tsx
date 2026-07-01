@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/ToastProvider';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface ApolloResult {
   id: string;
@@ -39,6 +40,27 @@ function AdminApolloPage() {
   });
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from live Apollo search results.
+  const trust: TrustSignal = useMemo(() => {
+    return {
+      level: 'live',
+      source: 'apollo',
+      updatedAt: new Date().toISOString(),
+      summary: `${total} prospects matched, ${results.length} shown, ${selectedIds.size} selected.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Search',
+          status: 'live',
+          evidence: [
+            { label: 'Matches', value: String(total) },
+            { label: 'Selected', value: String(selectedIds.size) },
+          ],
+        },
+      ],
+    };
+  }, [total, results.length, selectedIds.size]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,13 +133,33 @@ function AdminApolloPage() {
   };
 
   return (
-    <div>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Apollo' }]} />
-      <h2 className="mb-4">Apollo Lead Search</h2>
+    <>
+      <PageHeader
+        title="Apollo"
+        icon="search-eye-line"
+        subtitle="Search Apollo for high-intent prospects and import them straight into the leads pipeline."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Apollo' }]}
+        trust={trust}
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Matches" value={total} icon="search-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Showing" value={results.length} icon="list-check" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Selected" value={selectedIds.size} icon="checkbox-multiple-line" tone={selectedIds.size ? 'success' : 'neutral'} />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Imported" value={importResult?.imported ?? 0} icon="user-add-line" tone={importResult?.imported ? 'success' : 'neutral'} />
+          </div>
+        </div>
+      </PageHeader>
 
       {/* Search Form */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-body">
+      <div className="mb-4">
+        <SectionCard title="Search Criteria" icon="filter-3-line">
           <form onSubmit={handleSearch}>
             <div className="row g-3">
               <div className="col-md-6">
@@ -181,23 +223,32 @@ function AdminApolloPage() {
               </button>
             </div>
           </form>
-        </div>
+        </SectionCard>
       </div>
 
       {/* Import Result */}
       {importResult && (
-        <div className="alert alert-success">
-          Imported {importResult.imported} leads.
-          {importResult.duplicates > 0 && ` ${importResult.duplicates} duplicates skipped.`}
-          {importResult.errors > 0 && ` ${importResult.errors} errors.`}
+        <div className="mb-4">
+          <SectionCard>
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <StatusBadge label="Imported" tone="success" icon="check-line" />
+              <span>
+                {importResult.imported} lead{importResult.imported === 1 ? '' : 's'} imported.
+                {importResult.duplicates > 0 && ` ${importResult.duplicates} duplicate${importResult.duplicates === 1 ? '' : 's'} skipped.`}
+                {importResult.errors > 0 && ` ${importResult.errors} error${importResult.errors === 1 ? '' : 's'}.`}
+              </span>
+            </div>
+          </SectionCard>
         </div>
       )}
 
       {/* Results */}
       {results.length > 0 && (
-        <div className="card admin-table-card">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <span className="fw-semibold">Results ({total} total, showing {results.length})</span>
+        <SectionCard
+          title={`Results (${total} total, showing ${results.length})`}
+          icon="contacts-book-line"
+          padded={false}
+          actions={
             <div className="d-flex gap-2">
               <button className="btn btn-outline-secondary btn-sm" onClick={selectAll}>
                 {selectedIds.size === results.length ? 'Deselect All' : 'Select All'}
@@ -210,7 +261,8 @@ function AdminApolloPage() {
                 {importing ? 'Importing...' : `Import ${selectedIds.size} Lead(s)`}
               </button>
             </div>
-          </div>
+          }
+        >
           <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
@@ -230,6 +282,7 @@ function AdminApolloPage() {
                     <td>
                       <input
                         type="checkbox"
+                        className="form-check-input"
                         checked={selectedIds.has(r.id)}
                         onChange={() => toggleSelect(r.id)}
                       />
@@ -245,9 +298,9 @@ function AdminApolloPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SectionCard>
       )}
-    </div>
+    </>
   );
 }
 

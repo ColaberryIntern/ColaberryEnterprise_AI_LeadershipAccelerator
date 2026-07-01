@@ -46,34 +46,49 @@ export type NavItem = {
   children?: { path: string; label: string }[];
 };
 
+/**
+ * "One Class, Many Doors" navigation.
+ * Two doors into ONE program:
+ *   Door A — individuals self-serve ($149/mo membership personas) → "Join the Challenge"
+ *   Door B — employers sponsor annual seats (talent discovery)     → "Sponsor Your Team"
+ * Advisory / pilot / strategy-call links are demoted out of the primary nav.
+ * The two-door CTAs render as buttons in PublicNavbar (see PRIMARY_CTA / SECONDARY_CTA).
+ */
 export const NAV_LINKS: NavItem[] = [
   { path: '/', label: 'Home' },
   {
-    label: 'Program',
+    label: 'The Program',
     children: [
-      { path: '/program', label: 'Program Overview' },
-      { path: '/ai-architect/instructor', label: 'Your Instructor' },
-      { path: '/advisory', label: 'Advisory' },
+      { path: '/program', label: 'Program' },
+      { path: '/pricing', label: 'Pricing' },
       { path: '/case-studies', label: 'Case Studies' },
+      { path: '/demo-day', label: 'Demo Day' },
     ],
   },
   {
-    label: 'Get Started',
+    label: 'For Employers',
     children: [
-      { path: '/pricing', label: 'Pricing' },
-      { path: '/sponsorship', label: 'Corporate Sponsorship' },
-      { path: '/enroll', label: 'Enroll' },
+      { path: '/sponsorship', label: 'Sponsor Your Team' },
+      { path: '/consulting', label: 'Consulting' },
+      { path: '/sponsor/dashboard', label: 'Employer Dashboard' },
     ],
   },
   { path: '/contact', label: 'Contact' },
 ];
 
+/** The two doors, surfaced as the primary nav CTAs. */
+export const PRIMARY_CTA = { path: '/enroll', label: 'Join the Challenge' };
+export const SECONDARY_CTA = { path: '/sponsorship', label: 'Sponsor Your Team' };
+
+/** Footer link columns. Advisory / pilot / strategy-call intentionally omitted. */
 export const FOOTER_LINKS = [
-  { path: '/program', label: 'Program' },
-  { path: '/pricing', label: 'Pricing' },
-  { path: '/sponsorship', label: 'Corporate Sponsorship' },
-  { path: '/advisory', label: 'Enterprise AI Advisory' },
+  { path: '/program', label: 'How It Works' },
+  { path: '/enroll', label: 'Join the Challenge' },
+  { path: '/sponsorship', label: 'Sponsor Your Team' },
   { path: '/case-studies', label: 'Case Studies' },
-  { path: '/enroll', label: 'Enroll' },
+  { path: '/pricing', label: 'Pricing & Seats' },
   { path: '/contact', label: 'Contact' },
 ];
+
+/** Footer tagline — matches the new positioning. */
+export const FOOTER_TAGLINE = 'Most people consume AI. Very few learn to build with it.';

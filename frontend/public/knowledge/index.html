@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colaberry Knowledge Base · Company source of truth</title>
+<link rel="icon" href="assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+<link rel="stylesheet" href="design/styles.css">
+<link rel="stylesheet" href="assets/kb.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- TOP NAVIGATION -->
+<header class="topbar">
+  <div class="topbar__in">
+    <button class="tb-logo" id="homeBtn" title="Home" aria-label="Colaberry Knowledge Base, home"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry" width="1658" height="390"></button>
+    <nav class="tb-tabs" id="domtabs" aria-label="Domains"></nav>
+    <div class="tb-search">
+      <span class="cb-i"><i class="ri-search-line"></i></span>
+      <input id="q" type="text" placeholder="Search the knowledge base..." autocomplete="off" aria-label="Search">
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <!-- HOME -->
+  <section id="home">
+    <div class="home-hero">
+      <p class="eyebrow">Company source of truth · search · assistant</p>
+      <h1>Everything the team and our AI need, <span class="cb-grad">in one place</span></h1>
+      <p>The Colaberry knowledge base for Sales, Marketing, Design, Curriculum, Product, and Compliance. Search every answer in the bar above, ask Cory, and open the source documents. Built on our design system, organized for people and for AI.</p>
+    </div>
+
+    <div class="home-sec">
+      <h2>See how it fits together</h2>
+      <p class="sub">A quick map of the journey, from the free Open House to the Architect certification. Click any box to jump straight into the answers.</p>
+      <div class="chartwrap" id="home-chart" role="img" aria-label="Program journey map"></div>
+    </div>
+
+    <div class="home-sec">
+      <h2>Choose a domain</h2>
+      <p class="sub">Open one to focus search and Cory on it, or search across everything.</p>
+      <div class="dgrid" id="tiles"></div>
+      <div class="soonrow" id="soonrow"></div>
+    </div>
+
+    <div class="home-note">
+      <div class="inner">
+        <div>
+          <h3><span class="cb-i"><i class="ri-user-heart-line"></i></span> Human-friendly</h3>
+          <p>Clean top navigation, one search, one assistant, and source documents one click away. Pick a domain and everything narrows to it.</p>
+        </div>
+        <div>
+          <h3><span class="cb-i"><i class="ri-robot-2-line"></i></span> AI-friendly</h3>
+          <p>Every answer is structured, domain-tagged data. The whole base is exported to <a href="kb.json" download>kb.json</a> so our AI can ingest it and stay well informed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BROWSE -->
+  <section id="browse" hidden>
+    <div class="bhead">
+      <h1 id="scopeTitle"></h1>
+      <span class="count" id="count" role="status" aria-live="polite"></span>
+      <button class="back" id="backHome"><span class="cb-i"><i class="ri-arrow-left-line"></i></span> Home</button>
+    </div>
+    <div class="bsec">
+      <div class="chartwrap chartwrap--browse" id="browse-chart" role="img" aria-label="Domain map"></div>
+      <div id="kb-root"></div>
+      <div class="noresults" id="noresults">No answer matches that yet. Try fewer words, switch to All, or ask Cory.</div>
+      <div class="res-wrap"><div id="res-root"></div></div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="in">
+    <img src="assets/logo/colaberry-horizontal-white.png" alt="Colaberry" width="3961" height="938">
+    <p>Colaberry Knowledge Base · the company source of truth · built on the Colaberry design system. Sales, Marketing, and Design, for the team and our AI. <button id="helpBtn" style="background:none;border:0;color:var(--neutral-200);text-decoration:underline;cursor:pointer;font:inherit;padding:0">How this works</button> · keyboard: press / to search, Esc to close Cory.</p>
+    <span class="sp">Draft for review · enterprise.colaberry.ai/knowledge/</span>
+  </div>
+</footer>
+
+<!-- CORY ASSISTANT -->
+<button id="cory-launch" aria-label="Open Cory assistant" aria-expanded="false" aria-controls="cory-panel"><span class="cb-i"><i class="ri-sparkling-2-line"></i></span> Ask Cory</button>
+<section id="cory-panel" role="dialog" aria-modal="true" aria-label="Cory company knowledge assistant">
+  <div class="cory-hd">
+    <div class="av"><span class="cb-i"><i class="ri-sparkling-2-line"></i></span></div>
+    <div><div class="nm">Cory</div><div class="st">Company knowledge assistant</div></div>
+    <div class="sp">
+      <button id="cory-clear" title="New chat" aria-label="New chat (clear conversation)"><span class="cb-i"><i class="ri-refresh-line"></i></span></button>
+      <button id="cory-settings-btn" title="Settings (API key, model)" aria-label="Cory settings"><span class="cb-i"><i class="ri-key-2-line"></i></span></button>
+      <button id="cory-close" title="Close" aria-label="Close assistant">&times;</button>
+    </div>
+  </div>
+  <div class="cory-scope"><span class="cb-i"><i class="ri-filter-3-line"></i></span> Scope: <b id="cory-scope-label">All domains</b> (set by the tabs above)</div>
+  <div class="cory-body" id="cory-body" role="log" aria-live="polite"></div>
+  <div class="cory-settings" id="cory-settings">
+    <label for="cory-key">Anthropic API key</label>
+    <input id="cory-key" type="password" placeholder="sk-ant-..." autocomplete="off">
+    <label for="cory-model">Model</label>
+    <select id="cory-model"></select>
+    <div class="hint">Without a key, Cory answers from the knowledge base. With a key, it calls Claude directly at api.anthropic.com, grounded in the current scope, and streams the reply. Use a personal, limited-scope key (never an org or admin key); it is stored unencrypted in this browser (localStorage) and sent only to Anthropic. Live mode needs the page served over http(s); opened as a local file, Cory falls back to knowledge-base answers.</div>
+    <button class="save" id="cory-save">Save</button>
+  </div>
+  <div class="cory-input">
+    <input id="cory-q" type="text" placeholder="Ask about anything in the knowledge base...">
+    <button id="cory-send" aria-label="Send"><span class="cb-i"><i class="ri-send-plane-2-fill"></i></span></button>
+  </div>
+</section>
+
+<script src="sales/kb-data.js"></script>
+<script src="marketing/hub-data.js"></script>
+<script src="data/design-kb.js"></script>
+<script src="data/curriculum-kb.js"></script>
+<script src="data/product-kb.js"></script>
+<script src="data/compliance-kb.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script src="assets/kb-app.js"></script>
+</body>
+</html>

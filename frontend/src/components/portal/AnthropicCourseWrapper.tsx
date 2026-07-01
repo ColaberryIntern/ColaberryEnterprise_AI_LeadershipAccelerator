@@ -11,60 +11,48 @@ interface Props {
 function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, courseNumber }: Props) {
   return (
     <div
-      className="card border-0 shadow-sm"
-      style={{ borderLeft: '4px solid #6366f1' }}
+      className="card border-0 shadow-sm card-lift"
+      style={{ borderLeft: '4px solid var(--color-primary)' }}
     >
-      <div className="card-body" style={{ padding: '16px 20px' }}>
+      <div className="card-body p-3 px-md-4">
 
         {/* Badge row */}
         <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
           <span
-            className="badge"
-            style={{ background: '#fff3e0', color: '#c15c1b', fontSize: 10, fontWeight: 700, letterSpacing: '0.03em' }}
+            className="badge text-uppercase"
+            style={{ background: 'var(--color-primary)', color: 'var(--color-bg)', letterSpacing: '0.03em' }}
           >
             Anthropic
           </span>
           <span
-            className="badge"
-            style={{ background: '#eef2ff', color: '#6366f1', fontSize: 10, fontWeight: 600 }}
+            className="badge bg-light border"
+            style={{ color: 'var(--color-primary-light)' }}
           >
             <i className="bi bi-mortarboard me-1" aria-hidden="true"></i>Skilljar
           </span>
           {courseNumber != null && (
-            <span
-              className="badge"
-              style={{ background: '#f1f5f9', color: '#64748b', fontSize: 10, fontWeight: 600 }}
-            >
+            <span className="badge bg-light border text-muted">
               Course {courseNumber}
             </span>
           )}
         </div>
 
-        {/* Title */}
-        <h6
-          className="fw-bold mb-1"
-          style={{ color: '#1e293b', fontSize: 14, lineHeight: 1.4 }}
-        >
+        {/* Title — h6 inherits navy var(--color-primary) from the global heading rule */}
+        <h6 className="fw-bold mb-1" style={{ fontSize: 14, lineHeight: 1.4 }}>
           {title}
         </h6>
 
         {/* Description */}
         {description && (
-          <p
-            className="mb-0 small"
-            style={{ color: '#64748b', lineHeight: 1.6 }}
-          >
+          <p className="mb-0 small text-muted">
             {description}
           </p>
         )}
 
         {/* Footer: duration + CTA */}
-        <div
-          className="d-flex align-items-center justify-content-between gap-2 flex-wrap"
-          style={{ marginTop: 14 }}
-        >
+        <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mt-3">
           {estimatedMinutes != null ? (
-            <span className="small" style={{ color: '#94a3b8' }}>
+            <span className="small text-muted">
               <i className="bi bi-clock me-1" aria-hidden="true"></i>
               {estimatedMinutes} min
             </span>
@@ -76,18 +64,7 @@ function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, cou
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-sm px-3"
-            style={{
-              background: '#6366f1',
-              color: '#fff',
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              textDecoration: 'none',
-              minHeight: 36,
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
+            className="btn btn-primary btn-sm px-3 d-inline-flex align-items-center"
             aria-label={`Launch ${title} — opens in new tab`}
           >
             <i className="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>

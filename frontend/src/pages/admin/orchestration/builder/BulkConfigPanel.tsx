@@ -292,7 +292,7 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
                   <span className="badge bg-light text-dark border" style={{ fontSize: 9 }}>M{row.moduleNumber}</span>
                 </td>
                 <td>
-                  <span className="fw-medium" style={{ color: 'var(--color-primary-light, #2b6cb0)' }}>
+                  <span className="fw-medium" style={{ color: 'var(--red-500)' }}>
                     {row.lessonNumber}. {row.lessonTitle}
                   </span>
                 </td>

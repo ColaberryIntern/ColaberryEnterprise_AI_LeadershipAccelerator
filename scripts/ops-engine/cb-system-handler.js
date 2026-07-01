@@ -461,7 +461,7 @@ function appendLog(entry) {
 }
 
 // Build the toolImpls closure that has access to bc functions + state.
-function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId, requesterId, requesterName, aliId }) {
+function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, requesterRef, invocationId, requesterId, requesterName, aliId }) {
   const sideEffects = { repliedHtml: null, emailMessageId: null, followupTodoId: null, qualityFlags: [] };
 
   const MENTION_RE = /content-type="application\/vnd\.basecamp\.mention"/;
@@ -478,7 +478,11 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId,
     // the paragraph breaks by promoting them to <br>.
     if (!/<[a-z][\s\S]*>/i.test(body)) body = body.replace(/\n/g, '<br>');
     if (!MENTION_RE.test(body)) {
-      body = `<div>${mention()} ${body}</div>`;
+      // Tag the ACTUAL requester (off comment.creator's attachable_sgid), not
+      // always Ali. This is the "tagged Ram, not Ali" contract: mention() was
+      // hardcoded to Ali, so this auto-inject tagged Ali for everyone.
+      // mention(requesterRef) falls back to Ali only when the ref is unresolved.
+      body = `<div>${mention(requesterRef)} ${body}</div>`;
     }
     await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: body });
     sideEffects.repliedHtml = body;
@@ -501,7 +505,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId,
     const targetId = todo_id || recId;
     try {
       if (closure_note) {
-        const noteHtml = `<div>${mention()} closing this todo. <em>${stripEmDashes(closure_note)}</em></div>`;
+        const noteHtml = `<div>${mention(requesterRef)} closing this todo. <em>${stripEmDashes(closure_note)}</em></div>`;
         await bcPost(`/buckets/${bucketId}/recordings/${targetId}/comments.json`, { content: noteHtml });
       }
       // Completion endpoint takes empty body. bcPost serializes {} which BC accepts.
@@ -541,7 +545,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId,
     // Simpler approach: post the followup as a structured comment in the same
     // thread (we'd need a todoset id to create a real todo). v1 = comment with FOLLOWUP tag.
     const html = `<div><strong>[FOLLOWUP for next Claude Code session]</strong></div>
-<div>${mention()} ${stripEmDashes(title)}</div>
+<div>${mention(requesterRef)} ${stripEmDashes(title)}</div>
 <div><br></div>
 <div>${stripEmDashes(notes).replace(/\n/g, '<br>')}</div>
 <div><br></div>
@@ -907,6 +911,9 @@ async function handleOpenEnded(ctx) {
   const invocationId = `cb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const requesterId = comment.creator?.id;
   const requesterName = comment.creator?.name || 'team member';
+  // The person CB is replying to; carries attachable_sgid so mention() tags the
+  // real requester (Aleem, Kes, ...) instead of always tagging Ali.
+  const requesterRef = comment.creator || null;
   const isAli = requesterId === aliId;
   const availableTools = filterToolsForRequester(requesterId, aliId);
 
@@ -956,7 +963,7 @@ Decide and act. Always end with basecamp_reply, then finish.`;
     { role: 'user', content: userMessage },
   ];
 
-  const { impls, sideEffects } = buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId, requesterId, requesterName, aliId });
+  const { impls, sideEffects } = buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, requesterRef, invocationId, requesterId, requesterName, aliId });
   const toolsCalled = [];
   let finished = false;
   let lastError = null;
@@ -1039,7 +1046,7 @@ Decide and act. Always end with basecamp_reply, then finish.`;
   if (!sideEffects.repliedHtml) {
     try {
       await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, {
-        content: `<div>${mention()} Got your message. I tried to handle it but ran out of steps. Queued for review.</div>`,
+        content: `<div>${mention(comment.creator)} Got your message. I tried to handle it but ran out of steps. Queued for review.</div>`,
       });
     } catch (_e) {}
   }

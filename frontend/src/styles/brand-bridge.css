@@ -1,0 +1,174 @@
+/* ============================================================
+   brand-bridge.css
+   Wires the admin app's legacy semantic tokens + Bootstrap 5.3
+   onto the vendored Colaberry brand system (src/colaberry/).
+
+   WHY: the brand token layer (src/colaberry/styles.css -> tokens/*)
+   is already loaded app-wide, but the admin still reads its own
+   navy --color-primary and Bootstrap's default blue. This file is
+   the single seam that completes the navy -> cherry rebrand.
+
+   LOAD ORDER: imported LAST in index.tsx, after colaberry/styles.css,
+   so (a) the brand ramps/fonts it references are defined, and
+   (b) these mappings win every name collision. Remove this one
+   import to fully revert the rebrand.
+   Brand: cherry #FB2832 primary, leaf #77BB4A, berry #367895,
+   Roboto / Roboto Mono, rounded shapes, RemixIcon (ri-*).
+   ============================================================ */
+
+:root {
+  /* ---- Legacy admin color tokens -> Colaberry brand ramps ----
+     These names are admin-only (no circular ref with brand ramps). */
+  --color-primary:        var(--red-500);    /* cherry #FB2832 (was navy #1a365d) */
+  --color-primary-light:  var(--red-400);    /* #FD5760 */
+  --color-secondary:      var(--red-600);    /* deep cherry CTA accent */
+  --color-accent:         var(--green-600);  /* leaf #5BA63C */
+
+  /* Surfaces + text aligned to the brand LIGHT theme (admin-only names) */
+  --color-bg:        var(--surface-page);    /* #FFFFFF */
+  --color-bg-alt:    var(--surface-subtle);  /* #F8F8F7 warm neutral */
+  --color-text:      var(--text-body);       /* #2B2B2B */
+  --color-text-light:var(--text-muted);      /* #6B6B6B */
+  --color-border:    var(--border-subtle);   /* #E4E4E3 */
+  --color-muted:     var(--text-muted);
+
+  /* Functional/status -> brand status tokens (keep semantics) */
+  --color-success:   var(--status-success);
+  --color-danger:    var(--status-danger);
+  --color-warning:   var(--status-warning);
+  --color-info:      var(--status-info);
+  --color-success-bg: var(--status-success-bg);
+  --color-danger-bg:  var(--status-danger-bg);
+  --color-warning-bg: var(--status-warning-bg);
+  --color-info-bg:    var(--status-info-bg);
+
+  /* ---- Typography -> Roboto / Roboto Mono ----
+     Set LITERALLY: --font-body/--font-mono are shared names with the
+     brand layer, so a var() self-reference would be circular. */
+  --font-heading: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:    'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'Roboto Mono', ui-monospace, 'Consolas', 'Monaco', monospace;
+
+  /* ============================================================
+     Bootstrap 5.3 brand override.
+     Utilities (.bg-primary/.text-primary/.border-primary/.badge)
+     read --bs-primary(-rgb); buttons/forms read their own --bs-*
+     local vars set to literal hex at compile time, so those need
+     targeted class overrides below.
+     ============================================================ */
+  --bs-primary: #FB2832;
+  --bs-primary-rgb: 251, 40, 50;
+  --bs-secondary: #4A4A4A;
+  --bs-secondary-rgb: 74, 74, 74;
+  --bs-success: #468A2E;
+  --bs-success-rgb: 70, 138, 46;
+  --bs-danger: #E5121D;
+  --bs-danger-rgb: 229, 18, 29;
+  --bs-warning: #E8920C;
+  --bs-warning-rgb: 232, 146, 12;
+  --bs-info: #367895;
+  --bs-info-rgb: 54, 120, 149;
+
+  --bs-link-color: #2E6A86;
+  --bs-link-color-rgb: 46, 106, 134;
+  --bs-link-hover-color: #265A72;
+  --bs-link-hover-color-rgb: 38, 90, 114;
+
+  --bs-border-radius: 12px;
+  --bs-border-radius-sm: 8px;
+  --bs-border-radius-lg: 16px;
+  --bs-border-radius-xl: 24px;
+  --bs-border-radius-pill: 999px;
+
+  --bs-body-font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* ---- Buttons: primary (cherry) ---- */
+.btn-primary {
+  --bs-btn-bg: var(--red-500);
+  --bs-btn-border-color: var(--red-500);
+  --bs-btn-hover-bg: var(--red-600);
+  --bs-btn-hover-border-color: var(--red-600);
+  --bs-btn-active-bg: var(--red-700);
+  --bs-btn-active-border-color: var(--red-700);
+  --bs-btn-disabled-bg: var(--red-300);
+  --bs-btn-disabled-border-color: var(--red-300);
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--red-600);
+  --bs-btn-border-color: var(--red-500);
+  --bs-btn-hover-bg: var(--red-500);
+  --bs-btn-hover-border-color: var(--red-500);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: var(--red-600);
+  --bs-btn-active-border-color: var(--red-600);
+  --bs-btn-active-color: #fff;
+}
+
+/* ---- Buttons: success (leaf) + danger / info aligned to brand ---- */
+.btn-success {
+  --bs-btn-bg: var(--green-600);
+  --bs-btn-border-color: var(--green-600);
+  --bs-btn-hover-bg: var(--green-700);
+  --bs-btn-hover-border-color: var(--green-700);
+  --bs-btn-active-bg: var(--green-700);
+}
+.btn-info {
+  --bs-btn-bg: var(--blue-500);
+  --bs-btn-border-color: var(--blue-500);
+  --bs-btn-hover-bg: var(--blue-600);
+  --bs-btn-hover-border-color: var(--blue-600);
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+}
+
+/* ---- Forms: focus ring + checks in cherry ---- */
+.form-control:focus,
+.form-select:focus,
+.form-check-input:focus {
+  border-color: var(--red-300);
+  box-shadow: 0 0 0 0.25rem rgba(251, 40, 50, 0.2);
+}
+.form-check-input:checked {
+  background-color: var(--red-500);
+  border-color: var(--red-500);
+}
+.form-switch .form-check-input:checked {
+  background-color: var(--red-500);
+  border-color: var(--red-500);
+}
+
+/* ---- Nav tabs / pills active state ---- */
+.nav-tabs .nav-link.active {
+  color: var(--red-600);
+  border-bottom-color: var(--red-500);
+}
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  background-color: var(--red-500);
+}
+
+/* ---- Pagination ---- */
+.page-link { color: var(--blue-600); }
+.page-item.active .page-link {
+  background-color: var(--red-500);
+  border-color: var(--red-500);
+}
+
+/* ---- Progress + spinners default to brand cherry ---- */
+.progress { --bs-progress-bar-bg: var(--red-500); }
+
+/* ---- Generic headings default to brand ink + Roboto.
+     Page titles that set an inline color:var(--color-primary) now
+     render cherry; those migrate to the PageHeader primitive (which
+     uses --text-strong) during the per-page polish loop. ---- */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display, 'Roboto', system-ui, sans-serif);
+  color: var(--text-strong);
+}
+
+/* Body + links inherit the brand base layer (src/colaberry/tokens/base.css). */
