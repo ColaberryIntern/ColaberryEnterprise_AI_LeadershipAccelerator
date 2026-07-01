@@ -7413,3 +7413,13 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: committed 12 ATA files (runAliTaskAgent.js + lib/aliTaskAgent/* + scripts/ata-report-digest.sh, 1223 lines) that ran on prod via cron but were never in git
   - Verification: secret-scan clean; branch workstream/ali-task-agent pushed for PR to main
   - Notes: no behavior change - already running under ATA_ENABLED + report-digest cron (CC-20260630-h3v9); found during staging/prod reconciliation
+
+- [x] **CB System @-mentions: resolve `@Name` in the reply body to the real project member (upgrade the resolver main already had)**
+  - Date: 2026-07-01
+  - Session: CC-20260701-a7k2
+  - What changed: Aleem reopened BC todo 10048624254 - CB "@mention only tags Ali and Karun, not Sohail/Sai." main already had the m4k7 resolver, but it only exact-matched full names against the 1295-person account list and the reply path only auto-tagged the requester (`mention(requesterRef)`); a `@Sohail` the model wrote in the body stayed dead plain text.
+    - `scripts/ops-engine/cb-people.js`: upgraded (superset of the existing exports) - PROJECT-scoped roster (`ensurePeopleLoaded({ bcGet, bucketId })` -> `/projects/{id}/people.json`), graded fuzzy name match in `resolveSgidSync(ref, { bucketId })` (exact full > first-name > any token > first-name prefix; ambiguous -> null, never guesses), and new pure `injectMentions(html, resolve)` that rewrites plain-text `@Name` into a real `<bc-attachment ...mention>` only on a unique match.
+    - `scripts/ops-engine/cb-system-handler.js`: `basecamp_reply` now runs `injectMentions` over the (sanitized) body so body `@Name`s notify the real person; the existing `mention(requesterRef)` requester-tag contract is preserved. Handler warms the project roster and builds `resolveMention`; system prompt gains a TAGGING PEOPLE rule.
+    - `scripts/ops-engine/inbound-dispatcher.js`: passes paginated `bcGetAll` into the handler (project people page at 15) and drops the per-tick 1295-person account warm as now redundant.
+  - Verification: `node --test cb-people.test.js` 20/20 (10 new incl. first-name resolve, ambiguous->null, project-scope isolation, injectMentions rewrite/miss/email-safety); `node --check` clean on all 3 files. Real project-12724483 roster (25, paginated): @Sohail/@Sai/@Aleem/@Kes/@Ali resolve; @Karun stays text (two Karuns - use @Karun Swaroop). Already live on prod (surgically deployed). Detail in memory `reference_cb_mention_resolution`.
+  - Notes: This lands on main the same fix already running on prod. Reconciled onto main's newer handler (reply-sanitizer + requesterRef preserved). cb-people.js/test are a clean superset of main's m4k7 versions.

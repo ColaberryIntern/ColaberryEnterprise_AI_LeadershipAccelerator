@@ -95,3 +95,70 @@ test('ensurePeopleLoaded indexes people from the getter', async () => {
   assert.equal(map.get('name:aleem'), ALEEM.attachable_sgid);
   assert.equal(map.get('email:ali@colaberry.com'), ALI.attachable_sgid);
 });
+
+// --- 2026-07-01 defect: "only tags Ali and Karun, not Sohail/Sai" ------------
+// The roster carries FULL names but people are referenced by FIRST name. The old
+// exact-full-name-only match silently missed, so the tag fell back to Ali.
+const SOHAIL = { id: 47335940, name: 'Sohail Syed', email_address: 'sohail@colaberry.com', attachable_sgid: 'BAh-SOHAIL-SGID' };
+const SAI_TEJESH = { id: 50567410, name: 'Sai Tejesh', email_address: 'saitejesh@colaberry.com', attachable_sgid: 'BAh-SAITEJESH-SGID' };
+const SAI_KRISHNA = { id: 32992444, name: 'Sai Krishna', email_address: 'saikrishna@x.com', attachable_sgid: 'BAh-SAIKRISHNA-SGID' };
+
+test('THE REOPENED BUG: a bare FIRST name resolves to the right person', () => {
+  cbPeople.__setPeopleCacheForTests(cbPeople.indexPeople([ALI, SOHAIL, SAI_TEJESH]));
+  assert.equal(cbPeople.resolveSgidSync('Sohail'), SOHAIL.attachable_sgid);
+  assert.equal(cbPeople.resolveSgidSync('sohail'), SOHAIL.attachable_sgid); // case-insensitive
+  assert.equal(cbPeople.resolveSgidSync('Sai'), SAI_TEJESH.attachable_sgid); // unique here
+});
+
+test('a last-name (any token) resolves too', () => {
+  cbPeople.__setPeopleCacheForTests(cbPeople.indexPeople([ALI, SOHAIL, SAI_TEJESH]));
+  assert.equal(cbPeople.resolveSgidSync('Syed'), SOHAIL.attachable_sgid);
+  assert.equal(cbPeople.resolveSgidSync('Tejesh'), SAI_TEJESH.attachable_sgid);
+});
+
+test('AMBIGUOUS first name returns null (never guesses the wrong human)', () => {
+  cbPeople.__setPeopleCacheForTests(cbPeople.indexPeople([SAI_TEJESH, SAI_KRISHNA]));
+  assert.equal(cbPeople.resolveSgidSync('Sai'), null); // two Sais -> refuse to guess
+  // full name still disambiguates
+  assert.equal(cbPeople.resolveSgidSync('Sai Krishna'), SAI_KRISHNA.attachable_sgid);
+});
+
+test('project-scoped cache: resolution honors bucketId and does not leak across projects', async () => {
+  await cbPeople.ensurePeopleLoaded({ bcGet: async (p) => {
+    assert.ok(p.includes('/projects/12724483/people.json'));
+    return [ALI, SOHAIL, SAI_TEJESH];
+  }, bucketId: 12724483 });
+  assert.equal(cbPeople.resolveSgidSync('Sohail', { bucketId: 12724483 }), SOHAIL.attachable_sgid);
+  // "Sai" is unique inside THIS project even though it is ambiguous account-wide
+  assert.equal(cbPeople.resolveSgidSync('Sai', { bucketId: 12724483 }), SAI_TEJESH.attachable_sgid);
+  // A bucket with no loaded roster resolves nothing (no global bleed-through)
+  assert.equal(cbPeople.resolveSgidSync('Sohail', { bucketId: 999 }), null);
+});
+
+test('injectMentions rewrites a plain-text @First into a real mention attachment', () => {
+  const resolve = (name) => (cbPeople.normKey(name) === 'sohail' ? SOHAIL.attachable_sgid : null);
+  const out = cbPeople.injectMentions('<div>@Sohail please review this.</div>', resolve);
+  assert.ok(out.includes(cbPeople.buildMentionTag(SOHAIL.attachable_sgid)), 'Sohail is a real mention');
+  assert.ok(out.includes('please review this.'), 'the rest of the sentence is preserved');
+  assert.ok(!out.includes('@Sohail'), 'the raw @Sohail text is gone');
+});
+
+test('injectMentions leaves unknown / ambiguous @Name as plain text (no false tag, no Ali default)', () => {
+  const resolve = () => null; // everyone misses
+  const html = '<div>@Nobody and @Someone Else here.</div>';
+  assert.equal(cbPeople.injectMentions(html, resolve), html);
+});
+
+test('injectMentions never mangles an email address', () => {
+  const resolve = () => SOHAIL.attachable_sgid; // would fire if it matched
+  const html = '<div>Email ali@colaberry.com for access.</div>';
+  assert.equal(cbPeople.injectMentions(html, resolve), html);
+});
+
+test('injectMentions backs off to the longest span that resolves', () => {
+  // "@Sohail Please" - only "Sohail" resolves, "Please" is kept as text.
+  const resolve = (name) => (cbPeople.normKey(name) === 'sohail' ? SOHAIL.attachable_sgid : null);
+  const out = cbPeople.injectMentions('<div>@Sohail Please confirm.</div>', resolve);
+  assert.ok(out.includes(cbPeople.buildMentionTag(SOHAIL.attachable_sgid)));
+  assert.ok(out.includes('Please confirm.'));
+});

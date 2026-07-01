@@ -33,6 +33,7 @@ const LOG_PATH = path.resolve(REPO, 'tmp/ops-engine/cb-handler-log.jsonl');
 const OpenAI = require(path.resolve(REPO, 'node_modules/openai')).default;
 const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
 const { sanitizeReplyHtml, looksLikeToolCallLeak } = require('./cb-reply-sanitizer');
+const cbPeople = require('./cb-people');
 
 // Durable self-improvement lessons. Each confirmed failure pattern gets one
 // line appended here (by cb-quality-audit.js) and is injected into the system
@@ -77,6 +78,7 @@ HARD CONSTRAINTS (violations are production defects)
 
 TOOL PICKING GUIDE
 - basecamp_reply: ALWAYS call this at least once per invocation, as the visible response in the thread. Brief acknowledgement + what you did or queued. Use Basecamp HTML (<div>, <strong>, <em>, <br>, <ul><li>). Sign off as "CB System" only if the thread is with someone other than Ali, otherwise no signoff.
+- TAGGING PEOPLE: to notify a teammate, write @ then their name (first name is enough, e.g. @Sohail, @Sai, @Ali). CB converts it into a real Basecamp mention that actually notifies them, but ONLY if they are a member of this project. If a name does not resolve (not on the project, or ambiguous) it stays plain text with no false notification, so prefer a first name that is unique on the project. Do NOT hand-write <bc-attachment> tags; just write @Name.
 - email_ali: when Ali asked you to email him something (a summary, research notes, a draft). Recipient is locked to ali@colaberry.com.
 HANDLING WORK - decide among THREE tiers (this is the most common place to get stuck; pick deliberately):
 - EXECUTE NOW: if the request is something your tools can finish this turn (reply, summarize prior thread content, create a PDF/XLSX, complete a todo, run a gov-bid op), just do it. Do not queue work you can actually do. "Execute" is internal-only: never send outside-facing comms, post publicly, book external calendar, or take personnel action yourself - those get queued.
@@ -463,6 +465,9 @@ function appendLog(entry) {
 // Build the toolImpls closure that has access to bc functions + state.
 function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, requesterRef, invocationId, requesterId, requesterName, aliId }) {
   const sideEffects = { repliedHtml: null, emailMessageId: null, followupTodoId: null, qualityFlags: [] };
+  // Resolve a bare @Name (first name is enough) to a project member's sgid.
+  // Scoped to THIS project so first names are unambiguous; null on miss/ambiguity.
+  const resolveMention = (name) => cbPeople.resolveSgidSync(name, { bucketId });
 
   const MENTION_RE = /content-type="application\/vnd\.basecamp\.mention"/;
 
@@ -477,6 +482,10 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, requesterRef,
     // Recovered plain-text (e.g. from a leak) has newlines, no markup: keep
     // the paragraph breaks by promoting them to <br>.
     if (!/<[a-z][\s\S]*>/i.test(body)) body = body.replace(/\n/g, '<br>');
+    // Resolve any @Name the model wrote in the body into a REAL Basecamp mention
+    // so that person (Sohail, Sai, ...) is actually notified, not left as plain
+    // text. Unresolved/ambiguous names stay text; never mis-tagged, never Ali.
+    body = cbPeople.injectMentions(body, resolveMention);
     if (!MENTION_RE.test(body)) {
       // Tag the ACTUAL requester (off comment.creator's attachable_sgid), not
       // always Ali. This is the "tagged Ram, not Ali" contract: mention() was
@@ -907,8 +916,12 @@ function summarizeComments(comments, aliId) {
  * Returns { ok, summary } so dispatcher can update state.
  */
 async function handleOpenEnded(ctx) {
-  const { bcGet, bcPost, bucketId, recId, comment, mention, aliId } = ctx;
+  const { bcGet, bcGetAll, bcPost, bucketId, recId, comment, mention, aliId } = ctx;
   const invocationId = `cb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Warm the PROJECT roster so @Name the model writes resolves to the real
+  // member (a mention only notifies project members; first names are unambiguous
+  // within a ~25-person roster). Best-effort: on failure mentions degrade to text.
+  try { await cbPeople.ensurePeopleLoaded({ bcGet: bcGetAll || bcGet, bucketId }); } catch (_e) {}
   const requesterId = comment.creator?.id;
   const requesterName = comment.creator?.name || 'team member';
   // The person CB is replying to; carries attachable_sgid so mention() tags the
