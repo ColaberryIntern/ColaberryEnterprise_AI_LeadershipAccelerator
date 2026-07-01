@@ -42,6 +42,25 @@ interface NormalizedEmail {
 }
 
 /**
+ * Matches Basecamp's notification sender across domains. Basecamp 3 ("the new
+ * Basecamp") sends from notifications@app.basecamp.com; 3.basecamp.com is the
+ * legacy Basecamp Classic host. Match any basecamp.com subdomain so a future
+ * sender host keeps working, anchored on @/./start so look-alikes
+ * (e.g. notbasecamp.com) never match.
+ *
+ * Pinned 2026-06-29: the prior /3\.basecamp\.com/ check matched ONLY the legacy
+ * host, so every real @mention/assignment from app.basecamp.com fell through to
+ * the List-Unsubscribe rule and was auto-archived — Ali never saw Ram's SAM.gov
+ * @mentions for a week. The 2026-06-24 fix and its tests both used the wrong
+ * domain, so the tests stayed green while production stayed broken.
+ */
+export function isBasecampSender(fromAddress: string | null | undefined): boolean {
+  // Require an @, allow any subdomain chain, and forbid a trailing domain label
+  // so "basecamp.com.evil.io" / "x@notbasecamp.com" do not match.
+  return /@(?:[\w-]+\.)*basecamp\.com(?![\w.-])/i.test((fromAddress || '').trim());
+}
+
+/**
  * True when a Basecamp notification is a person directly tagging or assigning
  * Ali — an @mention or a to-do assignment — rather than project-management
  * noise. Basecamp encodes both directly in the subject:
@@ -53,8 +72,7 @@ interface NormalizedEmail {
  * ("<Name> completed a to-do") deliberately do NOT match.
  */
 export function isBasecampDirectMention(email: { from_address: string; subject: string | null }): boolean {
-  const isBasecamp = /3\.basecamp\.com/i.test(email.from_address || '');
-  if (!isBasecamp) return false;
+  if (!isBasecampSender(email.from_address)) return false;
   return /@mentioned you|assigned you/i.test(email.subject || '');
 }
 
@@ -77,8 +95,7 @@ export function isBasecampDirectComment(email: {
   subject: string | null;
   body_text: string | null;
 }): boolean {
-  const isBasecamp = /3\.basecamp\.com/i.test(email.from_address || '');
-  if (!isBasecamp) return false;
+  if (!isBasecampSender(email.from_address)) return false;
   if (!/\bre:/i.test(email.subject || '')) return false; // comment replies only
   const body = email.body_text || '';
   const greetingToAli = /\b(hi|hello|hey|dear|thanks|thank you|good (?:morning|afternoon|evening))[,!\s]+ali\b/i;
@@ -217,7 +234,7 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   // — known correspondents keep the legacy behavior, first-time senders fall
   // through to the LLM (which has its own first-time-sender penalty).
   const AUTO_NOTIFICATION_SENDERS =
-    /@(3\.basecamp\.com|tc\.rocketmortgage\.com|zoom\.us|dart\.org|opentable\.com|substack\.com|lyftmail\.com|nextdoor\.com|otter\.ai|mailchimp\.com|sendgrid\.net|amazonses\.com)$/i;
+    /@((?:[\w-]+\.)*basecamp\.com|tc\.rocketmortgage\.com|zoom\.us|dart\.org|opentable\.com|substack\.com|lyftmail\.com|nextdoor\.com|otter\.ai|mailchimp\.com|sendgrid\.net|amazonses\.com)$/i;
   const isAutoNotificationSender = AUTO_NOTIFICATION_SENDERS.test(email.from_address);
   const namePattern = /ali\s+muwwakkil/i;
   if (!isAutoNotificationSender && namePattern.test(email.subject)) {

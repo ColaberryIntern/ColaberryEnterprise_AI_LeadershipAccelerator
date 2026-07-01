@@ -12,11 +12,11 @@ interface Props {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  executive_reality_check: '#2b6cb0',
-  ai_strategy: '#0d9488',
-  prompt_template: '#7c3aed',
-  implementation_task: '#dd6b20',
-  knowledge_check: '#e53e3e',
+  executive_reality_check: 'var(--chart-1)',
+  ai_strategy: 'var(--chart-6)',
+  prompt_template: 'var(--chart-5)',
+  implementation_task: 'var(--chart-4)',
+  knowledge_check: 'var(--status-danger)',
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -84,13 +84,13 @@ export default function MiniSectionPipeline({ miniSections, selectedId, onSelect
     <div className="d-flex gap-1 align-items-start overflow-auto pb-2" style={{ minHeight: 90 }} role="list" aria-label="Mini-section pipeline">
       {miniSections.map((ms, i) => {
         const icon = TYPE_ICONS[ms.mini_section_type] || 'bi-circle';
-        const color = TYPE_COLORS[ms.mini_section_type] || '#718096';
+        const color = TYPE_COLORS[ms.mini_section_type] || 'var(--text-muted)';
         const shortLabel = TYPE_LABELS[ms.mini_section_type] || ms.mini_section_type;
         const isSelected = ms.id === selectedId;
         const isDirty = ms.id === isDirtyId;
         const isDropHere = dropTarget === i && dragIndex !== i;
         const qScore = ms.quality_score;
-        const qColor = !qScore ? '#718096' : qScore >= 90 ? '#2b6cb0' : qScore >= 70 ? '#38a169' : qScore >= 40 ? '#dd6b20' : '#e53e3e';
+        const qColor = !qScore ? 'var(--text-muted)' : qScore >= 90 ? 'var(--chart-1)' : qScore >= 70 ? 'var(--status-success)' : qScore >= 40 ? 'var(--status-warning)' : 'var(--status-danger)';
 
         return (
           <React.Fragment key={ms.id}>
@@ -111,7 +111,7 @@ export default function MiniSectionPipeline({ miniSections, selectedId, onSelect
                 padding: '6px 4px',
                 borderRadius: 8,
                 border: `2px solid ${isSelected ? color : 'transparent'}`,
-                background: isSelected ? `${color}10` : 'transparent',
+                background: isSelected ? `color-mix(in srgb, ${color} 6%, transparent)` : 'transparent',
                 transition: 'border-color 0.15s, background 0.15s',
                 position: 'relative',
                 flexShrink: 0,
@@ -136,7 +136,7 @@ export default function MiniSectionPipeline({ miniSections, selectedId, onSelect
               {/* Type icon */}
               <div
                 className="d-flex align-items-center justify-content-center rounded-circle mb-1"
-                style={{ width: 36, height: 36, background: `${color}18`, color, flexShrink: 0 }}
+                style={{ width: 36, height: 36, background: `color-mix(in srgb, ${color} 9%, transparent)`, color, flexShrink: 0 }}
               >
                 <i className={`bi ${icon}`} style={{ fontSize: 16 }}></i>
               </div>
@@ -154,7 +154,7 @@ export default function MiniSectionPipeline({ miniSections, selectedId, onSelect
               {/* Quality + status badges */}
               <div className="d-flex gap-1 mt-1 flex-wrap justify-content-center">
                 {qScore != null && (
-                  <span className="badge" style={{ fontSize: 7, background: `${qColor}20`, color: qColor, border: `1px solid ${qColor}40` }}>
+                  <span className="badge" style={{ fontSize: 7, background: `color-mix(in srgb, ${qColor} 12%, transparent)`, color: qColor, border: `1px solid color-mix(in srgb, ${qColor} 25%, transparent)` }}>
                     {Math.round(qScore)}
                   </span>
                 )}
@@ -169,7 +169,7 @@ export default function MiniSectionPipeline({ miniSections, selectedId, onSelect
 
             {/* Arrow connector */}
             {i < miniSections.length - 1 && (
-              <div className="d-flex align-items-center" style={{ color: 'var(--color-border, #e2e8f0)', fontSize: 14, flexShrink: 0, marginTop: 20 }}>
+              <div className="d-flex align-items-center" style={{ color: 'var(--border-default)', fontSize: 14, flexShrink: 0, marginTop: 20 }}>
                 <i className="bi bi-arrow-right"></i>
               </div>
             )}

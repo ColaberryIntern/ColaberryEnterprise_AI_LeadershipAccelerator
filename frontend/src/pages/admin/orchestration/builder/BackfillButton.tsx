@@ -89,14 +89,14 @@ export default function BackfillButton({ token, apiUrl, onComplete }: Props) {
                       </div>
                       <div className="col-3">
                         <div className="border rounded p-2 text-center" style={{ fontSize: 11 }}>
-                          <i className="bi bi-braces d-block mb-1" style={{ fontSize: 18, color: '#e53e3e' }}></i>
+                          <i className="bi bi-braces d-block mb-1" style={{ fontSize: 18, color: 'var(--chart-2)' }}></i>
                           <strong>Variables</strong>
                           <div className="text-muted" style={{ fontSize: 9 }}>System + lesson vars</div>
                         </div>
                       </div>
                       <div className="col-3">
                         <div className="border rounded p-2 text-center" style={{ fontSize: 11 }}>
-                          <i className="bi bi-file-earmark-check d-block mb-1" style={{ fontSize: 18, color: '#d69e2e' }}></i>
+                          <i className="bi bi-file-earmark-check d-block mb-1" style={{ fontSize: 18, color: 'var(--chart-4)' }}></i>
                           <strong>Artifacts</strong>
                           <div className="text-muted" style={{ fontSize: 9 }}>For implementation tasks</div>
                         </div>
@@ -152,7 +152,7 @@ export default function BackfillButton({ token, apiUrl, onComplete }: Props) {
                       </div>
                       <div className="col-3">
                         <div className="border rounded p-2 text-center">
-                          <div className="fw-bold" style={{ fontSize: 22, color: '#e53e3e' }}>{result.variables.mapped}</div>
+                          <div className="fw-bold" style={{ fontSize: 22, color: 'var(--chart-2)' }}>{result.variables.mapped}</div>
                           <div className="text-muted" style={{ fontSize: 10 }}>Variables Mapped</div>
                           {result.variables.skipped > 0 && (
                             <div className="text-muted" style={{ fontSize: 9 }}>{result.variables.skipped} skipped</div>
@@ -161,7 +161,7 @@ export default function BackfillButton({ token, apiUrl, onComplete }: Props) {
                       </div>
                       <div className="col-3">
                         <div className="border rounded p-2 text-center">
-                          <div className="fw-bold" style={{ fontSize: 22, color: '#d69e2e' }}>{result.artifacts.created}</div>
+                          <div className="fw-bold" style={{ fontSize: 22, color: 'var(--chart-4)' }}>{result.artifacts.created}</div>
                           <div className="text-muted" style={{ fontSize: 10 }}>Artifacts Created</div>
                           {result.artifacts.linked > 0 && result.artifacts.linked !== result.artifacts.created && (
                             <div className="text-muted" style={{ fontSize: 9 }}>{result.artifacts.linked} linked</div>

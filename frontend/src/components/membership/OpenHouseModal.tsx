@@ -7,6 +7,12 @@ interface OpenHouseModalProps {
   /** Persona slug, used to namespace the lead formType (e.g. open_house_builders). */
   personaSlug: string;
   submitLabel: string;
+  /** Optional override copy — used to reframe the SAME open-house event for a
+   *  different audience (e.g. an employer "Live Info Session"). Defaults to the
+   *  individual open-house copy. */
+  title?: string;
+  subtitle?: string;
+  successMessage?: string;
 }
 
 const OVERLAY: React.CSSProperties = {
@@ -32,7 +38,15 @@ const DIALOG: React.CSSProperties = {
   overflowY: 'auto',
 };
 
-function OpenHouseModal({ show, onClose, personaSlug, submitLabel }: OpenHouseModalProps) {
+function OpenHouseModal({
+  show,
+  onClose,
+  personaSlug,
+  submitLabel,
+  title = 'Reserve Your Free Open House Seat',
+  subtitle = 'Membership starts at $149/month. The Open House is free.',
+  successMessage = 'You’re registered. We’ll email you the Open House details shortly.',
+}: OpenHouseModalProps) {
   useEffect(() => {
     if (!show) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -63,16 +77,16 @@ function OpenHouseModal({ show, onClose, personaSlug, submitLabel }: OpenHouseMo
           {'×'}
         </button>
         <h2 id="open-house-modal-title" style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
-          Reserve Your Free Open House Seat
+          {title}
         </h2>
         <p style={{ fontSize: 14, color: '#64748b', marginBottom: 20 }}>
-          Membership starts at $149/month. The Open House is free.
+          {subtitle}
         </p>
         <LeadCaptureForm
           formType={`open_house_${personaSlug}`}
           fields={['name', 'email']}
           submitLabel={submitLabel}
-          successMessage="You’re registered. We’ll email you the Open House details shortly."
+          successMessage={successMessage}
           buttonClassName="btn btn-primary btn-lg w-100"
         />
       </div>

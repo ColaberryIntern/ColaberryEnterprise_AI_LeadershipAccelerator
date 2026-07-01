@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260628-k7p2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, June 30, 2026 at 1:43 PM</div>
+    <div><span class="sid">CC-20260628-k7p2</span><span class="count">4 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Branded the admin shell to the Colaberry design system + redesigned the sidebar + per-page trust primitives**</h2>
+          <span class="badge">2026-06-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean on every changed file (run in a `node:20` Docker container since this host has no local node; the only errors are 2 pre-existing recharts `Formatter` type mismatches in untouched IntelScatter/Waterfall charts). A separate checker subagent (maker/checker per the Loop Architect) audited the diff — no build-breakers, no circular CSS vars, all referenced tokens resolve — and its 3 findings (immersive-bg hex, detail-card primitive, neutral-badge contrast) were fixed. Visual review via dev deploy is pending.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the brand icon set is RemixIcon (already vendored via `src/colaberry/tokens/fonts.css`), not Lucide — so NO new npm dependency was added (plan had assumed lucide-react). The foundation re-skins every admin page globally; the existing `AdminTrustCenterPage` already provides the L0 Trust Command Center hub. Per-page PageHeader/Trust migration continues via the LEDGER loop.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Per-page loop Batch 1 — 9 high-traffic admin pages converted to the brand shell**</h2>
+          <span class="badge">2026-06-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">converted `AdminReportsPage`, `AdminDashboardPage`, `AdminLeadsPage`, `AdminPipelinePage`, `AdminOpportunitiesPage`, `AdminRevenueDashboardPage`, `CEOCommandCenter` (header + KPI tiles; dark tab panels deferred), `GovernanceCommandCenter`, and `inbox/InboxCOSPage` to the shared shell — each now uses `PageHeader` (with a per-page `TrustBadge`), `StatCard` KPIs, `StatusBadge`, and `SectionCard`; all hand-rolled hex replaced with brand tokens (chart/funnel/stage series → `--chart-N`).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">built by maker subagents, each audited by a SEPARATE checker subagent (maker/checker per the Loop Architect) — all PASS; `tsc --noEmit` clean on every page (node:20 Docker; only the 2 pre-existing recharts errors remain); grep-verified no hardcoded hex / no `react-hooks` eslint-disable / no dangling removed symbols. Built + run as a live dev review container (`http://95.216.199.47:9990`, dev2 network); all 9 routes serve HTTP 200.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">state ledger at `docs/admin-redesign/LEDGER.md` tracks all pages. Remaining after Batch 1: the rest of the route-level pages (done in Waves 2–7 below), Batch 3 (sub-tab hubs), CEO/Governance dark-panel re-theme.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Per-page loop Waves 2–7 — ALL 44 navigable admin pages converted to the brand shell**</h2>
+          <span class="badge">2026-06-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">converted every remaining route-level admin page to the shared shell (`PageHeader` + per-page `TrustBadge`, `StatCard` KPIs, `StatusBadge`, `SectionCard`; all hand-rolled hex → brand/chart tokens, RemixIcon glyphs). Pages: War Room, Visitors, Funnel, Campaigns, Communications, ICP Insights, Sources, Ingest Logs, Routing Rules, Autonomous, Marketing, Missed Opportunities, Content Queue, Tickets, Settings, Apollo, Import, Event Ledger, Projects, CB System, Lead/Cohort/Campaign Detail, Sequences, Governance Policy, Generator, Accelerator, AI Settings (surgical header), Orchestration (surgical header), Trust Center, Campaign Builder, Automation, Intelligence Discovery, Intelligence Settings, Agent Orphans (+ the 9 Batch‑1 pages above). Only intentionally untouched: `AdminLoginPage` (already brand-styled by the foundation) and the immersive `IntelligenceOSPage` (bespoke full-screen design).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">built by maker subagents in waves of ~5, each gated by `tsc --noEmit` (clean — only the 2 pre-existing recharts errors) + a grep for build-breakers (no `react-hooks` eslint-disable, no raw hex, no dangling removed symbols); high-traffic pages also passed a separate checker subagent. Each wave was built + run as a live dev review container (`http://95.216.199.47:9990`, dev2 network) — the nginx multi-stage prod build (npm ci + react-scripts build + eslint) is GREEN; all routes serve HTTP 200. Spot-checked screenshots (login, dashboard, list pages, tab-heavy command centers) show no layout regression.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">REMAINING (queued in the ledger): Batch 3 — the sub-tab *content* components inside the hub pages; and the CEO/Governance dark command-center panel re-theme (dark→light). (Both completed in the entries below.)</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Batch 3 + orchestration full rebrand + CEO dark→light — brand migration COMPLETE across every admin surface**</h2>
+          <span class="badge">2026-06-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">~15 maker subagents across the batches, each gated by `tsc --noEmit` (clean — only the 2 pre-existing recharts errors) + grep (whole `ai-settings/`, `inbox/` touched files, and the entire `orchestration/` dir verified 0 hardcoded hex and 0 `react-hooks` eslint-disable). Rebuilt + run as the live dev review container (`http://95.216.199.47:9990`) — the nginx multi-stage prod build (npm ci + react-scripts build + eslint) is GREEN; routes serve HTTP 200.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The Colaberry brand migration of the admin is complete** — every navigable page + all sub-tab content + the orchestration builder workspace + the CEO command center are on-brand. The ONLY surfaces intentionally left: `IntelligenceOSPage` (immersive full-screen bespoke design) and `AdminLoginPage` (already brand-styled by the foundation). 18 commits on `workstream/admin-brand-redesign`.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260628-k7p2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

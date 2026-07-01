@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KPIs and Measurement · Open House Marketing Hub</title>
+<link rel="icon" href="../assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../assets/hub.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><img src="../assets/logo/colaberry-horizontal.png" alt="Colaberry"></div>
+    <a class="nav home" href="../index.html"><span class="cb-i"><i class="ri-arrow-left-line"></i></span> Marketing Hub</a>
+    <div class="navsec">On this page</div>
+    <a class="nav" href="#funnel"><span class="cb-i"><i class="ri-filter-3-line"></i></span> The funnel</a>
+    <a class="nav" href="#targets"><span class="cb-i"><i class="ri-flag-line"></i></span> KPI targets</a>
+    <a class="nav" href="#chart"><span class="cb-i"><i class="ri-bar-chart-2-line"></i></span> Stage volumes</a>
+    <a class="nav" href="#utm"><span class="cb-i"><i class="ri-links-line"></i></span> UTM plan</a>
+    <a class="nav" href="#cadence"><span class="cb-i"><i class="ri-calendar-check-line"></i></span> Weekly read cadence</a>
+    <a class="nav" href="#notes"><span class="cb-i"><i class="ri-information-line"></i></span> How to use this</a>
+  </aside>
+  <main class="content">
+    <div class="hero cherry">
+      <p class="crumbs"><a href="../index.html">Marketing Hub</a> / KPIs and Measurement</p>
+      <p class="eyebrow">How we know it worked</p>
+      <h1>KPIs and Measurement</h1>
+      <p>The measurement plan for the Open House campaign. It defines the funnel we are moving people through, the KPIs we watch, how every link is tagged for attribution, and the weekly rhythm for reading the numbers and adjusting.</p>
+      <div class="meta"><span class="pill">Open House Jul 16</span><span class="pill">Founding Cohort</span></div>
+    </div>
+    <div class="actionbar">
+      <a class="btn btn-ghost" href="../../index.html"><span class="cb-i"><i class="ri-stack-line"></i></span> Knowledge Base</a> <a class="btn btn-ghost" href="../index.html"><span class="cb-i"><i class="ri-home-4-line"></i></span> Hub</a>
+      <div class="spacer"></div>
+      <a class="btn btn-ghost" href="kpi-measurement.html" download><span class="cb-i"><i class="ri-download-2-line"></i></span> Download this doc</a>
+      <a class="btn btn-primary" href="#" onclick="window.print();return false;"><span class="cb-i"><i class="ri-printer-line"></i></span> Print / PDF</a>
+    </div>
+    <div class="wrap">
+
+      <!-- ===================== READ THIS FIRST ===================== -->
+      <div class="callout approval">
+        <span class="cb-i"><i class="ri-error-warning-line"></i></span>
+        <div>
+          <p class="ttl">Every numeric target on this page is a placeholder until approved</p>
+          <p class="body">No registration count, attendance rate, enrollment number, reach figure, or click-through rate below is a forecast or a commitment. Each one is marked [NEEDS APPROVAL] and is shown only to make the table and the sample chart legible. Replace them with grounded baselines and approved targets before this doc is used to judge performance.</p>
+        </div>
+      </div>
+
+      <!-- ===================== THE FUNNEL ===================== -->
+      <section class="section" id="funnel">
+        <h2><span class="cb-i"><i class="ri-filter-3-line"></i></span> The funnel</h2>
+        <p class="sub">The campaign goal is to generate free Open House registrations, then convert attendees into Founding Cohort enrollment. The funnel below names the stages we measure, from the first impression on social and email through to a founding seat taken. Registrations return through the OpenHouseModal into /api/leads as open_house leads, and every inbound link carries UTM tags and a campaign_id so each stage is attributable by channel and beat.</p>
+
+        <div class="diagram">
+          <div class="cap"><span class="cb-i"><i class="ri-git-merge-line"></i></span> Awareness to enrollment, stage by stage</div>
+          <pre class="mermaid">
+flowchart TD
+  A["Reach<br/>impressions on LinkedIn, X, Instagram, email opens"] --> B["Engagement<br/>clicks, reactions, replies, saves"]
+  B --> C["Landing visits<br/>env.openHouseLandingUrl with UTM and campaign_id"]
+  C --> D["Open House registrations<br/>open_house leads via the OpenHouseModal to /api/leads"]
+  D --> E["Open House attendance<br/>registrants who show up live on Jul 16"]
+  E --> F["Founding Cohort enrollment<br/>attendees who take one of 40 founding seats"]
+</pre>
+        </div>
+
+        <div class="callout info">
+          <span class="cb-i"><i class="ri-information-line"></i></span>
+          <div>
+            <p class="ttl">Free registration first, enrollment second</p>
+            <p class="body">All awareness and outbound copy drives to the free Open House. Pricing is revealed at the Open House, so the enrollment stage opens at and after the live event on July 16. Cohort 1 kicks off the following Thursday, July 23.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== KPI TARGETS ===================== -->
+      <section class="section" id="targets">
+        <h2><span class="cb-i"><i class="ri-flag-line"></i></span> KPI targets</h2>
+        <p class="sub">The metrics we report on, with placeholder targets so the table reads cleanly. The status column shows how a conditional cell would color once real numbers arrive. Green means on or ahead of target, amber means watch, red means behind. Right now every status is illustrative because there is no live data and no approved baseline.</p>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>KPI</th>
+                <th>What it measures</th>
+                <th>Target</th>
+                <th>Where it comes from</th>
+                <th>Illustrative status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Open House registrations</strong></td>
+                <td>Total open_house leads captured before and during the event</td>
+                <td class="num">[NEEDS APPROVAL]</td>
+                <td>/api/leads, filtered to open_house leads</td>
+                <td class="cell-good">On track (sample)</td>
+              </tr>
+              <tr>
+                <td><strong>Attendance rate</strong></td>
+                <td>Registrants who attend live, divided by total registrations</td>
+                <td class="num">[NEEDS APPROVAL]</td>
+                <td>Live attendance log against the registration list</td>
+                <td class="cell-warn">Watch (sample)</td>
+              </tr>
+              <tr>
+                <td><strong>Founding Cohort enrollment</strong></td>
+                <td>Attendees who take a founding seat. Cap is 40 seats</td>
+                <td class="num">[NEEDS APPROVAL] of 40 seats</td>
+                <td>Enrollment record, post event</td>
+                <td class="cell-good">On track (sample)</td>
+              </tr>
+              <tr>
+                <td><strong>Social reach</strong></td>
+                <td>Unique impressions across LinkedIn, X, and Instagram</td>
+                <td class="num">[NEEDS APPROVAL]</td>
+                <td>Native platform analytics per channel</td>
+                <td class="cell-warn">Watch (sample)</td>
+              </tr>
+              <tr>
+                <td><strong>Social engagement rate</strong></td>
+                <td>Reactions, replies, and saves divided by reach</td>
+                <td class="num">[NEEDS APPROVAL]</td>
+                <td>Native platform analytics per channel</td>
+                <td class="cell-bad">Behind (sample)</td>
+              </tr>
+              <tr>
+                <td><strong>Click-through rate (CTR)</strong></td>
+                <td>Landing visits divided by engaged clicks on the registration link</td>
+                <td class="num">[NEEDS APPROVAL]</td>
+                <td>UTM-tagged visits to env.openHouseLandingUrl</td>
+                <td class="cell-info">No baseline yet</td>
+              </tr>
+              <tr>
+                <td><strong>Email open and click rate</strong></td>
+                <td>Opens and clicks on the approved five-email sequence</td>
+                <td class="num">[NEEDS APPROVAL]</td>
+                <td>Email platform reporting, owned channel</td>
+                <td class="cell-info">No baseline yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <span class="cb-i"><i class="ri-price-tag-3-line"></i></span>
+          <div>
+            <p class="ttl">Targets need a grounded baseline before they become real</p>
+            <p class="body">A target is only meaningful next to a baseline. Until we have a baseline from past Colaberry sends or a prior event, treat every number here as a placeholder. The seat cap of 40 is the one hard, approved number on this page. Enrollment cannot exceed it.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== STAGE VOLUMES CHART ===================== -->
+      <section class="section" id="chart">
+        <h2><span class="cb-i"><i class="ri-bar-chart-2-line"></i></span> Stage volumes</h2>
+        <p class="sub">A bar view of the same funnel, showing how volume narrows from reach down to enrolled seats. This is the shape we expect a healthy funnel to take. The numbers themselves are illustrative placeholders, not a forecast, chosen only to draw a readable chart.</p>
+
+        <div class="chart-card">
+          <div class="cap">Funnel stage volumes (illustrative placeholder values, not a forecast)</div>
+          <div class="chart-box">
+            <canvas id="funnelChart" aria-label="Bar chart of funnel stage volumes from reach to enrolled seats. All values are illustrative placeholders, not forecasts." role="img"></canvas>
+          </div>
+        </div>
+
+        <div class="callout danger">
+          <span class="cb-i"><i class="ri-alert-line"></i></span>
+          <div>
+            <p class="ttl">Do not read these bars as a prediction</p>
+            <p class="body">The sample values in this chart exist purely to render a legible shape. They are not goals, projections, or promises. Replace them with live, attributed data once the campaign is running, and only then read the proportions as a real funnel.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== UTM PLAN ===================== -->
+      <section class="section" id="utm">
+        <h2><span class="cb-i"><i class="ri-links-line"></i></span> UTM plan</h2>
+        <p class="sub">Every outbound link points to env.openHouseLandingUrl and carries a consistent set of UTM parameters plus the campaign_id, so each channel, beat, and creative is attributable when registrations return as open_house leads. Use lowercase, no spaces, and the exact values below so reporting stays clean.</p>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th>utm_source</th>
+                <th>utm_medium</th>
+                <th>utm_campaign</th>
+                <th>utm_content (example)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span></td>
+                <td><code>linkedin</code></td>
+                <td><code>social_organic</code></td>
+                <td><code>open_house_jul16</code></td>
+                <td><code>beat1_the_shift</code></td>
+              </tr>
+              <tr>
+                <td><span class="chchip ch-x"><i class="ri-twitter-x-line"></i> X</span></td>
+                <td><code>x</code></td>
+                <td><code>social_organic</code></td>
+                <td><code>open_house_jul16</code></td>
+                <td><code>beat2_user_to_builder</code></td>
+              </tr>
+              <tr>
+                <td><span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span></td>
+                <td><code>instagram</code></td>
+                <td><code>social_organic</code></td>
+                <td><code>open_house_jul16</code></td>
+                <td><code>beat3_carousel</code></td>
+              </tr>
+              <tr>
+                <td><span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span></td>
+                <td><code>email</code></td>
+                <td><code>owned_email</code></td>
+                <td><code>open_house_jul16</code></td>
+                <td><code>beat4_forty_seats</code></td>
+              </tr>
+              <tr>
+                <td><span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn (paid, if used)</span></td>
+                <td><code>linkedin</code></td>
+                <td><code>paid_social</code></td>
+                <td><code>open_house_jul16</code></td>
+                <td><code>alumni_retarget</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="h">Anatomy of a tagged link</h3>
+        <p class="prose">All links resolve to the same destination and carry the same campaign_id. The campaign engine bakes UTM and campaign_id onto every link at send time, so the team does not hand-build these. The pattern below is the reference for what a finished link looks like.</p>
+
+        <div class="copyblock">
+          <div class="label">Reference link pattern</div>
+          <div class="copytext">env.openHouseLandingUrl?utm_source=linkedin&amp;utm_medium=social_organic&amp;utm_campaign=open_house_jul16&amp;utm_content=beat1_the_shift&amp;campaign_id=[campaign_id]</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <div class="grid cols-3">
+          <div class="card accent-top">
+            <h4><span class="badge info">Destination</span> env.openHouseLandingUrl</h4>
+            <p class="prose">The Open House landing page. The human-facing registration URL token is [reg link], confirmed from Basecamp 9946499609.</p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="badge info">Stitch key</span> campaign_id</h4>
+            <p class="prose">Ties every link, post, and email back to one campaign. The value [campaign_id] is a token to fill from the campaign engine.</p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="badge locked">Locked</span> Same campaign, every beat</h4>
+            <p class="prose">utm_campaign stays open_house_jul16 across all five beats. The beat and creative live in utm_content so beats stay comparable.</p>
+          </div>
+        </div>
+
+        <div class="callout approval">
+          <span class="cb-i"><i class="ri-error-warning-line"></i></span>
+          <div>
+            <p class="ttl">Tokens to resolve before any link goes live</p>
+            <p class="body">[reg link] is the Open House registration URL from Basecamp 9946499609. [campaign_id] is the campaign engine identifier. Both must be filled before the first send so attribution is intact from the very first click.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== WEEKLY READ CADENCE ===================== -->
+      <section class="section" id="cadence">
+        <h2><span class="cb-i"><i class="ri-calendar-check-line"></i></span> Weekly read cadence</h2>
+        <p class="sub">The campaign runway is short, so the read rhythm is tight. Each week has one clear question to answer and one decision it unlocks. As the event nears, the read frequency increases from weekly to near daily.</p>
+
+        <div class="steps">
+          <div class="step">
+            <h4>Week of Jun 30. Pre-launch setup</h4>
+            <p>Confirm the UTM plan and campaign_id are wired, registrations are landing as open_house leads, and dashboards read cleanly. Lock baselines where they exist. Decision. Are we ready to launch Beat 1 on Jul 7.</p>
+          </div>
+          <div class="step">
+            <h4>Week of Jul 7. Awareness ramp</h4>
+            <p>Read reach, engagement, and CTR by channel after Beat 1 and Beat 2. Question. Which channel and beat is driving registrations most efficiently. Decision. Where to lean in for Beat 3.</p>
+          </div>
+          <div class="step">
+            <h4>Week of Jul 14. Final push</h4>
+            <p>Read daily through the event. Watch registration pace against the runway, then attendance on Jul 16. Question. Are we pacing toward enough registrations. Decision. Tighten Beat 4 and Beat 5 spacing if pace lags.</p>
+          </div>
+          <div class="step">
+            <h4>Week of Jul 21. Conversion review</h4>
+            <p>Read attendance rate and Founding Cohort enrollment against the 40-seat cap ahead of the Jul 23 kickoff. Question. How well did attendees convert. Decision. Capture learnings for the next cohort runway.</p>
+          </div>
+        </div>
+
+        <div class="callout success">
+          <span class="cb-i"><i class="ri-pulse-line"></i></span>
+          <div>
+            <p class="ttl">One question and one decision per read</p>
+            <p class="body">Keep each weekly read short. Answer the question, make the decision, and adjust the calendar. Beat dates are an approved suggestion and stay adjustable as registration data comes in.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== HOW TO USE ===================== -->
+      <section class="section" id="notes">
+        <h2><span class="cb-i"><i class="ri-information-line"></i></span> How to use this</h2>
+        <p class="sub">This doc is the measurement layer for the campaign. Read it alongside the campaign brief, the content calendar, and the five-beat sequence.</p>
+
+        <div class="dodont">
+          <div class="col do">
+            <h4><span class="cb-i"><i class="ri-checkbox-circle-line"></i></span> Do</h4>
+            <ul>
+              <li>Replace every [NEEDS APPROVAL] target with a grounded baseline and an approved number before judging performance.</li>
+              <li>Treat the sample chart values as illustrative shape only, never as a forecast.</li>
+              <li>Keep utm_campaign as open_house_jul16 across all beats so they stay comparable.</li>
+              <li>Read attribution from open_house leads in /api/leads tied to campaign_id.</li>
+            </ul>
+          </div>
+          <div class="col dont">
+            <h4><span class="cb-i"><i class="ri-close-circle-line"></i></span> Do not</h4>
+            <ul>
+              <li>Do not report a placeholder number as a result or a commitment.</li>
+              <li>Do not exceed the 40 founding seat cap in any enrollment target.</li>
+              <li>Do not put price in any awareness or outbound metric copy. Pricing is revealed at the Open House.</li>
+              <li>Do not ship links without [reg link] and [campaign_id] resolved.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <div class="foot">
+        KPIs and Measurement. Open House Marketing Hub. Grounded in the approved strategy (Basecamp 9946499631) and Ali-confirmed facts (2026-06-25). All numeric targets and all chart values are illustrative placeholders marked [NEEDS APPROVAL], not forecasts or commitments. Draft only, pending final review.
+      </div>
+    </div>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="../assets/hub.js"></script>
+<script>
+(function () {
+  function init() {
+    var el = document.getElementById("funnelChart");
+    if (!el || !window.Chart) return;
+    var css = getComputedStyle(document.documentElement);
+    var v = function (n, f) { return (css.getPropertyValue(n) || f).trim(); };
+    var grid = v("--border-subtle", "#E5E5E5");
+    var text = v("--text-muted", "#555");
+    // Illustrative placeholder values only. NOT a forecast. Do not read as goals.
+    var labels = ["Reach", "Engagement", "Landing visits", "Registrations", "Attendance", "Enrolled seats"];
+    var sample = [100000, 6000, 2400, 600, 360, 40];
+    new window.Chart(el, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Illustrative placeholder volume (not a forecast)",
+          data: sample,
+          backgroundColor: [
+            v("--chart-1", "#367895"),
+            v("--chart-6", "#2BA39A"),
+            v("--chart-3", "#5BA63C"),
+            v("--chart-4", "#E8920C"),
+            v("--chart-2", "#FB2832"),
+            v("--chart-5", "#7A5AF0")
+          ],
+          borderWidth: 0,
+          borderRadius: 6,
+          maxBarThickness: 64
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, labels: { color: text } },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                return " " + ctx.parsed.y.toLocaleString() + " (illustrative placeholder)";
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: text } },
+          y: {
+            beginAtZero: true,
+            grid: { color: grid },
+            ticks: {
+              color: text,
+              callback: function (val) { return Number(val).toLocaleString(); }
+            }
+          }
+        }
+      }
+    });
+  }
+  if (document.readyState !== "loading") init();
+  else document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>

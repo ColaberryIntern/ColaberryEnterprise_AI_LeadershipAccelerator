@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
 import Pagination from '../../components/ui/Pagination';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,23 +53,34 @@ interface Forecast {
 
 type TabKey = 'pipeline' | 'forecast' | 'at_risk';
 
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const LEVEL_BADGES: Record<string, { bg: string; label: string }> = {
-  cold_prospect: { bg: 'bg-secondary', label: 'Cold Prospect' },
-  warming: { bg: 'bg-info', label: 'Warming' },
-  qualified: { bg: 'bg-primary', label: 'Qualified' },
-  hot_opportunity: { bg: 'bg-warning text-dark', label: 'Hot Opportunity' },
-  ready_to_close: { bg: 'bg-success', label: 'Ready to Close' },
+// Opportunity level -> semantic badge tone + label (was hardcoded bg-* classes).
+const LEVEL_BADGES: Record<string, { tone: BadgeTone; label: string }> = {
+  cold_prospect: { tone: 'neutral', label: 'Cold Prospect' },
+  warming: { tone: 'info', label: 'Warming' },
+  qualified: { tone: 'primary', label: 'Qualified' },
+  hot_opportunity: { tone: 'warning', label: 'Hot Opportunity' },
+  ready_to_close: { tone: 'success', label: 'Ready to Close' },
 };
 
-const STALL_BADGES: Record<string, { bg: string; label: string }> = {
-  none: { bg: '', label: '' },
-  low: { bg: 'bg-warning text-dark', label: 'Low' },
-  medium: { bg: 'bg-warning text-dark', label: 'Medium' },
-  high: { bg: 'bg-danger', label: 'High' },
+// Stall risk -> tone + label (was hardcoded bg-* classes).
+const STALL_BADGES: Record<string, { tone: BadgeTone; label: string }> = {
+  none: { tone: 'neutral', label: '' },
+  low: { tone: 'warning', label: 'Low' },
+  medium: { tone: 'warning', label: 'Medium' },
+  high: { tone: 'danger', label: 'High' },
+};
+
+// Recommended-action priority -> tone (was hardcoded bg-danger/bg-warning/bg-info).
+const PRIORITY_TONE: Record<string, BadgeTone> = {
+  critical: 'danger',
+  high: 'warning',
+  medium: 'info',
 };
 
 const PIPELINE_LABELS: Record<string, string> = {
@@ -83,10 +95,6 @@ const PIPELINE_LABELS: Record<string, string> = {
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +161,27 @@ export default function AdminOpportunitiesPage() {
     fetchSummaryAndForecast();
   }, [fetchSummaryAndForecast]);
 
+  // Per-page trust signal (Basecamp todo 10027085963) derived from scoring freshness.
+  const trust: TrustSignal = useMemo(() => {
+    const atRisk = summary ? (summary.stall_counts.medium || 0) + (summary.stall_counts.high || 0) : 0;
+    return {
+      level: 'live',
+      source: 'opportunities table',
+      updatedAt: new Date().toISOString(),
+      summary: summary
+        ? `${summary.total_scored} opportunities scored, ${atRisk} at risk.`
+        : 'Opportunity scores stream live from the pipeline.',
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: 'live',
+          evidence: [{ label: 'Scored', value: summary ? String(summary.total_scored) : '0' }],
+        },
+      ],
+    };
+  }, [summary]);
+
   const handleRecompute = async () => {
     setRecomputing(true);
     try {
@@ -173,7 +202,7 @@ export default function AdminOpportunitiesPage() {
 
   const sortIcon = (field: string) => {
     if (sort !== field) return '';
-    return order === 'DESC' ? ' \u25BC' : ' \u25B2';
+    return order === 'DESC' ? ' ▼' : ' ▲';
   };
 
   // At-risk filters
@@ -184,54 +213,41 @@ export default function AdminOpportunitiesPage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div>
-      <Breadcrumb items={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Opportunities' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h4 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Opportunities</h4>
-        <button className="btn btn-sm btn-outline-primary" onClick={handleRecompute} disabled={recomputing}>
-          {recomputing ? 'Recomputing...' : 'Recompute Scores'}
-        </button>
-      </div>
-
-      {/* Summary KPIs */}
-      {summary && (
-        <div className="row g-3 mb-4">
-          <div className="col-sm-6 col-lg-3">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body py-3">
-                <div className="text-muted small">Total Scored</div>
-                <div className="fw-bold fs-4" style={{ color: 'var(--color-primary)' }}>{summary.total_scored}</div>
-              </div>
+    <>
+      <PageHeader
+        title="Opportunities"
+        icon="line-chart-line"
+        subtitle="Scored pipeline, weighted forecast, and at-risk opportunities across every active lead."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Opportunities' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-sm btn-outline-primary" onClick={handleRecompute} disabled={recomputing}>
+            <i className="ri-refresh-line" aria-hidden="true" /> {recomputing ? 'Recomputing...' : 'Recompute Scores'}
+          </button>
+        }
+      >
+        {summary && (
+          <div className="row g-3">
+            <div className="col-6 col-lg-3">
+              <StatCard label="Total Scored" value={summary.total_scored} icon="database-2-line" tone="primary" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Avg Score" value={summary.avg_score} icon="bar-chart-box-line" tone="info" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Pipeline Value" value={formatCurrency(summary.total_pipeline_value)} icon="funds-line" tone="success" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="At Risk"
+                value={(summary.stall_counts.medium || 0) + (summary.stall_counts.high || 0)}
+                icon="error-warning-line"
+                tone={((summary.stall_counts.medium || 0) + (summary.stall_counts.high || 0)) > 0 ? 'danger' : 'neutral'}
+              />
             </div>
           </div>
-          <div className="col-sm-6 col-lg-3">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body py-3">
-                <div className="text-muted small">Avg Score</div>
-                <div className="fw-bold fs-4" style={{ color: 'var(--color-primary)' }}>{summary.avg_score}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-sm-6 col-lg-3">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body py-3">
-                <div className="text-muted small">Pipeline Value</div>
-                <div className="fw-bold fs-4" style={{ color: 'var(--color-accent)' }}>{formatCurrency(summary.total_pipeline_value)}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-sm-6 col-lg-3">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body py-3">
-                <div className="text-muted small">At Risk</div>
-                <div className="fw-bold fs-4" style={{ color: 'var(--color-secondary)' }}>
-                  {(summary.stall_counts.medium || 0) + (summary.stall_counts.high || 0)}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </PageHeader>
 
       {/* Tabs */}
       <ul className="nav nav-tabs mb-4">
@@ -267,7 +283,7 @@ export default function AdminOpportunitiesPage() {
           </div>
 
           {/* Table */}
-          <div className="card border-0 shadow-sm">
+          <SectionCard padded={false}>
             <div className="table-responsive">
               <table className="table table-hover mb-0">
                 <thead className="table-light">
@@ -303,9 +319,9 @@ export default function AdminOpportunitiesPage() {
                           <span className="fw-bold">{row.score}</span>
                           <div className="text-muted" style={{ fontSize: '0.65rem' }}>{Math.round(row.conversion_probability * 100)}% prob</div>
                         </td>
-                        <td><span className={`badge ${lb.bg}`}>{lb.label}</span></td>
+                        <td><StatusBadge label={lb.label} tone={lb.tone} /></td>
                         <td><span className="small">{PIPELINE_LABELS[row.lead.pipeline_stage] || row.lead.pipeline_stage}</span></td>
-                        <td>{sb.label && <span className={`badge ${sb.bg}`}>{sb.label}</span>}</td>
+                        <td>{sb.label && <StatusBadge label={sb.label} tone={sb.tone} />}</td>
                         <td className="small">{row.days_since_last_activity === 999 ? 'Never' : `${row.days_since_last_activity}d ago`}</td>
                         <td className="small">{row.days_in_pipeline}d</td>
                         <td>
@@ -321,7 +337,7 @@ export default function AdminOpportunitiesPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionCard>
 
           {totalPages > 1 && (
             <div className="mt-3">
@@ -337,34 +353,18 @@ export default function AdminOpportunitiesPage() {
           {/* KPI Cards */}
           <div className="row g-3 mb-4">
             <div className="col-sm-6 col-lg-4">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body py-3">
-                  <div className="text-muted small">Projected Enrollments</div>
-                  <div className="fw-bold fs-4" style={{ color: 'var(--color-primary)' }}>{forecast.total_projected_enrollments}</div>
-                </div>
-              </div>
+              <StatCard label="Projected Enrollments" value={forecast.total_projected_enrollments} icon="graduation-cap-line" tone="primary" />
             </div>
             <div className="col-sm-6 col-lg-4">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body py-3">
-                  <div className="text-muted small">Projected Revenue</div>
-                  <div className="fw-bold fs-4" style={{ color: 'var(--color-accent)' }}>{formatCurrency(forecast.total_projected_revenue)}</div>
-                </div>
-              </div>
+              <StatCard label="Projected Revenue" value={formatCurrency(forecast.total_projected_revenue)} icon="money-dollar-circle-line" tone="success" />
             </div>
             <div className="col-sm-6 col-lg-4">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body py-3">
-                  <div className="text-muted small">Weighted Pipeline</div>
-                  <div className="fw-bold fs-4" style={{ color: 'var(--color-primary)' }}>{formatCurrency(forecast.weighted_pipeline_value)}</div>
-                </div>
-              </div>
+              <StatCard label="Weighted Pipeline" value={formatCurrency(forecast.weighted_pipeline_value)} icon="scales-3-line" tone="info" />
             </div>
           </div>
 
           {/* Breakdown Table */}
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">Forecast by Opportunity Level</div>
+          <SectionCard title="Forecast by Opportunity Level" icon="line-chart-line" padded={false}>
             <div className="table-responsive">
               <table className="table table-hover mb-0">
                 <thead className="table-light">
@@ -381,7 +381,7 @@ export default function AdminOpportunitiesPage() {
                     const lb = LEVEL_BADGES[row.level] || LEVEL_BADGES.cold_prospect;
                     return (
                       <tr key={row.level}>
-                        <td><span className={`badge ${lb.bg}`}>{lb.label}</span></td>
+                        <td><StatusBadge label={lb.label} tone={lb.tone} /></td>
                         <td className="text-end">{row.count}</td>
                         <td className="text-end">{Math.round(row.conversion_rate * 100)}%</td>
                         <td className="text-end">{row.projected_enrollments}</td>
@@ -401,7 +401,7 @@ export default function AdminOpportunitiesPage() {
                 </tfoot>
               </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
       )}
 
@@ -411,9 +411,9 @@ export default function AdminOpportunitiesPage() {
           {loading ? (
             <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>
           ) : atRiskRows.length === 0 ? (
-            <div className="card border-0 shadow-sm">
-              <div className="card-body text-center py-4 text-muted">No at-risk opportunities found. Great news!</div>
-            </div>
+            <SectionCard>
+              <div className="text-center py-4 text-muted">No at-risk opportunities found. Great news!</div>
+            </SectionCard>
           ) : (
             <div className="row g-3">
               {atRiskRows.sort((a, b) => {
@@ -423,39 +423,38 @@ export default function AdminOpportunitiesPage() {
               }).map(row => {
                 const lb = LEVEL_BADGES[row.opportunity_level] || LEVEL_BADGES.cold_prospect;
                 const sb = STALL_BADGES[row.stall_risk] || STALL_BADGES.none;
+                const accent = row.stall_risk === 'high' ? 'var(--status-danger)' : 'var(--status-warning)';
                 return (
                   <div key={row.id} className="col-lg-6">
-                    <div className="card border-0 shadow-sm h-100" style={{ borderLeft: `4px solid ${row.stall_risk === 'high' ? '#dc3545' : '#ffc107'}` }}>
-                      <div className="card-body">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <div>
-                            <Link to={`/admin/leads/${row.lead.id}`} className="fw-bold text-decoration-none">
-                              {row.lead.name}
-                            </Link>
-                            <div className="text-muted small">{row.lead.company} &middot; {PIPELINE_LABELS[row.lead.pipeline_stage] || row.lead.pipeline_stage}</div>
-                          </div>
-                          <div className="text-end">
-                            <span className={`badge ${lb.bg} me-1`}>{row.score}</span>
-                            <span className={`badge ${sb.bg}`}>{sb.label} Risk</span>
-                          </div>
+                    <div className="h-100" style={{ borderLeft: `4px solid ${accent}`, borderRadius: 8 } as React.CSSProperties}>
+                    <SectionCard className="h-100">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <Link to={`/admin/leads/${row.lead.id}`} className="fw-bold text-decoration-none">
+                            {row.lead.name}
+                          </Link>
+                          <div className="text-muted small">{row.lead.company} &middot; {PIPELINE_LABELS[row.lead.pipeline_stage] || row.lead.pipeline_stage}</div>
                         </div>
-                        {row.stall_reason && (
-                          <div className="small text-muted mb-2">{row.stall_reason}</div>
-                        )}
-                        {row.recommended_actions && row.recommended_actions.length > 0 && (
-                          <div>
-                            <div className="small fw-medium mb-1">Recommended Actions:</div>
-                            {row.recommended_actions.map((a, i) => (
-                              <div key={i} className="d-flex align-items-start gap-2 mb-1">
-                                <span className={`badge ${a.priority === 'critical' ? 'bg-danger' : a.priority === 'high' ? 'bg-warning text-dark' : 'bg-info'}`} style={{ fontSize: '0.65rem' }}>
-                                  {a.priority}
-                                </span>
-                                <span className="small">{a.action}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <div className="d-flex align-items-center gap-1">
+                          <StatusBadge label={String(row.score)} tone={lb.tone} />
+                          <StatusBadge label={`${sb.label} Risk`} tone={sb.tone} />
+                        </div>
                       </div>
+                      {row.stall_reason && (
+                        <div className="small text-muted mb-2">{row.stall_reason}</div>
+                      )}
+                      {row.recommended_actions && row.recommended_actions.length > 0 && (
+                        <div>
+                          <div className="small fw-medium mb-1">Recommended Actions:</div>
+                          {row.recommended_actions.map((a, i) => (
+                            <div key={i} className="d-flex align-items-start gap-2 mb-1">
+                              <StatusBadge label={a.priority} tone={PRIORITY_TONE[a.priority] || 'info'} />
+                              <span className="small">{a.action}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </SectionCard>
                     </div>
                   </div>
                 );
@@ -464,6 +463,6 @@ export default function AdminOpportunitiesPage() {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
