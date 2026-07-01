@@ -43,6 +43,18 @@ export interface OnboardingProfileView {
   has_resume: boolean;
 }
 
+export interface FreeSignupResult {
+  jwt: string;
+  enrollment: { id: string; full_name: string; email: string; tier: string };
+  created: boolean;
+}
+
+/** Public: create (or reuse) a free guest account and get a participant session JWT. */
+export async function freeSignup(body: { full_name: string; email: string }): Promise<FreeSignupResult> {
+  const { data } = await portalApi.post<FreeSignupResult>('/api/portal/free-signup', body);
+  return data;
+}
+
 export async function fetchPoints(): Promise<PointsSummary> {
   const { data } = await portalApi.get<PointsSummary>('/api/portal/points');
   return data;

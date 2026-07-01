@@ -4,6 +4,7 @@ import { ParticipantAuthProvider } from '../contexts/ParticipantAuthContext';
 import PortalProtectedRoute from '../components/PortalProtectedRoute';
 import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
+import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
 import PortalDashboardPage from '../pages/portal/PortalDashboardPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
@@ -35,6 +36,7 @@ import SystemView from '../pages/project/SystemView';
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
     <Route path="/portal/login" element={<PortalLoginPage />} />
+    <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
     <Route element={<PortalProtectedRoute />}>
       {/* Today shell (Design E onboarding experience) renders its own chrome,
