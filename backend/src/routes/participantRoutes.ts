@@ -5,6 +5,7 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
+import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
@@ -155,8 +156,13 @@ router.post('/api/portal/project-dna', requireParticipant, async (req, res) => {
     return;
   }
   try {
-    const record = await saveProjectDna(req.participant!.sub, parse.data);
+    const enrollmentId = req.participant!.sub;
+    const record = await saveProjectDna(enrollmentId, parse.data);
     res.status(201).json(record);
+    // Fire-and-forget: kick off requirements generation; does not block the response
+    startRequirementsGeneration(enrollmentId).catch(err =>
+      console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'requirements_gen_trigger_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message, enrollment_id: enrollmentId } }))
+    );
   } catch (err: any) {
     const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
     console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'project_dna_save_failed', correlation_id: correlationId, outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));

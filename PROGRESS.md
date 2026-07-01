@@ -6878,6 +6878,29 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
   - Verification: post-deploy, the 458-stuck backlog clears on the first cycle (stuck-due count -> ~0, fetchable count rises); AI ROI Pilot Touch-2 shows 99 sent.
   - Notes: Subject-matched comm-log is the proof-of-send (each touch has a unique subject per lead) so re-sending is avoided. Lesson reinforced: deploy after-hours; mid-window restarts strand in-flight sends (this reconciler now self-corrects that within one cycle).
 
+### Epic 1 — ProjectDnaWizard → Requirements → Native Student Tasks (2026-06-25)
+- [x] **Wire ProjectDna → requirements generation → student task lists (BC #9985689231)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-c8r2
+  - What changed:
+    - `backend/src/models/StudentTaskList.ts` (new): Sequelize model for `student_task_lists` table — one row per requirements cluster per project (unique on `project_id + cluster`). Fields: `project_id`, `enrollment_id`, `cluster`, `title`, `status` (not_started/in_progress/complete), `position`.
+    - `backend/src/models/StudentTask.ts` (new): Sequelize model for `student_tasks` table — one row per requirement per project (unique on `project_id + requirement_key`). Fields: `task_list_id`, `project_id`, `requirement_map_id` (FK to requirements_maps), `requirement_key`, `title`, `description`, `status` (not_started/in_progress/complete/blocked), `position`.
+    - `backend/src/services/studentTaskService.ts` (new): `createTasksFromRequirements(projectId)` — reads all active RequirementsMap rows for the project, groups by cluster prefix (e.g., `AUTH.001` → cluster `AUTH`), creates/finds one `StudentTaskList` per cluster and one `StudentTask` per requirement. Idempotent via `findOrCreate` on unique keys.
+    - `backend/src/models/index.ts` (modified): imports + associations for `StudentTaskList` and `StudentTask`; exports added.
+    - `backend/src/routes/participantRoutes.ts` (modified): `POST /api/portal/project-dna` now fires `startRequirementsGeneration(enrollmentId)` fire-and-forget after DNA save returns 201.
+    - `backend/src/services/requirementsGenerationService.ts` (modified): `executeJob()` now calls `createTasksFromRequirements(project.id)` fire-and-forget after job is marked `completed` and portfolio refresh fires.
+    - `backend/src/services/__tests__/studentTaskService.test.ts` (new): 7 unit tests — happy path, empty requirements, project not found, cluster derivation, idempotency, title truncation, error propagation.
+  - Verification: `npx tsc --noEmit` clean (0 errors); `npx jest studentTaskService` 7/7 pass.
+- [x] **DB migration + trigger chain smoke test + post-DNA success screen (BC #9985689231)**
+  - Date: 2026-06-25
+  - Session: CC-20260625-k3p7
+  - What changed:
+    - `backend/src/seeds/seedStudentTasks.ts` (new): idempotent raw-SQL migration (`CREATE TABLE IF NOT EXISTS`) for `student_task_lists` and `student_tasks`, with all FK constraints, indexes, and ENUM checks. Run manually against `accelerator_dev1`; both tables confirmed via psql.
+    - `frontend/src/pages/portal/ProjectDnaWizard.tsx` (modified): post-DNA `done` state redesigned — added two info cards ("Generating your requirements document — 15–30 min background" and "Your project tasks will be ready shortly after — one task list per system area") so students understand what happens next. CTA button now navigates to `/portal/home` (was `/portal/project/blueprint`). Footer: "You can leave this page — your requirements will be ready when you come back."
+    - End-to-end trigger chain verified locally: `POST /api/portal/project-dna` → 201 → `startRequirementsGeneration` fires in background → job row created → `executeJob` runs → reaches OpenAI (returns 401 with no local key, as expected). Success screen confirmed in browser (Docker nginx rebuild).
+  - Verification: `tsc --noEmit` clean; nginx container rebuilt and success screen confirmed live at `localhost:9999/portal/project-builder` — Kes confirmed via screenshot.
+  - Notes: OpenAI 401 is expected in local dev (no API key in container env). Full task seeding path (requirements → tasks) requires prod deploy with a real OpenAI key. `seedStudentTasks.ts` not yet wired into server startup — must be run manually or wired to auto-run at boot (pending approval).
+  - Notes: Tables are not yet created in DB — Sequelize models define the schema but migrations must be run on dev and prod via `sync({alter: true})` or raw DDL. Task seeding runs after requirements generation job completes (~15-30 min latency on first submit). Fire-and-forget means DNA save returns instantly.
 - [x] **Wire Week 5 Anthropic course: seed curriculum_course_links into server startup (BC #9984355973)**
   - Date: 2026-06-25
   - Session: CC-20260625-c8r2
