@@ -20,6 +20,7 @@ import { Op } from 'sequelize';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getProjectByEnrollment } from '../services/projectService';
 import RequirementsMap from '../models/RequirementsMap';
+import { generateStudentPrompt, type ReqCategory } from '../services/students/studentPromptService';
 
 const router = Router();
 
@@ -27,9 +28,11 @@ const DONE_STATUSES = ['verified', 'auto_verified'];
 
 // ---------------------------------------------------------------------------
 // Urgency scoring (deterministic, mirrors priorityEngineService pattern)
+// ReqCategory is defined in studentPromptService and re-exported here for
+// backward compatibility with existing tests.
 // ---------------------------------------------------------------------------
 
-export type ReqCategory = 'build' | 'integrate' | 'deploy' | 'test' | 'design' | 'default';
+export type { ReqCategory };
 
 const STATUS_BASE: Record<string, number> = {
   unmatched: 60,
@@ -70,29 +73,6 @@ export function scoreRequirement(req: RequirementsMap): { urgency: number; cat: 
 }
 
 // ---------------------------------------------------------------------------
-// Claude Code prompt generation (deterministic templates, no LLM)
-// ---------------------------------------------------------------------------
-
-const PROMPT_TEMPLATES: Record<ReqCategory, (text: string) => string> = {
-  build: (text) =>
-    `claude --project . "Implement this requirement: ${text}\\n\\nSteps:\\n1. Read the existing codebase to understand patterns.\\n2. Implement the requirement following those patterns.\\n3. Write a brief test if logic is non-trivial.\\n4. Commit with message: feat: <what you built>"`,
-  integrate: (text) =>
-    `claude --project . "Wire up this integration: ${text}\\n\\nSteps:\\n1. Check if any relevant env vars or credentials are already configured.\\n2. Implement the integration with a timeout and error handler.\\n3. Test the happy path locally.\\n4. Commit: feat: integrate <service name>"`,
-  deploy: (text) =>
-    `claude --project . "Set up deployment for: ${text}\\n\\nSteps:\\n1. Review the current Dockerfile and docker-compose if present.\\n2. Add or update the deploy configuration.\\n3. Test the container builds cleanly (docker build .).\\n4. Commit: chore: add deployment config for <service>"`,
-  test: (text) =>
-    `claude --project . "Write tests for: ${text}\\n\\nSteps:\\n1. Identify the function or module to test.\\n2. Write happy-path + one failure-path test.\\n3. Run tests locally to confirm they pass.\\n4. Commit: test: add coverage for <what you tested>"`,
-  design: (text) =>
-    `claude --project . "Build the UI for: ${text}\\n\\nSteps:\\n1. Identify the component or page that needs this design work.\\n2. Implement the layout using existing component patterns (no new design system).\\n3. Check that it renders correctly on a 1280px viewport.\\n4. Commit: feat(ui): <what you built>"`,
-  default: (text) =>
-    `claude --project . "Complete this requirement: ${text}\\n\\nSteps:\\n1. Read the codebase to understand context.\\n2. Implement the requirement.\\n3. Verify it works as described.\\n4. Commit your changes with a descriptive message."`,
-};
-
-export function buildPrompt(text: string, cat: ReqCategory): string {
-  return PROMPT_TEMPLATES[cat](text.replace(/"/g, '\\"'));
-}
-
-// ---------------------------------------------------------------------------
 // Shared queue builder (used by /my-queue and /run-my-day)
 // ---------------------------------------------------------------------------
 
@@ -108,7 +88,13 @@ export interface StudentQueueItemShape {
   rank: number;
 }
 
-async function fetchScoredQueue(projectId: string, limit: number): Promise<StudentQueueItemShape[]> {
+async function fetchScoredQueue(
+  projectId: string,
+  limit: number,
+  githubRepoUrl: string | null = null,
+  projectName: string | null = null,
+  organizationName: string | null = null,
+): Promise<StudentQueueItemShape[]> {
   const rows = await RequirementsMap.findAll({
     where: {
       project_id: projectId,
@@ -122,6 +108,7 @@ async function fetchScoredQueue(projectId: string, limit: number): Promise<Stude
   return rows
     .map((r) => {
       const { urgency, cat } = scoreRequirement(r);
+      const filePaths: string[] = r.github_file_paths || [];
       return {
         id: r.id,
         requirement_key: r.requirement_key,
@@ -129,8 +116,19 @@ async function fetchScoredQueue(projectId: string, limit: number): Promise<Stude
         status: r.status,
         urgency_score: urgency,
         category: cat,
-        claude_code_prompt: buildPrompt(r.requirement_text, cat),
-        github_file_paths: r.github_file_paths || [],
+        claude_code_prompt: generateStudentPrompt({
+          id: r.id,
+          requirement_key: r.requirement_key,
+          requirement_text: r.requirement_text,
+          status: r.status,
+          category: cat,
+          urgency_score: urgency,
+          github_file_paths: filePaths,
+          github_repo_url: githubRepoUrl,
+          project_name: projectName,
+          organization_name: organizationName,
+        }),
+        github_file_paths: filePaths,
       };
     })
     .sort((a, b) => b.urgency_score - a.urgency_score)
@@ -152,7 +150,7 @@ router.get('/api/portal/student-ops/my-queue', requireParticipant, async (req: R
       return;
     }
 
-    const items = await fetchScoredQueue(project.id, 20);
+    const items = await fetchScoredQueue(project.id, 20, project.github_repo_url, project.name, project.organization_name);
     res.json({ items, total: items.length, project_id: project.id, generated_at: new Date().toISOString() });
   } catch (err: any) {
     console.error(JSON.stringify({
@@ -180,7 +178,7 @@ router.get('/api/portal/student-ops/run-my-day', requireParticipant, async (req:
       return;
     }
 
-    const items = await fetchScoredQueue(project.id, limit);
+    const items = await fetchScoredQueue(project.id, limit, project.github_repo_url, project.name, project.organization_name);
     res.json({
       tasks: items,
       total: items.length,
