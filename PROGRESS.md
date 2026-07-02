@@ -7497,3 +7497,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - `backend/src/services/lib/catalogFallback.ts`: added W6 (Model Context Protocol: Advanced Topics → `anthropic.skilljar.com/model-context-protocol-advanced-topics`) and W7 (Introduction to Subagents → `anthropic.skilljar.com/introduction-to-subagents`) to `KNOWN_CATALOG`. Fallback now covers all 7 confirmed Skilljar courses (W1/2/3/5/6/7/8) so a DB outage never silently drops W6/W7 monitoring.
     - `backend/src/seeds/migrations/add_student_skilljar_progress.sql`: deleted. The `StudentSkilljarProgress` model and `skilljarSyncService` were removed in `fb796c02` (Ali redirect: no Skilljar API); the table was never created in dev or prod; the migration file was an orphan.
   - Verification: `tsc --noEmit` exit 0.
+
+- [x] **Dev seed: 12-week AI Systems Architect Accelerator cohort (BC #10059441652)**
+  - Date: 2026-07-02
+  - Session: CC-20260702-k7p2
+  - What changed:
+    - `backend/src/seeds/seedAcceleratorCurriculum.ts` (new): idempotent seed that creates cohort "AI Systems Architect — July 2026 (dev)", 12 CurriculumModule rows (W1–W12 per Appendix A titles + descriptions + correct skill_area mapping), 3 CurriculumLesson rows per module, one Enrollment for kes@localdev.test, and calls initializeParticipantCurriculum to initialize all LessonInstance rows. Prints portal login URL on completion.
+  - Verification: Seed ran in dev container — 12 modules + 36 lessons + 1 enrollment created. Kes confirmed all 12 weeks visible in portal sidebar at localhost:9999/portal/curriculum. W9 "Reliability" correctly shows "Colaberry-original module" pill. W12 "Capstone + Expo" shows "Go to CCA-F exam" button (external URL returns 451 — flagged to Ali, external site issue). tsc --noEmit exit 0.
+  - Notes: Page header reads "AI Leadership Learning Path" (hardcoded label in PortalCurriculumPage — cosmetic, does not affect functionality). claudecertifications.com returning 451 from Kes's region — escalated to Ali via BC comment on #9985689609.
