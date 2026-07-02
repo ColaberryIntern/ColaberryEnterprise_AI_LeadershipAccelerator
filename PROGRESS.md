@@ -7456,3 +7456,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - `backend/src/routes/__tests__/studentOpsRoutes.test.ts` (new): 29 tests covering pure functions (classify, scoreRequirement, buildPrompt — happy + boundary) and all 6 route endpoints (happy + no-project + DB failure + bad input + 404 + limit clamping).
   - Verification: `npx jest --testPathPattern=studentOpsRoutes` 29/29 passing; `npx tsc --noEmit` exit code 0 (no type errors).
   - Notes: `StudentTask` and `StudentTaskList` models + `studentTaskService.ts` (with 6 tests) were already built by a prior session. `studentOpsRoutes.ts` is registered in `participantRoutes.ts`. Scoring operates on `RequirementsMap` rows (the canonical 4-state status tracker) not `StudentTask` rows — this is correct: `StudentTask` is the UI task layer; `RequirementsMap` is the ops signal source. Deferred: per-student decision audit table (Phase 2), automation rules for students, daily metrics rollup cron.
+
+- [x] **ArchitectDashboard.tsx — student-facing AI Systems Architect portal page**
+  - Date: 2026-07-02
+  - Session: CC-20260702-p4q1
+  - What changed:
+    - `frontend/src/pages/portal/ArchitectDashboard.tsx` (new): dedicated student portal page for AI Systems Architect Accelerator participants. 3-tile metrics row (tasks_completed_today / tasks_remaining / completion_pct) fetched from `GET /api/portal/student-ops/metrics/today`. Full ranked build queue from `GET /api/portal/student-ops/my-queue` with expand-to-copy-prompt, mark done, defer, flag blocker. Walk My Day full-screen overlay via RunMyDayMode. Reuses `StudentQueueSection`, `RunMyDayMode`, and `StudentQueueItem` from `CoryHomeParts.tsx` — no new dependencies, no MUI.
+    - `frontend/src/routes/portalRoutes.tsx`: added import + `<Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />` under PortalLayout (protected).
+  - Verification: `tsc --noEmit` exit 0. Smoke-tested live at `http://localhost:9999/portal/architect-dashboard` — metrics row shows live data (0 completed today / 146 remaining / 0%), queue loads 20 items ranked by urgency, row expansion shows Claude Code prompt + actions, Walk My Queue overlay works with keyboard nav (arrow keys + Space to copy + Escape to exit).
+  - Notes: BC drafts (CB System 2026-05-31/06-12/06-15) were discarded — they used MUI (not in this stack), hardcoded data, no backend integration. Deferred: GitHub activity feed, Skilljar progress widget, lab progress — require separate API integrations.
