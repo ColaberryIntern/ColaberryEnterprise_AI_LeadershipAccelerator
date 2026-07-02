@@ -2,12 +2,16 @@
  * studentOpsRoutes — student-facing CB-System operating model.
  *
  * Adapts the employee ops machinery (services/ops/priorityEngineService,
- * runMyDayPromptService, approvalService) for students. Work source is
- * RequirementsMap (native student tasks), not Basecamp todos.
+ * runMyDayPromptService) for students. Work source is RequirementsMap
+ * (native student tasks), not Basecamp todos.
  *
- * Phase 1 endpoints:
- *   GET  /api/portal/student-ops/my-queue  — ranked requirement queue + Claude Code prompts
- *   POST /api/portal/student-ops/decide    — mark done or flag blocker
+ * Endpoints:
+ *   GET  /api/portal/student-ops/my-queue        — full ranked queue + Claude Code prompts
+ *   GET  /api/portal/student-ops/run-my-day      — top 5 by urgency, workspace bundles
+ *   POST /api/portal/student-ops/decide          — mark done / flag blocker (frontend compat)
+ *   POST /api/portal/student-ops/decisions       — same as /decide (admin-mirrored path)
+ *   GET  /api/portal/student-ops/decisions/today — today's decision counts
+ *   GET  /api/portal/student-ops/metrics/today   — task completion metrics for today
  */
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
@@ -19,11 +23,13 @@ import RequirementsMap from '../models/RequirementsMap';
 
 const router = Router();
 
+const DONE_STATUSES = ['verified', 'auto_verified'];
+
 // ---------------------------------------------------------------------------
 // Urgency scoring (deterministic, mirrors priorityEngineService pattern)
 // ---------------------------------------------------------------------------
 
-type ReqCategory = 'build' | 'integrate' | 'deploy' | 'test' | 'design' | 'default';
+export type ReqCategory = 'build' | 'integrate' | 'deploy' | 'test' | 'design' | 'default';
 
 const STATUS_BASE: Record<string, number> = {
   unmatched: 60,
@@ -33,13 +39,13 @@ const STATUS_BASE: Record<string, number> = {
   planned:   15,
 };
 
-const STALE_BONUS = (updatedAt: Date): number => {
+function staleBonus(updatedAt: Date): number {
   const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000);
   if (days > 14) return 20;
   if (days > 7)  return 12;
   if (days > 3)  return 6;
   return 0;
-};
+}
 
 const CATEGORY_PATTERNS: Array<{ pattern: RegExp; cat: ReqCategory; bonus: number }> = [
   { pattern: /\b(deploy|hosting|docker|infrastructure|cloud|production|VPS)\b/i, cat: 'deploy',    bonus: 8 },
@@ -49,16 +55,16 @@ const CATEGORY_PATTERNS: Array<{ pattern: RegExp; cat: ReqCategory; bonus: numbe
   { pattern: /\b(build|implement|create|develop|feature|logic|service)\b/i,      cat: 'build',     bonus: 4 },
 ];
 
-function classify(text: string): { cat: ReqCategory; bonus: number } {
+export function classify(text: string): { cat: ReqCategory; bonus: number } {
   for (const { pattern, cat, bonus } of CATEGORY_PATTERNS) {
     if (pattern.test(text)) return { cat, bonus };
   }
   return { cat: 'default', bonus: 0 };
 }
 
-function scoreRequirement(req: RequirementsMap): { urgency: number; cat: ReqCategory } {
+export function scoreRequirement(req: RequirementsMap): { urgency: number; cat: ReqCategory } {
   const base = STATUS_BASE[req.status] ?? 10;
-  const stale = STALE_BONUS(req.updated_at);
+  const stale = staleBonus(req.updated_at);
   const { cat, bonus } = classify(`${req.requirement_key} ${req.requirement_text}`);
   return { urgency: Math.min(100, base + stale + bonus), cat };
 }
@@ -82,12 +88,12 @@ const PROMPT_TEMPLATES: Record<ReqCategory, (text: string) => string> = {
     `claude --project . "Complete this requirement: ${text}\\n\\nSteps:\\n1. Read the codebase to understand context.\\n2. Implement the requirement.\\n3. Verify it works as described.\\n4. Commit your changes with a descriptive message."`,
 };
 
-function buildPrompt(text: string, cat: ReqCategory): string {
+export function buildPrompt(text: string, cat: ReqCategory): string {
   return PROMPT_TEMPLATES[cat](text.replace(/"/g, '\\"'));
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/portal/student-ops/my-queue
+// Shared queue builder (used by /my-queue and /run-my-day)
 // ---------------------------------------------------------------------------
 
 export interface StudentQueueItemShape {
@@ -102,6 +108,40 @@ export interface StudentQueueItemShape {
   rank: number;
 }
 
+async function fetchScoredQueue(projectId: string, limit: number): Promise<StudentQueueItemShape[]> {
+  const rows = await RequirementsMap.findAll({
+    where: {
+      project_id: projectId,
+      is_active: { [Op.ne]: false },
+      status: { [Op.notIn]: DONE_STATUSES },
+    },
+    order: [['updated_at', 'ASC']],
+    limit: 50,
+  });
+
+  return rows
+    .map((r) => {
+      const { urgency, cat } = scoreRequirement(r);
+      return {
+        id: r.id,
+        requirement_key: r.requirement_key,
+        requirement_text: r.requirement_text,
+        status: r.status,
+        urgency_score: urgency,
+        category: cat,
+        claude_code_prompt: buildPrompt(r.requirement_text, cat),
+        github_file_paths: r.github_file_paths || [],
+      };
+    })
+    .sort((a, b) => b.urgency_score - a.urgency_score)
+    .slice(0, limit)
+    .map((item, i) => ({ ...item, rank: i + 1 }));
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/portal/student-ops/my-queue
+// ---------------------------------------------------------------------------
+
 router.get('/api/portal/student-ops/my-queue', requireParticipant, async (req: Request, res: Response) => {
   const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
   try {
@@ -112,41 +152,8 @@ router.get('/api/portal/student-ops/my-queue', requireParticipant, async (req: R
       return;
     }
 
-    const DONE_STATUSES = ['verified', 'auto_verified'];
-    const rows = await RequirementsMap.findAll({
-      where: {
-        project_id: project.id,
-        is_active: { [Op.ne]: false },
-        status: { [Op.notIn]: DONE_STATUSES },
-      },
-      order: [['updated_at', 'ASC']],
-      limit: 50,
-    });
-
-    const scored = rows
-      .map((r) => {
-        const { urgency, cat } = scoreRequirement(r);
-        return {
-          id: r.id,
-          requirement_key: r.requirement_key,
-          requirement_text: r.requirement_text,
-          status: r.status,
-          urgency_score: urgency,
-          category: cat,
-          claude_code_prompt: buildPrompt(r.requirement_text, cat),
-          github_file_paths: r.github_file_paths || [],
-        };
-      })
-      .sort((a, b) => b.urgency_score - a.urgency_score)
-      .slice(0, 20)
-      .map((item, i) => ({ ...item, rank: i + 1 }));
-
-    res.json({
-      items: scored,
-      total: scored.length,
-      project_id: project.id,
-      generated_at: new Date().toISOString(),
-    });
+    const items = await fetchScoredQueue(project.id, 20);
+    res.json({ items, total: items.length, project_id: project.id, generated_at: new Date().toISOString() });
   } catch (err: any) {
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'error', service: 'backend',
@@ -159,7 +166,40 @@ router.get('/api/portal/student-ops/my-queue', requireParticipant, async (req: R
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/portal/student-ops/decide
+// GET /api/portal/student-ops/run-my-day
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/student-ops/run-my-day', requireParticipant, async (req: Request, res: Response) => {
+  const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 5, 1), 20);
+    const enrollmentId = req.participant!.sub;
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) {
+      res.json({ tasks: [], total: 0, project_id: null, generated_at: new Date().toISOString() });
+      return;
+    }
+
+    const items = await fetchScoredQueue(project.id, limit);
+    res.json({
+      tasks: items,
+      total: items.length,
+      project_id: project.id,
+      generated_at: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'student_run_my_day_failed', correlation_id: correlationId,
+      outcome: 'failure', error_class: err.constructor?.name ?? 'Error',
+      context: { message: err.message },
+    }));
+    res.status(500).json({ error: 'Failed to load run-my-day tasks' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Shared decision handler (used by both /decide and /decisions POST)
 // ---------------------------------------------------------------------------
 
 const decideSchema = z.object({
@@ -168,7 +208,7 @@ const decideSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
-router.post('/api/portal/student-ops/decide', requireParticipant, async (req: Request, res: Response) => {
+async function handleDecide(req: Request, res: Response): Promise<void> {
   const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
   const parse = decideSchema.safeParse(req.body);
   if (!parse.success) {
@@ -183,22 +223,22 @@ router.post('/api/portal/student-ops/decide', requireParticipant, async (req: Re
       return;
     }
 
-    const req_ = await RequirementsMap.findOne({
+    const reqRow = await RequirementsMap.findOne({
       where: { id: parse.data.requirement_id, project_id: project.id },
     });
-    if (!req_) {
+    if (!reqRow) {
       res.status(404).json({ error: 'Requirement not found' });
       return;
     }
 
     if (parse.data.decision === 'done') {
-      await req_.update({ status: 'verified', verification_notes: parse.data.note ?? undefined });
+      await reqRow.update({ status: 'verified', verification_notes: parse.data.note ?? undefined });
     } else {
-      // flag_blocker → revert to unmatched so it resurfaces at top of queue with a note
-      await req_.update({ status: 'unmatched', verification_notes: parse.data.note ?? undefined });
+      // flag_blocker: resurfaces at top of queue with a note
+      await reqRow.update({ status: 'unmatched', verification_notes: parse.data.note ?? undefined });
     }
 
-    res.json({ ok: true, id: req_.id, new_status: req_.status });
+    res.json({ ok: true, id: reqRow.id, new_status: reqRow.status });
   } catch (err: any) {
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'error', service: 'backend',
@@ -207,6 +247,144 @@ router.post('/api/portal/student-ops/decide', requireParticipant, async (req: Re
       context: { message: err.message },
     }));
     res.status(500).json({ error: 'Failed to record decision' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/portal/student-ops/decide  (frontend-compat path, keep as-is)
+// POST /api/portal/student-ops/decisions  (admin-mirrored path)
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/student-ops/decide', requireParticipant, handleDecide);
+router.post('/api/portal/student-ops/decisions', requireParticipant, handleDecide);
+
+// ---------------------------------------------------------------------------
+// GET /api/portal/student-ops/decisions/today
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/student-ops/decisions/today', requireParticipant, async (req: Request, res: Response) => {
+  const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+  try {
+    const enrollmentId = req.participant!.sub;
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) {
+      res.json({ total_today: 0, completed_today: 0, flagged_today: 0, project_id: null });
+      return;
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [completedToday, flaggedToday] = await Promise.all([
+      RequirementsMap.count({
+        where: {
+          project_id: project.id,
+          is_active: { [Op.ne]: false },
+          status: { [Op.in]: DONE_STATUSES },
+          updated_at: { [Op.gte]: todayStart },
+        },
+      }),
+      // Flagged blockers: status reset to unmatched today AND note attached.
+      // Cast needed: Sequelize WhereAttributeHashValue<string|undefined> does not
+      // accept null as an Op.ne comparator in strict mode.
+      RequirementsMap.count({
+        where: {
+          project_id: project.id,
+          is_active: { [Op.ne]: false },
+          status: 'unmatched',
+          verification_notes: { [Op.ne]: null },
+          updated_at: { [Op.gte]: todayStart },
+        } as any,
+      }),
+    ]);
+
+    res.json({
+      total_today: completedToday + flaggedToday,
+      completed_today: completedToday,
+      flagged_today: flaggedToday,
+      project_id: project.id,
+      generated_at: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'student_decisions_today_failed', correlation_id: correlationId,
+      outcome: 'failure', error_class: err.constructor?.name ?? 'Error',
+      context: { message: err.message },
+    }));
+    res.status(500).json({ error: 'Failed to load today\'s decisions' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/portal/student-ops/metrics/today
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/student-ops/metrics/today', requireParticipant, async (req: Request, res: Response) => {
+  const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+  try {
+    const enrollmentId = req.participant!.sub;
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) {
+      res.json({
+        date: new Date().toISOString().slice(0, 10),
+        tasks_completed_today: 0,
+        tasks_remaining: 0,
+        total_active: 0,
+        completion_pct: 0,
+        project_id: null,
+        generated_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [completedToday, totalActive, completedEver] = await Promise.all([
+      RequirementsMap.count({
+        where: {
+          project_id: project.id,
+          is_active: { [Op.ne]: false },
+          status: { [Op.in]: DONE_STATUSES },
+          updated_at: { [Op.gte]: todayStart },
+        },
+      }),
+      RequirementsMap.count({
+        where: {
+          project_id: project.id,
+          is_active: { [Op.ne]: false },
+        },
+      }),
+      RequirementsMap.count({
+        where: {
+          project_id: project.id,
+          is_active: { [Op.ne]: false },
+          status: { [Op.in]: DONE_STATUSES },
+        },
+      }),
+    ]);
+
+    const tasksRemaining = totalActive - completedEver;
+    const completionPct = totalActive > 0 ? Math.round((completedEver / totalActive) * 100) : 0;
+
+    res.json({
+      date: new Date().toISOString().slice(0, 10),
+      tasks_completed_today: completedToday,
+      tasks_remaining: Math.max(0, tasksRemaining),
+      total_active: totalActive,
+      completion_pct: completionPct,
+      project_id: project.id,
+      generated_at: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'student_metrics_today_failed', correlation_id: correlationId,
+      outcome: 'failure', error_class: err.constructor?.name ?? 'Error',
+      context: { message: err.message },
+    }));
+    res.status(500).json({ error: 'Failed to load today\'s metrics' });
   }
 });
 
