@@ -284,7 +284,9 @@ router.get('/api/portal/student-ops/decisions/today', requireParticipant, async 
           updated_at: { [Op.gte]: todayStart },
         },
       }),
-      // Flagged blockers: status reset to unmatched today AND note attached
+      // Flagged blockers: status reset to unmatched today AND note attached.
+      // Cast needed: Sequelize WhereAttributeHashValue<string|undefined> does not
+      // accept null as an Op.ne comparator in strict mode.
       RequirementsMap.count({
         where: {
           project_id: project.id,
@@ -292,7 +294,7 @@ router.get('/api/portal/student-ops/decisions/today', requireParticipant, async 
           status: 'unmatched',
           verification_notes: { [Op.ne]: null },
           updated_at: { [Op.gte]: todayStart },
-        },
+        } as any,
       }),
     ]);
 
