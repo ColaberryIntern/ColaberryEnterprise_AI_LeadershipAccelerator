@@ -18,7 +18,7 @@ import {
   handleGetCurriculumProfile, handleUpdateCurriculumProfile,
   handleGetSkillGenome, handleGetSkillGaps,
   handleSaveQuizProgress, handleSaveTaskProgress, handleGradeArtifacts,
-  handleGetOrchestrationContext,
+  handleGetOrchestrationContext, handleSaveSurveyResponse,
 } from '../controllers/curriculumController';
 import {
   handleSendMentorMessage, handleGetMentorHistory,
@@ -56,6 +56,7 @@ router.put('/api/portal/curriculum/lessons/:lessonId/complete', requireParticipa
 router.post('/api/portal/curriculum/lessons/:lessonId/lab', requireParticipant, handleSubmitLabData);
 router.post('/api/portal/curriculum/lessons/:lessonId/prompt-lab', requireParticipant, handleExecutePromptLab);
 router.post('/api/portal/curriculum/lessons/:lessonId/quiz-progress', requireParticipant, handleSaveQuizProgress);
+router.post('/api/portal/curriculum/lessons/:lessonId/survey', requireParticipant, handleSaveSurveyResponse);
 router.post('/api/portal/curriculum/lessons/:lessonId/task-progress', requireParticipant, handleSaveTaskProgress);
 router.post('/api/portal/curriculum/lessons/:lessonId/grade-artifacts', requireParticipant, handleGradeArtifacts);
 router.get('/api/portal/curriculum/session-readiness/:sessionId', requireParticipant, handleCheckSessionReadiness);
