@@ -26,6 +26,7 @@ import WalkCapsPage from '../pages/portal/WalkCapsPage';
 import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
 import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
+import ArchitectDashboard from '../pages/portal/ArchitectDashboard';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 import ExecutionLane from '../pages/project/ExecutionLane';
@@ -38,6 +39,7 @@ const portalRoutes = (
     <Route element={<PortalProtectedRoute />}>
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
+        <Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
         <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
         {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
