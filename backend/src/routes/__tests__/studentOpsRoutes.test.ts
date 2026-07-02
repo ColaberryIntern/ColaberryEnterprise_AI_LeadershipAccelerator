@@ -2,11 +2,14 @@
  * Tests for studentOpsRoutes.
  *
  * Coverage:
- *   - Pure functions: classify, scoreRequirement, buildPrompt
+ *   - Pure functions: classify, scoreRequirement
  *   - Route: GET /my-queue  (happy + no-project + DB failure)
  *   - Route: GET /run-my-day (happy + limit clamping)
  *   - Route: GET /metrics/today (happy + no-project)
  *   - Route: POST /decide  (happy + invalid input + not-found)
+ *
+ * Prompt generation tests live in:
+ *   services/students/__tests__/studentPromptService.test.ts
  */
 import express from 'express';
 import request from 'supertest';
@@ -44,7 +47,7 @@ jest.mock('../../models/RequirementsMap', () => {
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { classify, scoreRequirement, buildPrompt } from '../studentOpsRoutes';
+import { classify, scoreRequirement } from '../studentOpsRoutes';
 import { getProjectByEnrollment } from '../../services/projectService';
 import RequirementsMap from '../../models/RequirementsMap';
 
@@ -144,22 +147,7 @@ describe('scoreRequirement()', () => {
   });
 });
 
-describe('buildPrompt()', () => {
-  it('returns a non-empty string for each category', () => {
-    const categories = ['build', 'integrate', 'deploy', 'test', 'design', 'default'] as const;
-    for (const cat of categories) {
-      const prompt = buildPrompt('Implement user login', cat);
-      expect(typeof prompt).toBe('string');
-      expect(prompt.length).toBeGreaterThan(10);
-    }
-  });
-
-  it('escapes double-quotes in the requirement text', () => {
-    const prompt = buildPrompt('Build a "secure" auth flow', 'build');
-    expect(prompt).not.toContain('"secure"');
-    expect(prompt).toContain('\\"secure\\"');
-  });
-});
+// buildPrompt() tests moved to services/students/__tests__/studentPromptService.test.ts
 
 // ---------------------------------------------------------------------------
 // Route tests

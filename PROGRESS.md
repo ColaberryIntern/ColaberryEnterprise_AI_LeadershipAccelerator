@@ -7437,6 +7437,17 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: `node --test __tests__/cb-reply-body.test.js` 8/8 (incl. the exact "Aleem Aleem" regression, div-wrapped address, third-party @Sohail no-double, unresolved @Name still tags requester, tool-call-leak wasLeak, mid-sentence not promoted); `node --test __tests__/cb-people.test.js` 20/20 unchanged (no regression); `node --check` clean on cb-reply-body.js / cb-system-handler.js / inbound-dispatcher.js. Repro against the real prod input now renders a single "@Aleem, ..." across all four addressing shapes.
   - Notes: Builds on CC-20260701-a7k2 (same branch/PR #122). The a7k2 resolver is already live on prod, so the doubling is live now - this fix needs an after-hours deploy (host-side `git checkout` of the 3 ops-engine files, CB is a live agent) to actually stop it in prod. Known scope: only a LEADING address is de-duplicated; a requester name mid-sentence still gets the tag prepended (asserted in test 8) - acceptable, matches the prompt's "open by addressing them" pattern.
 
+- [x] **Per-task Claude Code prompt generator (project/GitHub resources)**
+  - Date: 2026-07-02
+  - Session: CC-20260702-k7m2
+  - What changed:
+    - `backend/src/services/students/studentPromptService.ts` (new): exports `ReqCategory`, `RequirementForPrompt`, and `generateStudentPrompt()`. Generates per-task Claude Code prompts scoped to the student's GitHub repo URL + 3 curriculum doc references (STUDENT_PLATFORM_BUILD_SPEC.md, STUDENT_PLATFORM_STRATEGY.md, STUDENT_PLATFORM_BLUEPRINT.html). Category-based action blocks (build/integrate/deploy/test/design/default) with numbered steps and stop conditions. No BC tools (sendWithBcAttach, cb-context-walker, Gmail MCP, ticketId, BC Vault) anywhere.
+    - `backend/src/routes/studentOpsRoutes.ts`: removed inline `PROMPT_TEMPLATES` and `buildPrompt()`. Imported `generateStudentPrompt` + `ReqCategory` from new service. Updated `fetchScoredQueue()` to accept `githubRepoUrl`, `projectName`, `organizationName` and forward them from both `/my-queue` and `/run-my-day` callers.
+    - `backend/src/services/students/__tests__/studentPromptService.test.ts` (new): 44 tests — happy path, BC-tool exclusion (5 terms × 6 categories), null-repo fallback, boundary cases.
+    - `backend/src/routes/__tests__/studentOpsRoutes.test.ts`: removed 2 `buildPrompt()` tests (moved to service); updated import.
+  - Verification: `npx jest --testPathPattern="studentPromptService|studentOpsRoutes"` 73/73 passing; `npx tsc --noEmit` exit 0. Smoke-tested live via devtools on `/portal/home` — prompt contains real GitHub repo URL, 3 curriculum doc refs, numbered steps, no BC tools.
+  - Notes: `ReqCategory` type moved to service; `studentOpsRoutes.ts` re-exports it for backward compat. Deferred: curriculum week/module injection (requires enrollment→module lookup); LLM-tuned prompts (v1 per original runMyDayPromptService comment).
+
 - [x] **StudentTask model + studentOpsRoutes: full 4-route CB-System for students (Epic 2)**
   - Date: 2026-07-02
   - Session: CC-20260702-s9t4
