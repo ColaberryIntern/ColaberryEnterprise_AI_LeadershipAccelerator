@@ -7465,3 +7465,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - `frontend/src/routes/portalRoutes.tsx`: added import + `<Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />` under PortalLayout (protected).
   - Verification: `tsc --noEmit` exit 0. Smoke-tested live at `http://localhost:9999/portal/architect-dashboard` — metrics row shows live data (0 completed today / 146 remaining / 0%), queue loads 20 items ranked by urgency, row expansion shows Claude Code prompt + actions, Walk My Queue overlay works with keyboard nav (arrow keys + Space to copy + Escape to exit).
   - Notes: BC drafts (CB System 2026-05-31/06-12/06-15) were discarded — they used MUI (not in this stack), hardcoded data, no backend integration. Deferred: GitHub activity feed, Skilljar progress widget, lab progress — require separate API integrations.
+
+- [x] **Skilljar deep-link delivery — flip Weeks 1 & 7 to confirmed**
+  - Date: 2026-07-02
+  - Session: CC-20260702-p4q1
+  - What changed:
+    - `backend/src/seeds/seedCurriculumCourseLinks.ts`: Week 1 (`claude-code-101`) and Week 7 (`introduction-to-subagents`) flipped from `pending_confirmation` to `confirmed`. Week 1 title cleaned from "Claude Code 101 (+ Claude Code in Action)" to "Claude Code 101" (matches live Skilljar catalog). Header comment updated to reflect all 7 Skilljar weeks now confirmed.
+  - Verification: Both URLs verified live against Anthropic Skilljar catalog (WebFetch: 200 + full course page for each). `npx tsc --noEmit` exit 0. Deploy + prod seed run + no-SSO enrolled-student smoke test deferred to Kes post-merge.
+  - Notes: Deep-link implementation was already fully shipped (BC#9985688697, Ali 2026-06-17). This commit closes the URL-verification gap. Remaining human step: Kes runs the seed in prod and clicks the CTA as an enrolled student to confirm no-SSO open path.
