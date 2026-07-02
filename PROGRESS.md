@@ -7474,6 +7474,22 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Both URLs verified live against Anthropic Skilljar catalog (WebFetch: 200 + full course page for each). `npx tsc --noEmit` exit 0. Deploy + prod seed run + no-SSO enrolled-student smoke test deferred to Kes post-merge.
   - Notes: Deep-link implementation was already fully shipped (BC#9985688697, Ali 2026-06-17). This commit closes the URL-verification gap. Remaining human step: Kes runs the seed in prod and clicks the CTA as an enrolled student to confirm no-SSO open path.
 
+- [x] **Quiz engine + survey engine per week (BC #9985689581)**
+  - Date: 2026-07-02
+  - Session: CC-20260702-m9x4
+  - What changed:
+    - `backend/src/schemas/assessmentSchemas.ts` (new): Zod schemas `QuizProgressSchema` + `SurveyResponseSchema` + pure `computeQuizScore()` function. Score = `Math.round((correct/total)*100)`, deterministic.
+    - `backend/src/services/curriculumService.ts`: added `saveSurveyResponse()` — saves survey responses to `LessonInstance.reflection_responses_json`.
+    - `backend/src/controllers/curriculumController.ts`: added Zod validation to `handleSaveQuizProgress` (returns 400 on bad input); added `handleSaveSurveyResponse` handler.
+    - `backend/src/routes/participantRoutes.ts`: added `POST /api/portal/curriculum/lessons/:lessonId/survey` route.
+    - `frontend/src/components/portal/lesson/WeekFeedbackSurvey.tsx` (new): survey component (Likert 1–5 + open-text questions). Submits to `/survey` endpoint, shows confirmation on success.
+    - `frontend/src/components/portal/lesson/ConceptLesson.tsx`: added `surveyResponses` prop + `SurveyLesson` inner component. Routes `quiz_type === 'survey'` to `WeekFeedbackSurvey`; warmup/post-quiz continue through existing `KnowledgeChecks` via ConceptV2.
+    - `frontend/src/pages/portal/PortalLessonPage.tsx`: passes `instance.reflection_responses_json` as `surveyResponses` to `ConceptLesson`.
+    - `backend/src/seeds/seedWeeklyAssessments.ts` (new): idempotent seed script. Adds warmup (lesson_number 0, 5 MCQ, 0% pass), post-quiz (lesson_number 98, 10 MCQ, 70% pass), survey (lesson_number 99, 3 Likert + 2 open-text) to each module in a cohort. Run with `COHORT_ID=<uuid>`. Verified: 15 lessons created across 5 modules, 0 on second run.
+    - `backend/src/__tests__/services/assessmentService.test.ts` (new): 22 unit tests covering `computeQuizScore` (happy/failure/boundary/determinism), Zod schemas (valid + invalid inputs), `saveSurveyResponse` (happy/idempotent/failure), `saveQuizProgress` (merge/null-base/failure).
+  - Verification: 22/22 tests pass. `tsc --noEmit` exit 0 on both backend and frontend. Seed ran against dev DB (15 created, idempotency confirmed on second run).
+  - Notes: Assessment content (actual questions) pending Swati/CB — seed ships placeholder questions tagged `[PLACEHOLDER]`. Warmup is diagnostic (0% pass gate); post-quiz gates at 70%.
+
 - [x] **Catalog fallback: add W6 + W7 to KNOWN_CATALOG; delete orphan migration (BC #9985689556)**
   - Date: 2026-07-02
   - Session: CC-20260702-k8r2

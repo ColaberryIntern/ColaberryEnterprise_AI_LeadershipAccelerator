@@ -939,3 +939,22 @@ async function getPriorLabResponses(enrollmentId: string, currentLessonId: strin
 
   return labResponses;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Save Survey Response (per-week feedback survey)                     */
+/* ------------------------------------------------------------------ */
+
+export async function saveSurveyResponse(
+  enrollmentId: string,
+  lessonId: string,
+  responses: Record<string, number | string>
+): Promise<{ saved: boolean }> {
+  const instance = await LessonInstance.findOne({
+    where: { lesson_id: lessonId, enrollment_id: enrollmentId },
+  });
+  if (!instance) throw new Error('Lesson instance not found');
+
+  await instance.update({ reflection_responses_json: responses });
+
+  return { saved: true };
+}
