@@ -7473,3 +7473,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - `backend/src/seeds/seedCurriculumCourseLinks.ts`: Week 1 (`claude-code-101`) and Week 7 (`introduction-to-subagents`) flipped from `pending_confirmation` to `confirmed`. Week 1 title cleaned from "Claude Code 101 (+ Claude Code in Action)" to "Claude Code 101" (matches live Skilljar catalog). Header comment updated to reflect all 7 Skilljar weeks now confirmed.
   - Verification: Both URLs verified live against Anthropic Skilljar catalog (WebFetch: 200 + full course page for each). `npx tsc --noEmit` exit 0. Deploy + prod seed run + no-SSO enrolled-student smoke test deferred to Kes post-merge.
   - Notes: Deep-link implementation was already fully shipped (BC#9985688697, Ali 2026-06-17). This commit closes the URL-verification gap. Remaining human step: Kes runs the seed in prod and clicks the CTA as an enrolled student to confirm no-SSO open path.
+
+- [x] **Catalog fallback: add W6 + W7 to KNOWN_CATALOG; delete orphan migration (BC #9985689556)**
+  - Date: 2026-07-02
+  - Session: CC-20260702-k8r2
+  - What changed:
+    - `backend/src/services/lib/catalogFallback.ts`: added W6 (Model Context Protocol: Advanced Topics → `anthropic.skilljar.com/model-context-protocol-advanced-topics`) and W7 (Introduction to Subagents → `anthropic.skilljar.com/introduction-to-subagents`) to `KNOWN_CATALOG`. Fallback now covers all 7 confirmed Skilljar courses (W1/2/3/5/6/7/8) so a DB outage never silently drops W6/W7 monitoring.
+    - `backend/src/seeds/migrations/add_student_skilljar_progress.sql`: deleted. The `StudentSkilljarProgress` model and `skilljarSyncService` were removed in `fb796c02` (Ali redirect: no Skilljar API); the table was never created in dev or prod; the migration file was an orphan.
+  - Verification: `tsc --noEmit` exit 0.
