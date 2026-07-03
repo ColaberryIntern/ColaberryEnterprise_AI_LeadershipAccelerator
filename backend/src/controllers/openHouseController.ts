@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { openHouseRegisterSchema } from '../schemas/openHouseSchema';
 import { createExplorerEnrollment } from '../services/enrollmentService';
+import { getCurrentOpenHouseEvent } from '../services/openHouseEventService';
 
 function log(
   level: 'info' | 'warn' | 'error',
@@ -59,5 +60,23 @@ export async function handleOpenHouseRegister(req: Request, res: Response, next:
       duration_ms: Date.now() - start,
     });
     next(err);
+  }
+}
+
+// GET /api/v1/open-house/event
+// Public, cached. Returns the current Open House details (date/time/format/price/
+// seats/RSVP url) for the marketing site card, or { announced: false } when none
+// is live. Never throws — a CCPP hiccup degrades to "not announced" so the page
+// never breaks.
+export async function handleGetOpenHouseEvent(_req: Request, res: Response): Promise<void> {
+  try {
+    const event = await getCurrentOpenHouseEvent();
+    res.json(event);
+  } catch (err) {
+    log('error', 'open_house_event_fetch_failure', 'failure', {
+      error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+      message: err instanceof Error ? err.message : String(err),
+    });
+    res.json({ announced: false });
   }
 }
