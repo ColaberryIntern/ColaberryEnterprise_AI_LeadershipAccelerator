@@ -33,6 +33,7 @@ interface ModuleSummary {
 
 interface CurriculumData {
   modules: ModuleSummary[];
+  cohort_name: string;
   overall_progress: number;
   total_lessons: number;
   completed_lessons: number;
@@ -212,7 +213,7 @@ function PortalCurriculumPage() {
           <i className="bi bi-mortarboard me-1"></i>Personalized Curriculum
         </p>
         <h1 className="h4 fw-bold" style={{ color: 'var(--color-text)' }}>
-          AI Leadership Learning Path
+          {data.cohort_name || 'AI Systems Architect Accelerator'}
         </h1>
       </div>
 
