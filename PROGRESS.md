@@ -7513,6 +7513,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - `frontend/src/pages/portal/PortalCurriculumPage.tsx`: added `cohort_name: string` to `CurriculumData` interface; replaced hardcoded "AI Leadership Learning Path" h1 with `{data.cohort_name || 'AI Systems Architect Accelerator'}`. The backend already returned `cohort_name` in `getParticipantCurriculum` (line 171 of curriculumService.ts) — field was unused on the frontend.
   - Verification: `tsc --noEmit` exit 0. Page h1 will now reflect actual cohort name from DB (e.g. "AI Systems Architect — July 2026 (dev)") for any enrolled participant.
 
+- [x] **Presence / Peer Chat UI mockup (BC #9985689097, tracker #10044472185)**
+  - Date: 2026-07-02
+  - Session: CC-20260702-k7p2
+  - What changed:
+    - `docs/training-program-2026-q3/mockups/presence-chat.html` (new): self-contained 1,138-line interactive HTML mockup for BUILD_SPEC §9 #8. Covers: 5 demo states (Default / Peer Typing / Loading / Nobody Online / Disconnected), 3-pane layout (Who's Online roster + Conversations + Chat thread), presence strip for Community page, compact topbar badge for all other pages, self-status control (Online / Away / Appear offline), delivery ticks (sent / delivered), typing indicator, fail-soft disconnection with queued-message notice, dark mode, responsive breakpoints (desktop 3-pane → tablet 2-pane → mobile master-detail), WCAG AA contrast + full ARIA, Build Spec tab for Kes (WebSocket schema, DB model, state machine, breakpoints, v1 vs deferred scope table). Brand-correct: Cherry send-only, Leaf online, Berry structure, Roboto. Reconstructed from Aleem's approved BC design spec after branch was never pushed to GitHub.
+    - Branch `workstream/presence-chat-mockup` pushed to origin.
+  - Verification: Kes confirmed Build Spec tab and Disconnected state render correctly via browser screenshots (2026-07-02).
+  - Notes: Aleem design sign-off complete. PR to staging pending Kes go-ahead. Awaiting Ali approval on BC #10044472185 before merge.
+
 - [x] **Architect Evaluation Agent — weekly project evaluation (BC #9946499487)**
   - Date: 2026-07-02
   - Session: CC-20260702-k7p2
@@ -7525,3 +7534,9 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - `backend/src/routes/participantRoutes.ts`: added `GET /api/portal/project/evaluation`.
     - `frontend/src/pages/portal/ArchitectDashboard.tsx`: added evaluation card widget above the build queue.
   - Verification: tsc --noEmit exit 0 (frontend + backend). Migration applied in dev. Agent triggered manually: 13 enrollments evaluated, 0 errors, week 27. LLM scored all successfully.
+
+- [x] **Week 9 content spec — Reliability Engineering + AI Quality Layer (BC #9984356522)**
+  - Date: 2026-07-03
+  - Session: CC-20260703-k7p2
+  - What changed: `docs/training-program-2026-q3/curriculum/week-09-reliability-engineering.md` (new). Full content spec for Week 9 (Colaberry-original, no Anthropic Skilljar course), following the Week 4 template format. Covers: purpose, learning objectives (5 measurable outcomes), read/watch layer (4 Anthropic public docs pages, ~45 min pre-class), Architecture Day agenda (Monday 2026-09-21, 90 min, 6 blocks), Build Day lab assignment (Thursday 2026-09-24), Tier-A artifact spec (`reliability/` module: validate.ts / retry.ts / confidence.ts / logger.ts with acceptance criteria), assessment hooks (5-question warmup + 10-question post quiz + 4-question feedback survey), NotebookLM video hooks (12-15 min, 5 segments), non-goals with explicit deferral rationale, done criteria.
+  - Verification: Kes confirmed spec content before commit.
