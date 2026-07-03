@@ -269,6 +269,9 @@ import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
 import ArchitectEvaluation from './ArchitectEvaluation';
+import WeekItemVisibility from './WeekItemVisibility';
+import InterviewRubric from './InterviewRubric';
+import InterviewSession from './InterviewSession';
 import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
@@ -1114,6 +1117,9 @@ export {
   ProjectDna,
   StudentGithubActivity,
   ArchitectEvaluation,
+  WeekItemVisibility,
+  InterviewRubric,
+  InterviewSession,
   // One Class, Many Doors — Sponsorship + Challenge/Leaderboard
   Sponsor,
   SponsorSeat,
@@ -1155,3 +1161,13 @@ SkoolTask.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' }
 
 SkoolResponse.hasMany(SkoolEngagement, { foreignKey: 'response_id', as: 'engagements' });
 SkoolEngagement.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
+
+// --- Classroom Week View associations ---
+Enrollment.hasMany(WeekItemVisibility, { foreignKey: 'enrollment_id', as: 'weekItemVisibilities' });
+WeekItemVisibility.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(InterviewSession, { foreignKey: 'enrollment_id', as: 'interviewSessions' });
+InterviewSession.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+InterviewRubric.hasMany(InterviewSession, { foreignKey: 'rubric_id', as: 'sessions' });
+InterviewSession.belongsTo(InterviewRubric, { foreignKey: 'rubric_id', as: 'rubric' });

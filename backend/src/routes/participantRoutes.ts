@@ -296,4 +296,79 @@ router.post('/api/portal/github/status-report', requireParticipant, async (req, 
   }
 });
 
+// ─── Classroom Week View ──────────────────────────────────────────────────────
+
+import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterviewSchema } from '../schemas/interviewSchemas';
+
+router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
+  const parsed = GetWeekSchema.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Week must be 1–12', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { getWeekData } = await import('../services/weekVisibilityService');
+    const data = await getWeekData(req.participant!.sub, parseInt(parsed.data.weekNum, 10));
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/classroom/week/:weekNum/reveal', requireParticipant, async (req, res) => {
+  const weekParsed = GetWeekSchema.safeParse(req.params);
+  const bodyParsed = RevealActivitySchema.safeParse(req.body);
+  if (!weekParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  try {
+    const { revealNextActivity } = await import('../services/weekVisibilityService');
+    const result = await revealNextActivity(
+      req.participant!.sub,
+      parseInt(weekParsed.data.weekNum, 10),
+      bodyParsed.data.completed_item
+    );
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/interview/start', requireParticipant, async (req, res) => {
+  const parsed = StartInterviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { startInterview } = await import('../services/interviewService');
+    const result = await startInterview(req.participant!.sub, parsed.data.week_number);
+    res.json(result);
+  } catch (err: any) {
+    const status = err.error_class === 'ValidationError' ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/interview/:sessionId/submit', requireParticipant, async (req, res) => {
+  const parsed = SubmitInterviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid answers', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { submitInterview } = await import('../services/interviewService');
+    const result = await submitInterview(
+      req.params.sessionId as string,
+      req.participant!.sub,
+      parsed.data.answers
+    );
+    res.json(result);
+  } catch (err: any) {
+    const status = err.error_class === 'ValidationError' ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 export default router;
