@@ -190,6 +190,98 @@ export async function createAdminEnrollment(data: {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Explorer (Open House) enrollments                                  */
+/* ------------------------------------------------------------------ */
+
+// An "Explorer" is an Open House visitor who can log into the portal and explore
+// the app but has NOT paid or joined a class. They are placed under the current
+// (latest open) cohort, flagged enrollment_type='explorer', and — critically —
+// do NOT consume a paid seat and are excluded from student metrics.
+export async function createExplorerEnrollment(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  order_id?: string;
+  utm_source?: string;
+  utm_campaign?: string;
+  page_url?: string;
+}): Promise<{ enrollment: Enrollment; created: boolean; cohort_id: string }> {
+  const email = input.email.toLowerCase().trim();
+  if (!email) throw new AppError('email is required', 400);
+
+  const { getLatestOpenCohort } = await import('./cohortService');
+  const cohort = await getLatestOpenCohort();
+  if (!cohort) throw new AppError('No cohort available to place the Explorer under', 409);
+
+  // Idempotent: reuse any existing enrollment for this email in the cohort —
+  // including a real paid student — so we never duplicate or downgrade anyone.
+  const existing = await Enrollment.findOne({ where: { email, cohort_id: cohort.id } });
+  if (existing) {
+    return { enrollment: existing, created: false, cohort_id: cohort.id };
+  }
+
+  const enrollment = await Enrollment.create({
+    full_name: input.name.trim() || 'Open House Guest',
+    email,
+    company: '',
+    phone: input.phone || undefined,
+    cohort_id: cohort.id,
+    enrollment_type: 'explorer',
+    payment_status: 'pending',
+    payment_method: 'credit_card',
+    status: 'active',
+    portal_enabled: true,
+    notes: `Open House Explorer${input.order_id ? ` | eventbrite_order:${input.order_id}` : ''}`,
+  });
+  // NOTE: intentionally does NOT increment cohort.seats_taken — Explorers are not
+  // paying students and must never consume a paid seat.
+
+  // Capture as a Lead for CRM visibility (best-effort — never block the account).
+  try {
+    await Lead.findOrCreate({
+      where: { email },
+      defaults: {
+        name: enrollment.full_name,
+        email,
+        phone: input.phone || '',
+        source: 'open_house',
+        form_type: 'open_house',
+        status: 'new',
+        utm_source: input.utm_source,
+        utm_campaign: input.utm_campaign,
+        page_url: input.page_url,
+      } as any,
+    });
+  } catch (err: any) {
+    console.error('[OpenHouse] Lead capture failed (non-fatal):', err.message);
+  }
+
+  // Send the passwordless login link. Requires status=active + portal_enabled
+  // (both set above). Best-effort so an email hiccup never loses the account; the
+  // visitor can request a fresh link later. Only fires on first creation, so
+  // re-running onboarding never double-sends.
+  try {
+    const { requestMagicLink } = await import('./participantService');
+    await requestMagicLink(email);
+  } catch (err: any) {
+    console.error('[OpenHouse] Magic link send failed (non-fatal):', err.message);
+  }
+
+  return { enrollment, created: true, cohort_id: cohort.id };
+}
+
+// Admin "Convert to enrolled": flip an Explorer into a standard enrollment. Seat
+// reservation + payment follow the normal enrollment path, not this flag flip.
+export async function convertExplorerToStandard(enrollmentId: string): Promise<Enrollment> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) throw new AppError('Enrollment not found', 404);
+  if (enrollment.enrollment_type === 'explorer') {
+    await enrollment.update({ enrollment_type: 'standard' });
+  }
+  return enrollment;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Payment Readiness Campaign Helpers                                 */
 /* ------------------------------------------------------------------ */
 
