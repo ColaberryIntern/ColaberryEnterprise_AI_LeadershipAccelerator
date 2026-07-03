@@ -268,6 +268,7 @@ import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
+import ArchitectEvaluation from './ArchitectEvaluation';
 import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
@@ -1112,6 +1113,7 @@ export {
   // AI Systems Architect Accelerator
   ProjectDna,
   StudentGithubActivity,
+  ArchitectEvaluation,
   // One Class, Many Doors — Sponsorship + Challenge/Leaderboard
   Sponsor,
   SponsorSeat,

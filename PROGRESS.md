@@ -7512,3 +7512,16 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed:
     - `frontend/src/pages/portal/PortalCurriculumPage.tsx`: added `cohort_name: string` to `CurriculumData` interface; replaced hardcoded "AI Leadership Learning Path" h1 with `{data.cohort_name || 'AI Systems Architect Accelerator'}`. The backend already returned `cohort_name` in `getParticipantCurriculum` (line 171 of curriculumService.ts) — field was unused on the frontend.
   - Verification: `tsc --noEmit` exit 0. Page h1 will now reflect actual cohort name from DB (e.g. "AI Systems Architect — July 2026 (dev)") for any enrolled participant.
+
+- [x] **Architect Evaluation Agent — weekly project evaluation (BC #9946499487)**
+  - Date: 2026-07-02
+  - Session: CC-20260702-k7p2
+  - What changed:
+    - `backend/src/seeds/migrations/add_architect_evaluations.sql` (new): creates `architect_evaluations` table with `UNIQUE(enrollment_id, week_number)`. Run in dev container — confirmed OK.
+    - `backend/src/models/ArchitectEvaluation.ts` (new): Sequelize model for `architect_evaluations`.
+    - `backend/src/models/index.ts`: added `ArchitectEvaluation` import + export.
+    - `backend/src/services/agents/architectEvaluationAgent.ts` (new): reads ProjectDna + StudentGithubActivity + LessonInstance progress, calls LLM to score 0-100 and generate next_steps/strengths/technical_gaps. Rule-based fallback when LLM unavailable. Idempotent upsert per (enrollment_id, week_number).
+    - `backend/src/services/schedulerService.ts`: added weekly cron `0 6 * * 6` (Saturday 6 AM UTC) via instrumentCronJob.
+    - `backend/src/routes/participantRoutes.ts`: added `GET /api/portal/project/evaluation`.
+    - `frontend/src/pages/portal/ArchitectDashboard.tsx`: added evaluation card widget above the build queue.
+  - Verification: tsc --noEmit exit 0 (frontend + backend). Migration applied in dev. Agent triggered manually: 13 enrollments evaluated, 0 errors, week 27. LLM scored all successfully.

@@ -6,6 +6,16 @@ import {
   type StudentQueueItem,
 } from './CoryHomeParts';
 
+interface ArchitectEvaluation {
+  week_number: number;
+  overall_score: number | null;
+  progress_summary: string | null;
+  strengths: string[];
+  next_steps: string[];
+  technical_gaps: string[];
+  evaluated_at: string;
+}
+
 interface DayMetrics {
   tasks_completed_today: number;
   tasks_remaining: number;
@@ -23,6 +33,7 @@ const METRIC_TILES = (m: DayMetrics) => [
 
 const ArchitectDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<DayMetrics | null>(null);
+  const [evaluation, setEvaluation] = useState<ArchitectEvaluation | null>(null);
   const [studentQueue, setStudentQueue] = useState<StudentQueueItem[]>([]);
   const [sqLoading, setSqLoading] = useState(true);
   const [sqError, setSqError] = useState<string | null>(null);
@@ -38,13 +49,15 @@ const ArchitectDashboard: React.FC = () => {
       setSqLoading(true);
       setSqError(null);
       try {
-        const [queueRes, metricsRes] = await Promise.all([
+        const [queueRes, metricsRes, evalRes] = await Promise.all([
           portalApi.get<{ items: StudentQueueItem[] }>('/api/portal/student-ops/my-queue'),
           portalApi.get<DayMetrics>('/api/portal/student-ops/metrics/today').catch(() => ({ data: null })),
+          portalApi.get<ArchitectEvaluation | null>('/api/portal/project/evaluation').catch(() => ({ data: null })),
         ]);
         if (!cancelled) {
           setStudentQueue(queueRes.data.items || []);
           if (metricsRes.data) setMetrics(metricsRes.data);
+          if (evalRes.data) setEvaluation(evalRes.data);
         }
       } catch (err: any) {
         if (!cancelled) setSqError(err?.response?.data?.error || err?.message || 'Failed to load queue');
@@ -152,6 +165,92 @@ const ArchitectDashboard: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Project Evaluation Card — soft-fail: hidden when no evaluation exists yet */}
+      {evaluation && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h2 className="h6 fw-bold mb-0" style={{ color: '#1e293b' }}>
+                <i className="bi bi-clipboard2-data me-2" style={{ color: '#FB2832' }}></i>
+                Week {evaluation.week_number} Project Evaluation
+              </h2>
+              {evaluation.overall_score !== null && (
+                <span
+                  className="fw-bold"
+                  style={{
+                    fontSize: 28,
+                    color: evaluation.overall_score >= 70 ? '#10b981' : evaluation.overall_score >= 40 ? '#f59e0b' : '#ef4444',
+                  }}
+                >
+                  {evaluation.overall_score}
+                  <span className="text-muted fw-normal" style={{ fontSize: 14 }}>/100</span>
+                </span>
+              )}
+            </div>
+
+            {evaluation.progress_summary && (
+              <p className="text-muted small mb-3" style={{ lineHeight: 1.6 }}>
+                {evaluation.progress_summary}
+              </p>
+            )}
+
+            <div className="row g-3">
+              {evaluation.next_steps?.length > 0 && (
+                <div className="col-12 col-md-6">
+                  <p className="fw-semibold small mb-1" style={{ color: '#3b82f6' }}>
+                    <i className="bi bi-arrow-right-circle me-1"></i>Next Steps
+                  </p>
+                  <ul className="list-unstyled mb-0">
+                    {evaluation.next_steps.map((step, i) => (
+                      <li key={i} className="small text-muted mb-1">
+                        <i className="bi bi-dot me-1"></i>{step}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {evaluation.technical_gaps?.length > 0 && (
+                <div className="col-12 col-md-6">
+                  <p className="fw-semibold small mb-1" style={{ color: '#ef4444' }}>
+                    <i className="bi bi-exclamation-triangle me-1"></i>Technical Gaps
+                  </p>
+                  <ul className="list-unstyled mb-0">
+                    {evaluation.technical_gaps.map((gap, i) => (
+                      <li key={i} className="small text-muted mb-1">
+                        <i className="bi bi-dot me-1"></i>{gap}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {evaluation.strengths?.length > 0 && (
+              <div className="mt-3 pt-3 border-top">
+                <p className="fw-semibold small mb-1" style={{ color: '#10b981' }}>
+                  <i className="bi bi-patch-check me-1"></i>Strengths
+                </p>
+                <div className="d-flex flex-wrap gap-2">
+                  {evaluation.strengths.map((s, i) => (
+                    <span key={i} className="badge small" style={{ background: '#ecfdf5', color: '#065f46', fontWeight: 500 }}>
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-muted mb-0 mt-3" style={{ fontSize: 11 }}>
+              Evaluated {new Date(evaluation.evaluated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {' · '}
+              <a href="/portal/project-builder" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
+                Update Project DNA
+              </a>
+            </p>
+          </div>
         </div>
       )}
 
