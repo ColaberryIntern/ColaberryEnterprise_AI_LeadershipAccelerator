@@ -20,6 +20,18 @@ export async function listAllCohorts() {
   });
 }
 
+export async function getLatestOpenCohort(): Promise<Cohort | null> {
+  // The cohort new Explorers (Open House signups) are placed under: the open
+  // cohort with the latest start_date. Falls back to the most recently created
+  // cohort if none are open.
+  const open = await Cohort.findOne({
+    where: { status: 'open' },
+    order: [['start_date', 'DESC']],
+  });
+  if (open) return open;
+  return Cohort.findOne({ order: [['created_at', 'DESC']] });
+}
+
 export async function getCohortDetail(id: string) {
   const cohort = await Cohort.findByPk(id, {
     include: [{ model: Enrollment, as: 'enrollments' }],
@@ -37,10 +49,15 @@ export async function updateCohort(id: string, data: UpdateCohortInput) {
 
 export async function getDashboardStats() {
   const cohorts = await Cohort.findAll();
-  const totalEnrollments = await Enrollment.count();
-  const paidEnrollments = await Enrollment.count({ where: { payment_status: 'paid' } });
+  // Explorers (Open House visitors) are not paying students — exclude them from
+  // enrollment/pipeline counts so they never skew the dashboard.
+  const notExplorer = { enrollment_type: { [Op.ne]: 'explorer' } };
+  const totalEnrollments = await Enrollment.count({ where: notExplorer as any });
+  const paidEnrollments = await Enrollment.count({
+    where: { payment_status: 'paid', ...notExplorer } as any,
+  });
   const pendingInvoice = await Enrollment.count({
-    where: { payment_status: ['pending', 'pending_invoice'] as any },
+    where: { payment_status: ['pending', 'pending_invoice'] as any, ...notExplorer } as any,
   });
 
   const openCohorts = cohorts.filter((c) => c.status === 'open');
