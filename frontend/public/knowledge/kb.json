@@ -270,8 +270,8 @@
       "status": "active"
     }
   ],
-  "generated_at": "2026-06-26T17:58:16.523Z",
-  "count": 212,
+  "generated_at": "2026-07-03T15:12:55.138Z",
+  "count": 213,
   "entries": [
     {
       "id": "sales-1",
@@ -1610,6 +1610,26 @@
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
       "needs_verification": false
+    },
+    {
+      "id": "sales-79",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "Are there scholarships available?",
+      "answer": "Yes, scholarships are available for the Founding Cohort. Contact admissions at admissions@colaberry.com for details and to apply.",
+      "detail": "Scholarship availability and terms are confirmed at enrollment. Contact admissions early; the Founding Cohort is limited to 40 seats.",
+      "tags": [
+        "scholarship",
+        "financial aid",
+        "pricing",
+        "discount",
+        "free",
+        "founding cohort"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": true
     },
     {
       "id": "marketing-1",

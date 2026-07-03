@@ -7540,3 +7540,10 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Session: CC-20260703-k7p2
   - What changed: `docs/training-program-2026-q3/curriculum/week-09-reliability-engineering.md` (new). Full content spec for Week 9 (Colaberry-original, no Anthropic Skilljar course), following the Week 4 template format. Covers: purpose, learning objectives (5 measurable outcomes), read/watch layer (4 Anthropic public docs pages, ~45 min pre-class), Architecture Day agenda (Monday 2026-09-21, 90 min, 6 blocks), Build Day lab assignment (Thursday 2026-09-24), Tier-A artifact spec (`reliability/` module: validate.ts / retry.ts / confidence.ts / logger.ts with acceptance criteria), assessment hooks (5-question warmup + 10-question post quiz + 4-question feedback survey), NotebookLM video hooks (12-15 min, 5 segments), non-goals with explicit deferral rationale, done criteria.
   - Verification: Kes confirmed spec content before commit.
+
+- [x] **Knowledge base wiring — /knowledge/ status + scholarship gap (BC #9946499032)**
+  - Date: 2026-07-03
+  - Session: CC-20260703-k7p2
+  - What changed: (1) `frontend/public/knowledge/index.html` line 83: footer status text changed from "Draft for review" to "Live". (2) `frontend/public/knowledge/sales/kb-data.js`: added scholarship Q&A entry to pricing-billing category (`needs_verification: true` — terms pending Ali confirmation). (3) `frontend/public/knowledge/kb.json`: rebuilt from source, 212 → 213 entries.
+  - Verification: `node build-kb.js` from knowledge/ dir confirms 213 entries; scholarship entry present in kb.json with `needs_verification: true`; footer text verified in index.html.
+  - Notes: 12 existing refund/cancellation entries also flagged `needs_verification: true` — Ali must finalize those terms and confirm scholarship details before flags are cleared.
