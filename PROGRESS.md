@@ -7489,3 +7489,10 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - `backend/src/seeds/seedAcceleratorCurriculum.ts` (new): idempotent seed that creates cohort "AI Systems Architect — July 2026 (dev)", 12 CurriculumModule rows (W1–W12 per Appendix A titles + descriptions + correct skill_area mapping), 3 CurriculumLesson rows per module, one Enrollment for kes@localdev.test, and calls initializeParticipantCurriculum to initialize all LessonInstance rows. Prints portal login URL on completion.
   - Verification: Seed ran in dev container — 12 modules + 36 lessons + 1 enrollment created. Kes confirmed all 12 weeks visible in portal sidebar at localhost:9999/portal/curriculum. W9 "Reliability" correctly shows "Colaberry-original module" pill. W12 "Capstone + Expo" shows "Go to CCA-F exam" button (external URL returns 451 — flagged to Ali, external site issue). tsc --noEmit exit 0.
   - Notes: Page header reads "AI Leadership Learning Path" (hardcoded label in PortalCurriculumPage — cosmetic, does not affect functionality). claudecertifications.com returning 451 from Kes's region — escalated to Ali via BC comment on #9985689609.
+
+- [x] **Portal curriculum page header: show cohort name dynamically**
+  - Date: 2026-07-02
+  - Session: CC-20260702-k7p2
+  - What changed:
+    - `frontend/src/pages/portal/PortalCurriculumPage.tsx`: added `cohort_name: string` to `CurriculumData` interface; replaced hardcoded "AI Leadership Learning Path" h1 with `{data.cohort_name || 'AI Systems Architect Accelerator'}`. The backend already returned `cohort_name` in `getParticipantCurriculum` (line 171 of curriculumService.ts) — field was unused on the frontend.
+  - Verification: `tsc --noEmit` exit 0. Page h1 will now reflect actual cohort name from DB (e.g. "AI Systems Architect — July 2026 (dev)") for any enrolled participant.
