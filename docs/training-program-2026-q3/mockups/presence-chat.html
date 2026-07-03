@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Presence · Peer Chat — Colaberry AI Systems Architect Accelerator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* === Colaberry School Design System tokens === */
+:root {
+  --cherry:#FB2832; --cherry-text:#E5121D; --cherry-deep:#C20E1E;
+  --leaf:#77BB4A; --leaf-action:#5BA63C; --leaf-text:#468A2E; --leaf-deep:#3C7A26;
+  --berry:#367895; --berry-hover:#2E6A86; --link:#2E6A86;
+  --amber:#E8920C; --amber-deep:#B5710A; --amber-bg:#FFF3E0;
+  --white:#FFFFFF; --n50:#F8F8F7; --n100:#F1F1F0; --n200:#E4E4E3; --n300:#D8D8D8;
+  --n400:#B4B4B4; --n500:#8C8C8C; --n600:#6B6B6B; --n700:#4A4A4A; --n800:#2B2B2B; --n900:#1A1A1A;
+  --surface-page:#FFFFFF; --surface-subtle:#F8F8F7; --surface-sunken:#F1F1F0;
+  --text-strong:#1A1A1A; --text-body:#2B2B2B; --text-muted:#6B6B6B;
+  --border-default:#D8D8D8; --border-subtle:#E4E4E3;
+  --shadow-md:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04);
+  --shadow-lg:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);
+  --r-4:4px; --r-8:8px; --r-12:12px; --r-16:16px; --r-pill:999px;
+  --sans:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Roboto Mono',ui-monospace,'SFMono-Regular','Menlo','Consolas',monospace;
+  --logo:'Quicksand',system-ui,sans-serif;
+  --ease:cubic-bezier(0.22,1,0.36,1);
+}
+[data-theme="dark"] {
+  --surface-page:#0F0F0F; --surface-subtle:#1A1A1A; --surface-sunken:#161616;
+  --text-strong:#FFFFFF; --text-body:#E4E4E3; --text-muted:#B4B4B4;
+  --border-default:rgba(255,255,255,.14); --border-subtle:rgba(255,255,255,.10);
+  --white:#1A1A1A; --n50:#161616; --n100:#1F1F1F; --n200:#262626; --n300:#333333;
+  --link:#6FB2CC; --leaf-text:#9BD173; --cherry-text:#FF6A71;
+  --shadow-md:0 3px 8px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);
+  --shadow-lg:0 12px 30px rgba(0,0,0,.5),0 3px 8px rgba(0,0,0,.4);
+  --amber-bg:rgba(232,146,12,.15); --amber-deep:#F5C96A;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans);background:var(--surface-subtle);color:var(--text-body);line-height:1.55;font-size:15px;-webkit-font-smoothing:antialiased;transition:background .22s var(--ease),color .22s var(--ease)}
+h1,h2,h3,h4{font-family:var(--sans);font-weight:700;color:var(--text-strong);margin:0}
+button{font-family:inherit;cursor:pointer}
+a{color:var(--link);text-decoration:none}
+:focus-visible{outline:3px solid var(--berry);outline-offset:2px;border-radius:var(--r-4)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* === Demo chrome === */
+.demo-bar{
+  position:fixed;top:0;left:0;right:0;z-index:200;
+  background:#111;border-bottom:2px solid var(--cherry);
+  display:flex;align-items:center;gap:6px;padding:0 14px;height:44px;overflow-x:auto;
+}
+.demo-label{font-size:10.5px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;margin-right:2px}
+.state-btn{padding:4px 11px;border-radius:var(--r-pill);border:1.5px solid #333;background:transparent;color:#999;font-size:11.5px;font-weight:600;white-space:nowrap;transition:.14s}
+.state-btn:hover{border-color:#666;color:#eee}
+.state-btn.active{background:var(--cherry);border-color:var(--cherry);color:#fff}
+.demo-sep{width:1px;height:22px;background:#333;flex:none;margin:0 2px}
+.tab-btn{padding:4px 11px;border-radius:var(--r-pill);border:1.5px solid #333;background:transparent;color:#999;font-size:11.5px;font-weight:600;white-space:nowrap;transition:.14s}
+.tab-btn:hover{border-color:#666;color:#eee}
+.tab-btn.active{background:#333;border-color:#555;color:#fff}
+.dark-toggle{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r-pill);border:1.5px solid #333;background:transparent;color:#999;font-size:11.5px;font-weight:600;transition:.14s;margin-left:auto;white-space:nowrap}
+.dark-toggle:hover{border-color:#666;color:#eee}
+.dark-toggle svg{flex:none}
+
+/* === App shell === */
+body{padding-top:44px}
+.app{display:grid;grid-template-columns:240px 1fr;grid-template-rows:60px 1fr;min-height:calc(100vh - 44px);grid-template-areas:"top top" "nav main"}
+
+/* Topbar */
+.topbar{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 22px;background:var(--surface-page);border-bottom:1px solid var(--border-default);position:sticky;top:44px;z-index:40;height:60px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:34px;height:34px;border-radius:8px;background:var(--cherry);display:flex;align-items:center;justify-content:center;flex:none}
+.brand-mark svg{width:20px;height:20px;color:#fff}
+.brand-txt b{font-family:var(--logo);font-size:16px;font-weight:700;display:block;line-height:1;color:var(--text-strong)}
+.brand-txt b .cc{color:var(--cherry)}
+.brand-txt span{font-size:11px;color:var(--text-muted);font-weight:500}
+.topbar-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+
+/* Presence compact badge (Command Center topbar element) */
+.presence-badge{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:var(--r-pill);background:var(--surface-sunken);border:1px solid var(--border-default);font-size:13px;font-weight:600;color:var(--text-body);cursor:pointer;transition:.14s var(--ease)}
+.presence-badge:hover{border-color:var(--leaf);color:var(--leaf-text)}
+.presence-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--leaf);flex:none}
+.topbar-av{width:32px;height:32px;border-radius:50%;background:var(--berry);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;border:2px solid var(--surface-page)}
+
+/* Sidebar nav */
+.nav{grid-area:nav;background:var(--surface-page);border-right:1px solid var(--border-default);padding:16px 12px;display:flex;flex-direction:column;gap:2px;position:sticky;top:104px;height:calc(100vh - 104px);overflow-y:auto}
+.nav-grp{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:12px 10px 4px;font-weight:700}
+.navbtn{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r-pill);border:none;background:none;color:var(--text-body);font-size:14px;font-weight:500;text-align:left;width:100%;transition:.14s var(--ease)}
+.navbtn svg{width:17px;height:17px;flex:none;opacity:.75}
+.navbtn:hover{background:var(--surface-sunken);color:var(--text-strong)}
+.navbtn.active{background:#ffe7e8;color:var(--cherry-deep);font-weight:700}
+[data-theme="dark"] .navbtn.active{background:rgba(251,40,50,.16);color:#FF6A71}
+.navbtn.active svg{opacity:1}
+.nav-badge{margin-left:auto;background:var(--cherry);color:#fff;font-size:10.5px;font-weight:700;border-radius:var(--r-pill);padding:1px 7px;font-family:var(--mono)}
+
+/* Main area */
+.main{grid-area:main;overflow:hidden;height:calc(100vh - 104px);display:flex;flex-direction:column}
+
+/* === Disconnection banner === */
+.disconn-banner{display:none;align-items:center;gap:10px;padding:10px 22px;background:var(--amber-bg);border-bottom:1px solid rgba(232,146,12,.5);color:#7C4A00;font-size:13.5px;font-weight:600;flex:none}
+[data-theme="dark"] .disconn-banner{color:var(--amber-deep)}
+.disconn-banner.show{display:flex}
+.disconn-dot{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse-amber 1.4s ease-in-out infinite;flex:none}
+@keyframes pulse-amber{0%,100%{opacity:1}50%{opacity:.3}}
+.reconnect-btn{margin-left:auto;padding:4px 14px;border-radius:var(--r-pill);border:1.5px solid currentColor;background:transparent;color:inherit;font-size:12.5px;font-weight:700}
+.reconnect-btn:hover{opacity:.8}
+
+/* === Presence strip (top of Community page) === */
+.presence-strip{display:flex;align-items:center;gap:16px;padding:14px 22px;background:var(--surface-page);border-bottom:1px solid var(--border-default);flex:none}
+.facepile{display:flex}
+.fp-av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;border:2.5px solid var(--surface-page);margin-left:-8px;flex:none;position:relative}
+.fp-av:first-child{margin-left:0}
+.fp-av .sdot{position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--surface-page)}
+.sdot.online{background:var(--leaf)}
+.sdot.away{background:var(--amber)}
+.sdot.offline{background:var(--n400)}
+.strip-info{display:flex;flex-direction:column;line-height:1.2}
+.strip-count{font-size:15px;font-weight:700;color:var(--text-strong)}
+.strip-sub{font-size:12px;color:var(--text-muted)}
+.strip-link{margin-left:auto;font-size:13px;color:var(--link);font-weight:600;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.strip-link:hover{color:var(--berry-hover)}
+
+/* === 3-pane layout === */
+.three-pane{display:grid;grid-template-columns:260px 220px 1fr;flex:1;min-height:0;overflow:hidden}
+
+/* --- Pane 1: Roster --- */
+.pane-roster{border-right:1px solid var(--border-default);display:flex;flex-direction:column;background:var(--surface-page);overflow-y:auto}
+.pane-hdr{padding:13px 14px 10px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:8px;flex:none}
+.pane-title{font-size:12px;font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.07em}
+.pane-count{font-size:10.5px;font-family:var(--mono);font-weight:700;color:var(--text-muted);background:var(--surface-sunken);padding:1px 7px;border-radius:var(--r-pill)}
+
+/* Self-status */
+.self-status{padding:11px 14px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:10px;flex:none}
+.self-av{width:36px;height:36px;border-radius:50%;background:var(--berry);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;position:relative}
+.self-av .sdot{position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--surface-page)}
+.self-info{flex:1;min-width:0}
+.self-name{font-size:13.5px;font-weight:700;color:var(--text-strong)}
+.status-dropdown{position:relative}
+.status-select{font-size:12px;font-weight:600;color:var(--leaf-text);border:none;background:none;padding:0;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:3px}
+.status-select.away{color:var(--amber-deep)}
+.status-select.invisible{color:var(--text-muted)}
+.status-select svg{width:11px;height:11px}
+.status-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:60;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-8);box-shadow:var(--shadow-lg);min-width:176px;padding:4px}
+.status-menu.open{display:block}
+.status-opt{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-4);border:none;background:none;width:100%;text-align:left;font-size:13.5px;color:var(--text-body);cursor:pointer;font-family:inherit}
+.status-opt:hover{background:var(--surface-sunken)}
+.opt-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.opt-dot.online{background:var(--leaf)}
+.opt-dot.away{background:var(--amber)}
+.opt-dot.invisible{background:var(--n400)}
+
+/* Roster list */
+.roster-sec{padding:6px 0}
+.roster-sec-lbl{display:flex;align-items:center;gap:6px;padding:6px 14px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);cursor:pointer;user-select:none}
+.roster-sec-lbl svg{width:11px;height:11px;transition:transform .2s}
+.roster-sec-lbl.collapsed svg{transform:rotate(-90deg)}
+.roster-item{display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;transition:background .14s}
+.roster-item:hover{background:var(--surface-sunken)}
+.roster-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex:none;position:relative}
+.roster-av .sdot{position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:50%;border:2px solid var(--surface-page)}
+.roster-info{flex:1;min-width:0}
+.roster-name{font-size:13.5px;font-weight:600;color:var(--text-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.roster-act{font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.roster-chat-btn{width:26px;height:26px;border-radius:50%;border:none;background:var(--surface-sunken);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .14s;color:var(--text-muted);flex:none}
+.roster-item:hover .roster-chat-btn{opacity:1}
+.roster-chat-btn:hover{background:var(--n200);color:var(--berry)}
+.roster-chat-btn svg{width:14px;height:14px}
+.roster-more{padding:6px 14px;font-size:12px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;gap:5px}
+.roster-more:hover{color:var(--text-body)}
+
+/* Empty state */
+.empty-roster{padding:28px 18px;text-align:center;display:none}
+.empty-roster.show{display:block}
+.empty-icon{font-size:36px;margin-bottom:10px}
+.empty-title{font-size:14.5px;font-weight:700;color:var(--text-strong);margin-bottom:6px}
+.empty-sub{font-size:12.5px;color:var(--text-muted);line-height:1.55}
+
+/* Skeleton animation */
+.skel{background:var(--n200);border-radius:var(--r-4);animation:skel 1.5s ease-in-out infinite}
+[data-theme="dark"] .skel{background:var(--n300)}
+@keyframes skel{0%,100%{opacity:1}50%{opacity:.4}}
+.skel-av{width:36px;height:36px;border-radius:50%;flex:none}
+.skel-line{height:12px;border-radius:var(--r-pill);margin-bottom:5px}
+.loading-overlay{display:none;flex-direction:column;gap:12px;padding:16px}
+.loading-overlay.show{display:flex}
+.skel-row{display:flex;align-items:center;gap:10px}
+
+/* --- Pane 2: Conversations --- */
+.pane-convos{border-right:1px solid var(--border-default);display:flex;flex-direction:column;background:var(--surface-page);overflow:hidden}
+.convo-search{padding:10px 12px;border-bottom:1px solid var(--border-subtle);flex:none}
+.convo-search input{width:100%;padding:7px 12px;border:1px solid var(--border-default);border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-body);font-family:inherit;font-size:13px;transition:border-color .14s}
+.convo-search input:focus{outline:none;border-color:var(--berry)}
+.convo-list{overflow-y:auto;flex:1}
+.convo-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .14s}
+.convo-item:hover{background:var(--surface-sunken)}
+.convo-item.active{background:#ffe7e8}
+[data-theme="dark"] .convo-item.active{background:rgba(251,40,50,.12)}
+.convo-av{position:relative;flex:none}
+.convo-av .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff}
+.convo-av .sdot{position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--surface-page)}
+.convo-body{flex:1;min-width:0}
+.convo-header{display:flex;align-items:baseline;gap:4px}
+.convo-name{font-size:13.5px;font-weight:700;color:var(--text-strong);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.convo-time{font-size:10.5px;color:var(--text-muted);font-family:var(--mono);white-space:nowrap}
+.convo-preview{font-size:12.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.convo-unread{min-width:18px;height:18px;border-radius:var(--r-pill);background:var(--cherry);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;font-family:var(--mono);flex:none}
+
+/* --- Pane 3: Chat thread --- */
+.pane-chat{display:flex;flex-direction:column;background:var(--surface-subtle);overflow:hidden}
+.chat-hdr{display:flex;align-items:center;gap:12px;padding:13px 20px;background:var(--surface-page);border-bottom:1px solid var(--border-default);flex:none}
+.chat-peer-av{position:relative;flex:none}
+.chat-peer-av .av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff}
+.chat-peer-av .sdot{position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;border:2.5px solid var(--surface-page)}
+.chat-peer-info{flex:1;min-width:0}
+.chat-peer-name{font-size:15px;font-weight:700;color:var(--text-strong)}
+.chat-peer-status{font-size:12.5px;color:var(--leaf-text);font-weight:500}
+.chat-peer-status.away{color:var(--amber-deep)}
+.chat-peer-status.disconnected{color:var(--text-muted)}
+.chat-actions{display:flex;gap:6px}
+.icon-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
+.icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border-default);background:var(--surface-page);display:flex;align-items:center;justify-content:center;color:var(--text-muted);transition:.14s}
+.icon-btn:hover{border-color:var(--berry);color:var(--berry)}
+.icon-btn svg{width:15px;height:15px}
+.soon-badge{font-size:9px;font-weight:700;color:var(--text-muted);background:var(--surface-sunken);border-radius:var(--r-pill);padding:1px 5px;white-space:nowrap}
+
+/* Thread */
+.chat-thread{flex:1;overflow-y:auto;padding:18px 20px 6px;display:flex;flex-direction:column;gap:2px}
+.msg-date{text-align:center;font-size:11.5px;color:var(--text-muted);display:flex;align-items:center;gap:10px;margin:10px 0 8px;font-weight:600}
+.msg-date::before,.msg-date::after{content:'';flex:1;height:1px;background:var(--border-subtle)}
+.msg-group{margin-bottom:8px}
+.msg-group-hdr{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.msg-group-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex:none}
+.msg-group-name{font-size:13px;font-weight:700;color:var(--text-strong)}
+.msg-group-time{font-size:11px;color:var(--text-muted);font-family:var(--mono)}
+.msg-row{display:flex;padding-left:36px;margin-bottom:2px}
+.msg-row.out{padding-left:0;justify-content:flex-end}
+.msg-bubble{max-width:72%;padding:9px 14px;border-radius:var(--r-12);font-size:14px;line-height:1.5;color:var(--text-body);background:var(--surface-page);border:1px solid var(--border-subtle);word-break:break-word}
+.msg-row.out .msg-bubble{background:var(--berry);color:#fff;border-color:transparent}
+.msg-meta{padding-left:36px;display:flex;align-items:center;gap:4px;margin-top:2px}
+.msg-meta.out{padding-left:0;justify-content:flex-end}
+.tick{color:var(--text-muted);display:flex;align-items:center}
+.tick.delivered{color:var(--leaf-text)}
+.tick svg{width:13px;height:13px}
+.msg-time{font-size:11px;color:var(--text-muted)}
+
+/* Failed message */
+.msg-failed-row{display:none;justify-content:flex-end;margin-bottom:6px;gap:8px;align-items:center}
+.msg-failed-row.show{display:flex}
+.msg-failed-row .msg-bubble{opacity:.65;background:var(--berry);color:#fff;border-color:transparent;max-width:60%}
+.retry-btn{font-size:12px;font-weight:700;color:var(--cherry-text);border:none;background:none;padding:0;white-space:nowrap}
+.retry-btn:hover{text-decoration:underline}
+
+/* Typing indicator */
+.typing-ind{display:none;padding:4px 36px 2px;align-items:center;gap:6px}
+.typing-ind.show{display:flex}
+.typing-ind .t-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:#fff;flex:none}
+.typing-dots{display:flex;gap:3px;align-items:center}
+.typing-dots span{width:5px;height:5px;border-radius:50%;background:var(--n400);animation:typing 1.2s ease-in-out infinite}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes typing{0%,60%,100%{transform:translateY(0);opacity:.6}30%{transform:translateY(-5px);opacity:1}}
+.typing-label{font-size:12.5px;color:var(--text-muted);font-style:italic}
+
+/* Chat input */
+.chat-input-area{padding:12px 20px 16px;background:var(--surface-page);border-top:1px solid var(--border-default);flex:none}
+.input-row{display:flex;align-items:flex-end;gap:8px;background:var(--surface-sunken);border:1.5px solid var(--border-default);border-radius:var(--r-12);padding:8px 8px 8px 12px;transition:border-color .14s}
+.input-row:focus-within{border-color:var(--berry)}
+.attach-btn{width:28px;height:28px;border-radius:50%;border:none;background:none;color:var(--text-muted);display:flex;align-items:center;justify-content:center;transition:.14s;flex:none;position:relative}
+.attach-btn:hover{color:var(--berry)}
+.attach-btn svg{width:16px;height:16px}
+.attach-soon{position:absolute;top:-6px;right:-8px;font-size:8px;background:var(--n200);color:var(--text-muted);border-radius:var(--r-pill);padding:1px 4px;white-space:nowrap;pointer-events:none}
+.chat-input{flex:1;border:none;background:none;padding:0;font-family:inherit;font-size:14px;color:var(--text-body);resize:none;min-height:22px;max-height:100px;outline:none;line-height:1.5}
+.chat-input::placeholder{color:var(--n400)}
+.chat-send{width:34px;height:34px;border-radius:50%;background:var(--cherry);border:none;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;transition:background .14s}
+.chat-send:hover:not(:disabled){background:var(--cherry-deep)}
+.chat-send:disabled{background:var(--n300);cursor:not-allowed}
+[data-theme="dark"] .chat-send:disabled{background:var(--n200)}
+.chat-send svg{width:16px;height:16px}
+.queued-notice{display:none;font-size:12px;color:var(--amber-deep);text-align:center;margin-top:6px;font-weight:600}
+.queued-notice.show{display:block}
+
+/* === Build Spec view === */
+.spec-view{display:none;padding:28px 36px 80px;overflow-y:auto;height:calc(100vh - 44px)}
+.spec-view.show{display:block}
+.spec-section{margin-bottom:32px}
+.spec-section h2{font-size:18px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--cherry);display:inline-block}
+.spec-section h3{font-size:15px;color:var(--berry);margin:16px 0 8px}
+.spec-section p{font-size:14px;color:var(--text-body);line-height:1.7;margin:0 0 10px}
+.spec-table{width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:14px}
+.spec-table th{text-align:left;padding:8px 14px;background:var(--surface-sunken);color:var(--text-strong);font-weight:700;border:1px solid var(--border-default)}
+.spec-table td{padding:8px 14px;border:1px solid var(--border-default);color:var(--text-body);vertical-align:top}
+.spec-table code{font-family:var(--mono);font-size:12.5px;background:var(--surface-sunken);padding:1px 5px;border-radius:3px;color:var(--cherry-text)}
+.spec-code{background:#111;color:#E4E4E3;border-radius:var(--r-8);padding:16px 20px;font-family:var(--mono);font-size:12.5px;line-height:1.65;overflow-x:auto;margin:8px 0 16px;border:1px solid #2A2A2A}
+[data-theme="dark"] .spec-code{background:#0A0A0A}
+.kw{color:#FF6A71} .str{color:#9BD173} .cm{color:#555} .ty{color:#6FB2CC}
+.pill{display:inline-block;padding:2px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:700;margin:0 4px 4px 0}
+.pill-ship{background:#ffe7e8;color:var(--cherry-deep)}
+.pill-defer{background:var(--surface-sunken);color:var(--text-muted)}
+[data-theme="dark"] .pill-ship{background:rgba(251,40,50,.2);color:#FF6A71}
+
+/* === Responsive === */
+@media(max-width:900px){
+  .three-pane{grid-template-columns:220px 1fr}
+  .pane-roster{display:none}
+}
+@media(max-width:600px){
+  .app{grid-template-columns:1fr;grid-template-areas:"top" "main"}
+  .nav{display:none}
+  .main{height:calc(100vh - 104px)}
+  .three-pane{grid-template-columns:1fr}
+  .pane-convos{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ─── Demo chrome ─── -->
+<div class="demo-bar" role="toolbar" aria-label="Mockup controls">
+  <span class="demo-label">State</span>
+  <button class="state-btn active" onclick="setState('default')">Default</button>
+  <button class="state-btn" onclick="setState('typing')">Peer Typing</button>
+  <button class="state-btn" onclick="setState('loading')">Loading</button>
+  <button class="state-btn" onclick="setState('empty')">Nobody Online</button>
+  <button class="state-btn" onclick="setState('disconnected')">Disconnected</button>
+  <div class="demo-sep" aria-hidden="true"></div>
+  <button class="tab-btn active" onclick="setTab('community')">① Community View</button>
+  <button class="tab-btn" onclick="setTab('spec')">② Build Spec for Kes</button>
+  <div class="demo-sep" aria-hidden="true"></div>
+  <button class="dark-toggle" onclick="toggleDark()">
+    <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+    Dark
+  </button>
+</div>
+
+<!-- ─── Community View ─── -->
+<div class="app" id="community-view">
+
+  <!-- Topbar (represents the portal shell header) -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <div class="brand-txt">
+        <b><span class="cc">Colaberry</span> Accelerator</b>
+        <span>AI Systems Architect · Cohort July 2026</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <!-- Compact presence count — this is the only presence element on non-Community pages -->
+      <a href="#" class="presence-badge" title="View who's online on Community" aria-label="11 cohort members online — view Community">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="compact-count">11 online</span>
+        <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11" aria-hidden="true"><path fill-rule="evenodd" d="M4.22 11.78a.75.75 0 010-1.06L9.44 5.5H5.75a.75.75 0 010-1.5h5.5a.75.75 0 01.75.75v5.5a.75.75 0 01-1.5 0V6.56l-5.22 5.22a.75.75 0 01-1.06 0z" clip-rule="evenodd"/></svg>
+      </a>
+      <div class="topbar-av" title="Kes Delele" aria-label="Kes Delele — your account">KD</div>
+    </div>
+  </header>
+
+  <!-- Sidebar nav -->
+  <nav class="nav" aria-label="Portal navigation">
+    <div class="nav-grp" aria-hidden="true">Main</div>
+    <button class="navbtn" aria-label="Command Center">
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
+      Command Center
+    </button>
+    <button class="navbtn active" aria-current="page" aria-label="Community — current page">
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg>
+      Community
+      <span class="nav-badge" aria-label="3 unread">3</span>
+    </button>
+    <button class="navbtn" aria-label="My Project">
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+      My Project
+    </button>
+    <button class="navbtn" aria-label="Curriculum">
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/></svg>
+      Curriculum
+    </button>
+    <button class="navbtn" aria-label="Portfolio">
+      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"/></svg>
+      Portfolio
+    </button>
+  </nav>
+
+  <!-- Main content area -->
+  <main class="main" id="main-area">
+
+    <!-- Disconnection banner -->
+    <div class="disconn-banner" id="disconn-banner" role="alert" aria-live="assertive">
+      <div class="disconn-dot" aria-hidden="true"></div>
+      Reconnecting to Colaberry — messages are queued and will send automatically when the connection is restored.
+      <button class="reconnect-btn" onclick="setState('default')">Retry now</button>
+    </div>
+
+    <!-- Presence strip: full version on Community page -->
+    <div class="presence-strip" aria-label="Cohort presence">
+      <div class="facepile" aria-hidden="true">
+        <div class="fp-av" style="background:#367895" title="Marcus T.">MT<div class="sdot online"></div></div>
+        <div class="fp-av" style="background:#4D9E3A" title="Sarah K.">SK<div class="sdot online"></div></div>
+        <div class="fp-av" style="background:#C17B00" title="Jordan M.">JM<div class="sdot online"></div></div>
+        <div class="fp-av" style="background:#6D4BB8" title="Priya L.">PL<div class="sdot online"></div></div>
+      </div>
+      <div class="strip-info">
+        <div class="strip-count" id="strip-count">4 online · 2 away</div>
+        <div class="strip-sub">Cohort active · Intensive 3, Week 7</div>
+      </div>
+      <a href="#" class="strip-link" aria-label="See all cohort members">
+        See all
+        <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" aria-hidden="true"><path fill-rule="evenodd" d="M4.22 11.78a.75.75 0 010-1.06L9.44 5.5H5.75a.75.75 0 010-1.5h5.5a.75.75 0 01.75.75v5.5a.75.75 0 01-1.5 0V6.56l-5.22 5.22a.75.75 0 01-1.06 0z" clip-rule="evenodd"/></svg>
+      </a>
+    </div>
+
+    <!-- 3-pane layout -->
+    <div class="three-pane">
+
+      <!-- Pane 1: Who's Online Roster -->
+      <aside class="pane-roster" aria-label="Who's online">
+
+        <!-- Loading -->
+        <div class="loading-overlay" id="roster-loading" aria-hidden="true">
+          <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1"><div class="skel skel-line" style="width:55%"></div><div class="skel skel-line" style="width:38%"></div></div></div>
+          <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1"><div class="skel skel-line" style="width:70%"></div><div class="skel skel-line" style="width:45%"></div></div></div>
+          <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1"><div class="skel skel-line" style="width:60%"></div><div class="skel skel-line" style="width:40%"></div></div></div>
+        </div>
+
+        <div id="roster-content">
+          <!-- Self-status control -->
+          <div class="self-status">
+            <div class="self-av" aria-hidden="true">KD<div class="sdot online" id="self-dot"></div></div>
+            <div class="self-info">
+              <div class="self-name">Kes Delele</div>
+              <div class="status-dropdown">
+                <button class="status-select" id="self-status-btn" onclick="toggleStatusMenu(event)"
+                  aria-haspopup="menu" aria-expanded="false" aria-label="Set your status">
+                  <span id="self-status-label">● Online</span>
+                  <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.22 6.22a.75.75 0 011.06 0L8 8.94l2.72-2.72a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L4.22 7.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="status-menu" id="status-menu" role="menu">
+                  <button class="status-opt" onclick="setStatus('online')" role="menuitem"><div class="opt-dot online" aria-hidden="true"></div>Online</button>
+                  <button class="status-opt" onclick="setStatus('away')" role="menuitem"><div class="opt-dot away" aria-hidden="true"></div>Away</button>
+                  <button class="status-opt" onclick="setStatus('invisible')" role="menuitem"><div class="opt-dot invisible" aria-hidden="true"></div>Appear offline</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pane-hdr">
+            <span class="pane-title">Who's Online</span>
+            <span class="pane-count" id="roster-count" aria-label="4 online">4</span>
+          </div>
+
+          <!-- Empty state -->
+          <div class="empty-roster" id="empty-roster" role="status">
+            <div class="empty-icon" aria-hidden="true">💤</div>
+            <div class="empty-title">Just you — cohort is offline</div>
+            <div class="empty-sub">Check back during session hours (Mon + Thu 7–9 PM ET) to find peers online.</div>
+          </div>
+
+          <!-- Online section -->
+          <div class="roster-sec" id="online-section">
+            <div class="roster-sec-lbl" onclick="toggleSection('online-list',this)" role="button" aria-expanded="true" tabindex="0">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.22 6.22a.75.75 0 011.06 0L8 8.94l2.72-2.72a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L4.22 7.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+              <span style="color:var(--leaf-text)">● Online</span>
+              <span style="margin-left:auto;font-family:var(--mono)" aria-hidden="true">4</span>
+            </div>
+            <div id="online-list" role="list">
+              <div class="roster-item" role="listitem" onclick="selectConvo('marcus')" tabindex="0">
+                <div class="roster-av" style="background:#367895" aria-hidden="true">MT<div class="sdot online"></div></div>
+                <div class="roster-info">
+                  <div class="roster-name">Marcus T.</div>
+                  <div class="roster-act">In Week 7 lab</div>
+                </div>
+                <button class="roster-chat-btn" aria-label="Chat with Marcus T." onclick="event.stopPropagation();selectConvo('marcus')">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+              <div class="roster-item" role="listitem" onclick="selectConvo('sarah')" tabindex="0">
+                <div class="roster-av" style="background:#4D9E3A" aria-hidden="true">SK<div class="sdot online"></div></div>
+                <div class="roster-info">
+                  <div class="roster-name">Sarah K.</div>
+                  <div class="roster-act">In Week 7 lab</div>
+                </div>
+                <button class="roster-chat-btn" aria-label="Chat with Sarah K.">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+              <div class="roster-item" role="listitem" onclick="selectConvo('jordan')" tabindex="0">
+                <div class="roster-av" style="background:#C17B00" aria-hidden="true">JM<div class="sdot online"></div></div>
+                <div class="roster-info">
+                  <div class="roster-name">Jordan M.</div>
+                  <div class="roster-act">Reviewing feedback</div>
+                </div>
+                <button class="roster-chat-btn" aria-label="Chat with Jordan M.">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+              <div class="roster-item" role="listitem" tabindex="0">
+                <div class="roster-av" style="background:#6D4BB8" aria-hidden="true">PL<div class="sdot online"></div></div>
+                <div class="roster-info">
+                  <div class="roster-name">Priya L.</div>
+                  <div class="roster-act">Watching a lesson</div>
+                </div>
+                <button class="roster-chat-btn" aria-label="Chat with Priya L.">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Away section -->
+          <div class="roster-sec" id="away-section">
+            <div class="roster-sec-lbl" onclick="toggleSection('away-list',this)" role="button" aria-expanded="true" tabindex="0">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.22 6.22a.75.75 0 011.06 0L8 8.94l2.72-2.72a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L4.22 7.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+              <span style="color:var(--amber-deep)">◐ Away</span>
+              <span style="margin-left:auto;font-family:var(--mono)" aria-hidden="true">2</span>
+            </div>
+            <div id="away-list" role="list">
+              <div class="roster-item" role="listitem" tabindex="0">
+                <div class="roster-av" style="background:#B55A2E" aria-hidden="true">DR<div class="sdot away"></div></div>
+                <div class="roster-info">
+                  <div class="roster-name">David R.</div>
+                  <div class="roster-act">Away · 8 min</div>
+                </div>
+                <button class="roster-chat-btn" aria-label="Chat with David R.">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+              <div class="roster-item" role="listitem" tabindex="0">
+                <div class="roster-av" style="background:#2E7A5C" aria-hidden="true">AN<div class="sdot away"></div></div>
+                <div class="roster-info">
+                  <div class="roster-name">Aisha N.</div>
+                  <div class="roster-act">Away · 3 min</div>
+                </div>
+                <button class="roster-chat-btn" aria-label="Chat with Aisha N.">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Offline section (collapsed) -->
+          <div class="roster-sec">
+            <div class="roster-sec-lbl collapsed" onclick="toggleSection('offline-list',this)" role="button" aria-expanded="false" tabindex="0">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.22 6.22a.75.75 0 011.06 0L8 8.94l2.72-2.72a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L4.22 7.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+              <span style="color:var(--text-muted)">○ Offline</span>
+              <span style="margin-left:auto;font-family:var(--mono)" aria-hidden="true">8</span>
+            </div>
+            <div id="offline-list" style="display:none" role="list">
+              <div class="roster-item" role="listitem" tabindex="0">
+                <div class="roster-av" style="background:#7A7A7A" aria-hidden="true">RJ<div class="sdot offline"></div></div>
+                <div class="roster-info"><div class="roster-name">Rita J.</div><div class="roster-act">Last seen 2h ago</div></div>
+              </div>
+              <div class="roster-item" role="listitem" tabindex="0">
+                <div class="roster-av" style="background:#7A7A7A" aria-hidden="true">TK<div class="sdot offline"></div></div>
+                <div class="roster-info"><div class="roster-name">Tanya K.</div><div class="roster-act">Last seen yesterday</div></div>
+              </div>
+              <div class="roster-more">+ 6 more offline</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Pane 2: Conversation list -->
+      <section class="pane-convos" aria-label="Conversations">
+        <div class="pane-hdr">
+          <span class="pane-title">Messages</span>
+        </div>
+        <div class="convo-search">
+          <input type="search" placeholder="Search messages…" aria-label="Search conversations" />
+        </div>
+
+        <!-- Loading -->
+        <div class="loading-overlay" id="convos-loading" aria-hidden="true">
+          <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1"><div class="skel skel-line" style="width:65%"></div><div class="skel skel-line" style="width:80%"></div></div></div>
+          <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1"><div class="skel skel-line" style="width:50%"></div><div class="skel skel-line" style="width:70%"></div></div></div>
+          <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1"><div class="skel skel-line" style="width:60%"></div><div class="skel skel-line" style="width:55%"></div></div></div>
+        </div>
+
+        <div id="convos-content" class="convo-list">
+          <div class="convo-item active" id="convo-marcus" onclick="selectConvo('marcus')" tabindex="0" role="button" aria-label="Marcus T., online, 2 minutes ago">
+            <div class="convo-av">
+              <div class="av" style="background:#367895">MT</div>
+              <div class="sdot online"></div>
+            </div>
+            <div class="convo-body">
+              <div class="convo-header">
+                <span class="convo-name">Marcus T.</span>
+                <span class="convo-time">2m</span>
+              </div>
+              <div class="convo-preview">Went with hybrid search — dense...</div>
+            </div>
+          </div>
+
+          <div class="convo-item" id="convo-sarah" onclick="selectConvo('sarah')" tabindex="0" role="button" aria-label="Sarah K., online, 2 unread messages">
+            <div class="convo-av">
+              <div class="av" style="background:#4D9E3A">SK</div>
+              <div class="sdot online"></div>
+            </div>
+            <div class="convo-body">
+              <div class="convo-header">
+                <span class="convo-name">Sarah K.</span>
+                <span class="convo-time">1h</span>
+              </div>
+              <div class="convo-preview">Did you see the updated lab spec?</div>
+            </div>
+            <div class="convo-unread" aria-label="2 unread">2</div>
+          </div>
+
+          <div class="convo-item" id="convo-jordan" onclick="selectConvo('jordan')" tabindex="0" role="button">
+            <div class="convo-av">
+              <div class="av" style="background:#C17B00">JM</div>
+              <div class="sdot online"></div>
+            </div>
+            <div class="convo-body">
+              <div class="convo-header">
+                <span class="convo-name">Jordan M.</span>
+                <span class="convo-time">3h</span>
+              </div>
+              <div class="convo-preview">Thanks for the review feedback!</div>
+            </div>
+          </div>
+
+          <div class="convo-item" tabindex="0" role="button">
+            <div class="convo-av">
+              <div class="av" style="background:#B55A2E">DR</div>
+              <div class="sdot away"></div>
+            </div>
+            <div class="convo-body">
+              <div class="convo-header">
+                <span class="convo-name">David R.</span>
+                <span class="convo-time">Yesterday</span>
+              </div>
+              <div class="convo-preview">Let me know when you're free to pair</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pane 3: Chat thread -->
+      <section class="pane-chat" aria-label="Chat with Marcus T.">
+        <div class="chat-hdr">
+          <div class="chat-peer-av">
+            <div class="av" style="background:#367895" aria-hidden="true">MT</div>
+            <div class="sdot online" id="peer-dot" aria-hidden="true"></div>
+          </div>
+          <div class="chat-peer-info">
+            <div class="chat-peer-name">Marcus T.</div>
+            <div class="chat-peer-status" id="peer-status" aria-live="polite">Online</div>
+          </div>
+          <div class="chat-actions" aria-label="Call options">
+            <div class="icon-wrap">
+              <button class="icon-btn" aria-label="Voice call — coming soon, not yet available" title="Voice call">
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/></svg>
+              </button>
+              <span class="soon-badge" aria-hidden="true">soon</span>
+            </div>
+            <div class="icon-wrap">
+              <button class="icon-btn" aria-label="Video call — coming soon, not yet available" title="Video call">
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/></svg>
+              </button>
+              <span class="soon-badge" aria-hidden="true">soon</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Thread -->
+        <div class="chat-thread" id="chat-thread" role="log" aria-label="Chat messages" aria-live="polite">
+
+          <!-- Loading state -->
+          <div class="loading-overlay" id="thread-loading" aria-hidden="true" style="padding:16px;gap:14px">
+            <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1;max-width:60%"><div class="skel skel-line" style="width:90%;height:42px;border-radius:12px"></div></div></div>
+            <div class="skel-row" style="justify-content:flex-end"><div style="flex:1;max-width:55%;display:flex;justify-content:flex-end"><div class="skel skel-line" style="width:80%;height:58px;border-radius:12px"></div></div></div>
+            <div class="skel-row"><div class="skel skel-av"></div><div style="flex:1;max-width:65%"><div class="skel skel-line" style="width:85%;height:58px;border-radius:12px"></div></div></div>
+          </div>
+
+          <!-- Normal thread content -->
+          <div id="thread-content">
+            <div class="msg-date" aria-label="Today, July 2 2026">Today · Jul 2, 2026</div>
+
+            <!-- Incoming group -->
+            <div class="msg-group">
+              <div class="msg-group-hdr">
+                <div class="msg-group-av" style="background:#367895" aria-hidden="true">MT</div>
+                <span class="msg-group-name">Marcus T.</span>
+                <span class="msg-group-time">7:14 PM</span>
+              </div>
+              <div class="msg-row">
+                <div class="msg-bubble">Hey, just deployed my Week 7 lab — the RAG pipeline is actually working! 🎉</div>
+              </div>
+              <div class="msg-row">
+                <div class="msg-bubble">Took me a while to get the chunking strategy right but retrieval quality is solid now.</div>
+              </div>
+            </div>
+
+            <!-- Outgoing delivered -->
+            <div class="msg-group">
+              <div class="msg-row out">
+                <div class="msg-bubble">Nice! What retrieval strategy did you end up using?</div>
+              </div>
+              <div class="msg-meta out">
+                <span class="tick delivered" aria-label="Delivered">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                </span>
+                <span class="msg-time">7:15 PM</span>
+              </div>
+            </div>
+
+            <!-- Incoming group -->
+            <div class="msg-group">
+              <div class="msg-group-hdr">
+                <div class="msg-group-av" style="background:#367895" aria-hidden="true">MT</div>
+                <span class="msg-group-name">Marcus T.</span>
+                <span class="msg-group-time">7:16 PM</span>
+              </div>
+              <div class="msg-row">
+                <div class="msg-bubble">Went with hybrid search — dense + BM25. Way better than pure vector for technical queries.</div>
+              </div>
+              <div class="msg-row">
+                <div class="msg-bubble">BM25 catches exact keyword matches that the embedding model misses on code-heavy questions.</div>
+              </div>
+            </div>
+
+            <!-- Outgoing sent (single tick) -->
+            <div class="msg-group">
+              <div class="msg-row out">
+                <div class="msg-bubble">That makes sense — BM25 is still really strong for sparse retrieval. Are you using Pinecone or local FAISS?</div>
+              </div>
+              <div class="msg-meta out">
+                <span class="tick" aria-label="Sent">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </span>
+                <span class="msg-time">7:18 PM</span>
+              </div>
+            </div>
+
+            <!-- Failed message — only shown in disconnected state -->
+            <div class="msg-failed-row" id="msg-failed" role="alert">
+              <div class="msg-bubble">Actually are you deploying on serverless or a container?</div>
+              <button class="retry-btn" onclick="setState('default')" aria-label="Message failed to send — click to retry">Couldn't send · Retry</button>
+            </div>
+          </div>
+
+          <!-- Typing indicator — shown in "typing" state -->
+          <div class="typing-ind" id="typing-ind" aria-live="polite" aria-label="Marcus T. is typing">
+            <div class="t-av" style="background:#367895" aria-hidden="true">MT</div>
+            <div class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+            <span class="typing-label">Marcus is typing…</span>
+          </div>
+        </div>
+
+        <!-- Input area -->
+        <div class="chat-input-area">
+          <div class="input-row">
+            <button class="attach-btn" aria-label="Attach file — coming soon" title="Attach file">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd"/></svg>
+              <span class="attach-soon" aria-hidden="true">soon</span>
+            </button>
+            <textarea
+              class="chat-input"
+              id="chat-input"
+              placeholder="Message Marcus…"
+              rows="1"
+              aria-label="Type a message"
+              onkeydown="handleKeydown(event)"
+              oninput="handleInput(this)"
+            ></textarea>
+            <button class="chat-send" id="send-btn" disabled aria-label="Send message" onclick="sendMessage()">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
+            </button>
+          </div>
+          <div class="queued-notice" id="queued-notice" role="status">
+            ⏳ 1 message queued — will send when reconnected
+          </div>
+        </div>
+      </section>
+    </div><!-- /three-pane -->
+  </main>
+</div><!-- /community-view -->
+
+
+<!-- ─── Build Spec view ─── -->
+<div class="spec-view" id="spec-view">
+  <h1 style="font-size:24px;margin-bottom:4px">Build Spec — Presence / Peer Chat</h1>
+  <p style="color:var(--text-muted);font-size:14px;margin-bottom:32px">
+    <strong>BUILD_SPEC §9 #8</strong> · Engineer: Kes Delele · Design: Aleem (approved) · Approval: Ali (pending) ·
+    <span class="pill pill-defer">P2 — post 7/13 launch</span>
+  </p>
+
+  <div class="spec-section">
+    <h2>Overview</h2>
+    <p>Adds real-time presence awareness and 1:1 peer chat to the Community page. Gated P2: does not block the 7/13 P0 launch. The existing poll-based <code>Member.presence</code> field stays for launch; this WebSocket layer replaces it afterward.</p>
+    <table class="spec-table">
+      <tr><th>What</th><th>Detail</th></tr>
+      <tr><td>Online indicators</td><td>Who's-online roster on Community page + compact count badge on portal topbar (all pages)</td></tr>
+      <tr><td>Peer chat</td><td>1:1 direct messaging between cohort members — no group chat in v1</td></tr>
+      <tr><td>Transport</td><td>WebSocket — Socket.IO recommended (handles reconnect, rooms, heartbeat). Raw WS acceptable if reconnect logic is hand-rolled.</td></tr>
+      <tr><td>Scale target v1</td><td>One cohort (~20–30 concurrent connections). No sharding, no Redis adapter needed at launch.</td></tr>
+    </table>
+  </div>
+
+  <div class="spec-section">
+    <h2>Presence thresholds (server-derived)</h2>
+    <p>Heartbeat: client pings every <strong>30s</strong>. Server marks socket offline after 65s without ping (5s grace above the threshold).</p>
+    <table class="spec-table">
+      <tr><th>State</th><th>Condition</th><th>Dot color / token</th></tr>
+      <tr><td><strong>Online</strong></td><td>Heartbeat received within last 60s</td><td style="color:var(--leaf-text)">● Leaf green — <code>--leaf</code> #77BB4A</td></tr>
+      <tr><td><strong>Away</strong></td><td>61s – 5 min since last heartbeat</td><td style="color:var(--amber-deep)">◐ Amber — <code>--amber</code> #E8920C</td></tr>
+      <tr><td><strong>Offline</strong></td><td>&gt;5 min, or appear-offline set</td><td style="color:var(--text-muted)">○ Neutral — <code>--n400</code> #B4B4B4</td></tr>
+    </table>
+    <p>Activity context is <strong>coarse + opt-in</strong>: page-level labels only ("In Week 7 lab", "Reviewing feedback", "Watching a lesson") — never exact URLs. Students can hide activity via the appear-offline toggle.</p>
+  </div>
+
+  <div class="spec-section">
+    <h2>Presence state machine</h2>
+    <div class="spec-code"><span class="cm">// Server-side record per active connection</span>
+<span class="kw">type</span> <span class="ty">PresenceSession</span> = {
+  enrollment_id:  <span class="ty">string</span>;       <span class="cm">// UUID</span>
+  socket_id:      <span class="ty">string</span>;
+  status:         <span class="str">'online'</span> | <span class="str">'away'</span> | <span class="str">'offline'</span> | <span class="str">'invisible'</span>;
+  last_heartbeat: <span class="ty">Date</span>;
+  activity:       <span class="ty">string</span> | <span class="kw">null</span>;  <span class="cm">// coarse label, opt-in</span>
+};
+
+<span class="cm">// Client emits every 30s</span>
+socket.emit(<span class="str">'presence:heartbeat'</span>, { activity: <span class="str">'In Week 7 lab'</span> });
+
+<span class="cm">// Server broadcasts to cohort room on state change</span>
+io.to(<span class="str">`cohort:${cohort_id}`</span>).emit(<span class="str">'presence:update'</span>, {
+  enrollment_id, status, activity
+});
+
+<span class="cm">// Client-side status derived from last_heartbeat delta</span>
+<span class="kw">function</span> <span class="ty">deriveStatus</span>(lastSeen: <span class="ty">Date</span>): <span class="str">'online'</span> | <span class="str">'away'</span> | <span class="str">'offline'</span> {
+  <span class="kw">const</span> delta = Date.now() - lastSeen.getTime();
+  <span class="kw">if</span> (delta &lt;= 60_000)  <span class="kw">return</span> <span class="str">'online'</span>;
+  <span class="kw">if</span> (delta &lt;= 300_000) <span class="kw">return</span> <span class="str">'away'</span>;
+  <span class="kw">return</span> <span class="str">'offline'</span>;
+}</div>
+  </div>
+
+  <div class="spec-section">
+    <h2>Message delivery states</h2>
+    <table class="spec-table">
+      <tr><th>State</th><th>UI</th><th>Condition</th></tr>
+      <tr><td><strong>Queued</strong></td><td>⏳ clock icon</td><td>Client offline — stored in IndexedDB, auto-replayed on reconnect in send order</td></tr>
+      <tr><td><strong>Sent</strong></td><td>✓ single grey tick</td><td>Server received — peer client not yet confirmed</td></tr>
+      <tr><td><strong>Delivered</strong></td><td>✓✓ double leaf-green tick</td><td>Server confirmed peer client received</td></tr>
+    </table>
+    <p>Failed messages show <strong>"Couldn't send · Retry"</strong> inline. No read receipts in v1.</p>
+    <p>Idempotency: client generates a UUID per message before sending. Server does <code>INSERT ... ON CONFLICT (id) DO NOTHING</code> — replayed messages on reconnect are safe to re-emit.</p>
+  </div>
+
+  <div class="spec-section">
+    <h2>Disconnection &amp; failsafe</h2>
+    <p><strong>Fail-soft on disconnect:</strong> UI shows last-known presence state (not "everyone offline"). A "Reconnecting…" banner appears. Outbound messages are queued in IndexedDB and replayed in send order on reconnect. Socket.IO's built-in exponential backoff handles reconnect (max 5 attempts, cap 30s delay). After 5 failed attempts, show "Couldn't send · Retry" per queued message.</p>
+    <div class="spec-code"><span class="cm">// Auto-queue messages while disconnected</span>
+socket.on(<span class="str">'disconnect'</span>, () => {
+  store.dispatch(setConnectionState(<span class="str">'reconnecting'</span>));
+  <span class="cm">// Subsequent sends go to IndexedDB queue instead of socket.emit</span>
+});
+
+socket.on(<span class="str">'reconnect'</span>, <span class="kw">async</span> () => {
+  <span class="kw">const</span> queued = <span class="kw">await</span> idb.getQueuedMessages();  <span class="cm">// ordered by created_at</span>
+  <span class="kw">for</span> (<span class="kw">const</span> msg <span class="kw">of</span> queued) {
+    socket.emit(<span class="str">'chat:send'</span>, msg);  <span class="cm">// idempotency key: msg.id (UUID)</span>
+    <span class="kw">await</span> idb.removeQueued(msg.id);
+  }
+  store.dispatch(setConnectionState(<span class="str">'connected'</span>));
+});</div>
+  </div>
+
+  <div class="spec-section">
+    <h2>Layout &amp; responsive breakpoints</h2>
+    <table class="spec-table">
+      <tr><th>Breakpoint</th><th>Layout</th><th>Detail</th></tr>
+      <tr><td>&gt;900px — desktop</td><td><strong>3-pane</strong></td><td>Roster (260px) | Conversations (220px) | Thread (flex 1)</td></tr>
+      <tr><td>601–900px — tablet</td><td><strong>2-pane</strong></td><td>Roster hidden; Conversations (240px) | Thread</td></tr>
+      <tr><td>≤600px — mobile</td><td><strong>Master-detail</strong></td><td>Nav hidden; one pane at a time. Conversation list → tap → chat thread. Back button to return.</td></tr>
+    </table>
+  </div>
+
+  <div class="spec-section">
+    <h2>Where presence lives across the portal</h2>
+    <table class="spec-table">
+      <tr><th>Page</th><th>Presence element</th></tr>
+      <tr><td><strong>Community page</strong></td><td>Full presence strip (facepile + "4 online · 2 away") + 3-pane roster + conversation + chat thread</td></tr>
+      <tr><td><strong>Portal topbar (all pages)</strong></td><td>Compact count-only badge — "11 online ›" — links to Community. No roster or chat.</td></tr>
+      <tr><td><strong>All other pages</strong> (lessons, project builder, etc.)</td><td>Nothing — focus screens stay distraction-free</td></tr>
+    </table>
+  </div>
+
+  <div class="spec-section">
+    <h2>Data model (PostgreSQL)</h2>
+    <div class="spec-code"><span class="cm">-- Presence sessions (ephemeral; could move to Redis in future)</span>
+<span class="kw">CREATE TABLE</span> presence_sessions (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  enrollment_id  UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+  socket_id      TEXT NOT NULL,
+  status         TEXT NOT NULL CHECK (status IN ('online','away','offline','invisible')),
+  activity       TEXT,          <span class="cm">-- coarse opt-in label; NULL when hidden</span>
+  last_heartbeat TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (enrollment_id, socket_id)
+);
+<span class="kw">CREATE INDEX</span> ON presence_sessions (enrollment_id);
+
+<span class="cm">-- Chat messages (persistent)</span>
+<span class="kw">CREATE TABLE</span> chat_messages (
+  id           UUID PRIMARY KEY,  <span class="cm">-- client-generated for idempotency</span>
+  sender_id    UUID NOT NULL REFERENCES enrollments(id),
+  recipient_id UUID NOT NULL REFERENCES enrollments(id),
+  body         TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 4000),
+  delivered_at TIMESTAMPTZ,       <span class="cm">-- set when peer socket confirms receipt</span>
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+<span class="cm">-- INSERT ... ON CONFLICT (id) DO NOTHING  → idempotent replays</span>
+<span class="kw">CREATE INDEX</span> ON chat_messages (sender_id, recipient_id, created_at);</div>
+  </div>
+
+  <div class="spec-section">
+    <h2>V1 scope vs. deferred</h2>
+    <table class="spec-table">
+      <tr><th>Feature</th><th>V1 (ship)</th><th>Deferred</th></tr>
+      <tr><td>1:1 peer chat</td><td><span class="pill pill-ship">✓ Ship</span></td><td></td></tr>
+      <tr><td>Who's online roster + presence strip</td><td><span class="pill pill-ship">✓ Ship</span></td><td></td></tr>
+      <tr><td>Appear-offline toggle</td><td><span class="pill pill-ship">✓ Ship</span></td><td></td></tr>
+      <tr><td>Coarse activity labels (opt-in)</td><td><span class="pill pill-ship">✓ Ship</span></td><td></td></tr>
+      <tr><td>Delivery ticks (sent / delivered)</td><td><span class="pill pill-ship">✓ Ship</span></td><td></td></tr>
+      <tr><td>Offline queue + auto-replay on reconnect</td><td><span class="pill pill-ship">✓ Ship</span></td><td></td></tr>
+      <tr><td>Group / pod chat</td><td></td><td><span class="pill pill-defer">P2.1</span></td></tr>
+      <tr><td>Reactions</td><td></td><td><span class="pill pill-defer">P2.1</span></td></tr>
+      <tr><td>File / image attachments</td><td></td><td><span class="pill pill-defer">P2.1</span></td></tr>
+      <tr><td>Audio / video calls</td><td></td><td><span class="pill pill-defer">P2.2</span></td></tr>
+      <tr><td>Missed-message push notifications</td><td></td><td><span class="pill pill-defer">P2.2</span></td></tr>
+      <tr><td>Read receipts</td><td></td><td><span class="pill pill-defer">P2.2</span></td></tr>
+    </table>
+  </div>
+</div><!-- /spec-view -->
+
+
+<script>
+let currentState = 'default';
+let menuOpen = false;
+
+/* ─── State machine ─── */
+function setState(state) {
+  currentState = state;
+
+  // Highlight active state button
+  const stateMap = { default: 0, typing: 1, loading: 2, empty: 3, disconnected: 4 };
+  document.querySelectorAll('.state-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === stateMap[state]);
+  });
+
+  const isLoading = state === 'loading';
+  const isEmpty   = state === 'empty';
+  const isDisconn = state === 'disconnected';
+
+  // Disconnection banner
+  document.getElementById('disconn-banner').classList.toggle('show', isDisconn);
+
+  // Presence strip text
+  document.getElementById('strip-count').textContent =
+    isEmpty   ? '0 online · 0 away' :
+    isDisconn ? '4 online · 2 away (last known)' :
+                '4 online · 2 away';
+
+  document.getElementById('compact-count').textContent = isEmpty ? '0 online' : '11 online';
+  document.getElementById('roster-count').textContent  = isEmpty ? '0' : '4';
+
+  // Loading skeletons
+  document.getElementById('roster-loading').classList.toggle('show', isLoading);
+  document.getElementById('roster-content').style.display = isLoading ? 'none' : '';
+  document.getElementById('convos-loading').classList.toggle('show', isLoading);
+  document.getElementById('convos-content').style.display = isLoading ? 'none' : '';
+  document.getElementById('thread-loading').classList.toggle('show', isLoading);
+  document.getElementById('thread-content').style.display = isLoading ? 'none' : '';
+  document.getElementById('typing-ind').classList.remove('show');
+  if (isLoading) return;
+
+  // Nobody online empty state
+  document.getElementById('empty-roster').classList.toggle('show', isEmpty);
+  document.getElementById('online-section').style.display = isEmpty ? 'none' : '';
+  document.getElementById('away-section').style.display   = isEmpty ? 'none' : '';
+
+  // Typing indicator
+  document.getElementById('typing-ind').classList.toggle('show', state === 'typing');
+
+  // Peer status header
+  const peerStatus = document.getElementById('peer-status');
+  const peerDot    = document.getElementById('peer-dot');
+  if (isDisconn) {
+    peerStatus.textContent = 'Offline (reconnecting…)';
+    peerStatus.className   = 'chat-peer-status disconnected';
+    peerDot.style.display  = 'none';
+  } else {
+    peerStatus.textContent = 'Online';
+    peerStatus.className   = 'chat-peer-status';
+    peerDot.style.display  = '';
+  }
+
+  // Failed message
+  document.getElementById('msg-failed').classList.toggle('show', isDisconn);
+
+  // Queued notice + input disabled
+  document.getElementById('queued-notice').classList.toggle('show', isDisconn);
+  const input = document.getElementById('chat-input');
+  input.disabled    = isDisconn;
+  input.placeholder = isDisconn ? 'Reconnecting…' : 'Message Marcus…';
+  if (isDisconn) document.getElementById('send-btn').disabled = true;
+}
+
+/* ─── Tab switching ─── */
+function setTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) =>
+    b.classList.toggle('active', (tab === 'community') ? i === 0 : i === 1)
+  );
+  document.getElementById('community-view').style.display = tab === 'community' ? '' : 'none';
+  document.getElementById('spec-view').classList.toggle('show', tab === 'spec');
+
+  // Hide state buttons when on spec view
+  document.querySelectorAll('.state-btn').forEach(b => b.style.display = tab === 'spec' ? 'none' : '');
+  document.querySelectorAll('.demo-sep').forEach(b => b.style.display = tab === 'spec' ? 'none' : '');
+  document.querySelector('.demo-label').style.display = tab === 'spec' ? 'none' : '';
+}
+
+/* ─── Dark mode ─── */
+function toggleDark() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  const btn = document.querySelector('.dark-toggle');
+  btn.innerHTML = isDark
+    ? '<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg> Dark'
+    : '<svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg> Light';
+}
+
+/* ─── Roster section collapse ─── */
+function toggleSection(listId, lbl) {
+  const list = document.getElementById(listId);
+  const collapsed = list.style.display === 'none';
+  list.style.display = collapsed ? '' : 'none';
+  lbl.classList.toggle('collapsed', !collapsed);
+  lbl.setAttribute('aria-expanded', String(collapsed));
+}
+
+/* ─── Self-status dropdown ─── */
+function toggleStatusMenu(e) {
+  e.stopPropagation();
+  menuOpen = !menuOpen;
+  document.getElementById('status-menu').classList.toggle('open', menuOpen);
+  document.getElementById('self-status-btn').setAttribute('aria-expanded', String(menuOpen));
+}
+
+function setStatus(mode) {
+  menuOpen = false;
+  document.getElementById('status-menu').classList.remove('open');
+  document.getElementById('self-status-btn').setAttribute('aria-expanded', 'false');
+
+  const label = document.getElementById('self-status-label');
+  const dot   = document.getElementById('self-dot');
+  const btn   = document.getElementById('self-status-btn');
+
+  const map = {
+    online:    { text: '● Online',         dotBg: 'var(--leaf)',  cls: '' },
+    away:      { text: '◐ Away',           dotBg: 'var(--amber)', cls: 'away' },
+    invisible: { text: '○ Appear offline', dotBg: 'var(--n400)', cls: 'invisible' },
+  };
+  const { text, dotBg, cls } = map[mode];
+  label.textContent = text;
+  dot.style.background = dotBg;
+  btn.className = `status-select ${cls}`.trim();
+}
+
+document.addEventListener('click', () => {
+  if (menuOpen) {
+    menuOpen = false;
+    document.getElementById('status-menu').classList.remove('open');
+    document.getElementById('self-status-btn').setAttribute('aria-expanded', 'false');
+  }
+});
+
+/* ─── Conversation selection ─── */
+function selectConvo(person) {
+  document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('convo-' + person);
+  if (el) el.classList.add('active');
+}
+
+/* ─── Chat input ─── */
+function handleInput(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  document.getElementById('send-btn').disabled =
+    el.value.trim() === '' || currentState === 'disconnected';
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text || currentState === 'disconnected') return;
+
+  const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const group = document.createElement('div');
+  group.className = 'msg-group';
+  group.innerHTML = `
+    <div class="msg-row out"><div class="msg-bubble">${safe}</div></div>
+    <div class="msg-meta out">
+      <span class="tick" aria-label="Sent">
+        <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+      </span>
+      <span class="msg-time">${now}</span>
+    </div>`;
+
+  document.getElementById('thread-content').appendChild(group);
+  const thread = document.getElementById('chat-thread');
+  thread.scrollTop = thread.scrollHeight;
+
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('send-btn').disabled = true;
+}
+
+// Init
+setState('default');
+</script>
+</body>
+</html>
