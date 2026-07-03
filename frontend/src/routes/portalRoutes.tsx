@@ -29,6 +29,7 @@ import CoryHome from '../pages/portal/CoryHome';
 import ArchitectDashboard from '../pages/portal/ArchitectDashboard';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
+import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 import ExecutionLane from '../pages/project/ExecutionLane';
 import SystemView from '../pages/project/SystemView';
 
@@ -45,6 +46,7 @@ const portalRoutes = (
         {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
         <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
+        <Route path="/portal/classroom/week/:weekNum" element={<ClassroomWeekPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />
         <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
