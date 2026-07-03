@@ -2706,6 +2706,27 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Portfolio GitHub sync agent: daily at 02:15 UTC');
+
+  // ── Architect Evaluation Agent (weekly, Saturday 06:00 UTC) ──────────────────
+  // Evaluates each active student's project progress using ProjectDna +
+  // StudentGithubActivity + lesson completion. Upserts one row per
+  // (enrollment_id, week_number) in architect_evaluations — safe to re-run.
+  cron.schedule('0 6 * * 6', () => {
+    instrumentCronJob('ArchitectEvaluationAgent', async () => {
+      const { runArchitectEvaluationAgent } = await import('./agents/architectEvaluationAgent');
+      const result = await runArchitectEvaluationAgent();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'architect_evaluation_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Architect evaluation error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
 }
 
 // ---------------------------------------------------------------------------

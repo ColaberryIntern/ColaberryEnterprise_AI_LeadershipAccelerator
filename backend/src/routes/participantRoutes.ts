@@ -66,6 +66,15 @@ router.get('/api/portal/curriculum/skill-genome', requireParticipant, handleGetS
 router.get('/api/portal/curriculum/skill-gaps', requireParticipant, handleGetSkillGaps);
 router.get('/api/portal/curriculum/lessons/:lessonId/orchestration-context', requireParticipant, handleGetOrchestrationContext);
 
+// Architect project evaluation — latest AI evaluation for this enrollment
+router.get('/api/portal/project/evaluation', requireParticipant, async (req, res, next) => {
+  try {
+    const { getLatestEvaluation } = await import('../services/agents/architectEvaluationAgent');
+    const evaluation = await getLatestEvaluation(req.participant!.sub);
+    res.json(evaluation ? evaluation.toJSON() : null);
+  } catch (err) { next(err); }
+});
+
 // Context state — returns learner's context mode for UX adaptation
 router.get('/api/portal/context-state', requireParticipant, async (req, res) => {
   try {
