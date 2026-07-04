@@ -7567,3 +7567,4 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     - BC comment posted: https://app.basecamp.com/3945211/buckets/15139308/question_answers/10036783688#__recording_10063101246
   - Verification: User confirmed mockup via browser review across multiple iterations. Spec doc live at BC URL above.
   - Notes: Implementation (Phase 1) blocked on 3 decisions from Ali — portal URL (training.colaberry.com vs enterprise.colaberry.ai), community platform (Discord vs Skool+WhatsApp), AI Mentor continuity. No code changes to backend/frontend in this branch — design/spec only. Phase 1 estimate 3–4 days once Ali approves.
+  - Reference: `C:\Users\keset\Downloads\CoraEmails` — local folder of real Cora inbox email examples (old rubric). Must be cross-checked against the 26 seeded KB entries during Phase 1 seed/validation to confirm full pattern coverage before retiring `coraKnowledgeBase.ts`.
