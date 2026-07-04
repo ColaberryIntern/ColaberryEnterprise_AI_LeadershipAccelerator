@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Operations — Colaberry Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --cherry-red:  #FB2832;
+      --leaf-green:  #77BB4A;
+      --berry-blue:  #367895;
+      --berry-dark:  #275e75;
+      --sidebar-bg:  #12202e;
+      --sidebar-txt: #8fa3b8;
+      --surface:     #f0f3f6;
+      --card:        #ffffff;
+      --strong:      #1a2332;
+      --muted:       #6c757d;
+      --border:      #dde2e9;
+      --warn-bg:     #fffbeb;
+      --warn-border: #f59e0b;
+      --warn-text:   #92400e;
+    }
+    * { font-family: 'Roboto', sans-serif; }
+    body { background: var(--surface); min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    #sidebar { width:240px; min-height:100vh; background:var(--sidebar-bg); position:fixed; top:0; left:0; z-index:100; display:flex; flex-direction:column; }
+    .sb-logo { padding:20px 20px 16px; border-bottom:1px solid rgba(255,255,255,.07); display:flex; align-items:center; gap:8px; }
+    .sb-mark { width:32px; height:32px; background:var(--cherry-red); border-radius:6px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:14px; }
+    .sb-name { color:#fff; font-weight:500; font-size:15px; }
+    .sb-env  { font-size:10px; color:var(--leaf-green); font-weight:600; background:rgba(119,187,74,.12); border-radius:3px; padding:1px 5px; }
+    .sb-sect { padding:20px 12px 6px; font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:rgba(255,255,255,.28); }
+    .sb-item { display:flex; align-items:center; gap:10px; padding:9px 16px; color:var(--sidebar-txt); font-size:13.5px; text-decoration:none; border-radius:6px; margin:1px 8px; cursor:pointer; transition:all .15s; }
+    .sb-item:hover { background:rgba(255,255,255,.06); color:#fff; }
+    .sb-item.active { background:var(--berry-blue); color:#fff; font-weight:500; }
+    .sb-item i { font-size:16px; width:18px; text-align:center; }
+    .sb-badge { margin-left:auto; font-size:10px; font-weight:700; background:var(--cherry-red); color:#fff; border-radius:10px; padding:1px 6px; }
+
+    /* ── Topbar ── */
+    #topbar { position:fixed; top:0; left:240px; right:0; height:56px; background:#fff; border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; z-index:99; gap:12px; }
+    .bc { font-size:13px; color:var(--muted); }
+    .bc a { color:var(--berry-blue); text-decoration:none; }
+    .bc span { margin:0 6px; }
+
+    /* ── Main ── */
+    #main { margin-left:240px; padding-top:56px; }
+
+    /* ── Page header ── */
+    .ph { background:#fff; border-bottom:1px solid var(--border); padding:20px 28px 0; }
+    .ph-row { display:flex; align-items:flex-start; justify-content:space-between; }
+    .ph h1 { font-size:22px; font-weight:700; color:var(--strong); margin:0; }
+    .ph p  { font-size:13px; color:var(--muted); margin:3px 0 0; }
+
+    /* ── Tabs ── */
+    .tabs { display:flex; margin-top:16px; }
+    .tab { padding:10px 18px 11px; font-size:13.5px; font-weight:500; color:var(--muted); border-bottom:3px solid transparent; cursor:pointer; transition:all .15s; white-space:nowrap; }
+    .tab:hover { color:var(--strong); }
+    .tab.active { color:var(--berry-blue); border-bottom-color:var(--berry-blue); }
+    .tab .tc { font-size:11px; font-weight:600; background:var(--surface); border-radius:10px; padding:1px 7px; margin-left:5px; color:var(--muted); }
+    .tab.active .tc { background:rgba(54,120,149,.12); color:var(--berry-blue); }
+
+    /* ── Pending decisions panel ── */
+    .pending-panel { margin:20px 28px 0; background:var(--warn-bg); border:1.5px solid var(--warn-border); border-radius:10px; overflow:hidden; }
+    .pending-hdr { display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px solid rgba(245,158,11,.25); }
+    .pending-hdr i { color:var(--warn-border); font-size:18px; }
+    .pending-hdr strong { font-size:14px; color:var(--warn-text); }
+    .pending-hdr span { font-size:12px; color:var(--warn-text); opacity:.8; margin-left:4px; }
+    .pending-qs { display:grid; grid-template-columns:repeat(3,1fr); gap:0; }
+    .pending-q { padding:14px 18px; border-right:1px solid rgba(245,158,11,.2); }
+    .pending-q:last-child { border-right:none; }
+    .pending-q-num { font-size:11px; font-weight:700; color:var(--warn-border); text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+    .pending-q-text { font-size:13px; color:var(--warn-text); font-weight:500; line-height:1.4; margin-bottom:6px; }
+    .pending-q-opts { display:flex; gap:6px; flex-wrap:wrap; }
+    .pq-opt { font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:12px; border:1.5px solid var(--warn-border); color:var(--warn-text); background:#fff; cursor:pointer; transition:all .15s; }
+    .pq-opt:hover { background:var(--warn-border); color:#fff; }
+    .pq-opt.selected { background:var(--warn-border); color:#fff; }
+
+    /* ── Synthflow banner ── */
+    .sf-banner { margin:14px 28px 0; padding:13px 18px; background:linear-gradient(135deg,rgba(119,187,74,.07),rgba(54,120,149,.07)); border:1px solid rgba(119,187,74,.3); border-radius:10px; display:flex; align-items:center; gap:14px; }
+    .sf-banner i { font-size:22px; color:var(--leaf-green); flex-shrink:0; }
+    .sf-txt { flex:1; }
+    .sf-txt strong { font-size:13.5px; color:var(--strong); }
+    .sf-txt p { font-size:12px; color:var(--muted); margin:2px 0 0; }
+
+    /* ── Toolbar ── */
+    .toolbar { padding:14px 28px; display:flex; gap:10px; align-items:center; }
+    .srch { position:relative; flex:1; max-width:300px; }
+    .srch i { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:14px; }
+    .srch input { padding-left:32px; font-size:13px; height:36px; border:1px solid var(--border); border-radius:6px; background:#fff; width:100%; }
+    .srch input:focus { outline:none; border-color:var(--berry-blue); box-shadow:0 0 0 3px rgba(54,120,149,.1); }
+    .fsel { height:36px; font-size:13px; padding:0 10px; border:1px solid var(--border); border-radius:6px; background:#fff; color:var(--strong); cursor:pointer; }
+    .fsel:focus { outline:none; border-color:var(--berry-blue); }
+    .tsp { flex:1; }
+
+    /* ── Buttons ── */
+    .btn-blue { background:var(--berry-blue); border:none; color:#fff; font-size:13px; font-weight:500; padding:7px 16px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:background .15s; }
+    .btn-blue:hover { background:var(--berry-dark); }
+    .btn-sf { background:#fff; border:1.5px solid var(--leaf-green); color:#2d6e10; font-size:13px; font-weight:500; padding:6px 16px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all .15s; }
+    .btn-sf:hover { background:rgba(119,187,74,.08); }
+    .btn-out { background:#fff; border:1px solid var(--border); color:var(--strong); font-size:13px; font-weight:500; padding:7px 14px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+    .btn-out:hover { border-color:var(--berry-blue); color:var(--berry-blue); }
+    .btn-icon { background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:4px; }
+    .btn-icon:hover { background:var(--surface); color:var(--strong); }
+    .btn-del { background:none; border:none; color:#dc3545; font-size:13px; cursor:pointer; padding:4px 6px; border-radius:4px; }
+    .btn-del:hover { background:rgba(220,53,69,.08); }
+
+    /* ── Table ── */
+    .tcard { background:#fff; border:1px solid var(--border); border-radius:10px; margin:14px 28px 28px; overflow:hidden; }
+    .kbt { width:100%; border-collapse:collapse; font-size:13px; }
+    .kbt thead tr { border-bottom:1px solid var(--border); background:#f8fafc; }
+    .kbt th { padding:10px 13px; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); white-space:nowrap; }
+    .kbt td { padding:11px 13px; border-bottom:1px solid #f0f2f5; vertical-align:middle; }
+    .kbt tbody tr:hover { background:#f8fafc; }
+    .kbt tbody tr:last-child td { border-bottom:none; }
+
+    /* category pills */
+    .cp { font-size:11px; font-weight:600; padding:3px 9px; border-radius:12px; white-space:nowrap; display:inline-block; }
+    .cp-prog { background:rgba(54,120,149,.1);  color:var(--berry-blue); }
+    .cp-price{ background:rgba(119,187,74,.1);  color:#2d6e10; }
+    .cp-sch  { background:rgba(251,40,50,.08);  color:#c01020; }
+    .cp-cur  { background:rgba(90,50,160,.1);   color:#5a32a0; }
+    .cp-plat { background:rgba(30,150,100,.1);  color:#1e9664; }
+    .cp-bill { background:rgba(255,140,0,.1);   color:#b35a00; }
+    .cp-car  { background:rgba(54,120,149,.08); color:#275e75; }
+
+    /* automation badges */
+    .ab { font-size:11px; font-weight:600; padding:3px 8px; border-radius:4px; display:inline-block; }
+    .ab-h { background:rgba(119,187,74,.12); color:#2d7a10; }
+    .ab-m { background:rgba(255,165,0,.12);  color:#a06000; }
+    .ab-l { background:rgba(220,53,69,.1);   color:#c01020; }
+
+    /* person chips */
+    .person-stack { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+    .pchip { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--strong); }
+    .av { width:22px; height:22px; border-radius:50%; font-size:9px; font-weight:700; color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .av-lg { width:46px; height:46px; font-size:15px; border-radius:50%; font-weight:700; color:#fff; display:flex; align-items:center; justify-content:center; }
+    .av-sm { width:22px; height:22px; font-size:9px; border-radius:50%; font-weight:700; color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .primary-chip { display:flex; align-items:center; gap:5px; font-size:12px; }
+    .team-avs { display:flex; gap:2px; }
+    .team-tag { font-size:10px; font-weight:600; color:var(--muted); background:var(--surface); border-radius:3px; padding:1px 5px; }
+
+    /* toggle */
+    .tog { position:relative; display:inline-block; width:36px; height:20px; }
+    .tog input { opacity:0; width:0; height:0; }
+    .sl { position:absolute; inset:0; background:#ccc; border-radius:20px; cursor:pointer; transition:.2s; }
+    .sl::before { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+    input:checked + .sl { background:var(--leaf-green); }
+    input:checked + .sl::before { transform:translateX(16px); }
+
+    /* sub text */
+    .st { font-size:11.5px; color:var(--muted); margin-top:2px; }
+
+    /* pagination */
+    .pgbar { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-top:1px solid var(--border); font-size:12.5px; color:var(--muted); }
+    .pgbtns { display:flex; gap:4px; }
+    .pgb { width:30px; height:30px; border:1px solid var(--border); border-radius:5px; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; transition:all .15s; }
+    .pgb:hover { border-color:var(--berry-blue); color:var(--berry-blue); }
+    .pgb.active { background:var(--berry-blue); border-color:var(--berry-blue); color:#fff; }
+
+    /* ── Persons grid ── */
+    .pgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; padding:0 28px 28px; }
+    .pcard { background:#fff; border:1px solid var(--border); border-radius:10px; padding:20px; position:relative; transition:box-shadow .15s; }
+    .pcard:hover { box-shadow:0 4px 16px rgba(0,0,0,.06); }
+    .pcard-edit { position:absolute; top:14px; right:14px; }
+    .pc-name { font-size:15px; font-weight:600; color:var(--strong); margin:10px 0 2px; }
+    .pc-areas { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px; }
+    .area-tag { font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:10px; }
+    .at-admin      { background:rgba(54,120,149,.1);  color:var(--berry-blue); }
+    .at-admissions { background:rgba(119,187,74,.1);  color:#2d6e10; }
+    .at-payment    { background:rgba(255,140,0,.1);   color:#a06000; }
+    .at-support    { background:rgba(90,50,160,.1);   color:#5a32a0; }
+    .at-comms      { background:rgba(30,150,100,.1);  color:#1e9664; }
+    .at-tech       { background:rgba(251,40,50,.08);  color:#c01020; }
+    .shift-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; background:rgba(54,120,149,.08); color:var(--berry-blue); border:1px solid rgba(54,120,149,.2); display:inline-flex; align-items:center; gap:4px; }
+    .pc-meta { display:flex; flex-direction:column; gap:7px; }
+    .meta-r { display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--strong); }
+    .meta-r i { color:var(--muted); width:14px; margin-top:1px; font-size:13px; }
+    .meta-r a { color:var(--berry-blue); text-decoration:none; }
+    .meta-r a:hover { text-decoration:underline; }
+
+    /* ── Modals ── */
+    .mbk { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:200; display:none; align-items:center; justify-content:center; }
+    .mbk.show { display:flex; }
+    .mbox { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.2); width:100%; max-height:90vh; overflow-y:auto; animation:sUp .2s ease; }
+    .msm { max-width:480px; }
+    .mmd { max-width:640px; }
+    .mlg { max-width:900px; }
+    @keyframes sUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    .mhdr { padding:18px 22px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+    .mhdr h5 { font-size:16px; font-weight:600; color:var(--strong); margin:0; }
+    .mcls { background:none; border:none; font-size:20px; color:var(--muted); cursor:pointer; line-height:1; padding:0; }
+    .mcls:hover { color:var(--strong); }
+    .mbdy { padding:20px 22px; }
+    .mftr { padding:14px 22px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px; }
+    .fl { font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; display:block; }
+    .fc { border:1px solid var(--border); border-radius:6px; font-size:13px; padding:8px 10px; width:100%; }
+    .fc:focus { outline:none; border-color:var(--berry-blue); box-shadow:0 0 0 3px rgba(54,120,149,.1); }
+    .fg { margin-bottom:14px; }
+
+    /* Multi-person selector */
+    .person-checks { border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    .pc-item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid #f0f2f5; cursor:pointer; transition:background .1s; }
+    .pc-item:last-child { border-bottom:none; }
+    .pc-item:hover { background:#f8fafc; }
+    .pc-item input[type=checkbox] { width:15px; height:15px; accent-color:var(--berry-blue); cursor:pointer; }
+    .pc-item-info { flex:1; }
+    .pc-item-name { font-size:13px; font-weight:500; color:var(--strong); }
+    .pc-item-role { font-size:11.5px; color:var(--muted); }
+    .pc-primary-lbl { font-size:10px; font-weight:700; color:var(--berry-blue); background:rgba(54,120,149,.1); padding:2px 6px; border-radius:8px; }
+
+    /* Escalation visual */
+    .esc-vis { display:flex; border-radius:6px; overflow:hidden; border:1px solid var(--border); font-size:12px; }
+    .eb { flex:1; padding:6px 8px; text-align:center; font-weight:600; }
+    .eb-a { background:rgba(119,187,74,.15); color:#2d7a10; }
+    .eb-r { background:rgba(255,165,0,.15);  color:#a06000; }
+    .eb-e { background:rgba(220,53,69,.1);   color:#c01020; }
+
+    /* Toast */
+    .tct { position:fixed; bottom:24px; right:24px; z-index:999; display:flex; flex-direction:column; gap:8px; }
+    .tm { background:#1a2332; color:#fff; font-size:13px; padding:10px 16px; border-radius:8px; display:flex; align-items:center; gap:10px; animation:fIn .2s ease; box-shadow:0 4px 16px rgba(0,0,0,.2); }
+    .tm i { color:var(--leaf-green); }
+    @keyframes fIn { from{opacity:0;transform:translateY(8px)} to{opacity:1} }
+
+    /* Export modal col tags */
+    .ctag { font-size:11px; font-weight:600; background:var(--surface); padding:2px 8px; border-radius:10px; }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-mark">C</div>
+    <span class="sb-name">Colaberry</span>
+    <span class="sb-env">ADMIN</span>
+  </div>
+  <div class="sb-sect">Core</div>
+  <a class="sb-item" href="#"><i class="bi bi-grid-1x2"></i> Dashboard</a>
+  <a class="sb-item" href="#"><i class="bi bi-people"></i> Students</a>
+  <a class="sb-item" href="#"><i class="bi bi-envelope"></i> Cora Inbox <span class="sb-badge">3</span></a>
+  <div class="sb-sect">Knowledge</div>
+  <a class="sb-item active" href="#"><i class="bi bi-journal-text"></i> Knowledge Ops</a>
+  <a class="sb-item" href="#"><i class="bi bi-chat-quote"></i> Synthflow</a>
+  <div class="sb-sect">Program</div>
+  <a class="sb-item" href="#"><i class="bi bi-calendar3"></i> Cohort Schedule</a>
+  <a class="sb-item" href="#"><i class="bi bi-bar-chart"></i> Reports</a>
+  <a class="sb-item" href="#"><i class="bi bi-gear"></i> Settings</a>
+  <div style="flex:1"></div>
+  <div style="padding:16px 12px;border-top:1px solid rgba(255,255,255,.06)">
+    <div class="sb-item" style="margin:0;cursor:default">
+      <div class="av" style="background:var(--berry-blue);width:26px;height:26px;font-size:10px;">KD</div>
+      <span style="font-size:12.5px;color:#fff;">Kes Delele</span>
+    </div>
+  </div>
+</nav>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="bc"><a href="#">Admin</a><span>›</span><strong style="color:var(--strong)">Knowledge Operations</strong></div>
+  <div style="flex:1"></div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--strong);">
+    <i class="bi bi-bell" style="font-size:17px;color:var(--muted)"></i>
+    <div class="av" style="background:var(--berry-blue);width:30px;height:30px;font-size:11px;">KD</div>
+    Kes Delele
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- Page header -->
+  <div class="ph">
+    <div class="ph-row">
+      <div>
+        <h1>Knowledge Operations</h1>
+        <p>Manage Q&amp;A entries, routing rules, and responsible persons for Cora Inbox and Synthflow.</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;padding-top:4px;">
+        <button class="btn-sf" onclick="exportSynthflow()"><i class="bi bi-download"></i> Export for Synthflow</button>
+        <button class="btn-blue" onclick="openAddEntry()"><i class="bi bi-plus-lg"></i> Add Entry</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('entries',this)">KB Entries <span class="tc" id="ec">26</span></div>
+      <div class="tab" onclick="switchTab('persons',this)">Responsible Persons <span class="tc">8</span></div>
+      <div class="tab" onclick="switchTab('cohorts',this)">Cohorts <span class="tc">2 courses</span></div>
+    </div>
+  </div>
+
+  <!-- ══ KB ENTRIES TAB ══ -->
+  <div id="tab-entries">
+
+    <!-- Pending Decisions panel -->
+    <div class="pending-panel" style="margin-top:20px;">
+      <div class="pending-hdr">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>3 Decisions Needed from Ali</strong>
+        <span>— Select an answer on each card below. These affect multiple entries.</span>
+      </div>
+      <div class="pending-qs">
+        <div class="pending-q">
+          <div class="pending-q-num">Question 1 · Portal URL</div>
+          <div class="pending-q-text">Which URL is live for the AI Accelerator portal and enrollment?</div>
+          <div class="pending-q-opts">
+            <div class="pq-opt" onclick="selectOpt(this,'q1')">training.colaberry.com</div>
+            <div class="pq-opt" onclick="selectOpt(this,'q1')">enterprise.colaberry.ai</div>
+            <div class="pq-opt" onclick="selectOpt(this,'q1')">Both (different purposes)</div>
+          </div>
+        </div>
+        <div class="pending-q">
+          <div class="pending-q-num">Question 2 · Community Platform</div>
+          <div class="pending-q-text">Is Discord still active for the AI course, or fully replaced by Skool + WhatsApp?</div>
+          <div class="pending-q-opts">
+            <div class="pq-opt" onclick="selectOpt(this,'q2')">Skool + WhatsApp only</div>
+            <div class="pq-opt" onclick="selectOpt(this,'q2')">Discord still active</div>
+            <div class="pq-opt" onclick="selectOpt(this,'q2')">All three platforms</div>
+          </div>
+        </div>
+        <div class="pending-q" style="border-right:none">
+          <div class="pending-q-num">Question 3 · AI Mentor</div>
+          <div class="pending-q-text">Does the AI Mentor (cai@aiagent.colaberry.com / WhatsApp +1 682-281-4281) carry over to the new AI Accelerator cohort?</div>
+          <div class="pending-q-opts">
+            <div class="pq-opt" onclick="selectOpt(this,'q3')">Yes, carries over</div>
+            <div class="pq-opt" onclick="selectOpt(this,'q3')">No, retired</div>
+            <div class="pq-opt" onclick="selectOpt(this,'q3')">New mentor assigned</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Synthflow banner -->
+    <div class="sf-banner">
+      <i class="bi bi-robot"></i>
+      <div class="sf-txt">
+        <strong>Synthflow Integration Active</strong>
+        <p>Export downloads a 16-column CSV matching the Synthflow internal knowledge base format. Upload directly to Synthflow after export. Only active entries are included.</p>
+      </div>
+      <button class="btn-sf" onclick="exportSynthflow()"><i class="bi bi-file-earmark-spreadsheet"></i> Download Rubric CSV</button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="srch">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search questions, answers, keywords…" oninput="filterTable(this.value)" id="kb-search">
+      </div>
+      <select class="fsel" onchange="filterByCategory(this.value)" id="cat-filter">
+        <option value="">All Categories</option>
+        <option>Program Basics</option>
+        <option>Pricing &amp; Enrollment</option>
+        <option>Schedule &amp; Time</option>
+        <option>Curriculum &amp; Tools</option>
+        <option>Platform &amp; Support</option>
+        <option>Billing &amp; Account</option>
+        <option>Certification &amp; Career</option>
+      </select>
+      <select class="fsel" onchange="filterByAuto(this.value)">
+        <option value="">All Automation</option>
+        <option>High</option><option>Medium</option><option>Low</option>
+      </select>
+      <select class="fsel" onchange="filterByActive(this.value)">
+        <option value="">All Status</option>
+        <option value="1">Active</option><option value="0">Inactive</option>
+      </select>
+      <div class="tsp"></div>
+      <span style="font-size:12px;color:var(--muted)" id="rcl">Showing 26 entries</span>
+    </div>
+
+    <!-- Table -->
+    <div class="tcard">
+      <div style="overflow-x:auto">
+        <table class="kbt" id="kbt">
+          <thead>
+            <tr>
+              <th style="width:140px">Category</th>
+              <th>Question Pattern</th>
+              <th style="width:180px">Team</th>
+              <th style="width:90px">Automation</th>
+              <th style="width:70px">Priority</th>
+              <th style="width:70px">Active</th>
+              <th style="width:80px;text-align:center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="kb-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pgbar">
+        <span id="pgi">Showing 1–26 of 26 entries</span>
+        <div class="pgbtns">
+          <button class="pgb"><i class="bi bi-chevron-left"></i></button>
+          <button class="pgb active">1</button>
+          <button class="pgb"><i class="bi bi-chevron-right"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RESPONSIBLE PERSONS TAB ══ -->
+  <div id="tab-persons" style="display:none;padding-top:20px">
+    <!-- Shift coverage notice -->
+    <div style="margin:0 28px 14px;padding:12px 16px;background:rgba(54,120,149,.06);border:1px solid rgba(54,120,149,.2);border-radius:8px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--berry-blue)">
+      <i class="bi bi-clock-history" style="font-size:16px"></i>
+      <span><strong>Shift Coverage:</strong> Farhat, Balakrishna, and Balamurali cover the same support categories across different shifts (Mon–Sat, 6AM–10PM CST). All three appear as team members on Platform &amp; Support entries.</span>
+    </div>
+    <div class="toolbar" style="border:none;padding-bottom:12px">
+      <div class="srch">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search by name or role…" oninput="filterPersons(this.value)">
+      </div>
+      <div class="tsp"></div>
+      <button class="btn-blue" onclick="openAddPerson()"><i class="bi bi-plus-lg"></i> Add Person</button>
+    </div>
+    <div class="pgrid" id="pgrid"></div>
+  </div>
+
+  <!-- ══ COHORTS TAB ══ -->
+  <div id="tab-cohorts" style="display:none;padding:20px 28px 28px">
+    <div style="padding:12px 16px;background:rgba(119,187,74,.06);border:1px solid rgba(119,187,74,.25);border-radius:8px;display:flex;align-items:center;gap:10px;font-size:13px;color:#2d6e10;margin-bottom:18px">
+      <i class="bi bi-magic" style="font-size:16px"></i>
+      <span><strong>Merge tags resolve automatically.</strong> When you activate a cohort, every KB entry and Synthflow export immediately reflects the new dates, pricing, and URLs — no entry editing needed.</span>
+    </div>
+    <div id="cohorts-accordion"></div>
+  </div>
+
+</div><!-- /main -->
+
+<div class="tct" id="tct"></div>
+
+<!-- ══ MODAL: Add/Edit Cohort ══ -->
+<div class="mbk" id="cohort-modal">
+  <div class="mbox mmd">
+    <div class="mhdr">
+      <h5 id="cm-title">Add Cohort</h5>
+      <button class="mcls" onclick="closeModal('cohort-modal')">×</button>
+    </div>
+    <div class="mbdy">
+      <div class="fg"><span class="fl">Course</span>
+        <select class="fc" id="c-course"></select></div>
+      <div class="row g-3">
+        <div class="col-md-8"><div class="fg"><span class="fl">Cohort Name</span><input class="fc" id="c-name" placeholder="e.g. Cohort 2"></div></div>
+        <div class="col-md-4"><div class="fg"><span class="fl">Number</span><input class="fc" id="c-num" type="number" placeholder="2"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Open House Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.open_house_date}}</span></span><input class="fc" id="c-oh-date" placeholder="Thursday, July 16, 2026"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Open House URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.open_house_url}}</span></span><input class="fc" id="c-oh-url" placeholder="training.colaberry.com/open-house"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Start Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.start_date}}</span></span><input class="fc" id="c-start" placeholder="Thursday, July 23, 2026"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">End Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.end_date}}</span></span><input class="fc" id="c-end" placeholder="October 15, 2026"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Expo / Demo Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.expo_date}}</span></span><input class="fc" id="c-expo" placeholder="October 2026"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Enrollment URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.enrollment_url}}</span></span><input class="fc" id="c-enroll" placeholder="training.colaberry.com"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Waitlist URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.waitlist_url}}</span></span><input class="fc" id="c-waitlist" placeholder="training.colaberry.com/waitlist"></div></div>
+        <div class="col-md-3"><div class="fg"><span class="fl">Annual $/mo <span style="color:var(--leaf-green);font-size:10px">{{cohort.price_annual}}</span></span><input class="fc" id="c-price-a" type="number" placeholder="149"></div></div>
+        <div class="col-md-3"><div class="fg"><span class="fl">Monthly $/mo <span style="color:var(--leaf-green);font-size:10px">{{cohort.price_monthly}}</span></span><input class="fc" id="c-price-m" type="number" placeholder="199"></div></div>
+        <div class="col-md-3"><div class="fg"><span class="fl">Total Seats <span style="color:var(--leaf-green);font-size:10px">{{cohort.seats_total}}</span></span><input class="fc" id="c-seats-t" type="number" placeholder="40"></div></div>
+        <div class="col-md-3"><div class="fg"><span class="fl">Remaining <span style="color:var(--leaf-green);font-size:10px">{{cohort.seats_remaining}}</span></span><input class="fc" id="c-seats-r" type="number" placeholder="40"></div></div>
+        <div class="col-12">
+          <div class="fg">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+              <label class="tog"><input type="checkbox" id="c-active"><span class="sl"></span></label>
+              <span><strong>Set as Active Cohort</strong> — previous active cohort for this course will be deactivated</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn-out" onclick="closeModal('cohort-modal')">Cancel</button>
+      <button class="btn-blue" onclick="saveCohort()"><i class="bi bi-check-lg"></i> Save Cohort</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Edit/Add Entry ══ -->
+<div class="mbk" id="entry-modal">
+  <div class="mbox mlg">
+    <div class="mhdr">
+      <h5 id="em-title">Edit KB Entry</h5>
+      <button class="mcls" onclick="closeModal('entry-modal')">×</button>
+    </div>
+    <div class="mbdy">
+      <div class="row g-3">
+        <div class="col-md-7">
+          <div class="row g-2 mb-1">
+            <div class="col-8"><span class="fl">Main Category</span>
+              <select class="fc" id="e-cat">
+                <option>Program Basics</option><option>Pricing &amp; Enrollment</option>
+                <option>Schedule &amp; Time</option><option>Curriculum &amp; Tools</option>
+                <option>Platform &amp; Support</option><option>Billing &amp; Account</option>
+                <option>Certification &amp; Career</option>
+              </select></div>
+            <div class="col-4"><span class="fl">Course Scope</span>
+              <select class="fc" id="e-course">
+                <option value="">— All courses —</option>
+              </select></div>
+          </div>
+          <div class="fg"><span class="fl">Sub Category</span><input class="fc" id="e-sub" placeholder="e.g. Open House &amp; Info Session"></div>
+          <div class="fg"><span class="fl">Question from Email</span><input class="fc" id="e-q" placeholder="How this question typically arrives…"></div>
+          <div class="fg">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <span class="fl" style="margin:0">Answer Template</span>
+              <div style="display:flex;gap:6px">
+                <div style="position:relative">
+                  <button class="btn-out" style="padding:3px 10px;font-size:11.5px" onclick="toggleTagMenu(event)"><i class="bi bi-code-slash"></i> Insert tag</button>
+                  <div id="tag-menu" style="display:none;position:absolute;right:0;top:100%;z-index:300;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:220px;padding:6px 0;max-height:280px;overflow-y:auto"></div>
+                </div>
+                <button class="btn-blue" style="padding:3px 12px;font-size:11.5px" onclick="previewAnswer()"><i class="bi bi-eye"></i> Preview</button>
+              </div>
+            </div>
+            <textarea class="fc" id="e-a" rows="5" placeholder="Use {{cohort.start_date}}, {{cohort.price_annual}}, etc. for dates and values that change per cohort…"></textarea>
+            <div id="preview-panel" style="display:none;margin-top:8px;padding:12px;background:rgba(54,120,149,.05);border:1px solid rgba(54,120,149,.2);border-radius:6px;font-size:13px;color:var(--strong);line-height:1.6">
+              <div style="font-size:10px;font-weight:700;color:var(--berry-blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px" id="preview-label">Preview · Founding Cohort</div>
+              <div id="preview-text"></div>
+            </div>
+          </div>
+          <div class="fg"><span class="fl">Email Examples</span><textarea class="fc" id="e-ex" rows="2" placeholder="1–2 real email snippets…"></textarea></div>
+          <div class="fg"><span class="fl">Common Patterns / Keywords</span><input class="fc" id="e-kw" placeholder="open house, info session, free, attend, register…"></div>
+          <div class="fg"><span class="fl">Notes</span><input class="fc" id="e-notes" placeholder="Internal notes, edge cases…"></div>
+        </div>
+        <div class="col-md-5">
+          <!-- Primary contact -->
+          <div class="fg">
+            <span class="fl">Primary Contact <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0">(Cora escalates here)</span></span>
+            <select class="fc" id="e-primary" onchange="syncCal()"></select>
+          </div>
+          <div class="fg"><span class="fl">Calendar Link (auto-filled)</span><input class="fc" id="e-cal" placeholder="calendly.com/…"></div>
+          <!-- Team members -->
+          <div class="fg">
+            <span class="fl">Also Assigned To <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0">(handles day-to-day)</span></span>
+            <div class="person-checks" id="e-team-list"></div>
+          </div>
+          <div class="fg"><span class="fl">Priority</span>
+            <select class="fc" id="e-pri"><option>High</option><option>Medium</option><option>Low</option></select></div>
+          <div class="fg"><span class="fl">Response Time</span><input class="fc" id="e-rt" placeholder="e.g. &lt; 2 hours"></div>
+          <div class="fg"><span class="fl">Automation Potential</span>
+            <select class="fc" id="e-auto"><option>High</option><option>Medium</option><option>Low</option></select></div>
+          <div class="fg"><span class="fl">Emotional Tone</span>
+            <select class="fc" id="e-tone">
+              <option>Informative</option><option>Enthusiastic</option><option>Encouraging</option>
+              <option>Clarifying</option><option>Urgent</option><option>Empathetic</option>
+              <option>Direct</option><option>Transparent</option><option>Reassuring</option>
+            </select></div>
+          <div class="fg">
+            <span class="fl">Escalation Logic</span>
+            <div class="esc-vis"><div class="eb eb-a">≥85%<br><span style="font-size:10px;font-weight:400">Auto-respond</span></div><div class="eb eb-r">65–84%<br><span style="font-size:10px;font-weight:400">Human review</span></div><div class="eb eb-e">&lt;65%<br><span style="font-size:10px;font-weight:400">Escalate to primary</span></div></div>
+            <input class="fc" id="e-esc" style="margin-top:6px" placeholder="Custom override (optional)…">
+          </div>
+          <div class="fg">
+            <span class="fl">Status</span>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+              <label class="tog"><input type="checkbox" id="e-active" checked><span class="sl"></span></label>
+              <span>Active — Cora &amp; Synthflow will use this entry</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn-out" onclick="closeModal('entry-modal')">Cancel</button>
+      <button class="btn-blue" onclick="saveEntry()"><i class="bi bi-check-lg"></i> Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Edit/Add Person ══ -->
+<div class="mbk" id="person-modal">
+  <div class="mbox mmd">
+    <div class="mhdr">
+      <h5 id="pm-title">Edit Responsible Person</h5>
+      <button class="mcls" onclick="closeModal('person-modal')">×</button>
+    </div>
+    <div class="mbdy">
+      <div class="row g-3">
+        <div class="col-md-6"><div class="fg"><span class="fl">Full Name</span><input class="fc" id="p-name" placeholder="First Last"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Role / Department</span><input class="fc" id="p-role" placeholder="e.g. Admissions Coordinator"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Email Address</span><input class="fc" id="p-email" type="email"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Phone / WhatsApp</span><input class="fc" id="p-phone"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Work Hours</span><input class="fc" id="p-hours" placeholder="Mon–Fri, 9:00AM–5:00PM"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Time Zone</span>
+          <select class="fc" id="p-tz"><option>CST (UTC−6)</option><option>EST (UTC−5)</option><option>MST (UTC−7)</option><option>PST (UTC−8)</option><option>GMT (UTC+0)</option><option>IST (UTC+5:30)</option></select></div></div>
+        <div class="col-12"><div class="fg"><span class="fl">Calendar / Booking Link</span><input class="fc" id="p-cal" placeholder="calendly.com/name"></div></div>
+        <div class="col-12">
+          <div class="fg">
+            <span class="fl">Areas of Responsibility</span>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="p-areas-wrap">
+              <!-- rendered dynamically -->
+            </div>
+            <input class="fc" id="p-areas" placeholder="e.g. Admissions, Customer Support" style="margin-top:8px">
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">Comma-separated. Each area becomes a tag on the person card and maps to KB entry categories.</div>
+          </div>
+        </div>
+        <div class="col-12"><div class="fg"><span class="fl">Shift Coverage Note</span><input class="fc" id="p-shift" placeholder="e.g. Shift B: Mon/Wed/Fri 2PM–10PM CST"></div></div>
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn-out" onclick="closeModal('person-modal')">Cancel</button>
+      <button class="btn-blue" onclick="savePerson()"><i class="bi bi-check-lg"></i> Save Person</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Export Preview ══ -->
+<div class="mbk" id="export-modal">
+  <div class="mbox mmd">
+    <div class="mhdr"><h5>Export for Synthflow</h5><button class="mcls" onclick="closeModal('export-modal')">×</button></div>
+    <div class="mbdy">
+      <div style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(119,187,74,.07);border:1px solid rgba(119,187,74,.25);border-radius:8px;margin-bottom:16px">
+        <i class="bi bi-file-earmark-spreadsheet" style="font-size:24px;color:var(--leaf-green)"></i>
+        <div>
+          <div style="font-size:13.5px;font-weight:600;color:var(--strong)">colaberry-knowledge-ops.csv</div>
+          <div style="font-size:12px;color:var(--muted)">16-column format · <span id="exp-cnt"></span> active entries · UTF-8 CSV</div>
+        </div>
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--strong);margin-bottom:8px">Columns included:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px" id="col-tags"></div>
+      <div style="font-size:12px;color:var(--muted);padding:10px 12px;background:#f8fafc;border-radius:6px;border:1px solid var(--border)">
+        <strong>Upload to Synthflow:</strong> Synthflow → Knowledge Base → Import → Upload CSV → Map columns automatically → Save.
+      </div>
+    </div>
+    <div class="mftr">
+      <button class="btn-out" onclick="closeModal('export-modal')">Cancel</button>
+      <button class="btn-sf" onclick="doDownload()"><i class="bi bi-download"></i> Download CSV</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+/* ═══════════════════════════
+   COURSES & COHORTS
+═══════════════════════════ */
+const COURSES = [
+  { id:1, name:'AI Systems Architect Accelerator', slug:'ai-architect' },
+  { id:2, name:'Data Analytics Accelerator',       slug:'da-accelerator' },
+];
+
+const COHORTS = [
+  { id:1, courseId:1, name:'Founding Cohort', number:1,
+    openHouseDate:'Thursday, July 16, 2026', openHouseUrl:'training.colaberry.com/open-house',
+    startDate:'Thursday, July 23, 2026', endDate:'October 15, 2026', expoDate:'October 2026',
+    priceAnnual:149, priceMonthly:199, seatsTotal:40, seatsRemaining:32,
+    enrollmentUrl:'training.colaberry.com', waitlistUrl:'training.colaberry.com/waitlist',
+    isActive:true },
+  { id:2, courseId:2, name:'Cohort 12', number:12,
+    openHouseDate:'TBD', openHouseUrl:'',
+    startDate:'TBD', endDate:'TBD', expoDate:'TBD',
+    priceAnnual:0, priceMonthly:0, seatsTotal:0, seatsRemaining:0,
+    enrollmentUrl:'', waitlistUrl:'', isActive:true },
+  { id:3, courseId:2, name:'Cohort 11', number:11,
+    openHouseDate:'January 10, 2026', openHouseUrl:'',
+    startDate:'January 17, 2026', endDate:'April 10, 2026', expoDate:'April 2026',
+    priceAnnual:349, priceMonthly:449, seatsTotal:30, seatsRemaining:0,
+    enrollmentUrl:'', waitlistUrl:'', isActive:false },
+];
+
+function getActiveCohort(courseId){
+  return COHORTS.find(c=>c.courseId===courseId&&c.isActive);
+}
+function getCourse(id){ return COURSES.find(c=>c.id===id)||{}; }
+
+/* Merge tag resolution */
+const MERGE_TAGS = [
+  {tag:'{{cohort.name}}',         key:'name'},
+  {tag:'{{cohort.number}}',       key:'number'},
+  {tag:'{{cohort.open_house_date}}', key:'openHouseDate'},
+  {tag:'{{cohort.open_house_url}}',  key:'openHouseUrl'},
+  {tag:'{{cohort.start_date}}',   key:'startDate'},
+  {tag:'{{cohort.end_date}}',     key:'endDate'},
+  {tag:'{{cohort.expo_date}}',    key:'expoDate'},
+  {tag:'{{cohort.price_annual}}', key:'priceAnnual'},
+  {tag:'{{cohort.price_monthly}}',key:'priceMonthly'},
+  {tag:'{{cohort.seats_total}}',  key:'seatsTotal'},
+  {tag:'{{cohort.seats_remaining}}',key:'seatsRemaining'},
+  {tag:'{{cohort.enrollment_url}}',  key:'enrollmentUrl'},
+  {tag:'{{cohort.waitlist_url}}',    key:'waitlistUrl'},
+];
+
+function resolveMergeTags(template, cohort, course){
+  if(!template) return '';
+  let out = template;
+  if(cohort){
+    MERGE_TAGS.forEach(({tag,key})=>{
+      const v = cohort[key] !== undefined && cohort[key] !== '' && cohort[key] !== 0
+        ? String(cohort[key]) : '[TBD]';
+      out = out.split(tag).join(v);
+    });
+  }
+  if(course){
+    out = out.split('{{course.name}}').join(course.name||'');
+    out = out.split('{{course.slug}}').join(course.slug||'');
+  }
+  return out;
+}
+
+/* ─── Cohorts tab render ─── */
+function renderCohorts(){
+  const el=document.getElementById('cohorts-accordion');
+  el.innerHTML=COURSES.map(course=>{
+    const active=COHORTS.find(c=>c.courseId===course.id&&c.isActive);
+    const past=COHORTS.filter(c=>c.courseId===course.id&&!c.isActive);
+    const activeCard = active ? `
+      <div style="background:rgba(54,120,149,.05);border:1.5px solid rgba(54,120,149,.25);border-radius:8px;padding:16px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:14px;font-weight:600;color:var(--strong)">${active.name}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--leaf-green);color:#fff">ACTIVE</span>
+          </div>
+          <button class="btn-icon" onclick="openEditCohort(${active.id})"><i class="bi bi-pencil"></i></button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:12.5px">
+          ${cohortField('Open House',active.openHouseDate,'cohort.open_house_date')}
+          ${cohortField('Start Date',active.startDate,'cohort.start_date')}
+          ${cohortField('End Date',active.endDate,'cohort.end_date')}
+          ${cohortField('Expo Date',active.expoDate,'cohort.expo_date')}
+          ${cohortField('Annual $/mo','$'+active.priceAnnual,'cohort.price_annual')}
+          ${cohortField('Monthly $/mo','$'+active.priceMonthly,'cohort.price_monthly')}
+          ${cohortField('Total Seats',active.seatsTotal,'cohort.seats_total')}
+          ${cohortField('Remaining',active.seatsRemaining,'cohort.seats_remaining')}
+          ${cohortField('Enrollment URL',active.enrollmentUrl||'—','cohort.enrollment_url')}
+        </div>
+      </div>` : `<div style="padding:14px;border:1px dashed var(--border);border-radius:8px;font-size:13px;color:var(--muted);text-align:center;margin-bottom:12px">No active cohort for this course.</div>`;
+
+    const pastRows = past.length ? `
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Past Cohorts</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);font-weight:600">Name</th>
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);font-weight:600">Start</th>
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);font-weight:600">End</th>
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);font-weight:600">Seats Filled</th>
+          <th style="padding:6px 8px;text-align:center;color:var(--muted);font-weight:600">Action</th>
+        </tr></thead>
+        <tbody>${past.map(c=>`<tr style="border-bottom:1px solid #f0f2f5">
+          <td style="padding:7px 8px;color:var(--strong);font-weight:500">${c.name}</td>
+          <td style="padding:7px 8px;color:var(--muted)">${c.startDate}</td>
+          <td style="padding:7px 8px;color:var(--muted)">${c.endDate}</td>
+          <td style="padding:7px 8px;color:var(--muted)">${c.seatsTotal} seats</td>
+          <td style="padding:7px 8px;text-align:center">
+            <button class="btn-out" style="padding:2px 10px;font-size:11.5px" onclick="activateCohort(${c.id})">Reactivate</button>
+          </td>
+        </tr>`).join('')}</tbody>
+      </table>` : '';
+
+    return `<div style="background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:var(--strong)">${course.name}</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:1px">slug: ${course.slug}</div>
+        </div>
+        <button class="btn-blue" onclick="openAddCohort(${course.id})"><i class="bi bi-plus-lg"></i> Add Cohort</button>
+      </div>
+      <div style="padding:16px 18px">
+        ${activeCard}
+        ${pastRows}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function cohortField(label, value, tag){
+  const isTbd = !value || value==='TBD' || value==='$0';
+  return `<div style="padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:6px">
+    <div style="font-size:10px;color:var(--muted);margin-bottom:2px">${label}</div>
+    <div style="font-weight:500;color:${isTbd?'#c01020':'var(--strong)'}">${value||'—'}</div>
+    <div style="font-size:9.5px;color:var(--leaf-green);margin-top:2px;font-family:monospace">{{${tag}}}</div>
+  </div>`;
+}
+
+/* ─── Cohort modal ─── */
+let editCohortId=null;
+function populateCourseDropdown(selectedId){
+  const el=document.getElementById('c-course');
+  if(!el) return;
+  el.innerHTML=COURSES.map(c=>`<option value="${c.id}"${c.id===selectedId?' selected':''}>${c.name}</option>`).join('');
+}
+function openAddCohort(courseId){
+  editCohortId=null;
+  document.getElementById('cm-title').textContent='Add Cohort';
+  populateCourseDropdown(courseId);
+  ['c-name','c-num','c-oh-date','c-oh-url','c-start','c-end','c-expo','c-enroll','c-waitlist','c-price-a','c-price-m','c-seats-t','c-seats-r'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('c-active').checked=false;
+  openModal('cohort-modal');
+}
+function openEditCohort(id){
+  const c=COHORTS.find(c=>c.id===id); if(!c) return;
+  editCohortId=id;
+  document.getElementById('cm-title').textContent='Edit: '+c.name;
+  populateCourseDropdown(c.courseId);
+  document.getElementById('c-name').value=c.name;
+  document.getElementById('c-num').value=c.number;
+  document.getElementById('c-oh-date').value=c.openHouseDate;
+  document.getElementById('c-oh-url').value=c.openHouseUrl;
+  document.getElementById('c-start').value=c.startDate;
+  document.getElementById('c-end').value=c.endDate;
+  document.getElementById('c-expo').value=c.expoDate;
+  document.getElementById('c-enroll').value=c.enrollmentUrl;
+  document.getElementById('c-waitlist').value=c.waitlistUrl;
+  document.getElementById('c-price-a').value=c.priceAnnual;
+  document.getElementById('c-price-m').value=c.priceMonthly;
+  document.getElementById('c-seats-t').value=c.seatsTotal;
+  document.getElementById('c-seats-r').value=c.seatsRemaining;
+  document.getElementById('c-active').checked=c.isActive;
+  openModal('cohort-modal');
+}
+function saveCohort(){
+  const courseId=parseInt(document.getElementById('c-course').value);
+  const setActive=document.getElementById('c-active').checked;
+  if(setActive && !confirm('Set this as the active cohort? The current active cohort for this course will be deactivated.')) return;
+  const cohort={
+    id:editCohortId||(Math.max(...COHORTS.map(c=>c.id))+1),
+    courseId, name:document.getElementById('c-name').value,
+    number:parseInt(document.getElementById('c-num').value)||1,
+    openHouseDate:document.getElementById('c-oh-date').value,
+    openHouseUrl:document.getElementById('c-oh-url').value,
+    startDate:document.getElementById('c-start').value,
+    endDate:document.getElementById('c-end').value,
+    expoDate:document.getElementById('c-expo').value,
+    enrollmentUrl:document.getElementById('c-enroll').value,
+    waitlistUrl:document.getElementById('c-waitlist').value,
+    priceAnnual:parseInt(document.getElementById('c-price-a').value)||0,
+    priceMonthly:parseInt(document.getElementById('c-price-m').value)||0,
+    seatsTotal:parseInt(document.getElementById('c-seats-t').value)||0,
+    seatsRemaining:parseInt(document.getElementById('c-seats-r').value)||0,
+    isActive:setActive,
+  };
+  if(setActive) COHORTS.forEach(c=>{ if(c.courseId===courseId) c.isActive=false; });
+  if(editCohortId){ const i=COHORTS.findIndex(c=>c.id===editCohortId); if(i>-1) COHORTS[i]=cohort; }
+  else COHORTS.push(cohort);
+  closeModal('cohort-modal');
+  renderCohorts();
+  toast(setActive?'Cohort activated — merge tags updated':'Cohort saved');
+}
+function activateCohort(id){
+  const c=COHORTS.find(c=>c.id===id); if(!c) return;
+  if(!confirm(`Activate "${c.name}"? Current active cohort will be deactivated.`)) return;
+  COHORTS.forEach(x=>{ if(x.courseId===c.courseId) x.isActive=false; });
+  c.isActive=true;
+  renderCohorts();
+  toast('Cohort activated — merge tags updated');
+}
+
+/* ─── Entry modal: course dropdown + merge tag panel + preview ─── */
+function populateEntryCourseDropdown(){
+  const el=document.getElementById('e-course'); if(!el) return;
+  el.innerHTML='<option value="">— All courses —</option>'+
+    COURSES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+}
+function previewAnswer(){
+  const template=document.getElementById('e-a').value;
+  const courseId=parseInt(document.getElementById('e-course').value)||1;
+  const cohort=getActiveCohort(courseId)||COHORTS[0];
+  const course=getCourse(cohort?.courseId);
+  const resolved=resolveMergeTags(template, cohort, course);
+  document.getElementById('preview-text').textContent=resolved||'(empty)';
+  document.getElementById('preview-label').textContent=`Preview · ${cohort?.name||'No active cohort'}`;
+  document.getElementById('preview-panel').style.display='';
+}
+function toggleTagMenu(e){
+  e.stopPropagation();
+  const menu=document.getElementById('tag-menu');
+  if(menu.style.display==='none'){
+    const courseId=parseInt(document.getElementById('e-course').value)||1;
+    const cohort=getActiveCohort(courseId)||COHORTS[0];
+    menu.innerHTML=MERGE_TAGS.map(({tag,key})=>{
+      const v=cohort?cohort[key]:'—';
+      return `<div onclick="insertTag('${tag}')" style="padding:7px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:12.5px;gap:16px;border-bottom:1px solid #f0f2f5" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <span style="color:var(--leaf-green);font-family:monospace;font-size:12px">${tag}</span>
+        <span style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px">${v||'TBD'}</span>
+      </div>`;
+    }).join('');
+    menu.style.display='';
+    document.addEventListener('click',()=>{ menu.style.display='none'; },{once:true});
+  } else { menu.style.display='none'; }
+}
+function insertTag(tag){
+  const ta=document.getElementById('e-a');
+  const s=ta.selectionStart, e2=ta.selectionEnd;
+  ta.value=ta.value.slice(0,s)+tag+ta.value.slice(e2);
+  ta.selectionStart=ta.selectionEnd=s+tag.length;
+  ta.focus();
+  document.getElementById('tag-menu').style.display='none';
+}
+
+/* ═══════════════════════════
+   PERSONS
+═══════════════════════════ */
+const PERSONS = [
+  { id:1, name:'Ali Muwwakkil',      initials:'AM', color:'#367895',
+    areas:[{l:'Program Director',t:'at-admin'},{l:'Admissions',t:'at-admissions'},{l:'Escalations',t:'at-admin'}],
+    email:'ali@colaberry.com', phone:'+1 (972) 555-0142',
+    hours:'Mon–Fri, 9:00AM–6:00PM', tz:'CST (UTC−6)', cal:'calendly.com/ali-colaberry', shift:'' },
+  { id:2, name:'Kes Delele',          initials:'KD', color:'#FB2832',
+    areas:[{l:'Platform & Tech Lead',t:'at-tech'},{l:'Billing Support',t:'at-payment'}],
+    email:'kesetebirhan@colaberry.com', phone:'+1 (972) 555-0187',
+    hours:'Mon–Fri, 9:00AM–5:00PM', tz:'CST (UTC−6)', cal:'calendly.com/kes-colaberry', shift:'' },
+  { id:3, name:'Roselen Cruz',        initials:'RC', color:'#77BB4A',
+    areas:[{l:'DA Admissions',t:'at-admissions'},{l:'Customer Support',t:'at-support'}],
+    email:'roselen@colaberry.com', phone:'+1 (972) 555-0153',
+    hours:'Mon–Fri, 9:00AM–5:00PM', tz:'CST (UTC−6)', cal:'calendly.com/generalcalendar', shift:'' },
+  { id:4, name:'Taiwo Arowojiola',    initials:'TA', color:'#e07b00',
+    areas:[{l:'IPBC Lead',t:'at-admissions'},{l:'Payment Handling',t:'at-payment'},{l:'Account Reactivation',t:'at-payment'}],
+    email:'taiwo@colaberry.com', phone:'+1 (972) 555-0164',
+    hours:'Mon–Fri, 9:00AM–5:00PM', tz:'CST (UTC−6)', cal:'calendly.com/taiwo-colaberry', shift:'' },
+  { id:5, name:'Farhat Shaikh',       initials:'FS', color:'#5a32a0',
+    areas:[{l:'Tech Support',t:'at-support'},{l:'Platform Support',t:'at-support'}],
+    email:'supportagent11@colaberry.com', phone:'+1 (972) 555-0175',
+    hours:'Mon–Sat, 6:00AM–10:00PM', tz:'CST (UTC−6)', cal:'', shift:'Shift A: Mon/Tue/Sat 6AM–2PM CST' },
+  { id:6, name:'Balakrishna (Bala)',  initials:'BK', color:'#275e75',
+    areas:[{l:'Tech Support',t:'at-support'},{l:'Platform Support',t:'at-support'}],
+    email:'supportagent27@colaberry.com', phone:'+1 (972) 555-0181',
+    hours:'Mon–Sat, 6:00AM–10:00PM', tz:'CST (UTC−6)', cal:'', shift:'Shift B: Wed/Thu/Fri 2PM–10PM CST' },
+  { id:7, name:'Balamurali Nair',     initials:'BN', color:'#1e7a56',
+    areas:[{l:'Tech Support',t:'at-support'},{l:'Platform Support',t:'at-support'}],
+    email:'supportagent33@colaberry.com', phone:'+1 (972) 555-0192',
+    hours:'Mon–Sat, 6:00AM–10:00PM', tz:'CST (UTC−6)', cal:'', shift:'Shift C: Mon/Wed/Fri 10AM–6PM CST' },
+  { id:8, name:'Jackie Nwosu',        initials:'JN', color:'#1e7a9a',
+    areas:[{l:'Class Communications',t:'at-comms'},{l:'WhatsApp',t:'at-comms'},{l:'Broken Links',t:'at-comms'}],
+    email:'jackie@colaberry.com', phone:'+1 (682) 555-0196',
+    hours:'Mon–Fri, 8:00AM–6:00PM', tz:'CST (UTC−6)', cal:'', shift:'' },
+];
+
+/* ═══════════════════════════
+   KB ENTRIES  (26 total)
+   primaryId = primary/escalation contact
+   teamIds   = all assigned persons (incl primary)
+═══════════════════════════ */
+const ENTRIES = [
+  // ── PROGRAM BASICS ──────────────────────────────────────────
+  {id:1,cat:'Program Basics',sub:'Program Overview',
+   q:'What is the AI Systems Architect Accelerator?',
+   a:'The AI Systems Architect Accelerator is a membership built around a 12-week, project-based program, powered by Anthropic and Claude Code. Most people consume AI — here you learn to build with it. You arrive with an idea and leave with a deployed AI system.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Enthusiastic',
+   ex:'Hi, I just heard about your AI program — can you tell me more about it?',
+   kw:'accelerator, program, AI, architect, 12-week, cohort, systems, what is',
+   notes:'', active:true},
+
+  {id:2,cat:'Program Basics',sub:'Target Audience',
+   q:'Who is this program designed for?',
+   a:'The program is designed for working professionals — engineers, analysts, product managers, and consultants — who want to move from AI user to AI builder. Comfortable with basic software concepts like git and the command line, and you have a real business problem to solve.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Informative',
+   ex:'I am a project manager with no coding background. Is this for me?',
+   kw:'background, prerequisites, engineer, analyst, PM, professional, who is it for',
+   notes:'Emphasize Claude Code reduces the coding barrier.', active:true},
+
+  {id:3,cat:'Program Basics',sub:'Program Comparison',
+   q:'Is this the same as the old Executive AI Build Accelerator?',
+   a:'No — these are two different programs. The Executive AI Build Accelerator was a 3-week intensive for enterprise executives. The AI Systems Architect Accelerator is 12 weeks, built for working professionals, with a hands-on build curriculum that results in a real portfolio. Different audience, different depth, different outcomes.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Clarifying',
+   ex:'I attended the AI Build program last year, is this the same thing?',
+   kw:'executive, AI build, comparison, old program, same, previous accelerator',
+   notes:'Old cohort members may ask about this.', active:true},
+
+  {id:21,cat:'Program Basics',sub:'Open House & Info Session',
+   q:'How can I attend the Open House or learn more before enrolling?',
+   a:'The Open House on Thursday July 16, 2026 is completely free and requires no commitment. Come see exactly how the program works, ask questions, and meet the team before you decide. The Founding Cohort kicks off Thursday July 23, 2026. Register and learn more at training.colaberry.com.',
+   primaryId:1,teamIds:[1,2],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Enthusiastic',
+   ex:'Is there an info session I can attend? How do I RSVP?',
+   kw:'open house, info session, RSVP, free, attend, register, July 16, demo, preview',
+   notes:'Confirm with Ali whether a formal RSVP system exists or if training.colaberry.com handles registration.', active:true},
+
+  // ── PRICING & ENROLLMENT ─────────────────────────────────────
+  {id:4,cat:'Pricing & Enrollment',sub:'Tuition',
+   q:'How much does the program cost?',
+   a:'Founding cohort pricing: $149/month billed annually (best value, founding rate locked permanently) or $199/month month-to-month with cancel anytime. This rate is permanently locked for founding members and will not be offered again. One membership covers everything — all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Informative',
+   ex:'Can you tell me about pricing? How much does it cost per month?',
+   kw:'price, cost, $149, $199, monthly, annual, tuition, fee, founding rate',
+   notes:'', active:true},
+
+  {id:5,cat:'Pricing & Enrollment',sub:'Enrollment Steps',
+   q:'How do I enroll or sign up?',
+   a:'Go to training.colaberry.com, select your membership plan (annual at $149/mo or monthly at $199/mo), and complete checkout. The Founding Cohort is limited to 40 seats — enroll early to secure your spot and lock the founding rate.',
+   primaryId:1,teamIds:[1,2],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 1 hour',auto:'High',tone:'Enthusiastic',
+   ex:'How do I sign up? Where do I go to register?',
+   kw:'enroll, sign up, register, apply, how to join, training.colaberry.com, checkout',
+   notes:'URL pending Q1 decision from Ali.', active:true},
+
+  {id:22,cat:'Pricing & Enrollment',sub:'Cohort Full / Waitlist',
+   q:'What if the cohort is full? Can I defer to a later cohort?',
+   a:'The Founding Cohort is capped at 40 seats — once full, enrollment for this cohort closes. If you miss the founding cohort, you can join the waitlist for the next cohort at training.colaberry.com. Note: the $149/month founding rate is exclusive to the founding cohort; later cohorts will be priced higher. Contact ali@colaberry.com to be added to the waitlist.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Honest, empathetic',
+   ex:'I missed the founding cohort — is there a waitlist? When is the next one?',
+   kw:'cohort full, waitlist, defer, next cohort, 40 seats, missed enrollment, later cohort',
+   notes:'', active:true},
+
+  {id:23,cat:'Pricing & Enrollment',sub:'Additional Tool Costs',
+   q:'Are there any costs beyond the Colaberry membership fee?',
+   a:'Yes, and we are upfront about it. In addition to your Colaberry membership ($149/mo annual or $199/mo monthly), you pay Anthropic directly for: Claude Code subscription (~$20/month) and LLM API usage billed to your own key (~$10/month per project). These are paid directly to Anthropic — not Colaberry — and are required because you build and deploy real systems on your own keys, exactly as you would on the job.',
+   primaryId:2,teamIds:[2,5,6,7],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Transparent',
+   ex:'Are there any extra costs I should know about? Does Claude Code cost extra?',
+   kw:'extra costs, Claude Code, Anthropic, $20, API, additional fees, tool costs, third-party',
+   notes:'', active:true},
+
+  // ── SCHEDULE & TIME ──────────────────────────────────────────
+  {id:6,cat:'Schedule & Time',sub:'Start Date',
+   q:'When does the program start?',
+   a:'There is a free Open House on Thursday July 16, 2026, and the Founding Cohort first class is Thursday July 23, 2026. The program runs 12 weeks, building toward the Architect Expo in early October 2026. Calendar invites are sent to all enrolled members after signup.',
+   primaryId:1,teamIds:[1,2],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Informative',
+   ex:'When does it start? Is there a specific start date?',
+   kw:'start date, July 16, July 23, kickoff, begin, orientation, open house, October expo',
+   notes:'Update when cohort dates change.', active:true},
+
+  {id:7,cat:'Schedule & Time',sub:'Session Schedule',
+   q:'What days and times are the live sessions?',
+   a:'Live sessions run twice weekly: Monday Architecture Day (2 hours) and Thursday Build Day (2 hours) — 4 hours total per week. Specific clock times are confirmed after enrollment; exact start times are not yet published. Check the program calendar at training.colaberry.com after enrolling.',
+   primaryId:2,teamIds:[2],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Informative',
+   ex:'What days are the classes? What time zone?',
+   kw:'Monday, Thursday, architecture day, build day, schedule, 4 hours, time, CST',
+   notes:'Confirm exact clock times with Ali when published.', active:true},
+
+  {id:8,cat:'Schedule & Time',sub:'Missed Sessions',
+   q:'What happens if I miss a live session?',
+   a:'Every session is recorded and posted in the portal within 24 hours. You can watch the replay anytime and ask follow-up questions in the Skool peer community or the class WhatsApp group.',
+   primaryId:2,teamIds:[2,5,6,7],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Reassuring',
+   ex:'I have a conflict on Thursday nights — can I still do the program?',
+   kw:'recording, replay, missed, conflict, asynchronous, catch up, video',
+   notes:'', active:true},
+
+  // ── CURRICULUM & TOOLS ───────────────────────────────────────
+  {id:9,cat:'Curriculum & Tools',sub:'What You Build',
+   q:'What will I actually build in this program?',
+   a:'You build four progressively complex AI systems: (1) Weeks 1–3: a Business Workflow Assistant with reusable AI Skills; (2) Weeks 4–6: a multi-agent AI team with an Enterprise Prompt Library; (3) Weeks 7–9: a working MCP server integrated with a real system; (4) Weeks 10–12: a complete Solution Architecture Package. You arrive with an idea and leave with a deployed system and a GitHub portfolio.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Enthusiastic',
+   ex:'What kind of projects will I complete? What do graduates actually build?',
+   kw:'build, project, portfolio, workflow assistant, multi-agent, MCP server, GitHub, deliverables',
+   notes:'', active:true},
+
+  {id:10,cat:'Curriculum & Tools',sub:'Required Tools',
+   q:'What tools and software do I need?',
+   a:'You need: Claude Code (Anthropic\'s AI coding tool), a GitHub account (free), Docker Desktop, and a laptop with at least 8GB RAM. Windows and Mac are both fully supported. A detailed setup guide is in your portal welcome email after enrollment.',
+   primaryId:2,teamIds:[2,5,6,7],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Informative',
+   ex:'Do I need to install anything? What hardware do I need?',
+   kw:'tools, Claude Code, GitHub, Docker, RAM, 8GB, requirements, setup, install, Mac, Windows',
+   notes:'', active:true},
+
+  {id:11,cat:'Curriculum & Tools',sub:'Claude Code Cost',
+   q:'How much does Claude Code cost on top of the membership?',
+   a:'Claude Code usage is billed by Anthropic separately from your Colaberry membership. Budget approximately $20/month for the Claude Code subscription plus ~$10/month for LLM API usage on your own key. These are paid directly to Anthropic. The portal includes a cost guide with tips to stay within budget.',
+   primaryId:2,teamIds:[2,5,6,7],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Transparent',
+   ex:'Is Claude Code included? How much extra does it cost?',
+   kw:'Claude Code, cost, Anthropic, $20, $10, usage, extra, billed separately, API',
+   notes:'', active:true},
+
+  // ── PLATFORM & SUPPORT ───────────────────────────────────────
+  {id:12,cat:'Platform & Support',sub:'Login Issues',
+   q:'I cannot log into the portal.',
+   a:'Please try: (1) Clear your browser cache and cookies. (2) Go to training.colaberry.com. (3) If you signed up with Google, use "Continue with Google." Still stuck? Email kesetebirhan@colaberry.com with your registered email address and a screenshot of the error. Response within 1 business day.',
+   primaryId:2,teamIds:[2,5,6,7],
+   esc:'65–84% human review; <65% escalate to Kes immediately',
+   pri:'High',rt:'< 1 hour',auto:'Medium',tone:'Helpful',
+   ex:'I keep getting a login error. My password isn\'t working.',
+   kw:'login, portal, error, password, access, sign in, can\'t log in, broken, Google',
+   notes:'Check if user registered via Google vs email — different auth flow. URL pending Q1 decision.', active:true},
+
+  {id:13,cat:'Platform & Support',sub:'Recordings',
+   q:'Where do I find session recordings?',
+   a:'Log into training.colaberry.com → Dashboard → Current Intensive → Recordings tab. Replays are posted within 24 hours of the live session. If a recording is missing after 24 hours, email kesetebirhan@colaberry.com.',
+   primaryId:2,teamIds:[2,5,6],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Informative',
+   ex:'Where are the class recordings? I can\'t find last Thursday\'s replay.',
+   kw:'recording, replay, portal, video, session, Intensive, recordings tab',
+   notes:'URL pending Q1 decision.', active:true},
+
+  {id:14,cat:'Platform & Support',sub:'Community Access',
+   q:'How do I join the peer community or WhatsApp group?',
+   a:'The Skool community link is in your portal welcome email after enrollment. The class WhatsApp group link is pinned inside Skool. If you did not receive the welcome email, check your spam folder or email jackie@colaberry.com.',
+   primaryId:8,teamIds:[8,2],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Jackie',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Friendly',
+   ex:'How do I get into the WhatsApp group? Where is the Skool link?',
+   kw:'WhatsApp, Skool, community, group link, welcome email, Jackie, peer',
+   notes:'Pending Q2 decision — add Discord if still active.', active:true},
+
+  {id:25,cat:'Platform & Support',sub:'Broken Links & Site Issues',
+   q:'I found a broken link or something on the site is not working.',
+   a:'Thank you for letting us know — reports like this help us fix issues fast. Email jackie@colaberry.com with the page URL and what you were trying to access. We aim to resolve reported issues within 1 business day.',
+   primaryId:8,teamIds:[8,2],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Jackie',
+   pri:'Low',rt:'< 1 business day',auto:'High',tone:'Helpful',
+   ex:'The link on your email is broken. The RSVP page gives a 404 error.',
+   kw:'broken link, 404, not working, error, page, website, link, fix',
+   notes:'', active:true},
+
+  // ── BILLING & ACCOUNT ────────────────────────────────────────
+  {id:15,cat:'Billing & Account',sub:'Receipt & Tax Docs',
+   q:'I need a receipt or tax document.',
+   a:'Log into training.colaberry.com → Account → Billing → Download Receipt. The organization\'s EIN is 45-4223538. Note: there is no 1098-T for this program — Colaberry is not a Title IV institution for this course. For any billing questions, email kesetebirhan@colaberry.com.',
+   primaryId:2,teamIds:[2,4],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Informative',
+   ex:'I need a receipt for my tax return. Can you send documentation?',
+   kw:'receipt, tax, 1098, EIN, 45-4223538, document, invoice, billing, proof of payment',
+   notes:'EIN: 45-4223538. No 1098-T issued.', active:true},
+
+  {id:16,cat:'Billing & Account',sub:'Cancellation & Refunds',
+   q:'I want to cancel or I was charged incorrectly.',
+   a:'For billing disputes or cancellation, email ali@colaberry.com. Refund policy: monthly plan cancels anytime, access through the paid month. Annual plan: 14-day money-back window from the July 23 kickoff; after that non-refundable but membership stays active the full year with your founding rate locked. We will work with you to find the best path forward.',
+   primaryId:1,teamIds:[1,4],
+   esc:'65–84% human review required; <65% escalate to Ali immediately',
+   pri:'High',rt:'< 2 hours',auto:'Low',tone:'Empathetic',
+   ex:'I need to cancel. I was charged but I want my money back.',
+   kw:'cancel, refund, dispute, billing, charged, money back, cancellation, annual, monthly',
+   notes:'Never auto-respond to cancellation or billing dispute. Always route to Ali.', active:true},
+
+  {id:26,cat:'Billing & Account',sub:'Account Reactivation',
+   q:'My account is suspended or I need to reactivate my membership.',
+   a:'If your account was suspended due to a failed payment or lapsed subscription, email taiwo@colaberry.com with your registered email address — we will review and help you reactivate promptly. If your payment is current but you cannot access the portal (technical issue), email kesetebirhan@colaberry.com instead.',
+   primaryId:4,teamIds:[4,2],
+   esc:'65–84% human review; <65% escalate to Taiwo',
+   pri:'High',rt:'< 2 hours',auto:'Medium',tone:'Empathetic',
+   ex:'My account says suspended. I need to get back in. I paid last month.',
+   kw:'suspended, reactivate, account, lapsed, payment failed, access denied, locked out',
+   notes:'Taiwo handles payment-side reactivation. Kes handles portal-side technical access.', active:true},
+
+  // ── CERTIFICATION & CAREER ───────────────────────────────────
+  {id:17,cat:'Certification & Career',sub:'Certificate',
+   q:'Do I get a certificate? Is it accredited?',
+   a:'Yes. You earn the Anthropic Architect certification upon completing the program. Certification prep is fully included in your membership — no extra fee. The program holds TWC Certificate of Approval U5306. This is a professional certification, not a college degree. As we put it: Anthropic certifies knowledge, Colaberry certifies capability.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Confident',
+   ex:'Will I receive a certificate? Is it recognized by Anthropic?',
+   kw:'certificate, Anthropic, accredited, credential, TWC, U5306, recognized, degree, professional',
+   notes:'Always clarify: professional certification, not a college degree.', active:true},
+
+  {id:18,cat:'Certification & Career',sub:'Portfolio & Career Outcomes',
+   q:'What will I have to show employers when I finish?',
+   a:'Three concrete things: (1) a deployed AI system running in the real world, (2) a GitHub portfolio of four guided projects (Business Workflow Assistant, multi-agent AI team, MCP server, Solution Architecture Package), and (3) the Anthropic Architect certification. Anthropic certifies your knowledge; Colaberry certifies your capability through a real deployed system.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Confident',
+   ex:'What can I show an employer after finishing? What\'s in the portfolio?',
+   kw:'portfolio, GitHub, employer, deployed system, certification, outcomes, projects',
+   notes:'', active:true},
+
+  {id:19,cat:'Certification & Career',sub:'Internship Experience',
+   q:'Is the internship a real job or just coursework?',
+   a:'It is a full-time internship experience built directly into the membership at no extra cost. You apply AI skills on real work so you graduate with hands-on experience, not just theory. The internship is included alongside all four Architect Intensives, certification prep, and your guided GitHub portfolio projects — all in one membership.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'High',rt:'< 2 hours',auto:'High',tone:'Enthusiastic',
+   ex:'What is the internship experience? Is it a real paid internship?',
+   kw:'internship, real job, experience, hands-on, included, coursework, alumni, paid',
+   notes:'Confirm internship structure details with Ali — "full-time internship experience" wording comes from Ali\'s KB.', active:true},
+
+  {id:20,cat:'Certification & Career',sub:'Job Guarantee',
+   q:'Is there a job placement guarantee?',
+   a:'There is no job placement guarantee. This is a professional skill-building and portfolio program. You graduate with four real AI systems, a documented architecture portfolio, the Anthropic Architect certification, and a full-time internship experience. Career guidance (LinkedIn review, portfolio feedback) is included. Colaberry has supported 5,000+ career transitions since 2012.',
+   primaryId:1,teamIds:[1],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Honest, direct',
+   ex:'Do you guarantee a job after completion? What\'s the placement rate?',
+   kw:'job, guarantee, placement, employment, career, 5000, portfolio, outcome',
+   notes:'Be direct — no guarantee. Lean on portfolio and community strength.', active:true},
+
+  {id:24,cat:'Certification & Career',sub:'Scholarships',
+   q:'Are there any scholarships or financial aid available?',
+   a:'Yes, scholarships are available for the Founding Cohort. Contact admissions at admissions@colaberry.com for details and to apply. The founding cohort price ($149/$199/month) is itself the strongest discount available — it will not be offered at this rate again. Military professionals and verified non-profits may also contact ali@colaberry.com to discuss options.',
+   primaryId:1,teamIds:[1,3],
+   esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
+   pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Honest, no-pressure',
+   ex:'Do you offer any scholarships? I am a veteran, is there financial aid?',
+   kw:'scholarship, financial aid, military, discount, promo, reduced, free, admissions@colaberry.com',
+   notes:'Terms marked as drafted-verify in Ali\'s KB — confirm before quoting verbatim.', active:true},
+];
+
+/* ═══════════════════════════
+   HELPERS
+═══════════════════════════ */
+const CAT_CLS = {
+  'Program Basics':'cp-prog','Pricing & Enrollment':'cp-price',
+  'Schedule & Time':'cp-sch','Curriculum & Tools':'cp-cur',
+  'Platform & Support':'cp-plat','Billing & Account':'cp-bill',
+  'Certification & Career':'cp-car'
+};
+const AUTO_CLS = {High:'ab-h',Medium:'ab-m',Low:'ab-l'};
+
+function getPerson(id){ return PERSONS.find(p=>p.id===id)||{}; }
+
+/* ═══════════════════════════
+   RENDER TABLE
+═══════════════════════════ */
+let filtered = [...ENTRIES];
+
+function teamHtml(e){
+  const primary = getPerson(e.primaryId);
+  const team = e.teamIds.filter(id=>id!==e.primaryId).slice(0,3).map(id=>getPerson(id));
+  let html = `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">`;
+  html += `<div class="primary-chip"><div class="av" style="background:${primary.color}">${primary.initials}</div><span style="font-size:12px;color:var(--strong);font-weight:500">${primary.name.split(' ')[0]}</span></div>`;
+  if(team.length){
+    html += `<div class="team-avs">`;
+    team.forEach(p=>{ html+=`<div class="av" title="${p.name}" style="background:${p.color};border:2px solid #fff">${p.initials}</div>`; });
+    html += `</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderTable(entries){
+  const tbody = document.getElementById('kb-tbody');
+  tbody.innerHTML = entries.map(e=>{
+    const tags = e.kw.split(',').slice(0,3).map(k=>`<span style="background:#f0f3f6;padding:1px 5px;border-radius:3px;margin-right:3px;font-size:10px">${k.trim()}</span>`).join('');
+    return `<tr data-id="${e.id}">
+      <td>
+        <span class="cp ${CAT_CLS[e.cat]||''}">${e.cat}</span>
+        <div class="st">${e.sub}</div>
+      </td>
+      <td>
+        <div style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;color:var(--strong)" title="${e.q}">${e.q}</div>
+        <div class="st" style="margin-top:3px">${tags}</div>
+      </td>
+      <td>${teamHtml(e)}</td>
+      <td><span class="ab ${AUTO_CLS[e.auto]}">${e.auto}</span></td>
+      <td><span style="font-size:12px;font-weight:600;color:${e.pri==='High'?'#c01020':e.pri==='Medium'?'#a06000':'var(--muted)'}">${e.pri}</span></td>
+      <td><label class="tog"><input type="checkbox" ${e.active?'checked':''} onchange="toggleActive(${e.id},this.checked)"><span class="sl"></span></label></td>
+      <td style="text-align:center">
+        <button class="btn-icon" title="Edit" onclick="openEditEntry(${e.id})"><i class="bi bi-pencil"></i></button>
+        <button class="btn-icon btn-del" title="Delete" onclick="delEntry(${e.id})"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('ec').textContent = entries.length;
+  document.getElementById('rcl').textContent = `Showing ${entries.length} entr${entries.length===1?'y':'ies'}`;
+  document.getElementById('pgi').textContent = `Showing 1–${entries.length} of ${entries.length} entries`;
+}
+
+function filterTable(q){ applyFilters(q, document.getElementById('cat-filter').value); }
+function filterByCategory(c){ applyFilters(document.getElementById('kb-search').value, c); }
+function filterByAuto(v){ renderTable(v?ENTRIES.filter(e=>e.auto===v):[...ENTRIES]); }
+function filterByActive(v){ renderTable(v===''?[...ENTRIES]:ENTRIES.filter(e=>e.active===(v==='1'))); }
+function applyFilters(q,cat){
+  const ql=q.toLowerCase();
+  filtered=ENTRIES.filter(e=>{
+    const mc=!cat||e.cat===cat;
+    const mq=!ql||[e.q,e.a,e.kw,e.sub].some(f=>f.toLowerCase().includes(ql));
+    return mc&&mq;
+  });
+  renderTable(filtered);
+}
+function toggleActive(id,val){
+  const e=ENTRIES.find(e=>e.id===id); if(e){e.active=val; toast(val?'Entry activated':'Entry deactivated');}
+}
+function delEntry(id){
+  if(confirm('Delete this entry? This cannot be undone.')){
+    const i=ENTRIES.findIndex(e=>e.id===id);
+    if(i>-1){ENTRIES.splice(i,1);renderTable(ENTRIES);toast('Entry deleted');}
+  }
+}
+
+/* ═══════════════════════════
+   RENDER PERSONS
+═══════════════════════════ */
+function renderPersons(persons){
+  document.getElementById('pgrid').innerHTML = persons.map(p=>{
+    const areas = p.areas.map(a=>`<span class="area-tag ${a.t}">${a.l}</span>`).join('');
+    const shiftBadge = p.shift?`<div class="shift-badge" style="margin-top:8px"><i class="bi bi-arrow-repeat"></i>${p.shift}</div>`:'';
+    const calLink = p.cal?`<div class="meta-r"><i class="bi bi-calendar-check"></i><a href="https://${p.cal}" target="_blank">${p.cal}</a></div>`:`<div class="meta-r" style="color:var(--muted)"><i class="bi bi-calendar-x"></i>No calendar link</div>`;
+    return `<div class="pcard">
+      <button class="btn-icon pcard-edit" onclick="openEditPerson(${p.id})"><i class="bi bi-pencil"></i></button>
+      <div class="av-lg" style="background:${p.color}">${p.initials}</div>
+      <div class="pc-name">${p.name}</div>
+      <div class="pc-areas">${areas}</div>
+      ${shiftBadge}
+      <div class="pc-meta" style="margin-top:${p.shift?'10px':'0'}">
+        <div class="meta-r"><i class="bi bi-envelope"></i><a href="mailto:${p.email}">${p.email}</a></div>
+        <div class="meta-r"><i class="bi bi-telephone"></i>${p.phone}</div>
+        <div class="meta-r"><i class="bi bi-clock"></i>${p.hours}</div>
+        <div class="meta-r"><i class="bi bi-globe"></i>${p.tz}</div>
+        ${calLink}
+      </div>
+    </div>`;
+  }).join('');
+}
+function filterPersons(q){
+  const ql=q.toLowerCase();
+  const f=ql?PERSONS.filter(p=>p.name.toLowerCase().includes(ql)||p.areas.some(a=>a.l.toLowerCase().includes(ql))):[...PERSONS];
+  renderPersons(f);
+}
+
+/* ═══════════════════════════
+   TABS / MODALS
+═══════════════════════════ */
+function switchTab(tab,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-entries').style.display=tab==='entries'?'':'none';
+  document.getElementById('tab-persons').style.display=tab==='persons'?'':'none';
+  document.getElementById('tab-cohorts').style.display=tab==='cohorts'?'':'none';
+}
+function openModal(id){document.getElementById(id).classList.add('show');}
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+document.querySelectorAll('.mbk').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');});});
+
+/* ── Entry modal ── */
+let editEntryId=null;
+
+function buildTeamList(excludeId, selectedIds){
+  return PERSONS.map(p=>{
+    if(p.id===excludeId) return '';
+    const chk=selectedIds.includes(p.id)?'checked':'';
+    return `<div class="pc-item">
+      <input type="checkbox" id="tc-${p.id}" value="${p.id}" ${chk}>
+      <div class="av-sm" style="background:${p.color}">${p.initials}</div>
+      <div class="pc-item-info">
+        <div class="pc-item-name">${p.name}</div>
+        <div class="pc-item-role">${p.areas.map(a=>a.l).join(' · ')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function populatePrimaryDropdown(selectedId){
+  document.getElementById('e-primary').innerHTML = '<option value="">— Select primary contact —</option>'+
+    PERSONS.map(p=>`<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.name} · ${p.areas[0].l}</option>`).join('');
+}
+
+function syncCal(){
+  const pid=parseInt(document.getElementById('e-primary').value);
+  const p=getPerson(pid);
+  document.getElementById('e-cal').value=p.cal||'';
+  // refresh team list
+  const teamIds=getCheckedTeam();
+  document.getElementById('e-team-list').innerHTML=buildTeamList(pid,teamIds);
+}
+
+function getCheckedTeam(){
+  return [...document.querySelectorAll('#e-team-list input[type=checkbox]:checked')].map(c=>parseInt(c.value));
+}
+
+function openAddEntry(){
+  editEntryId=null;
+  document.getElementById('em-title').textContent='Add KB Entry';
+  populateEntryCourseDropdown();
+  document.getElementById('preview-panel').style.display='none';
+  populatePrimaryDropdown(null);
+  document.getElementById('e-team-list').innerHTML=buildTeamList(null,[]);
+  ['e-sub','e-q','e-a','e-ex','e-kw','e-notes','e-cal','e-rt','e-esc'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('e-active').checked=true;
+  openModal('entry-modal');
+}
+
+function openEditEntry(id){
+  const e=ENTRIES.find(e=>e.id===id); if(!e) return;
+  editEntryId=id;
+  document.getElementById('em-title').textContent='Edit KB Entry';
+  populateEntryCourseDropdown();
+  document.getElementById('e-course').value=e.courseId||'';
+  document.getElementById('preview-panel').style.display='none';
+  document.getElementById('e-cat').value=e.cat;
+  document.getElementById('e-sub').value=e.sub;
+  document.getElementById('e-q').value=e.q;
+  document.getElementById('e-a').value=e.a;
+  document.getElementById('e-ex').value=e.ex||'';
+  document.getElementById('e-kw').value=e.kw;
+  document.getElementById('e-notes').value=e.notes||'';
+  document.getElementById('e-cal').value=getPerson(e.primaryId).cal||'';
+  document.getElementById('e-pri').value=e.pri;
+  document.getElementById('e-rt').value=e.rt;
+  document.getElementById('e-auto').value=e.auto;
+  document.getElementById('e-tone').value=e.tone;
+  document.getElementById('e-esc').value=e.esc||'';
+  document.getElementById('e-active').checked=e.active;
+  populatePrimaryDropdown(e.primaryId);
+  const teamWithoutPrimary=e.teamIds.filter(id=>id!==e.primaryId);
+  document.getElementById('e-team-list').innerHTML=buildTeamList(e.primaryId,teamWithoutPrimary);
+  openModal('entry-modal');
+}
+
+function saveEntry(){
+  const pid=parseInt(document.getElementById('e-primary').value);
+  const teamIds=[pid,...getCheckedTeam().filter(id=>id!==pid)];
+  const entry={
+    id:editEntryId||(Math.max(...ENTRIES.map(e=>e.id))+1),
+    cat:document.getElementById('e-cat').value,
+    sub:document.getElementById('e-sub').value,
+    q:document.getElementById('e-q').value,
+    a:document.getElementById('e-a').value,
+    ex:document.getElementById('e-ex').value,
+    kw:document.getElementById('e-kw').value,
+    notes:document.getElementById('e-notes').value,
+    primaryId:pid, teamIds,
+    pri:document.getElementById('e-pri').value,
+    rt:document.getElementById('e-rt').value,
+    auto:document.getElementById('e-auto').value,
+    tone:document.getElementById('e-tone').value,
+    esc:document.getElementById('e-esc').value,
+    active:document.getElementById('e-active').checked,
+  };
+  if(editEntryId){
+    const i=ENTRIES.findIndex(e=>e.id===editEntryId);
+    if(i>-1) ENTRIES[i]=entry;
+    toast('Entry updated');
+  } else {
+    ENTRIES.push(entry);
+    toast('Entry added');
+  }
+  closeModal('entry-modal');
+  renderTable(ENTRIES);
+}
+
+/* ── Person modal ── */
+let editPersonId=null;
+function openAddPerson(){
+  editPersonId=null;
+  document.getElementById('pm-title').textContent='Add Responsible Person';
+  ['p-name','p-role','p-email','p-phone','p-hours','p-cal','p-areas','p-shift'].forEach(id=>{document.getElementById(id).value='';});
+  openModal('person-modal');
+}
+function openEditPerson(id){
+  const p=getPerson(id); if(!p.name) return;
+  editPersonId=id;
+  document.getElementById('pm-title').textContent='Edit: '+p.name;
+  document.getElementById('p-name').value=p.name;
+  document.getElementById('p-role').value=p.areas[0]?.l||'';
+  document.getElementById('p-email').value=p.email;
+  document.getElementById('p-phone').value=p.phone;
+  document.getElementById('p-hours').value=p.hours;
+  document.getElementById('p-tz').value=p.tz;
+  document.getElementById('p-cal').value=p.cal;
+  document.getElementById('p-areas').value=p.areas.map(a=>a.l).join(', ');
+  document.getElementById('p-shift').value=p.shift||'';
+  openModal('person-modal');
+}
+function savePerson(){
+  const areasRaw=document.getElementById('p-areas').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const areas=areasRaw.map(l=>({l,t:'at-support'}));
+  const p={
+    id:editPersonId||(Math.max(...PERSONS.map(p=>p.id))+1),
+    name:document.getElementById('p-name').value,
+    areas,
+    email:document.getElementById('p-email').value,
+    phone:document.getElementById('p-phone').value,
+    hours:document.getElementById('p-hours').value,
+    tz:document.getElementById('p-tz').value,
+    cal:document.getElementById('p-cal').value,
+    shift:document.getElementById('p-shift').value,
+    initials:document.getElementById('p-name').value.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2),
+    color:editPersonId?getPerson(editPersonId).color:'#367895',
+  };
+  if(editPersonId){const i=PERSONS.findIndex(p=>p.id===editPersonId);if(i>-1)PERSONS[i]=p;toast('Person updated');}
+  else{PERSONS.push(p);toast('Person added');}
+  closeModal('person-modal');
+  renderPersons(PERSONS);
+}
+
+/* ═══════════════════════════
+   PENDING DECISIONS
+═══════════════════════════ */
+function selectOpt(el,q){
+  el.closest('.pending-q').querySelectorAll('.pq-opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  toast('Answer recorded — update KB entries once Ali confirms');
+}
+
+/* ═══════════════════════════
+   SYNTHFLOW EXPORT — 16 cols
+═══════════════════════════ */
+const SF_COLS=['Main Category','Sub Category','Question from Email','Response Type',
+  'Template Answer','Responsible Person','Escalation Logic','Priority','Response Time',
+  'Automation Potential','Emotional Tone','Calendar Link','Email Examples','Common Patterns',
+  'Keywords','Notes'];
+
+function exportSynthflow(){
+  const active=ENTRIES.filter(e=>e.active);
+  document.getElementById('exp-cnt').textContent=active.length;
+  document.getElementById('col-tags').innerHTML=SF_COLS.map(c=>`<span class="ctag">${c}</span>`).join('');
+  openModal('export-modal');
+}
+
+function doDownload(){
+  const active=ENTRIES.filter(e=>e.active);
+  const rows=[SF_COLS];
+  active.forEach(e=>{
+    const primary=getPerson(e.primaryId);
+    const team=e.teamIds.map(id=>getPerson(id).name).filter(Boolean).join(', ');
+    rows.push([
+      e.cat, e.sub, e.q, 'auto',
+      e.a, primary.name||'',
+      e.esc||'≥85% auto-respond; 65–84% human review; <65% escalate to primary contact',
+      e.pri, e.rt, e.auto, e.tone,
+      primary.cal||'', e.ex||'', team, e.kw||'', e.notes||''
+    ]);
+  });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`colaberry-knowledge-ops-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  closeModal('export-modal');
+  toast(`Synthflow CSV downloaded — ${active.length} active entries`);
+}
+
+/* ═══════════════════════════
+   TOAST
+═══════════════════════════ */
+function toast(msg){
+  const c=document.getElementById('tct');
+  const t=document.createElement('div');
+  t.className='tm';
+  t.innerHTML=`<i class="bi bi-check-circle-fill"></i>${msg}`;
+  c.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},2800);
+}
+
+/* ═══════════════════════════
+   INIT
+═══════════════════════════ */
+renderTable(ENTRIES);
+renderPersons(PERSONS);
+renderCohorts();
+populateEntryCourseDropdown();
+</script>
+</body>
+</html>
