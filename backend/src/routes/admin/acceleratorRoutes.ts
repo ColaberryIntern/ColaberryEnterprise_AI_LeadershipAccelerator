@@ -87,4 +87,17 @@ router.get('/api/admin/accelerator/enrollments/:enrollmentId/project-architect',
 router.put('/api/admin/accelerator/curriculum/lessons/:lessonId/override', requireAdmin, handleAdminOverrideLessonStatus);
 router.get('/api/admin/accelerator/enrollments/:enrollmentId/lab-responses', requireAdmin, handleAdminGetLabResponses);
 
+// Open House: onboard Eventbrite registrants (read from CCPP) as Explorer accounts.
+// Dry-run by default; pass ?send=true to actually create accounts + send login links.
+router.post('/api/admin/accelerator/open-house/sync', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const dryRun = req.query.send !== 'true';
+    const { syncOpenHouseExplorers } = await import('../../services/openHouseOnboardingService');
+    const summary = await syncOpenHouseExplorers({ dryRun });
+    res.json({ success: true, ...summary });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

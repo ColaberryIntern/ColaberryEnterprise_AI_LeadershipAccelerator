@@ -36,6 +36,7 @@ export interface EnrollmentAttributes {
   portal_token_expires_at?: Date;
   portal_enabled?: boolean;
   active_project_id?: string | null;
+  enrollment_type?: 'standard' | 'explorer';
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -72,6 +73,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare portal_token_expires_at: Date;
   declare portal_enabled: boolean;
   declare active_project_id: string | null;
+  declare enrollment_type: 'standard' | 'explorer';
   declare created_at: Date;
 }
 
@@ -221,6 +223,14 @@ Enrollment.init(
       type: DataTypes.UUID,
       allowNull: true,
     },
+    enrollment_type: {
+      // 'explorer' = Open House visitor who can log in and explore but has NOT
+      // paid or joined a class; excluded from paid-seat + student metrics.
+      // 'standard' = a normal (paying) enrollment.
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'standard',
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -236,6 +246,7 @@ Enrollment.init(
       { fields: ['cohort_id'], name: 'idx_enrollments_cohort_id' },
       { fields: ['payment_status'], name: 'idx_enrollments_payment_status' },
       { fields: ['paysimple_payment_id'], name: 'idx_enrollments_ps_payment', where: { paysimple_payment_id: { [require('sequelize').Op.ne]: null } } },
+      { fields: ['enrollment_type'], name: 'idx_enrollments_enrollment_type' },
     ],
   }
 );
