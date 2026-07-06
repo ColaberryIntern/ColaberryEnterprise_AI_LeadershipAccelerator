@@ -294,40 +294,25 @@
   <!-- ══ KB ENTRIES TAB ══ -->
   <div id="tab-entries">
 
-    <!-- Pending Decisions panel -->
-    <div class="pending-panel" style="margin-top:20px;">
-      <div class="pending-hdr">
-        <i class="bi bi-exclamation-triangle-fill"></i>
-        <strong>3 Decisions Needed from Ali</strong>
-        <span>— Select an answer on each card below. These affect multiple entries.</span>
+    <!-- Confirmed Decisions panel -->
+    <div class="pending-panel" style="margin-top:20px;border-left:4px solid #22c55e;">
+      <div class="pending-hdr" style="color:#15803d;">
+        <i class="bi bi-check-circle-fill"></i>
+        <strong>Ali Confirmed — 2026-07-06</strong>
+        <span>— All blocking decisions resolved. Phase 1 approved.</span>
       </div>
       <div class="pending-qs">
         <div class="pending-q">
-          <div class="pending-q-num">Question 1 · Portal URL</div>
-          <div class="pending-q-text">Which URL is live for the AI Accelerator portal and enrollment?</div>
-          <div class="pending-q-opts">
-            <div class="pq-opt" onclick="selectOpt(this,'q1')">training.colaberry.com</div>
-            <div class="pq-opt" onclick="selectOpt(this,'q1')">enterprise.colaberry.ai</div>
-            <div class="pq-opt" onclick="selectOpt(this,'q1')">Both (different purposes)</div>
-          </div>
+          <div class="pending-q-num" style="color:#15803d;">✅ Decision 1 · Portal URL</div>
+          <div class="pending-q-text"><strong>enterprise.colaberry.ai</strong> — use for all enrollment links and cohort seed data.</div>
         </div>
         <div class="pending-q">
-          <div class="pending-q-num">Question 2 · Community Platform</div>
-          <div class="pending-q-text">Is Discord still active for the AI course, or fully replaced by Skool + WhatsApp?</div>
-          <div class="pending-q-opts">
-            <div class="pq-opt" onclick="selectOpt(this,'q2')">Skool + WhatsApp only</div>
-            <div class="pq-opt" onclick="selectOpt(this,'q2')">Discord still active</div>
-            <div class="pq-opt" onclick="selectOpt(this,'q2')">All three platforms</div>
-          </div>
+          <div class="pending-q-num" style="color:#15803d;">✅ Decision 2 · Community Platform</div>
+          <div class="pending-q-text"><strong>Program portal + WhatsApp only.</strong> No Discord. No Skool. Jackie manages WhatsApp group.</div>
         </div>
         <div class="pending-q" style="border-right:none">
-          <div class="pending-q-num">Question 3 · AI Mentor</div>
-          <div class="pending-q-text">Does the AI Mentor (cai@aiagent.colaberry.com / WhatsApp +1 682-281-4281) carry over to the new AI Accelerator cohort?</div>
-          <div class="pending-q-opts">
-            <div class="pq-opt" onclick="selectOpt(this,'q3')">Yes, carries over</div>
-            <div class="pq-opt" onclick="selectOpt(this,'q3')">No, retired</div>
-            <div class="pq-opt" onclick="selectOpt(this,'q3')">New mentor assigned</div>
-          </div>
+          <div class="pending-q-num" style="color:#15803d;">✅ Decision 3 · AI Mentor</div>
+          <div class="pending-q-text"><strong>Rebuild fresh against app data</strong> — decoupled from SQL Server. Legacy cai@aiagent.colaberry.com does not carry over. Placeholder in KB until Phase 2 ships.</div>
         </div>
       </div>
     </div>
@@ -444,12 +429,12 @@
         <div class="col-md-8"><div class="fg"><span class="fl">Cohort Name</span><input class="fc" id="c-name" placeholder="e.g. Cohort 2"></div></div>
         <div class="col-md-4"><div class="fg"><span class="fl">Number</span><input class="fc" id="c-num" type="number" placeholder="2"></div></div>
         <div class="col-md-6"><div class="fg"><span class="fl">Open House Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.open_house_date}}</span></span><input class="fc" id="c-oh-date" placeholder="Thursday, July 16, 2026"></div></div>
-        <div class="col-md-6"><div class="fg"><span class="fl">Open House URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.open_house_url}}</span></span><input class="fc" id="c-oh-url" placeholder="training.colaberry.com/open-house"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Open House URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.open_house_url}}</span></span><input class="fc" id="c-oh-url" placeholder="enterprise.colaberry.ai/open-house"></div></div>
         <div class="col-md-6"><div class="fg"><span class="fl">Start Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.start_date}}</span></span><input class="fc" id="c-start" placeholder="Thursday, July 23, 2026"></div></div>
         <div class="col-md-6"><div class="fg"><span class="fl">End Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.end_date}}</span></span><input class="fc" id="c-end" placeholder="October 15, 2026"></div></div>
         <div class="col-md-6"><div class="fg"><span class="fl">Expo / Demo Date <span style="color:var(--leaf-green);font-size:10px">{{cohort.expo_date}}</span></span><input class="fc" id="c-expo" placeholder="October 2026"></div></div>
-        <div class="col-md-6"><div class="fg"><span class="fl">Enrollment URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.enrollment_url}}</span></span><input class="fc" id="c-enroll" placeholder="training.colaberry.com"></div></div>
-        <div class="col-md-6"><div class="fg"><span class="fl">Waitlist URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.waitlist_url}}</span></span><input class="fc" id="c-waitlist" placeholder="training.colaberry.com/waitlist"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Enrollment URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.enrollment_url}}</span></span><input class="fc" id="c-enroll" placeholder="enterprise.colaberry.ai"></div></div>
+        <div class="col-md-6"><div class="fg"><span class="fl">Waitlist URL <span style="color:var(--leaf-green);font-size:10px">{{cohort.waitlist_url}}</span></span><input class="fc" id="c-waitlist" placeholder="enterprise.colaberry.ai/waitlist"></div></div>
         <div class="col-md-3"><div class="fg"><span class="fl">Annual $/mo <span style="color:var(--leaf-green);font-size:10px">{{cohort.price_annual}}</span></span><input class="fc" id="c-price-a" type="number" placeholder="149"></div></div>
         <div class="col-md-3"><div class="fg"><span class="fl">Monthly $/mo <span style="color:var(--leaf-green);font-size:10px">{{cohort.price_monthly}}</span></span><input class="fc" id="c-price-m" type="number" placeholder="199"></div></div>
         <div class="col-md-3"><div class="fg"><span class="fl">Total Seats <span style="color:var(--leaf-green);font-size:10px">{{cohort.seats_total}}</span></span><input class="fc" id="c-seats-t" type="number" placeholder="40"></div></div>
@@ -636,10 +621,10 @@ const COURSES = [
 
 const COHORTS = [
   { id:1, courseId:1, name:'Founding Cohort', number:1,
-    openHouseDate:'Thursday, July 16, 2026', openHouseUrl:'training.colaberry.com/open-house',
+    openHouseDate:'Thursday, July 16, 2026', openHouseUrl:'enterprise.colaberry.ai/open-house',
     startDate:'Thursday, July 23, 2026', endDate:'October 15, 2026', expoDate:'October 2026',
     priceAnnual:149, priceMonthly:199, seatsTotal:40, seatsRemaining:32,
-    enrollmentUrl:'training.colaberry.com', waitlistUrl:'training.colaberry.com/waitlist',
+    enrollmentUrl:'enterprise.colaberry.ai', waitlistUrl:'enterprise.colaberry.ai/waitlist',
     isActive:true },
   { id:2, courseId:2, name:'Cohort 12', number:12,
     openHouseDate:'TBD', openHouseUrl:'',
@@ -960,13 +945,13 @@ const ENTRIES = [
 
   {id:21,cat:'Program Basics',sub:'Open House & Info Session',
    q:'How can I attend the Open House or learn more before enrolling?',
-   a:'The Open House on Thursday July 16, 2026 is completely free and requires no commitment. Come see exactly how the program works, ask questions, and meet the team before you decide. The Founding Cohort kicks off Thursday July 23, 2026. Register and learn more at training.colaberry.com.',
+   a:'The Open House on Thursday July 16, 2026 is completely free and requires no commitment. Come see exactly how the program works, ask questions, and meet the team before you decide. The Founding Cohort kicks off Thursday July 23, 2026. Register and learn more at enterprise.colaberry.ai.',
    primaryId:1,teamIds:[1,2],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
    pri:'High',rt:'< 2 hours',auto:'High',tone:'Enthusiastic',
    ex:'Is there an info session I can attend? How do I RSVP?',
    kw:'open house, info session, RSVP, free, attend, register, July 16, demo, preview',
-   notes:'Confirm with Ali whether a formal RSVP system exists or if training.colaberry.com handles registration.', active:true},
+   notes:'Confirm with Ali whether a formal RSVP system exists or if enterprise.colaberry.ai handles registration.', active:true},
 
   // ── PRICING & ENROLLMENT ─────────────────────────────────────
   {id:4,cat:'Pricing & Enrollment',sub:'Tuition',
@@ -981,17 +966,17 @@ const ENTRIES = [
 
   {id:5,cat:'Pricing & Enrollment',sub:'Enrollment Steps',
    q:'How do I enroll or sign up?',
-   a:'Go to training.colaberry.com, select your membership plan (annual at $149/mo or monthly at $199/mo), and complete checkout. The Founding Cohort is limited to 40 seats — enroll early to secure your spot and lock the founding rate.',
+   a:'Go to enterprise.colaberry.ai, select your membership plan (annual at $149/mo or monthly at $199/mo), and complete checkout. The Founding Cohort is limited to 40 seats — enroll early to secure your spot and lock the founding rate.',
    primaryId:1,teamIds:[1,2],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
    pri:'High',rt:'< 1 hour',auto:'High',tone:'Enthusiastic',
    ex:'How do I sign up? Where do I go to register?',
-   kw:'enroll, sign up, register, apply, how to join, training.colaberry.com, checkout',
+   kw:'enroll, sign up, register, apply, how to join, enterprise.colaberry.ai, checkout',
    notes:'URL pending Q1 decision from Ali.', active:true},
 
   {id:22,cat:'Pricing & Enrollment',sub:'Cohort Full / Waitlist',
    q:'What if the cohort is full? Can I defer to a later cohort?',
-   a:'The Founding Cohort is capped at 40 seats — once full, enrollment for this cohort closes. If you miss the founding cohort, you can join the waitlist for the next cohort at training.colaberry.com. Note: the $149/month founding rate is exclusive to the founding cohort; later cohorts will be priced higher. Contact ali@colaberry.com to be added to the waitlist.',
+   a:'The Founding Cohort is capped at 40 seats — once full, enrollment for this cohort closes. If you miss the founding cohort, you can join the waitlist for the next cohort at enterprise.colaberry.ai. Note: the $149/month founding rate is exclusive to the founding cohort; later cohorts will be priced higher. Contact ali@colaberry.com to be added to the waitlist.',
    primaryId:1,teamIds:[1],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Ali',
    pri:'High',rt:'< 2 hours',auto:'High',tone:'Honest, empathetic',
@@ -1022,7 +1007,7 @@ const ENTRIES = [
 
   {id:7,cat:'Schedule & Time',sub:'Session Schedule',
    q:'What days and times are the live sessions?',
-   a:'Live sessions run twice weekly: Monday Architecture Day (2 hours) and Thursday Build Day (2 hours) — 4 hours total per week. Specific clock times are confirmed after enrollment; exact start times are not yet published. Check the program calendar at training.colaberry.com after enrolling.',
+   a:'Live sessions run twice weekly: Monday Architecture Day (2 hours) and Thursday Build Day (2 hours) — 4 hours total per week. Specific clock times are confirmed after enrollment; exact start times are not yet published. Check the program calendar at enterprise.colaberry.ai after enrolling.',
    primaryId:2,teamIds:[2],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
    pri:'High',rt:'< 2 hours',auto:'High',tone:'Informative',
@@ -1032,7 +1017,7 @@ const ENTRIES = [
 
   {id:8,cat:'Schedule & Time',sub:'Missed Sessions',
    q:'What happens if I miss a live session?',
-   a:'Every session is recorded and posted in the portal within 24 hours. You can watch the replay anytime and ask follow-up questions in the Skool peer community or the class WhatsApp group.',
+   a:'Every session is recorded and posted in the portal within 24 hours. You can watch the replay anytime and ask follow-up questions in the program portal (enterprise.colaberry.ai) or the class WhatsApp group.',
    primaryId:2,teamIds:[2,5,6,7],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
    pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Reassuring',
@@ -1074,7 +1059,7 @@ const ENTRIES = [
   // ── PLATFORM & SUPPORT ───────────────────────────────────────
   {id:12,cat:'Platform & Support',sub:'Login Issues',
    q:'I cannot log into the portal.',
-   a:'Please try: (1) Clear your browser cache and cookies. (2) Go to training.colaberry.com. (3) If you signed up with Google, use "Continue with Google." Still stuck? Email kesetebirhan@colaberry.com with your registered email address and a screenshot of the error. Response within 1 business day.',
+   a:'Please try: (1) Clear your browser cache and cookies. (2) Go to enterprise.colaberry.ai. (3) If you signed up with Google, use "Continue with Google." Still stuck? Email kesetebirhan@colaberry.com with your registered email address and a screenshot of the error. Response within 1 business day.',
    primaryId:2,teamIds:[2,5,6,7],
    esc:'65–84% human review; <65% escalate to Kes immediately',
    pri:'High',rt:'< 1 hour',auto:'Medium',tone:'Helpful',
@@ -1084,7 +1069,7 @@ const ENTRIES = [
 
   {id:13,cat:'Platform & Support',sub:'Recordings',
    q:'Where do I find session recordings?',
-   a:'Log into training.colaberry.com → Dashboard → Current Intensive → Recordings tab. Replays are posted within 24 hours of the live session. If a recording is missing after 24 hours, email kesetebirhan@colaberry.com.',
+   a:'Log into enterprise.colaberry.ai → Dashboard → Current Intensive → Recordings tab. Replays are posted within 24 hours of the live session. If a recording is missing after 24 hours, email kesetebirhan@colaberry.com.',
    primaryId:2,teamIds:[2,5,6],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
    pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Informative',
@@ -1094,13 +1079,13 @@ const ENTRIES = [
 
   {id:14,cat:'Platform & Support',sub:'Community Access',
    q:'How do I join the peer community or WhatsApp group?',
-   a:'The Skool community link is in your portal welcome email after enrollment. The class WhatsApp group link is pinned inside Skool. If you did not receive the welcome email, check your spam folder or email jackie@colaberry.com.',
+   a:'Your program community lives in the portal at enterprise.colaberry.ai and the class WhatsApp group. Both links are in your welcome email after enrollment. If you did not receive the welcome email, check your spam folder or contact jackie@colaberry.com.',
    primaryId:8,teamIds:[8,2],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Jackie',
    pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Friendly',
-   ex:'How do I get into the WhatsApp group? Where is the Skool link?',
-   kw:'WhatsApp, Skool, community, group link, welcome email, Jackie, peer',
-   notes:'Pending Q2 decision — add Discord if still active.', active:true},
+   ex:'How do I join the community? Where is the WhatsApp group link?',
+   kw:'WhatsApp, community, portal, group link, welcome email, Jackie, peer',
+   notes:'Confirmed 2026-07-06: portal + WhatsApp only — no Discord, no Skool.', active:true},
 
   {id:25,cat:'Platform & Support',sub:'Broken Links & Site Issues',
    q:'I found a broken link or something on the site is not working.',
@@ -1115,7 +1100,7 @@ const ENTRIES = [
   // ── BILLING & ACCOUNT ────────────────────────────────────────
   {id:15,cat:'Billing & Account',sub:'Receipt & Tax Docs',
    q:'I need a receipt or tax document.',
-   a:'Log into training.colaberry.com → Account → Billing → Download Receipt. The organization\'s EIN is 45-4223538. Note: there is no 1098-T for this program — Colaberry is not a Title IV institution for this course. For any billing questions, email kesetebirhan@colaberry.com.',
+   a:'Log into enterprise.colaberry.ai → Account → Billing → Download Receipt. The organization\'s EIN is 45-4223538. Note: there is no 1098-T for this program — Colaberry is not a Title IV institution for this course. For any billing questions, email kesetebirhan@colaberry.com.',
    primaryId:2,teamIds:[2,4],
    esc:'≥85% auto-respond; 65–84% human review; <65% escalate to Kes',
    pri:'Medium',rt:'< 4 hours',auto:'High',tone:'Informative',

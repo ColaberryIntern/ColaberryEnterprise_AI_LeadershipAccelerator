@@ -123,7 +123,7 @@ Answer templates may embed merge tags. At resolution time (Cora query, Synthflow
 | `{{cohort.name}}` | Cohort name | Founding Cohort |
 | `{{cohort.number}}` | Cohort number | 1 |
 | `{{cohort.open_house_date}}` | Open house date string | Thursday, July 16, 2026 |
-| `{{cohort.open_house_url}}` | Open house registration URL | training.colaberry.com |
+| `{{cohort.open_house_url}}` | Open house registration URL | enterprise.colaberry.ai |
 | `{{cohort.start_date}}` | First class date string | Thursday, July 23, 2026 |
 | `{{cohort.end_date}}` | End date string | October 15, 2026 |
 | `{{cohort.expo_date}}` | Expo/demo date string | October 2026 |
@@ -131,8 +131,8 @@ Answer templates may embed merge tags. At resolution time (Cora query, Synthflow
 | `{{cohort.price_monthly}}` | Month-to-month rate | $199 |
 | `{{cohort.seats_total}}` | Total seats | 40 |
 | `{{cohort.seats_remaining}}` | Remaining seats | 12 |
-| `{{cohort.enrollment_url}}` | Enrollment page URL | training.colaberry.com |
-| `{{cohort.waitlist_url}}` | Waitlist page URL | training.colaberry.com/waitlist |
+| `{{cohort.enrollment_url}}` | Enrollment page URL | enterprise.colaberry.ai |
+| `{{cohort.waitlist_url}}` | Waitlist page URL | enterprise.colaberry.ai/waitlist |
 | `{{course.name}}` | Course full name | AI Systems Architect Accelerator |
 | `{{course.slug}}` | Course slug | ai-architect |
 
@@ -291,13 +291,15 @@ All admin endpoints gated by `requireAdmin` middleware.
 
 ---
 
-## 10. Decisions Required from Ali
+## 10. Ali-Confirmed Decisions (2026-07-06)
 
-| # | Question | Affects |
+| # | Decision | Impact |
 |---|---|---|
-| 1 | Is the live portal `training.colaberry.com` or `enterprise.colaberry.ai`? | 6 entries with direct enrollment links; `cohorts.enrollment_url` seed value |
-| 2 | Is Discord still active for this cohort, or Skool + WhatsApp only? | Entry #14 (Community Access) answer template |
-| 3 | Does the AI Mentor (cai@aiagent.colaberry.com / WhatsApp +1 682-281-4281) carry over to the AI Accelerator cohort? | Entry answer templates referencing the AI Mentor |
+| 1 | Portal URL: `enterprise.colaberry.ai` | All enrollment links and `cohorts.enrollment_url` seed value updated |
+| 2 | Community: program portal (enterprise.colaberry.ai) + WhatsApp — no Discord, no Skool | Entry #14 (Community Access) updated accordingly |
+| 3 | AI Mentor: concept carries over but will be rebuilt fresh against app data, decoupled from SQL Server / CCPP. Legacy `cai@aiagent.colaberry.com` does not carry over as-is. | AI Mentor entries in the KB use a `[PHASE 2 — NOT YET ACTIVE]` placeholder until the new agent ships |
+| 4 | Single source of truth: `enterprise.colaberry.ai/knowledge/#home` | Cora Rubric + Synthflow content both map into `cora_kb_entries`; public KB reads from same table |
+| 5 | Phase 1 approved: proceed | Implementation starts on `workstream/kb-ops-phase1` branch |
 
 ---
 
