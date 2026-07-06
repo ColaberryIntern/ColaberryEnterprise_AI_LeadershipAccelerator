@@ -22,6 +22,7 @@ import AdminICPInsightsPage from '../pages/admin/AdminICPInsightsPage';
 import AdminVisitorsPage from '../pages/admin/AdminVisitorsPage';
 import AdminOpportunitiesPage from '../pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from '../pages/admin/AdminAcceleratorPage';
+import AdminKnowledgeOpsPage from '../pages/admin/AdminKnowledgeOpsPage';
 import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
 import IntelligenceOSPage from '../pages/admin/intelligence/IntelligenceOSPage';
 import IntelligenceDiscoveryPage from '../pages/admin/intelligence/IntelligenceDiscoveryPage';
@@ -73,6 +74,7 @@ const adminRoutes = (
         <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
+        <Route path="/admin/knowledge-ops" element={<AdminKnowledgeOpsPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
         <Route path="/admin/ai-settings" element={<Navigate to="/admin/intelligence" replace />} />
         <Route path="/admin/intelligence" element={<IntelligenceOSPage />} />
