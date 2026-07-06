@@ -276,6 +276,12 @@ import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 
+// Knowledge Operations System — KB Unification
+import CoraKbCourse from './CoraKbCourse';
+import CoraKbCohort from './CoraKbCohort';
+import ResponsiblePerson from './ResponsiblePerson';
+import CoraKbEntry from './CoraKbEntry';
+
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
 import SponsorSeat from './SponsorSeat';
@@ -1131,6 +1137,11 @@ export {
   EnrollmentLead,
   StudentTaskList,
   StudentTask,
+  // Knowledge Operations System — KB Unification
+  CoraKbCourse,
+  CoraKbCohort,
+  ResponsiblePerson,
+  CoraKbEntry,
 };
 
 // --- Enrollment Lead associations ---
@@ -1171,3 +1182,13 @@ InterviewSession.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrol
 
 InterviewRubric.hasMany(InterviewSession, { foreignKey: 'rubric_id', as: 'sessions' });
 InterviewSession.belongsTo(InterviewRubric, { foreignKey: 'rubric_id', as: 'rubric' });
+
+// --- Knowledge Operations System associations ---
+CoraKbCourse.hasMany(CoraKbCohort, { foreignKey: 'course_id', as: 'cohorts' });
+CoraKbCohort.belongsTo(CoraKbCourse, { foreignKey: 'course_id', as: 'course' });
+
+CoraKbCourse.hasMany(CoraKbEntry, { foreignKey: 'course_id', as: 'kbEntries' });
+CoraKbEntry.belongsTo(CoraKbCourse, { foreignKey: 'course_id', as: 'course' });
+
+ResponsiblePerson.hasMany(CoraKbEntry, { foreignKey: 'primary_person_id', as: 'primaryEntries' });
+CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 'primaryPerson' });

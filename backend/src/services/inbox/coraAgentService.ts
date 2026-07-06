@@ -8,13 +8,17 @@
  * during shadow testing to verify Cora quality before going live.
  */
 import OpenAI from 'openai';
-import { buildCoraSystemPrompt, CoraCohortContext } from './coraKnowledgeBase';
+import { buildCoraSystemPromptFromDB, getCourseBySlug } from '../kbService';
 import { logAuditEvent } from './inboxAuditService';
-import { listOpenCohorts } from '../cohortService';
 
 const LOG_PREFIX = '[InboxCOS][Cora]';
 
 const DRY_RUN = process.env.CORA_DRY_RUN === 'true';
+
+// KB Ops Phase 1 (BC #10036783688): Cora's system prompt is now DB-backed via
+// cora_kb_entries/cora_cohorts, not the static coraKnowledgeBase.ts. This slug
+// must match the seeded course in backend/src/seeds/seedKbData.ts.
+const CORA_COURSE_SLUG = process.env.CORA_ACTIVE_COURSE_SLUG || 'ai-architect';
 
 export interface CoraReply {
   subject: string;
@@ -82,27 +86,27 @@ export function decideCoraDisposition(opts: {
 }
 
 /**
- * Read the next open cohort from the DB (the source of truth, managed at
- * /admin/accelerator). Returns null on any failure so Cora degrades gracefully
- * to "check the enrollment page" rather than failing the whole reply.
+ * Build Cora's system prompt from the KB Ops DB (cora_kb_entries/cora_cohorts),
+ * scoped to the currently active program. Degrades to a generic handoff prompt
+ * if the configured course isn't found, rather than failing the whole reply.
  */
-async function getNextCohortForCora(): Promise<CoraCohortContext | null> {
+async function getCoraSystemPrompt(): Promise<string> {
   try {
-    const cohorts = await listOpenCohorts(); // status='open', ordered by start_date ASC
-    // Only surface a cohort that hasn't started yet. 'open' cohorts can linger
-    // with past start dates in the DB, and the public enrollment page filters
-    // the same way (start_date >= today) — Cora must not quote a past cohort.
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (DATEONLY)
-    const next = (cohorts || []).find((c) => c.start_date >= today);
-    if (!next) return null;
-    return {
-      name: next.name,
-      start_date: next.start_date,
-      seats_remaining: Math.max(0, (next.max_seats ?? 0) - (next.seats_taken ?? 0)),
-    };
+    const course = await getCourseBySlug(CORA_COURSE_SLUG);
+    if (!course) {
+      console.warn(`${LOG_PREFIX} No KB course found for slug "${CORA_COURSE_SLUG}"`);
+      return (
+        'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics. ' +
+        'No program knowledge base is currently configured — acknowledge receipt and route to support@colaberry.com.'
+      );
+    }
+    return await buildCoraSystemPromptFromDB(course.id);
   } catch (error: any) {
-    console.warn(`${LOG_PREFIX} Could not load next cohort: ${error.message}`);
-    return null;
+    console.warn(`${LOG_PREFIX} Could not build DB-backed system prompt: ${error.message}`);
+    return (
+      'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics. ' +
+      'Acknowledge receipt and route to support@colaberry.com.'
+    );
   }
 }
 
@@ -115,7 +119,7 @@ export async function generateCoraReply(
 ): Promise<CoraReply> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const nextCohort = await getNextCohortForCora();
+  const systemPrompt = await getCoraSystemPrompt();
 
   const senderLine = fromName ? `From: ${fromName}` : '';
   const userMessage = `${senderLine}\nSubject: ${subject}\n\n${emailBody.substring(0, 3000)}`;
@@ -126,7 +130,7 @@ export async function generateCoraReply(
     temperature: 0.2,
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: buildCoraSystemPrompt(nextCohort) },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
     ],
   });
