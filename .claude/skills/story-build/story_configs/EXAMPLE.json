@@ -35,6 +35,8 @@
 
   "_builder_id": "The intern/operator who owns EVERY build task. e.g. Anvi 52639032, Meghana 52489233, Omolola/others.",
   "builder_id": 0,
+  "_builder_label": "First name shown in the list description (e.g. 'Anvi', 'Meghana'). Defaults to 'The assigned builder' if omitted.",
+  "builder_label": "Anvi",
 
   "_approver": "Who signs off, and how. approver_mode 'per-release' = one gate per release (heavy involvement, e.g. Ram 17346350). 'phase-gates' = 4 consolidated gates (light-touch exec, e.g. Ali 17454835).",
   "approver_id": 0,

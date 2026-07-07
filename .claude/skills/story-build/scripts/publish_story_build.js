@@ -86,7 +86,24 @@ async function resolveTarget() {
 
   const { bucket, todoset, vault, url } = await resolveTarget();
   const releases = plan.releases || [];
-  const ov = `${NAME} - story-driven build plan (Claude Code, ${cfg.start_date} to ${cfg.end_date}). ${plan.story_count} traceable user stories across ${releases.length} releases, each ${AI} [AI] / ${HU} [Human]. Builder: assigned to every build task. ${APPROVER_LABEL} approves ${APPROVER_MODE === 'per-release' ? 'EVERY milestone' : 'at high-level phase gates'} (see the approvals group).${MKT_CO ? ` ${MKT_LABEL} co-assigned on marketing/social/prompt tasks.` : ''} Requirements / Architecture / Trust (TBI) Primer / Build Guide / Traceability Matrix are in Docs & Files.${DEMO ? ' Demo target: ' + DEMO + '.' : ''}`;
+  // The list description must explain the project to a reader with ZERO context:
+  // what it is (the idea verbatim), what we are building, how the list works, and
+  // where the detail lives -- never just process shorthand.
+  const builderLabel = cfg.builder_label || 'The assigned builder';
+  const approverLine = APPROVER_MODE === 'per-release'
+    ? `${esc(APPROVER_LABEL)} approves every milestone (one gate per release) before the team moves on.`
+    : `${esc(APPROVER_LABEL)} approves at four high-level phase gates before the team moves to the next phase.`;
+  const mktLine = MKT_CO ? `<li><strong>Marketing:</strong> ${esc(MKT_LABEL)} advises on accounts, prompts, and content direction.</li>` : '';
+  const ov = [
+    `<div><strong>What this is.</strong> ${esc(cfg.idea)}</div>`,
+    `<div><strong>What we are actually building.</strong> A real, working web application built with Claude Code (React front end, Node/Express API, PostgreSQL, containerized with Docker), deployed to a live demo${DEMO ? ' at ' + esc(DEMO) : ''}. Not slides, not a mockup: a running product built from the stories below.</div>`,
+    `<div><strong>How this list works.</strong> Every item is a user story - a small, demoable slice of the product with plain-English acceptance criteria (the "done when"). Stories are grouped into releases, from R0 (a thin end-to-end walking skeleton) through launch; each release is something you can watch run. Work top to bottom.</div>`,
+    `<ul><li><strong>${AI} [AI]</strong> tasks are AI-buildable: Claude Code drafts them, the owner reviews and approves.</li>`,
+    `<li><strong>${HU} [Human]</strong> tasks need a person: a decision, a credential, an account, or a judgment call.</li>`,
+    `<li><strong>Builder:</strong> ${builderLabel} owns and builds every task.</li>`,
+    `<li><strong>Approvals:</strong> ${approverLine}</li>${mktLine}</ul>`,
+    `<div><strong>Where the detail lives.</strong> Every task links the five project documents in Docs & Files (Requirements, Architecture and Agent Map, Trust/TBI Primer, Build Guide, Traceability Matrix), so anyone on any machine can pick up a task and know exactly what to build and how it fits. A task is <strong>done</strong> when its acceptance criteria pass and the feature runs in the deployed demo.</div>`,
+  ].join('');
   const list = await post(`${BC}/buckets/${bucket}/todosets/${todoset}/todolists.json`, { name: cfg.list_name, description: ov });
   console.log('LIST', list.app_url);
 
