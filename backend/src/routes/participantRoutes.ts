@@ -299,7 +299,10 @@ router.post('/api/portal/github/status-report', requireParticipant, async (req, 
 // ─── Classroom Week View ──────────────────────────────────────────────────────
 
 import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterviewSchema } from '../schemas/interviewSchemas';
-import { CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema } from '../schemas/communitySchemas';
+import {
+  CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema,
+  CreateCommentSchema, CommentIdParamSchema, MemberIdParamSchema, UpdateProfileSchema,
+} from '../schemas/communitySchemas';
 
 router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
   const parsed = GetWeekSchema.safeParse(req.params);
@@ -428,6 +431,119 @@ router.patch('/api/portal/community/posts/:postId/pin', requireParticipant, asyn
     const { togglePin } = await import('../services/communityService');
     const post = await togglePin(req.participant!.sub, paramsParsed.data.postId, bodyParsed.data);
     res.json({ post });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/posts/:postId/comments', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  const bodyParsed = CreateCommentSchema.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid comment' });
+    return;
+  }
+  try {
+    const { createComment } = await import('../services/communityService');
+    const comment = await createComment(req.participant!.sub, paramsParsed.data.postId, bodyParsed.data);
+    res.status(201).json({ comment });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/posts/:postId/comments', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid post id' });
+    return;
+  }
+  try {
+    const { listComments } = await import('../services/communityService');
+    const comments = await listComments(req.participant!.sub, paramsParsed.data.postId);
+    res.json({ comments });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/posts/:postId/like', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid post id' });
+    return;
+  }
+  try {
+    const { toggleLike } = await import('../services/communityService');
+    const result = await toggleLike(req.participant!.sub, 'post', paramsParsed.data.postId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/comments/:commentId/like', requireParticipant, async (req, res) => {
+  const paramsParsed = CommentIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid comment id' });
+    return;
+  }
+  try {
+    const { toggleLike } = await import('../services/communityService');
+    const result = await toggleLike(req.participant!.sub, 'comment', paramsParsed.data.commentId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Specific literal routes ('me', bare directory) are registered before the
+// generic ':memberId' route so Express matches them first.
+router.get('/api/portal/community/members/me', requireParticipant, async (req, res) => {
+  try {
+    const { getMyProfile } = await import('../services/communityService');
+    const profile = await getMyProfile(req.participant!.sub);
+    res.json({ profile });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.patch('/api/portal/community/members/me', requireParticipant, async (req, res) => {
+  const parsed = UpdateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid profile update', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { updateMyProfile } = await import('../services/communityService');
+    const profile = await updateMyProfile(req.participant!.sub, parsed.data);
+    res.json({ profile });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/members', requireParticipant, async (req, res) => {
+  try {
+    const { listMembers } = await import('../services/communityService');
+    const members = await listMembers(req.participant!.sub);
+    res.json({ members });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/members/:memberId', requireParticipant, async (req, res) => {
+  const paramsParsed = MemberIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid member id' });
+    return;
+  }
+  try {
+    const { getMemberProfileById } = await import('../services/communityService');
+    const profile = await getMemberProfileById(req.participant!.sub, paramsParsed.data.memberId);
+    res.json({ profile });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
