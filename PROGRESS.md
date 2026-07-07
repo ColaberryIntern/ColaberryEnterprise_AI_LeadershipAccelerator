@@ -18,7 +18,7 @@ Accelerator Program local dev environment — one-command setup for admin, stude
   - Added `backend/src/services/__tests__/cohortService.test.ts` — 7 cases: the Nov-vs-Jul bug scenario, ignores non-open, today-is-upcoming boundary, all-started fallback, none-open fallback, empty→null, input-not-mutated.
   - Why: real students were being routed to the wrong cohort. At the time of the fix prod had 82 `explorer`/`pending` enrollments (created 2026-07-05..07) all filed into November instead of July. Follow-on to BC todo 10071007473.
   - Verification: pure helper covered by unit tests (CI "Backend unit tests" authoritative; local jest not runnable — backend pins TS 5.7.3, not installed locally). Docker `--build` tsc is the authoritative typecheck at deploy.
-  - Notes: Deployed surgically to prod (working-tree edit + `up -d --build backend`, dirty prod tree). A separate parameterized migration script moves the existing November explorers to July on Ali's go-ahead (not auto-run). See [[project_prod_cohort_landscape]].
+  - Notes: Deployed surgically to prod (working-tree edit + `up -d --build backend`, dirty prod tree). Added `backend/src/scripts/migrateExplorersToNextCohort.js` — a parameterized, idempotent, dry-run-by-default migration that moves the existing November explorers to July (`--apply` to execute); NOT auto-run, awaiting Ali's go-ahead. See [[project_prod_cohort_landscape]].
 
 ### Gate the legacy 5-week curriculum seed out of production boot (2026-07-07)
 - [x] **`server.ts` no longer runs `seedProgramCurriculum()` in production**
