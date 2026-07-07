@@ -11,6 +11,7 @@ export interface CommunityPostAttributes {
   pinned?: boolean;
   like_count?: number;
   comment_count?: number;
+  mentioned_member_ids?: string[];
   created_at?: Date;
   updated_at?: Date;
 }
@@ -25,6 +26,7 @@ class CommunityPost extends Model<CommunityPostAttributes> implements CommunityP
   declare pinned: boolean;
   declare like_count: number;
   declare comment_count: number;
+  declare mentioned_member_ids: string[];
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -74,6 +76,14 @@ CommunityPost.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+    },
+    mentioned_member_ids: {
+      // Composer resolves @-autocomplete to member ids client-side; the
+      // backend only validates they belong to the post's cohort and stores
+      // them. No free-text mention parsing server-side (see communityService.ts).
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
     },
   },
   {

@@ -299,6 +299,7 @@ router.post('/api/portal/github/status-report', requireParticipant, async (req, 
 // ─── Classroom Week View ──────────────────────────────────────────────────────
 
 import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterviewSchema } from '../schemas/interviewSchemas';
+import { CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema } from '../schemas/communitySchemas';
 
 router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
   const parsed = GetWeekSchema.safeParse(req.params);
@@ -368,6 +369,67 @@ router.post('/api/portal/interview/:sessionId/submit', requireParticipant, async
   } catch (err: any) {
     const status = err.error_class === 'ValidationError' ? 400 : 500;
     res.status(status).json({ error: err.message });
+  }
+});
+
+// ─── Community Feed ───────────────────────────────────────────────────────────
+
+function communityErrorStatus(err: any): number {
+  switch (err.error_class) {
+    case 'ValidationError':
+      return 400;
+    case 'NotFoundError':
+      return 404;
+    case 'ForbiddenError':
+      return 403;
+    default:
+      return 500;
+  }
+}
+
+router.post('/api/portal/community/posts', requireParticipant, async (req, res) => {
+  const parsed = CreatePostSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid post', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { createPost } = await import('../services/communityService');
+    const post = await createPost(req.participant!.sub, parsed.data);
+    res.status(201).json({ post });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/posts', requireParticipant, async (req, res) => {
+  const parsed = ListPostsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid query', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { listPosts } = await import('../services/communityService');
+    const posts = await listPosts(req.participant!.sub, parsed.data.category);
+    res.json({ posts });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.patch('/api/portal/community/posts/:postId/pin', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  const bodyParsed = TogglePinSchema.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  try {
+    const { togglePin } = await import('../services/communityService');
+    const post = await togglePin(req.participant!.sub, paramsParsed.data.postId, bodyParsed.data);
+    res.json({ post });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
   }
 });
 
