@@ -1,0 +1,47 @@
+{
+  "_comment": "One project = one config. Copy to story_configs/<slug>.json and fill in. Generator reads slug/project_name/idea/choices; publisher reads the rest. Delete _comment lines.",
+
+  "slug": "example-project",
+  "project_name": "Example Project - Colaberry Build",
+  "short_name": "Example",
+  "list_name": "Example - BUILD (story-driven)",
+
+  "start_date": "2026-07-07",
+  "end_date": "2026-08-04",
+  "demo_url": "https://example-demo.colaberry.dev",
+
+  "_idea": "One rich paragraph distilled from the requirements doc or the described idea. Say what it is, who uses it, what the AI does, and that a human stays in control. Assume Claude Code / real code (React, Node, PostgreSQL, Docker), never no-code tools.",
+  "idea": "A multi-tenant, multi-user platform that ... Autonomous agents ... while a human approves anything that goes out. Strict per-tenant isolation; role-based access ...",
+
+  "_choices": "Array of '- Label: description' lines the pipeline treats as design constraints. Always include Control, Intelligence, Domain, Primary users, Data, Trust/compliance, Stack.",
+  "choices": [
+    "- Control: AI drafts, a human reviews and approves before anything publishes or spends",
+    "- Intelligence: retrieval-augmented generation plus ML over the domain data",
+    "- Domain: <what the product is>",
+    "- Primary users: <roles>, with strict per-tenant isolation and role-based access",
+    "- Data: PostgreSQL system of record; external providers via APIs (mocked for the demo); append-only audit log",
+    "- Trust and compliance: append-only audit, approval gates on outbound actions, GDPR/CCPA, role-based access",
+    "- Stack: React frontend, Node/Express backend, PostgreSQL, Docker; REST API with OpenAPI docs; deployed to a public demo URL"
+  ],
+
+  "_target": "Where the list lands. mode 'existing' uses a known project's bucket/todoset/vault; mode 'create' makes a new project and grants grant_ids. Internship project = 24865175 / todoset 4327600402 / vault 4327600403. Gov Contracts = 47346103 / todoset 9908475794 / vault 9908475797.",
+  "target": {
+    "mode": "existing",
+    "bucket": 24865175,
+    "todoset": 4327600402,
+    "vault": 4327600403,
+    "grant_ids": []
+  },
+
+  "_builder_id": "The intern/operator who owns EVERY build task. e.g. Anvi 52639032, Meghana 52489233, Omolola/others.",
+  "builder_id": 0,
+
+  "_approver": "Who signs off, and how. approver_mode 'per-release' = one gate per release (heavy involvement, e.g. Ram 17346350). 'phase-gates' = 4 consolidated gates (light-touch exec, e.g. Ali 17454835).",
+  "approver_id": 0,
+  "approver_label": "Ram",
+  "approver_mode": "per-release",
+
+  "_marketing_co_assignee_id": "Optional. If set, this person is co-assigned on marketing/social/prompt/content tasks (e.g. Sohail 47335940). Omit or null for non-marketing builds.",
+  "marketing_co_assignee_id": null,
+  "marketing_co_label": "Marketing"
+}
