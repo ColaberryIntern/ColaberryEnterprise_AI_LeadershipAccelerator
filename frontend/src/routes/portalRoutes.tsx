@@ -28,6 +28,9 @@ import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
 import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
 import TodayShell from '../pages/portal/today/TodayShell';
+import PathPage from '../pages/portal/path/PathPage';
+import SchedulePage from '../pages/portal/schedule/SchedulePage';
+import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 import ExecutionLane from '../pages/project/ExecutionLane';
@@ -42,6 +45,12 @@ const portalRoutes = (
       {/* Today shell (Design E onboarding experience) renders its own chrome,
           so it sits outside PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
+      {/* Path + Schedule share the Design E shell (PortalShell), like Today. */}
+      <Route path="/portal/path" element={<PathPage />} />
+      <Route path="/portal/schedule" element={<SchedulePage />} />
+      {/* Projects tab: portal-native builds (lists + tasks, FB vibe), opens on
+          the new-build wizard. Renders its own PortalShell chrome like Today. */}
+      <Route path="/portal/projects" element={<ProjectsPage />} />
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
@@ -90,3 +99,4 @@ const portalRoutes = (
 );
 
 export default portalRoutes;
+

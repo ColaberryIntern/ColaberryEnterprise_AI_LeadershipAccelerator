@@ -19,7 +19,7 @@
   background:var(--page);
   min-height:100vh;
   display:grid;
-  grid-template-columns:232px 1fr;
+  grid-template-columns:248px 1fr;
   grid-template-rows:auto 1fr;
   grid-template-areas:"top top" "nav main";
 }
@@ -55,13 +55,32 @@
 /* ── nav ── */
 .te-nav{grid-area:nav;background:var(--surface);border-right:1px solid var(--border);padding:16px 12px;
   display:flex;flex-direction:column;gap:2px;position:sticky;top:61px;height:calc(100vh - 61px);overflow:auto}
-.te-nav .grp{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:12px 12px 5px}
-.te-navbtn{display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:var(--r-pill);border:none;background:none;
-  color:var(--body);font-size:14px;font-weight:500;cursor:pointer;text-align:left;width:100%;font-family:inherit;text-decoration:none}
+.te-nav .grp{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:14px 12px 6px}
+.te-nav .grp:first-child{margin-top:2px}
+.te-navbtn{display:flex;align-items:center;gap:13px;padding:11px 14px;border-radius:var(--r-pill);border:none;background:none;
+  color:var(--body);font-size:15px;font-weight:500;cursor:pointer;text-align:left;width:100%;font-family:inherit;text-decoration:none;
+  transition:background .16s,color .16s}
 .te-navbtn:hover{background:var(--sunken);color:var(--strong)}
 .te-navbtn.active{background:#ffe7e8;color:var(--cherry-deep);font-weight:700}
-.te-navbtn .dot{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}
-.te-navbtn .badge{margin-left:auto;font-size:11px;background:var(--cherry);color:#fff;border-radius:var(--r-pill);padding:1px 8px;font-weight:700}
+.te-navbtn .ic{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.te-navbtn .ic svg{width:20px;height:20px;opacity:.85}
+.te-navbtn.active .ic svg{opacity:1}
+.te-navbtn .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.te-navbtn .badge{margin-left:auto;font-size:12px;background:var(--cherry);color:#fff;border-radius:var(--r-pill);padding:1px 9px;font-weight:700}
+.te-navbtn.is-soon{opacity:.6}
+.te-navbtn.is-soon:hover{opacity:1;background:var(--sunken)}
+.te-navbtn .te-soon{margin-left:auto;font-size:10px;letter-spacing:.04em;text-transform:uppercase;background:var(--sunken);
+  color:var(--muted);border:1px solid var(--border-sub);border-radius:var(--r-pill);padding:1px 8px;font-weight:700}
+
+/* ── presence footer ── */
+.te-presence{margin-top:auto;padding:14px 12px 6px;border-top:1px solid var(--border)}
+.te-presence .h{font-size:12px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:7px;font-weight:500}
+.te-presence .pdot{width:8px;height:8px;border-radius:50%;background:var(--leaf);box-shadow:0 0 0 3px rgba(91,166,60,.22);flex:none}
+.te-onrow{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--body);padding:6px;border-radius:var(--r-8);
+  width:100%;border:none;background:none;cursor:pointer;font-family:inherit;text-align:left}
+.te-onrow:hover{background:var(--sunken);color:var(--strong)}
+.te-onrow .pmini{width:26px;height:26px;border-radius:50%;background:var(--sunken);border:1px solid var(--border-sub);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;font-weight:700;flex:none}
 
 /* ── main ── */
 .te-main{grid-area:main;padding:26px 34px 70px;max-width:1180px}
@@ -140,6 +159,33 @@
 .te-count .seg span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:3px;display:block}
 .te-quick{display:flex;flex-direction:column;gap:8px;margin-top:4px}
 .te-quick .te-btn{width:100%;justify-content:center}
+
+/* your-day + daily-streak sidebar cards */
+.te-scard h3 svg{width:17px;height:17px;flex:none}
+.te-streak-top{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.te-streak-top .fl{width:34px;height:34px;flex:none}
+.te-streak-top .fl svg{width:34px;height:34px;display:block}
+.te-streak-top .ct b{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber-deep);line-height:1;display:block}
+.te-streak-top .ct span{font-size:12px;color:var(--muted);font-weight:700}
+.te-streak-week{display:flex;gap:7px}
+.te-streak-week .sd{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px}
+.te-streak-week .sd .dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;background:var(--surface)}
+.te-streak-week .sd .dot svg{width:14px;height:14px;color:#fff;opacity:0}
+.te-streak-week .sd.hit .dot{background:var(--amber);border-color:var(--amber)}
+.te-streak-week .sd.hit .dot svg{opacity:1}
+.te-streak-week .sd.today .dot{box-shadow:0 0 0 3px rgba(232,146,12,.25)}
+.te-streak-week .sd .lbl{font-size:10px;color:var(--muted);font-weight:700}
+.te-btn.leaf{background:var(--leaf);color:#fff}
+
+/* background upload (resume / LinkedIn PDF) */
+.te-upload{padding:18px;margin-bottom:18px}
+.te-drop{display:flex;flex-direction:column;align-items:center;gap:5px;width:100%;padding:24px;border:2px dashed var(--border);
+  border-radius:var(--r-16);background:var(--page);cursor:pointer;font-family:inherit;color:var(--body);transition:border-color .15s,color .15s}
+.te-drop:hover{border-color:var(--berry)}
+.te-drop:disabled{opacity:.6;cursor:default}
+.te-drop .ic svg{color:var(--berry)}
+.te-drop .t{font-weight:700;font-size:15px;color:var(--strong)}
+.te-drop .s{font-size:12px;color:var(--muted)}
 
 .te-muted{color:var(--muted);font-size:14px}
 .te-toast{position:fixed;top:74px;right:24px;z-index:60;background:var(--surface);border:1px solid var(--border);

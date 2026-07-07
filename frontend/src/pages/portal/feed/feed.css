@@ -1,0 +1,62 @@
+/* ============================================================
+   Shared FB-style feed card + timeline, scoped to .te-feed so it
+   carries its own Design-E tokens and never collides with globals.
+   Used by the Today aggregated timeline and (later) every page's feed.
+   ============================================================ */
+.te-feed {
+  --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-text:#E5121D;
+  --leaf:#5BA63C; --leaf-deep:#3C7A26; --leaf-text:#468A2E;
+  --berry:#367895; --berry-hover:#2E6A86; --amber:#E8920C; --amber-deep:#B5710A;
+  --surface-page:#FFFFFF; --surface-sunken:#F1F1F0; --surface-subtle:#F8F8F7;
+  --text-strong:#1A1A1A; --text-body:#2B2B2B; --text-muted:#6B6B6B;
+  --border-default:#D8D8D8; --border-subtle:#E4E4E3;
+  --r-8:8px; --r-12:12px; --r-16:16px; --r-pill:999px;
+  --shadow-md:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04);
+  --mono:'Roboto Mono',ui-monospace,'Consolas',monospace;
+}
+
+/* section header ("Your timeline · everything in one place") */
+.te-feed-head{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
+.te-feed-head .h{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6B6B6B;display:flex;align-items:center;gap:9px}
+.te-feed-head .h svg{width:16px;height:16px;flex:none}
+
+/* source filter chips (the "customize feed" affordance, inline) */
+.te-feed-filter{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.te-feed-filter .fchip{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:7px 14px;border-radius:999px;
+  border:1px solid #D8D8D8;background:#fff;color:#2B2B2B;cursor:pointer;font-family:inherit;transition:.14s}
+.te-feed-filter .fchip:hover{border-color:#367895;color:#367895}
+.te-feed-filter .fchip.active{background:#FB2832;border-color:#FB2832;color:#fff}
+.te-feed-filter .fchip .ct{font-family:var(--mono);font-size:11px;opacity:.7}
+
+/* the card */
+.te-feed .fcard{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);
+  box-shadow:var(--shadow-md);overflow:hidden;margin-bottom:14px}
+.te-feed .fc-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 0}
+.te-feed .fc-head .ico{width:42px;height:42px;border-radius:var(--r-12);display:flex;align-items:center;justify-content:center;color:#fff;flex:none;box-shadow:var(--shadow-md)}
+.te-feed .fc-head .ico.round{border-radius:50%}
+.te-feed .fc-head .ico svg{width:20px;height:20px}
+.te-feed .fc-head .ttl{font-weight:700;font-size:16px;color:var(--text-strong);line-height:1.25}
+.te-feed .fc-head .sub{font-size:13px;color:var(--text-muted);margin-top:4px;display:flex;flex-wrap:wrap;align-items:center}
+.te-feed .fc-head .sub .src{font-weight:700}
+.te-feed .ptbadge{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);background:rgba(91,166,60,.14);color:var(--leaf-text)}
+.te-feed .fc-body{padding:12px 18px 0}
+.te-feed .fc-body p{margin:0;font-size:15px;color:var(--text-body);line-height:1.5}
+.te-feed .fc-foot{display:flex;align-items:center;gap:16px;padding:14px 18px;flex-wrap:wrap}
+.te-feed .fc-foot .like,.te-feed .fc-foot .cmt{border:none;background:none;cursor:pointer;color:var(--text-muted);
+  display:flex;align-items:center;gap:7px;font-size:14px;font-weight:500;font-family:inherit}
+.te-feed .fc-foot .like svg,.te-feed .fc-foot .cmt svg{width:18px;height:18px}
+.te-feed .fc-foot .like:hover,.te-feed .fc-foot .cmt:hover{color:var(--cherry-text)}
+.te-feed .fc-foot .like.liked{color:var(--cherry-text)}
+.te-feed .fc-foot .spacer{flex:1}
+
+/* CTA buttons in the action bar */
+.te-feed .tl-cta{display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;font-size:13px;font-weight:700;
+  padding:8px 15px;border-radius:var(--r-pill);font-family:inherit;text-decoration:none;transition:.14s}
+.te-feed .tl-cta.berry{background:var(--berry);color:#fff} .te-feed .tl-cta.berry:hover{background:var(--berry-hover)}
+.te-feed .tl-cta.cherry{background:var(--cherry);color:#fff} .te-feed .tl-cta.cherry:hover{background:var(--cherry-deep)}
+.te-feed .tl-cta.leaf{background:var(--leaf);color:#fff} .te-feed .tl-cta.leaf:hover{background:var(--leaf-deep)}
+.te-feed .tl-cta.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)}
+.te-feed .tl-cta.ghost:hover{border-color:var(--berry);color:var(--berry)}
+
+.te-feed .fc-empty{padding:26px;text-align:center;color:var(--text-muted);font-size:14px;background:var(--surface-page);
+  border:1px dashed var(--border-default);border-radius:var(--r-16)}
