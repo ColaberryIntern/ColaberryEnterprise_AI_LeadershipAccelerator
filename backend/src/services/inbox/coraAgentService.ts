@@ -119,7 +119,10 @@ export async function generateCoraReply(
 ): Promise<CoraReply> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const systemPrompt = await getCoraSystemPrompt();
+  // response_format: json_object requires the literal word "json" to appear
+  // somewhere in the messages (an OpenAI API constraint) — this also doubles
+  // as the explicit schema instruction parseCoraReply() expects.
+  const systemPrompt = `${await getCoraSystemPrompt()}\n\nRespond ONLY with a JSON object with exactly these fields: "subject" (string), "body" (string), "needs_human" (boolean).`;
 
   const senderLine = fromName ? `From: ${fromName}` : '';
   const userMessage = `${senderLine}\nSubject: ${subject}\n\n${emailBody.substring(0, 3000)}`;
@@ -229,7 +232,7 @@ export async function handleCoraInquiry(email: {
 
 // ─── Gmail Send ───────────────────────────────────────────────────────────
 
-async function sendCoraReplyViaGmail(
+export async function sendCoraReplyViaGmail(
   email: {
     from_address: string;
     subject: string;
