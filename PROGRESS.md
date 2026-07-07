@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Gate the legacy 5-week curriculum seed out of production boot (2026-07-07)
+- [x] **`server.ts` no longer runs `seedProgramCurriculum()` in production**
+  - Date: 2026-07-07
+  - Session: CC-20260707-q7m2
+  - What changed: `backend/src/server.ts` — wrapped the unconditional `await seedProgramCurriculum();` boot call in `if (env.nodeEnv !== 'production')`, with an `else` that logs `[Seed] Skipping seedProgramCurriculum in production`. `env` was already imported.
+  - Why: `seedProgramCurriculum()` ran on every backend boot in every environment and attaches the stale 5-module "Enterprise AI Leadership Accelerator" pilot content + April-2026 LiveSessions onto the OLDEST cohort (`Cohort.findOne` order `created_at ASC`). In prod that content is currently pinned to the completed "Cohort — April 2026", but it must never run against a real forward cohort. Per BC todo 10071007473 (assigned Ali). Dev/staging still seed so the local portal UX renders.
+  - Verification: `tsc --noEmit` (backend) in an origin/main worktree; Docker `--build` (which recompiles via tsc) is the authoritative gate at deploy. Post-deploy: backend boot log shows the skip line and no new modules attach.
+  - Notes: Deployed surgically to prod (working-tree edit + `up -d --build backend`) because the prod tree is dirty and behind origin/main (running an uncommitted Open House feature) — a `git pull` would silently no-op. The 12-week cohort *seed* half of the ticket was intentionally NOT run: prod already has 3 cohorts (incl. an open July-2026 cohort with a real enrollee and a November-2026 cohort receiving live signups), contradicting the ticket's "zero cohorts" premise; Ali chose to hold the seed and ship only this guard. Authoritative July start date per Ali: 2026-07-23.
+
 ### Admin UI rebrand foundation + Trust layer + collapsible sidebar (Colaberry brand) (2026-06-28)
 - [x] **Branded the admin shell to the Colaberry design system + redesigned the sidebar + per-page trust primitives**
   - Date: 2026-06-28
