@@ -10,6 +10,16 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Explorer cohort placement: route new signups to the soonest upcoming cohort (2026-07-07)
+- [x] **`getLatestOpenCohort()` now picks the soonest upcoming open cohort, not the farthest-out**
+  - Date: 2026-07-07
+  - Session: CC-20260707-q7m2
+  - What changed: `backend/src/services/cohortService.ts` — `getLatestOpenCohort()` (the resolver that sets a new Explorer/Open-House signup's `cohort_id`, called from `enrollmentService.ts:213`) previously did `WHERE status='open' ORDER BY start_date DESC`, filing every new signup into the cohort with the LATEST start_date. With an open November-2026 cohort sitting after the imminent July-2026 (2026-07-23) launch, all live Open-House signups were landing in November. Extracted a pure, unit-tested `selectNextOpenCohort(cohorts, now)` that picks the soonest open cohort with `start_date >= today`, falling back to the most-recently-started open cohort, then the most recently created. `getLatestOpenCohort()` now `findAll()`s and delegates to it. Name retained (single call site).
+  - Added `backend/src/services/__tests__/cohortService.test.ts` — 7 cases: the Nov-vs-Jul bug scenario, ignores non-open, today-is-upcoming boundary, all-started fallback, none-open fallback, empty→null, input-not-mutated.
+  - Why: real students were being routed to the wrong cohort. At the time of the fix prod had 82 `explorer`/`pending` enrollments (created 2026-07-05..07) all filed into November instead of July. Follow-on to BC todo 10071007473.
+  - Verification: pure helper covered by unit tests (CI "Backend unit tests" authoritative; local jest not runnable — backend pins TS 5.7.3, not installed locally). Docker `--build` tsc is the authoritative typecheck at deploy.
+  - Notes: Deployed surgically to prod (working-tree edit + `up -d --build backend`, dirty prod tree). A separate parameterized migration script moves the existing November explorers to July on Ali's go-ahead (not auto-run). See [[project_prod_cohort_landscape]].
+
 ### Gate the legacy 5-week curriculum seed out of production boot (2026-07-07)
 - [x] **`server.ts` no longer runs `seedProgramCurriculum()` in production**
   - Date: 2026-07-07
