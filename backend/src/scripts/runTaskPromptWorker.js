@@ -32,6 +32,9 @@ const { sendWithBcAttach } = require('./lib/sendWithBcAttach');
 const { classifyWorkable } = require('./lib/taskPromptWorker/classifyWorkable');
 const { buildPrompt } = require('./lib/taskPromptWorker/promptBuilder');
 const { renderDigest } = require('./lib/taskPromptWorker/renderPromptDigest');
+const { selectOldRuns } = require('./lib/taskPromptWorker/pruneRuns');
+
+const KEEP_RUNS = 30;
 
 // Report destination: Ali's home-base tracking todo (his own, not a task ticket).
 const REPORT_BUCKET = 7463955;
@@ -124,6 +127,15 @@ async function main() {
   const outPath = path.join(outDir, `TPW_${runId}.html`);
   fs.writeFileSync(outPath, html);
   console.log(`[tpw] wrote ${outPath}`);
+
+  // Self-purge: keep only the newest KEEP_RUNS digests so the dir never grows unbounded.
+  try {
+    const stale = selectOldRuns(fs.readdirSync(outDir), KEEP_RUNS);
+    for (const f of stale) fs.unlinkSync(path.join(outDir, f));
+    if (stale.length) console.log(`[tpw] pruned ${stale.length} old run file(s), kept ${KEEP_RUNS}`);
+  } catch (e) {
+    console.warn(`[tpw] prune skipped: ${e.message}`);
+  }
 
   if (!REPORT_ONLY) {
     console.log(`[tpw] ${DRY ? 'DRY RUN' : 'FILE-ONLY'} - no email sent. Pass --report-only to email Ali.`);

@@ -2,6 +2,7 @@
 const { classifyWorkable } = require('../lib/taskPromptWorker/classifyWorkable');
 const { buildPrompt, slugify } = require('../lib/taskPromptWorker/promptBuilder');
 const { renderDigest } = require('../lib/taskPromptWorker/renderPromptDigest');
+const { selectOldRuns } = require('../lib/taskPromptWorker/pruneRuns');
 
 describe('classifyWorkable', () => {
   const codeTitles = [
@@ -95,5 +96,28 @@ describe('renderDigest', () => {
   });
   it('is deterministic (no clock inside)', () => {
     expect(renderDigest(input).html).toBe(out.html);
+  });
+});
+
+describe('selectOldRuns', () => {
+  const mk = (n: number) =>
+    Array.from({ length: n }, (_, i) => `TPW_TPW-2026070${String(i).padStart(5, '0')}.html`);
+
+  it('keeps the newest N and returns the oldest (length - N) to delete', () => {
+    const files = mk(35);
+    const del = selectOldRuns(files, 30);
+    expect(del.length).toBe(5);
+    expect(del[0]).toBe(files[0]); // oldest first
+    expect(del).not.toContain(files[34]); // newest kept
+  });
+
+  it('deletes nothing when at or under the cap', () => {
+    expect(selectOldRuns(mk(30), 30)).toEqual([]);
+    expect(selectOldRuns(mk(10), 30)).toEqual([]);
+  });
+
+  it('ignores non-run files and tolerates junk input', () => {
+    expect(selectOldRuns(['a.txt', 'TPW_TPW-1.html', '.gitignore'], 0)).toEqual(['TPW_TPW-1.html']);
+    expect(selectOldRuns(null as any, 30)).toEqual([]);
   });
 });
