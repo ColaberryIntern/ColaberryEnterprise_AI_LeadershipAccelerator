@@ -282,6 +282,14 @@ import CoraKbCohort from './CoraKbCohort';
 import ResponsiblePerson from './ResponsiblePerson';
 import CoraKbEntry from './CoraKbEntry';
 
+// Epic 4 — Community + Gamification
+import CommunityMember from './CommunityMember';
+import CommunityPost from './CommunityPost';
+import CommunityComment from './CommunityComment';
+import CommunityLike from './CommunityLike';
+import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
+import CommunityEvent from './CommunityEvent';
+
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
 import SponsorSeat from './SponsorSeat';
@@ -1142,6 +1150,13 @@ export {
   CoraKbCohort,
   ResponsiblePerson,
   CoraKbEntry,
+  // Epic 4 — Community + Gamification
+  CommunityMember,
+  CommunityPost,
+  CommunityComment,
+  CommunityLike,
+  CommunityLeaderboardEntry,
+  CommunityEvent,
 };
 
 // --- Enrollment Lead associations ---
@@ -1192,3 +1207,31 @@ CoraKbEntry.belongsTo(CoraKbCourse, { foreignKey: 'course_id', as: 'course' });
 
 ResponsiblePerson.hasMany(CoraKbEntry, { foreignKey: 'primary_person_id', as: 'primaryEntries' });
 CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 'primaryPerson' });
+
+// --- Community + Gamification associations (Epic 4) ---
+Enrollment.hasOne(CommunityMember, { foreignKey: 'enrollment_id', as: 'communityMember' });
+CommunityMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Cohort.hasMany(CommunityPost, { foreignKey: 'cohort_id', as: 'communityPosts' });
+CommunityPost.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+CommunityMember.hasMany(CommunityPost, { foreignKey: 'member_id', as: 'posts' });
+CommunityPost.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityPost.hasMany(CommunityComment, { foreignKey: 'post_id', as: 'comments' });
+CommunityComment.belongsTo(CommunityPost, { foreignKey: 'post_id', as: 'post' });
+
+CommunityMember.hasMany(CommunityComment, { foreignKey: 'member_id', as: 'comments' });
+CommunityComment.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityComment.hasMany(CommunityComment, { foreignKey: 'parent_comment_id', as: 'replies' });
+CommunityComment.belongsTo(CommunityComment, { foreignKey: 'parent_comment_id', as: 'parentComment' });
+
+CommunityMember.hasMany(CommunityLike, { foreignKey: 'member_id', as: 'likes' });
+CommunityLike.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityMember.hasMany(CommunityLeaderboardEntry, { foreignKey: 'member_id', as: 'leaderboardEntries' });
+CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
+CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
