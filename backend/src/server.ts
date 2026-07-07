@@ -609,7 +609,12 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[Seed] Missed Opportunities Report registration failed:', err?.message);
   }
-  await seedProgramCurriculum();
+  // The legacy 5-week "Enterprise AI Leadership Accelerator" curriculum is superseded
+  // by the 12-week program. Auto-seeding it is convenient for local/dev/staging setup,
+  // but must never attach to a real production cohort (see server.ts boot sequence).
+  if (env.nodeEnv !== 'production') {
+    await seedProgramCurriculum();
+  }
   await seedDepartments();
   await seedCurriculumTypeDefinitions();
   await seedCurriculumCourseLinks();
