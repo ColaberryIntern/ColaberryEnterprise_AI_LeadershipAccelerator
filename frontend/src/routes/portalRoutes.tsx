@@ -52,14 +52,14 @@ const portalRoutes = (
       {/* Projects tab: portal-native builds (lists + tasks, FB vibe), opens on
           the new-build wizard. Renders its own PortalShell chrome like Today. */}
       <Route path="/portal/projects" element={<ProjectsPage />} />
+      {/* Classroom (Design E timeline) renders its own PortalShell chrome, like Today/Path/Projects. */}
+      <Route path="/portal/classroom" element={<ClassroomPage />} />
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
         <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
         {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
         <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
-        {/* Timeline Engine — Classroom (Design E), flag-gated; falls back to /portal/curriculum. */}
-        <Route path="/portal/classroom" element={<ClassroomPage />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />

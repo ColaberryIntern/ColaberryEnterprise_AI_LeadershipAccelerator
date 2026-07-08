@@ -4,6 +4,7 @@ import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import '../../components/timeline/timeline.css';
+import PortalShell from './today/PortalShell';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -106,14 +107,14 @@ const ClassroomPage: React.FC = () => {
     </button>
   );
 
-  if (uiState === 'loading') return <div className="tl-de"><div className="tl-empty">Loading your classroom…</div></div>;
+  if (uiState === 'loading') return <PortalShell><div className="tl-de"><div className="tl-empty">Loading your classroom…</div></div></PortalShell>;
   if (uiState === 'disabled') return (
-    <div className="tl-de"><div className="tl-empty">
+    <PortalShell><div className="tl-de"><div className="tl-empty">
       The new Classroom timeline isn’t enabled for your cohort yet.
       <div style={{ marginTop: 12 }}><button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/curriculum')}>Go to Curriculum</button></div>
-    </div></div>
+    </div></div></PortalShell>
   );
-  if (uiState === 'error' || !feed) return <div className="tl-de"><div className="tl-error">Couldn’t load the classroom. Please try again.</div></div>;
+  if (uiState === 'error' || !feed) return <PortalShell><div className="tl-de"><div className="tl-error">Couldn’t load the classroom. Please try again.</div></div></PortalShell>;
 
   const prog = feed.progression;
   const readinessPct = prog ? Math.round(prog.level.readiness * 100) : 0;
@@ -123,6 +124,7 @@ const ClassroomPage: React.FC = () => {
   const seg = (n: number, l: string) => <div className="cd-seg"><b>{String(n).padStart(2, '0')}</b><span>{l}</span></div>;
 
   return (
+    <PortalShell>
     <div className="tl-de" data-theme={theme}>
       <div className="tl-top">
         <div>
@@ -185,6 +187,7 @@ const ClassroomPage: React.FC = () => {
         </aside>
       </div>
     </div>
+    </PortalShell>
   );
 };
 
