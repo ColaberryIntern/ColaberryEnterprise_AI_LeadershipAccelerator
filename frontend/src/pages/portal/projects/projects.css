@@ -142,12 +142,54 @@
 .pj-newbuild:hover{border-color:var(--cherry);color:var(--cherry-text)}
 .pj-newbuild svg{width:30px;height:30px}
 
+/* ── ONE consistent task-action button group (used EVERYWHERE) ──
+   The same 4 buttons — Copy Prompt · Open Workspace · Mark Done · Skip — render
+   identically on the hero, on each timeline task card, and (minus Open Workspace)
+   in the workspace drawer footer. Colors are FIXED here and never recolored per
+   location. Scoped under `.pj-root` so they also resolve inside the Drawer
+   (which wraps its content in `.pj-root pw-body`). */
+.pj-root .pw-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pj-root .pw-act{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;cursor:pointer;
+  font-size:13px;font-weight:700;padding:9px 16px;border-radius:var(--r-pill);font-family:inherit;transition:.14s;white-space:nowrap}
+.pj-root .pw-act svg{width:15px;height:15px;flex:none}
+.pj-root .pw-act:disabled{opacity:.55;cursor:not-allowed}
+/* Copy Prompt = berry/blue */
+.pj-root .pw-act.copy{background:#367895;color:#fff} .pj-root .pw-act.copy:hover{background:#2E6A86}
+.pj-root .pw-act.copy.ok{background:#5BA63C}
+/* Open Workspace = cherry/red */
+.pj-root .pw-act.open{background:#FB2832;color:#fff} .pj-root .pw-act.open:hover{background:#C20E1E}
+/* Mark Done = leaf/green */
+.pj-root .pw-act.done{background:#5BA63C;color:#fff} .pj-root .pw-act.done:hover{background:#3C7A26}
+/* Skip = ghost (transparent, gray border/text) */
+.pj-root .pw-act.skip{background:transparent;color:var(--text-muted);border-color:var(--border-default)}
+.pj-root .pw-act.skip:hover{border-color:var(--text-muted);color:var(--text-body)}
+/* Close (drawer only) — ghost too, so the footer stays consistent */
+.pj-root .pw-act.close{background:transparent;color:var(--text-muted);border-color:var(--border-default)}
+.pj-root .pw-act.close:hover{border-color:var(--text-muted);color:var(--text-body)}
+
+/* a VISIBLE-but-LOCKED task (dependency blocking: see-but-not-open) */
+.pjt-card.blocked{opacity:.85}
+.pjt-card.blocked .pjt-head{cursor:default}
+.pjt-card.blocked .pjt-head:hover{background:none}
+.pjt-lock{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--amber-deep);
+  background:rgba(232,146,12,.12);border:1px solid rgba(232,146,12,.3);border-radius:var(--r-pill);padding:5px 12px}
+.pjt-lock svg{width:13px;height:13px;flex:none}
+.pjt-lockpill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-muted);
+  background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:8px 14px}
+.pjt-lockpill svg{width:14px;height:14px;flex:none}
+
 /* ── project interior ── */
 .pj-back{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--berry);background:none;border:none;cursor:pointer;font-family:inherit;padding:6px 0;margin-bottom:12px}
 .pj-back svg{width:16px;height:16px}
 .pj-head{padding:0;overflow:hidden;margin-bottom:18px}
 .pj-head .pj-cover{height:110px;position:relative;overflow:hidden}
 .pj-head .pj-cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.2))}
+/* themed watermark — the project's own icon, big + low-opacity, behind the cover.
+   Non-interactive and clipped to the cover; tinted white so it reads on the
+   colored gradient. Every project gets one automatically from its `icon`. */
+.pj-head .pj-wm{position:absolute;top:50%;right:26px;transform:translateY(-50%);
+  width:220px;height:220px;opacity:.09;color:#fff;pointer-events:none;z-index:1}
+.pj-head .pj-wm svg{width:100%;height:100%;display:block}
 .pj-head .pj-hbody{padding:0 22px 20px}
 .pj-head .pj-avwrap{display:flex;align-items:flex-end;gap:15px;margin-top:-40px;position:relative;z-index:2}
 .pj-head .pj-av{width:72px;height:72px;border-radius:var(--r-16);display:flex;align-items:center;justify-content:center;color:#fff;flex:none;border:4px solid var(--surface-page);box-shadow:var(--shadow-md)}

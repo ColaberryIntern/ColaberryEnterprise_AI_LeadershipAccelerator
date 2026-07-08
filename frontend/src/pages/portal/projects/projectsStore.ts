@@ -33,6 +33,7 @@ export type ProjectTask = {
   owner?: string;         // owning AI agent(s)
   release?: string;       // release label, e.g. "r0 (wk3)"
   storyId?: string;       // e.g. "STORY-001"
+  blockedBy?: string[];   // storyIds of prerequisite tasks that must be DONE first
   state: TaskState;
   due: TaskDue;
 };
@@ -156,9 +157,34 @@ export function reqVerified(p: StudentProject): { v: number; total: number } {
   return { v: p.reqs.filter((r) => r.state === 'verified').length, total: p.reqs.length };
 }
 const DUE_RANK: Record<TaskDue, number> = { overdue: 0, today: 1, up: 2, done: 9 };
+
+// ── dependency blocking (see-but-not-open) ────────────────────────────────────
+// A task is BLOCKED while any storyId it lists in `blockedBy` maps to a task that
+// is not yet DONE. A skipped prerequisite does NOT satisfy the dependency (only a
+// `done` state clears it), so a story gated on a skipped predecessor stays locked.
+// `waitingOn` = the prerequisite storyIds that are not yet done.
+export function isTaskBlocked(
+  p: StudentProject,
+  task: ProjectTask,
+): { blocked: boolean; waitingOn: string[] } {
+  if (!task.blockedBy || task.blockedBy.length === 0) return { blocked: false, waitingOn: [] };
+  // Index tasks by their storyId once for the lookup.
+  const byStory = new Map<string, ProjectTask>();
+  p.lists.forEach((l) => l.tasks.forEach((t) => { if (t.storyId) byStory.set(t.storyId, t); }));
+  const waitingOn = task.blockedBy.filter((sid) => {
+    const dep = byStory.get(sid);
+    // Unknown prerequisite (defensive) or a prerequisite not yet done → still waiting.
+    return !dep || dep.state !== 'done';
+  });
+  return { blocked: waitingOn.length > 0, waitingOn };
+}
+
+// The hero "your next action" — first NON-blocked, non-done, non-skipped task.
 export function nextTask(p: StudentProject): { task: ProjectTask; list: ProjectList } | null {
   const open: { task: ProjectTask; list: ProjectList }[] = [];
-  p.lists.forEach((l) => l.tasks.forEach((t) => { if (t.state === 'todo') open.push({ task: t, list: l }); }));
+  p.lists.forEach((l) => l.tasks.forEach((t) => {
+    if (t.state === 'todo' && !isTaskBlocked(p, t).blocked) open.push({ task: t, list: l });
+  }));
   if (!open.length) return null;
   open.sort((a, b) => DUE_RANK[a.task.due] - DUE_RANK[b.task.due]);
   return open[0];
@@ -352,26 +378,55 @@ const PHASE: Record<string, string> = {
   r0: 'Walking skeleton', r1: 'Payments', r2: 'Scheduling & UX',
   r3: 'Reminders & resilience', r4: 'Personalization', r5: 'Trust & governance',
 };
+
+// A scissors path (open shears) — matches the Hair Salon training example so its
+// themed header watermark reads as a salon at a glance. Single SVG path `d`.
+const SALON_SCISSORS_ICON =
+  'M6 6a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM6 13a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8 10l12 8M8 14l12-8M11 10.8l3.5 2.3';
+
+// The "key story" of each release — the last story in that release (walking-skeleton
+// order). Every story in release R(n) is blockedBy this key story of R(n-1), so later
+// releases are gated on earlier ones. Computed from the release ordering below.
+function keyStoryIdByRelease(
+  releases: string[],
+  stories: SalonStory[],
+): Record<string, string> {
+  const key: Record<string, string> = {};
+  releases.forEach((rel) => {
+    const rs = stories.filter((s) => s.release === rel);
+    if (rs.length) key[rel] = rs[rs.length - 1].storyId; // last story = the release's key gate
+  });
+  return key;
+}
 function buildSalonProject(): StudentProject {
   const id = 'sample-salon';
   const stories = (salonData.stories as unknown as SalonStory[]).filter((s) => s.storyId);
   const releases: string[] = [];
   stories.forEach((s) => { if (!releases.includes(s.release)) releases.push(s.release); });
   releases.sort();
+  // Walking-skeleton-first dependency gating: each story in release R(n) is blocked
+  // by the key (last) story of release R(n-1), so opening the build shows early tasks
+  // actionable and every later release visibly LOCKED until its predecessor lands.
+  const keyByRelease = keyStoryIdByRelease(releases, stories);
   let first = true;
   const lists: ProjectList[] = releases.map((rel, ri) => {
     const rs = stories.filter((s) => s.release === rel);
     const weeks = rs[0]?.releaseLabel.match(/\(([^)]+)\)/)?.[1] || '';
+    const prevRel = ri > 0 ? releases[ri - 1] : null;
+    const gateStoryId = prevRel ? keyByRelease[prevRel] : undefined; // the key story of the prior release
     return {
       id: `${id}-${rel}`, step: 2 + ri,
       name: `Release ${rel.slice(1)} · ${PHASE[rel] || 'Stories'}`,
       sub: `${weeks ? weeks + ' · ' : ''}${rs.length} vertical-slice stor${rs.length === 1 ? 'y' : 'ies'}`,
       tasks: rs.map((s) => {
         const due: TaskDue = first ? 'today' : 'up'; first = false;
+        // Gate on the previous release's key story (r0 stories are ungated).
+        const blockedBy = gateStoryId ? [gateStoryId] : undefined;
         return {
           id: `${id}-${s.storyId}`, title: `${s.storyId} · ${s.title}`,
           what: s.story, prompt: s.prompt, req: s.reqs[0],
           acceptance: s.acceptance, owner: s.owner.replace(/\s*·.*$/, ''), release: s.releaseLabel, storyId: s.storyId,
+          blockedBy,
           state: (s.completed ? 'done' : 'todo') as TaskState, due,
         };
       }),
@@ -386,7 +441,8 @@ function buildSalonProject(): StudentProject {
     id, name: salonData.name, slug: 'hair-salon-booking-payments', sample: true,
     descriptor: salonData.descriptor, accent: '#367895',
     cover: 'linear-gradient(120deg,#367895 0%,#2E6A86 55%,#5BA63C 130%)',
-    icon: 'M3 5h18v16H3zM3 9h18M8 3v4M16 3v4',
+    // Scissors icon so the themed watermark literally matches a hair salon.
+    icon: SALON_SCISSORS_ICON,
     status: 'ready', createdAt: 0, stage: 'Release r0 · Walking skeleton (wk3)', curStep: 3, size: 'autonomous',
     idea: salonData.descriptor, reqs, lists,
     preview: {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Drawer from '../../../components/workspace/Drawer';
-import { StudentProject, ProjectTask, markTaskDone } from './projectsStore';
+import { StudentProject, ProjectTask, markTaskDone, skipTask, isTaskBlocked } from './projectsStore';
 import { buildProjectTaskPrompt } from './projectWorkspacePrompt';
 import {
   DELIVERY_MODES, DeliveryModeId, loadDeliveryMode, saveDeliveryMode,
@@ -113,7 +113,9 @@ const ProjectWorkspaceDrawer: React.FC<Props> = ({ project, task, open, onClose 
     }
   }, []);
 
-  if (!task) return null;
+  // The workspace must NEVER open for a blocked task (dependency gate). The
+  // interior already refuses to resolve one, but guard here too (defense in depth).
+  if (!task || isTaskBlocked(project, task).blocked) return null;
 
   const req = task.req ? project.reqs.find((r) => r.id === task.req) : null;
   const done = task.state === 'done';
@@ -128,18 +130,29 @@ const ProjectWorkspaceDrawer: React.FC<Props> = ({ project, task, open, onClose 
     window.setTimeout(() => setCopied(false), 1600);
   };
 
+  // Footer reuses the SAME shared action-button styles/colors as the hero + cards
+  // (.pw-act.copy/.done/.skip), so the set stays consistent. Open Workspace is
+  // omitted here — you are already inside the workspace — and Close replaces it,
+  // keeping a consistent 4-button footer. Wrapped in `.pj-root` so the
+  // `.pj-root`-scoped `.pw-act` rules resolve (the Drawer renders the footer at
+  // the document root, outside the page's own `.pj-root`).
   const footer = (
-    <>
-      <button type="button" className="pw-btn ghost" onClick={onClose}>Close</button>
+    <div className="pj-root pw-acts" style={{ margin: 0 }}>
+      <button type="button" className={`pw-act copy${copied ? ' ok' : ''}`} onClick={copyPrompt}>
+        {copied ? 'Copied' : 'Copy Prompt'}
+      </button>
       {!done && (
-        <button type="button" className="pw-btn leaf" onClick={() => { markTaskDone(project.id, task.id); onClose(); }}>
-          Mark done
+        <button type="button" className="pw-act done" onClick={() => { markTaskDone(project.id, task.id); onClose(); }}>
+          Mark Done
         </button>
       )}
-      <button type="button" className={`pw-btn cherry${copied ? ' ok' : ''}`} onClick={copyPrompt}>
-        {copied ? 'Copied' : 'Copy prompt'}
-      </button>
-    </>
+      {!done && (
+        <button type="button" className="pw-act skip" onClick={() => { skipTask(project.id, task.id); onClose(); }}>
+          Skip
+        </button>
+      )}
+      <button type="button" className="pw-act close" onClick={onClose}>Close</button>
+    </div>
   );
 
   return (
