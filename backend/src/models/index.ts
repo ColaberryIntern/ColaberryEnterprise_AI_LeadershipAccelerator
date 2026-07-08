@@ -281,6 +281,17 @@ import SponsorSeat from './SponsorSeat';
 import Challenge from './Challenge';
 import ChallengeParticipant from './ChallengeParticipant';
 import LeaderboardScore from './LeaderboardScore';
+// Timeline Engine (Classroom rebuild) — universal card + progression models.
+import TimelineCard from './TimelineCard';
+import TimelineCardProgress from './TimelineCardProgress';
+import TimelineEvent from './TimelineEvent';
+import PointsConfig from './PointsConfig';
+import CompetencyDomain from './CompetencyDomain';
+import StudentCompetency from './StudentCompetency';
+import EvidenceRecord from './EvidenceRecord';
+import XpEvent from './XpEvent';
+import BuilderLevel from './BuilderLevel';
+import StudentLevel from './StudentLevel';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1133,6 +1144,9 @@ export {
   StudentPointsEvent,
   OpenHouseEvent,
   OnboardingProfile,
+  // Timeline Engine (Classroom rebuild)
+  TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
+  CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
 };
 
 // --- Enrollment Lead associations ---
@@ -1163,3 +1177,11 @@ SkoolTask.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' }
 
 SkoolResponse.hasMany(SkoolEngagement, { foreignKey: 'response_id', as: 'engagements' });
 SkoolEngagement.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
+
+// --- Timeline Engine associations (Classroom rebuild) ---
+TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });
+TimelineCardProgress.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });
+Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'timelineProgress' });
+TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
+TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });

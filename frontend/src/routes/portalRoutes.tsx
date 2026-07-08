@@ -8,6 +8,7 @@ import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
 import PortalDashboardPage from '../pages/portal/PortalDashboardPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
+import ClassroomPage from '../pages/portal/ClassroomPage';
 import PortalLessonPage from '../pages/portal/PortalLessonPage';
 import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
 import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
@@ -57,6 +58,8 @@ const portalRoutes = (
         <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
         {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
         <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
+        {/* Timeline Engine — Classroom (Design E), flag-gated; falls back to /portal/curriculum. */}
+        <Route path="/portal/classroom" element={<ClassroomPage />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />

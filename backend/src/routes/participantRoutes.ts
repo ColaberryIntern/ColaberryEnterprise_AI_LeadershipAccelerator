@@ -30,6 +30,7 @@ import {
   handleGetSessionChat, handlePostSessionChat,
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
+import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import workspaceRoutes from './workspaceRoutes';
@@ -44,6 +45,9 @@ router.get('/api/portal/verify', handleVerifyMagicLink);
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
+// Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
+router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
+router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
