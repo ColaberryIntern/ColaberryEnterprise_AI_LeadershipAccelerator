@@ -308,6 +308,50 @@
 .pj-sb-t .bar>i{display:block;height:100%;border-radius:var(--r-pill)}
 .pj-sb-pct{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text-muted);flex:none}
 
+/* ── project workspace drawer (right-side slide-over; mirrors the labs drawer) ── */
+.pj-root .pw-sec{padding:14px 0;border-bottom:1px solid var(--border-subtle)}
+.pj-root .pw-sec:last-child{border-bottom:none}
+.pj-root .pw-h{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin:0 0 9px}
+.pj-root .pw-h-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pj-root .pw-modes{display:flex;flex-wrap:wrap;gap:7px}
+.pj-root .pw-mode{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;
+  background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:6px 12px;color:var(--text-body);transition:.14s}
+.pj-root .pw-mode:hover{border-color:var(--berry);color:var(--berry)}
+.pj-root .pw-mode.active{font-weight:700;color:var(--text-strong);background:var(--surface-subtle)}
+.pj-root .pw-mode .em{font-size:14px;line-height:1}
+.pj-root .pw-modeblurb{font-size:12.5px;color:var(--text-muted);margin-top:9px;line-height:1.5}
+.pj-root .pw-kv{display:flex;flex-direction:column;gap:7px}
+.pj-root .pw-kv>div{font-size:13px;color:var(--text-body)}
+.pj-root .pw-kv b{color:var(--text-strong);margin-right:5px}
+.pj-root .pw-accept{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px}
+.pj-root .pw-accept li{font-size:13px;color:var(--text-body);line-height:1.5}
+.pj-root .pw-repo{display:inline-block;font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--berry);text-decoration:none;word-break:break-all}
+.pj-root .pw-repo:hover{text-decoration:underline}
+.pj-root .pw-note{font-size:12.5px;color:var(--text-muted);margin-top:8px;line-height:1.5}
+.pj-root .pw-notes{width:100%;border:1px solid var(--border-default);border-radius:var(--r-12);padding:11px 13px;font-family:inherit;font-size:14px;background:var(--surface-page);resize:vertical;outline:none;color:var(--text-body)}
+.pj-root .pw-notes:focus{border-color:var(--berry)}
+.pj-root .pw-prompt{max-height:200px;overflow:auto;margin:0;background:#161616;color:#f1f1f0;border-radius:var(--r-12);padding:14px 16px;
+  font-family:var(--mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.pj-root .pw-copy{background:var(--surface-sunken);border:1px solid var(--border-default);color:var(--text-body);padding:5px 12px;border-radius:var(--r-pill);
+  cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;transition:.14s}
+.pj-root .pw-copy:hover{border-color:var(--berry);color:var(--berry)}
+.pj-root .pw-copy.ok{background:var(--leaf-action);border-color:var(--leaf-action);color:#fff}
+.pj-root .pw-btn{display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;font-size:13.5px;font-weight:700;
+  padding:9px 17px;border-radius:var(--r-pill);font-family:inherit;transition:.14s}
+.pj-root .pw-btn.sm{padding:7px 14px;font-size:13px;margin-top:10px}
+.pj-root .pw-btn.berry{background:var(--berry);color:#fff} .pj-root .pw-btn.berry:hover{background:var(--berry-hover)}
+.pj-root .pw-btn.berry.ok{background:var(--leaf-action)}
+.pj-root .pw-btn.leaf{background:var(--leaf-action);color:#fff} .pj-root .pw-btn.leaf:hover{background:var(--leaf-deep)}
+.pj-root .pw-btn.dark{background:#4A4A4A;color:#fff} .pj-root .pw-btn.dark:hover{background:#5a5a5a}
+.pj-root .pw-btn.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)}
+.pj-root .pw-btn.ghost:hover{border-color:var(--berry);color:var(--berry)}
+.pj-root .pw-btn:disabled{opacity:.55;cursor:not-allowed}
+.pj-root .pw-repoform{display:flex;gap:8px;margin-top:10px}
+.pj-root .pw-input{flex:1;min-width:0;border:1px solid var(--border-default);border-radius:var(--r-pill);padding:8px 14px;font-family:inherit;font-size:13px;outline:none;color:var(--text-body);background:var(--surface-page)}
+.pj-root .pw-input:focus{border-color:var(--berry)}
+.pj-root .pw-repoform .pw-btn.sm{margin-top:0}
+.pj-root .pw-err{margin-top:9px;font-size:12.5px;color:var(--cherry-text);background:rgba(251,40,50,.08);border:1px solid rgba(251,40,50,.24);border-radius:var(--r-8);padding:8px 11px;line-height:1.45}
+
 /* ── build-ready toast (global, via PortalShell) ── */
 .pj-toastwrap{position:fixed;top:80px;right:24px;z-index:120;display:flex;flex-direction:column;gap:10px;pointer-events:none}
 .pj-toast{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #D8D8D8;border-left:4px solid #5BA63C;border-radius:12px;
