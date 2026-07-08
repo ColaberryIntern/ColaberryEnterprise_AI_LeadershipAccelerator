@@ -104,9 +104,14 @@ function read(): StudentProject[] {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const list = JSON.parse(raw) as StudentProject[];
-      // migrate: ensure the current training seed exists (drops any retired
-      // sample seed like the old Recipe Concierge) while keeping user builds.
-      if (!list.some((p) => p.id === 'sample-salon')) {
+      // migrate: (re)seed the training sample when it is MISSING or STALE. A
+      // pre-dependency sample carries no `blockedBy` on any task, so refresh it
+      // so the blocking demo (and the themed icon) reach returning users. The
+      // student's own builds are always kept.
+      const sample = list.find((p) => p.id === 'sample-salon');
+      const stale = !sample
+        || !sample.lists.some((l) => l.tasks.some((t) => (t.blockedBy?.length ?? 0) > 0));
+      if (stale) {
         const migrated = [buildSalonProject(), ...list.filter((p) => !p.sample)];
         write(migrated);
         return migrated;

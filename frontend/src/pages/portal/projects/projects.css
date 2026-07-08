@@ -168,14 +168,17 @@
 .pj-root .pw-act.close:hover{border-color:var(--text-muted);color:var(--text-body)}
 
 /* a VISIBLE-but-LOCKED task (dependency blocking: see-but-not-open) */
-.pjt-card.blocked{opacity:.85}
-.pjt-card.blocked .pjt-head{cursor:default}
+.pjt-card.blocked{background:rgba(232,146,12,.07);border-color:rgba(232,146,12,.5);
+  border-left:5px solid var(--amber);cursor:not-allowed}
+.pjt-card.blocked .pjt-head{cursor:not-allowed}
 .pjt-card.blocked .pjt-head:hover{background:none}
-.pjt-lock{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--amber-deep);
-  background:rgba(232,146,12,.12);border:1px solid rgba(232,146,12,.3);border-radius:var(--r-pill);padding:5px 12px}
+.pjt-card.blocked .pjt-title,.pjt-card.blocked h4{color:var(--text-muted)}
+/* solid orange lock chip — unmistakably "you can't work on this" */
+.pjt-lock{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;letter-spacing:.02em;
+  color:#fff;background:var(--amber);border:1px solid var(--amber-deep);border-radius:var(--r-pill);padding:5px 12px}
 .pjt-lock svg{width:13px;height:13px;flex:none}
-.pjt-lockpill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-muted);
-  background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:8px 14px}
+.pjt-lockpill{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:var(--amber-deep);
+  background:rgba(232,146,12,.16);border:1px solid rgba(232,146,12,.55);border-radius:var(--r-pill);padding:8px 14px}
 .pjt-lockpill svg{width:14px;height:14px;flex:none}
 
 /* ── project interior ── */
