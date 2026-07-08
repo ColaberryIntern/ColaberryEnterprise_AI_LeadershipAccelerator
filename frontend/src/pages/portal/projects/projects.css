@@ -319,3 +319,62 @@
 .pj-toast b{display:block;font-size:15px;color:#1A1A1A}
 .pj-toast .ts{font-size:12.5px;color:#6B6B6B}
 .pj-toast a{color:#367895;font-weight:700;text-decoration:none;font-size:13px;white-space:nowrap}
+
+/* ── workspace drawer (Project Workspace Drawer) ──
+   Rendered inside the shared Drawer at the document root; content is wrapped in
+   `.pj-root pw-body` so these `.pj-root`-scoped tokens/rules resolve there. */
+.pj-root.pw-body{color:var(--text-body)}
+.pj-root .pw-sec{margin-bottom:20px}
+.pj-root .pw-sec:last-child{margin-bottom:4px}
+.pj-root .pw-h{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin:0 0 9px}
+.pj-root .pw-muted{font-size:13px;color:var(--text-muted)}
+.pj-root .pw-hint{font-size:12.5px;color:var(--text-muted);margin:8px 0 0;line-height:1.5}
+.pj-root .pw-error{margin-top:9px;font-size:13px;font-weight:600;color:var(--cherry-deep);background:rgba(251,40,50,.08);border:1px solid rgba(251,40,50,.28);border-radius:var(--r-8);padding:8px 12px}
+
+/* mode selector */
+.pj-root .pw-modes{display:flex;flex-direction:column;gap:8px}
+.pj-root .pw-mode{display:flex;align-items:flex-start;gap:11px;text-align:left;width:100%;padding:11px 13px;border:1.5px solid var(--border-default);
+  background:var(--surface-page);border-radius:var(--r-12);cursor:pointer;font-family:inherit;transition:.14s}
+.pj-root .pw-mode:hover{border-color:var(--berry)}
+.pj-root .pw-mode.sel{border-color:var(--cherry);background:rgba(251,40,50,.05)}
+.pj-root .pw-mode-emoji{font-size:18px;line-height:1.2;flex:none}
+.pj-root .pw-mode-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pj-root .pw-mode-label{font-size:14px;font-weight:700;color:var(--text-strong)}
+.pj-root .pw-mode-blurb{font-size:12.5px;color:var(--text-muted);line-height:1.4}
+
+/* owner & requirement */
+.pj-root .pw-kv{display:flex;flex-wrap:wrap;gap:8px}
+.pj-root .pw-b{background:var(--surface-subtle);border:1px solid var(--border-default);border-radius:var(--r-8);padding:8px 12px;font-size:13px}
+.pj-root .pw-b b{color:var(--text-strong)}
+
+/* acceptance */
+.pj-root .pw-accept{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px}
+.pj-root .pw-accept li{font-size:13.5px;color:var(--text-body);line-height:1.5}
+
+/* workspace repo */
+.pj-root .pw-repo{display:flex;flex-direction:column;gap:9px}
+.pj-root .pw-repo-link{font-size:15px;font-weight:700;color:var(--berry);text-decoration:none;word-break:break-all}
+.pj-root .pw-repo-link:hover{text-decoration:underline}
+.pj-root .pw-repo-meta{display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px;color:var(--text-muted)}
+.pj-root .pw-repo-form{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.pj-root .pw-repo-form .txt{flex:1;min-width:160px}
+
+/* your-context notes */
+.pj-root .pw-notes{width:100%;border:1px solid var(--border-default);border-radius:var(--r-12);padding:11px 13px;font-family:inherit;font-size:14px;background:var(--surface-page);resize:vertical;outline:none;color:var(--text-body);min-height:70px}
+.pj-root .pw-notes:focus{border-color:var(--berry)}
+
+/* truncated + scrollable prompt preview */
+.pj-root .pw-prompt{max-height:200px;overflow:auto;background:#161616;color:#f1f1f0;border-radius:var(--r-12);padding:15px;
+  font-family:var(--mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;margin:0}
+
+/* drawer footer buttons */
+.pj-root .pw-btn{display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;font-size:14px;font-weight:700;
+  padding:9px 18px;border-radius:var(--r-pill);font-family:inherit;transition:.14s}
+.pj-root .pw-btn.sm{padding:7px 14px;font-size:13px}
+.pj-root .pw-btn.cherry{background:var(--cherry);color:#fff} .pj-root .pw-btn.cherry:hover{background:var(--cherry-deep)}
+.pj-root .pw-btn.cherry.ok{background:var(--leaf-action)}
+.pj-root .pw-btn.berry{background:var(--berry);color:#fff} .pj-root .pw-btn.berry:hover{background:var(--berry-hover)}
+.pj-root .pw-btn.leaf{background:var(--leaf-action);color:#fff} .pj-root .pw-btn.leaf:hover{background:var(--leaf-deep)}
+.pj-root .pw-btn.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)}
+.pj-root .pw-btn.ghost:hover{border-color:var(--berry);color:var(--berry)}
+.pj-root .pw-btn:disabled{opacity:.5;cursor:not-allowed}

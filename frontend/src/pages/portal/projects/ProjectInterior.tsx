@@ -4,6 +4,7 @@ import {
   projectProgress, reqVerified, nextTask, markTaskDone, skipTask,
 } from './projectsStore';
 import NextSessionStrip from './NextSessionStrip';
+import ProjectWorkspaceDrawer from './ProjectWorkspaceDrawer';
 
 // The portal-native project workspace, in the Today-page shape: a full-width
 // build header, then a two-column grid — left is the FB timeline (hero "your
@@ -23,25 +24,16 @@ function urgColor(t: ProjectTask): string {
   if (t.due === 'today') return '#E8920C';
   return '#367895';
 }
-function CopyBtn({ text }: { text: string }) {
-  const [ok, setOk] = useState(false);
-  return (
-    <button type="button" className={`copy${ok ? ' ok' : ''}`} onClick={() => {
-      if (navigator.clipboard) navigator.clipboard.writeText(text);
-      setOk(true); window.setTimeout(() => setOk(false), 1600);
-    }}>{ok ? 'Copied' : 'Copy'}</button>
-  );
-}
-
-// ── one task as an FB-style feed card; click header to expand the full story ──
-const TaskCard: React.FC<{ project: StudentProject; task: ProjectTask; listName: string }> = ({ project, task, listName }) => {
-  const [open, setOpen] = useState(false);
+// ── one task as an FB-style feed card; click to open the workspace drawer ──
+const TaskCard: React.FC<{
+  project: StudentProject; task: ProjectTask; listName: string; onOpen: (taskId: string) => void;
+}> = ({ project, task, listName, onOpen }) => {
   const req = task.req ? project.reqs.find((r) => r.id === task.req) : null;
   const done = task.state === 'done';
   const color = urgColor(task);
   return (
-    <div className={`pjt-card${done ? ' done' : ''}${open ? ' open' : ''}`}>
-      <div className="pjt-head" onClick={() => setOpen((v) => !v)}>
+    <div className={`pjt-card${done ? ' done' : ''}`}>
+      <div className="pjt-head" onClick={() => onOpen(task.id)}>
         <span className="pjt-ic" style={{ background: color }}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
         </span>
@@ -53,52 +45,21 @@ const TaskCard: React.FC<{ project: StudentProject; task: ProjectTask; listName:
             {req && <span className={`pj-st ${req.state}`}>{task.req} · {req.state}</span>}
           </div>
           <div className="pjt-title">{task.title}</div>
-          {task.what && !open && <div className="pjt-sub">{task.what}</div>}
+          {task.what && <div className="pjt-sub">{task.what}</div>}
         </div>
         <span className="pjt-chev"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
       </div>
-
-      {open && (
-        <div className="pjt-detail">
-          {task.what && <div className="pjt-sec"><h5>Story</h5><div className="pjt-kv"><div className="b">{task.what}</div></div></div>}
-          <div className="pjt-sec">
-            <h5>Owner &amp; requirement</h5>
-            <div className="pjt-kv">
-              {task.owner && <div className="b"><b>Agent</b> {task.owner}</div>}
-              {req && <div className="b"><b>{task.req}</b> {req.name} <span className={`pj-st ${req.state}`}>{req.state}</span></div>}
-              {task.release && <div className="b"><b>Release</b> {task.release}</div>}
-            </div>
-          </div>
-          {task.acceptance && task.acceptance.length > 0 && (
-            <div className="pjt-sec">
-              <h5>Acceptance · demo script + build-loop stop</h5>
-              <ul className="pjt-accept">{task.acceptance.map((a, i) => <li key={i}>{a}</li>)}</ul>
-            </div>
-          )}
-          {task.prompt && (
-            <div className="pjt-sec">
-              <h5>Claude Code prompt · "vibe-code it"</h5>
-              <div className="pjt-code"><CopyBtn text={task.prompt} />{task.prompt}</div>
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="pjt-foot">
         {done ? (
           <span className="pjt-donetag"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed</span>
         ) : (
           <>
-            {task.prompt && (
-              <button className="pjt-cta berry" onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(task.prompt!); }}>
-                <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" strokeWidth="2" /></svg> Copy prompt
-              </button>
-            )}
-            <button className="pjt-cta dark" onClick={() => setOpen(true)}>
+            <button className="pjt-cta dark" onClick={() => onOpen(task.id)}>
               <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Open workspace
             </button>
             <button className="pjt-cta leaf" onClick={() => markTaskDone(project.id, task.id)}>
-              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Mark done
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg> Mark done
             </button>
             <button className="pjt-cta ghost" onClick={() => skipTask(project.id, task.id)}>Skip</button>
           </>
@@ -128,9 +89,16 @@ const ActivityCard: React.FC<{ a: ProjectActivity }> = ({ a }) => (
 
 const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }> = ({ project, onBack }) => {
   const [sel, setSel] = useState<string>('all'); // 'all' or a list id (drives the outline filter)
+  const [wsTaskId, setWsTaskId] = useState<string | null>(null); // task open in the workspace drawer
   const prog = projectProgress(project);
   const rv = reqVerified(project);
   const nx = nextTask(project);
+
+  // Resolve the task currently open in the drawer (re-derived so it stays in
+  // sync with the store after mark-done / skip mutations).
+  const wsTask = wsTaskId
+    ? project.lists.flatMap((l) => l.tasks).find((t) => t.id === wsTaskId) || null
+    : null;
 
   // stat tiles (whole project, regardless of filter)
   let open = 0, today = 0, overdue = 0, done = 0;
@@ -186,7 +154,7 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
               <h2>{nx.task.title}</h2>
               <p>{nx.task.what || 'Pick this up next — it keeps the walking skeleton moving.'}</p>
               <div className="pjw-actions" style={{ marginTop: 0 }}>
-                {nx.task.prompt && <button className="te-btn cherry" onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(nx.task.prompt!); }}>Copy Claude Code prompt</button>}
+                <button className="te-btn cherry" onClick={() => setWsTaskId(nx.task.id)}>Open workspace</button>
                 <button className="te-btn leaf" onClick={() => markTaskDone(project.id, nx.task.id)}>Mark done</button>
               </div>
             </div>
@@ -198,9 +166,9 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
 
           {/* the FB timeline, filtered by the outline selection */}
           <div className="te-sec-title">{selName ? `${selName} · tasks` : 'This build · next task due first'}</div>
-          {openTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} />)}
+          {openTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={setWsTaskId} />)}
           {sel === 'all' && project.activity.map((a) => <ActivityCard key={a.id} a={a} />)}
-          {doneTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} />)}
+          {doneTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={setWsTaskId} />)}
           {!openTasks.length && !doneTasks.length && <div className="fc-empty">No tasks in this section.</div>}
         </div>
 
@@ -234,6 +202,13 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
           </div>
         </aside>
       </div>
+
+      <ProjectWorkspaceDrawer
+        project={project}
+        task={wsTask}
+        open={wsTask !== null}
+        onClose={() => setWsTaskId(null)}
+      />
     </>
   );
 };
