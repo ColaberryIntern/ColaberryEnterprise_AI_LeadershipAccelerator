@@ -45,7 +45,7 @@ export async function handleGetOnboardingSchedule(req: Request, res: Response, n
 
 export async function handleRsvpOpenHouse(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await rsvpToOpenHouse(req.participant!.sub, req.params.id);
+    const result = await rsvpToOpenHouse(req.participant!.sub, String(req.params.id));
     if (!result.ok) return res.status(404).json({ error: 'Open house not found' });
     res.json(result);
   } catch (err) { next(err); }
