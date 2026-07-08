@@ -10,6 +10,19 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Project workspace drawer (delivery modes + per-student GitHub repo) (2026-07-08)
+- [x] **Right-side workspace drawer on the Projects page + platform-provisioned student repo (provision + sync)**
+  - Date: 2026-07-08
+  - Session: CC-20260708-pw1
+  - Branch: `feat/project-workspace` (isolated git worktree off `workstream/onboarding-experience`)
+  - What changed:
+    - Part A (frontend): `frontend/src/services/deliveryModes.ts` (new — 8 delivery modes ported from the advisor personas: Co-pilot / Just the answer / Visual-first / Explain it to me / Checklist doer / Plain & friendly / Social Media / UI/UX Designer, selection saved to profile); `frontend/src/pages/portal/projects/projectWorkspacePrompt.ts` (new — assembles the Claude Code prompt); `ProjectWorkspaceDrawer.tsx` (new — uses the shared `Drawer`; delivery-mode selector + build context + your-context box + a truncated/scrollable prompt preview); `ProjectInterior.tsx` (drawer replaces the old inline task-detail expansion; removed the dead `CopyBtn`); `projects.css` (`.pw-*` styles).
+    - Part B (backend): `backend/src/services/studentWorkspaceService.ts` (new — `provisionWorkspaceRepo` creates a private repo in the ColaberryIntern org + adds the student as a push collaborator, idempotent; `syncWorkspaceRepo` pulls tree + commits into the existing `GitHubConnection`; platform token stays in env, never persisted); `backend/src/routes/workspaceRoutes.ts` (new — `GET/POST /api/portal/workspace/repo[/provision|/sync]`, mounted in `participantRoutes.ts`); `studentWorkspaceService.test.ts` (new unit test). Frontend: `frontend/src/services/workspaceRepoApi.ts` (new) + the drawer's repo section (username → provision; repo link + Commit & sync).
+    - `docs/features/project-workspace-drawer.md` (new — PR/handoff doc + env + test plan).
+  - Why: Ali — the Projects task detail should open as a right-side workspace (like labs), carry the delivery-mode parameters (UI/UX, Visual…), and truncate/scroll the prompt; each student needs one repo their files live in (the prompt points Claude Code at it) and the portal syncs their commits. Locked decisions: platform-provisioned repos under ColaberryIntern; student commits locally, portal pulls.
+  - Verification: frontend `tsc --noEmit` clean across all new/changed frontend files (React + axios resolve). Backend written against the exact existing route/service patterns; every `GitHubConnection`/`Enrollment` field used is confirmed on the models. Backend `tsc`/`jest` + live repo provisioning are PENDING a running env (this host had no backend `node_modules`, no DB, no `GITHUB_TOKEN`).
+  - Notes: requires env `GITHUB_TOKEN` (repo-create + collaborator scope in the org), `GITHUB_WORKSPACE_ORG` (default `ColaberryIntern`), `GITHUB_API_URL`. Projects portal stays localStorage-native; only the repo section calls the backend.
+
 ### Admin UI rebrand foundation + Trust layer + collapsible sidebar (Colaberry brand) (2026-06-28)
 - [x] **Branded the admin shell to the Colaberry design system + redesigned the sidebar + per-page trust primitives**
   - Date: 2026-06-28

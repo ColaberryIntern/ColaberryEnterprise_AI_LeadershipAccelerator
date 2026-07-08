@@ -32,6 +32,7 @@ import {
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
+import workspaceRoutes from './workspaceRoutes';
 
 const router = Router();
 
@@ -194,6 +195,9 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
 
 // Project endpoints
 router.use(projectRoutes);
+
+// Student workspace repo (platform-provisioned GitHub repo: provision + sync)
+router.use(workspaceRoutes);
 
 // Student CB-System operating model (priority queue, Run My Day, decisions)
 router.use(studentOpsRoutes);
