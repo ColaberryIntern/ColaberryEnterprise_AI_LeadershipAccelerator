@@ -21,11 +21,12 @@ function PortalVerifyPage() {
     portalApi.get(`/api/portal/verify?token=${token}`)
       .then((res) => {
         login(res.data.jwt);
-        // Land on Home — it routes first-run users to the build chooser (or the
-        // live demo if a build is in flight) and existing users to the dashboard.
-        // (Previously went to /portal/project → blueprint, which showed an empty
-        // "nothing to execute" page to brand-new users.)
-        navigate('/portal/home', { replace: true });
+        // Land on Today — the student's daily command center (your day, next
+        // step, schedule, streak). This is the ONE universal post-login and
+        // post-signup home for every account (PortalFreeSignupPage lands here
+        // too). The build/requirements wizard is never forced; it opens only when
+        // the user explicitly starts a project from Projects.
+        navigate('/portal/today', { replace: true });
       })
       .catch((err) => {
         setError(err.response?.data?.error || 'Invalid or expired link. Please request a new one.');

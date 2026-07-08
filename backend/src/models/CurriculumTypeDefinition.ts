@@ -17,6 +17,21 @@ export interface CurriculumTypeDefinitionAttributes {
   is_system?: boolean;
   is_active?: boolean;
   display_order?: number;
+  // Timeline Engine registry metadata (Classroom rebuild — all nullable/additive).
+  bucket_default?: string | null;
+  render_band?: string | null;
+  learning_xp?: number | null;
+  builder_xp?: number | null;
+  community_xp?: number | null;
+  estimated_time?: number | null;
+  difficulty?: string | null;
+  competencies?: any;
+  evidence_required?: boolean;
+  github_required?: boolean;
+  ai_evaluation?: boolean;
+  instructor_review?: boolean;
+  portfolio_eligible?: boolean;
+  certification_mapping?: any;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -37,6 +52,20 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare is_system: boolean;
   declare is_active: boolean;
   declare display_order: number;
+  declare bucket_default: string | null;
+  declare render_band: string | null;
+  declare learning_xp: number | null;
+  declare builder_xp: number | null;
+  declare community_xp: number | null;
+  declare estimated_time: number | null;
+  declare difficulty: string | null;
+  declare competencies: any;
+  declare evidence_required: boolean;
+  declare github_required: boolean;
+  declare ai_evaluation: boolean;
+  declare instructor_review: boolean;
+  declare portfolio_eligible: boolean;
+  declare certification_mapping: any;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -115,6 +144,21 @@ CurriculumTypeDefinition.init(
       allowNull: false,
       defaultValue: 0,
     },
+    // Timeline Engine registry metadata — nullable so existing rows are untouched.
+    bucket_default: { type: DataTypes.STRING(30), allowNull: true },
+    render_band: { type: DataTypes.STRING(60), allowNull: true },
+    learning_xp: { type: DataTypes.INTEGER, allowNull: true },
+    builder_xp: { type: DataTypes.INTEGER, allowNull: true },
+    community_xp: { type: DataTypes.INTEGER, allowNull: true },
+    estimated_time: { type: DataTypes.INTEGER, allowNull: true },
+    difficulty: { type: DataTypes.STRING(20), allowNull: true },
+    competencies: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    evidence_required: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    github_required: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    ai_evaluation: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    instructor_review: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    portfolio_eligible: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    certification_mapping: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

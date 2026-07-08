@@ -271,6 +271,9 @@ import ProjectDna from './ProjectDna';
 import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
+import StudentPointsEvent from './StudentPointsEvent';
+import OpenHouseEvent from './OpenHouseEvent';
+import OnboardingProfile from './OnboardingProfile';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -278,6 +281,17 @@ import SponsorSeat from './SponsorSeat';
 import Challenge from './Challenge';
 import ChallengeParticipant from './ChallengeParticipant';
 import LeaderboardScore from './LeaderboardScore';
+// Timeline Engine (Classroom rebuild) — universal card + progression models.
+import TimelineCard from './TimelineCard';
+import TimelineCardProgress from './TimelineCardProgress';
+import TimelineEvent from './TimelineEvent';
+import PointsConfig from './PointsConfig';
+import CompetencyDomain from './CompetencyDomain';
+import StudentCompetency from './StudentCompetency';
+import EvidenceRecord from './EvidenceRecord';
+import XpEvent from './XpEvent';
+import BuilderLevel from './BuilderLevel';
+import StudentLevel from './StudentLevel';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -872,6 +886,10 @@ StudentTask.belongsTo(StudentTaskList, { foreignKey: 'task_list_id', as: 'taskLi
 StudentTask.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'studentTasks' });
 StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
+Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
+StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(OnboardingProfile, { foreignKey: 'enrollment_id', as: 'onboardingProfile', onDelete: 'CASCADE' });
+OnboardingProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // Capability Agent Map associations
 Capability.hasMany(CapabilityAgentMap, { foreignKey: 'capability_id', as: 'agentMaps' });
@@ -1123,6 +1141,12 @@ export {
   EnrollmentLead,
   StudentTaskList,
   StudentTask,
+  StudentPointsEvent,
+  OpenHouseEvent,
+  OnboardingProfile,
+  // Timeline Engine (Classroom rebuild)
+  TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
+  CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
 };
 
 // --- Enrollment Lead associations ---
@@ -1153,3 +1177,11 @@ SkoolTask.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' }
 
 SkoolResponse.hasMany(SkoolEngagement, { foreignKey: 'response_id', as: 'engagements' });
 SkoolEngagement.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
+
+// --- Timeline Engine associations (Classroom rebuild) ---
+TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });
+TimelineCardProgress.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });
+Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'timelineProgress' });
+TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
+TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });

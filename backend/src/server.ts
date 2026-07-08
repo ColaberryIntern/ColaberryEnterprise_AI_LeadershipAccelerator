@@ -370,6 +370,130 @@ async function ensureIngestionSchema() {
 // Explicit migration: ensure composite index for the admin communications
 // AI events telemetry table (TBI audit P1). Explicit idempotent creation because prod does
 // not run sequelize.sync (DB_BOOT_SYNC is off by default); columns mirror the AiEvent model.
+async function ensureStudentTaskMergeSchema() {
+  // Unified StudentTask (F): relax requirement_key to nullable and add the
+  // story-driven columns so requirement-based tasks (Kes's ProjectDnaWizard
+  // path) and story/engine-based tasks live in one table. Idempotent. The
+  // partial unique on (project_id, story_id) keeps engine upserts idempotent
+  // without affecting requirement-based rows (story_id NULL).
+  const statements = [
+    `ALTER TABLE student_tasks ALTER COLUMN requirement_key DROP NOT NULL`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS story_id VARCHAR(60)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS narrative TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS owner_agent VARCHAR(120)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS acceptance JSONB`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS build TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS vibe TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS trust TEXT`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(30)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS fulfills JSONB`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS release_key VARCHAR(60)`,
+    `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] student-task merge schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureOnboardingProfileSchema() {
+  // Background onboarding profile (S4): resume/LinkedIn + derived prefill that
+  // seeds the ProjectDnaWizard. Idempotent.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS onboarding_profiles (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       resume_text TEXT,
+       linkedin_url VARCHAR(500),
+       prefill JSONB,
+       extracted JSONB,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS onboarding_profiles_unique_enrollment ON onboarding_profiles (enrollment_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] onboarding-profile schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureOpenHouseSchema() {
+  // Cohort-agnostic open house / info sessions (S3). Guests RSVP before joining.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS open_house_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       title VARCHAR(255) NOT NULL,
+       description TEXT,
+       starts_at TIMESTAMPTZ NOT NULL,
+       timezone VARCHAR(60) NOT NULL DEFAULT 'America/Chicago',
+       registration_url VARCHAR(500),
+       meeting_link VARCHAR(500),
+       status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_open_house_events_status_starts ON open_house_events (status, starts_at)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] open-house schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensurePointsSchema() {
+  // Append-only student points ledger (S2). Idempotent create + unique index so
+  // pointsService.award is idempotent per (enrollment_id, event_key).
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS student_points_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       event_type VARCHAR(60) NOT NULL,
+       event_key VARCHAR(120) NOT NULL,
+       points INTEGER NOT NULL DEFAULT 0,
+       metadata JSONB,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS student_points_events_unique ON student_points_events (enrollment_id, event_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_student_points_events_enrollment ON student_points_events (enrollment_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] points schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureFreeTierSchema() {
+  // Free/guest tier support: a `tier` column on enrollments, and a nullable
+  // cohort_id so self-serve free (non-member) accounts can exist without a
+  // cohort. Idempotent — both statements are safe to re-run.
+  const statements = [
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'member'`,
+    `ALTER TABLE enrollments ALTER COLUMN cohort_id DROP NOT NULL`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] free-tier schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureAiEventsSchema() {
   try {
     await sequelize.query(`
@@ -450,6 +574,212 @@ async function ensureCampaignLinkColumns() {
 // alter sync is unreliable on prod (hits pre-existing index conflicts and
 // never reaches new models). Mirrors the Sequelize models in
 // InboxOpportunityScore / InboxFalseNegativeFeedback / InboxSurfacePreference.
+async function ensureTimelineEngineSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS timeline_cards (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       type VARCHAR(100) NOT NULL,
+       title VARCHAR(500) NOT NULL,
+       subtitle VARCHAR(500),
+       description TEXT,
+       week INTEGER,
+       bucket VARCHAR(20) NOT NULL DEFAULT 'learn',
+       event_id UUID,
+       session_id UUID,
+       visibility VARCHAR(20) NOT NULL DEFAULT 'draft',
+       release_date TIMESTAMPTZ,
+       unlock_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+       completion_rules JSONB NOT NULL DEFAULT '{}'::jsonb,
+       estimated_time INTEGER,
+       difficulty VARCHAR(20) NOT NULL DEFAULT 'core',
+       priority INTEGER NOT NULL DEFAULT 0,
+       points JSONB NOT NULL DEFAULT '{}'::jsonb,
+       competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
+       ref_kind VARCHAR(20) NOT NULL DEFAULT 'none',
+       ref_id UUID,
+       prompt_refs JSONB NOT NULL DEFAULT '{}'::jsonb,
+       variable_keys JSONB NOT NULL DEFAULT '[]'::jsonb,
+       creates_variable_keys JSONB NOT NULL DEFAULT '[]'::jsonb,
+       artifact_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+       github JSONB NOT NULL DEFAULT '{}'::jsonb,
+       ai_actions JSONB NOT NULL DEFAULT '{}'::jsonb,
+       status VARCHAR(20) NOT NULL DEFAULT 'active',
+       cohort_id UUID,
+       program_id UUID,
+       "order" INTEGER NOT NULL DEFAULT 0,
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_cards_cohort_seq ON timeline_cards (cohort_id, week, bucket, "order")`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_cards_type ON timeline_cards (type)`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_cards_event ON timeline_cards (event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_cards_session ON timeline_cards (session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_cards_visibility ON timeline_cards (visibility)`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_cards_ref ON timeline_cards (ref_kind, ref_id)`,
+
+    `CREATE TABLE IF NOT EXISTS timeline_card_progress (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       card_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'locked',
+       student_progress JSONB,
+       evidence JSONB,
+       analytics JSONB,
+       quiz_score DOUBLE PRECISION,
+       attempts INTEGER NOT NULL DEFAULT 0,
+       started_at TIMESTAMPTZ,
+       completed_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_timeline_progress_card_enrollment ON timeline_card_progress (card_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_progress_enrollment ON timeline_card_progress (enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_progress_status ON timeline_card_progress (status)`,
+
+    `CREATE TABLE IF NOT EXISTS timeline_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       cohort_id UUID,
+       slug VARCHAR(100) NOT NULL,
+       title VARCHAR(500) NOT NULL,
+       description TEXT,
+       week INTEGER,
+       event_date DATE,
+       session_id UUID,
+       card_template_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_events_cohort_week ON timeline_events (cohort_id, week)`,
+    `CREATE INDEX IF NOT EXISTS idx_timeline_events_slug ON timeline_events (slug)`,
+
+    `CREATE TABLE IF NOT EXISTS points_config (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       scope VARCHAR(30) NOT NULL,
+       key VARCHAR(150) NOT NULL,
+       learning_xp INTEGER,
+       builder_xp INTEGER,
+       community_xp INTEGER,
+       config JSONB NOT NULL DEFAULT '{}'::jsonb,
+       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_points_config_scope_key ON points_config (scope, key)`,
+    `CREATE INDEX IF NOT EXISTS idx_points_config_active ON points_config (is_active)`,
+
+    // Extend curriculum_type_definitions with the registry metadata (additive).
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS bucket_default VARCHAR(30)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS render_band VARCHAR(60)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS learning_xp INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS builder_xp INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS community_xp INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS estimated_time INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS difficulty VARCHAR(20)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS competencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS evidence_required BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS github_required BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS ai_evaluation BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS instructor_review BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS portfolio_eligible BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS certification_mapping JSONB NOT NULL DEFAULT '{}'::jsonb`,
+
+    // ── Progression (Phase 2) ──────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS competency_domains (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       program_id UUID,
+       domain_id VARCHAR(60) NOT NULL,
+       name VARCHAR(150) NOT NULL,
+       description TEXT,
+       confidence_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.7,
+       weight DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_competency_domains_prog_domain ON competency_domains (program_id, domain_id)`,
+
+    `CREATE TABLE IF NOT EXISTS student_competency (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       domain_id VARCHAR(60) NOT NULL,
+       confidence DOUBLE PRECISION NOT NULL DEFAULT 0,
+       evidence_count INTEGER NOT NULL DEFAULT 0,
+       last_evidence_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_student_competency_enrollment_domain ON student_competency (enrollment_id, domain_id)`,
+
+    `CREATE TABLE IF NOT EXISTS evidence_records (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       card_id UUID,
+       source_type VARCHAR(30) NOT NULL,
+       source_ref VARCHAR(255),
+       competency_weights JSONB NOT NULL DEFAULT '[]'::jsonb,
+       builder_xp INTEGER NOT NULL DEFAULT 0,
+       validated BOOLEAN NOT NULL DEFAULT TRUE,
+       idempotency_key VARCHAR(255) NOT NULL UNIQUE,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_evidence_enrollment ON evidence_records (enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_evidence_source ON evidence_records (source_type)`,
+
+    `CREATE TABLE IF NOT EXISTS xp_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       stream VARCHAR(20) NOT NULL,
+       card_id UUID,
+       amount INTEGER NOT NULL DEFAULT 0,
+       reason VARCHAR(255),
+       idempotency_key VARCHAR(255) NOT NULL UNIQUE,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_xp_events_enrollment_stream ON xp_events (enrollment_id, stream)`,
+
+    `CREATE TABLE IF NOT EXISTS builder_levels (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       slug VARCHAR(40) NOT NULL UNIQUE,
+       rank INTEGER NOT NULL DEFAULT 0,
+       label VARCHAR(80) NOT NULL,
+       required_competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
+       min_evidence INTEGER NOT NULL DEFAULT 0,
+       min_artifacts INTEGER NOT NULL DEFAULT 0,
+       min_github INTEGER NOT NULL DEFAULT 0,
+       min_evaluations INTEGER NOT NULL DEFAULT 0,
+       min_implementation INTEGER NOT NULL DEFAULT 0,
+       min_attendance INTEGER NOT NULL DEFAULT 0,
+       requires_ai_approval BOOLEAN NOT NULL DEFAULT FALSE,
+       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+
+    `CREATE TABLE IF NOT EXISTS student_level (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL UNIQUE,
+       level_slug VARCHAR(40) NOT NULL DEFAULT 'builder',
+       rank INTEGER NOT NULL DEFAULT 0,
+       architect_readiness DOUBLE PRECISION NOT NULL DEFAULT 0,
+       promotion_evidence JSONB,
+       ai_approval JSONB,
+       promoted_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn(`[DB] Timeline Engine schema statement failed:`, err.message?.split('\n')[0]);
+    }
+  }
+  console.log('[DB] Timeline Engine schema ensured');
+}
+
 async function ensureMissedOpportunitiesSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS inbox_opportunity_scores (
@@ -566,6 +896,31 @@ async function start(): Promise<void> {
   await ensureMissedOpportunitiesSchema();
   // AI events telemetry table (TBI audit P1) — explicit because prod does not run sync.
   await ensureAiEventsSchema();
+  // Free/guest tier: enrollments.tier column + nullable cohort_id (idempotent).
+  await ensureFreeTierSchema();
+  // Student points ledger (idempotent).
+  await ensurePointsSchema();
+  // Open house events (idempotent).
+  await ensureOpenHouseSchema();
+  // Onboarding profile (resume/LinkedIn prefill) (idempotent).
+  await ensureOnboardingProfileSchema();
+  // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
+  await ensureStudentTaskMergeSchema();
+  // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
+  await ensureTimelineEngineSchema();
+  // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
+  if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
+    try {
+      const { seedCurriculumTypeDefinitions } = await import('./services/timeline/typeSeeder');
+      const r = await seedCurriculumTypeDefinitions();
+      console.log(`[TimelineEngine] curriculum types seeded: ${r.created} created, ${r.updated} updated`);
+      const { seedProgressionConfig } = await import('./services/progression/seeders');
+      const p = await seedProgressionConfig();
+      console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+    } catch (err: any) {
+      console.warn('[TimelineEngine] seed failed:', err?.message);
+    }
+  }
   // Consent ledger (TBI audit P0-3) — explicit, idempotent. Powers the shadow consent gate.
   try {
     const { ensureConsentSchema } = await import('./services/consentService');
@@ -609,21 +964,25 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[Seed] Missed Opportunities Report registration failed:', err?.message);
   }
-  // The legacy 5-module "Enterprise AI Leadership Accelerator" pilot seed
-  // (seedProgramCurriculum) runs on every backend boot and attaches its stale
-  // 5-module curriculum + April-2026 LiveSessions onto the OLDEST cohort in the
-  // DB (Cohort.findOne order created_at ASC). In production that would silently
-  // corrupt a real cohort's curriculum the moment it becomes the oldest row, so
-  // it must never run there. Dev/staging still seed it so the local portal UX
-  // has content to render. See BC todo 10071007473.
-  if (env.nodeEnv !== 'production') {
-    await seedProgramCurriculum();
-  } else {
-    console.log('[Seed] Skipping seedProgramCurriculum in production (legacy 5-week pilot content)');
+  try {
+    // The legacy 5-module "Enterprise AI Leadership Accelerator" pilot seed
+    // (seedProgramCurriculum) runs on every backend boot and attaches its stale
+    // 5-module curriculum + April-2026 LiveSessions onto the OLDEST cohort in the
+    // DB (Cohort.findOne order created_at ASC). In production that would silently
+    // corrupt a real cohort's curriculum the moment it becomes the oldest row, so
+    // it must never run there. Dev/staging still seed it so the local portal UX
+    // has content to render. See BC todo 10071007473.
+    if (env.nodeEnv !== 'production') {
+      await seedProgramCurriculum();
+    } else {
+      console.log('[Seed] Skipping seedProgramCurriculum in production (legacy 5-week pilot content)');
+    }
+    await seedDepartments();
+    await seedCurriculumTypeDefinitions();
+    await seedCurriculumCourseLinks();
+  } catch (err: any) {
+    console.warn('[Seed] curriculum/departments seed failed (non-fatal):', err?.message);
   }
-  await seedDepartments();
-  await seedCurriculumTypeDefinitions();
-  await seedCurriculumCourseLinks();
 
   // Seed landing pages and migrate existing campaign deployments
   try {
@@ -643,7 +1002,7 @@ async function start(): Promise<void> {
   );
 
   // Intelligence OS: ensure tables exist and start autonomous discovery
-  await ensureIntelligenceTables();
+  try { await ensureIntelligenceTables(); } catch (err: any) { console.warn('[Intelligence] ensure tables failed (non-fatal):', err?.message); }
   setTimeout(() => {
     runDiscoveryAgent().catch((err) =>
       console.error('[Intelligence] Startup discovery failed:', err?.message)

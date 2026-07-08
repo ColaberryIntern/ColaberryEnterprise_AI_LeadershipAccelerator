@@ -1,0 +1,154 @@
+/* ============================================================
+   Schedule page — faithful port of Design E "Schedule" view.
+   All rules are scoped under .sch-root, and the full light-theme
+   token block from the mockup's :root is redefined here (these
+   tokens are NOT global in this app).
+   ============================================================ */
+.sch-root{
+  /* Colaberry brand */
+  --cherry:#FB2832; --cherry-text:#E5121D; --cherry-deep:#C20E1E;
+  --leaf:#77BB4A; --leaf-action:#5BA63C; --leaf-text:#468A2E; --leaf-deep:#3C7A26;
+  --berry:#367895; --berry-hover:#2E6A86; --link:#2E6A86;
+  --amber:#E8920C; --amber-deep:#B5710A;
+  /* neutrals */
+  --white:#FFFFFF; --n50:#F8F8F7; --n100:#F1F1F0; --n200:#E4E4E3; --n300:#D8D8D8;
+  --n400:#B4B4B4; --n500:#8C8C8C; --n600:#6B6B6B; --n700:#4A4A4A; --n800:#2B2B2B; --n900:#1A1A1A;
+  /* semantic */
+  --surface-page:#FFFFFF; --surface-subtle:#F8F8F7; --surface-sunken:#F1F1F0;
+  --text-strong:#1A1A1A; --text-body:#2B2B2B; --text-muted:#6B6B6B;
+  --border-default:#D8D8D8; --border-subtle:#E4E4E3;
+  /* dataviz */
+  --dv-learning:#367895; --dv-project:#FB2832; --dv-internship:#5BA63C; --dv-cert:#E8920C; --dv-event:#367895;
+  /* schedule v2 type tokens: Learning=berry, Project=leaf, Internship=amber, Cert=deep berry */
+  --dv-project2:#5BA63C; --dv-cert2:#2E6A86;
+  --shadow-md:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04);
+  --shadow-lg:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);
+  --r-4:4px; --r-8:8px; --r-12:12px; --r-16:16px; --r-20:20px; --r-24:24px; --r-32:32px; --r-pill:999px;
+  --sans:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Roboto Mono',ui-monospace,'SFMono-Regular','Menlo','Consolas',monospace;
+  --ease:cubic-bezier(0.22,1,0.36,1);
+
+  color:var(--text-body);
+}
+
+/* ===== chips (shared) ===== */
+.sch-root .chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;padding:4px 12px;border-radius:var(--r-pill);letter-spacing:.02em;text-transform:uppercase;line-height:1.2}
+.sch-root .chip .sw{width:8px;height:8px;border-radius:50%}
+.sch-root .chip.learning{background:rgba(54,120,149,.14);color:var(--berry)} .sch-root .chip.learning .sw{background:var(--dv-learning)}
+.sch-root .chip.project{background:rgba(251,40,50,.12);color:var(--cherry-text)} .sch-root .chip.project .sw{background:var(--dv-project)}
+.sch-root .chip.internship{background:rgba(91,166,60,.16);color:var(--leaf-text)} .sch-root .chip.internship .sw{background:var(--dv-internship)}
+.sch-root .chip.cert{background:rgba(232,146,12,.16);color:var(--amber-deep)} .sch-root .chip.cert .sw{background:var(--dv-cert)}
+.sch-root .chip.event{background:rgba(54,120,149,.14);color:var(--berry)} .sch-root .chip.event .sw{background:var(--dv-event)}
+
+/* ===== Today button (self-contained ghost/sm) ===== */
+.sch-root .sch-btn{border:none;border-radius:var(--r-pill);font-family:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.sch-root .sch-btn.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)}
+.sch-root .sch-btn.ghost:hover{border-color:var(--berry);color:var(--berry)}
+.sch-root .sch-btn.sm{padding:9px 16px;font-size:14px}
+
+/* ===== SCHEDULE (base) ===== */
+.sch-root .toggle{display:inline-flex;background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--r-pill);padding:4px}
+.sch-root .toggle button{border:none;background:none;padding:8px 20px;border-radius:var(--r-pill);font-size:14px;cursor:pointer;color:var(--text-muted);font-weight:700;font-family:inherit}
+.sch-root .toggle button.active{background:var(--surface-page);color:var(--text-strong);box-shadow:var(--shadow-md)}
+
+/* time-grid week view */
+.sch-root .timegrid{display:grid;grid-template-columns:64px repeat(5,1fr);gap:8px;margin-top:16px;overflow-x:auto}
+.sch-root .tg-corner{}
+.sch-root .tg-dayhead{text-align:center;padding:8px 4px;border-radius:var(--r-12);background:var(--surface-sunken);border:1px solid var(--border-subtle)}
+.sch-root .tg-dayhead .d{font-size:13px;color:var(--text-muted);font-weight:500} .sch-root .tg-dayhead .n{font-size:18px;font-weight:700;color:var(--text-strong)}
+.sch-root .tg-dayhead .sl{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--cherry-text);margin-top:2px}
+.sch-root .tg-dayhead.today{box-shadow:inset 0 0 0 2px var(--cherry);border-color:transparent}
+.sch-root .tg-time{font-size:12px;color:var(--text-muted);font-family:var(--mono);text-align:right;padding:10px 6px 0 0;font-weight:700}
+.sch-root .tg-cell{min-height:64px;border-radius:var(--r-12);border:1px dashed var(--border-subtle);padding:5px;display:flex;flex-direction:column;gap:5px}
+.sch-root .tg-cell.today{background:rgba(251,40,50,.03)}
+.sch-root .tg-ev{padding:7px 9px;border-radius:var(--r-8);font-size:12px;border-left:3px solid;cursor:pointer;line-height:1.25;background:var(--surface-page)}
+.sch-root .tg-ev:hover{filter:brightness(.97)}
+.sch-root .tg-ev b{display:block;font-size:12px;font-weight:700;color:var(--text-strong)}
+.sch-root .tg-ev.learning{border-color:var(--dv-learning);background:rgba(54,120,149,.08)}
+.sch-root .tg-ev.project{border-color:var(--dv-project2);background:rgba(91,166,60,.1)}
+.sch-root .tg-ev.internship{border-color:var(--amber);background:rgba(232,146,12,.1)}
+.sch-root .tg-ev.cert{border-color:var(--dv-cert2);background:rgba(46,106,134,.1)}
+.sch-root .tg-ev.event{border-color:var(--dv-event);background:rgba(54,120,149,.08)}
+.sch-root .tg-ev.done{opacity:.6} .sch-root .tg-ev.done b{text-decoration:line-through}
+.sch-root .tg-ev.locked{opacity:.5;background:var(--surface-sunken);border-color:var(--border-default)}
+.sch-root .tg-ev .tgp{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--leaf-text)}
+
+/* task chip (week header / agenda) */
+.sch-root .tk{padding:10px 11px;border-radius:var(--r-8);font-size:13px;margin-bottom:9px;cursor:pointer;border-left:4px solid;line-height:1.35}
+.sch-root .tk:hover{filter:brightness(.97)}
+.sch-root .tk b{display:block;font-weight:700;font-size:13px;color:var(--text-strong)} .sch-root .tk .tt{color:var(--text-muted);font-size:12px}
+.sch-root .tk.learning{background:rgba(54,120,149,.1);border-color:var(--dv-learning)}
+.sch-root .tk.project{background:rgba(251,40,50,.08);border-color:var(--dv-project)}
+.sch-root .tk.internship{background:rgba(91,166,60,.12);border-color:var(--dv-internship)}
+.sch-root .tk.cert{background:rgba(232,146,12,.12);border-color:var(--dv-cert)}
+.sch-root .tk.event{background:rgba(54,120,149,.1);border-color:var(--dv-event)}
+.sch-root .tk.locked{opacity:.5;cursor:default;background:var(--surface-sunken);border-color:var(--border-default)}
+.sch-root .tk.done{opacity:.62} .sch-root .tk.done b{text-decoration:line-through}
+
+/* legend + agenda */
+.sch-root .legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:16px;font-size:14px;color:var(--text-muted)}
+.sch-root .legend span{display:inline-flex;align-items:center;gap:7px}
+.sch-root .agenda-day .dh{font-size:14px;font-weight:700;color:var(--text-strong);padding:14px 4px 9px;border-bottom:1px solid var(--border-default)}
+
+/* ===== SCHEDULE v2 toolbar ===== */
+.sch-root .schtoolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.sch-root .navbtns{display:inline-flex;gap:6px;align-items:center}
+.sch-root .navarrow{width:38px;height:38px;border-radius:var(--r-pill);border:1px solid var(--border-default);background:var(--surface-page);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--text-body)}
+.sch-root .navarrow:hover{border-color:var(--berry);color:var(--berry)} .sch-root .navarrow svg{width:18px;height:18px}
+.sch-root .periodlbl{font-size:18px;font-weight:700;color:var(--text-strong);min-width:230px;text-align:center}
+.sch-root .ptsbank{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}
+.sch-root .ptchip{display:flex;flex-direction:column;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-12);padding:8px 16px;box-shadow:var(--shadow-md)}
+.sch-root .ptchip .v{font-family:var(--mono);font-weight:700;font-size:18px;color:var(--leaf-text)} .sch-root .ptchip .l{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em}
+
+/* month grid */
+.sch-root .monthgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.sch-root .moh{font-size:12px;font-weight:700;color:var(--text-muted);text-align:center;text-transform:uppercase;letter-spacing:.05em;padding-bottom:4px}
+.sch-root .mcell{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-12);padding:8px;min-height:108px;display:flex;flex-direction:column;gap:5px}
+.sch-root .mcell.out{background:var(--surface-subtle);opacity:.55}
+.sch-root .mcell.today{box-shadow:inset 0 0 0 2px var(--cherry);border-color:transparent}
+.sch-root .mcell .dn{font-size:13px;font-weight:700;color:var(--text-strong);display:flex;justify-content:space-between;align-items:center}
+.sch-root .mcell .dn .wkn{font-size:10px;color:var(--text-muted);font-weight:700}
+.sch-root .mdot{display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 7px;border-radius:6px;cursor:pointer;border-left:3px solid;line-height:1.25;background:var(--surface-sunken)}
+.sch-root .mdot b{font-weight:700;color:var(--text-strong);font-size:11px}
+.sch-root .mdot.learning{border-color:var(--dv-learning)} .sch-root .mdot.project{border-color:var(--dv-project2)} .sch-root .mdot.internship{border-color:var(--dv-internship)} .sch-root .mdot.cert{border-color:var(--dv-cert)} .sch-root .mdot.event{border-color:var(--dv-event)}
+.sch-root .mdot.done{opacity:.6} .sch-root .mdot.done b{text-decoration:line-through} .sch-root .mdot.lock{opacity:.5}
+.sch-root .mdot .mp{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--leaf-text);font-weight:700}
+.sch-root .mmore{font-size:10px;color:var(--text-muted)}
+
+/* schedule entry chip in week/agenda */
+.sch-root .tk .row1{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px}
+.sch-root .tk .pp{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--leaf-text)}
+.sch-root .tk.cert{background:rgba(46,106,134,.12);border-color:var(--dv-cert2)}
+.sch-root .tk .stpip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;margin-top:3px}
+.sch-root .tk.done .stpip{color:var(--leaf-text)} .sch-root .tk.locked .stpip{color:var(--text-muted)}
+.sch-root .tk .stpip svg{width:12px;height:12px}
+
+/* week header pill row */
+.sch-root .sch-weekhdr{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+
+/* ===== agenda queue (shared "queue" component) ===== */
+.sch-root .queue{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);overflow:hidden;box-shadow:var(--shadow-md)}
+.sch-root .agenda-queue{margin-top:10px;margin-bottom:14px}
+.sch-root .qtask{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:.14s var(--ease);width:100%;text-align:left;background:none;border-left:none;border-right:none;border-top:none;color:inherit;font-family:inherit}
+.sch-root .qtask:last-child{border-bottom:none}
+.sch-root .qtask:hover{background:var(--surface-subtle)}
+.sch-root .qrank{font-family:var(--mono);font-size:14px;color:var(--text-muted);width:24px;text-align:center;font-weight:700}
+.sch-root .qtask.done .qrank{color:var(--leaf-text)}
+.sch-root .qbody{flex:1;min-width:0}
+.sch-root .qtitle{font-weight:700;font-size:15px;color:var(--text-strong)}
+.sch-root .qtask.done .qtitle{text-decoration:line-through;color:var(--text-muted)}
+.sch-root .qmeta{display:flex;align-items:center;gap:9px;margin-top:5px;color:var(--text-muted);font-size:13px;flex-wrap:wrap}
+.sch-root .qgo{opacity:.35;transition:.16s var(--ease);flex:none;color:var(--cherry)}
+.sch-root .qtask:hover .qgo{opacity:1;transform:translateX(2px)}
+.sch-root .ptbadge{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);background:rgba(91,166,60,.14);color:var(--leaf-text);letter-spacing:.01em}
+.sch-root .ptbadge.earned{background:var(--leaf-action);color:#fff}
+
+.sch-root .sch-empty{font-size:13px;color:var(--text-muted);padding:30px;text-align:center}
+
+/* ===== responsive ===== */
+@media (max-width:720px){
+  .sch-root .monthgrid{font-size:10px}
+  .sch-root .mcell{min-height:72px}
+  .sch-root .schtoolbar{gap:8px} .sch-root .periodlbl{min-width:0;font-size:15px} .sch-root .ptsbank{margin-left:0;width:100%}
+}
