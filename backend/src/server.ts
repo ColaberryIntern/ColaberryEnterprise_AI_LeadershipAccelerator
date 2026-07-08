@@ -965,7 +965,18 @@ async function start(): Promise<void> {
     console.warn('[Seed] Missed Opportunities Report registration failed:', err?.message);
   }
   try {
-    await seedProgramCurriculum();
+    // The legacy 5-module "Enterprise AI Leadership Accelerator" pilot seed
+    // (seedProgramCurriculum) runs on every backend boot and attaches its stale
+    // 5-module curriculum + April-2026 LiveSessions onto the OLDEST cohort in the
+    // DB (Cohort.findOne order created_at ASC). In production that would silently
+    // corrupt a real cohort's curriculum the moment it becomes the oldest row, so
+    // it must never run there. Dev/staging still seed it so the local portal UX
+    // has content to render. See BC todo 10071007473.
+    if (env.nodeEnv !== 'production') {
+      await seedProgramCurriculum();
+    } else {
+      console.log('[Seed] Skipping seedProgramCurriculum in production (legacy 5-week pilot content)');
+    }
     await seedDepartments();
     await seedCurriculumTypeDefinitions();
     await seedCurriculumCourseLinks();

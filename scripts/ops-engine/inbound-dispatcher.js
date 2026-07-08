@@ -728,11 +728,11 @@ if (require.main !== module) return;
       await cbControl.close();
       process.exit(0);
     }
-    // Warm the people cache once per tick so @-mentions resolve to the real
-    // person (by name/email/id) and not just the requester's own object-sgid.
-    // Best-effort: ensurePeopleLoaded swallows its own errors, so a /people.json
-    // hiccup degrades mentions to the Ali fallback rather than breaking the tick.
-    try { await cbPeople.ensurePeopleLoaded({ bcGet: bcGetAll }); } catch (_e) {}
+    // People-cache warming is now PROJECT-scoped inside the handler
+    // (ensurePeopleLoaded({ bucketId })), so @Name resolves against the right
+    // ~25-person roster with unambiguous first names. We no longer pull the
+    // 1295-person account list every tick (paginated, rate-limit pressure, and
+    // it still could not disambiguate first names account-wide).
     const mentions = await findNewMentions(state);
     console.log(`  ${mentions.length} new @CB mentions from team members`);
     for (const m of mentions) {
@@ -765,7 +765,7 @@ if (require.main !== module) return;
         // Open-ended -> hand off to LLM handler. It posts its own replies.
         try {
           const result = await handleOpenEnded({
-            bcGet, bcPost, mention,
+            bcGet, bcGetAll, bcPost, mention,
             bucketId: m.bucketId, recId: m.recId, comment: m.comment, aliId: ALI_ID,
           });
           if (result.ok) { recordReply(state, m.key); repliedNow = true; }
