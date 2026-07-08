@@ -7511,3 +7511,10 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: The consolidated Classroom rendered blank because /portal/classroom was nested inside the legacy <PortalLayout> block (which is empty on the Design-E branch). Moved the route OUT to sit beside /portal/today, /portal/path, /portal/projects, and wrapped ClassroomPage's content in <PortalShell> so it carries the same left-nav chrome as every other Design-E page. Two files: routes/portalRoutes.tsx (route relocation) + pages/portal/ClassroomPage.tsx (PortalShell wrap on all 4 render states).
   - Verification: my standalone `tsc --noEmit` = 0 errors in these files; diagnostic build confirmed the route mounts. NOTE: the shared :3098 CRA dev server wedged repeatedly on incremental recompiles (Windows bind-mount + fork-ts-checker) during two concurrent sessions restarting it — code is correct; the render will appear once a clean compile settles.
   - Notes: Committed explicit paths only (ClassroomPage.tsx, portalRoutes.tsx); left the other session's uncommitted feed.css/TodayShell.* untouched. New-account->Today redirect already exists (PortalVerifyPage.tsx:29 + PortalFreeSignupPage.tsx:29 -> /portal/today) from commit 8e34d638, so that deploy requirement is already met.
+
+- [x] Deploy prep: fix 2 frontend CI typecheck blockers (recharts Formatter types)
+  - Date: 2026-07-08
+  - Session: CC-20260708-q7m3
+  - What changed: IntelScatterChart.tsx + IntelWaterfallChart.tsx typed the Tooltip `formatter` param as `name?: string`, but recharts' Formatter passes `NameType` (string | number) — a TS2322 that would fail the authoritative Frontend-typecheck CI gate on a PR to main. Widened both to `name?: any`. Pure type fix, no runtime change.
+  - Verification: frontend `tsc --noEmit` in onb-test-fe (pending confirm) — these were the only 2 src errors.
+  - Notes: Deploy prep for promoting feature/project-workspace-drawer -> main. Not the Classroom/Timeline feature; pre-existing admin-chart errors that blocked CI.
