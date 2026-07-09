@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import {
-  listCohortTimeline, createCard, updateCard, deleteCard, reorderCards, cloneCard,
+  listTimeline, createCard, updateCard, deleteCard, reorderCards, cloneCard,
 } from '../services/timeline/timelineAdminService';
 
 const bucketEnum = z.enum(['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance']);
@@ -20,7 +20,6 @@ const pointsSchema = z.object({
 const competenciesSchema = z.array(z.object({ domain_id: z.string(), weight: z.number() })).optional();
 
 const createSchema = z.object({
-  cohort_id: z.string().uuid(),
   type: z.string().min(1),
   title: z.string().max(500).optional(),
   subtitle: z.string().max(500).nullable().optional(),
@@ -67,9 +66,9 @@ function fail(res: Response, err: any, next: NextFunction) {
   return next(err);
 }
 
-export async function handleListCohortTimeline(req: Request, res: Response, next: NextFunction) {
+export async function handleListTimeline(_req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await listCohortTimeline(String(req.params.cohortId)));
+    res.json(await listTimeline());
   } catch (err) { fail(res, err, next); }
 }
 

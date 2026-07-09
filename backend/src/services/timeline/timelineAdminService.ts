@@ -21,7 +21,7 @@ const VISIBILITIES = ['draft', 'scheduled', 'published', 'archived'] as const;
 export type Visibility = typeof VISIBILITIES[number];
 
 export interface CreateCardInput {
-  cohort_id: string;
+  cohort_id?: string | null;   // ignored — the curriculum is global (cohort_id null)
   type: string;
   title?: string;
   subtitle?: string | null;
@@ -69,25 +69,25 @@ export function composeCardAttributes(
     competencies,
     ref_kind: 'none',
     status: 'active',
-    cohort_id: input.cohort_id,
+    cohort_id: null,                 // global — one curriculum for every batch
     program_id: input.program_id ?? null,
     order,
     metadata: { authored: true },
   };
 }
 
-/** Next order value at the tail of a (cohort, week, bucket) lane. */
-async function nextOrderInLane(cohortId: string, week: number | null, bucket: string): Promise<number> {
+/** Next order value at the tail of a (week, bucket) lane in the global curriculum. */
+async function nextOrderInLane(week: number | null, bucket: string): Promise<number> {
   const max = await TimelineCard.max<number, TimelineCard>('order', {
-    where: { cohort_id: cohortId, week: week ?? null, bucket },
+    where: { cohort_id: null, week: week ?? null, bucket },
   });
   return (typeof max === 'number' ? max : -1) + 1;
 }
 
-/** Admin view: every card for a cohort (all visibilities) + the type registry. */
-export async function listCohortTimeline(cohortId: string) {
+/** Admin view: the whole global curriculum (all visibilities) + the type registry. */
+export async function listTimeline() {
   const cards = await TimelineCard.findAll({
-    where: { cohort_id: cohortId },
+    where: { cohort_id: null },
     order: [['week', 'ASC'], ['bucket', 'ASC'], ['order', 'ASC']],
   });
   // Authorable types only — system types are engine-emitted, not hand-placed.
@@ -99,18 +99,17 @@ export async function listCohortTimeline(cohortId: string) {
       learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
       competencies: t.competencies, event: !!t.event,
     }));
-  return { cohort_id: cohortId, buckets: BUCKETS, cards, types };
+  return { scope: 'global', buckets: BUCKETS, cards, types };
 }
 
 export async function createCard(input: CreateCardInput): Promise<TimelineCard> {
   const def = resolveType(input.type);
   if (!def) throw Object.assign(new Error(`Unknown card type "${input.type}"`), { status: 400 });
   if (def.system) throw Object.assign(new Error(`Type "${input.type}" is system-emitted and cannot be created manually`), { status: 400 });
-  if (!input.cohort_id) throw Object.assign(new Error('cohort_id is required'), { status: 400 });
   if (input.bucket && !BUCKETS.includes(input.bucket)) throw Object.assign(new Error(`Invalid bucket "${input.bucket}"`), { status: 400 });
 
   const bucket = input.bucket || def.bucket;
-  const order = await nextOrderInLane(input.cohort_id, input.week ?? null, bucket);
+  const order = await nextOrderInLane(input.week ?? null, bucket);
   return TimelineCard.create(composeCardAttributes(def, input, order) as any);
 }
 
@@ -170,7 +169,7 @@ export async function reorderCards(items: Array<{ id: string; order: number; wee
 export async function cloneCard(id: string): Promise<TimelineCard> {
   const src = await TimelineCard.findByPk(id);
   if (!src) throw Object.assign(new Error('Card not found'), { status: 404 });
-  const order = await nextOrderInLane(src.cohort_id as string, src.week, src.bucket);
+  const order = await nextOrderInLane(src.week, src.bucket);
   const attrs = src.toJSON() as any;
   delete attrs.id; delete attrs.created_at; delete attrs.updated_at;
   return TimelineCard.create({

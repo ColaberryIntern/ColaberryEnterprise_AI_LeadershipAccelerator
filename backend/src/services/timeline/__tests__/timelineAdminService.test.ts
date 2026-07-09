@@ -22,7 +22,7 @@ describe('composeCardAttributes', () => {
     expect(attrs.estimated_time).toBe(45);          // evidence_required => 45
     expect(attrs.visibility).toBe('draft');         // authored cards start hidden
     expect(attrs.status).toBe('active');
-    expect(attrs.cohort_id).toBe(COHORT);
+    expect(attrs.cohort_id).toBeNull();             // global curriculum — shared across batches
     expect(attrs.order).toBe(0);
   });
 
