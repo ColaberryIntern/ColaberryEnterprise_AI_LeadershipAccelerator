@@ -15,6 +15,7 @@ import MiniSectionControlTab from './orchestration/MiniSectionControlTab';
 import BulkConfigPanel from './orchestration/builder/BulkConfigPanel';
 import HealthDashboardTab from './orchestration/HealthDashboardTab';
 import ExperienceStudioTab from './orchestration/ExperienceStudioTab';
+import CurriculumComposerTab from './orchestration/composer/CurriculumComposerTab';
 import TimelineEditorTab from './orchestration/TimelineEditorTab';
 import WorkstationTab from './orchestration/WorkstationTab';
 import '../../styles/orchestration.css';
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'sections', label: 'Sections' },
   { id: 'mini-sections', label: 'Mini-Sections' },
   { id: 'types', label: 'Experience Studio' },
+  { id: 'composer', label: 'Curriculum Composer' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'skills', label: 'Skills' },
   { id: 'gating', label: 'Gating' },
@@ -106,6 +108,7 @@ export default function AdminOrchestrationPage() {
           {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
           {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
           {activeTab === 'types' && <ExperienceStudioTab />}
+          {activeTab === 'composer' && <CurriculumComposerTab />}
           {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
           {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
           {activeTab === 'gating' && <GatingControlTab {...tabProps} />}
