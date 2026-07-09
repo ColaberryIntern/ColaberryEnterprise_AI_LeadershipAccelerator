@@ -292,6 +292,7 @@ import EvidenceRecord from './EvidenceRecord';
 import XpEvent from './XpEvent';
 import BuilderLevel from './BuilderLevel';
 import StudentLevel from './StudentLevel';
+import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1147,6 +1148,8 @@ export {
   // Timeline Engine (Classroom rebuild)
   TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
   CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
+  // Experience Builder (Phase 1)
+  ComponentVersion,
 };
 
 // --- Enrollment Lead associations ---
