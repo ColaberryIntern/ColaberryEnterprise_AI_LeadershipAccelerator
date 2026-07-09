@@ -15,6 +15,7 @@ import MiniSectionControlTab from './orchestration/MiniSectionControlTab';
 import BulkConfigPanel from './orchestration/builder/BulkConfigPanel';
 import HealthDashboardTab from './orchestration/HealthDashboardTab';
 import CurriculumTypesTab from './orchestration/CurriculumTypesTab';
+import TimelineEditorTab from './orchestration/TimelineEditorTab';
 import WorkstationTab from './orchestration/WorkstationTab';
 import '../../styles/orchestration.css';
 
@@ -23,6 +24,7 @@ const API = process.env.REACT_APP_API_URL || '';
 const TABS = [
   { id: 'blueprint', label: 'Blueprint' },
   { id: 'overview', label: 'Overview' },
+  { id: 'timeline', label: 'Timeline' },
   { id: 'sessions', label: 'Sessions' },
   { id: 'sections', label: 'Sections' },
   { id: 'mini-sections', label: 'Mini-Sections' },
@@ -99,6 +101,7 @@ export default function AdminOrchestrationPage() {
         <ErrorBoundary key={activeTab}>
           {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
           {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
+          {activeTab === 'timeline' && <TimelineEditorTab />}
           {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
           {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
           {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
