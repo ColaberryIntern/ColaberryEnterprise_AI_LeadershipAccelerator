@@ -853,6 +853,60 @@ async function ensureTimelineEngineSchema() {
   console.log('[DB] Timeline Engine schema ensured');
 }
 
+async function ensureCurriculumComposerSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS curriculum_blueprints (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       title VARCHAR(500) NOT NULL,
+       purpose TEXT,
+       problem_statement TEXT,
+       target_audience VARCHAR(300),
+       program_id UUID,
+       cohort_id UUID,
+       week INTEGER,
+       session VARCHAR(120),
+       scope VARCHAR(30) NOT NULL DEFAULT 'week',
+       difficulty VARCHAR(20) NOT NULL DEFAULT 'core',
+       estimated_hours DOUBLE PRECISION,
+       learning_objectives JSONB NOT NULL DEFAULT '[]'::jsonb,
+       competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
+       architect_domains JSONB NOT NULL DEFAULT '[]'::jsonb,
+       bloom JSONB NOT NULL DEFAULT '[]'::jsonb,
+       evidence_produced JSONB NOT NULL DEFAULT '[]'::jsonb,
+       github_deliverables JSONB NOT NULL DEFAULT '[]'::jsonb,
+       portfolio_deliverables JSONB NOT NULL DEFAULT '[]'::jsonb,
+       builder_xp INTEGER NOT NULL DEFAULT 0,
+       learning_xp INTEGER NOT NULL DEFAULT 0,
+       community_xp INTEGER NOT NULL DEFAULT 0,
+       architect_readiness DOUBLE PRECISION NOT NULL DEFAULT 0,
+       certification_mapping JSONB NOT NULL DEFAULT '{}'::jsonb,
+       unlock_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+       completion_rules JSONB NOT NULL DEFAULT '{}'::jsonb,
+       success_criteria JSONB NOT NULL DEFAULT '[]'::jsonb,
+       instructor_notes TEXT,
+       ai_notes TEXT,
+       risk_areas JSONB NOT NULL DEFAULT '[]'::jsonb,
+       student_outcomes JSONB NOT NULL DEFAULT '[]'::jsonb,
+       generated_plan JSONB,
+       dna JSONB,
+       quality_score INTEGER NOT NULL DEFAULT 0,
+       coverage_score INTEGER NOT NULL DEFAULT 0,
+       readiness_score INTEGER NOT NULL DEFAULT 0,
+       status VARCHAR(20) NOT NULL DEFAULT 'draft',
+       published_card_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_curriculum_blueprints_status ON curriculum_blueprints (status)`,
+    `CREATE INDEX IF NOT EXISTS idx_curriculum_blueprints_week ON curriculum_blueprints (week)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Curriculum Composer schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Curriculum Composer schema ensured');
+}
+
 async function ensureMissedOpportunitiesSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS inbox_opportunity_scores (
@@ -983,6 +1037,7 @@ async function start(): Promise<void> {
   await ensureTimelineEngineSchema();
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
+  await ensureCurriculumComposerSchema();
   // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
   if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
     try {
