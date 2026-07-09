@@ -4,7 +4,11 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { listComponents, getComponent, updateComponent, createComponent, listVersions, restoreVersion } from '../services/components/componentService';
+import { listComponents, getComponent, updateComponent, createComponent, listVersions, restoreVersion, exportComponent, importComponent } from '../services/components/componentService';
+import { seedAnalytics, getAnalytics, analyticsOverview } from '../services/components/componentAnalyticsService';
+import { setDependencies, dependencyGraph } from '../services/components/dependencyService';
+import { compareVersions } from '../services/components/versionDiffService';
+import { generateThumbnail, backfillThumbnails } from '../services/components/thumbnailService';
 import { testPrompt, PromptKind } from '../services/components/promptTesterService';
 import { estimateComponent } from '../services/components/costEstimationService';
 import { backfillComponents } from '../services/components/componentBackfill';
@@ -96,3 +100,41 @@ export async function handleRuntimePreview(req: Request, res: Response, next: Ne
 
 export function handleListCapabilities(_req: Request, res: Response) { res.json({ capabilities: CAPABILITY_MODULES }); }
 export function handleListRecipes(_req: Request, res: Response) { res.json({ recipes: RECIPES }); }
+
+// ── Foundation: analytics, dependencies, version-compare, thumbnails, export ──
+export async function handleAnalyticsOverview(_req: Request, res: Response, next: NextFunction) {
+  try { res.json(await analyticsOverview()); } catch (e) { fail(res, e, next); }
+}
+export async function handleComponentAnalytics(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getAnalytics(String(req.params.slug))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSeedAnalytics(_req: Request, res: Response, next: NextFunction) {
+  try { res.json(await seedAnalytics()); } catch (e) { fail(res, e, next); }
+}
+export async function handleDependencyGraph(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await dependencyGraph(String(req.params.slug))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSetDependencies(req: Request, res: Response, next: NextFunction) {
+  try {
+    const deps = z.array(z.string()).parse(req.body?.dependencies ?? []);
+    res.json(await setDependencies(String(req.params.slug), deps));
+  } catch (e) { fail(res, e, next); }
+}
+export async function handleCompareVersions(req: Request, res: Response, next: NextFunction) {
+  try {
+    const norm = (v: string) => (v === 'current' ? 'current' : Number(v)) as number | 'current';
+    res.json(await compareVersions(String(req.params.slug), norm(String(req.params.a)), norm(String(req.params.b))));
+  } catch (e) { fail(res, e, next); }
+}
+export async function handleGenerateThumbnail(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await generateThumbnail(String(req.params.slug), req.body?.source === 'custom' ? 'custom' : 'template', req.body?.url)); } catch (e) { fail(res, e, next); }
+}
+export async function handleBackfillThumbnails(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await backfillThumbnails(req.query.force === 'true')); } catch (e) { fail(res, e, next); }
+}
+export async function handleExportComponent(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await exportComponent(String(req.params.slug))); } catch (e) { fail(res, e, next); }
+}
+export async function handleImportComponent(req: Request, res: Response, next: NextFunction) {
+  try { res.status(201).json(await importComponent(req.body)); } catch (e) { fail(res, e, next); }
+}

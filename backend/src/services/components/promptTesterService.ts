@@ -25,6 +25,8 @@ export function resolvePrompt(template: string, variables: Record<string, string
 export interface TestResult {
   kind: PromptKind;
   model: string;
+  temperature: number;
+  variables: Record<string, string>;
   resolved_prompt: string;
   output: string;
   usage: { input_tokens: number; output_tokens: number };
@@ -42,6 +44,7 @@ export async function testPrompt(
 
   const resolved = resolvePrompt(template, variables);
   const client = getInstrumentedOpenAI({ workflow_id: 'experience_builder_prompt_test' });
+  const temperature = 0.7;
 
   const started = Date.now();
   const res = await client.chat.completions.create({
@@ -50,7 +53,7 @@ export async function testPrompt(
       { role: 'system', content: 'You are an AI curriculum component. Produce exactly what the prompt asks — no preamble.' },
       { role: 'user', content: resolved },
     ],
-    temperature: 0.7,
+    temperature,
     max_tokens: 900,
   });
   const runtime_ms = Date.now() - started;
@@ -61,5 +64,5 @@ export async function testPrompt(
   const p = MODEL_PRICING[model] || MODEL_PRICING[DEFAULT_MODEL];
   const cost_usd = Number(((input_tokens * p.input_per_1m + output_tokens * p.output_per_1m) / 1_000_000).toFixed(6));
 
-  return { kind, model, resolved_prompt: resolved, output, usage: { input_tokens, output_tokens }, cost_usd, runtime_ms };
+  return { kind, model, temperature, variables, resolved_prompt: resolved, output, usage: { input_tokens, output_tokens }, cost_usd, runtime_ms };
 }

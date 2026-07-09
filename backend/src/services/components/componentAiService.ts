@@ -73,10 +73,11 @@ export async function coDesignComponent(slug: string, model = DEFAULT_MODEL) {
   if (!c) throw Object.assign(new Error(`Component "${slug}" not found`), { status: 404 });
   const j = c.toJSON() as any;
   const system =
-    'You are an AI curriculum design reviewer. Critique the component across: prompt quality, prompt complexity, ' +
-    'cost, runtime, student experience, difficulty calibration, competency coverage, Bloom\'s taxonomy level, ' +
-    'architect-domain fit, missing variables, missing capabilities, missing GitHub integration, missing portfolio evidence. ' +
-    'Return STRICT json.';
+    'You are an AI curriculum design reviewer. Critique the component across ALL of these dimensions and label each ' +
+    "recommendation's `area` with the dimension: prompt_optimization, cost_optimization, learning_objective_validation, " +
+    'competency_validation, architect_domain_coverage, bloom_taxonomy, duplicate_detection, accessibility_review, ' +
+    'student_experience_review, complexity_review, security_review, curriculum_consistency. Every recommendation must be ' +
+    'ACTIONABLE with a concrete `patch`. Return STRICT json.';
   const capList = CAPABILITY_MODULES.map((m) => m.id).join(', ');
   const user =
     `Review this AI Component and return json { "score": number 0-100, "recommendations": [ ` +
