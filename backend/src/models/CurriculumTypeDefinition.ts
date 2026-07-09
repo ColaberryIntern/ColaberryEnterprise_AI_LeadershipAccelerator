@@ -68,6 +68,8 @@ export interface CurriculumTypeDefinitionAttributes {
   // Dependencies + lifecycle.
   dependencies?: any;                 // string[] of component slugs this requires
   version_locked?: boolean;
+  // Renderer Engine — prompt-driven renderer definition (8 surfaces). No hardcoded layouts.
+  renderers?: any;                    // { thumbnail, timeline, expanded, runtime, student, mobile, tablet, desktop: string }
   created_at?: Date;
   updated_at?: Date;
 }
@@ -133,6 +135,7 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare completion_rules: any;
   declare dependencies: any;
   declare version_locked: boolean;
+  declare renderers: any;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -258,6 +261,7 @@ CurriculumTypeDefinition.init(
     completion_rules: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     dependencies: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     version_locked: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    renderers: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

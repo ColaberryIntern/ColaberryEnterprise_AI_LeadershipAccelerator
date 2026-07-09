@@ -1,30 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
+import {
+  Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, frameHtml, Row, studioCss,
+} from './studio/studioKit';
+import RendererEngine from './studio/RendererEngine';
+import LifecycleStepper from './studio/LifecycleStepper';
+import VersionCompare from './studio/VersionCompare';
+import Sandbox from './studio/Sandbox';
 
 /**
  * ExperienceStudioTab — the AI-native curriculum experience designer (formerly
  * "Experience Builder"/"Types"). Authors design reusable AI Components, not
  * forms: a component library, AI generation ("Create a Prompt Lab that teaches
- * Context Engineering"), a visual 7-stage prompt pipeline, live runtime preview
- * across desktop/tablet/mobile, an AI Co-Designer, an output inspector,
- * composable capability modules, and version history.
+ * Context Engineering"), a visual 7-stage prompt pipeline, an 8-surface Renderer
+ * Engine, a Storybook-like Sandbox, a runtime Lifecycle, live multi-device
+ * preview, an AI Co-Designer, version compare, and composable capabilities.
+ * Design-system primitives + styles are extracted into ./studio/studioKit.
  */
 
-const STAGES = [
-  { key: 'design', field: 'design_prompt', label: 'Design', purpose: 'How the experience is designed' },
-  { key: 'generation', field: 'generation_prompt', label: 'Generation', purpose: 'Produce the student content' },
-  { key: 'renderer', field: 'renderer_prompt', label: 'Renderer', purpose: 'Render content into the card' },
-  { key: 'evaluation', field: 'evaluation_prompt', label: 'Evaluation', purpose: 'Score the submission' },
-  { key: 'reflection', field: 'reflection_prompt', label: 'Reflection', purpose: 'Prompt student reflection' },
-  { key: 'github', field: 'github_prompt', label: 'GitHub', purpose: 'Analyze the repo evidence' },
-  { key: 'improvement', field: 'improvement_prompt', label: 'Improvement', purpose: 'Self-improve the component' },
+const DTABS = [
+  { key: 'pipeline', label: 'Pipeline' },
+  { key: 'renderers', label: 'Renderers' },
+  { key: 'sandbox', label: 'Sandbox' },
+  { key: 'lifecycle', label: 'Lifecycle' },
+  { key: 'versions', label: 'Versions' },
 ] as const;
-type StageKey = typeof STAGES[number]['key'];
-const usd = (n?: number) => (n == null ? '—' : `$${n < 0.001 ? n.toExponential(1) : n.toFixed(4)}`);
+type DTab = typeof DTABS[number]['key'];
 
-interface Cmp { slug: string; label: string; student_label?: string; description?: string; category?: string; status?: string; difficulty?: string; render_band?: string; bucket_default?: string; component_version?: number; version_count?: number; est_cost_usd?: number; est_runtime_ms?: number; est_input_tokens?: number; est_output_tokens?: number; variable_keys?: string[]; capabilities?: string[]; tags?: string[]; learning_objectives?: string[]; architect_domains?: string[]; competencies?: any[]; learning_xp?: number; builder_xp?: number; community_xp?: number; is_system?: boolean; thumbnail_url?: string; dependencies?: string[]; evaluation_type?: string; inputs?: any[]; outputs?: any[]; artifacts_produced?: string[]; evidence_produced?: string[]; portfolio_assets?: string[]; github_assets?: string[]; [k: string]: any }
-interface Cap { id: string; label: string; category: string; description: string }
-interface Recipe { id: string; label: string; description: string }
+const FAV_KEY = 'studio.favorites';
+const loadFavs = (): string[] => { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } };
 
 const ExperienceStudioTab: React.FC = () => {
   const [list, setList] = useState<Cmp[]>([]);
@@ -46,6 +50,9 @@ const ExperienceStudioTab: React.FC = () => {
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
   const [gen, setGen] = useState<{ open: boolean; desc: string; recipe: string; draft: any } | null>(null);
+  const [detailTab, setDetailTab] = useState<DTab>('pipeline');
+  const [favs, setFavs] = useState<string[]>(loadFavs);
+  const toggleFav = (slug: string) => setFavs((f) => { const next = f.includes(slug) ? f.filter((x) => x !== slug) : [...f, slug]; localStorage.setItem(FAV_KEY, JSON.stringify(next)); return next; });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,7 +67,7 @@ const ExperienceStudioTab: React.FC = () => {
     setError(''); setStageTest(null); setPreview(null); setCoDesign(null); setAnalytics(null); setDepGraph(null);
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
-      setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false);
+      setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('pipeline');
       setVars(Object.fromEntries((r.data.variable_keys || []).map((k: string) => [k, sampleFor(k)])));
       api.get(`/api/admin/components/${slug}/analytics`).then((a) => setAnalytics(a.data)).catch(() => {});
       api.get(`/api/admin/components/${slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {});
@@ -79,8 +86,8 @@ const ExperienceStudioTab: React.FC = () => {
       if (filter.capability && !(c.capabilities || []).includes(filter.capability)) return false;
       if (filter.domain && !(c.architect_domains || []).includes(filter.domain)) return false;
       return true;
-    });
-  }, [list, q, filter]);
+    }).sort((a, b) => (favs.includes(b.slug) ? 1 : 0) - (favs.includes(a.slug) ? 1 : 0));
+  }, [list, q, filter, favs]);
   const stageField = (k: StageKey) => STAGES.find((s) => s.key === k)!.field;
   const setStagePrompt = (val: string) => { if (!sel) return; setSel({ ...sel, [stageField(stage)]: val }); setDirty(true); };
   const setField = (f: string, val: any) => { if (!sel) return; setSel({ ...sel, [f]: val }); setDirty(true); };
@@ -109,7 +116,7 @@ const ExperienceStudioTab: React.FC = () => {
       const payload: any = {};
       STAGES.forEach((s) => { payload[s.field] = sel[s.field] ?? null; });
       ['label', 'student_label', 'description', 'category', 'status', 'difficulty', 'render_band', 'bucket_default',
-        'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags'].forEach((f) => { payload[f] = sel[f]; });
+        'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags', 'renderers'].forEach((f) => { payload[f] = sel[f]; });
       await api.put(`/api/admin/components/${sel.slug}`, payload);
       setDirty(false); await open(sel.slug); await load();
     } catch (e: any) { setError(e?.response?.data?.error || 'Save failed'); } finally { setBusy(''); }
@@ -142,7 +149,7 @@ const ExperienceStudioTab: React.FC = () => {
 
   return (
     <div>
-      <style>{css}</style>
+      <style>{studioCss}</style>
       {error && <div className="es-err">{error}</div>}
 
       {!sel ? (
@@ -164,15 +171,18 @@ const ExperienceStudioTab: React.FC = () => {
             <div className="es-grid">
               {filtered.map((c) => (
                 <div key={c.slug} className="es-card" onClick={() => open(c.slug)}>
+                  <button className="es-fav" title={favs.includes(c.slug) ? 'Unfavorite' : 'Favorite'} onClick={(e) => { e.stopPropagation(); toggleFav(c.slug); }}>{favs.includes(c.slug) ? '★' : '☆'}</button>
                   {c.thumbnail_url && <img src={c.thumbnail_url} alt="" className="es-thumbimg" />}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                     <span className="es-thumb">{(c.label || '?')[0]}</span>
                     <div style={{ minWidth: 0 }}><div className="es-cname">{c.label}</div><div className="es-cmeta">{c.category || c.render_band}</div></div>
-                    <span className={`es-status ${c.status}`} style={{ marginLeft: 'auto' }}>{c.status || 'ready'}</span>
+                    <span className={`es-status ${c.status}`} style={{ marginLeft: 'auto', marginRight: 18 }}>{c.status || 'ready'}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
                     <span className="es-chip">{c.difficulty || 'core'}</span>
                     <span className="es-chip">{(c.capabilities || []).length} caps</span>
+                    {c.estimated_time ? <span className="es-chip">{c.estimated_time} min</span> : null}
+                    {c.usage_count ? <span className="es-chip">{c.usage_count.toLocaleString()} runs</span> : null}
                     {c.is_system && <span className="es-chip sys">system</span>}
                   </div>
                   <div className="es-cmeta" style={{ display: 'flex', justifyContent: 'space-between' }}><span>v{c.component_version} · {c.version_count || 0} saved</span><span>{usd(c.est_cost_usd)}/run</span></div>
@@ -193,9 +203,16 @@ const ExperienceStudioTab: React.FC = () => {
             <button className="es-btn pri" disabled={busy === 'save' || !dirty} onClick={save}>{busy === 'save' ? 'Saving…' : dirty ? 'Save version' : 'Saved'}</button>
           </div>
 
+          <div className="es-tabs">
+            {DTABS.map((t) => (
+              <button key={t.key} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
+            ))}
+          </div>
+
           <div className="es-cols">
-            {/* LEFT: visual pipeline + editor */}
+            {/* LEFT: switches by detail tab */}
             <div>
+              {detailTab === 'pipeline' && (<>
               <div className="es-lab">Prompt pipeline</div>
               <div className="es-pipe">
                 {STAGES.map((s, i) => (
@@ -248,6 +265,12 @@ const ExperienceStudioTab: React.FC = () => {
                   </details>
                 </div>
               )}
+              </>)}
+
+              {detailTab === 'renderers' && <RendererEngine sel={sel} vars={vars} onChange={(r) => setField('renderers', r)} />}
+              {detailTab === 'sandbox' && <Sandbox sel={sel} vars={vars} />}
+              {detailTab === 'lifecycle' && <LifecycleStepper slug={sel.slug} onChanged={() => { open(sel.slug); load(); }} />}
+              {detailTab === 'versions' && <VersionCompare sel={sel} versions={versions} onRestore={restore} />}
             </div>
 
             {/* RIGHT: co-designer, variables, capabilities, estimate, versions */}
@@ -370,67 +393,5 @@ const ExperienceStudioTab: React.FC = () => {
     </div>
   );
 };
-
-const Row: React.FC<{ l: string; v: string }> = ({ l, v }) => (<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}><span className="es-muted">{l}</span><span style={{ fontWeight: 600 }}>{v}</span></div>);
-
-function sampleFor(k: string): string {
-  const m: Record<string, string> = { topic: 'Context Engineering', week: '2', cohort: 'April 2026', submission: 'def rag(q): return retrieve(q)', content: 'A short lesson.', repo: 'github.com/student/lab', answer: 'I learned to chunk documents.' };
-  return m[k] || '';
-}
-function frameHtml(exp: any, c: Cmp): string {
-  if (!exp) return '<p>—</p>';
-  const q = (exp.questions || []).map((x: string) => `<li>${esc(x)}</li>`).join('');
-  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
-    body{font-family:Roboto,system-ui,sans-serif;margin:0;padding:16px;color:#1A1A1A;background:#fff}
-    h1{font-size:18px;margin:0 0 6px} .sub{color:#6B6B6B;font-size:13px;margin-bottom:12px}
-    .card{border:1px solid #E4E4E4;border-left:3px solid #367895;border-radius:10px;padding:12px;margin-bottom:10px}
-    .cta{display:inline-block;background:#FB2832;color:#fff;padding:8px 14px;border-radius:8px;font-weight:600;font-size:13px;margin-top:8px}
-    ul{padding-left:18px;font-size:13px} h3{font-size:13px;margin:10px 0 4px}
-  </style><h1>${esc(exp.title || c.label)}</h1><div class=sub>${esc(exp.summary || '')}</div>
-  <div class=card>${exp.body_html || ''}</div>
-  ${q ? `<h3>Questions</h3><ul>${q}</ul>` : ''}
-  ${exp.reflection ? `<h3>Reflection</h3><div style="font-size:13px">${esc(exp.reflection)}</div>` : ''}
-  ${exp.github_task ? `<h3>GitHub task</h3><div style="font-size:13px">${esc(exp.github_task)}</div>` : ''}
-  <span class=cta>${esc(exp.completion || 'Complete')}</span>`;
-}
-function esc(s: any): string { return String(s ?? '').replace(/[<>&]/g, (m) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[m] as string)); }
-
-const css = `
-  .es-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-  .es-title{font-size:15px;font-weight:700}.es-sub{font-size:12px;color:#8A8A8A}.es-muted{font-size:11px;color:#A0A0A0}
-  .es-err{background:#FDECEC;color:#C20E1E;padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:12px}
-  .es-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
-  .es-card{border:1px solid #E4E4E4;border-radius:12px;padding:14px;cursor:pointer;background:#fff;transition:.12s}
-  .es-card:hover{border-color:#367895;box-shadow:0 4px 14px rgba(26,26,26,.08);transform:translateY(-1px)}
-  .es-thumb{width:30px;height:30px;border-radius:8px;background:#EDF3F5;color:#367895;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
-  .es-thumbimg{width:100%;height:92px;object-fit:cover;border-radius:9px;margin-bottom:10px;display:block}
-  .es-cname{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.es-cmeta{font-size:10.5px;color:#A0A0A0}
-  .es-chip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:#F1F1F0;color:#6B6B6B}.es-chip.sys{background:#FBEAEA;color:#C20E1E}
-  .es-status{font-size:9.5px;font-weight:800;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:#F0F0F0;color:#8A8A8A}
-  .es-status.published{background:#E7F5E9;color:#3C7A26}.es-status.draft{background:#FEF3E2;color:#B5710A}.es-status.deprecated{background:#FBEAEA;color:#C20E1E}
-  .es-btn{font-size:12px;font-weight:600;padding:6px 12px;border:1px solid #DADADA;background:#fff;border-radius:7px;cursor:pointer;color:#4A4A4A;white-space:nowrap}
-  .es-btn:hover{background:#F2F2F2}.es-btn.pri{background:#367895;color:#fff;border-color:#367895}.es-btn.pri:disabled{opacity:.5;cursor:not-allowed}
-  .es-in{width:100%;padding:7px 9px;border:1px solid #D8D8D8;border-radius:7px;font-size:12px}.es-in.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-  .es-lab{font-size:11px;font-weight:700;color:#8A8A8A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
-  .es-cols{display:grid;grid-template-columns:1fr 300px;gap:18px}
-  .es-pipe{display:flex;flex-direction:column;align-items:stretch}
-  .es-stage{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid #E4E4E4;border-radius:9px;padding:8px 10px;background:#fff;cursor:pointer}
-  .es-stage.on{border-color:#367895;background:#F5FAFB}.es-stage small{display:block;color:#A0A0A0;font-size:10.5px}.es-stage b{font-size:12.5px}
-  .es-stnum{width:20px;height:20px;border-radius:50%;background:#1A1A1A;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
-  .es-stdot{width:8px;height:8px;border-radius:50%;margin-left:auto;flex:none}
-  .es-arrow{text-align:center;color:#C0C0C0;font-size:12px;margin:1px 0}
-  .es-out{background:#fff;border:1px solid #E4E4E4;border-radius:8px;padding:10px;font-size:11.5px;white-space:pre-wrap;max-height:240px;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace}
-  .es-devices{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
-  .es-device{flex:1;min-width:0}.es-device:last-child{flex:none}.es-devlabel{font-size:11px;font-weight:700;color:#8A8A8A;margin-bottom:4px}
-  .es-frame{border:1px solid #DADADA;border-radius:10px;height:360px;background:#fff}
-  .es-inspect{margin-top:10px;font-size:12px}.es-inspect summary{cursor:pointer;font-weight:600;color:#367895}
-  .es-panel{border:1px solid #E4E4E4;border-radius:10px;padding:12px;margin-bottom:12px}
-  .es-rec{border-top:1px solid #F2F2F2;padding:6px 0}.es-sev{font-size:9.5px;font-weight:800;text-transform:uppercase;padding:1px 6px;border-radius:999px;background:#F0F0F0;color:#8A8A8A}
-  .es-sev.high{background:#FBEAEA;color:#C20E1E}.es-sev.medium{background:#FEF3E2;color:#B5710A}.es-sev.low{background:#EDF3F5;color:#367895}
-  .es-capchip{font-size:10.5px;font-weight:600;padding:3px 8px;border:1px solid #DADADA;background:#fff;border-radius:999px;cursor:pointer;color:#8A8A8A}
-  .es-capchip.on{background:#367895;color:#fff;border-color:#367895}
-  .es-modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
-  .es-modalbody{background:#fff;border-radius:12px;padding:20px;width:520px;max-height:88vh;overflow:auto}
-`;
 
 export default ExperienceStudioTab;

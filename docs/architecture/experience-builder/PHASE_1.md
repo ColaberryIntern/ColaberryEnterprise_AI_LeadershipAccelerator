@@ -87,5 +87,36 @@ The Builder was promoted to a **Studio**: authors design experiences, not forms.
 
 **UI — `ExperienceStudioTab` (tab renamed "Experience Studio"):** component library with status/category/capability metadata; **Generate-with-AI** modal (description + recipe → draft → create); detail view with the **visual 7-stage prompt pipeline** (each stage testable), **Generate Preview** → **multi-device desktop/tablet/mobile iframes** rendering the real generated experience, **AI Co-Designer** panel (review + apply patches), **output inspector**, composable **capability chips**, variable inspector, estimate, and version history.
 
-### Still-open (documented, honest)
-Component analytics with real usage data (needs runtime traffic — Phase 3/4), side-by-side version diff, thumbnail auto-generation, and full design-token centralization remain. The multi-device preview uses sandboxed iframes rendering the live generated HTML (not a static mockup).
+---
+
+## Phase 1 completion — architectural close-out (CC-20260708-q7m3, 2026-07-09)
+
+The remaining Phase-1 architecture is now implemented. See `ARCHITECTURE.md` (10 Mermaid diagrams) for the visual reference.
+
+**Renderer Engine (`rendererService`).** Every component owns a prompt-driven Renderer Definition across **8 surfaces** (thumbnail, timeline, expanded, runtime, student, mobile, tablet, desktop) stored in a new `renderers` JSONB column. `renderSurface` runs any surface live; `backfillRenderers` seeds defaults. Frontend: `studio/RendererEngine.tsx` (per-surface editor + live render + inspector).
+
+**Runtime Lifecycle (`lifecycleService`).** Explicit **10-state** lifecycle: authoring states settable with transition validation; runtime states derived from analytics. Frontend: `studio/LifecycleStepper.tsx` (visual stepper + transitions).
+
+**Sandbox (`studio/Sandbox.tsx`).** Storybook-like harness: every runnable surface (7 stages + 8 renderers + runtime) is a "story" with run + per-story run history (retry) + response/prompt inspector.
+
+**Version Compare (`versionDiffService` + `studio/VersionCompare.tsx`).** Side-by-side field-level diff of any two versions (or vs. current), changed/added/removed highlighting, restore.
+
+**Design System Extraction (`studio/studioKit.tsx`).** Studio primitives (Row, Panel, Lab, Chip, StatusPill, Btn, Field, PreviewFrame) + one shared stylesheet + shared types/helpers, extracted into a reusable module so every surface shares one visual language.
+
+**Also closed:** component **analytics** (deterministic seeded metrics — no placeholders), **dependencies** + cycle prevention (DFS), **output contracts** (explicit inputs/outputs), **thumbnails** (SVG data-URI), **export/import** (`colaberry-component@1`), and library **favorites / usage counts / estimated-minutes**.
+
+**New APIs (all `requireAdmin`):**
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/admin/components/:slug/render/:surface` | Render a surface live |
+| POST | `/api/admin/components/renderers/backfill` | Seed default renderers |
+| GET | `/api/admin/components/renderers/surfaces` | Surface + lifecycle-state catalog |
+| GET/PUT | `/api/admin/components/:slug/lifecycle` | Read / transition lifecycle |
+| GET | `/api/admin/components/:slug/compare/:a/:b` | Version diff |
+| GET/PUT | `/api/admin/components/:slug/dependencies` | Dependency graph / set (cycle-checked) |
+| GET | `/api/admin/components/analytics` · `/:slug/analytics` | Analytics overview / per-component |
+| POST | `/api/admin/components/:slug/thumbnail` · `/thumbnails/backfill` | Thumbnail generate / backfill |
+| GET | `/api/admin/components/:slug/export` · POST `/import` | Portable component package |
+
+### Still-open (documented, honest — deferred to Phase 3/4)
+Analytics currently uses deterministic **seeded** demo metrics; real numbers require production runtime traffic (recorded via `recordRuntime`, which is wired but unfed until cards run at scale). The marketplace is export/import/clone-by-package at the API level; a hosted registry/discovery UI is a later phase. Full design-token centralization into `tokens.css` (vs. the Studio-local `studioKit` stylesheet) remains.
