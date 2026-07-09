@@ -3,7 +3,8 @@
  * DB-touching functions (create/reorder/clone) are covered by integration; this
  * pins the registry-default + author-override logic that everything relies on.
  */
-import { composeCardAttributes, CreateCardInput } from '../timelineAdminService';
+import { composeCardAttributes, buildVideoMeta, CreateCardInput } from '../timelineAdminService';
+import { videoFromMetadata } from '../timelineService';
 import { resolveOrThrow } from '../typeRegistry';
 
 const COHORT = '11111111-1111-1111-1111-111111111111';
@@ -59,5 +60,45 @@ describe('composeCardAttributes', () => {
     const def = resolveOrThrow('announcement'); // evidence_required=false
     const attrs = composeCardAttributes(def, { cohort_id: COHORT, type: 'announcement' }, 0);
     expect(attrs.estimated_time).toBe(15);
+  });
+
+  it('stores an authored video link in metadata.video', () => {
+    const def = resolveOrThrow('video');
+    const attrs = composeCardAttributes(def, {
+      cohort_id: COHORT, type: 'video',
+      video: { url: 'https://youtu.be/dQw4w9WgXcQ', presenter: 'Coach Tariq' },
+    }, 0);
+    expect(attrs.metadata).toEqual({ authored: true, video: { url: 'https://youtu.be/dQw4w9WgXcQ', presenter: 'Coach Tariq', poster: null } });
+  });
+
+  it('omits metadata.video when no url is given', () => {
+    const def = resolveOrThrow('video');
+    const attrs = composeCardAttributes(def, { cohort_id: COHORT, type: 'video' }, 0);
+    expect(attrs.metadata).toEqual({ authored: true });
+  });
+});
+
+describe('buildVideoMeta', () => {
+  it('trims + keeps optional presenter/poster', () => {
+    expect(buildVideoMeta({ url: '  https://x.com/v.mp4  ', presenter: ' Ram ', poster: '' }))
+      .toEqual({ url: 'https://x.com/v.mp4', presenter: 'Ram', poster: null });
+  });
+  it('returns null without a usable url', () => {
+    expect(buildVideoMeta({ url: '   ' })).toBeNull();
+    expect(buildVideoMeta(null)).toBeNull();
+    expect(buildVideoMeta(undefined)).toBeNull();
+  });
+});
+
+describe('videoFromMetadata (feed read)', () => {
+  it('reads a stored video, defaulting missing extras to null', () => {
+    expect(videoFromMetadata({ authored: true, video: { url: 'https://vimeo.com/76979871' } }))
+      .toEqual({ url: 'https://vimeo.com/76979871', presenter: null, poster: null });
+  });
+  it('returns null when absent, malformed, or url-less', () => {
+    expect(videoFromMetadata(null)).toBeNull();
+    expect(videoFromMetadata({ authored: true })).toBeNull();
+    expect(videoFromMetadata({ video: { presenter: 'x' } })).toBeNull();
+    expect(videoFromMetadata({ video: { url: '   ' } })).toBeNull();
   });
 });

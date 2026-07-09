@@ -18,6 +18,11 @@ const pointsSchema = z.object({
   community: z.number().int().min(0).optional(),
 }).optional();
 const competenciesSchema = z.array(z.object({ domain_id: z.string(), weight: z.number() })).optional();
+const videoSchema = z.object({
+  url: z.string().max(2000).nullable().optional(),
+  presenter: z.string().max(200).nullable().optional(),
+  poster: z.string().max(2000).nullable().optional(),
+}).nullable().optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -33,6 +38,7 @@ const createSchema = z.object({
   visibility: visibilityEnum.optional(),
   release_date: z.string().datetime().nullable().optional(),
   program_id: z.string().uuid().nullable().optional(),
+  video: videoSchema,
 });
 
 const updateSchema = z.object({
@@ -49,6 +55,7 @@ const updateSchema = z.object({
   release_date: z.string().datetime().nullable().optional(),
   priority: z.number().int().optional(),
   order: z.number().int().optional(),
+  video: videoSchema,
 }).strict();
 
 const reorderSchema = z.object({

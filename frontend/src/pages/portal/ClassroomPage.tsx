@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
+import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
 
@@ -46,6 +47,7 @@ const ClassroomPage: React.FC = () => {
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'error'>('loading');
   const [theme, setTheme] = useState<'light' | 'dark'>(readTheme);
   const [week, setWeek] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState<number>(() => (typeof performance !== 'undefined' ? Date.now() : 0));
 
   const load = useCallback(async () => {
@@ -86,12 +88,16 @@ const ClassroomPage: React.FC = () => {
   const done = weekCards.filter((c) => c.status === 'completed').length;
   const pct = weekCards.length ? Math.round((done / weekCards.length) * 100) : 0;
 
-  const openCard = useCallback(async (card: TimelineFeedCard) => {
+  // Opening a card now shows its detail drawer (preview + in-app video player);
+  // completion is an explicit action inside the drawer, not a side effect of opening.
+  const openCard = useCallback((card: TimelineFeedCard) => { setSelectedId(card.id); }, []);
+  const completeCard = useCallback(async (card: TimelineFeedCard) => {
     try {
       await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
       await load();
     } catch { /* surfaced on next load; keep the UI responsive */ }
   }, [load]);
+  const selectedCard = useMemo(() => feed?.cards.find((c) => c.id === selectedId) ?? null, [feed, selectedId]);
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -186,6 +192,8 @@ const ClassroomPage: React.FC = () => {
           </div>
         </aside>
       </div>
+
+      <CardDetailDrawer card={selectedCard} onClose={() => setSelectedId(null)} onComplete={completeCard} />
     </div>
     </PortalShell>
   );

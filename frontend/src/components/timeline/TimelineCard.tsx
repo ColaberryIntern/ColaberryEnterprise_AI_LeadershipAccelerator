@@ -25,6 +25,7 @@ export interface TimelineFeedCard {
   status: 'locked' | 'available' | 'in_progress' | 'completed';
   quiz_score: number | null;
   completed_at: string | null;
+  video?: { url: string; presenter: string | null; poster: string | null } | null;
 }
 
 type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -122,6 +123,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const media = v.kind === 'video' ? (
     <button type="button" className="vframe" onClick={() => !locked && onOpen?.(card)} aria-label={`Play ${card.title}`}>
       <span className="poster" style={{ background: KIND_GRADIENT.video }} />
+      {card.video?.poster && <img className="vphoto" src={card.video.poster} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
       <span className="vgrad" />
       <span className="vmeta"><b>{shortTitle}</b><span>{card.estimated_time ? `${card.estimated_time}:00` : 'video'}</span></span>
       <span className="vplay"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
