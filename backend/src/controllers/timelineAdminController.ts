@@ -69,7 +69,7 @@ function fail(res: Response, err: any, next: NextFunction) {
 
 export async function handleListCohortTimeline(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await listCohortTimeline(req.params.cohortId));
+    res.json(await listCohortTimeline(String(req.params.cohortId)));
   } catch (err) { fail(res, err, next); }
 }
 
@@ -83,13 +83,13 @@ export async function handleCreateCard(req: Request, res: Response, next: NextFu
 export async function handleUpdateCard(req: Request, res: Response, next: NextFunction) {
   try {
     const patch = updateSchema.parse(req.body);
-    res.json(await updateCard(req.params.id, patch));
+    res.json(await updateCard(String(req.params.id), patch));
   } catch (err) { fail(res, err, next); }
 }
 
 export async function handleDeleteCard(req: Request, res: Response, next: NextFunction) {
   try {
-    await deleteCard(req.params.id);
+    await deleteCard(String(req.params.id));
     res.json({ deleted: true });
   } catch (err) { fail(res, err, next); }
 }
@@ -103,6 +103,6 @@ export async function handleReorderCards(req: Request, res: Response, next: Next
 
 export async function handleCloneCard(req: Request, res: Response, next: NextFunction) {
   try {
-    res.status(201).json(await cloneCard(req.params.id));
+    res.status(201).json(await cloneCard(String(req.params.id)));
   } catch (err) { fail(res, err, next); }
 }
