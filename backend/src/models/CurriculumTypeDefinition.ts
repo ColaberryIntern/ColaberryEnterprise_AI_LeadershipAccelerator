@@ -56,6 +56,18 @@ export interface CurriculumTypeDefinitionAttributes {
   learning_objectives?: any;          // string[]
   architect_domains?: any;            // string[]
   capabilities?: any;                 // string[] of capability-module ids
+  // Output Contracts (explicit I/O — no implicit behavior).
+  inputs?: any;                       // [{ key, type, required }]
+  outputs?: any;                      // [{ key, type, description }]
+  artifacts_produced?: any;           // string[]
+  evidence_produced?: any;            // string[]
+  portfolio_assets?: any;             // string[]
+  github_assets?: any;                // string[]
+  evaluation_type?: string | null;    // none | ai | rubric | instructor | peer
+  completion_rules?: any;             // { on: 'view'|'submit'|'evaluate'|'approve', min_score? }
+  // Dependencies + lifecycle.
+  dependencies?: any;                 // string[] of component slugs this requires
+  version_locked?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -111,6 +123,16 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare learning_objectives: any;
   declare architect_domains: any;
   declare capabilities: any;
+  declare inputs: any;
+  declare outputs: any;
+  declare artifacts_produced: any;
+  declare evidence_produced: any;
+  declare portfolio_assets: any;
+  declare github_assets: any;
+  declare evaluation_type: string | null;
+  declare completion_rules: any;
+  declare dependencies: any;
+  declare version_locked: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -226,6 +248,16 @@ CurriculumTypeDefinition.init(
     learning_objectives: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     architect_domains: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     capabilities: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    inputs: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    outputs: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    artifacts_produced: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    evidence_produced: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    portfolio_assets: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    github_assets: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    evaluation_type: { type: DataTypes.STRING(20), allowNull: true },
+    completion_rules: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    dependencies: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    version_locked: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

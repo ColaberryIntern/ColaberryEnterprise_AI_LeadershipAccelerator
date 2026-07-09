@@ -22,7 +22,7 @@ const STAGES = [
 type StageKey = typeof STAGES[number]['key'];
 const usd = (n?: number) => (n == null ? '—' : `$${n < 0.001 ? n.toExponential(1) : n.toFixed(4)}`);
 
-interface Cmp { slug: string; label: string; student_label?: string; description?: string; category?: string; status?: string; difficulty?: string; render_band?: string; bucket_default?: string; component_version?: number; version_count?: number; est_cost_usd?: number; est_runtime_ms?: number; est_input_tokens?: number; est_output_tokens?: number; variable_keys?: string[]; capabilities?: string[]; tags?: string[]; learning_objectives?: string[]; architect_domains?: string[]; competencies?: any[]; learning_xp?: number; builder_xp?: number; community_xp?: number; is_system?: boolean; [k: string]: any }
+interface Cmp { slug: string; label: string; student_label?: string; description?: string; category?: string; status?: string; difficulty?: string; render_band?: string; bucket_default?: string; component_version?: number; version_count?: number; est_cost_usd?: number; est_runtime_ms?: number; est_input_tokens?: number; est_output_tokens?: number; variable_keys?: string[]; capabilities?: string[]; tags?: string[]; learning_objectives?: string[]; architect_domains?: string[]; competencies?: any[]; learning_xp?: number; builder_xp?: number; community_xp?: number; is_system?: boolean; thumbnail_url?: string; dependencies?: string[]; evaluation_type?: string; inputs?: any[]; outputs?: any[]; artifacts_produced?: string[]; evidence_produced?: string[]; portfolio_assets?: string[]; github_assets?: string[]; [k: string]: any }
 interface Cap { id: string; label: string; category: string; description: string }
 interface Recipe { id: string; label: string; description: string }
 
@@ -32,6 +32,9 @@ const ExperienceStudioTab: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
+  const [filter, setFilter] = useState({ category: '', difficulty: '', status: '', capability: '', domain: '' });
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [depGraph, setDepGraph] = useState<any>(null);
   const [sel, setSel] = useState<Cmp | null>(null);
   const [versions, setVersions] = useState<any[]>([]);
   const [stage, setStage] = useState<StageKey>('generation');
@@ -54,15 +57,30 @@ const ExperienceStudioTab: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const open = async (slug: string) => {
-    setError(''); setStageTest(null); setPreview(null); setCoDesign(null);
+    setError(''); setStageTest(null); setPreview(null); setCoDesign(null); setAnalytics(null); setDepGraph(null);
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
       setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false);
       setVars(Object.fromEntries((r.data.variable_keys || []).map((k: string) => [k, sampleFor(k)])));
+      api.get(`/api/admin/components/${slug}/analytics`).then((a) => setAnalytics(a.data)).catch(() => {});
+      api.get(`/api/admin/components/${slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {});
     } catch { setError('Failed to open component'); }
   };
 
-  const filtered = useMemo(() => { const s = q.trim().toLowerCase(); return !s ? list : list.filter((c) => c.label.toLowerCase().includes(s) || c.slug.includes(s) || (c.category || '').includes(s)); }, [list, q]);
+  const allDomains = useMemo(() => Array.from(new Set(list.flatMap((c) => c.architect_domains || []))).sort(), [list]);
+  const allCategories = useMemo(() => Array.from(new Set(list.map((c) => c.category).filter(Boolean))).sort() as string[], [list]);
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return list.filter((c) => {
+      if (s && !(c.label.toLowerCase().includes(s) || c.slug.includes(s) || (c.category || '').includes(s) || String(c.generation_prompt || '').toLowerCase().includes(s))) return false;
+      if (filter.category && c.category !== filter.category) return false;
+      if (filter.difficulty && c.difficulty !== filter.difficulty) return false;
+      if (filter.status && (c.status || 'ready') !== filter.status) return false;
+      if (filter.capability && !(c.capabilities || []).includes(filter.capability)) return false;
+      if (filter.domain && !(c.architect_domains || []).includes(filter.domain)) return false;
+      return true;
+    });
+  }, [list, q, filter]);
   const stageField = (k: StageKey) => STAGES.find((s) => s.key === k)!.field;
   const setStagePrompt = (val: string) => { if (!sel) return; setSel({ ...sel, [stageField(stage)]: val }); setDirty(true); };
   const setField = (f: string, val: any) => { if (!sel) return; setSel({ ...sel, [f]: val }); setDirty(true); };
@@ -97,6 +115,19 @@ const ExperienceStudioTab: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Save failed'); } finally { setBusy(''); }
   };
   const restore = async (v: number) => { if (!sel || !window.confirm(`Restore v${v}?`)) return; try { await api.post(`/api/admin/components/${sel.slug}/versions/${v}/restore`); await open(sel.slug); await load(); } catch { setError('Restore failed'); } };
+  const setDeps = async (deps: string[]) => {
+    if (!sel) return;
+    try { const r = await api.put(`/api/admin/components/${sel.slug}/dependencies`, { dependencies: deps }); setSel({ ...sel, dependencies: r.data.dependencies }); api.get(`/api/admin/components/${sel.slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {}); }
+    catch (e: any) { setError(e?.response?.data?.error || 'Dependency update failed'); }
+  };
+  const exportCmp = async () => {
+    if (!sel) return;
+    try {
+      const r = await api.get(`/api/admin/components/${sel.slug}/export`);
+      const blob = new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${sel.slug}.component.json`; a.click();
+    } catch { setError('Export failed'); }
+  };
 
   const doGenerate = async () => {
     if (!gen) return; setBusy('generate');
@@ -121,10 +152,19 @@ const ExperienceStudioTab: React.FC = () => {
             <input className="es-in" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />
             <button className="es-btn pri" onClick={() => setGen({ open: true, desc: '', recipe: '', draft: null })}>✦ Generate component</button>
           </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <select className="es-in" style={{ width: 'auto' }} value={filter.category} onChange={(e) => setFilter({ ...filter, category: e.target.value })}><option value="">All categories</option>{allCategories.map((c) => <option key={c}>{c}</option>)}</select>
+            <select className="es-in" style={{ width: 'auto' }} value={filter.difficulty} onChange={(e) => setFilter({ ...filter, difficulty: e.target.value })}><option value="">All difficulty</option>{['intro', 'core', 'stretch'].map((c) => <option key={c}>{c}</option>)}</select>
+            <select className="es-in" style={{ width: 'auto' }} value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}><option value="">All status</option>{['draft', 'ready', 'published', 'deprecated'].map((c) => <option key={c}>{c}</option>)}</select>
+            <select className="es-in" style={{ width: 'auto' }} value={filter.capability} onChange={(e) => setFilter({ ...filter, capability: e.target.value })}><option value="">Any capability</option>{caps.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
+            <select className="es-in" style={{ width: 'auto' }} value={filter.domain} onChange={(e) => setFilter({ ...filter, domain: e.target.value })}><option value="">Any domain</option>{allDomains.map((c) => <option key={c}>{c}</option>)}</select>
+            <span className="es-muted" style={{ alignSelf: 'center' }}>{filtered.length} of {list.length}</span>
+          </div>
           {loading ? <div className="es-muted">Loading…</div> : (
             <div className="es-grid">
               {filtered.map((c) => (
                 <div key={c.slug} className="es-card" onClick={() => open(c.slug)}>
+                  {c.thumbnail_url && <img src={c.thumbnail_url} alt="" className="es-thumbimg" />}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                     <span className="es-thumb">{(c.label || '?')[0]}</span>
                     <div style={{ minWidth: 0 }}><div className="es-cname">{c.label}</div><div className="es-cmeta">{c.category || c.render_band}</div></div>
@@ -179,7 +219,11 @@ const ExperienceStudioTab: React.FC = () => {
                 </div>
                 {stageTest && (
                   <div style={{ marginTop: 10 }}>
-                    <div className="es-muted">{stageTest.usage.input_tokens}/{stageTest.usage.output_tokens} tok · {usd(stageTest.cost_usd)} · {stageTest.runtime_ms}ms</div>
+                    <div className="es-muted">{stageTest.model} · temp {stageTest.temperature} · {stageTest.usage.input_tokens}/{stageTest.usage.output_tokens} tok · {usd(stageTest.cost_usd)} · {stageTest.runtime_ms}ms</div>
+                    <details className="es-inspect"><summary>Prompt debugger</summary>
+                      <div className="es-lab" style={{ marginTop: 6 }}>Resolved variables</div><pre className="es-out">{JSON.stringify(stageTest.variables, null, 2)}</pre>
+                      <div className="es-lab">Rendered prompt</div><pre className="es-out">{stageTest.resolved_prompt}</pre>
+                    </details>
                     <pre className="es-out">{stageTest.output}</pre>
                   </div>
                 )}
@@ -242,6 +286,43 @@ const ExperienceStudioTab: React.FC = () => {
                 <Row l="Tokens" v={`${sel.est_input_tokens ?? '—'} / ${sel.est_output_tokens ?? '—'}`} />
                 <Row l="Cost/run" v={usd(sel.est_cost_usd)} /><Row l="Runtime" v={sel.est_runtime_ms != null ? `${sel.est_runtime_ms}ms` : '—'} />
                 <div className="es-muted" style={{ marginTop: 3 }}>gpt-4o-mini</div>
+              </div>
+
+              <div className="es-panel"><div className="es-lab">Analytics {analytics?.seeded && <span className="es-muted">(demo-seeded)</span>}</div>
+                {!analytics ? <div className="es-muted">Loading…</div> : (
+                  <>
+                    <Row l="Completion" v={`${analytics.completion_pct}%`} /><Row l="Runtimes" v={String(analytics.runtime_count)} />
+                    <Row l="Avg rating" v={`${analytics.avg_rating}/5`} /><Row l="Dropoff" v={`${analytics.dropoff_pct}%`} />
+                    <Row l="Prompt quality" v={`${analytics.prompt_quality}`} /><Row l="Eval quality" v={`${analytics.evaluation_quality}`} />
+                    {analytics.github_success_pct > 0 && <Row l="GitHub success" v={`${analytics.github_success_pct}%`} />}
+                    {analytics.portfolio_success_pct > 0 && <Row l="Portfolio success" v={`${analytics.portfolio_success_pct}%`} />}
+                  </>
+                )}
+              </div>
+
+              <div className="es-panel"><div className="es-lab">Output contracts</div>
+                <Row l="Evaluation" v={sel.evaluation_type || 'none'} />
+                <Row l="Completes on" v={(sel.completion_rules && sel.completion_rules.on) || 'view'} />
+                <Row l="Inputs" v={String((sel.inputs || []).length)} /><Row l="Outputs" v={String((sel.outputs || []).length)} />
+                <Row l="Evidence" v={(sel.evidence_produced || []).join(', ') || '—'} />
+                <Row l="Portfolio" v={(sel.portfolio_assets || []).join(', ') || '—'} />
+                <Row l="GitHub" v={(sel.github_assets || []).join(', ') || '—'} />
+              </div>
+
+              <div className="es-panel"><div className="es-lab">Dependencies</div>
+                {(sel.dependencies || []).length === 0 ? <div className="es-muted">None.</div> : (sel.dependencies || []).map((d) => (
+                  <div key={d} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}><span>{d}</span>
+                    <button className="es-btn" style={{ fontSize: 10, padding: '1px 6px' }} onClick={() => setDeps((sel.dependencies || []).filter((x) => x !== d))}>×</button></div>
+                ))}
+                <select className="es-in" style={{ marginTop: 4 }} value="" onChange={(e) => { if (e.target.value) setDeps([...(sel.dependencies || []), e.target.value]); }}>
+                  <option value="">+ add requirement…</option>
+                  {list.filter((c) => c.slug !== sel.slug && !(sel.dependencies || []).includes(c.slug)).map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                </select>
+                {depGraph && depGraph.dependents && depGraph.dependents.length > 0 && <div className="es-muted" style={{ marginTop: 5 }}>Required by: {depGraph.dependents.join(', ')}</div>}
+              </div>
+
+              <div className="es-panel"><div className="es-lab">Package</div>
+                <button className="es-btn" style={{ width: '100%' }} onClick={exportCmp}>Export component (json)</button>
               </div>
 
               <div className="es-panel"><div className="es-lab">Versions</div>
@@ -322,6 +403,7 @@ const css = `
   .es-card{border:1px solid #E4E4E4;border-radius:12px;padding:14px;cursor:pointer;background:#fff;transition:.12s}
   .es-card:hover{border-color:#367895;box-shadow:0 4px 14px rgba(26,26,26,.08);transform:translateY(-1px)}
   .es-thumb{width:30px;height:30px;border-radius:8px;background:#EDF3F5;color:#367895;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+  .es-thumbimg{width:100%;height:92px;object-fit:cover;border-radius:9px;margin-bottom:10px;display:block}
   .es-cname{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.es-cmeta{font-size:10.5px;color:#A0A0A0}
   .es-chip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:#F1F1F0;color:#6B6B6B}.es-chip.sys{background:#FBEAEA;color:#C20E1E}
   .es-status{font-size:9.5px;font-weight:800;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:#F0F0F0;color:#8A8A8A}

@@ -8,6 +8,7 @@
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { estimateComponent } from './costEstimationService';
 import { capabilitiesFromLegacyFlags } from './capabilityRegistry';
+import { templateThumbnail } from './thumbnailService';
 
 function defaultPrompts(c: CurriculumTypeDefinition) {
   const label = c.student_label || c.label;
@@ -75,6 +76,16 @@ export async function backfillComponents(force = false): Promise<{ processed: nu
     if (force || !(Array.isArray(c.architect_domains) && c.architect_domains.length)) {
       patch.architect_domains = (Array.isArray(c.competencies) ? c.competencies.map((x: any) => x.domain_id || x) : []).slice(0, 4);
     }
+    // Output contracts (explicit I/O) derived from capabilities/flags.
+    if (force || !c.evaluation_type) patch.evaluation_type = c.ai_evaluation ? 'ai' : c.instructor_review ? 'instructor' : 'none';
+    if (force || !(c.completion_rules && Object.keys(c.completion_rules).length)) patch.completion_rules = { on: c.evidence_required ? 'submit' : 'view' };
+    if (force || !(Array.isArray(c.evidence_produced) && c.evidence_produced.length)) patch.evidence_produced = c.evidence_required ? ['submission'] : [];
+    if (force || !(Array.isArray(c.artifacts_produced) && c.artifacts_produced.length)) patch.artifacts_produced = c.can_create_artifacts ? ['artifact'] : [];
+    if (force || !(Array.isArray(c.portfolio_assets) && c.portfolio_assets.length)) patch.portfolio_assets = c.portfolio_eligible ? ['portfolio_entry'] : [];
+    if (force || !(Array.isArray(c.github_assets) && c.github_assets.length)) patch.github_assets = c.github_required ? ['repo'] : [];
+    if (force || !(Array.isArray(c.inputs) && c.inputs.length)) patch.inputs = (patch.variable_keys || c.variable_keys || []).map((k: string) => ({ key: k, type: 'string', required: true }));
+    if (force || !(Array.isArray(c.outputs) && c.outputs.length)) patch.outputs = [{ key: 'content', type: 'html', description: 'Rendered student content' }];
+    if (force || !c.thumbnail_url) patch.thumbnail_url = templateThumbnail(c.toJSON() as any);
 
     // always refresh estimates off the merged state
     const est = estimateComponent({ ...c.toJSON(), ...patch } as any);

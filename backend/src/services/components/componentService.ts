@@ -21,6 +21,8 @@ export const EDITABLE_FIELDS = [
   'bucket_default', 'render_band', 'difficulty',
   'learning_xp', 'builder_xp', 'community_xp', 'estimated_time', 'competencies',
   'category', 'tags', 'status', 'learning_objectives', 'architect_domains', 'capabilities',
+  'inputs', 'outputs', 'artifacts_produced', 'evidence_produced', 'portfolio_assets', 'github_assets',
+  'evaluation_type', 'completion_rules', 'dependencies', 'version_locked', 'thumbnail_url',
   'can_create_variables', 'can_create_artifacts',
   'evidence_required', 'github_required', 'ai_evaluation', 'instructor_review', 'portfolio_eligible',
   'is_active',
@@ -107,6 +109,25 @@ export async function createComponent(draft: Record<string, any>): Promise<Curri
   const est = estimateComponent(clean as any);
   Object.assign(clean, { est_input_tokens: est.input_tokens, est_output_tokens: est.output_tokens, est_cost_usd: est.cost_usd, est_runtime_ms: est.runtime_ms });
   return CurriculumTypeDefinition.create(clean as any);
+}
+
+/** Export a component as a portable package (marketplace-ready). */
+export async function exportComponent(slug: string) {
+  const c = await CurriculumTypeDefinition.findOne({ where: { slug } });
+  if (!c) throw Object.assign(new Error(`Component "${slug}" not found`), { status: 404 });
+  const j = c.toJSON() as any;
+  const component: Record<string, any> = { slug: j.slug };
+  for (const f of EDITABLE_FIELDS) component[f] = j[f];
+  return { format: 'colaberry-component@1', exported_at: null, component, dependencies: j.dependencies || [] };
+}
+
+/** Import a component package -> a new component (de-duped slug). */
+export async function importComponent(pkg: any): Promise<CurriculumTypeDefinition> {
+  if (!pkg || (pkg.format && !String(pkg.format).startsWith('colaberry-component'))) {
+    throw Object.assign(new Error('Unrecognized component package'), { status: 400 });
+  }
+  const draft = pkg.component || pkg;
+  return createComponent({ ...draft, dependencies: pkg.dependencies || draft.dependencies || [] });
 }
 
 export async function listVersions(slug: string) {

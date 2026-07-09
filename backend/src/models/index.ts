@@ -293,6 +293,7 @@ import XpEvent from './XpEvent';
 import BuilderLevel from './BuilderLevel';
 import StudentLevel from './StudentLevel';
 import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
+import ComponentAnalytics from './ComponentAnalytics';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1150,6 +1151,7 @@ export {
   CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
   // Experience Builder (Phase 1)
   ComponentVersion,
+  ComponentAnalytics,
 };
 
 // --- Enrollment Lead associations ---

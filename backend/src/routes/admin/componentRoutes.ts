@@ -9,6 +9,9 @@ import {
   handleListVersions, handleRestoreVersion, handleBackfillComponents,
   handleGenerateComponent, handleCreateComponent, handleCoDesign, handleRuntimePreview,
   handleListCapabilities, handleListRecipes,
+  handleAnalyticsOverview, handleComponentAnalytics, handleSeedAnalytics,
+  handleDependencyGraph, handleSetDependencies, handleCompareVersions,
+  handleGenerateThumbnail, handleBackfillThumbnails, handleExportComponent, handleImportComponent,
 } from '../../controllers/componentController';
 
 const router = Router();
@@ -16,8 +19,18 @@ const router = Router();
 // Experience Studio — AI-native + composition library.
 router.get('/api/admin/capabilities', requireAdmin, handleListCapabilities);
 router.get('/api/admin/recipes', requireAdmin, handleListRecipes);
+router.get('/api/admin/components/analytics', requireAdmin, handleAnalyticsOverview);
+router.post('/api/admin/components/analytics/seed', requireAdmin, handleSeedAnalytics);
+router.post('/api/admin/components/thumbnails/backfill', requireAdmin, handleBackfillThumbnails);
+router.post('/api/admin/components/import', requireAdmin, handleImportComponent);
 router.post('/api/admin/components/generate', requireAdmin, handleGenerateComponent);
 router.post('/api/admin/components/backfill', requireAdmin, handleBackfillComponents);
+router.get('/api/admin/components/:slug/analytics', requireAdmin, handleComponentAnalytics);
+router.get('/api/admin/components/:slug/dependencies', requireAdmin, handleDependencyGraph);
+router.put('/api/admin/components/:slug/dependencies', requireAdmin, handleSetDependencies);
+router.get('/api/admin/components/:slug/compare/:a/:b', requireAdmin, handleCompareVersions);
+router.post('/api/admin/components/:slug/thumbnail', requireAdmin, handleGenerateThumbnail);
+router.get('/api/admin/components/:slug/export', requireAdmin, handleExportComponent);
 router.post('/api/admin/components/:slug/codesign', requireAdmin, handleCoDesign);
 router.post('/api/admin/components/:slug/preview', requireAdmin, handleRuntimePreview);
 router.post('/api/admin/components', requireAdmin, handleCreateComponent);
