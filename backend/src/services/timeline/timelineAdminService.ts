@@ -35,6 +35,16 @@ export interface CreateCardInput {
   visibility?: Visibility;
   release_date?: string | Date | null;
   program_id?: string | null;
+  video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
+}
+
+/** PURE — normalize an author's video input into the stored metadata shape, or
+ *  null when no usable URL is given. */
+export function buildVideoMeta(video: CreateCardInput['video']): { url: string; presenter: string | null; poster: string | null } | null {
+  const url = (video && typeof video.url === 'string') ? video.url.trim() : '';
+  if (!url) return null;
+  const str = (s: any) => (typeof s === 'string' && s.trim() ? s.trim() : null);
+  return { url, presenter: str(video?.presenter), poster: str(video?.poster) };
 }
 
 /**
@@ -72,7 +82,7 @@ export function composeCardAttributes(
     cohort_id: null,                 // global — one curriculum for every batch
     program_id: input.program_id ?? null,
     order,
-    metadata: { authored: true },
+    metadata: { authored: true, ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}) },
   };
 }
 
@@ -127,6 +137,14 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   const clean: Record<string, any> = {};
   for (const f of EDITABLE_FIELDS) {
     if (f in patch) clean[f] = f === 'release_date' && patch[f] ? new Date(patch[f]) : patch[f];
+  }
+  // Video lives in the metadata blob; merge it (setting/clearing the `video` key)
+  // without disturbing other metadata.
+  if ('video' in patch) {
+    const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
+    const v = buildVideoMeta(patch.video);
+    if (v) meta.video = v; else delete meta.video;
+    clean.metadata = meta;
   }
   await card.update(clean);
   return card;

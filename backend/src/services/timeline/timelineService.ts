@@ -13,6 +13,12 @@ import { resolve as resolveType } from './typeRegistry';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
+export interface FeedVideo {
+  url: string;
+  presenter: string | null;
+  poster: string | null;
+}
+
 export interface FeedCard {
   id: string;
   type: string;
@@ -31,6 +37,19 @@ export interface FeedCard {
   status: TimelineCardStatus;
   quiz_score: number | null;
   completed_at: Date | null;
+  video: FeedVideo | null;
+}
+
+/** PURE — a typed video from a card's metadata blob, or null. Only the URL is
+ *  required; presenter/poster are optional display extras. */
+export function videoFromMetadata(metadata: any): FeedVideo | null {
+  const v = metadata && typeof metadata === 'object' ? metadata.video : null;
+  if (!v || typeof v !== 'object' || typeof v.url !== 'string' || !v.url.trim()) return null;
+  return {
+    url: v.url.trim(),
+    presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
+    poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
+  };
 }
 
 export interface TimelineFeed {
@@ -113,6 +132,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       status: progress?.status || 'available',
       quiz_score: progress?.quiz_score ?? null,
       completed_at: progress?.completed_at ?? null,
+      video: videoFromMetadata(card.metadata),
     };
   });
 
