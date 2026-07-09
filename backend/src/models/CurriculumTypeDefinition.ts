@@ -34,6 +34,7 @@ export interface CurriculumTypeDefinitionAttributes {
   certification_mapping?: any;
   // Experience Builder (Phase 1) — every Type is a versioned AI Component. All
   // additive/nullable so the live registry is untouched until backfilled.
+  design_prompt?: string | null;      // pipeline stage 0 — how the experience is designed
   renderer_prompt?: string | null;
   generation_prompt?: string | null;
   evaluation_prompt?: string | null;
@@ -48,6 +49,13 @@ export interface CurriculumTypeDefinitionAttributes {
   est_cost_usd?: number | null;
   est_runtime_ms?: number | null;
   component_version?: number;
+  // Experience Studio metadata + composition (additive/nullable).
+  category?: string | null;
+  tags?: any;                          // string[]
+  status?: string | null;             // draft | ready | published | deprecated
+  learning_objectives?: any;          // string[]
+  architect_domains?: any;            // string[]
+  capabilities?: any;                 // string[] of capability-module ids
   created_at?: Date;
   updated_at?: Date;
 }
@@ -82,6 +90,7 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare instructor_review: boolean;
   declare portfolio_eligible: boolean;
   declare certification_mapping: any;
+  declare design_prompt: string | null;
   declare renderer_prompt: string | null;
   declare generation_prompt: string | null;
   declare evaluation_prompt: string | null;
@@ -96,6 +105,12 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare est_cost_usd: number | null;
   declare est_runtime_ms: number | null;
   declare component_version: number;
+  declare category: string | null;
+  declare tags: any;
+  declare status: string | null;
+  declare learning_objectives: any;
+  declare architect_domains: any;
+  declare capabilities: any;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -190,6 +205,7 @@ CurriculumTypeDefinition.init(
     portfolio_eligible: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     certification_mapping: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     // Experience Builder — AI Component fields (additive/nullable).
+    design_prompt: { type: DataTypes.TEXT, allowNull: true },
     renderer_prompt: { type: DataTypes.TEXT, allowNull: true },
     generation_prompt: { type: DataTypes.TEXT, allowNull: true },
     evaluation_prompt: { type: DataTypes.TEXT, allowNull: true },
@@ -204,6 +220,12 @@ CurriculumTypeDefinition.init(
     est_cost_usd: { type: DataTypes.DOUBLE, allowNull: true },
     est_runtime_ms: { type: DataTypes.INTEGER, allowNull: true },
     component_version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    category: { type: DataTypes.STRING(60), allowNull: true },
+    tags: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'ready' },
+    learning_objectives: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    architect_domains: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    capabilities: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

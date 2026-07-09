@@ -16,14 +16,19 @@ import { estimateComponent } from './costEstimationService';
 /** Fields an author may edit in the builder (everything else is derived/system). */
 export const EDITABLE_FIELDS = [
   'label', 'student_label', 'description', 'icon', 'badge_class',
-  'renderer_prompt', 'generation_prompt', 'evaluation_prompt', 'reflection_prompt',
+  'design_prompt', 'renderer_prompt', 'generation_prompt', 'evaluation_prompt', 'reflection_prompt',
   'github_prompt', 'improvement_prompt', 'thumbnail_url', 'preview_examples', 'variable_keys',
   'bucket_default', 'render_band', 'difficulty',
   'learning_xp', 'builder_xp', 'community_xp', 'estimated_time', 'competencies',
+  'category', 'tags', 'status', 'learning_objectives', 'architect_domains', 'capabilities',
   'can_create_variables', 'can_create_artifacts',
   'evidence_required', 'github_required', 'ai_evaluation', 'instructor_review', 'portfolio_eligible',
   'is_active',
 ] as const;
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 90) || 'component';
+}
 
 function snapshotOf(c: CurriculumTypeDefinition): Record<string, any> {
   const out: Record<string, any> = {};
@@ -82,6 +87,26 @@ export async function updateComponent(slug: string, patch: Record<string, any>, 
     await c.update(clean, { transaction: t });
     return c;
   });
+}
+
+/** Create a NEW component from an (AI-generated) draft. Slug derived + de-duped. */
+export async function createComponent(draft: Record<string, any>): Promise<CurriculumTypeDefinition> {
+  let slug = draft.slug ? slugify(String(draft.slug)) : slugify(String(draft.label || 'component'));
+  // de-dupe slug
+  let n = 1; const base = slug;
+  while (await CurriculumTypeDefinition.findOne({ where: { slug } })) { slug = `${base}_${++n}`; }
+
+  const clean: Record<string, any> = { slug };
+  for (const f of EDITABLE_FIELDS) if (f in draft) clean[f] = draft[f];
+  if (!clean.label) clean.label = 'New Component';
+  if (!clean.student_label) clean.student_label = clean.label;
+  clean.is_system = false;
+  clean.component_version = 1;
+  clean.status = clean.status || 'draft';
+
+  const est = estimateComponent(clean as any);
+  Object.assign(clean, { est_input_tokens: est.input_tokens, est_output_tokens: est.output_tokens, est_cost_usd: est.cost_usd, est_runtime_ms: est.runtime_ms });
+  return CurriculumTypeDefinition.create(clean as any);
 }
 
 export async function listVersions(slug: string) {

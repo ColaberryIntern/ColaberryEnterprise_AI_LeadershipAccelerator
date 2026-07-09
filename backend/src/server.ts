@@ -578,6 +578,13 @@ async function ensureCampaignLinkColumns() {
 // AI Components. Additive ALTERs + the component_versions snapshot table. Idempotent.
 async function ensureExperienceBuilderSchema() {
   const statements = [
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS design_prompt TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS category VARCHAR(60)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ready'`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS learning_objectives JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS architect_domains JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '[]'::jsonb`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS renderer_prompt TEXT`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS generation_prompt TEXT`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS evaluation_prompt TEXT`,

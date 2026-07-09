@@ -65,3 +65,27 @@ and mapped to the competencies: context_engineering. Difficulty: core.
 - Thumbnail **auto-generation** (currently a `thumbnail_url` field + first-letter avatar fallback).
 - Live preview **renderers across desktop/tablet/mobile** frames (the renderer prompt exists + is testable; the 3-device visual sandbox is a rendering-infra follow-on).
 - Example-output **gallery** persistence (`preview_examples` column exists; save-from-tester UI is the follow-on).
+
+---
+
+## Experience Studio — AI-native upgrade (Phase 1 continued)
+
+The Builder was promoted to a **Studio**: authors design experiences, not forms.
+
+**New model fields:** `design_prompt` (pipeline stage 0), `category`, `tags`, `status`, `learning_objectives`, `architect_domains`, `capabilities` (all additive/nullable).
+
+**Registries (registry pattern, no switch):**
+- `capabilityRegistry` — 25 reusable Capability Modules (transcript, ai_chat, reflection, discussion, quiz, github, portfolio, mentor_review, peer_review, video, voice, camera, rubric, artifacts, evaluation, retry, hint_system, scoring, notifications, calendar, comments, likes, bookmarks, sharing, evidence). Components compose `capabilities: string[]`; the 5 legacy boolean flags map onto module ids for back-compat.
+- `recipeRegistry` — 12 authoring recipes (Starter, Interactive, Executive, Certification, Enterprise, Workshop, Live Class, Bootcamp, Challenge, Project, Assessment, Interview) that bias AI generation.
+
+**AI service (`componentAiService`, all json-mode):**
+- `generateComponent(description, recipe)` — designs a full component (metadata + 8-stage prompt bundle + variables + objectives + competencies + capabilities) from a text request.
+- `coDesignComponent(slug)` — reviews a component across prompt quality, cost, coverage, Bloom's, missing variables/capabilities/github/portfolio → ranked recommendations with one-click patches.
+- `runtimePreview(slug, variables)` — runs the generation prompt and returns the complete student experience (title, summary, body_html, questions, reflection, discussion, github task, evaluation, completion).
+
+**New APIs:** `POST /api/admin/components/generate`, `POST /api/admin/components` (create draft), `POST /api/admin/components/:slug/codesign`, `POST /api/admin/components/:slug/preview`, `GET /api/admin/capabilities`, `GET /api/admin/recipes`.
+
+**UI — `ExperienceStudioTab` (tab renamed "Experience Studio"):** component library with status/category/capability metadata; **Generate-with-AI** modal (description + recipe → draft → create); detail view with the **visual 7-stage prompt pipeline** (each stage testable), **Generate Preview** → **multi-device desktop/tablet/mobile iframes** rendering the real generated experience, **AI Co-Designer** panel (review + apply patches), **output inspector**, composable **capability chips**, variable inspector, estimate, and version history.
+
+### Still-open (documented, honest)
+Component analytics with real usage data (needs runtime traffic — Phase 3/4), side-by-side version diff, thumbnail auto-generation, and full design-token centralization remain. The multi-device preview uses sandboxed iframes rendering the live generated HTML (not a static mockup).

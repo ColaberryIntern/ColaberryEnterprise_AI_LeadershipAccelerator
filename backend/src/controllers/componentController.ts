@@ -4,10 +4,13 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { listComponents, getComponent, updateComponent, listVersions, restoreVersion } from '../services/components/componentService';
+import { listComponents, getComponent, updateComponent, createComponent, listVersions, restoreVersion } from '../services/components/componentService';
 import { testPrompt, PromptKind } from '../services/components/promptTesterService';
 import { estimateComponent } from '../services/components/costEstimationService';
 import { backfillComponents } from '../services/components/componentBackfill';
+import { generateComponent, coDesignComponent, runtimePreview } from '../services/components/componentAiService';
+import { CAPABILITY_MODULES } from '../services/components/capabilityRegistry';
+import { RECIPES } from '../services/components/recipeRegistry';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 
 const testSchema = z.object({
@@ -64,3 +67,32 @@ export async function handleRestoreVersion(req: Request, res: Response, next: Ne
 export async function handleBackfillComponents(req: Request, res: Response, next: NextFunction) {
   try { res.json(await backfillComponents(req.query.force === 'true')); } catch (e) { fail(res, e, next); }
 }
+
+// ── Experience Studio (AI-native) ────────────────────────────────────────────
+const genSchema = z.object({ description: z.string().min(3), recipe: z.string().optional(), model: z.string().optional() });
+const previewSchema = z.object({ variables: z.record(z.string(), z.string()).optional(), model: z.string().optional() });
+
+export async function handleGenerateComponent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { description, recipe, model } = genSchema.parse(req.body);
+    res.json(await generateComponent(description, recipe, model));
+  } catch (e) { fail(res, e, next); }
+}
+
+export async function handleCreateComponent(req: Request, res: Response, next: NextFunction) {
+  try { res.status(201).json(await createComponent(req.body || {})); } catch (e) { fail(res, e, next); }
+}
+
+export async function handleCoDesign(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await coDesignComponent(String(req.params.slug), typeof req.body?.model === 'string' ? req.body.model : undefined)); } catch (e) { fail(res, e, next); }
+}
+
+export async function handleRuntimePreview(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { variables, model } = previewSchema.parse(req.body || {});
+    res.json(await runtimePreview(String(req.params.slug), variables || {}, model));
+  } catch (e) { fail(res, e, next); }
+}
+
+export function handleListCapabilities(_req: Request, res: Response) { res.json({ capabilities: CAPABILITY_MODULES }); }
+export function handleListRecipes(_req: Request, res: Response) { res.json({ recipes: RECIPES }); }
