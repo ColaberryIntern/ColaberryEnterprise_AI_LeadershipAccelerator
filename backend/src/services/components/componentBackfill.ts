@@ -7,6 +7,7 @@
  */
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { estimateComponent } from './costEstimationService';
+import { capabilitiesFromLegacyFlags } from './capabilityRegistry';
 
 function defaultPrompts(c: CurriculumTypeDefinition) {
   const label = c.student_label || c.label;
@@ -15,6 +16,10 @@ function defaultPrompts(c: CurriculumTypeDefinition) {
     ? c.competencies.map((x: any) => x.domain_id || x).join(', ')
     : 'AI systems architecture';
   return {
+    design_prompt:
+      `Design a "${label}" learning experience for an AI Systems Architect student. Define the learning goal, the ` +
+      `single big idea, the interaction model (${band}), and the evidence of mastery. Competencies: ${comps}. ` +
+      `Difficulty: ${c.difficulty || 'core'}.`,
     generation_prompt:
       `You are generating a "${label}" learning card for an AI Systems Architect student.\n` +
       `Topic: {{topic}}. Week: {{week}}. Cohort context: {{cohort}}.\n` +
@@ -56,6 +61,7 @@ export async function backfillComponents(force = false): Promise<{ processed: nu
     const setIf = (field: keyof CurriculumTypeDefinition, val: any) => {
       if (val != null && (force || !(c as any)[field])) patch[field] = val;
     };
+    setIf('design_prompt', dp.design_prompt);
     setIf('generation_prompt', dp.generation_prompt);
     setIf('renderer_prompt', dp.renderer_prompt);
     setIf('evaluation_prompt', dp.evaluation_prompt);
@@ -63,6 +69,12 @@ export async function backfillComponents(force = false): Promise<{ processed: nu
     setIf('github_prompt', dp.github_prompt);
     setIf('improvement_prompt', dp.improvement_prompt);
     if (force || !(Array.isArray(c.variable_keys) && c.variable_keys.length)) patch.variable_keys = defaultVariableKeys(c);
+    // compose capability modules from the 5 legacy flags (idempotent seed).
+    if (force || !(Array.isArray(c.capabilities) && c.capabilities.length)) patch.capabilities = capabilitiesFromLegacyFlags(c.toJSON() as any);
+    if (force || !c.category) patch.category = c.render_band ? String(c.render_band).split('_')[0] : 'learn';
+    if (force || !(Array.isArray(c.architect_domains) && c.architect_domains.length)) {
+      patch.architect_domains = (Array.isArray(c.competencies) ? c.competencies.map((x: any) => x.domain_id || x) : []).slice(0, 4);
+    }
 
     // always refresh estimates off the merged state
     const est = estimateComponent({ ...c.toJSON(), ...patch } as any);
