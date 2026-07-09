@@ -595,6 +595,7 @@ async function ensureExperienceBuilderSchema() {
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS completion_rules JSONB NOT NULL DEFAULT '{}'::jsonb`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS dependencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS version_locked BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS renderers JSONB NOT NULL DEFAULT '{}'::jsonb`,
     `CREATE TABLE IF NOT EXISTS component_analytics (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        component_slug VARCHAR(100) NOT NULL UNIQUE,

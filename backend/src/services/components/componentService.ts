@@ -11,6 +11,7 @@ import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import ComponentVersion from '../../models/ComponentVersion';
+import ComponentAnalytics from '../../models/ComponentAnalytics';
 import { estimateComponent } from './costEstimationService';
 
 /** Fields an author may edit in the builder (everything else is derived/system). */
@@ -22,7 +23,7 @@ export const EDITABLE_FIELDS = [
   'learning_xp', 'builder_xp', 'community_xp', 'estimated_time', 'competencies',
   'category', 'tags', 'status', 'learning_objectives', 'architect_domains', 'capabilities',
   'inputs', 'outputs', 'artifacts_produced', 'evidence_produced', 'portfolio_assets', 'github_assets',
-  'evaluation_type', 'completion_rules', 'dependencies', 'version_locked', 'thumbnail_url',
+  'evaluation_type', 'completion_rules', 'dependencies', 'version_locked', 'thumbnail_url', 'renderers',
   'can_create_variables', 'can_create_artifacts',
   'evidence_required', 'github_required', 'ai_evaluation', 'instructor_review', 'portfolio_eligible',
   'is_active',
@@ -46,7 +47,9 @@ export async function listComponents() {
     group: ['component_slug'],
   });
   const versionCount = new Map(counts.map((r: any) => [r.component_slug, Number(r.get('n'))]));
-  return rows.map((c) => ({ ...c.toJSON(), version_count: versionCount.get(c.slug) || 0 }));
+  const analytics = await ComponentAnalytics.findAll({ attributes: ['component_slug', 'runtime_count'] });
+  const usage = new Map(analytics.map((a: any) => [a.component_slug, Number(a.runtime_count) || 0]));
+  return rows.map((c) => ({ ...c.toJSON(), version_count: versionCount.get(c.slug) || 0, usage_count: usage.get(c.slug) || 0 }));
 }
 
 /** One component + its version history (newest first). */

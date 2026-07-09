@@ -9,6 +9,8 @@ import { seedAnalytics, getAnalytics, analyticsOverview } from '../services/comp
 import { setDependencies, dependencyGraph } from '../services/components/dependencyService';
 import { compareVersions } from '../services/components/versionDiffService';
 import { generateThumbnail, backfillThumbnails } from '../services/components/thumbnailService';
+import { renderSurface, backfillRenderers, RENDERER_SURFACES, RendererSurface } from '../services/components/rendererService';
+import { componentLifecycle, setLifecycle, LIFECYCLE_STATES } from '../services/components/lifecycleService';
 import { testPrompt, PromptKind } from '../services/components/promptTesterService';
 import { estimateComponent } from '../services/components/costEstimationService';
 import { backfillComponents } from '../services/components/componentBackfill';
@@ -137,4 +139,23 @@ export async function handleExportComponent(req: Request, res: Response, next: N
 }
 export async function handleImportComponent(req: Request, res: Response, next: NextFunction) {
   try { res.status(201).json(await importComponent(req.body)); } catch (e) { fail(res, e, next); }
+}
+
+// ── Renderer Engine + Lifecycle ──────────────────────────────────────────────
+export async function handleRenderSurface(req: Request, res: Response, next: NextFunction) {
+  try {
+    const surface = String(req.params.surface) as RendererSurface;
+    if (!RENDERER_SURFACES.includes(surface)) return res.status(400).json({ error: 'Unknown surface' });
+    res.json(await renderSurface(String(req.params.slug), surface, req.body?.variables || {}, req.body?.model));
+  } catch (e) { fail(res, e, next); }
+}
+export async function handleBackfillRenderers(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await backfillRenderers(req.query.force === 'true')); } catch (e) { fail(res, e, next); }
+}
+export function handleRendererSurfaces(_req: Request, res: Response) { res.json({ surfaces: RENDERER_SURFACES, lifecycle_states: LIFECYCLE_STATES }); }
+export async function handleGetLifecycle(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await componentLifecycle(String(req.params.slug))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSetLifecycle(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await setLifecycle(String(req.params.slug), String(req.body?.state))); } catch (e) { fail(res, e, next); }
 }

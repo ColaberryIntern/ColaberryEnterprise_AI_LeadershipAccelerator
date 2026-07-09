@@ -12,6 +12,7 @@ import {
   handleAnalyticsOverview, handleComponentAnalytics, handleSeedAnalytics,
   handleDependencyGraph, handleSetDependencies, handleCompareVersions,
   handleGenerateThumbnail, handleBackfillThumbnails, handleExportComponent, handleImportComponent,
+  handleRenderSurface, handleBackfillRenderers, handleRendererSurfaces, handleGetLifecycle, handleSetLifecycle,
 } from '../../controllers/componentController';
 
 const router = Router();
@@ -22,6 +23,8 @@ router.get('/api/admin/recipes', requireAdmin, handleListRecipes);
 router.get('/api/admin/components/analytics', requireAdmin, handleAnalyticsOverview);
 router.post('/api/admin/components/analytics/seed', requireAdmin, handleSeedAnalytics);
 router.post('/api/admin/components/thumbnails/backfill', requireAdmin, handleBackfillThumbnails);
+router.get('/api/admin/components/renderers/surfaces', requireAdmin, handleRendererSurfaces);
+router.post('/api/admin/components/renderers/backfill', requireAdmin, handleBackfillRenderers);
 router.post('/api/admin/components/import', requireAdmin, handleImportComponent);
 router.post('/api/admin/components/generate', requireAdmin, handleGenerateComponent);
 router.post('/api/admin/components/backfill', requireAdmin, handleBackfillComponents);
@@ -33,6 +36,9 @@ router.post('/api/admin/components/:slug/thumbnail', requireAdmin, handleGenerat
 router.get('/api/admin/components/:slug/export', requireAdmin, handleExportComponent);
 router.post('/api/admin/components/:slug/codesign', requireAdmin, handleCoDesign);
 router.post('/api/admin/components/:slug/preview', requireAdmin, handleRuntimePreview);
+router.get('/api/admin/components/:slug/lifecycle', requireAdmin, handleGetLifecycle);
+router.put('/api/admin/components/:slug/lifecycle', requireAdmin, handleSetLifecycle);
+router.post('/api/admin/components/:slug/render/:surface', requireAdmin, handleRenderSurface);
 router.post('/api/admin/components', requireAdmin, handleCreateComponent);
 router.get('/api/admin/components', requireAdmin, handleListComponents);
 router.get('/api/admin/components/:slug/estimate', requireAdmin, handleEstimateComponent);

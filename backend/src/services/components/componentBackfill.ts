@@ -9,6 +9,7 @@ import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { estimateComponent } from './costEstimationService';
 import { capabilitiesFromLegacyFlags } from './capabilityRegistry';
 import { templateThumbnail } from './thumbnailService';
+import { defaultRenderers, RENDERER_SURFACES } from './rendererService';
 
 function defaultPrompts(c: CurriculumTypeDefinition) {
   const label = c.student_label || c.label;
@@ -86,6 +87,8 @@ export async function backfillComponents(force = false): Promise<{ processed: nu
     if (force || !(Array.isArray(c.inputs) && c.inputs.length)) patch.inputs = (patch.variable_keys || c.variable_keys || []).map((k: string) => ({ key: k, type: 'string', required: true }));
     if (force || !(Array.isArray(c.outputs) && c.outputs.length)) patch.outputs = [{ key: 'content', type: 'html', description: 'Rendered student content' }];
     if (force || !c.thumbnail_url) patch.thumbnail_url = templateThumbnail(c.toJSON() as any);
+    const rz = (c.renderers && typeof c.renderers === 'object') ? c.renderers : {};
+    if (force || !RENDERER_SURFACES.every((s) => rz[s])) patch.renderers = { ...defaultRenderers(c.toJSON()), ...(force ? {} : rz) };
 
     // always refresh estimates off the merged state
     const est = estimateComponent({ ...c.toJSON(), ...patch } as any);
