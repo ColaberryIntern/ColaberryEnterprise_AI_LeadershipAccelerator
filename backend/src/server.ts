@@ -574,6 +574,43 @@ async function ensureCampaignLinkColumns() {
 // alter sync is unreliable on prod (hits pre-existing index conflicts and
 // never reaches new models). Mirrors the Sequelize models in
 // InboxOpportunityScore / InboxFalseNegativeFeedback / InboxSurfacePreference.
+// Experience Builder (Phase 1): promote curriculum_type_definitions into versioned
+// AI Components. Additive ALTERs + the component_versions snapshot table. Idempotent.
+async function ensureExperienceBuilderSchema() {
+  const statements = [
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS renderer_prompt TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS generation_prompt TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS evaluation_prompt TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS reflection_prompt TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS github_prompt TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS improvement_prompt TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS preview_examples JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS variable_keys JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS est_input_tokens INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS est_output_tokens INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS est_cost_usd DOUBLE PRECISION`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS est_runtime_ms INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS component_version INTEGER NOT NULL DEFAULT 1`,
+    `CREATE TABLE IF NOT EXISTS component_versions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       component_slug VARCHAR(100) NOT NULL,
+       version INTEGER NOT NULL,
+       snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+       label VARCHAR(255),
+       author VARCHAR(255),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_component_versions_slug_version ON component_versions (component_slug, version)`,
+    `CREATE INDEX IF NOT EXISTS idx_component_versions_slug ON component_versions (component_slug)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Experience Builder schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Experience Builder schema ensured');
+}
+
 async function ensureTimelineEngineSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS timeline_cards (
@@ -908,6 +945,8 @@ async function start(): Promise<void> {
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
   await ensureTimelineEngineSchema();
+  // Experience Builder (Phase 1) — AI Component columns + component_versions.
+  await ensureExperienceBuilderSchema();
   // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
   if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
     try {

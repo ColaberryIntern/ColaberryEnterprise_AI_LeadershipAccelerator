@@ -32,6 +32,22 @@ export interface CurriculumTypeDefinitionAttributes {
   instructor_review?: boolean;
   portfolio_eligible?: boolean;
   certification_mapping?: any;
+  // Experience Builder (Phase 1) — every Type is a versioned AI Component. All
+  // additive/nullable so the live registry is untouched until backfilled.
+  renderer_prompt?: string | null;
+  generation_prompt?: string | null;
+  evaluation_prompt?: string | null;
+  reflection_prompt?: string | null;
+  github_prompt?: string | null;
+  improvement_prompt?: string | null;
+  thumbnail_url?: string | null;
+  preview_examples?: any;              // [{ title, output, generated_at }]
+  variable_keys?: any;                 // string[] — variables the component reads
+  est_input_tokens?: number | null;
+  est_output_tokens?: number | null;
+  est_cost_usd?: number | null;
+  est_runtime_ms?: number | null;
+  component_version?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -66,6 +82,20 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare instructor_review: boolean;
   declare portfolio_eligible: boolean;
   declare certification_mapping: any;
+  declare renderer_prompt: string | null;
+  declare generation_prompt: string | null;
+  declare evaluation_prompt: string | null;
+  declare reflection_prompt: string | null;
+  declare github_prompt: string | null;
+  declare improvement_prompt: string | null;
+  declare thumbnail_url: string | null;
+  declare preview_examples: any;
+  declare variable_keys: any;
+  declare est_input_tokens: number | null;
+  declare est_output_tokens: number | null;
+  declare est_cost_usd: number | null;
+  declare est_runtime_ms: number | null;
+  declare component_version: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -159,6 +189,21 @@ CurriculumTypeDefinition.init(
     instructor_review: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     portfolio_eligible: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     certification_mapping: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    // Experience Builder — AI Component fields (additive/nullable).
+    renderer_prompt: { type: DataTypes.TEXT, allowNull: true },
+    generation_prompt: { type: DataTypes.TEXT, allowNull: true },
+    evaluation_prompt: { type: DataTypes.TEXT, allowNull: true },
+    reflection_prompt: { type: DataTypes.TEXT, allowNull: true },
+    github_prompt: { type: DataTypes.TEXT, allowNull: true },
+    improvement_prompt: { type: DataTypes.TEXT, allowNull: true },
+    thumbnail_url: { type: DataTypes.TEXT, allowNull: true },
+    preview_examples: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    variable_keys: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    est_input_tokens: { type: DataTypes.INTEGER, allowNull: true },
+    est_output_tokens: { type: DataTypes.INTEGER, allowNull: true },
+    est_cost_usd: { type: DataTypes.DOUBLE, allowNull: true },
+    est_runtime_ms: { type: DataTypes.INTEGER, allowNull: true },
+    component_version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
