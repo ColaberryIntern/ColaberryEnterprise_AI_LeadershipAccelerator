@@ -39,23 +39,28 @@ export interface TimelineFeed {
   cards: FeedCard[];
 }
 
-/** Published, active cards for a cohort, ordered for rendering. */
-export async function getCohortCards(cohortId: string): Promise<TimelineCard[]> {
+/**
+ * Published, active cards of the ONE shared curriculum. The class runs a single
+ * curriculum across every batch/cohort, so cards live at the global scope
+ * (cohort_id IS NULL) and every enrolled student sees the same timeline. (The
+ * cohort_id column is kept nullable for a possible future per-cohort override.)
+ */
+export async function getGlobalCards(): Promise<TimelineCard[]> {
   return TimelineCard.findAll({
-    where: { cohort_id: cohortId, status: 'active', visibility: 'published' },
+    where: { cohort_id: null, status: 'active', visibility: 'published' },
     order: [['week', 'ASC'], ['order', 'ASC']],
   });
 }
 
 /**
  * Idempotently ensure a progress row exists for every published card in the
- * student's cohort. Safe to re-run (findOrCreate on the unique key).
+ * shared curriculum. Safe to re-run (findOrCreate on the unique key).
  */
 export async function initProgress(enrollmentId: string): Promise<{ created: number; existing: number }> {
   const enrollment = await Enrollment.findByPk(enrollmentId);
-  if (!enrollment || !enrollment.cohort_id) return { created: 0, existing: 0 };
+  if (!enrollment) return { created: 0, existing: 0 };
 
-  const cards = await getCohortCards(enrollment.cohort_id);
+  const cards = await getGlobalCards();
   let created = 0;
   let existing = 0;
   for (const card of cards) {
@@ -77,11 +82,11 @@ export async function initProgress(enrollmentId: string): Promise<{ created: num
 /** Compose the student's feed: cards merged with their progress status. */
 export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   const enrollment = await Enrollment.findByPk(enrollmentId);
-  if (!enrollment || !enrollment.cohort_id) {
+  if (!enrollment) {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  const cards = await getCohortCards(enrollment.cohort_id);
+  const cards = await getGlobalCards();
   const progressRows = await TimelineCardProgress.findAll({
     where: { enrollment_id: enrollmentId, card_id: { [Op.in]: cards.map((c) => c.id) } },
   });

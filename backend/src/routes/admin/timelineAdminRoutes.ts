@@ -5,14 +5,14 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
-  handleListCohortTimeline, handleCreateCard, handleUpdateCard,
+  handleListTimeline, handleCreateCard, handleUpdateCard,
   handleDeleteCard, handleReorderCards, handleCloneCard,
 } from '../../controllers/timelineAdminController';
 
 const router = Router();
 
-// Board: all cards for a cohort + the authorable type registry.
-router.get('/api/admin/orchestration/cohorts/:cohortId/timeline', requireAdmin, handleListCohortTimeline);
+// Board: the whole shared curriculum (all batches) + the authorable type registry.
+router.get('/api/admin/orchestration/timeline', requireAdmin, handleListTimeline);
 
 // Card CRUD + reorder/clone.
 router.post('/api/admin/orchestration/timeline/cards', requireAdmin, handleCreateCard);
