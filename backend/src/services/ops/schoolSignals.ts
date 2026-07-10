@@ -4,7 +4,6 @@
  * readiness, timeline, composer) read-only. Produces one SchoolSignals object
  * the health score + AI Directors + briefing all analyze. Nothing here writes.
  */
-import { Op } from 'sequelize';
 import Enrollment from '../../models/Enrollment';
 import StudentLevel from '../../models/StudentLevel';
 import CurriculumBlueprint from '../../models/CurriculumBlueprint';
@@ -16,7 +15,7 @@ export interface StudentRollup {
   id: string; name: string; cohort_id: string | null;
   employment: number; band: string; cert_pass: number; architect_readiness: number;
   builder_xp: number; portfolio: number; github_commits: number;
-  attendance: number; at_risk: boolean; excelling: boolean;
+  attendance: number; started: boolean; at_risk: boolean; excelling: boolean;
 }
 export interface SchoolSignals {
   generated_at: string;
@@ -48,20 +47,25 @@ export async function gatherSignals(cap = 200): Promise<SchoolSignals> {
     const cert = computeCertificationReadiness(sig);
     const architect = levelByEnrollment.get(e.id) ?? 0;
     const attendance = (e as any).attendance_score ?? 0;
-    const at_risk = emp.overall < 30 || (attendance > 0 && attendance < 60);
+    // A student has "started" once they show any activity — unstarted signups
+    // are not counted as at-risk (they haven't begun), which keeps the exec view honest.
+    const started = sig.xp.builder > 0 || sig.xp.learning > 0 || sig.portfolio.entries > 0 || attendance > 0;
+    const at_risk = started && (emp.overall < 30 || (attendance > 0 && attendance < 60));
     const excelling = emp.overall >= 70 || architect >= 0.7;
     roster.push({
       id: e.id, name: (e as any).full_name || (e as any).email || 'Student', cohort_id: e.cohort_id ?? null,
       employment: emp.overall, band: emp.band, cert_pass: cert.pass_probability, architect_readiness: architect,
       builder_xp: sig.xp.builder, portfolio: sig.portfolio.entries, github_commits: sig.github.commits,
-      attendance, at_risk, excelling,
+      attendance, started, at_risk, excelling,
     });
   }
+  // Averages reflect students who have actually started (fall back to all).
+  const startedRoster = roster.filter((s) => s.started);
+  const forAvg = startedRoster.length ? startedRoster : roster;
 
-  const paidRows = await Enrollment.findAll({ where: { status: 'active', payment_status: { [Op.in]: ['paid', 'completed', 'active'] } } });
+  const paid = await Enrollment.count({ where: { status: 'active', payment_status: 'paid' } });
   const allActive = await Enrollment.count({ where: { status: 'active' } });
   const collected = enrollments.reduce((a, e) => a + (Number((e as any).amount_paid) || 0), 0);
-  const paid = paidRows.length;
 
   const blueprints = await CurriculumBlueprint.findAll({ attributes: ['quality_score'] });
 
@@ -79,9 +83,9 @@ export async function gatherSignals(cap = 200): Promise<SchoolSignals> {
       certification_ready: roster.filter((s) => s.cert_pass >= 0.6).length,
     },
     revenue: { collected: Math.round(collected), paid, unpaid: Math.max(0, allActive - paid), collection_rate: allActive ? r1((paid / allActive) * 100) : 0 },
-    learning: { avg_builder_xp: Math.round(avg(roster.map((s) => s.builder_xp))), avg_attendance: r1(avg(roster.map((s) => s.attendance))) },
-    employment: { avg_readiness: r1(avg(roster.map((s) => s.employment))), market_ready: roster.filter((s) => s.band === 'market-ready').length },
-    certification: { avg_pass_prob: r1(avg(roster.map((s) => s.cert_pass)) * 100), exam_ready: roster.filter((s) => s.cert_pass >= 0.6).length },
+    learning: { avg_builder_xp: Math.round(avg(forAvg.map((s) => s.builder_xp))), avg_attendance: r1(avg(forAvg.map((s) => s.attendance))) },
+    employment: { avg_readiness: r1(avg(forAvg.map((s) => s.employment))), market_ready: roster.filter((s) => s.band === 'market-ready').length },
+    certification: { avg_pass_prob: r1(avg(forAvg.map((s) => s.cert_pass)) * 100), exam_ready: roster.filter((s) => s.cert_pass >= 0.6).length },
     curriculum: { blueprints: blueprints.length, avg_quality: r1(avg(blueprints.map((b) => b.quality_score || 0))) },
     portfolio: { total_artifacts: roster.reduce((a, s) => a + s.portfolio, 0) },
     cohorts: Array.from(cohortMap.entries()).map(([cohort_id, emps]) => ({ cohort_id, students: emps.length, avg_employment: r1(avg(emps)) })),
