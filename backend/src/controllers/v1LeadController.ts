@@ -40,10 +40,10 @@ export async function createExternalLead(req: Request, res: Response, next: Next
       log('warn', 'lead_ingest_validation_failure', 'failure', {
         correlation_id,
         error_class: 'ValidationError',
-        issues: err.errors.map(e => ({ path: e.path, message: e.message })),
+        issues: err.issues.map(e => ({ path: e.path, message: e.message })),
         duration_ms: Date.now() - start,
       });
-      res.status(400).json({ error: 'Validation failed', details: err.errors });
+      res.status(400).json({ error: 'Validation failed', details: err.issues });
       return;
     }
     log('error', 'lead_ingest_unhandled_error', 'failure', {

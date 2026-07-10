@@ -90,4 +90,12 @@ export const env = {
 
   // Campaign Test Safety
   campaignTestEmailDomain: process.env.CAMPAIGN_TEST_EMAIL_DOMAIN || '@colaberry-test.local',
+
+  // VA ERP Integration (STORY-001)
+  vaErpTokenUrl: process.env.VA_ERP_TOKEN_URL || '',
+  vaErpClientId: process.env.VA_ERP_CLIENT_ID || '',
+  vaErpClientSecret: process.env.VA_ERP_CLIENT_SECRET || '',
+  vaErpModuleConfigJson: process.env.VA_ERP_MODULE_CONFIG || '[]',
+  vaErpRequestTimeoutMs: parseInt(process.env.VA_ERP_REQUEST_TIMEOUT_MS || '15000', 10),
+  vaErpMaxRetries: parseInt(process.env.VA_ERP_MAX_RETRIES || '3', 10),
 };
