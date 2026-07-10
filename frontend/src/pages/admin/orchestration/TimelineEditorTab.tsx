@@ -172,16 +172,29 @@ const BucketSection: React.FC<{
 };
 
 // ── right-side create / edit drawer (like the student detail panel) ──────────
+// Wrap AI body_html for a SANDBOXED iframe (no scripts run) — same safe render
+// the student drawer uses, so the editor preview matches the classroom exactly.
+function lessonDoc(bodyHtml: string): string {
+  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
+    body{font-family:Roboto,system-ui,sans-serif;margin:0;padding:2px;color:#1A1A1A;font-size:13.5px;line-height:1.6}
+    h1,h2,h3{line-height:1.3;margin:12px 0 6px} h1{font-size:17px} h2{font-size:15px} h3{font-size:13.5px}
+    p{margin:0 0 9px} ul,ol{padding-left:20px;margin:0 0 9px} li{margin-bottom:3px} a{color:#367895} img{max-width:100%}
+    pre,code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#F2F2F2;border-radius:6px}
+    pre{padding:9px;overflow:auto} code{padding:1px 4px}
+  </style>${bodyHtml}`;
+}
+
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo }; types: TypeDef[]; isNew: boolean; saving: boolean;
-  aiBusy: boolean; onAiFill: () => void;
+  aiBusy: boolean; onAiFill: () => void; genBusy: boolean; onGenerate: () => void;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo }) => void; onSave: () => void; onClose: () => void;
-}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, onChange, onSave, onClose }) => {
+}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
   const videoSource = draft.video?.url ? parseVideoUrl(draft.video.url) : null;
+  const content = draft.metadata?.content || null;
   return (
     <div className="te-scrim" onClick={onClose}>
       <div className="te-drawer" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -220,10 +233,26 @@ const EditDrawer: React.FC<{
                   ? <div className="tl-vwrap"><VideoEmbed source={videoSource} title={draft.title || ''} poster={draft.video?.poster || null} /></div>
                   : <div style={{ fontSize: 12.5, color: '#C29A0A', background: '#FEF7E6', border: '1px solid #F5E4B8', borderRadius: 9, padding: '10px 12px' }}>⚠ No video linked yet — add a Video URL below (or ✦ Fill with AI) so students can play it right here.</div>)}
                 {draft.description && <p style={{ fontSize: 13.5, color: '#4A4A4A', lineHeight: 1.55, margin: '12px 0 0' }}>{draft.description}</p>}
+                {content && (content.summary || content.body_html || (content.questions && content.questions.length > 0)) && (
+                  <div style={{ marginTop: 12, borderTop: '1px solid #EEE', paddingTop: 12 }}>
+                    {content.summary && <p style={{ fontSize: 13.5, color: '#1A1A1A', lineHeight: 1.55, margin: '0 0 10px' }}>{content.summary}</p>}
+                    {content.body_html && <iframe className="te-lessonframe" title="Lesson" sandbox="" srcDoc={lessonDoc(content.body_html)} />}
+                    {Array.isArray(content.questions) && content.questions.length > 0 && (
+                      <><div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#8A8A8A', margin: '10px 0 5px' }}>Questions</div>
+                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#4A4A4A', lineHeight: 1.5 }}>{content.questions.map((q: string, i: number) => <li key={i}>{q}</li>)}</ul></>
+                    )}
+                  </div>
+                )}
               </div>
-              <button type="button" className="te-act" style={{ width: '100%', justifyContent: 'center', padding: '9px 12px' }}
-                disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
-                onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill this out with AI'}</button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button type="button" className="te-act" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
+                  disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
+                  onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
+                <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
+                  disabled={genBusy || isNew || !draft.title} title={isNew ? 'Save the card first, then generate its content' : !draft.title ? 'Give it a title first' : 'Generate the real content students see (summary, body, questions) and save it to this card'}
+                  onClick={onGenerate}>{genBusy ? '✦ Generating…' : content ? '↻ Regenerate content' : '✦ Generate content'}</button>
+              </div>
+              {isNew && <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>Add the card first, then Generate content to write what students see.</div>}
             </div>
           )}
 
@@ -316,6 +345,7 @@ const TimelineEditorTab: React.FC = () => {
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
 
   const loadBoard = useCallback(async () => {
     setLoading(true); setError('');
@@ -441,6 +471,21 @@ const TimelineEditorTab: React.FC = () => {
     finally { setAiBusy(false); }
   };
 
+  // "Generate content" — run the card's type generation prompt on its real inputs,
+  // SAVE the result onto the card (metadata.content), and show it in the preview.
+  // This is what students actually see: preview == classroom.
+  const genContent = async () => {
+    if (!draft?.id) return;
+    setGenBusy(true); setError('');
+    try {
+      const r = await api.post(`/api/admin/orchestration/timeline/cards/${draft.id}/generate`, {});
+      const content = r.data?.content || null;
+      setDraft((d) => d && ({ ...d, metadata: { ...(d.metadata || {}), content } }));
+      loadBoard();
+    } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
+    finally { setGenBusy(false); }
+  };
+
   const onPublish = async (c: Card) => {
     try { await api.put(`/api/admin/orchestration/timeline/cards/${c.id}`, { visibility: c.visibility === 'published' ? 'draft' : 'published' }); loadBoard(); }
     catch { setError('Publish failed'); }
@@ -503,6 +548,7 @@ const TimelineEditorTab: React.FC = () => {
         .tl-vwrap .tlv-postertitle{position:absolute;left:12px;bottom:10px;z-index:2;color:#fff;font-weight:700;font-size:14px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
         .tl-vwrap .tlv-link,.tl-vwrap .tlv-none{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:#F5F5F5;border:1px solid #E4E4E4;border-radius:10px;color:#8A8A8A;padding:16px;font-size:12.5px}
         .tl-vwrap .tl-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid #367895;background:#367895;color:#fff;text-decoration:none;cursor:pointer}
+        .te-lessonframe{width:100%;height:300px;border:1px solid #E4E4E4;border-radius:9px;background:#fff;display:block}
       `}</style>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
@@ -533,7 +579,7 @@ const TimelineEditorTab: React.FC = () => {
 
       {draft && (
         <EditDrawer draft={draft} types={board?.types || []} isNew={isNew} saving={saving}
-          aiBusy={aiBusy} onAiFill={aiFill}
+          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent}
           onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} />
       )}
     </div>

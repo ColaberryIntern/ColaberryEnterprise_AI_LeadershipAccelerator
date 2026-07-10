@@ -6,7 +6,7 @@ import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListTimeline, handleCreateCard, handleUpdateCard,
-  handleDeleteCard, handleReorderCards, handleCloneCard,
+  handleDeleteCard, handleReorderCards, handleCloneCard, handleGenerateCardContent,
 } from '../../controllers/timelineAdminController';
 
 const router = Router();
@@ -18,6 +18,7 @@ router.get('/api/admin/orchestration/timeline', requireAdmin, handleListTimeline
 router.post('/api/admin/orchestration/timeline/cards', requireAdmin, handleCreateCard);
 router.put('/api/admin/orchestration/timeline/cards/reorder', requireAdmin, handleReorderCards);
 router.post('/api/admin/orchestration/timeline/cards/:id/clone', requireAdmin, handleCloneCard);
+router.post('/api/admin/orchestration/timeline/cards/:id/generate', requireAdmin, handleGenerateCardContent);
 router.put('/api/admin/orchestration/timeline/cards/:id', requireAdmin, handleUpdateCard);
 router.delete('/api/admin/orchestration/timeline/cards/:id', requireAdmin, handleDeleteCard);
 
