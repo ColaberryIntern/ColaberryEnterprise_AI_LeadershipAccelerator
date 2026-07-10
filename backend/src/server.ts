@@ -918,6 +918,71 @@ async function ensureCurriculumComposerSchema() {
   console.log('[DB] Curriculum Composer schema ensured');
 }
 
+async function ensureIntelligenceSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS graph_nodes (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       node_type VARCHAR(40) NOT NULL,
+       entity_id VARCHAR(120) NOT NULL,
+       label VARCHAR(400) NOT NULL,
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       owner VARCHAR(120),
+       trust_score DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+       status VARCHAR(20) NOT NULL DEFAULT 'active',
+       version INTEGER NOT NULL DEFAULT 1,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_graph_nodes_type_entity ON graph_nodes (node_type, entity_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_graph_nodes_type ON graph_nodes (node_type)`,
+    `CREATE TABLE IF NOT EXISTS graph_edges (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       from_id UUID NOT NULL,
+       to_id UUID NOT NULL,
+       edge_type VARCHAR(40) NOT NULL,
+       strength DOUBLE PRECISION NOT NULL DEFAULT 1,
+       confidence DOUBLE PRECISION NOT NULL DEFAULT 0.8,
+       evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_graph_edges_triple ON graph_edges (from_id, to_id, edge_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_graph_edges_from ON graph_edges (from_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_graph_edges_to ON graph_edges (to_id)`,
+    `CREATE TABLE IF NOT EXISTS graph_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       node_id UUID,
+       event_type VARCHAR(40) NOT NULL,
+       summary VARCHAR(500) NOT NULL,
+       actor VARCHAR(120),
+       ref VARCHAR(120),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_graph_events_created ON graph_events (created_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS decisions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       title VARCHAR(400) NOT NULL,
+       domain VARCHAR(40) NOT NULL,
+       reason TEXT,
+       evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+       alternatives JSONB NOT NULL DEFAULT '[]'::jsonb,
+       expected_outcome VARCHAR(500),
+       actual_outcome VARCHAR(500),
+       lessons TEXT,
+       status VARCHAR(20) NOT NULL DEFAULT 'proposed',
+       source_rec_key VARCHAR(120),
+       decided_by VARCHAR(120),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions (status)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Intelligence schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Enterprise Intelligence schema ensured');
+}
+
 async function ensureWorkforceSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS workforce_tasks (
@@ -1175,6 +1240,7 @@ async function start(): Promise<void> {
   await ensureRuntimeSchema();
   await ensureOpsCenterSchema();
   await ensureWorkforceSchema();
+  await ensureIntelligenceSchema();
   // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
   if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
     try {

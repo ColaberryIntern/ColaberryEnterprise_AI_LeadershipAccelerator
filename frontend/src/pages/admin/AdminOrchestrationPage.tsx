@@ -22,27 +22,22 @@ import '../../styles/orchestration.css';
 
 const API = process.env.REACT_APP_API_URL || '';
 
+// The forward-looking curriculum pipeline: design in the Composer, from approved
+// Experience Studio components, published to the Timeline. Legacy pre-redesign
+// tabs (Blueprint/Overview/Sessions/Sections/Mini-Sections/Artifacts/Skills/
+// Gating/Workstation/Bulk) are retired from the nav; their components remain in
+// the codebase and can be re-surfaced if needed.
 const TABS = [
-  { id: 'blueprint', label: 'Blueprint' },
-  { id: 'overview', label: 'Overview' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'sections', label: 'Sections' },
-  { id: 'mini-sections', label: 'Mini-Sections' },
-  { id: 'types', label: 'Experience Studio' },
   { id: 'composer', label: 'Curriculum Composer' },
-  { id: 'artifacts', label: 'Artifacts' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'gating', label: 'Gating' },
+  { id: 'types', label: 'Experience Studio' },
+  { id: 'timeline', label: 'Timeline' },
   { id: 'analytics', label: 'Analytics' },
-  { id: 'workstation', label: 'Workstation' },
-  { id: 'bulk', label: 'Bulk Config' },
   { id: 'health', label: 'Health' },
 ];
 
 export default function AdminOrchestrationPage() {
   const { token } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('composer');
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
   const handleNavigateToMiniSections = (lessonId: string) => {
