@@ -36,7 +36,7 @@ const ExperienceStudioTab: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState({ category: '', difficulty: '', status: '', capability: '', domain: '' });
+  const [filter, setFilter] = useState({ category: '', difficulty: '', status: '', capability: '', domain: '', approval: '' });
   const [analytics, setAnalytics] = useState<any>(null);
   const [depGraph, setDepGraph] = useState<any>(null);
   const [sel, setSel] = useState<Cmp | null>(null);
@@ -85,9 +85,21 @@ const ExperienceStudioTab: React.FC = () => {
       if (filter.status && (c.status || 'ready') !== filter.status) return false;
       if (filter.capability && !(c.capabilities || []).includes(filter.capability)) return false;
       if (filter.domain && !(c.architect_domains || []).includes(filter.domain)) return false;
+      if (filter.approval === 'approved' && !c.approved) return false;
+      if (filter.approval === 'unapproved' && c.approved) return false;
       return true;
     }).sort((a, b) => (favs.includes(b.slug) ? 1 : 0) - (favs.includes(a.slug) ? 1 : 0));
   }, [list, q, filter, favs]);
+  const approvedCount = useMemo(() => list.filter((c) => c.approved).length, [list]);
+
+  const setApproval = async (approved: boolean) => {
+    if (!sel) return;
+    try {
+      await api.put(`/api/admin/components/${sel.slug}/approval`, { approved });
+      setSel({ ...sel, approved });
+      setList((l) => l.map((c) => (c.slug === sel.slug ? { ...c, approved } : c)));
+    } catch { setError('Approval update failed'); }
+  };
   const stageField = (k: StageKey) => STAGES.find((s) => s.key === k)!.field;
   const setStagePrompt = (val: string) => { if (!sel) return; setSel({ ...sel, [stageField(stage)]: val }); setDirty(true); };
   const setField = (f: string, val: any) => { if (!sel) return; setSel({ ...sel, [f]: val }); setDirty(true); };
@@ -155,7 +167,7 @@ const ExperienceStudioTab: React.FC = () => {
       {!sel ? (
         <>
           <div className="es-head">
-            <div><div className="es-title">Experience Studio</div><div className="es-sub">{list.length} AI components · design reusable, AI-powered learning experiences</div></div>
+            <div><div className="es-title">Experience Studio</div><div className="es-sub">{list.length} AI components · <b style={{ color: '#3C7A26' }}>{approvedCount} approved</b> for curriculum · design reusable, AI-powered learning experiences</div></div>
             <input className="es-in" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />
             <button className="es-btn pri" onClick={() => setGen({ open: true, desc: '', recipe: '', draft: null })}>✦ Generate component</button>
           </div>
@@ -165,12 +177,13 @@ const ExperienceStudioTab: React.FC = () => {
             <select className="es-in" style={{ width: 'auto' }} value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}><option value="">All status</option>{['draft', 'ready', 'published', 'deprecated'].map((c) => <option key={c}>{c}</option>)}</select>
             <select className="es-in" style={{ width: 'auto' }} value={filter.capability} onChange={(e) => setFilter({ ...filter, capability: e.target.value })}><option value="">Any capability</option>{caps.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
             <select className="es-in" style={{ width: 'auto' }} value={filter.domain} onChange={(e) => setFilter({ ...filter, domain: e.target.value })}><option value="">Any domain</option>{allDomains.map((c) => <option key={c}>{c}</option>)}</select>
+            <select className="es-in" style={{ width: 'auto' }} value={filter.approval} onChange={(e) => setFilter({ ...filter, approval: e.target.value })}><option value="">All approval</option><option value="approved">✓ Approved only</option><option value="unapproved">Not approved</option></select>
             <span className="es-muted" style={{ alignSelf: 'center' }}>{filtered.length} of {list.length}</span>
           </div>
           {loading ? <div className="es-muted">Loading…</div> : (
             <div className="es-grid">
               {filtered.map((c) => (
-                <div key={c.slug} className="es-card" onClick={() => open(c.slug)}>
+                <div key={c.slug} className={`es-card ${c.approved ? 'appr' : 'unappr'}`} onClick={() => open(c.slug)}>
                   <button className="es-fav" title={favs.includes(c.slug) ? 'Unfavorite' : 'Favorite'} onClick={(e) => { e.stopPropagation(); toggleFav(c.slug); }}>{favs.includes(c.slug) ? '★' : '☆'}</button>
                   {c.thumbnail_url && <img src={c.thumbnail_url} alt="" className="es-thumbimg" />}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -178,7 +191,8 @@ const ExperienceStudioTab: React.FC = () => {
                     <div style={{ minWidth: 0 }}><div className="es-cname">{c.label}</div><div className="es-cmeta">{c.category || c.render_band}</div></div>
                     <span className={`es-status ${c.status}`} style={{ marginLeft: 'auto', marginRight: 18 }}>{c.status || 'ready'}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
+                    <span className={`es-appr ${c.approved ? 'on' : 'off'}`}>{c.approved ? <><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>Approved</> : 'Not approved'}</span>
                     <span className="es-chip">{c.difficulty || 'core'}</span>
                     <span className="es-chip">{(c.capabilities || []).length} caps</span>
                     {c.estimated_time ? <span className="es-chip">{c.estimated_time} min</span> : null}
@@ -197,7 +211,8 @@ const ExperienceStudioTab: React.FC = () => {
             <button className="es-btn" onClick={() => setSel(null)}>← Library</button>
             <div><div className="es-title" style={{ fontSize: 16 }}>{sel.label} <span className="es-muted" style={{ fontWeight: 500 }}>· v{sel.component_version}</span></div>
               <div className="es-sub">{sel.slug} · {sel.category} · {(sel.architect_domains || []).join(', ') || '—'}</div></div>
-            <select className="es-in" style={{ marginLeft: 'auto', width: 120 }} value={sel.status || 'ready'} onChange={(e) => setField('status', e.target.value)}>
+            <button className={`es-apprbtn ${sel.approved ? 'on' : 'off'}`} style={{ marginLeft: 'auto' }} title="Only approved components can be used by the Curriculum Composer" onClick={() => setApproval(!sel.approved)}>{sel.approved ? '✓ Approved for curriculum' : 'Approve for curriculum'}</button>
+            <select className="es-in" style={{ width: 120 }} value={sel.status || 'ready'} onChange={(e) => setField('status', e.target.value)}>
               {['draft', 'ready', 'published', 'deprecated'].map((s) => <option key={s}>{s}</option>)}
             </select>
             <button className="es-btn pri" disabled={busy === 'save' || !dirty} onClick={save}>{busy === 'save' ? 'Saving…' : dirty ? 'Save version' : 'Saved'}</button>

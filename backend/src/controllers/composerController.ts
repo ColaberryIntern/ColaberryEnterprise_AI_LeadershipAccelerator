@@ -9,7 +9,7 @@ import {
   generateForBlueprint, validateBlueprint, assessPlan,
 } from '../services/composer/blueprintService';
 import { publishBlueprint } from '../services/composer/publishService';
-import { generateCurriculum, fillCard, palette, scaffoldPlan } from '../services/composer/composerAi';
+import { generateCurriculum, fillCard, approvedPalette, scaffoldPlan } from '../services/composer/composerAi';
 import { ARCHITECT_JOURNEY } from '../services/composer/architectJourney';
 import { ComposerScope } from '../services/composer/types';
 
@@ -23,8 +23,11 @@ function fail(res: Response, err: any, next: NextFunction) {
 }
 
 // ── palette + journey (static reference) ─────────────────────────────────────
-export function handlePalette(_req: Request, res: Response) {
-  res.json({ types: palette().map((t) => ({ slug: t.slug, label: t.label, student_label: t.student_label, bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty, learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp, competencies: t.competencies, evidence_required: t.evidence_required, github_required: t.github_required, portfolio_eligible: t.portfolio_eligible })) });
+export async function handlePalette(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const pal = await approvedPalette();
+    res.json({ types: pal.map((t) => ({ slug: t.slug, label: t.label, student_label: t.student_label, bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty, learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp, competencies: t.competencies, evidence_required: t.evidence_required, github_required: t.github_required, portfolio_eligible: t.portfolio_eligible })) });
+  } catch (e) { fail(res, e, next); }
 }
 export function handleArchitectJourney(_req: Request, res: Response) { res.json({ stages: ARCHITECT_JOURNEY }); }
 

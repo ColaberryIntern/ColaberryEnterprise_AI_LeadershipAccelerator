@@ -70,6 +70,10 @@ export interface CurriculumTypeDefinitionAttributes {
   version_locked?: boolean;
   // Renderer Engine — prompt-driven renderer definition (8 surfaces). No hardcoded layouts.
   renderers?: any;                    // { thumbnail, timeline, expanded, runtime, student, mobile, tablet, desktop: string }
+  // Curriculum-inclusion approval gate.
+  approved?: boolean;                 // approved for inclusion in the Curriculum Composer
+  approved_at?: Date | null;
+  approved_by?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -136,6 +140,9 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare dependencies: any;
   declare version_locked: boolean;
   declare renderers: any;
+  declare approved: boolean;
+  declare approved_at: Date | null;
+  declare approved_by: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -262,6 +269,9 @@ CurriculumTypeDefinition.init(
     dependencies: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     version_locked: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     renderers: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    approved: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    approved_at: { type: DataTypes.DATE, allowNull: true },
+    approved_by: { type: DataTypes.STRING(255), allowNull: true },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

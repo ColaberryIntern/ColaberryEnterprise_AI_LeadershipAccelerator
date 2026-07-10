@@ -13,6 +13,7 @@ import {
   handleDependencyGraph, handleSetDependencies, handleCompareVersions,
   handleGenerateThumbnail, handleBackfillThumbnails, handleExportComponent, handleImportComponent,
   handleRenderSurface, handleBackfillRenderers, handleRendererSurfaces, handleGetLifecycle, handleSetLifecycle,
+  handleSetApproval,
 } from '../../controllers/componentController';
 
 const router = Router();
@@ -38,6 +39,7 @@ router.post('/api/admin/components/:slug/codesign', requireAdmin, handleCoDesign
 router.post('/api/admin/components/:slug/preview', requireAdmin, handleRuntimePreview);
 router.get('/api/admin/components/:slug/lifecycle', requireAdmin, handleGetLifecycle);
 router.put('/api/admin/components/:slug/lifecycle', requireAdmin, handleSetLifecycle);
+router.put('/api/admin/components/:slug/approval', requireAdmin, handleSetApproval);
 router.post('/api/admin/components/:slug/render/:surface', requireAdmin, handleRenderSurface);
 router.post('/api/admin/components', requireAdmin, handleCreateComponent);
 router.get('/api/admin/components', requireAdmin, handleListComponents);
