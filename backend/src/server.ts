@@ -907,6 +907,49 @@ async function ensureCurriculumComposerSchema() {
   console.log('[DB] Curriculum Composer schema ensured');
 }
 
+async function ensureRuntimeSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS runtime_mentor_turns (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       card_id UUID,
+       mode VARCHAR(20) NOT NULL DEFAULT 'ask',
+       question TEXT,
+       reply TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_mentor_turns_enrollment ON runtime_mentor_turns (enrollment_id, card_id)`,
+    `CREATE TABLE IF NOT EXISTS runtime_portfolio_artifacts (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       card_id UUID,
+       kind VARCHAR(40) NOT NULL DEFAULT 'case_study',
+       title VARCHAR(400) NOT NULL,
+       summary TEXT,
+       content JSONB NOT NULL DEFAULT '{}'::jsonb,
+       competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_portfolio_enrollment ON runtime_portfolio_artifacts (enrollment_id)`,
+    `CREATE TABLE IF NOT EXISTS runtime_notes (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       card_id UUID,
+       kind VARCHAR(20) NOT NULL DEFAULT 'note',
+       title VARCHAR(400),
+       body TEXT,
+       back TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_runtime_notes_enrollment ON runtime_notes (enrollment_id, kind)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Runtime schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Learning Runtime schema ensured');
+}
+
 async function ensureMissedOpportunitiesSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS inbox_opportunity_scores (
@@ -1038,6 +1081,7 @@ async function start(): Promise<void> {
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
+  await ensureRuntimeSchema();
   // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
   if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
     try {
