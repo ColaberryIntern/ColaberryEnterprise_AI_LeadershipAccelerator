@@ -7,6 +7,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
+import VideoEmbed from '../../../components/timeline/VideoEmbed';
+import { parseVideoUrl } from '../../../utils/videoEmbed';
 
 /**
  * TimelineEditorTab — the AUTHOR side of the Classroom. Staff build the ONE
@@ -165,12 +167,14 @@ const BucketSection: React.FC<{
 // ── create / edit modal ──────────────────────────────────────────────────────
 const CardModal: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo }; types: TypeDef[]; isNew: boolean; saving: boolean;
+  aiBusy: boolean; onAiFill: () => void;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo }) => void; onSave: () => void; onClose: () => void;
-}> = ({ draft, types, isNew, saving, onChange, onSave, onClose }) => {
+}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
+  const videoSource = draft.video?.url ? parseVideoUrl(draft.video.url) : null;
   return (
   <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
     <div style={{ background: '#fff', borderRadius: 12, padding: 20, width: 460, maxHeight: '86vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
@@ -190,6 +194,9 @@ const CardModal: React.FC<{
             <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1A1A' }}>{typeDef?.label || draft.type.replace(/_/g, ' ')}</div>
             <div style={{ fontSize: 11, color: '#8A8A8A' }}>Experience Studio type · {(band || 'card').replace(/_/g, ' ')}</div>
           </div>
+          <button type="button" className="tl-btn-ghost" style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+            disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
+            onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill with AI'}</button>
         </div>
       )}
       <label style={lbl}>Title
@@ -254,6 +261,26 @@ const CardModal: React.FC<{
           {['draft', 'scheduled', 'published', 'archived'].map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
       </label>
+
+      {draft.type && (
+        <div style={{ marginBottom: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#8A8A8A', marginBottom: 8 }}>Finished product · what the student sees</div>
+          <div style={{ border: '1px solid #E4E4E4', borderRadius: 10, padding: 12, background: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isVideo || draft.description ? 10 : 0 }}>
+              <TypeThumb band={band} size={28} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1A1A' }}>{draft.title || typeDef?.label || 'Untitled'}</div>
+                {draft.subtitle && <div style={{ fontSize: 11.5, color: '#8A8A8A' }}>{draft.subtitle}</div>}
+              </div>
+            </div>
+            {isVideo && (videoSource
+              ? <div className="tl-vwrap"><VideoEmbed source={videoSource} title={draft.title || ''} poster={draft.video?.poster || null} /></div>
+              : <div style={{ fontSize: 12, color: '#C29A0A', background: '#FEF7E6', border: '1px solid #F5E4B8', borderRadius: 8, padding: '8px 10px' }}>⚠ No video linked yet — add a Video URL above (or Fill with AI) so students can play it.</div>)}
+            {draft.description && <p style={{ fontSize: 13, color: '#4A4A4A', lineHeight: 1.5, margin: '10px 0 0' }}>{draft.description}</p>}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
         <button className="tl-btn-ghost" onClick={onClose}>Cancel</button>
         <button className="tl-btn-primary" disabled={saving || (isNew && !draft.type) || !draft.title} onClick={onSave}>
@@ -277,6 +304,7 @@ const TimelineEditorTab: React.FC = () => {
   const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo }) | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
 
   const loadBoard = useCallback(async () => {
     setLoading(true); setError('');
@@ -376,6 +404,32 @@ const TimelineEditorTab: React.FC = () => {
     finally { setSaving(false); }
   };
 
+  // "Fill with AI" — reuse the composer's single-card fill (returns copy + a suggested
+  // video_url for media types). Populates the draft; the author reviews before saving.
+  const aiFill = async () => {
+    if (!draft?.type) return;
+    setAiBusy(true); setError('');
+    try {
+      const r = await api.post('/api/admin/composer/fill-card', {
+        blueprint: { title: draft.title || '', week: draft.week ?? null },
+        type: draft.type,
+        instruction: draft.title || draft.type,
+      });
+      const c = r.data?.card || {};
+      setDraft((d) => d && ({
+        ...d,
+        title: d.title || c.title || d.title,
+        subtitle: c.subtitle ?? d.subtitle,
+        description: c.description ?? d.description,
+        difficulty: c.difficulty || d.difficulty,
+        estimated_time: typeof c.estimated_time === 'number' ? c.estimated_time : d.estimated_time,
+        points: c.points || d.points,
+        video: c.video_url ? { ...(d.video || {}), url: c.video_url } : d.video,
+      }));
+    } catch (e: any) { setError(e?.response?.data?.error || 'AI fill failed'); }
+    finally { setAiBusy(false); }
+  };
+
   const onPublish = async (c: Card) => {
     try { await api.put(`/api/admin/orchestration/timeline/cards/${c.id}`, { visibility: c.visibility === 'published' ? 'draft' : 'published' }); loadBoard(); }
     catch { setError('Publish failed'); }
@@ -398,6 +452,16 @@ const TimelineEditorTab: React.FC = () => {
         .tl-btn-ghost{font-size:13px;font-weight:600;padding:8px 16px;border:1px solid #D8D8D8;background:#fff;border-radius:8px;cursor:pointer}
         .tl-wk{font-size:13px;font-weight:600;padding:6px 14px;border:1px solid #DADADA;background:#fff;border-radius:999px;cursor:pointer;color:#4A4A4A}
         .tl-wk.on{background:#1A1A1A;color:#fff;border-color:#1A1A1A}
+        .tl-vwrap .tlv-frame{position:relative;width:100%;aspect-ratio:16/9;border-radius:9px;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center}
+        .tl-vwrap .tlv-media{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000}
+        .tl-vwrap .tlv-poster{cursor:pointer;padding:0;border:none}
+        .tl-vwrap .tlv-posterimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+        .tl-vwrap .tlv-postergrad{position:absolute;inset:0;background:linear-gradient(135deg,rgba(54,120,149,.55),rgba(20,24,27,.78));z-index:1}
+        .tl-vwrap .tlv-bigplay{position:relative;z-index:2;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.96);display:flex;align-items:center;justify-content:center}
+        .tl-vwrap .tlv-bigplay svg{width:24px;height:24px;color:#FB2832;margin-left:3px}
+        .tl-vwrap .tlv-postertitle{position:absolute;left:12px;bottom:10px;z-index:2;color:#fff;font-weight:700;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+        .tl-vwrap .tlv-link,.tl-vwrap .tlv-none{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:#F5F5F5;border:1px solid #E4E4E4;border-radius:9px;color:#8A8A8A;padding:14px;font-size:12px}
+        .tl-vwrap .tl-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:6px 11px;border-radius:7px;border:1px solid #367895;background:#367895;color:#fff;text-decoration:none;cursor:pointer}
       `}</style>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
@@ -428,6 +492,7 @@ const TimelineEditorTab: React.FC = () => {
 
       {draft && (
         <CardModal draft={draft} types={board?.types || []} isNew={isNew} saving={saving}
+          aiBusy={aiBusy} onAiFill={aiFill}
           onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} />
       )}
     </div>

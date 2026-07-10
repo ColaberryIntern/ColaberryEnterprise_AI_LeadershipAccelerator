@@ -77,12 +77,23 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
             </div>
           )}
 
-          {card.description && <p className="tld-desc">{card.description}</p>}
+          <div className="tld-about">
+            {isVideo && <div className="tld-lab">About this {source ? 'video' : 'activity'}</div>}
+            {card.description
+              ? <p className="tld-desc">{card.description}</p>
+              : <p className="tld-desc muted">No description yet.</p>}
+            <div className="tld-facts">
+              {presenter && <span><b>Presenter</b>{presenter}</span>}
+              {duration && <span><b>Length</b>{duration}</span>}
+              {pts > 0 && <span><b>Points</b>+{pts} pts</span>}
+              {card.difficulty && <span><b>Level</b>{card.difficulty}</span>}
+            </div>
+          </div>
 
           {isVideo && (
             <div className="tld-note">
               {source
-                ? 'Watch the video, then mark it complete to earn your points.'
+                ? 'Watch the video above, then mark it complete to earn your points.'
                 : 'No video link is attached to this card yet. An admin can add one from Orchestration → Timeline.'}
             </div>
           )}
