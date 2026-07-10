@@ -1,4 +1,6 @@
 import React from 'react';
+import VideoEmbed from './VideoEmbed';
+import { parseVideoUrl } from '../../utils/videoEmbed';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
@@ -120,12 +122,19 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  const media = v.kind === 'video' ? (
-    <button type="button" className="vframe" onClick={() => !locked && onOpen?.(card)} aria-label={`Play ${card.title}`}>
+  const videoSource = card.video?.url ? parseVideoUrl(card.video.url) : null;
+
+  const media = v.kind === 'video' && videoSource ? (
+    // Plays right here in the feed — press ▶ and watch in-app. "Open" is for the detail panel.
+    <div className="fc-video" onClick={(e) => e.stopPropagation()}>
+      <VideoEmbed source={videoSource} title={shortTitle} poster={card.video?.poster || null} />
+    </div>
+  ) : v.kind === 'video' ? (
+    // Video card with no link attached yet — poster opens the detail panel.
+    <button type="button" className="vframe" onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       <span className="poster" style={{ background: KIND_GRADIENT.video }} />
-      {card.video?.poster && <img className="vphoto" src={card.video.poster} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
       <span className="vgrad" />
-      <span className="vmeta"><b>{shortTitle}</b><span>{card.estimated_time ? `${card.estimated_time}:00` : 'video'}</span></span>
+      <span className="vmeta"><b>{shortTitle}</b><span>video</span></span>
       <span className="vplay"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
     </button>
   ) : (
