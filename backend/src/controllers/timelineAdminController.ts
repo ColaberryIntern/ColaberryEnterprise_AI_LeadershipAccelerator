@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   listTimeline, createCard, updateCard, deleteCard, reorderCards, cloneCard,
 } from '../services/timeline/timelineAdminService';
+import { generateCardContent } from '../services/timeline/cardContentService';
 
 const bucketEnum = z.enum(['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance']);
 const visibilityEnum = z.enum(['draft', 'scheduled', 'published', 'archived']);
@@ -110,5 +111,13 @@ export async function handleReorderCards(req: Request, res: Response, next: Next
 export async function handleCloneCard(req: Request, res: Response, next: NextFunction) {
   try {
     res.status(201).json(await cloneCard(String(req.params.id)));
+  } catch (err) { fail(res, err, next); }
+}
+
+// Generate the student-facing content for this card and save it onto the card
+// (metadata.content) — so what the author previews is exactly what students see.
+export async function handleGenerateCardContent(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await generateCardContent(String(req.params.id)));
   } catch (err) { fail(res, err, next); }
 }

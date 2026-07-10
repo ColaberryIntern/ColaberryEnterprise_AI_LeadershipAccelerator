@@ -28,6 +28,7 @@ export interface TimelineFeedCard {
   quiz_score: number | null;
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null } | null;
+  content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
 }
 
 type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';

@@ -19,6 +19,16 @@ export interface FeedVideo {
   poster: string | null;
 }
 
+/** AI-generated student content saved onto the card (by the Timeline editor's
+ *  "Generate content"), rendered in the student drawer — what was previewed IS
+ *  what the student sees. */
+export interface FeedContent {
+  summary?: string;
+  body_html?: string;
+  questions?: string[];
+  reflection?: string;
+}
+
 export interface FeedCard {
   id: string;
   type: string;
@@ -38,6 +48,19 @@ export interface FeedCard {
   quiz_score: number | null;
   completed_at: Date | null;
   video: FeedVideo | null;
+  content: FeedContent | null;
+}
+
+/** PURE — the saved AI content from a card's metadata blob, or null. */
+export function contentFromMetadata(metadata: any): FeedContent | null {
+  const c = metadata && typeof metadata === 'object' ? metadata.content : null;
+  if (!c || typeof c !== 'object') return null;
+  const out: FeedContent = {};
+  if (typeof c.summary === 'string' && c.summary.trim()) out.summary = c.summary;
+  if (typeof c.body_html === 'string' && c.body_html.trim()) out.body_html = c.body_html;
+  if (Array.isArray(c.questions) && c.questions.length) out.questions = c.questions.map(String);
+  if (typeof c.reflection === 'string' && c.reflection.trim()) out.reflection = c.reflection;
+  return Object.keys(out).length ? out : null;
 }
 
 /** PURE — a typed video from a card's metadata blob, or null. Only the URL is
@@ -133,6 +156,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       quiz_score: progress?.quiz_score ?? null,
       completed_at: progress?.completed_at ?? null,
       video: videoFromMetadata(card.metadata),
+      content: contentFromMetadata(card.metadata),
     };
   });
 
