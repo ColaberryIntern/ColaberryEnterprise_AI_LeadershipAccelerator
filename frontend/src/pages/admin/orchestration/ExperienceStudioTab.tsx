@@ -23,7 +23,7 @@ import { parseVideoUrl } from '../../../utils/videoEmbed';
 const DTABS = [
   { key: 'preview', label: 'Preview', hint: 'See exactly what a student gets' },
   { key: 'pipeline', label: 'Prompts', hint: 'How the AI builds this activity' },
-  { key: 'renderers', label: 'Appearance', hint: 'How it looks on each screen' },
+  { key: 'renderers', label: 'Appearance', hint: 'Experimental card templating — not what students see' },
   { key: 'sandbox', label: 'Test Lab', hint: 'Run any part and inspect it' },
   { key: 'lifecycle', label: 'Status', hint: 'Draft → Published lifecycle' },
   { key: 'versions', label: 'History', hint: 'Versions + restore' },
@@ -262,57 +262,94 @@ const ExperienceStudioTab: React.FC = () => {
             <div>
               {detailTab === 'preview' && (
                 <div>
-                  <div className="es-lab">The finished product</div>
-                  {isVideo ? (
-                    <p className="es-help">A <b>Video</b> activity plays a real video <b>in-app</b> — the student presses play and watches it right inside the Classroom (never sent off to YouTube). Paste any video link below to see <b>exactly what the student plays</b>. Beneath the player, the student taps <b>✦ Make it interactive</b> to generate AI notes — summary, key moments, and a self-check. The preview below shows the kind of notes that produces (press <b>Generate preview</b>).</p>
-                  ) : (
-                    <p className="es-help">This is exactly what a student sees when <b>{sel.label}</b> runs inside their Classroom timeline. Press <b>Generate preview</b> — the AI runs the whole pipeline and renders the live experience on every screen size.</p>
-                  )}
-
-                  {isVideo && (
-                    <div style={{ marginBottom: 18 }}>
-                      <div className="es-lab">▶ The video the student plays</div>
-                      <input className="es-in" placeholder="Paste a YouTube, Vimeo, Loom, Wistia, or .mp4 link…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-                      <div className="es-video" style={{ marginTop: 10 }}>
-                        <VideoEmbed source={videoSource} title={sel.label} />
-                      </div>
-                      {videoUrl.trim() && videoSource?.provider === 'unknown'
-                        ? <div className="es-muted" style={{ marginTop: 6 }}>That link isn't a recognized provider — a student would get a "watch on source" button instead of in-app playback. Use a YouTube, Vimeo, Loom, Wistia, or direct .mp4 link.</div>
-                        : videoSource && <div className="es-muted" style={{ marginTop: 6 }}>Playing in-app via {videoSource.provider}. The real per-week video is attached when you place this on a week in the Curriculum Composer — this field is just for previewing playback.</div>}
-                    </div>
-                  )}
-
-                  <div className="es-lab">{isVideo ? 'Interactive notes students generate beneath the video (“Make it interactive”)' : 'The student experience'}</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-                    <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Generating…' : preview ? '↻ Regenerate' : '✦ Generate preview'}</button>
-                    {!sel.generation_prompt && <span className="es-muted">Add a Generation prompt in the <b>Prompts</b> tab first.</span>}
+                  <div className="es-lab">The flow · inputs → prompt → content → the student's card</div>
+                  <p className="es-help">Follow <b>one example</b> all the way through. Set the inputs, see the <b>Generation</b> prompt that turns them into content, then watch <b>that exact content</b> become the card a student sees. Press <b>▶ Run the whole flow</b> and steps 3 and 4 come from the same run — so they always match.</p>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 16px', flexWrap: 'wrap' }}>
+                    <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>
+                    {!sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
                     {preview && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
                   </div>
-                  {!preview && busy !== 'preview' && (
-                    <div className="es-empty">
-                      <div style={{ fontSize: 26 }}>{isVideo ? '📝' : '🎓'}</div>
-                      <b>No preview yet</b>
-                      <span className="es-muted">{isVideo ? 'Generate the notes & questions that wrap the video.' : 'Generate one to see the student-facing experience.'}</span>
-                    </div>
-                  )}
-                  {preview && (<>
-                    <div className="es-devices">
-                      {([['🖥 Desktop', 1000], ['📱 Phone', 375]] as [string, number][]).map(([name, w]) => (
-                        <div key={name} className="es-device">
-                          <div className="es-devlabel">{name}</div>
-                          <iframe title={name} className="es-frame" style={{ width: w > 480 ? '100%' : w, maxWidth: '100%' }} sandbox="" srcDoc={frameHtml(preview.experience, sel)} />
+
+                  {/* STEP 1 — inputs */}
+                  <div className="es-flowstepbox">
+                    <div className="es-flownum">1</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="es-lab" style={{ marginTop: 0 }}>The inputs · this example</div>
+                      {isVideo && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div className="es-sublab">Video link</div>
+                          <input className="es-in" placeholder="Paste a YouTube / Vimeo / Loom / Wistia / .mp4 link…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+                          {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={sel.label} /></div>}
                         </div>
-                      ))}
+                      )}
+                      {(sel.variable_keys || []).length === 0
+                        ? <div className="es-muted">No variables — this activity reads the same for every student.</div>
+                        : (sel.variable_keys || []).map((k) => (
+                          <div key={k} style={{ marginBottom: 6 }}>
+                            <div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div>
+                            <input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} />
+                          </div>
+                        ))}
                     </div>
-                    <details className="es-inspect"><summary>What the AI generated (json)</summary>
-                      <pre className="es-out">{JSON.stringify(preview.experience, null, 2)}</pre>
-                    </details>
-                  </>)}
+                  </div>
+                  <div className="es-arrow">↓ feeds</div>
+
+                  {/* STEP 2 — the generation prompt */}
+                  <div className="es-flowstepbox">
+                    <div className="es-flownum">2</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="es-lab" style={{ marginTop: 0 }}>The instruction · the Generation prompt <span className="es-wired">students see this one</span></div>
+                      <p className="es-muted" style={{ margin: '0 0 6px' }}>The only prompt that writes what students see. Edit it and re-run to change the content below.</p>
+                      <textarea className="es-in mono" style={{ minHeight: 120 }} value={sel.generation_prompt || ''} onChange={(e) => setField('generation_prompt', e.target.value)} placeholder="Tell the AI what to produce for the student, using {{variables}} from step 1." />
+                    </div>
+                  </div>
+                  <div className="es-arrow">↓ produces</div>
+
+                  {/* STEP 3 — generated content */}
+                  <div className="es-flowstepbox">
+                    <div className="es-flownum">3</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="es-lab" style={{ marginTop: 0 }}>The content it produced</div>
+                      {!preview
+                        ? <div className="es-muted">Run the flow to see what the prompt produces for this example.</div>
+                        : (
+                          <div className="es-gencontent">
+                            {preview.experience?.title && <div style={{ fontSize: 14, fontWeight: 700 }}>{preview.experience.title}</div>}
+                            {preview.experience?.summary && <p style={{ fontSize: 12.5, color: '#555', margin: '4px 0' }}>{preview.experience.summary}</p>}
+                            {Array.isArray(preview.experience?.questions) && preview.experience.questions.length > 0 && (
+                              <><div className="es-sublab">Questions</div><ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#555' }}>{preview.experience.questions.map((q: string, i: number) => <li key={i}>{q}</li>)}</ul></>
+                            )}
+                            <details className="es-inspect"><summary>Raw JSON</summary><pre className="es-out">{JSON.stringify(preview.experience, null, 2)}</pre></details>
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                  <div className="es-arrow">↓ renders as</div>
+
+                  {/* STEP 4 — the student's card */}
+                  <div className="es-flowstepbox">
+                    <div className="es-flownum">4</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="es-lab" style={{ marginTop: 0 }}>What the student sees · the same content, as a card</div>
+                      {!preview
+                        ? <div className="es-empty"><div style={{ fontSize: 24 }}>🎓</div><span className="es-muted">Run the flow to render the student card.</span></div>
+                        : (
+                          <div className="es-devices">
+                            {([['🖥 Desktop', 1000], ['📱 Phone', 375]] as [string, number][]).map(([name, w]) => (
+                              <div key={name} className="es-device">
+                                <div className="es-devlabel">{name}</div>
+                                <iframe title={name} className="es-frame" style={{ width: w > 480 ? '100%' : w, maxWidth: '100%' }} sandbox="" srcDoc={frameHtml(preview.experience, sel)} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  </div>
 
                   <div className="es-flow">
-                    <div className="es-lab" style={{ marginTop: 0 }}>How this reaches a student</div>
+                    <div className="es-lab" style={{ marginTop: 0 }}>…then that card reaches the student</div>
                     <div className="es-flowrow">
-                      <span className="es-flowstep on">Experience Studio<small>design &amp; approve it here</small></span>
+                      <span className="es-flowstep on">Experience Studio<small>the flow above</small></span>
                       <span className="es-flowarrow">→</span>
                       <span className="es-flowstep">Curriculum Composer<small>add it to a week</small></span>
                       <span className="es-flowarrow">→</span>
@@ -368,7 +405,7 @@ const ExperienceStudioTab: React.FC = () => {
               </div>
               </>)}
 
-              {detailTab === 'renderers' && <RendererEngine sel={sel} vars={vars} onChange={(r) => setField('renderers', r)} />}
+              {detailTab === 'renderers' && <RendererEngine sel={sel} vars={vars} genContent={preview?.experience || null} onChange={(r) => setField('renderers', r)} />}
               {detailTab === 'sandbox' && <Sandbox sel={sel} vars={vars} />}
               {detailTab === 'lifecycle' && <LifecycleStepper slug={sel.slug} onChanged={() => { open(sel.slug); load(); }} />}
               {detailTab === 'versions' && <VersionCompare sel={sel} versions={versions} onRestore={restore} />}
