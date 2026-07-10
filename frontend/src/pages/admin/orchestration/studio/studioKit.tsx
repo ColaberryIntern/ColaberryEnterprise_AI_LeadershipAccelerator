@@ -148,6 +148,8 @@ export const studioCss = `
   .es-help{font-size:12.5px;line-height:1.5;color:#5A5A5A;margin:2px 0 12px;max-width:640px}
   .es-help b{color:#1A1A1A;font-weight:600}
   .es-stflag{margin-left:auto;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#B5710A;background:#FEF3E2;padding:1px 6px;border-radius:999px;flex:none}
+  .es-wired{margin-left:auto;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#3C7A26;background:#EDF7EE;padding:1px 7px;border-radius:999px;flex:none}
+  .es-unwired{margin-left:auto;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#A0A0A0;background:#F2F2F2;padding:1px 7px;border-radius:999px;flex:none}
   .es-stcaret{color:#367895;font-size:12px;flex:none;margin-left:6px}
   .es-stageedit{border:1px solid #367895;border-top:none;border-radius:0 0 9px 9px;background:#F5FAFB;padding:12px;margin:-4px 2px 2px}
   .es-connect{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;border:1px dashed #CBD9DE;border-radius:9px;background:#FAFCFD}

@@ -53,6 +53,7 @@ const ExperienceStudioTab: React.FC = () => {
   const [busy, setBusy] = useState('');
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [gen, setGen] = useState<{ open: boolean; desc: string; recipe: string; draft: any } | null>(null);
   const [detailTab, setDetailTab] = useState<DTab>('pipeline');
   const [favs, setFavs] = useState<string[]>(loadFavs);
@@ -68,7 +69,7 @@ const ExperienceStudioTab: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const open = async (slug: string) => {
-    setError(''); setStageTest(null); setPreview(null); setCoDesign(null); setAnalytics(null); setDepGraph(null);
+    setError(''); setNotice(''); setStageTest(null); setPreview(null); setCoDesign(null); setAnalytics(null); setDepGraph(null);
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
       setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('preview'); setPreview(null); setVideoUrl('');
@@ -127,18 +128,43 @@ const ExperienceStudioTab: React.FC = () => {
     try { const r = await api.post(`/api/admin/components/${sel.slug}/codesign`, {}); setCoDesign(r.data); }
     catch (e: any) { setError(e?.response?.data?.error || 'Co-design failed'); } finally { setBusy(''); }
   };
-  const applyPatch = (patch: any) => { if (!sel || !patch) return; setSel({ ...sel, ...patch }); setDirty(true); };
+  // The fields the editor can actually persist (the Co-Designer's Apply can only
+  // touch these; anything else can't be saved and would silently vanish).
+  const SAVE_FIELDS = ['label', 'student_label', 'description', 'category', 'status', 'difficulty', 'render_band', 'bucket_default',
+    'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags', 'renderers'];
+  const buildPayload = (src: Cmp) => {
+    const payload: any = {};
+    STAGES.forEach((s) => { payload[s.field] = src[s.field] ?? null; });
+    SAVE_FIELDS.forEach((f) => { payload[f] = src[f]; });
+    return payload;
+  };
+  const persist = async (src: Cmp) => {
+    await api.put(`/api/admin/components/${src.slug}`, buildPayload(src));
+    setDirty(false); await open(src.slug); await load();
+  };
+
+  const applyableKeys = new Set<string>([...STAGES.map((s) => s.field as string), ...SAVE_FIELDS]);
+  const applyPatch = async (patch: any) => {
+    if (!sel || !patch || typeof patch !== 'object') return;
+    const applied = Object.keys(patch).filter((k) => applyableKeys.has(k) && patch[k] !== undefined);
+    const skipped = Object.keys(patch).filter((k) => !applyableKeys.has(k));
+    if (applied.length === 0) {
+      setNotice(''); setError(`This suggestion targets fields the editor can't change here${skipped.length ? ` (${skipped.join(', ')})` : ''} — adjust those by hand.`);
+      return;
+    }
+    const next = { ...sel, ...Object.fromEntries(applied.map((k) => [k, patch[k]])) } as Cmp;
+    setSel(next); setError(''); setBusy('save');
+    setNotice(`Applying ${applied.join(', ')}…`);
+    try {
+      await persist(next);
+      setNotice(`✓ Applied & saved: ${applied.join(', ')}${skipped.length ? ` (couldn't touch ${skipped.join(', ')})` : ''}`);
+    } catch (e: any) { setNotice(''); setError(e?.response?.data?.error || 'Apply failed'); }
+    finally { setBusy(''); }
+  };
 
   const save = async () => {
     if (!sel) return; setBusy('save'); setError('');
-    try {
-      const payload: any = {};
-      STAGES.forEach((s) => { payload[s.field] = sel[s.field] ?? null; });
-      ['label', 'student_label', 'description', 'category', 'status', 'difficulty', 'render_band', 'bucket_default',
-        'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags', 'renderers'].forEach((f) => { payload[f] = sel[f]; });
-      await api.put(`/api/admin/components/${sel.slug}`, payload);
-      setDirty(false); await open(sel.slug); await load();
-    } catch (e: any) { setError(e?.response?.data?.error || 'Save failed'); } finally { setBusy(''); }
+    try { await persist(sel); } catch (e: any) { setError(e?.response?.data?.error || 'Save failed'); } finally { setBusy(''); }
   };
   const restore = async (v: number) => { if (!sel || !window.confirm(`Restore v${v}?`)) return; try { await api.post(`/api/admin/components/${sel.slug}/versions/${v}/restore`); await open(sel.slug); await load(); } catch { setError('Restore failed'); } };
   const setDeps = async (deps: string[]) => {
@@ -238,7 +264,7 @@ const ExperienceStudioTab: React.FC = () => {
                 <div>
                   <div className="es-lab">The finished product</div>
                   {isVideo ? (
-                    <p className="es-help">A <b>Video</b> activity plays a real video <b>in-app</b> — the student presses play and watches it right inside the Classroom (never sent off to YouTube). Paste any video link below to see <b>exactly what the student plays</b>. Beneath the player, the AI writes the summary, key points, and questions that wrap the video (press <b>Generate preview</b> for those).</p>
+                    <p className="es-help">A <b>Video</b> activity plays a real video <b>in-app</b> — the student presses play and watches it right inside the Classroom (never sent off to YouTube). Paste any video link below to see <b>exactly what the student plays</b>. Beneath the player, the student taps <b>✦ Make it interactive</b> to generate AI notes — summary, key moments, and a self-check. The preview below shows the kind of notes that produces (press <b>Generate preview</b>).</p>
                   ) : (
                     <p className="es-help">This is exactly what a student sees when <b>{sel.label}</b> runs inside their Classroom timeline. Press <b>Generate preview</b> — the AI runs the whole pipeline and renders the live experience on every screen size.</p>
                   )}
@@ -256,7 +282,7 @@ const ExperienceStudioTab: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="es-lab">{isVideo ? 'Notes & questions shown beneath the video' : 'The student experience'}</div>
+                  <div className="es-lab">{isVideo ? 'Interactive notes students generate beneath the video (“Make it interactive”)' : 'The student experience'}</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                     <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Generating…' : preview ? '↻ Regenerate' : '✦ Generate preview'}</button>
                     {!sel.generation_prompt && <span className="es-muted">Add a Generation prompt in the <b>Prompts</b> tab first.</span>}
@@ -300,15 +326,17 @@ const ExperienceStudioTab: React.FC = () => {
               )}
 
               {detailTab === 'pipeline' && (<>
-              <div className="es-lab">How the AI builds this activity</div>
-              <p className="es-help">Each step below is one instruction to the AI. They run top to bottom to turn a topic into a finished student experience. <b>Click a step to open its prompt right here</b>, then <b>▶ Test</b> to see exactly what that step produces.</p>
+              <div className="es-lab">The prompts behind this activity</div>
+              <p className="es-help">Straight talk: <b>only the <span style={{ color: '#3C7A26' }}>Generation</span> prompt writes what students actually see</b> today — it's the instruction behind “Generate content” on a card. The others are authored and testable here, but they don't drive the student experience yet (they're wired to future grading / reflection / GitHub features). Click any step to edit it; <b>▶ Test</b> shows its raw output.</p>
               <div className="es-pipe">
                 {STAGES.map((s, i) => (
                   <React.Fragment key={s.key}>
                     <button className={`es-stage ${stage === s.key ? 'on' : ''} ${sel[s.field] ? '' : 'empty'}`} onClick={() => { setStage(s.key); setStageTest(null); }}>
-                      <span className="es-stnum">{i + 1}</span>
+                      <span className="es-stnum" style={s.key === 'generation' ? { background: '#3C7A26' } : { background: '#C8C8C8' }}>{s.key === 'generation' ? '★' : '·'}</span>
                       <span><b>{s.label}</b><small>{s.purpose}</small></span>
-                      {!sel[s.field] && <span className="es-stflag">empty</span>}
+                      {s.key === 'generation'
+                        ? <span className="es-wired">students see this</span>
+                        : <span className="es-unwired">not wired yet</span>}
                       <span className="es-stcaret">{stage === s.key ? '▾' : '▸'}</span>
                     </button>
                     {stage === s.key && (
@@ -351,6 +379,7 @@ const ExperienceStudioTab: React.FC = () => {
               <div className="es-panel">
                 <div style={{ display: 'flex', alignItems: 'center' }}><div className="es-lab" style={{ margin: 0 }}>AI Co-Designer</div>
                   <button className="es-btn pri" style={{ marginLeft: 'auto' }} disabled={busy === 'codesign'} onClick={runCoDesign}>{busy === 'codesign' ? '…' : 'Review'}</button></div>
+                {notice && <div style={{ marginTop: 8, fontSize: 11.5, color: '#3C7A26', background: '#EDF7EE', border: '1px solid #CDE9D0', borderRadius: 7, padding: '6px 9px' }}>{notice}</div>}
                 {coDesign && (
                   <div style={{ marginTop: 8 }}>
                     <div style={{ fontSize: 12, marginBottom: 6 }}>Score: <b>{coDesign.score ?? '—'}/100</b></div>
@@ -358,7 +387,9 @@ const ExperienceStudioTab: React.FC = () => {
                       <div key={i} className="es-rec">
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span className={`es-sev ${r.severity}`}>{r.severity}</span><b style={{ fontSize: 12 }}>{r.area}</b></div>
                         <div style={{ fontSize: 12, color: '#555', margin: '3px 0' }}>{r.finding}</div>
-                        {r.patch && Object.keys(r.patch).length > 0 && <button className="es-btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => applyPatch(r.patch)}>Apply</button>}
+                        {r.patch && Object.keys(r.patch).length > 0
+                          ? <button className="es-btn" style={{ fontSize: 11, padding: '2px 8px' }} disabled={busy === 'save'} onClick={() => applyPatch(r.patch)}>{busy === 'save' ? 'Applying…' : 'Apply'}</button>
+                          : <span className="es-muted">No auto-fix — adjust by hand.</span>}
                       </div>
                     ))}
                   </div>

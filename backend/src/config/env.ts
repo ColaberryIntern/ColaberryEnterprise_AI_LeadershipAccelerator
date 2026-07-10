@@ -62,6 +62,11 @@ export const env = {
 
   // Apollo
   apolloApiKey: process.env.APOLLO_API_KEY || '',
+  // Master kill switch — every Apollo call (search/enrich/phone-reveal) burns paid
+  // credits, so ALL calls are OFF unless APOLLO_ENABLED=true is set explicitly.
+  // Default off protects against the scheduled lead-gen agents draining credits
+  // unattended. See CC-20260710-a9f2 (Apollo credit-leak audit).
+  apolloEnabled: process.env.APOLLO_ENABLED === 'true',
 
   // Mandrill
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
