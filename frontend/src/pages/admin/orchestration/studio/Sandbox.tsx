@@ -57,6 +57,9 @@ const Sandbox: React.FC<{ sel: Cmp; vars: Record<string, string> }> = ({ sel, va
   const latest = hist[0];
 
   return (
+    <div>
+    <Lab>Test Lab — run any single piece in isolation</Lab>
+    <p className="es-help">Pick a “story” on the left — one <b>prompt step</b>, one <b>screen</b>, or the <b>full runtime</b> — and press <b>▶ Run</b>. You’ll see the exact output, cost, and speed, with a run history so you can compare tries. Only prompt steps that actually have an instruction show up here.</p>
     <div className="es-cols" style={{ gridTemplateColumns: '210px 1fr' }}>
       <aside>
         {groups.map((g) => (
@@ -108,6 +111,7 @@ const Sandbox: React.FC<{ sel: Cmp; vars: Record<string, string> }> = ({ sel, va
           </>
         )}
       </div>
+    </div>
     </div>
   );
 };
