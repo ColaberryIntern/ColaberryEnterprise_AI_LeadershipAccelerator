@@ -918,6 +918,59 @@ async function ensureCurriculumComposerSchema() {
   console.log('[DB] Curriculum Composer schema ensured');
 }
 
+async function ensureWorkforceSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS workforce_tasks (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       employee_slug VARCHAR(40) NOT NULL,
+       title VARCHAR(400) NOT NULL,
+       description TEXT,
+       status VARCHAR(20) NOT NULL DEFAULT 'assigned',
+       priority VARCHAR(10) NOT NULL DEFAULT 'medium',
+       deadline TIMESTAMPTZ,
+       approver VARCHAR(40),
+       evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+       source_rec_key VARCHAR(120),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_wf_tasks_employee ON workforce_tasks (employee_slug, status)`,
+    `CREATE TABLE IF NOT EXISTS workforce_meetings (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       meeting_date VARCHAR(10) NOT NULL UNIQUE,
+       title VARCHAR(200) NOT NULL DEFAULT 'Daily Leadership Meeting',
+       agenda JSONB NOT NULL DEFAULT '{}'::jsonb,
+       participants JSONB NOT NULL DEFAULT '[]'::jsonb,
+       contributions JSONB NOT NULL DEFAULT '[]'::jsonb,
+       action_items JSONB NOT NULL DEFAULT '[]'::jsonb,
+       notes TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE TABLE IF NOT EXISTS workforce_memory (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       employee_slug VARCHAR(40) NOT NULL,
+       kind VARCHAR(20) NOT NULL DEFAULT 'working',
+       content TEXT NOT NULL,
+       ref VARCHAR(120),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_wf_memory_employee ON workforce_memory (employee_slug, kind)`,
+    `CREATE TABLE IF NOT EXISTS workforce_messages (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       from_slug VARCHAR(40) NOT NULL,
+       to_slug VARCHAR(40) NOT NULL,
+       subject VARCHAR(300) NOT NULL,
+       body TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Workforce schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] AI Workforce schema ensured');
+}
+
 async function ensureOpsCenterSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS ops_recommendations (
@@ -1121,6 +1174,7 @@ async function start(): Promise<void> {
   await ensureCurriculumComposerSchema();
   await ensureRuntimeSchema();
   await ensureOpsCenterSchema();
+  await ensureWorkforceSchema();
   // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
   if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
     try {
