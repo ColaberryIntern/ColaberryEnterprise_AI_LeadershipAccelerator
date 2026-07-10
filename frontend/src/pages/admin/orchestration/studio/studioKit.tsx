@@ -22,7 +22,7 @@ export interface Cmp {
   community_xp?: number; is_system?: boolean; version_locked?: boolean; thumbnail_url?: string;
   dependencies?: string[]; evaluation_type?: string; inputs?: any[]; outputs?: any[];
   artifacts_produced?: string[]; evidence_produced?: string[]; portfolio_assets?: string[];
-  github_assets?: string[]; renderers?: Record<string, string>; [k: string]: any;
+  github_assets?: string[]; renderers?: Record<string, string>; approved?: boolean; [k: string]: any;
 }
 export interface Cap { id: string; label: string; category: string; description: string }
 export interface Recipe { id: string; label: string; description: string }
@@ -117,6 +117,12 @@ export const studioCss = `
   .es-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
   .es-card{position:relative;border:1px solid #E4E4E4;border-radius:12px;padding:14px;cursor:pointer;background:#fff;transition:.12s}
   .es-card:hover{border-color:#367895;box-shadow:0 4px 14px rgba(26,26,26,.08);transform:translateY(-1px)}
+  .es-card.unappr{opacity:.72}.es-card.appr{border-left:3px solid #3C7A26}
+  .es-appr{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:2px 8px;border-radius:999px}
+  .es-appr.on{background:#E7F5E9;color:#3C7A26}.es-appr.off{background:#F0F0F0;color:#8A8A8A}
+  .es-appr svg{width:11px;height:11px}
+  .es-apprbtn{font-size:12px;font-weight:700;padding:7px 13px;border-radius:8px;cursor:pointer;border:1px solid}
+  .es-apprbtn.on{background:#E7F5E9;color:#3C7A26;border-color:#B8E0BE}.es-apprbtn.off{background:#3C7A26;color:#fff;border-color:#3C7A26}
   .es-thumb{width:30px;height:30px;border-radius:8px;background:#EDF3F5;color:#367895;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
   .es-thumbimg{width:100%;height:92px;object-fit:cover;border-radius:9px;margin-bottom:10px;display:block}
   .es-cname{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.es-cmeta{font-size:10.5px;color:#A0A0A0}

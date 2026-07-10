@@ -8,6 +8,7 @@
 import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { createCard, CreateCardInput } from '../timeline/timelineAdminService';
 import { assessPlan } from './blueprintService';
+import { approvedSlugs } from './composerAi';
 import { PlanCard, CurriculumPlan } from './types';
 import { TimelineBucket } from '../../models/TimelineCard';
 
@@ -42,6 +43,13 @@ export async function publishBlueprint(id: string, force = false): Promise<Publi
   const plan: CurriculumPlan | null = bp.generated_plan || null;
   if (!plan || !Array.isArray(plan.cards) || plan.cards.length === 0) {
     throw Object.assign(new Error('Nothing to publish — generate a curriculum first.'), { status: 400 });
+  }
+
+  // Approval gate: only approved activities may reach the Timeline.
+  const approved = await approvedSlugs();
+  const unapproved = Array.from(new Set(plan.cards.map((c) => c.type))).filter((t) => !approved.has(t));
+  if (unapproved.length) {
+    throw Object.assign(new Error(`Not approved for curriculum: ${unapproved.join(', ')}. Approve these activities in Experience Studio first.`), { status: 400 });
   }
 
   const { validation } = assessPlan(bp, plan);

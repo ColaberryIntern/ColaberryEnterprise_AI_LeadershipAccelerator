@@ -596,6 +596,17 @@ async function ensureExperienceBuilderSchema() {
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS dependencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS version_locked BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS renderers JSONB NOT NULL DEFAULT '{}'::jsonb`,
+    // Curriculum-inclusion approval gate: only approved components may be used by the Curriculum Composer.
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS approved_by VARCHAR(255)`,
+    // Seed an initial approved baseline (the core week activities) ONLY on first run —
+    // once anything is approved/unapproved by hand, this guard is false and never fights the author.
+    `UPDATE curriculum_type_definitions SET approved = TRUE, approved_at = NOW(), approved_by = 'system:baseline'
+       WHERE slug IN ('announcement','overview','warmup','video','knowledge_check','deep_dive','prompt_lab',
+                      'implementation_task','github_sync','artifact_submission','reflection','community_discussion',
+                      'mock_interview','survey','evaluation','live_class')
+       AND NOT EXISTS (SELECT 1 FROM curriculum_type_definitions WHERE approved = TRUE)`,
     `CREATE TABLE IF NOT EXISTS component_analytics (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        component_slug VARCHAR(100) NOT NULL UNIQUE,

@@ -21,6 +21,12 @@ describe('scaffoldPlan', () => {
     expect(scaffoldPlan(BP, 'lesson').cards.length).toBe(3);
     expect(scaffoldPlan(BP, 'certification_module').cards.some((c) => c.type === 'certification_exercise')).toBe(true);
   });
+  it('includes ONLY approved activities when an approved set is given', () => {
+    const approved = new Set(['overview', 'video', 'reflection']);
+    const plan = scaffoldPlan(BP, 'week', approved);
+    expect(plan.cards.length).toBe(3);
+    expect(plan.cards.every((c) => approved.has(c.type))).toBe(true);
+  });
 });
 
 describe('dependencyEngine', () => {

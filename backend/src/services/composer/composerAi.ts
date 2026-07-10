@@ -11,6 +11,7 @@
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL, MODEL_PRICING } from '../components/costEstimationService';
 import { allTypes, resolve, CardTypeDef } from '../timeline/typeRegistry';
+import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { PlanCard, CurriculumPlan, ComposerScope, Difficulty } from './types';
 
 export interface BlueprintInput {
@@ -22,6 +23,18 @@ export interface BlueprintInput {
 /** buildable, author-placeable palette (no system + no event types). */
 export function palette(): CardTypeDef[] {
   return allTypes().filter((t) => !t.system && !t.event);
+}
+
+/** The set of component slugs APPROVED for curriculum inclusion (accumulates over time). */
+export async function approvedSlugs(): Promise<Set<string>> {
+  const rows = await CurriculumTypeDefinition.findAll({ where: { approved: true }, attributes: ['slug'] });
+  return new Set(rows.map((r) => r.slug));
+}
+
+/** The palette gated to APPROVED components only — what the Composer may use. */
+export async function approvedPalette(): Promise<CardTypeDef[]> {
+  const set = await approvedSlugs();
+  return palette().filter((t) => set.has(t.slug));
 }
 
 // ── canonical scaffolds per scope (all deps satisfied by construction) ────────
@@ -61,12 +74,14 @@ function cardFromDef(def: CardTypeDef, topic: string, week: number | null): Plan
   };
 }
 
-/** PURE — a sound default plan for a scope, assembled from real registry types. */
-export function scaffoldPlan(bp: BlueprintInput, scope: ComposerScope = 'week'): CurriculumPlan {
+/** PURE — a sound default plan for a scope, assembled from real registry types.
+ *  When `approvedSet` is given, only approved activities are included. */
+export function scaffoldPlan(bp: BlueprintInput, scope: ComposerScope = 'week', approvedSet?: Set<string>): CurriculumPlan {
   const topic = (bp.title || 'the week topic').trim();
   const week = bp.week ?? null;
-  const cards = (SEQ[scope] || SEQ.week).map((slug) => cardFromDef(resolve(slug)!, topic, week));
-  return { scope, week, summary: `${labelScope(scope)} for ${topic}, assembled from ${cards.length} reusable components.`, cards };
+  const seq = (SEQ[scope] || SEQ.week).filter((slug) => !approvedSet || approvedSet.has(slug));
+  const cards = seq.map((slug) => cardFromDef(resolve(slug)!, topic, week));
+  return { scope, week, summary: `${labelScope(scope)} for ${topic}, assembled from ${cards.length} approved components.`, cards };
 }
 
 function labelScope(s: ComposerScope): string { return s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
@@ -119,7 +134,12 @@ export interface GenerateResult { plan: CurriculumPlan; source: 'ai' | 'scaffold
 /** Generate a curriculum plan from a blueprint + instruction. LLM-first, scaffold-fallback. */
 export async function generateCurriculum(bp: BlueprintInput, instruction: string, scope: ComposerScope = 'week', model = DEFAULT_MODEL): Promise<GenerateResult> {
   const week = bp.week ?? null;
-  const pal = palette().map((t) => `${t.slug} (${t.label}, ${t.bucket}${t.evidence_required ? ', evidence' : ''}${t.github_required ? ', github' : ''})`).join('; ');
+  const approved = await approvedSlugs();
+  const palTypes = palette().filter((t) => approved.has(t.slug));
+  if (palTypes.length === 0) {
+    return { plan: { scope, week, summary: 'No approved components yet — approve activities in Experience Studio to build curriculum.', cards: [] }, source: 'scaffold', ai_confidence: 0.5 };
+  }
+  const pal = palTypes.map((t) => `${t.slug} (${t.label}, ${t.bucket}${t.evidence_required ? ', evidence' : ''}${t.github_required ? ', github' : ''})`).join('; ');
   const system =
     'You are a Senior Instructional Designer + AI Curriculum Architect for an AI Systems Architect Accelerator. ' +
     'You assemble reusable component types into a coherent learning sequence. Your north star: maximize each ' +
@@ -135,12 +155,13 @@ export async function generateCurriculum(bp: BlueprintInput, instruction: string
 
   try {
     const r = await jsonCall('composer_generate', system, user, model, 3000);
-    const cards = Array.isArray(r.parsed?.cards) ? r.parsed.cards.map((c: any) => normalizeCard(c, week)).filter(Boolean) as PlanCard[] : [];
+    // enforce the approval gate on the LLM's output — never place an unapproved activity.
+    const cards = (Array.isArray(r.parsed?.cards) ? r.parsed.cards.map((c: any) => normalizeCard(c, week)).filter(Boolean) as PlanCard[] : []).filter((c) => approved.has(c.type));
     if (cards.length >= 3) {
       return { plan: { scope, week, summary: typeof r.parsed.summary === 'string' ? r.parsed.summary : null, cards }, source: 'ai', usage: r.usage, cost_usd: r.cost_usd, runtime_ms: r.runtime_ms, ai_confidence: 0.9 };
     }
   } catch { /* fall through to scaffold */ }
-  return { plan: scaffoldPlan(bp, scope), source: 'scaffold', ai_confidence: 0.8 };
+  return { plan: scaffoldPlan(bp, scope, approved), source: 'scaffold', ai_confidence: 0.8 };
 }
 
 export interface FillResult { card: Partial<PlanCard>; source: 'ai' | 'scaffold'; usage?: any; cost_usd?: number; runtime_ms?: number }

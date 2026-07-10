@@ -159,3 +159,14 @@ export async function handleGetLifecycle(req: Request, res: Response, next: Next
 export async function handleSetLifecycle(req: Request, res: Response, next: NextFunction) {
   try { res.json(await setLifecycle(String(req.params.slug), String(req.body?.state))); } catch (e) { fail(res, e, next); }
 }
+
+// ── Curriculum-inclusion approval ────────────────────────────────────────────
+export async function handleSetApproval(req: Request, res: Response, next: NextFunction) {
+  try {
+    const approved = req.body?.approved === true || req.body?.approved === 'true';
+    const c = await CurriculumTypeDefinition.findOne({ where: { slug: String(req.params.slug) } });
+    if (!c) return res.status(404).json({ error: 'Component not found' });
+    await c.update({ approved, approved_at: approved ? new Date() : null, approved_by: approved ? author(req) : null });
+    res.json({ slug: c.slug, approved: c.approved, approved_at: c.approved_at, approved_by: c.approved_by });
+  } catch (e) { fail(res, e, next); }
+}
