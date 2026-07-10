@@ -31,6 +31,10 @@ import {
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
+import {
+  handleOpenCard, handleMentor, handleReflection, handleVideoAugment, handlePromptLab,
+  handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
+} from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import workspaceRoutes from './workspaceRoutes';
@@ -48,6 +52,17 @@ router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
 // Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
 router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
+// Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
+router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);
+router.get('/api/portal/runtime/notebook', requireParticipant, handleListNotes);
+router.post('/api/portal/runtime/notebook', requireParticipant, handleCreateNote);
+router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDeleteNote);
+router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCard);
+router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
+router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
+router.post('/api/portal/runtime/cards/:cardId/video-augment', requireParticipant, handleVideoAugment);
+router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
+router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);

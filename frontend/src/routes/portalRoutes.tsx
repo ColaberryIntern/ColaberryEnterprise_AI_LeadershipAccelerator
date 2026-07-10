@@ -9,6 +9,7 @@ import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
 import PortalDashboardPage from '../pages/portal/PortalDashboardPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
+import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
 import PortalLessonPage from '../pages/portal/PortalLessonPage';
 import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
 import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
@@ -54,6 +55,8 @@ const portalRoutes = (
       <Route path="/portal/projects" element={<ProjectsPage />} />
       {/* Classroom (Design E timeline) renders its own PortalShell chrome, like Today/Path/Projects. */}
       <Route path="/portal/classroom" element={<ClassroomPage />} />
+      {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
+      <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />

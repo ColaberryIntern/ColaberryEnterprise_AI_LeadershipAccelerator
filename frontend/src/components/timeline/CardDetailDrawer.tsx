@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed from './VideoEmbed';
 import { parseVideoUrl } from '../../utils/videoEmbed';
@@ -22,7 +23,7 @@ function totalPoints(p: TimelineFeedCard['points']): number {
 }
 
 const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
-  const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!card) return;
@@ -33,8 +34,7 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
 
   const complete = useCallback(async () => {
     if (!card) return;
-    setBusy(true);
-    try { await onComplete(card); } finally { setBusy(false); }
+    await onComplete(card);
   }, [card, onComplete]);
 
   if (!card) return null;
@@ -94,9 +94,7 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
             : (
               <>
                 <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>
-                <button type="button" className="tl-btn primary" disabled={busy} onClick={complete}>
-                  {busy ? 'Saving…' : isVideo ? 'Mark watched · complete' : 'Mark complete'}
-                </button>
+                <button type="button" className="tl-btn primary" onClick={() => navigate(`/portal/runtime/${card.id}`)}>Enter workspace →</button>
               </>
             )}
         </div>
