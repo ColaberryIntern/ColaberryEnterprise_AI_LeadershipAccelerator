@@ -7,6 +7,8 @@ import RendererEngine from './studio/RendererEngine';
 import LifecycleStepper from './studio/LifecycleStepper';
 import VersionCompare from './studio/VersionCompare';
 import Sandbox from './studio/Sandbox';
+import VideoEmbed from '../../../components/timeline/VideoEmbed';
+import { parseVideoUrl } from '../../../utils/videoEmbed';
 
 /**
  * ExperienceStudioTab — the AI-native curriculum experience designer (formerly
@@ -46,6 +48,7 @@ const ExperienceStudioTab: React.FC = () => {
   const [vars, setVars] = useState<Record<string, string>>({});
   const [stageTest, setStageTest] = useState<any>(null);
   const [preview, setPreview] = useState<any>(null);
+  const [videoUrl, setVideoUrl] = useState('');
   const [coDesign, setCoDesign] = useState<any>(null);
   const [busy, setBusy] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -68,7 +71,7 @@ const ExperienceStudioTab: React.FC = () => {
     setError(''); setStageTest(null); setPreview(null); setCoDesign(null); setAnalytics(null); setDepGraph(null);
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
-      setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('preview'); setPreview(null);
+      setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('preview'); setPreview(null); setVideoUrl('');
       setVars(Object.fromEntries((r.data.variable_keys || []).map((k: string) => [k, sampleFor(k)])));
       api.get(`/api/admin/components/${slug}/analytics`).then((a) => setAnalytics(a.data)).catch(() => {});
       api.get(`/api/admin/components/${slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {});
@@ -101,6 +104,9 @@ const ExperienceStudioTab: React.FC = () => {
       setList((l) => l.map((c) => (c.slug === sel.slug ? { ...c, approved } : c)));
     } catch { setError('Approval update failed'); }
   };
+  // Video-type components play an actual video in-app (like the student Classroom), not just generated notes.
+  const isVideo = !!sel && (['media', 'live_class', 'video_feedback'].includes(String(sel.render_band || '')) || (sel.capabilities || []).includes('video'));
+  const videoSource = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
   const stageField = (k: StageKey) => STAGES.find((s) => s.key === k)!.field;
   const setStagePrompt = (val: string) => { if (!sel) return; setSel({ ...sel, [stageField(stage)]: val }); setDirty(true); };
   const setField = (f: string, val: any) => { if (!sel) return; setSel({ ...sel, [f]: val }); setDirty(true); };
@@ -231,7 +237,26 @@ const ExperienceStudioTab: React.FC = () => {
               {detailTab === 'preview' && (
                 <div>
                   <div className="es-lab">The finished product</div>
-                  <p className="es-help">This is exactly what a student sees when <b>{sel.label}</b> runs inside their Classroom timeline. Press <b>Generate preview</b> — the AI runs the whole pipeline and renders the live experience on every screen size.</p>
+                  {isVideo ? (
+                    <p className="es-help">A <b>Video</b> activity plays a real video <b>in-app</b> — the student presses play and watches it right inside the Classroom (never sent off to YouTube). Paste any video link below to see <b>exactly what the student plays</b>. Beneath the player, the AI writes the summary, key points, and questions that wrap the video (press <b>Generate preview</b> for those).</p>
+                  ) : (
+                    <p className="es-help">This is exactly what a student sees when <b>{sel.label}</b> runs inside their Classroom timeline. Press <b>Generate preview</b> — the AI runs the whole pipeline and renders the live experience on every screen size.</p>
+                  )}
+
+                  {isVideo && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div className="es-lab">▶ The video the student plays</div>
+                      <input className="es-in" placeholder="Paste a YouTube, Vimeo, Loom, Wistia, or .mp4 link…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+                      <div className="es-video" style={{ marginTop: 10 }}>
+                        <VideoEmbed source={videoSource} title={sel.label} />
+                      </div>
+                      {videoUrl.trim() && videoSource?.provider === 'unknown'
+                        ? <div className="es-muted" style={{ marginTop: 6 }}>That link isn't a recognized provider — a student would get a "watch on source" button instead of in-app playback. Use a YouTube, Vimeo, Loom, Wistia, or direct .mp4 link.</div>
+                        : videoSource && <div className="es-muted" style={{ marginTop: 6 }}>Playing in-app via {videoSource.provider}. The real per-week video is attached when you place this on a week in the Curriculum Composer — this field is just for previewing playback.</div>}
+                    </div>
+                  )}
+
+                  <div className="es-lab">{isVideo ? 'Notes & questions shown beneath the video' : 'The student experience'}</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                     <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Generating…' : preview ? '↻ Regenerate' : '✦ Generate preview'}</button>
                     {!sel.generation_prompt && <span className="es-muted">Add a Generation prompt in the <b>Prompts</b> tab first.</span>}
@@ -239,9 +264,9 @@ const ExperienceStudioTab: React.FC = () => {
                   </div>
                   {!preview && busy !== 'preview' && (
                     <div className="es-empty">
-                      <div style={{ fontSize: 26 }}>🎓</div>
+                      <div style={{ fontSize: 26 }}>{isVideo ? '📝' : '🎓'}</div>
                       <b>No preview yet</b>
-                      <span className="es-muted">Generate one to see the student-facing experience.</span>
+                      <span className="es-muted">{isVideo ? 'Generate the notes & questions that wrap the video.' : 'Generate one to see the student-facing experience.'}</span>
                     </div>
                   )}
                   {preview && (<>
