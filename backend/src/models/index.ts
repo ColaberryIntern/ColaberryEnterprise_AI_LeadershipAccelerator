@@ -147,6 +147,7 @@ import CampaignDeployment from './CampaignDeployment';
 import UnsubscribeEvent from './UnsubscribeEvent';
 import Project from './Project';
 import ProjectArtifact from './ProjectArtifact';
+import ShowcaseArtifact from './ShowcaseArtifact';
 import ProposedAgentAction from './ProposedAgentAction';
 import AgentWriteAudit from './AgentWriteAudit';
 import StrategicInitiative from './StrategicInitiative';
@@ -738,6 +739,9 @@ Project.belongsTo(ProgramBlueprint, { foreignKey: 'program_id', as: 'program' })
 Project.hasMany(ProjectArtifact, { foreignKey: 'project_id', as: 'projectArtifacts', onDelete: 'CASCADE' });
 ProjectArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+Project.hasMany(ShowcaseArtifact, { foreignKey: 'project_id', as: 'showcaseArtifacts', onDelete: 'CASCADE' });
+ShowcaseArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 
@@ -1053,6 +1057,7 @@ export {
   UnsubscribeEvent,
   Project,
   ProjectArtifact,
+  ShowcaseArtifact,
   ProposedAgentAction,
   AgentWriteAudit,
   StrategicInitiative,
