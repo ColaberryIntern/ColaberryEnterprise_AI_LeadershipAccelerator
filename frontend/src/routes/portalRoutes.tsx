@@ -34,6 +34,7 @@ import TodayShell from '../pages/portal/today/TodayShell';
 import PathPage from '../pages/portal/path/PathPage';
 import SchedulePage from '../pages/portal/schedule/SchedulePage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
+import CommunityPage from '../pages/portal/community/CommunityPage';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
@@ -55,6 +56,7 @@ const portalRoutes = (
       {/* Projects tab: portal-native builds (lists + tasks, FB vibe), opens on
           the new-build wizard. Renders its own PortalShell chrome like Today. */}
       <Route path="/portal/projects" element={<ProjectsPage />} />
+      <Route path="/portal/community" element={<CommunityPage />} />
       {/* Classroom (Design E timeline) renders its own PortalShell chrome, like Today/Path/Projects. */}
       <Route path="/portal/classroom" element={<ClassroomPage />} />
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}

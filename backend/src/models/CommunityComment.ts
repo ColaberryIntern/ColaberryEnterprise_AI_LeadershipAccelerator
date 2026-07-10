@@ -58,6 +58,11 @@ CommunityComment.init(
     tableName: 'community_comments',
     timestamps: true,
     underscored: true,
+    // See CommunityMember.ts — without this, Sequelize's auto-timestamp JS
+    // attributes are createdAt/updatedAt (camelCase), not the snake_case
+    // names this class declares, and created_at/updated_at read undefined.
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     indexes: [
       { fields: ['post_id'], name: 'idx_community_comments_post_id' },
       { fields: ['member_id'], name: 'idx_community_comments_member_id' },

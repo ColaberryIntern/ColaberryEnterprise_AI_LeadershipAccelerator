@@ -1,0 +1,63 @@
+/* Community tab — Design E card language (.fcard/.fc-*, .te-grid/.te-side/.te-card)
+   plus the pieces unique to Community: composer, comment thread, contacts rail,
+   leaderboard. Scoped with a cm- prefix so nothing leaks into other pages. */
+
+.cm-avatar{
+  width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:13px;color:#fff;background:var(--berry,#367895);
+}
+.cm-avatar.sm{width:28px;height:28px;font-size:11px}
+
+.cm-composer{padding:16px}
+.cm-composer textarea{
+  width:100%;min-height:76px;resize:vertical;border:1px solid var(--border,#D8D8D8);border-radius:var(--r-12,12px);
+  padding:10px 12px;font-family:inherit;font-size:14px;color:var(--strong,#1A1A1A);background:var(--surface,#fff);
+}
+.cm-composer textarea:focus{outline:none;border-color:var(--berry,#367895)}
+.cm-composer-row{display:flex;align-items:center;gap:10px;margin-top:10px}
+.cm-composer-row select{
+  border:1px solid var(--border,#D8D8D8);border-radius:var(--r-pill,999px);padding:7px 14px;font-size:13px;font-weight:700;
+  font-family:inherit;background:var(--surface,#fff);color:var(--body,#2B2B2B);
+}
+.cm-composer-row .spacer{flex:1}
+
+.cm-post-body{white-space:pre-wrap;word-break:break-word}
+.cm-pin{border:none;background:none;cursor:pointer;color:var(--muted,#6B6B6B);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;font-family:inherit}
+.cm-pin.pinned{color:var(--amber-deep,#B5710A)}
+.cm-pin svg{width:16px;height:16px}
+.cm-pinned-badge{font-family:var(--mono,monospace);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:rgba(232,146,12,.16);color:var(--amber-deep,#B5710A)}
+
+.cm-thread{border-top:1px solid var(--border-subtle,#E4E4E3);padding:10px 14px 14px;display:flex;flex-direction:column;gap:12px}
+.cm-comment{display:flex;gap:9px}
+.cm-comment.reply{margin-left:34px}
+.cm-comment-body{flex:1;min-width:0}
+.cm-comment-bubble{background:var(--sunken,#F1F1F0);border-radius:var(--r-12,12px);padding:8px 12px}
+.cm-comment-name{font-weight:700;font-size:13px;color:var(--strong,#1A1A1A)}
+.cm-comment-text{font-size:13.5px;color:var(--body,#2B2B2B);white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.cm-comment-meta{display:flex;align-items:center;gap:12px;margin-top:4px;font-size:12px;color:var(--muted,#6B6B6B)}
+.cm-comment-meta button{border:none;background:none;cursor:pointer;color:inherit;font-size:12px;font-weight:600;font-family:inherit;padding:0}
+.cm-comment-meta button.liked{color:var(--cherry-text,#E5121D)}
+
+.cm-comment-input{display:flex;gap:8px;margin-top:2px}
+.cm-comment-input input{
+  flex:1;border:1px solid var(--border,#D8D8D8);border-radius:999px;padding:8px 14px;font-size:13px;font-family:inherit;
+  background:var(--surface,#fff);color:var(--strong,#1A1A1A);
+}
+.cm-comment-input input:focus{outline:none;border-color:var(--berry,#367895)}
+.cm-comment-input button{border:none;background:var(--berry,#367895);color:#fff;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;flex:none}
+.cm-comment-input button:disabled{opacity:.5;cursor:default}
+
+.cm-dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block;background:var(--muted,#9C9C9C)}
+.cm-dot.online{background:var(--leaf,#5BA63C)}
+.cm-dot.away{background:var(--amber,#E8920C)}
+.cm-dot.offline{background:var(--border,#B8B8B8)}
+
+.cm-contact-row,.cm-leader-row{display:flex;align-items:center;gap:10px;padding:7px 0}
+.cm-contact-row + .cm-contact-row,.cm-leader-row + .cm-leader-row{border-top:1px solid var(--border-subtle,#E4E4E3)}
+.cm-contact-name,.cm-leader-name{font-size:13.5px;font-weight:600;color:var(--strong,#1A1A1A);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-contact-status{font-size:11.5px;color:var(--muted,#6B6B6B)}
+.cm-leader-rank{font-family:var(--mono,monospace);font-size:12px;font-weight:700;color:var(--muted,#6B6B6B);width:18px;flex:none}
+.cm-leader-pts{font-family:var(--mono,monospace);font-size:12.5px;font-weight:700;color:var(--leaf-text,#468A2E);flex:none}
+.cm-leader-row.me .cm-leader-name{color:var(--berry,#367895)}
+
+.cm-empty{padding:22px;text-align:center;color:var(--muted,#6B6B6B);font-size:13.5px}

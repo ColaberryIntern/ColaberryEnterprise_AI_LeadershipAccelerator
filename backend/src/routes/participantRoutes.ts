@@ -566,6 +566,16 @@ router.get('/api/portal/community/members', requireParticipant, async (req, res)
   }
 });
 
+router.post('/api/portal/community/presence/ping', requireParticipant, async (req, res) => {
+  try {
+    const { touchPresence } = await import('../services/communityService');
+    const result = await touchPresence(req.participant!.sub);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
 router.get('/api/portal/community/members/:memberId', requireParticipant, async (req, res) => {
   const paramsParsed = MemberIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) {

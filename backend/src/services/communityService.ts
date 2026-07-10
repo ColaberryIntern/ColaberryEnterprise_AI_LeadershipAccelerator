@@ -1,9 +1,33 @@
-import CommunityMember from '../models/CommunityMember';
+import CommunityMember, { CommunityPresenceStatus } from '../models/CommunityMember';
 import CommunityPost from '../models/CommunityPost';
 import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
+
+// Lite poll-presence (P0 per the approved design mockup — real-time websocket
+// presence is explicitly P2). A client pings /presence/ping every ~45s while
+// the Community tab is open; presence is derived here from staleness of
+// last_active_at rather than trusted from a stored flag, so a crashed/closed
+// tab reads as away then offline within these windows without any cleanup job.
+const PRESENCE_ONLINE_MS = 90_000;
+const PRESENCE_AWAY_MS = 10 * 60_000;
+
+export function derivePresence(lastActiveAt: Date | null, now: Date = new Date()): CommunityPresenceStatus {
+  if (!lastActiveAt) return 'offline';
+  const ageMs = now.getTime() - lastActiveAt.getTime();
+  if (ageMs < 0) return 'online'; // clock skew guard — treat future timestamps as fresh
+  if (ageMs <= PRESENCE_ONLINE_MS) return 'online';
+  if (ageMs <= PRESENCE_AWAY_MS) return 'away';
+  return 'offline';
+}
+
+// Idempotent — repeat pings just bump last_active_at forward.
+export async function touchPresence(enrollmentId: string): Promise<{ presence: CommunityPresenceStatus }> {
+  const member = await getOrCreateMember(enrollmentId);
+  await member.update({ last_active_at: new Date(), presence_status: 'online' });
+  return { presence: 'online' };
+}
 
 // Deterministic, pure, recomputable from points alone — matches the approved
 // member-profile-system design mockup's level tiers exactly. Full leaderboard
@@ -433,6 +457,7 @@ export interface MemberProfile {
   bio: string | null;
   level: number;
   points: number;
+  presence: CommunityPresenceStatus;
   created_at: Date;
 }
 
@@ -444,6 +469,7 @@ function toMemberProfile(member: CommunityMember): MemberProfile {
     bio: member.bio,
     level: member.level,
     points: member.points,
+    presence: derivePresence(member.last_active_at),
     created_at: member.created_at,
   };
 }
