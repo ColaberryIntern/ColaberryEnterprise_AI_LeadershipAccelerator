@@ -33,10 +33,11 @@ const SURFACE_GROUPS: { label: string; surfaces: Surface[] }[] = [
 interface Props {
   sel: Cmp;
   vars: Record<string, string>;
+  genContent?: any; // the experience generated in the Flow tab, so this render matches it
   onChange: (renderers: Record<string, string>) => void;
 }
 
-const RendererEngine: React.FC<Props> = ({ sel, vars, onChange }) => {
+const RendererEngine: React.FC<Props> = ({ sel, vars, genContent, onChange }) => {
   const [surface, setSurface] = useState<Surface>('timeline');
   const [rendered, setRendered] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
@@ -44,15 +45,19 @@ const RendererEngine: React.FC<Props> = ({ sel, vars, onChange }) => {
   const renderers = sel.renderers || {};
   const meta = SURFACE_META[surface];
 
+  // Prefer the content the Flow tab actually generated, so this render shows the
+  // SAME example — not a hardcoded sample that never matches.
+  const contentSample = (genContent && (genContent.body_html || genContent.summary || genContent.title)) || '';
+
   const setPrompt = (val: string) => onChange({ ...renderers, [surface]: val });
 
   const render = async () => {
     setBusy(true); setErr('');
     try {
-      // merge author-entered vars with samples so the render is never blank.
+      // merge author-entered vars with the generated content (or a sample) so the render is never blank.
       const merged: Record<string, string> = {};
       for (const k of sel.variable_keys || []) merged[k] = vars[k] ?? sampleFor(k);
-      merged.content = merged.content || vars.content || sampleFor('content');
+      merged.content = merged.content || vars.content || contentSample || sampleFor('content');
       const r = await api.post(`/api/admin/components/${sel.slug}/render/${surface}`, { variables: merged });
       setRendered({ ...rendered, [surface]: r.data });
     } catch (e: any) { setErr(e?.response?.data?.error || 'Render failed'); } finally { setBusy(false); }
@@ -62,8 +67,8 @@ const RendererEngine: React.FC<Props> = ({ sel, vars, onChange }) => {
 
   return (
     <div>
-      <Lab>Appearance — how this activity looks on each screen</Lab>
-      <p className="es-help">A “renderer” is the AI’s instruction for <b>how this activity looks</b> on one kind of screen. Pick a surface, edit its instruction, then <b>▶ Render live</b> to see the real HTML a student would see. Most of the time you only touch <b>Timeline</b> (the card in the feed) and <b>Student</b> (the full activity) — the rest are the same thing at other sizes.</p>
+      <Lab>Appearance — experimental card templating</Lab>
+      <p className="es-help"><b>Heads up:</b> this is an <b>experimental</b> way to hand-author card HTML per screen — it is <b>not</b> what students see today. The real student card is rendered by the Classroom from the content you make in the <b>Flow</b> tab. Use this only if you want to design a custom layout. {contentSample ? 'It now renders the content you generated in the Flow tab, so it matches.' : 'Run the Flow tab first and it will render that same content here.'}</p>
       {SURFACE_GROUPS.map((grp) => (
         <div key={grp.label} style={{ marginBottom: 8 }}>
           <div className="es-grouplab">{grp.label}</div>

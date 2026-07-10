@@ -154,6 +154,10 @@ export const studioCss = `
   .es-stageedit{border:1px solid #367895;border-top:none;border-radius:0 0 9px 9px;background:#F5FAFB;padding:12px;margin:-4px 2px 2px}
   .es-connect{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;border:1px dashed #CBD9DE;border-radius:9px;background:#FAFCFD}
   .es-empty{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;padding:34px 16px;border:1px dashed #D8D8D8;border-radius:12px;background:#FAFAFA;color:#5A5A5A}
+  .es-flowstepbox{display:flex;gap:12px;align-items:flex-start;border:1px solid #E4E4E4;border-radius:12px;padding:14px;background:#fff}
+  .es-flownum{width:26px;height:26px;border-radius:50%;background:#367895;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none}
+  .es-sublab{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8A8A8A;margin:0 0 4px}
+  .es-gencontent{border:1px solid #EEE;border-radius:9px;padding:10px 12px;background:#FBFBFC}
   .es-flow{margin-top:18px;padding:14px;border:1px solid #E4E4E4;border-radius:12px;background:#FBFBFC}
   .es-flowrow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:2px 0 10px}
   .es-flowstep{display:flex;flex-direction:column;gap:2px;font-size:12px;font-weight:700;color:#8A8A8A;border:1px solid #E4E4E4;background:#fff;border-radius:9px;padding:8px 11px;flex:1;min-width:120px}
