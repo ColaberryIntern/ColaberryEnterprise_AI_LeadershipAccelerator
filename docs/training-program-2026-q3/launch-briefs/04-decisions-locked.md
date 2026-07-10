@@ -26,8 +26,8 @@
 ## A6. LLM choice for training-platform agents
 **LOCKED:** OpenAI gpt-4o family for v1 (matches `@CB` precedent — OpenAI key already in prod env). Swap to Claude API once `ANTHROPIC_API_KEY` is provisioned.
 
-## A7. Cohort kickoff + Architect Expo dates
-**LOCKED:** Enrollment opens Fri 2026-07-10. Cohort 1 orientation Thu 2026-07-23, classes start Mon 2026-07-27. Cohort 1 ends + Architect Expo Fri 2026-10-16.
+## A7. Platform launch, program launch + Architect Expo dates
+**LOCKED (platform launch updated Ali 2026-07-10):** **Platform launch (site + Open House go-live; first paid enrollment): Thu 2026-07-16** (moved from 2026-07-10). Program launch / Cohort 1 orientation Thu 2026-07-23, classes start Mon 2026-07-27. Cohort 1 ends + Architect Expo Fri 2026-10-16.
 **If override:** Whole 41-day plan shifts.
 
 ## A8. Mentor sourcing for Architect Pro tier
