@@ -918,6 +918,33 @@ async function ensureCurriculumComposerSchema() {
   console.log('[DB] Curriculum Composer schema ensured');
 }
 
+async function ensureOpsCenterSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS ops_recommendations (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       rec_key VARCHAR(120) NOT NULL UNIQUE,
+       domain VARCHAR(40) NOT NULL,
+       title VARCHAR(400) NOT NULL,
+       why TEXT,
+       evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+       impact VARCHAR(400),
+       confidence DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+       action_type VARCHAR(20) NOT NULL DEFAULT 'open',
+       severity VARCHAR(10) NOT NULL DEFAULT 'medium',
+       status VARCHAR(20) NOT NULL DEFAULT 'open',
+       assigned_to VARCHAR(255),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ops_recs_status ON ops_recommendations (status)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Ops Center schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] AI Operations Center schema ensured');
+}
+
 async function ensureRuntimeSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS runtime_mentor_turns (
@@ -1093,6 +1120,7 @@ async function start(): Promise<void> {
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
   await ensureRuntimeSchema();
+  await ensureOpsCenterSchema();
   // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
   if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
     try {
