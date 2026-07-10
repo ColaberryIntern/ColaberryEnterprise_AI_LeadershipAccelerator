@@ -158,6 +158,20 @@ export const studioCss = `
   .es-flowstep small{font-weight:500;color:#A0A0A0;font-size:10.5px}
   .es-flowstep.on{border-color:#367895;background:#F5FAFB;color:#1A1A1A}.es-flowstep.on small{color:#367895}
   .es-flowarrow{display:flex;align-items:center;color:#C0C0C0;font-size:14px}
+  /* In-app video player (reuses the student <VideoEmbed> markup; scoped, token-free) */
+  .es-video{max-width:560px}
+  .es-video .tlv-frame{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center}
+  .es-video .tlv-media{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#000}
+  .es-video .tlv-poster{cursor:pointer;padding:0;border:none}
+  .es-video .tlv-posterimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+  .es-video .tlv-postergrad{position:absolute;inset:0;background:linear-gradient(135deg,rgba(54,120,149,.55),rgba(20,24,27,.78));z-index:1}
+  .es-video .tlv-bigplay{position:relative;z-index:2;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.96);display:flex;align-items:center;justify-content:center;transition:transform .15s}
+  .es-video .tlv-poster:hover .tlv-bigplay{transform:scale(1.08)}
+  .es-video .tlv-bigplay svg{width:28px;height:28px;color:#FB2832;margin-left:3px}
+  .es-video .tlv-postertitle{position:absolute;left:14px;bottom:12px;z-index:2;color:#fff;font-weight:700;font-size:14px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+  .es-video .tlv-link,.es-video .tlv-none{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:#F5F5F5;border:1px solid #E4E4E4;border-radius:10px;color:#8A8A8A;padding:16px}
+  .es-video .tlv-linkbody p{margin:0 0 12px;font-size:13px;color:#5A5A5A}
+  .es-video .tl-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:8px;border:1px solid #367895;background:#367895;color:#fff;text-decoration:none;cursor:pointer}
   .es-out{background:#fff;border:1px solid #E4E4E4;border-radius:8px;padding:10px;font-size:11.5px;white-space:pre-wrap;max-height:240px;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace}
   .es-devices{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
   .es-device{flex:1;min-width:0}.es-device:last-child{flex:none}.es-devlabel{font-size:11px;font-weight:700;color:#8A8A8A;margin-bottom:4px}
