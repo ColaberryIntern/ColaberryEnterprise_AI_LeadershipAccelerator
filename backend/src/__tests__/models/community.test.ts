@@ -195,3 +195,32 @@ describe('CommunityEvent validation', () => {
     expect(allowed).not.toContain('party');
   });
 });
+
+// Regression guard for a real bug found via live browser verification of the
+// Community tab: these 4 models declare snake_case created_at/updated_at in
+// their TS class, but Sequelize's auto-timestamp JS attribute names default
+// to createdAt/updatedAt even with underscored:true (that option only renames
+// the DB column). Without an explicit createdAt/updatedAt override in .init(),
+// every service function reading `.created_at` silently gets undefined — it
+// gets dropped by JSON.stringify, so the API response is missing the field
+// entirely rather than throwing, which is how this slipped through 3 merged
+// PRs' worth of mocked-instance tests. Checked via rawAttributes so no DB I/O.
+describe('Community models: created_at/updated_at attribute naming', () => {
+  const modelsWithTimestamps = [
+    Models.CommunityMember,
+    Models.CommunityPost,
+    Models.CommunityComment,
+    Models.CommunityEvent,
+  ];
+
+  test.each(modelsWithTimestamps.map((m) => [m.name, m]))(
+    '%s exposes created_at/updated_at as real attributes, not createdAt/updatedAt',
+    (_name, model: any) => {
+      const attrs = model.rawAttributes;
+      expect(attrs.created_at).toBeDefined();
+      expect(attrs.updated_at).toBeDefined();
+      expect(attrs.createdAt).toBeUndefined();
+      expect(attrs.updatedAt).toBeUndefined();
+    }
+  );
+});

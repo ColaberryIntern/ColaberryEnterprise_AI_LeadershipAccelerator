@@ -84,6 +84,12 @@ CommunityMember.init(
     tableName: 'community_members',
     timestamps: true,
     underscored: true,
+    // Sequelize's auto-timestamps default to camelCase JS attribute names
+    // (createdAt/updatedAt) even with underscored:true (that only renames the
+    // DB column). This class declares snake_case created_at/updated_at, so
+    // without this override those fields silently read as undefined.
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     indexes: [
       { unique: true, fields: ['enrollment_id'], name: 'uq_community_members_enrollment' },
       { fields: ['points'], name: 'idx_community_members_points' },

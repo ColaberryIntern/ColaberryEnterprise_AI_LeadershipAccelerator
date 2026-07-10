@@ -7,7 +7,7 @@ jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
 jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../models/CommunityPost', () => ({ create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn() }));
 
-import { createPost, listPosts, togglePin, getOrCreateMember } from '../../services/communityService';
+import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
@@ -223,5 +223,67 @@ describe('togglePin', () => {
 
     expect(alreadyPinned.update).not.toHaveBeenCalled();
     expect(result.pinned).toBe(true);
+  });
+});
+
+describe('derivePresence', () => {
+  const now = new Date('2026-07-10T12:00:00.000Z');
+
+  it('happy path: recent activity (< 90s) reads online', () => {
+    expect(derivePresence(new Date(now.getTime() - 30_000), now)).toBe('online');
+  });
+
+  it('happy path: activity between 90s and 10min reads away', () => {
+    expect(derivePresence(new Date(now.getTime() - 5 * 60_000), now)).toBe('away');
+  });
+
+  it('happy path: activity older than 10min reads offline', () => {
+    expect(derivePresence(new Date(now.getTime() - 20 * 60_000), now)).toBe('offline');
+  });
+
+  it('boundary: never-active member (null last_active_at) reads offline', () => {
+    expect(derivePresence(null, now)).toBe('offline');
+  });
+
+  it('boundary: exactly at the online threshold (90s) still reads online', () => {
+    expect(derivePresence(new Date(now.getTime() - 90_000), now)).toBe('online');
+  });
+
+  it('boundary: exactly at the away threshold (10min) still reads away', () => {
+    expect(derivePresence(new Date(now.getTime() - 10 * 60_000), now)).toBe('away');
+  });
+
+  it('failure/edge case: clock-skewed future timestamp reads online rather than throwing', () => {
+    expect(derivePresence(new Date(now.getTime() + 5_000), now)).toBe('online');
+  });
+});
+
+describe('touchPresence', () => {
+  it('happy path: bumps last_active_at and presence_status on the member row', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    const update = jest.fn();
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, update }, false]);
+
+    const result = await touchPresence(enrollmentId);
+
+    expect(result.presence).toBe('online');
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ presence_status: 'online' }));
+  });
+
+  it('idempotency: repeat pings are safe, each just bumps the timestamp forward', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    const update = jest.fn();
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, update }, false]);
+
+    await touchPresence(enrollmentId);
+    await touchPresence(enrollmentId);
+
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it('failure path: propagates NotFoundError for a missing enrollment', async () => {
+    findByPkEnrollment.mockResolvedValue(null);
+
+    await expect(touchPresence(enrollmentId)).rejects.toMatchObject({ error_class: 'NotFoundError' });
   });
 });
