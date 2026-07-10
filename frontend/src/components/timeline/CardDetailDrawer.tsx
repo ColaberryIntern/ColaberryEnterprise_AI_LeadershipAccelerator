@@ -23,6 +23,18 @@ function totalPoints(p: TimelineFeedCard['points']): number {
   return (p.learning || 0) + (p.builder || 0) + (p.community || 0);
 }
 
+/** Wrap AI-generated body_html in a minimal styled doc for a SANDBOXED iframe —
+ *  sandbox="" runs no scripts, so any markup the model emits is inert (safe). */
+function lessonDoc(bodyHtml: string): string {
+  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
+    body{font-family:Roboto,system-ui,sans-serif;margin:0;padding:2px;color:#1A1A1A;font-size:14.5px;line-height:1.62}
+    h1,h2,h3{line-height:1.3;margin:14px 0 6px} h1{font-size:18px} h2{font-size:16px} h3{font-size:14.5px}
+    p{margin:0 0 10px} ul,ol{padding-left:20px;margin:0 0 10px} li{margin-bottom:4px} a{color:#367895} img{max-width:100%}
+    pre,code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:#F5F5F5;border-radius:6px}
+    pre{padding:10px;overflow:auto} code{padding:1px 4px}
+  </style>${bodyHtml}`;
+}
+
 const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
   const navigate = useNavigate();
   // "Make it interactive" — the same AI notes (summary / key moments / self-check)
@@ -106,6 +118,18 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
               {card.difficulty && <span><b>Level</b>{card.difficulty}</span>}
             </div>
           </div>
+
+          {card.content && (card.content.summary || card.content.body_html || (card.content.questions && card.content.questions.length > 0)) && (
+            <div className="tld-lesson">
+              <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
+              {card.content.summary && <p className="tld-desc">{card.content.summary}</p>}
+              {card.content.body_html && <iframe className="tld-lessonframe" title="Lesson content" sandbox="" srcDoc={lessonDoc(card.content.body_html)} />}
+              {Array.isArray(card.content.questions) && card.content.questions.length > 0 && (
+                <><div className="tld-sublab">Questions to consider</div>
+                  <ul className="tld-alist">{card.content.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>
+              )}
+            </div>
+          )}
 
           {isVideo && source && (
             <div className="tld-augment">
