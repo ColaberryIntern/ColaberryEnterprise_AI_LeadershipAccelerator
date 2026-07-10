@@ -24,6 +24,8 @@ import AdminOpportunitiesPage from '../pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from '../pages/admin/AdminAcceleratorPage';
 import AdminKnowledgeOpsPage from '../pages/admin/AdminKnowledgeOpsPage';
 import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
+import WorkforceOSPage from '../pages/admin/workforce/WorkforceOSPage';
+import EnterpriseIntelligencePage from '../pages/admin/intelligence/EnterpriseIntelligencePage';
 import IntelligenceOSPage from '../pages/admin/intelligence/IntelligenceOSPage';
 import IntelligenceDiscoveryPage from '../pages/admin/intelligence/IntelligenceDiscoveryPage';
 import IntelligenceSettingsPage from '../pages/admin/intelligence/IntelligenceSettingsPage';
@@ -76,6 +78,10 @@ const adminRoutes = (
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
         <Route path="/admin/knowledge-ops" element={<AdminKnowledgeOpsPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
+        {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
+        <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
+        <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        <Route path="/admin/brain" element={<EnterpriseIntelligencePage />} />
         <Route path="/admin/ai-settings" element={<Navigate to="/admin/intelligence" replace />} />
         <Route path="/admin/intelligence" element={<IntelligenceOSPage />} />
         <Route path="/admin/missed-opportunities" element={<MissedOpportunitiesPage />} />

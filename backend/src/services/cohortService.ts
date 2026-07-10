@@ -20,16 +20,46 @@ export async function listAllCohorts() {
   });
 }
 
+/**
+ * Pure placement logic: which open cohort a new Explorer (Open House signup) is
+ * filed under. Picks the SOONEST upcoming open cohort — the open cohort whose
+ * start_date is today or later, earliest first — so prospects land in the next
+ * real intake rather than the farthest-out cohort. Fallbacks, in order:
+ *   1. soonest open cohort with start_date >= today
+ *   2. if every open cohort has already started, the most-recently-started open one
+ *   3. if no cohort is open at all, the most recently created cohort
+ * Pure + I/O-free so it is unit-testable; `now` is injected by the caller.
+ */
+export function selectNextOpenCohort<
+  T extends { status: string; start_date: string; created_at?: Date | string | null }
+>(cohorts: T[], now: Date): T | null {
+  const today = now.toISOString().slice(0, 10);
+  const open = cohorts.filter((c) => c.status === 'open');
+
+  const upcoming = open
+    .filter((c) => String(c.start_date) >= today)
+    .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+  if (upcoming.length) return upcoming[0];
+
+  const started = [...open].sort((a, b) =>
+    String(b.start_date).localeCompare(String(a.start_date))
+  );
+  if (started.length) return started[0];
+
+  const byCreated = [...cohorts].sort(
+    (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+  );
+  return byCreated[0] ?? null;
+}
+
 export async function getLatestOpenCohort(): Promise<Cohort | null> {
-  // The cohort new Explorers (Open House signups) are placed under: the open
-  // cohort with the latest start_date. Falls back to the most recently created
-  // cohort if none are open.
-  const open = await Cohort.findOne({
-    where: { status: 'open' },
-    order: [['start_date', 'DESC']],
-  });
-  if (open) return open;
-  return Cohort.findOne({ order: [['created_at', 'DESC']] });
+  // Placement for new Explorers (Open House signups). Historically this picked
+  // the open cohort with the LATEST start_date, which filed every new signup
+  // into the farthest-out cohort (e.g. a November cohort instead of the imminent
+  // July one). It now picks the SOONEST upcoming open cohort. Name retained for
+  // the single call site (enrollmentService). See selectNextOpenCohort.
+  const cohorts = await Cohort.findAll();
+  return selectNextOpenCohort(cohorts, new Date());
 }
 
 export async function getCohortDetail(id: string) {

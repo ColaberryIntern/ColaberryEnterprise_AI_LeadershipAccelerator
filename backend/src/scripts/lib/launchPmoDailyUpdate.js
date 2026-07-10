@@ -36,6 +36,14 @@ function stripHtml(s) {
   return (s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function stripEmDashes(s) { return (s || '').replace(/—/g, '-').replace(/–/g, '-'); }
+// Pure ISO(YYYY-MM-DD) -> "Jul 16" formatter. String-split (no Date) so it is
+// timezone-safe and cannot drift a day across UTC/local boundaries.
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function shortDate(ymd) {
+  const [y, m, d] = String(ymd || '').split('-').map(Number);
+  if (!y || !m || !d || m < 1 || m > 12) return String(ymd || '');
+  return `${SHORT_MONTHS[m - 1]} ${d}`;
+}
 
 // Mandrill preflight rejects "Ali Muwwakkil" appearing 3+ times (signature
 // duplicate detection). Both the HTML and text generators reference Ali by
@@ -121,6 +129,12 @@ async function pullProjectState() {
   const lists = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todosets/${dock.todoset.id}/todolists.json`);
   const today = dateYMD();
   const daysToLaunch = daysBetween(LAUNCH.targetLaunchDate, today);
+  // Two launch milestones surfaced in the report header/subject: platform (site
+  // + Open House go-live) and program (Cohort 1 orientation / kickoff).
+  // daysToLaunch above stays anchored to targetLaunchDate (first teaching class)
+  // for feasibility scoring; these two are display-only countdowns.
+  const daysToPlatform = daysBetween(LAUNCH.platformLaunchDate, today);
+  const daysToProgram = daysBetween(LAUNCH.programLaunchDate, today);
   const cbDraftedIds = loadCbDraftedIds();
   const areas = [];
   for (const list of lists) {
@@ -195,7 +209,7 @@ async function pullProjectState() {
   const totalAi = areas.reduce((s, a) => s + a.aiCount, 0);
   const totalEither = areas.reduce((s, a) => s + a.eitherCount, 0);
   const totalOverdue = areas.reduce((s, a) => s + a.overdue.length, 0);
-  return { areas, totalAll, doneAll, overall, totalHuman, totalAi, totalEither, totalOverdue, daysToLaunch, today };
+  return { areas, totalAll, doneAll, overall, totalHuman, totalAi, totalEither, totalOverdue, daysToLaunch, daysToPlatform, daysToProgram, today };
 }
 
 // ---------------------------------------------------------------------------
@@ -589,7 +603,7 @@ async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePost
 <tr><td style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:#fff;padding:28px 32px">
 <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">Launch PMO - Daily Update</div>
 <h1 style="margin:6px 0 8px;font-size:24px;font-weight:800;color:white">AI Systems Architect Accelerator &mdash; ${today}</h1>
-<div style="font-size:13px;color:#e2e8f0;line-height:1.6">${state.daysToLaunch} days to launch &middot; ${state.overall}% overall ready &middot; ${state.totalAi} AI-doable &middot; ${state.totalHuman} human-needed &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</div>
+<div style="font-size:13px;color:#e2e8f0;line-height:1.6">${state.daysToPlatform}d to platform launch (${shortDate(LAUNCH.platformLaunchDate)}) &middot; ${state.daysToProgram}d to program launch (${shortDate(LAUNCH.programLaunchDate)}) &middot; ${state.overall}% overall ready &middot; ${state.totalAi} AI-doable &middot; ${state.totalHuman} human-needed &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</div>
 </td></tr>
 
 <tr><td style="background:#1c1917;color:white;padding:18px 32px">
@@ -666,7 +680,7 @@ ${aiSummary.risks?.length ? `<h2 style="font-size:17px;color:#1a365d;border-bott
 
 </td></tr></table></td></tr></table></body></html>`;
 
-  const text = stripEmDashes(`Launch PMO Update ${state.today} - ${state.daysToLaunch} days to launch.
+  const text = stripEmDashes(`Launch PMO Update ${state.today} - ${state.daysToPlatform}d to platform launch (${shortDate(LAUNCH.platformLaunchDate)}), ${state.daysToProgram}d to program launch (${shortDate(LAUNCH.programLaunchDate)}).
 
 Overall readiness: ${state.overall}% | Open tasks: ${state.areas.reduce((s, a) => s + a.openCount, 0)} | Escalations: ${escalations.length}
 
@@ -699,7 +713,7 @@ Launch PMO for AI Systems Architect Accelerator`);
     from: '"CB System" <ali@colaberry.com>',
     to,
     cc,
-    subject: `[Launch PMO] ${state.today} - ${state.overall}% ready, ${state.daysToLaunch}d to launch`,
+    subject: `[Launch PMO] ${state.today} - ${state.overall}% ready, platform ${state.daysToPlatform}d / program ${state.daysToProgram}d`,
     text: textClean,
     html: htmlClean,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
@@ -930,4 +944,4 @@ async function runDailyUpdate({ force = false, recipients } = {}) {
   };
 }
 
-module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAwaitingDeliverableQueue, buildAiQueue, generateExecSummary, detectBlockedTasks };
+module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAwaitingDeliverableQueue, buildAiQueue, generateExecSummary, detectBlockedTasks, shortDate };

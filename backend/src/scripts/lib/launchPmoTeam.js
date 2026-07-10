@@ -114,7 +114,13 @@ function missing() { return TEAM.filter((t) => !t.basecampPersonId); }
 const LAUNCH = {
   projectId: 47502609,
   projectName: 'AI Systems Architect Accelerator',
-  targetLaunchDate: '2026-07-27', // Cohort 1 first teaching class; orientation 2026-07-23; moved from 2026-07-13 (Ali, 2026-06-19)
+  // Launch milestones surfaced in launch reporting (Ali, 2026-07-10):
+  //   platformLaunchDate - platform + site + Open House go-live / first paid enrollment (moved from 2026-07-10)
+  //   programLaunchDate  - program launch / Cohort 1 orientation (kickoff)
+  platformLaunchDate: '2026-07-16',
+  programLaunchDate: '2026-07-23',
+  // Task-scheduling / feasibility anchor: Cohort 1 first teaching class.
+  targetLaunchDate: '2026-07-27', // first teaching class; orientation 2026-07-23; moved from 2026-07-13 (Ali, 2026-06-19)
   basecampAccountId: '3945211',
   trackingTodoUrl: 'https://3.basecamp.com/3945211/buckets/7463955/todos/9945833396',
   systemPromptCommentId: 9946342528,

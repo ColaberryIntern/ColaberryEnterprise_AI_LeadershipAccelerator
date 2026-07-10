@@ -7,6 +7,9 @@ import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
+  handleFreeSignup, handleGetPoints,
+  handleGetOnboardingSchedule, handleRsvpOpenHouse,
+  handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
@@ -27,18 +30,39 @@ import {
   handleGetSessionChat, handlePostSessionChat,
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
+import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
+import {
+  handleOpenCard, handleMentor, handleReflection, handleVideoAugment, handlePromptLab,
+  handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
+} from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
+import workspaceRoutes from './workspaceRoutes';
 
 const router = Router();
 
 // Public auth endpoints
+router.post('/api/portal/free-signup', handleFreeSignup); // self-serve free/guest account
 router.post('/api/portal/request-link', handleRequestMagicLink);
 router.get('/api/portal/verify', handleVerifyMagicLink);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
+// Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
+router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
+router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
+// Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
+router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);
+router.get('/api/portal/runtime/notebook', requireParticipant, handleListNotes);
+router.post('/api/portal/runtime/notebook', requireParticipant, handleCreateNote);
+router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDeleteNote);
+router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCard);
+router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
+router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
+router.post('/api/portal/runtime/cards/:cardId/video-augment', requireParticipant, handleVideoAugment);
+router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
+router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
@@ -47,6 +71,11 @@ router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
+router.get('/api/portal/points', requireParticipant, handleGetPoints);
+router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
+router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
+router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
+router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);
@@ -195,6 +224,9 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
 
 // Project endpoints
 router.use(projectRoutes);
+
+// Per-student workspace repo endpoints (platform-provisioned GitHub repo + sync)
+router.use(workspaceRoutes);
 
 // Student CB-System operating model (priority queue, Run My Day, decisions)
 router.use(studentOpsRoutes);

@@ -14,31 +14,30 @@ import ProgramBlueprintTab from './orchestration/ProgramBlueprintTab';
 import MiniSectionControlTab from './orchestration/MiniSectionControlTab';
 import BulkConfigPanel from './orchestration/builder/BulkConfigPanel';
 import HealthDashboardTab from './orchestration/HealthDashboardTab';
-import CurriculumTypesTab from './orchestration/CurriculumTypesTab';
+import ExperienceStudioTab from './orchestration/ExperienceStudioTab';
+import CurriculumComposerTab from './orchestration/composer/CurriculumComposerTab';
+import TimelineEditorTab from './orchestration/TimelineEditorTab';
 import WorkstationTab from './orchestration/WorkstationTab';
 import '../../styles/orchestration.css';
 
 const API = process.env.REACT_APP_API_URL || '';
 
+// The forward-looking curriculum pipeline: design in the Composer, from approved
+// Experience Studio components, published to the Timeline. Legacy pre-redesign
+// tabs (Blueprint/Overview/Sessions/Sections/Mini-Sections/Artifacts/Skills/
+// Gating/Workstation/Bulk) are retired from the nav; their components remain in
+// the codebase and can be re-surfaced if needed.
 const TABS = [
-  { id: 'blueprint', label: 'Blueprint' },
-  { id: 'overview', label: 'Overview' },
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'sections', label: 'Sections' },
-  { id: 'mini-sections', label: 'Mini-Sections' },
-  { id: 'types', label: 'Types' },
-  { id: 'artifacts', label: 'Artifacts' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'gating', label: 'Gating' },
+  { id: 'composer', label: 'Curriculum Composer' },
+  { id: 'types', label: 'Experience Studio' },
+  { id: 'timeline', label: 'Timeline' },
   { id: 'analytics', label: 'Analytics' },
-  { id: 'workstation', label: 'Workstation' },
-  { id: 'bulk', label: 'Bulk Config' },
   { id: 'health', label: 'Health' },
 ];
 
 export default function AdminOrchestrationPage() {
   const { token } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('composer');
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
   const handleNavigateToMiniSections = (lessonId: string) => {
@@ -99,10 +98,12 @@ export default function AdminOrchestrationPage() {
         <ErrorBoundary key={activeTab}>
           {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
           {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
+          {activeTab === 'timeline' && <TimelineEditorTab />}
           {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
           {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
           {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
-          {activeTab === 'types' && <CurriculumTypesTab />}
+          {activeTab === 'types' && <ExperienceStudioTab />}
+          {activeTab === 'composer' && <CurriculumComposerTab />}
           {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
           {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
           {activeTab === 'gating' && <GatingControlTab {...tabProps} />}
