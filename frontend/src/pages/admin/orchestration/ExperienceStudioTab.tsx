@@ -238,7 +238,7 @@ const ExperienceStudioTab: React.FC = () => {
                 <div>
                   <div className="es-lab">The finished product</div>
                   {isVideo ? (
-                    <p className="es-help">A <b>Video</b> activity plays a real video <b>in-app</b> — the student presses play and watches it right inside the Classroom (never sent off to YouTube). Paste any video link below to see <b>exactly what the student plays</b>. Beneath the player, the AI writes the summary, key points, and questions that wrap the video (press <b>Generate preview</b> for those).</p>
+                    <p className="es-help">A <b>Video</b> activity plays a real video <b>in-app</b> — the student presses play and watches it right inside the Classroom (never sent off to YouTube). Paste any video link below to see <b>exactly what the student plays</b>. Beneath the player, the student taps <b>✦ Make it interactive</b> to generate AI notes — summary, key moments, and a self-check. The preview below shows the kind of notes that produces (press <b>Generate preview</b>).</p>
                   ) : (
                     <p className="es-help">This is exactly what a student sees when <b>{sel.label}</b> runs inside their Classroom timeline. Press <b>Generate preview</b> — the AI runs the whole pipeline and renders the live experience on every screen size.</p>
                   )}
@@ -256,7 +256,7 @@ const ExperienceStudioTab: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="es-lab">{isVideo ? 'Notes & questions shown beneath the video' : 'The student experience'}</div>
+                  <div className="es-lab">{isVideo ? 'Interactive notes students generate beneath the video (“Make it interactive”)' : 'The student experience'}</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                     <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Generating…' : preview ? '↻ Regenerate' : '✦ Generate preview'}</button>
                     {!sel.generation_prompt && <span className="es-muted">Add a Generation prompt in the <b>Prompts</b> tab first.</span>}

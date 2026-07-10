@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed from './VideoEmbed';
 import { parseVideoUrl } from '../../utils/videoEmbed';
@@ -24,6 +25,10 @@ function totalPoints(p: TimelineFeedCard['points']): number {
 
 const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
   const navigate = useNavigate();
+  // "Make it interactive" — the same AI notes (summary / key moments / self-check)
+  // the Runtime Workspace generates, brought right into the card drawer on demand.
+  const [augment, setAugment] = useState<any>(null);
+  const [augBusy, setAugBusy] = useState(false);
 
   useEffect(() => {
     if (!card) return;
@@ -32,10 +37,22 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [card, onClose]);
 
+  useEffect(() => { setAugment(null); setAugBusy(false); }, [card?.id]);
+
   const complete = useCallback(async () => {
     if (!card) return;
     await onComplete(card);
   }, [card, onComplete]);
+
+  const makeInteractive = useCallback(async () => {
+    if (!card) return;
+    setAugBusy(true);
+    try {
+      const r = await portalApi.post(`/api/portal/runtime/cards/${card.id}/video-augment`, {});
+      setAugment(r.data?.augment ?? r.data ?? null);
+    } catch { /* leave the button available to retry */ }
+    finally { setAugBusy(false); }
+  }, [card]);
 
   if (!card) return null;
 
@@ -90,10 +107,34 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
             </div>
           </div>
 
+          {isVideo && source && (
+            <div className="tld-augment">
+              <div className="tld-lab">Interactive notes</div>
+              {!augment ? (
+                <>
+                  <p className="tld-desc muted" style={{ margin: '0 0 10px', fontSize: 13.5 }}>Get an AI summary, the key moments, and a quick self-check for this video.</p>
+                  <button type="button" className="tl-btn primary sm" disabled={augBusy} onClick={makeInteractive}>{augBusy ? 'Generating…' : '✦ Make it interactive'}</button>
+                </>
+              ) : (
+                <>
+                  {augment.summary && <p className="tld-desc" style={{ marginBottom: 12 }}>{augment.summary}</p>}
+                  {Array.isArray(augment.chapters) && augment.chapters.length > 0 && (
+                    <><div className="tld-sublab">Key moments</div>
+                      <ul className="tld-alist">{augment.chapters.map((c: any, i: number) => <li key={i}><b>{c.t}</b> {c.title}</li>)}</ul></>
+                  )}
+                  {Array.isArray(augment.quiz) && augment.quiz.length > 0 && (
+                    <><div className="tld-sublab">Check yourself</div>
+                      <ul className="tld-alist">{augment.quiz.map((q: any, i: number) => <li key={i}>{typeof q === 'string' ? q : q.q}</li>)}</ul></>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {isVideo && (
             <div className="tld-note">
               {source
-                ? 'Watch the video above, then mark it complete to earn your points.'
+                ? 'Watch the video, use “Make it interactive” for notes, then mark it complete to earn your points.'
                 : 'No video link is attached to this card yet. An admin can add one from Orchestration → Timeline.'}
             </div>
           )}
