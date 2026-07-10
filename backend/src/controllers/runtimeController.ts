@@ -34,7 +34,10 @@ export async function handleReflection(req: Request, res: Response, next: NextFu
   try { res.json(await reflectionPrompts(await cardContext(String(req.params.cardId)))); } catch (e) { fail(res, e, next); }
 }
 export async function handleVideoAugment(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await videoAugment(await cardContext(String(req.params.cardId)))); } catch (e) { fail(res, e, next); }
+  try {
+    const force = req.query.force === 'true' || req.body?.force === true;
+    res.json(await videoAugment(await cardContext(String(req.params.cardId)), force));
+  } catch (e) { fail(res, e, next); }
 }
 
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });

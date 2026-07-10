@@ -54,7 +54,7 @@ export async function cardContext(cardId: string) {
   const c = await TimelineCard.findByPk(cardId);
   if (!c) throw Object.assign(new Error('Card not found'), { status: 404 });
   const def = resolveType(c.type);
-  return { id: c.id, type: c.type, title: c.title, description: c.description, student_label: def?.student_label || c.type };
+  return { id: c.id, type: c.type, title: c.title, description: c.description, student_label: def?.student_label || c.type, metadata: c.metadata };
 }
 
 /** Open a published card for the runtime (card + the student's progress + video). */
