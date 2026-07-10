@@ -9,8 +9,16 @@ import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL, MODEL_PRICING } from './costEstimationService';
 
-export type PromptKind = 'generation' | 'renderer' | 'evaluation' | 'reflection' | 'github' | 'improvement';
-const FIELD: Record<PromptKind, keyof CurriculumTypeDefinition> = {
+/**
+ * The complete, ordered set of testable prompt stages — the ONE source of truth.
+ * The HTTP validation schema (componentController.testSchema) and the FIELD map
+ * below both derive from this, so the allow-list can never drift out of sync
+ * again (the drift that made the Design stage 400 with "Invalid input").
+ */
+export const PROMPT_KINDS = ['design', 'generation', 'renderer', 'evaluation', 'reflection', 'github', 'improvement'] as const;
+export type PromptKind = typeof PROMPT_KINDS[number];
+export const FIELD: Record<PromptKind, keyof CurriculumTypeDefinition> = {
+  design: 'design_prompt',
   generation: 'generation_prompt', renderer: 'renderer_prompt', evaluation: 'evaluation_prompt',
   reflection: 'reflection_prompt', github: 'github_prompt', improvement: 'improvement_prompt',
 };

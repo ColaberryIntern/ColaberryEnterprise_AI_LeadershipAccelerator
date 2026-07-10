@@ -11,7 +11,7 @@ import { compareVersions } from '../services/components/versionDiffService';
 import { generateThumbnail, backfillThumbnails } from '../services/components/thumbnailService';
 import { renderSurface, backfillRenderers, RENDERER_SURFACES, RendererSurface } from '../services/components/rendererService';
 import { componentLifecycle, setLifecycle, LIFECYCLE_STATES } from '../services/components/lifecycleService';
-import { testPrompt, PromptKind } from '../services/components/promptTesterService';
+import { testPrompt, PromptKind, PROMPT_KINDS } from '../services/components/promptTesterService';
 import { estimateComponent } from '../services/components/costEstimationService';
 import { backfillComponents } from '../services/components/componentBackfill';
 import { generateComponent, coDesignComponent, runtimePreview } from '../services/components/componentAiService';
@@ -20,7 +20,7 @@ import { RECIPES } from '../services/components/recipeRegistry';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 
 const testSchema = z.object({
-  kind: z.enum(['generation', 'renderer', 'evaluation', 'reflection', 'github', 'improvement']),
+  kind: z.enum(PROMPT_KINDS),
   variables: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),
 });

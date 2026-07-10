@@ -39,7 +39,8 @@ const LifecycleStepper: React.FC<{ slug: string; onChanged?: () => void }> = ({ 
 
   return (
     <div>
-      <Lab>Runtime lifecycle</Lab>
+      <Lab>Status — where this activity is in its life</Lab>
+      <p className="es-help">The first four states are yours to set: <b>Draft → Generated → Validated → Published</b>. A component must be <b>Published</b> (and approved) before the Composer can put it in a week. The later states light up <b>automatically</b> as students open, run, complete, and get evaluated on it — you don’t set those. Use the buttons below to advance the state; blocked moves tell you what’s missing.</p>
       <div className="es-life">
         {life.states.map((s, i) => {
           const done = i < life.reached_index, cur = i === life.reached_index;

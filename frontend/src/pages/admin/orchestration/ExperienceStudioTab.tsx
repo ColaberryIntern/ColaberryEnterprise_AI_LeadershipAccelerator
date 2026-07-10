@@ -19,11 +19,12 @@ import Sandbox from './studio/Sandbox';
  */
 
 const DTABS = [
-  { key: 'pipeline', label: 'Pipeline' },
-  { key: 'renderers', label: 'Renderers' },
-  { key: 'sandbox', label: 'Sandbox' },
-  { key: 'lifecycle', label: 'Lifecycle' },
-  { key: 'versions', label: 'Versions' },
+  { key: 'preview', label: 'Preview', hint: 'See exactly what a student gets' },
+  { key: 'pipeline', label: 'Prompts', hint: 'How the AI builds this activity' },
+  { key: 'renderers', label: 'Appearance', hint: 'How it looks on each screen' },
+  { key: 'sandbox', label: 'Test Lab', hint: 'Run any part and inspect it' },
+  { key: 'lifecycle', label: 'Status', hint: 'Draft → Published lifecycle' },
+  { key: 'versions', label: 'History', hint: 'Versions + restore' },
 ] as const;
 type DTab = typeof DTABS[number]['key'];
 
@@ -67,7 +68,7 @@ const ExperienceStudioTab: React.FC = () => {
     setError(''); setStageTest(null); setPreview(null); setCoDesign(null); setAnalytics(null); setDepGraph(null);
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
-      setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('pipeline');
+      setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('preview'); setPreview(null);
       setVars(Object.fromEntries((r.data.variable_keys || []).map((k: string) => [k, sampleFor(k)])));
       api.get(`/api/admin/components/${slug}/analytics`).then((a) => setAnalytics(a.data)).catch(() => {});
       api.get(`/api/admin/components/${slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {});
@@ -220,66 +221,98 @@ const ExperienceStudioTab: React.FC = () => {
 
           <div className="es-tabs">
             {DTABS.map((t) => (
-              <button key={t.key} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
+              <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
             ))}
           </div>
 
           <div className="es-cols">
             {/* LEFT: switches by detail tab */}
             <div>
+              {detailTab === 'preview' && (
+                <div>
+                  <div className="es-lab">The finished product</div>
+                  <p className="es-help">This is exactly what a student sees when <b>{sel.label}</b> runs inside their Classroom timeline. Press <b>Generate preview</b> — the AI runs the whole pipeline and renders the live experience on every screen size.</p>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                    <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Generating…' : preview ? '↻ Regenerate' : '✦ Generate preview'}</button>
+                    {!sel.generation_prompt && <span className="es-muted">Add a Generation prompt in the <b>Prompts</b> tab first.</span>}
+                    {preview && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
+                  </div>
+                  {!preview && busy !== 'preview' && (
+                    <div className="es-empty">
+                      <div style={{ fontSize: 26 }}>🎓</div>
+                      <b>No preview yet</b>
+                      <span className="es-muted">Generate one to see the student-facing experience.</span>
+                    </div>
+                  )}
+                  {preview && (<>
+                    <div className="es-devices">
+                      {([['🖥 Desktop', 1000], ['📱 Phone', 375]] as [string, number][]).map(([name, w]) => (
+                        <div key={name} className="es-device">
+                          <div className="es-devlabel">{name}</div>
+                          <iframe title={name} className="es-frame" style={{ width: w > 480 ? '100%' : w, maxWidth: '100%' }} sandbox="" srcDoc={frameHtml(preview.experience, sel)} />
+                        </div>
+                      ))}
+                    </div>
+                    <details className="es-inspect"><summary>What the AI generated (json)</summary>
+                      <pre className="es-out">{JSON.stringify(preview.experience, null, 2)}</pre>
+                    </details>
+                  </>)}
+
+                  <div className="es-flow">
+                    <div className="es-lab" style={{ marginTop: 0 }}>How this reaches a student</div>
+                    <div className="es-flowrow">
+                      <span className="es-flowstep on">Experience Studio<small>design &amp; approve it here</small></span>
+                      <span className="es-flowarrow">→</span>
+                      <span className="es-flowstep">Curriculum Composer<small>add it to a week</small></span>
+                      <span className="es-flowarrow">→</span>
+                      <span className="es-flowstep">Timeline<small>publish to the cohort</small></span>
+                      <span className="es-flowarrow">→</span>
+                      <span className="es-flowstep">Student Runtime<small>student does it</small></span>
+                    </div>
+                    <p className="es-help" style={{ marginBottom: 0 }}>Only components marked <b>✓ Approved for curriculum</b> appear in the Composer. This one is currently <b>{sel.approved ? 'approved and available' : 'not yet approved'}</b>.</p>
+                  </div>
+                </div>
+              )}
+
               {detailTab === 'pipeline' && (<>
-              <div className="es-lab">Prompt pipeline</div>
+              <div className="es-lab">How the AI builds this activity</div>
+              <p className="es-help">Each step below is one instruction to the AI. They run top to bottom to turn a topic into a finished student experience. <b>Click a step to open its prompt right here</b>, then <b>▶ Test</b> to see exactly what that step produces.</p>
               <div className="es-pipe">
                 {STAGES.map((s, i) => (
                   <React.Fragment key={s.key}>
                     <button className={`es-stage ${stage === s.key ? 'on' : ''} ${sel[s.field] ? '' : 'empty'}`} onClick={() => { setStage(s.key); setStageTest(null); }}>
-                      <span className="es-stnum">{i}</span>
+                      <span className="es-stnum">{i + 1}</span>
                       <span><b>{s.label}</b><small>{s.purpose}</small></span>
-                      <span className="es-stdot" style={{ background: sel[s.field] ? '#5BA63C' : '#D0D0D0' }} />
+                      {!sel[s.field] && <span className="es-stflag">empty</span>}
+                      <span className="es-stcaret">{stage === s.key ? '▾' : '▸'}</span>
                     </button>
+                    {stage === s.key && (
+                      <div className="es-stageedit">
+                        <textarea className="es-in mono" style={{ minHeight: 170 }} value={sel[stageField(stage)] || ''} onChange={(e) => setStagePrompt(e.target.value)} placeholder={`No ${s.label.toLowerCase()} prompt yet — type the instruction you want the AI to follow.`} />
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <button className="es-btn pri" disabled={busy === 'test' || !sel[stageField(stage)]} onClick={testStage}>{busy === 'test' ? 'Running…' : '▶ Test this step'}</button>
+                          <span className="es-muted">Runs only this instruction and shows the raw output.</span>
+                        </div>
+                        {stageTest && (
+                          <div style={{ marginTop: 10 }}>
+                            <div className="es-muted">{stageTest.model} · {stageTest.usage.input_tokens}/{stageTest.usage.output_tokens} tok · {usd(stageTest.cost_usd)} · {stageTest.runtime_ms}ms</div>
+                            <details className="es-inspect"><summary>Prompt debugger</summary>
+                              <div className="es-lab" style={{ marginTop: 6 }}>Resolved variables</div><pre className="es-out">{JSON.stringify(stageTest.variables, null, 2)}</pre>
+                              <div className="es-lab">Rendered prompt</div><pre className="es-out">{stageTest.resolved_prompt}</pre>
+                            </details>
+                            <pre className="es-out">{stageTest.output}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {i < STAGES.length - 1 && <div className="es-arrow">↓</div>}
                   </React.Fragment>
                 ))}
               </div>
-
-              <div style={{ marginTop: 14 }}>
-                <div className="es-lab">{STAGES.find((s) => s.key === stage)!.label} prompt</div>
-                <textarea className="es-in mono" style={{ minHeight: 190 }} value={sel[stageField(stage)] || ''} onChange={(e) => setStagePrompt(e.target.value)} placeholder={`No ${stage} prompt yet.`} />
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-                  <button className="es-btn pri" disabled={busy === 'test' || !sel[stageField(stage)]} onClick={testStage}>{busy === 'test' ? 'Running…' : '▶ Test stage'}</button>
-                  <button className="es-btn" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Generating…' : '✦ Generate preview'}</button>
-                </div>
-                {stageTest && (
-                  <div style={{ marginTop: 10 }}>
-                    <div className="es-muted">{stageTest.model} · temp {stageTest.temperature} · {stageTest.usage.input_tokens}/{stageTest.usage.output_tokens} tok · {usd(stageTest.cost_usd)} · {stageTest.runtime_ms}ms</div>
-                    <details className="es-inspect"><summary>Prompt debugger</summary>
-                      <div className="es-lab" style={{ marginTop: 6 }}>Resolved variables</div><pre className="es-out">{JSON.stringify(stageTest.variables, null, 2)}</pre>
-                      <div className="es-lab">Rendered prompt</div><pre className="es-out">{stageTest.resolved_prompt}</pre>
-                    </details>
-                    <pre className="es-out">{stageTest.output}</pre>
-                  </div>
-                )}
+              <div className="es-connect">
+                <span className="es-muted">Want to see all the steps assembled into the real thing?</span>
+                <button className="es-btn" onClick={() => setDetailTab('preview')}>Open Preview →</button>
               </div>
-
-              {/* runtime multi-device preview */}
-              {preview && (
-                <div style={{ marginTop: 16 }}>
-                  <div className="es-lab">Runtime preview — {preview.experience?.title || 'student experience'} <span className="es-muted">({usd(preview.cost_usd)} · {preview.runtime_ms}ms)</span></div>
-                  <div className="es-devices">
-                    {([['Desktop', 1000], ['Tablet', 768], ['Mobile', 375]] as [string, number][]).map(([name, w]) => (
-                      <div key={name} className="es-device">
-                        <div className="es-devlabel">{name}</div>
-                        <iframe title={name} className="es-frame" style={{ width: w > 480 ? '100%' : w, maxWidth: '100%' }} sandbox="" srcDoc={frameHtml(preview.experience, sel)} />
-                      </div>
-                    ))}
-                  </div>
-                  {/* output inspector */}
-                  <details className="es-inspect"><summary>Output inspector</summary>
-                    <div className="es-lab" style={{ marginTop: 8 }}>Resolved prompt</div><pre className="es-out">{preview.resolved_prompt}</pre>
-                    <div className="es-lab">Generated experience (json)</div><pre className="es-out">{JSON.stringify(preview.experience, null, 2)}</pre>
-                  </details>
-                </div>
-              )}
               </>)}
 
               {detailTab === 'renderers' && <RendererEngine sel={sel} vars={vars} onChange={(r) => setField('renderers', r)} />}

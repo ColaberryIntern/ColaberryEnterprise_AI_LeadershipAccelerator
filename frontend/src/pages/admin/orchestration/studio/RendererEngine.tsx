@@ -24,6 +24,12 @@ const SURFACE_META: Record<Surface, { label: string; width: number; hint: string
   desktop: { label: 'Desktop', width: 1000, hint: '≥1000px viewport' },
 };
 
+const SURFACE_GROUPS: { label: string; surfaces: Surface[] }[] = [
+  { label: 'What students see', surfaces: ['timeline', 'student', 'runtime', 'expanded'] },
+  { label: 'Screen sizes (same activity, different width)', surfaces: ['mobile', 'tablet', 'desktop'] },
+  { label: 'Library', surfaces: ['thumbnail'] },
+];
+
 interface Props {
   sel: Cmp;
   vars: Record<string, string>;
@@ -56,17 +62,23 @@ const RendererEngine: React.FC<Props> = ({ sel, vars, onChange }) => {
 
   return (
     <div>
-      <Lab>Renderer surfaces — the component defines how it renders itself on each surface</Lab>
-      <div className="es-surfgrid">
-        {RENDERER_SURFACES.map((s) => (
-          <button key={s} className={`es-surf ${surface === s ? 'on' : ''}`} onClick={() => { setSurface(s); setErr(''); }}>
-            {SURFACE_META[s].label}
-            <span className="es-stdot" style={{ background: renderers[s] ? '#5BA63C' : '#D0D0D0' }} />
-          </button>
-        ))}
-      </div>
+      <Lab>Appearance — how this activity looks on each screen</Lab>
+      <p className="es-help">A “renderer” is the AI’s instruction for <b>how this activity looks</b> on one kind of screen. Pick a surface, edit its instruction, then <b>▶ Render live</b> to see the real HTML a student would see. Most of the time you only touch <b>Timeline</b> (the card in the feed) and <b>Student</b> (the full activity) — the rest are the same thing at other sizes.</p>
+      {SURFACE_GROUPS.map((grp) => (
+        <div key={grp.label} style={{ marginBottom: 8 }}>
+          <div className="es-grouplab">{grp.label}</div>
+          <div className="es-surfgrid">
+            {grp.surfaces.map((s) => (
+              <button key={s} className={`es-surf ${surface === s ? 'on' : ''}`} onClick={() => { setSurface(s); setErr(''); }}>
+                {SURFACE_META[s].label}
+                <span className="es-stdot" style={{ background: renderers[s] ? '#5BA63C' : '#D0D0D0' }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
-      <Lab style={{ marginTop: 4 }}>{meta.label} renderer prompt <span className="es-muted" style={{ textTransform: 'none', letterSpacing: 0 }}>· {meta.hint}</span></Lab>
+      <Lab style={{ marginTop: 4 }}>{meta.label} instruction <span className="es-muted" style={{ textTransform: 'none', letterSpacing: 0 }}>· {meta.hint}</span></Lab>
       <textarea className="es-in mono" style={{ minHeight: 150 }} value={renderers[surface] || ''} onChange={(e) => setPrompt(e.target.value)}
         placeholder={`No ${surface} renderer yet — describe how the AI should build this surface's HTML. Use {{content}} and any variable.`} />
 
