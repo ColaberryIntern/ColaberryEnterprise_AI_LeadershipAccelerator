@@ -213,8 +213,10 @@ async function upsertCampaign(data: {
 
   const existing = await Campaign.findOne({ where: { name: data.name } });
   if (existing) {
-    // Update sequence link and status
-    await existing.update({ sequence_id: sequence.id, status: data.status } as any);
+    // Link the sequence but do NOT clobber the operator's status on restart —
+    // manual pauses/activations must persist across boots. Status is only set on
+    // create (below). See CC-20260710-a9f2 (campaign reactivation-on-boot fix).
+    await existing.update({ sequence_id: sequence.id } as any);
     return;
   }
 
