@@ -42,6 +42,8 @@ export const NAV_GROUPS: NavGroup[] = [
   { label: 'Program', links: [
     { path: '/admin/accelerator', label: 'Accelerator', icon: 'graduation-cap-line' },
     { path: '/admin/orchestration', label: 'Orchestration', icon: 'flow-chart' },
+    { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
+    { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line' },
     { path: '/admin/projects', label: 'Projects', icon: 'rocket-2-line' },
   ]},
   { label: 'Intelligence', links: [

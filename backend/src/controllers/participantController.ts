@@ -5,6 +5,65 @@ import {
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
   getParticipantProgress,
 } from '../services/participantService';
+import { createFreeAccount } from '../services/freeSignupService';
+import { getPointsSummary } from '../services/pointsService';
+import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
+import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
+
+export async function handleIngestBackground(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { resume_text, linkedin_url } = req.body || {};
+    const result = await ingestBackground(req.participant!.sub, {
+      resumeText: typeof resume_text === 'string' ? resume_text : undefined,
+      linkedinUrl: typeof linkedin_url === 'string' ? linkedin_url : undefined,
+    });
+    if (!result.ok) return res.status(400).json({ error: 'Provide resume_text and/or linkedin_url' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetOnboardingProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const profile = await getOnboardingProfile(req.participant!.sub);
+    res.json(profile);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetPoints(req: Request, res: Response, next: NextFunction) {
+  try {
+    const summary = await getPointsSummary(req.participant!.sub);
+    res.json(summary);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
+  try {
+    const schedule = await getOnboardingSchedule(req.participant!.sub);
+    res.json(schedule);
+  } catch (err) { next(err); }
+}
+
+export async function handleRsvpOpenHouse(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await rsvpToOpenHouse(req.participant!.sub, String(req.params.id));
+    if (!result.ok) return res.status(404).json({ error: 'Open house not found' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+export async function handleFreeSignup(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { full_name, email } = req.body || {};
+    if (!full_name || !email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'full_name and email are required' });
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
+      return res.status(400).json({ error: 'A valid email is required' });
+    }
+    const result = await createFreeAccount({ full_name: String(full_name), email });
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (err) { next(err); }
+}
 
 export async function handleRequestMagicLink(req: Request, res: Response, next: NextFunction) {
   try {
