@@ -326,15 +326,17 @@ const ExperienceStudioTab: React.FC = () => {
               )}
 
               {detailTab === 'pipeline' && (<>
-              <div className="es-lab">How the AI builds this activity</div>
-              <p className="es-help">Each step below is one instruction to the AI. They run top to bottom to turn a topic into a finished student experience. <b>Click a step to open its prompt right here</b>, then <b>▶ Test</b> to see exactly what that step produces.</p>
+              <div className="es-lab">The prompts behind this activity</div>
+              <p className="es-help">Straight talk: <b>only the <span style={{ color: '#3C7A26' }}>Generation</span> prompt writes what students actually see</b> today — it's the instruction behind “Generate content” on a card. The others are authored and testable here, but they don't drive the student experience yet (they're wired to future grading / reflection / GitHub features). Click any step to edit it; <b>▶ Test</b> shows its raw output.</p>
               <div className="es-pipe">
                 {STAGES.map((s, i) => (
                   <React.Fragment key={s.key}>
                     <button className={`es-stage ${stage === s.key ? 'on' : ''} ${sel[s.field] ? '' : 'empty'}`} onClick={() => { setStage(s.key); setStageTest(null); }}>
-                      <span className="es-stnum">{i + 1}</span>
+                      <span className="es-stnum" style={s.key === 'generation' ? { background: '#3C7A26' } : { background: '#C8C8C8' }}>{s.key === 'generation' ? '★' : '·'}</span>
                       <span><b>{s.label}</b><small>{s.purpose}</small></span>
-                      {!sel[s.field] && <span className="es-stflag">empty</span>}
+                      {s.key === 'generation'
+                        ? <span className="es-wired">students see this</span>
+                        : <span className="es-unwired">not wired yet</span>}
                       <span className="es-stcaret">{stage === s.key ? '▾' : '▸'}</span>
                     </button>
                     {stage === s.key && (
