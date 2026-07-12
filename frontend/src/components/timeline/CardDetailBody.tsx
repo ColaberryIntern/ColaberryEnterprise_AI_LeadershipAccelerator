@@ -54,6 +54,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
   const source = parseVideoUrl(card.video?.url);
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
+  // Parts (capabilities) gate optional sections. Backward-compatible: a card
+  // whose type has NO Parts configured shows everything (today's behavior); once
+  // Parts are set, only the included ones render — so the Studio "Parts" toggles
+  // == what the student actually gets.
+  const caps = card.capabilities || [];
+  const hasPart = (c: string) => caps.length === 0 || caps.includes(c);
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
@@ -121,7 +127,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
-        {isVideo && source && (
+        {isVideo && source && hasPart('ai_chat') && (
           <div className="tld-augment">
             <div className="tld-lab">Interactive notes</div>
             {!augment ? (
@@ -141,11 +147,11 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                   <><div className="tld-sublab">Flashcards</div>
                     <ul className="tld-alist">{augment.flashcards.map((f: any, i: number) => <li key={i}><b>{typeof f === 'string' ? f : f.front}</b>{f && f.back ? ` — ${f.back}` : ''}</li>)}</ul></>
                 )}
-                {Array.isArray(augment.quiz) && augment.quiz.length > 0 && (
+                {Array.isArray(augment.quiz) && augment.quiz.length > 0 && hasPart('quiz') && (
                   <><div className="tld-sublab">Check yourself</div>
                     <ul className="tld-alist">{augment.quiz.map((q: any, i: number) => <li key={i}>{typeof q === 'string' ? q : q.q}</li>)}</ul></>
                 )}
-                {Array.isArray(augment.reflection) && augment.reflection.length > 0 && (
+                {Array.isArray(augment.reflection) && augment.reflection.length > 0 && hasPart('reflection') && (
                   <><div className="tld-sublab">Reflect</div>
                     <ul className="tld-alist">{augment.reflection.map((r: any, i: number) => <li key={i}>{typeof r === 'string' ? r : r.q || r.prompt}</li>)}</ul></>
                 )}

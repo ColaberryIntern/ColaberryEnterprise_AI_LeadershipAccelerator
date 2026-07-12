@@ -19,8 +19,8 @@ interface Props {
   parts?: string[] | null;
 }
 
-const StudentPreview: React.FC<Props> = ({ band, label, experience, videoUrl }) => {
-  const card = adaptToFeedCard({ render_band: band, label, student_label: label, experience, videoUrl });
+const StudentPreview: React.FC<Props> = ({ band, label, experience, videoUrl, parts }) => {
+  const card = adaptToFeedCard({ render_band: band, label, student_label: label, experience, videoUrl, capabilities: parts });
   return (
     <div className="tl-de">
       <div className="tld-inlinepanel">
