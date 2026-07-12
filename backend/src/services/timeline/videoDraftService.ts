@@ -21,12 +21,17 @@ const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 
 export interface VideoDraftInput {
   type: string;
-  title: string;
+  title?: string | null;
   subtitle?: string | null;
   description?: string | null;
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
+  // Which field the author is anchoring on. The anchored field is PRESERVED and
+  // every OTHER field is regenerated. 'title' (default) → keep the title, find a
+  // video + fill the rest. 'video' → keep the URL, write the title + fill the rest.
+  anchor?: 'title' | 'video';
 }
 export interface VideoDraft {
+  title: string | null;               // only set when anchor='video' (generated from the video)
   subtitle: string | null;
   description: string | null;
   video: { url: string; presenter: string | null; poster: string | null } | null;
@@ -107,26 +112,36 @@ async function resolveVideo(title: string, providedUrl: string | null | undefine
   return { url: '', presenter: null, poster: null, videoTitle: '', verified: false };
 }
 
-/** Write the subtitle, description, and lesson content around the (real) video. */
-async function generateText(def: CurriculumTypeDefinition | null, type: string, title: string, videoTitle: string, model: string) {
+/** Write the card copy + lesson content around the (real) video. When
+ *  video-anchored, also writes a concise card title (there's no author title). */
+async function generateText(
+  def: CurriculumTypeDefinition | null, type: string,
+  args: { title: string; videoTitle: string; anchor: 'title' | 'video' }, model: string,
+) {
   const gen = def ? ((def as any).generation_prompt as string | null) : null;
-  const anchor = videoTitle || title;
-  const vars: Record<string, string> = { topic: title, title, subject: title, description: videoTitle || '', content: anchor, video_title: videoTitle || '' };
+  // What to anchor the writing on: the author's title, else the real video's title.
+  const anchorText = args.anchor === 'video' ? (args.videoTitle || args.title) : (args.title || args.videoTitle);
+  const vars: Record<string, string> = {
+    topic: anchorText, title: args.title || args.videoTitle, subject: anchorText,
+    description: args.videoTitle || '', content: anchorText, video_title: args.videoTitle || '',
+  };
   const resolved = gen
     ? resolvePrompt(gen, vars)
-    : `Write the student-facing content for a "${type.replace(/_/g, ' ')}" titled "${title}".`;
+    : `Write the student-facing content for a "${type.replace(/_/g, ' ')}" about "${anchorText}".`;
+  const wantTitle = args.anchor === 'video'; // no author title → generate one
 
   const client = getInstrumentedOpenAI({ workflow_id: 'timeline_video_draft_text' });
   const res = await client.chat.completions.create({
     model, temperature: 0.6, max_tokens: 1600, response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: `You write a course video card for an AI Systems Architect student. Return STRICT json.` },
-      { role: 'user', content: `Card title: "${title}".${videoTitle ? ` The chosen video is "${videoTitle}".` : ''}\n${resolved}\n\nReturn json with keys: subtitle (string, short), description (string, 1-2 sentences on what the video covers), summary (string), body_html (clean self-contained HTML lesson notes, no scripts), questions (string[]), reflection (string).` },
+      { role: 'user', content: `${args.title ? `Card title: "${args.title}". ` : ''}${args.videoTitle ? `The chosen video is "${args.videoTitle}". ` : ''}\n${resolved}\n\nReturn json with keys: ${wantTitle ? 'title (a concise, specific card title for this video, e.g. "Video: <topic>"), ' : ''}subtitle (string, short), description (string, 1-2 sentences on what the video covers), summary (string), body_html (clean self-contained HTML lesson notes, no scripts), questions (string[]), reflection (string).` },
     ],
   });
   let p: any = {};
   try { p = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { p = {}; }
   return {
+    title: typeof p.title === 'string' && p.title.trim() ? p.title.trim() : null,
     subtitle: typeof p.subtitle === 'string' && p.subtitle.trim() ? p.subtitle.trim() : null,
     description: typeof p.description === 'string' && p.description.trim() ? p.description.trim() : null,
     content: {
@@ -139,13 +154,18 @@ async function generateText(def: CurriculumTypeDefinition | null, type: string, 
 }
 
 /**
- * Build a complete video-card draft from a title (+ optional overrides). Nothing
- * is persisted — the caller merges this into the draft and saves. Video
- * resolution only runs for video render_bands; other types just get text.
+ * Build a complete video-card draft, PRESERVING the anchored field and
+ * regenerating every other field. Nothing is persisted — the caller merges this
+ * into the draft and saves.
+ *   anchor='title' (default): keep the title, find a fresh video + fill the rest.
+ *   anchor='video':           keep the URL, write the title + fill the rest.
  */
 export async function generateVideoDraft(input: VideoDraftInput, model = DEFAULT_MODEL): Promise<VideoDraft> {
+  const anchor: 'title' | 'video' = input.anchor === 'video' ? 'video' : 'title';
   const title = (input.title || '').trim();
-  if (!title) throw Object.assign(new Error('A title is required to generate a card.'), { status: 400 });
+  const providedUrl = (input.video?.url || '').trim();
+  if (anchor === 'title' && !title) throw Object.assign(new Error('A title is required to generate from a title.'), { status: 400 });
+  if (anchor === 'video' && !providedUrl) throw Object.assign(new Error('A video URL is required to generate from a video.'), { status: 400 });
 
   const def = await CurriculumTypeDefinition.findOne({ where: { slug: input.type } });
   const band = def ? (def as any).render_band : null;
@@ -155,19 +175,22 @@ export async function generateVideoDraft(input: VideoDraftInput, model = DEFAULT
   let verified = false;
   let videoTitle = '';
   if (isVideo) {
-    const rv = await resolveVideo(title, input.video?.url, model);
+    // title-anchor finds a FRESH video (ignores any pasted URL); video-anchor
+    // keeps the pasted URL and reads its real metadata.
+    const rv = await resolveVideo(title, anchor === 'video' ? providedUrl : undefined, model);
     videoTitle = rv.videoTitle;
     verified = rv.verified;
     video = rv.url ? { url: rv.url, presenter: rv.presenter, poster: rv.poster } : null;
   }
 
-  const text = await generateText(def, input.type, title, videoTitle, model);
+  const text = await generateText(def, input.type, { title: anchor === 'video' ? '' : title, videoTitle, anchor }, model);
 
   return {
-    // Fill-empty for copy the author may have typed; the video + content always
-    // come from this run (that's the point of pressing Generate).
-    subtitle: (input.subtitle && input.subtitle.trim()) || text.subtitle,
-    description: (input.description && input.description.trim()) || text.description,
+    // The anchored field is preserved by the caller; every other field is
+    // regenerated here (title only when video-anchored).
+    title: anchor === 'video' ? (text.title || videoTitle || null) : null,
+    subtitle: text.subtitle,
+    description: text.description,
     video,
     content: text.content,
     video_verified: verified,

@@ -10,6 +10,7 @@ import VersionCompare from './studio/VersionCompare';
 import Sandbox from './studio/Sandbox';
 import VideoEmbed from '../../../components/timeline/VideoEmbed';
 import { parseVideoUrl } from '../../../utils/videoEmbed';
+import AutofillButton from '../../../components/common/AutofillButton';
 
 /**
  * ExperienceStudioTab — the AI-native curriculum experience designer (formerly
@@ -78,6 +79,7 @@ const ExperienceStudioTab: React.FC = () => {
   const [description, setDescription] = useState('');
   const [presenter, setPresenter] = useState('');
   const [poster, setPoster] = useState('');
+  const [vBusy, setVBusy] = useState<'' | 'title' | 'video'>(''); // which anchored auto-fill is running
   const [coDesign, setCoDesign] = useState<any>(null);
   const [busy, setBusy] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -155,23 +157,30 @@ const ExperienceStudioTab: React.FC = () => {
     try { const r = await api.post(`/api/admin/components/${sel.slug}/preview`, { variables: vars }); setPreview(r.data); }
     catch (e: any) { setError(e?.response?.data?.error || 'Preview failed'); } finally { setBusy(''); }
   };
-  // Video one-click — the SAME engine the Timeline editor uses: from a title,
-  // find a real video and fill the copy + content. Keeps the two surfaces in sync.
-  const runVideoFlow = async () => {
-    if (!sel) return; setBusy('preview'); setPreview(null); setError(''); setNotice('');
+  // Video one-click — the SAME field-anchored engine the Timeline editor uses.
+  // The anchored field is kept; every other field is regenerated (and steps 3-4
+  // render from the result, so the Studio shows exactly what the student sees).
+  const runVideoFlow = async (anchor: 'title' | 'video' = 'title') => {
+    if (!sel) return;
+    if (anchor === 'title' && !title) return;
+    if (anchor === 'video' && !videoUrl.trim()) return;
+    setVBusy(anchor); setPreview(null); setError(''); setNotice('');
     try {
       const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
-        type: sel.slug, title: title || sel.label,
+        type: sel.slug, title: title || null,
         subtitle: subtitle || null, description: description || null,
         video: { url: videoUrl || null, presenter: presenter || null, poster: poster || null },
+        anchor,
       });
       const g = r.data || {};
+      if (anchor === 'video' && g.title) setTitle(g.title);          // video-anchor writes the title
       if (g.video?.url) { setVideoUrl(g.video.url); setPresenter(g.video.presenter || ''); setPoster(g.video.poster || ''); }
-      if (g.subtitle) setSubtitle(g.subtitle);
-      if (g.description) setDescription(g.description);
-      setPreview({ experience: { title: title || sel.label, ...(g.content || {}) }, cost_usd: 0, runtime_ms: 0 });
-      if (g.video && g.video_verified === false) setNotice('Could not verify the suggested video plays — check it in the preview or paste your own URL.');
-    } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); } finally { setBusy(''); }
+      if (g.subtitle != null) setSubtitle(g.subtitle);
+      if (g.description != null) setDescription(g.description);
+      const finalTitle = anchor === 'video' ? (g.title || title || sel.label) : (title || sel.label);
+      setPreview({ experience: { title: finalTitle, ...(g.content || {}) }, cost_usd: 0, runtime_ms: 0 });
+      if (g.video && g.video_verified === false) setNotice('Could not verify the video plays — check it in the preview or paste your own URL.');
+    } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); } finally { setVBusy(''); }
   };
   const runCoDesign = async () => {
     if (!sel) return; setBusy('codesign'); setCoDesign(null); setError('');
@@ -339,9 +348,9 @@ const ExperienceStudioTab: React.FC = () => {
                   <p className="es-help">Follow <b>one example</b> all the way through. {isVideo ? <>These are the <b>same fields as the Timeline card editor</b> — add a <b>Title</b> and press <b>✦ Generate content</b> to find a matching video and fill the rest. Steps 3 and 4 come from that run, so they always match.</> : <>Set the inputs, see the <b>Generation</b> prompt that turns them into content, then watch <b>that exact content</b> become the card a student sees. Press <b>▶ Run the whole flow</b> and steps 3 and 4 come from the same run — so they always match.</>}</p>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 16px', flexWrap: 'wrap' }}>
                     {isVideo
-                      ? <button className="es-btn pri" disabled={busy === 'preview' || !title} title={!title ? 'Add a title first' : 'Find a video for this title and fill everything — subtitle, description, poster, presenter, and the lesson'} onClick={runVideoFlow}>{busy === 'preview' ? '✦ Finding video…' : preview ? '↻ Regenerate' : '✦ Generate content'}</button>
+                      ? <button className="es-btn pri" disabled={!!vBusy || (!title && !videoUrl.trim())} title={(!title && !videoUrl.trim()) ? 'Add a title (or paste a video URL) first' : 'Fill everything from your Title — or from your Video URL if you only pasted a link'} onClick={() => runVideoFlow(title ? 'title' : 'video')}>{vBusy ? '✦ Working…' : preview ? '↻ Regenerate' : '✦ Generate content'}</button>
                       : <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>}
-                    {isVideo ? <span className="es-muted">Just add a title — Generate finds a matching video and fills the rest.</span> : !sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
+                    {isVideo ? <span className="es-muted">Add a Title and press the ✦ next to it — or paste a Video URL and press the ✦ next to it.</span> : !sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
                     {preview && !isVideo && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
                   </div>
 
@@ -354,13 +363,21 @@ const ExperienceStudioTab: React.FC = () => {
                         // The SAME fields as the Timeline card editor, so the two match.
                         <div style={{ display: 'grid', gap: 10 }}>
                           <div><div className="es-sublab">Title</div>
-                            <input className="es-in" placeholder="e.g., Video: anatomy of an AI operating system" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <input className="es-in" style={{ flex: 1, minWidth: 0 }} placeholder="e.g., Video: anatomy of an AI operating system" value={title} onChange={(e) => setTitle(e.target.value)} />
+                              <AutofillButton onClick={() => runVideoFlow('title')} busy={vBusy === 'title'} disabled={!title || !!vBusy}
+                                title="✦ Auto-fill from this title — find a matching video and write everything else" />
+                            </div></div>
                           <div><div className="es-sublab">Subtitle</div>
                             <input className="es-in" placeholder="(optional)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} /></div>
                           <div><div className="es-sublab">Description</div>
                             <textarea className="es-in" style={{ minHeight: 54 }} placeholder="(optional)" value={description} onChange={(e) => setDescription(e.target.value)} /></div>
                           <div><div className="es-sublab">Video URL</div>
-                            <input className="es-in" placeholder="Paste a link — or leave blank and Generate finds one" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <input className="es-in" style={{ flex: 1, minWidth: 0 }} placeholder="Paste a link — or leave blank and use the Title button above" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+                              <AutofillButton onClick={() => runVideoFlow('video')} busy={vBusy === 'video'} disabled={!videoUrl.trim() || !!vBusy}
+                                title="✦ Auto-fill from this video — write the title and everything else" />
+                            </div>
                             {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={title || sel.label} poster={poster || null} /></div>}</div>
                           <div style={{ display: 'flex', gap: 10 }}>
                             <div style={{ flex: 1 }}><div className="es-sublab">Presenter</div>
@@ -500,10 +517,14 @@ const ExperienceStudioTab: React.FC = () => {
 
             {/* RIGHT: variables + parts (the real controls); everything else under Advanced */}
             <aside>
-              <div className="es-panel"><div className="es-lab">Variables · the inputs</div>
-                {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
-                  <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
-                ))}</div>
+              {/* For a video the inputs live in the Flow (the card fields); the raw
+                  {{variables}} panel is only for non-video types that use them. */}
+              {!isVideo && (
+                <div className="es-panel"><div className="es-lab">Variables · the inputs</div>
+                  {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
+                    <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
+                  ))}</div>
+              )}
 
               <div className="es-panel">
                 <div style={{ display: 'flex', alignItems: 'center' }}>

@@ -11,6 +11,7 @@ import VideoEmbed from '../../../components/timeline/VideoEmbed';
 import { parseVideoUrl } from '../../../utils/videoEmbed';
 import CardDetailBody from '../../../components/timeline/CardDetailBody';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
+import AutofillButton from '../../../components/common/AutofillButton';
 import '../../../components/timeline/timeline.css';
 
 /**
@@ -181,7 +182,7 @@ const BucketSection: React.FC<{
 // is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo }; types: TypeDef[]; isNew: boolean; saving: boolean;
-  aiBusy: boolean; onAiFill: () => void; genBusy: boolean; onGenerate: () => void;
+  aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video'; onGenerate: (anchor: 'title' | 'video') => void;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo }) => void; onSave: () => void; onClose: () => void;
 }> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
@@ -234,13 +235,13 @@ const EditDrawer: React.FC<{
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
                   onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
                 <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
-                  disabled={genBusy || !draft.title}
-                  title={!draft.title ? 'Give it a title first' : isVideo ? 'Find a video for this title and fill everything — subtitle, description, poster, presenter, and the lesson. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
-                  onClick={onGenerate}>{genBusy ? (isVideo ? '✦ Finding video…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
+                  disabled={!!genBusy || (!draft.title && !(draft.video?.url || '').trim())}
+                  title={(!draft.title && !(draft.video?.url || '').trim()) ? 'Add a title (or paste a video URL) first' : isVideo ? 'Fill everything from your Title — or from your Video URL if you only pasted a link. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
+                  onClick={() => onGenerate(draft.title ? 'title' : 'video')}>{genBusy ? (isVideo ? '✦ Working…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
               </div>
               <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
                 {isVideo
-                  ? 'Just add a title and click Generate content — it finds a matching video and fills the rest. Then Save changes. (Or fill it all in yourself and paste your own video.)'
+                  ? 'Add a Title and press the ✦ next to it to find a video and fill the rest — or paste a Video URL and press the ✦ next to it to fill everything from that video. Then Save changes.'
                   : 'Add a title and click Generate content to write what students see. Then Save changes.'}
               </div>
             </div>
@@ -248,7 +249,15 @@ const EditDrawer: React.FC<{
 
           <div className="te-sechead">Controls — tweak and watch the preview update</div>
           <label style={lbl}>Title
-            <input style={inp} value={draft.title || ''} onChange={(e) => onChange({ title: e.target.value })} placeholder="Card title" />
+            {isVideo ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input style={{ ...inp, flex: 1, minWidth: 0 }} value={draft.title || ''} onChange={(e) => onChange({ title: e.target.value })} placeholder="Card title" />
+                <AutofillButton onClick={() => onGenerate('title')} busy={genBusy === 'title'} disabled={!draft.title || !!genBusy}
+                  title="✦ Auto-fill from this title — find a matching video and write everything else" />
+              </div>
+            ) : (
+              <input style={inp} value={draft.title || ''} onChange={(e) => onChange({ title: e.target.value })} placeholder="Card title" />
+            )}
           </label>
           <label style={lbl}>Subtitle
             <input style={inp} value={draft.subtitle || ''} onChange={(e) => onChange({ subtitle: e.target.value })} placeholder="(optional)" />
@@ -263,7 +272,11 @@ const EditDrawer: React.FC<{
                 ▶ Video &amp; playback <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· the link this card plays in-app</span>
               </div>
               <label style={lbl}>Video URL
-                <input style={inp} value={draft.video?.url || ''} onChange={(e) => setVideo({ url: e.target.value })} placeholder="YouTube, Vimeo, Loom, Wistia, or .mp4 link" />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input style={{ ...inp, flex: 1, minWidth: 0 }} value={draft.video?.url || ''} onChange={(e) => setVideo({ url: e.target.value })} placeholder="YouTube, Vimeo, Loom, Wistia, or .mp4 link" />
+                  <AutofillButton onClick={() => onGenerate('video')} busy={genBusy === 'video'} disabled={!(draft.video?.url || '').trim() || !!genBusy}
+                    title="✦ Auto-fill from this video — write the title and everything else" />
+                </div>
               </label>
               <div style={{ display: 'flex', gap: 10 }}>
                 <label style={{ ...lbl, flex: 1, marginBottom: 0 }}>Presenter
@@ -335,7 +348,7 @@ const TimelineEditorTab: React.FC = () => {
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [genBusy, setGenBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState<'' | 'title' | 'video'>('');
 
   const loadBoard = useCallback(async () => {
     setLoading(true); setError('');
@@ -464,32 +477,36 @@ const TimelineEditorTab: React.FC = () => {
     finally { setAiBusy(false); }
   };
 
-  // "Generate content" — the one-click. From just a Title, find a REAL video and
-  // write the subtitle/description/poster/presenter + the lesson content, all
-  // into the draft (nothing saved yet — the author reviews the live preview, then
-  // Save persists it). Works before the card exists; keeps any copy already typed.
-  const genContent = async () => {
-    if (!draft?.type || !draft.title) return;
-    setGenBusy(true); setError('');
+  // The one-click, field-ANCHORED. The anchored field is kept; every other field
+  // is regenerated into the draft (nothing saved yet — the author reviews the
+  // live preview, then Save persists it).
+  //   anchor='title' → keep the Title, find a fresh video + fill the rest.
+  //   anchor='video' → keep the URL,  write the Title + fill the rest.
+  const genContent = async (anchor: 'title' | 'video' = 'title') => {
+    if (!draft?.type) return;
+    if (anchor === 'title' && !draft.title) return;
+    if (anchor === 'video' && !(draft.video?.url || '').trim()) return;
+    setGenBusy(anchor); setError('');
     try {
       const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
-        type: draft.type, title: draft.title,
+        type: draft.type, title: draft.title || null,
         subtitle: draft.subtitle || null, description: draft.description || null,
-        video: draft.video || null,
+        video: draft.video || null, anchor,
       });
       const g = r.data || {};
       setDraft((d) => d && ({
         ...d,
+        title: anchor === 'video' ? (g.title ?? d.title) : d.title,   // keep title when title-anchored
         subtitle: g.subtitle ?? d.subtitle,
         description: g.description ?? d.description,
-        video: g.video || d.video,
+        video: g.video || d.video,                                     // g.video keeps the URL when video-anchored
         metadata: { ...(d.metadata || {}), content: g.content || (d.metadata as any)?.content },
       }));
       if (g.video && g.video_verified === false) {
-        setError('Heads up: could not verify the suggested video plays — check it in the preview or paste your own URL.');
+        setError('Heads up: could not verify the video plays — check it in the preview or paste your own URL.');
       }
     } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
-    finally { setGenBusy(false); }
+    finally { setGenBusy(''); }
   };
 
   const onPublish = async (c: Card) => {
