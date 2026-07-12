@@ -4,16 +4,16 @@ import { OpenHouseEvent } from '../models';
 import { OpenHouseView } from './openHouseTypes';
 
 /**
- * Public (prospect-facing) events for the portal: the "Next event" countdown and
- * the next-30-days calendar feed.
+ * Public events for the portal: the calendar feed (all live events) and the
+ * "Next event" countdown (the flagship Open House).
  *
  * Source of truth is CCPP `EventBrite_Events` — the same live Eventbrite -> CCPP
- * pipeline that feeds attendees. Two facts about that table drive the query:
- *   - Public events are labelled ONLY in the `Name` (e.g. "... Open House").
- *     There is no category / IsPublic column, so we match on the name.
+ * pipeline that feeds attendees. One fact about that table drives the query:
  *   - `Status` carries the Eventbrite lifecycle (live / deleted / completed /
  *     draft / ended / started / canceled). Deleted events share future dates, so
- *     we require `Status = 'live'`.
+ *     we require `Status = 'live'` to mean "published & public".
+ * There is no category / IsPublic column, so the calendar shows every live event
+ * and the countdown singles out the Open House by name (see getNextPublicEvent).
  *
  * CCPP is only reachable from inside the prod network, so this runs in the
  * backend container. Failure-First: on any CCPP error we fall back to the
@@ -22,13 +22,14 @@ import { OpenHouseView } from './openHouseTypes';
  * schedule endpoint is hit on every portal page load.
  */
 
-// Prospect events are named "... Open House" in CCPP; widen here if other public
-// event types (info sessions, demo days) need to surface on the calendar.
-const PUBLIC_EVENT_NAME_LIKE = '%Open House%';
-// Fetch a generous window once so the "next event" countdown is never capped at
-// the calendar's 30-day horizon; callers slice to whatever window they render.
-const FETCH_WINDOW_DAYS = 120;
-const FETCH_LIMIT = 12;
+// The calendar surfaces ALL live public events; the "Next event" countdown
+// highlights the flagship Open House (see getNextPublicEvent). Match Open Houses
+// by name since CCPP has no category column.
+const OPEN_HOUSE_RE = /open house/i;
+// Fetch a generous window once (covers the calendar's ~90-day horizon incl. the
+// many weekly community events); callers slice to whatever window they render.
+const FETCH_WINDOW_DAYS = 100;
+const FETCH_LIMIT = 400;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
 
 interface CcppEventRow {
@@ -89,14 +90,12 @@ async function fetchFromCcpp(): Promise<OpenHouseView[]> {
   try {
     const res = await pool
       .request()
-      .input('like', sql.NVarChar, PUBLIC_EVENT_NAME_LIKE)
       .input('days', sql.Int, FETCH_WINDOW_DAYS)
       .input('lim', sql.Int, FETCH_LIMIT)
       .query<CcppEventRow>(`
         SELECT TOP (@lim) EventId, Name, Description, URL, StartDate, EndDate
         FROM EventBrite_Events
         WHERE Status = 'live'
-          AND Name LIKE @like
           AND StartDate > GETUTCDATE()
           AND StartDate <= DATEADD(day, @days, GETUTCDATE())
         ORDER BY StartDate ASC
@@ -156,10 +155,14 @@ async function loadUpcoming(): Promise<OpenHouseView[]> {
   return events;
 }
 
-/** The soonest upcoming public event (for the "Next event" countdown), or null. */
+/**
+ * The event for the topbar "Next event" countdown. Prefers the flagship Open
+ * House (prospect-facing), falling back to the soonest event of any kind so the
+ * chip is never empty when only community events are scheduled.
+ */
 export async function getNextPublicEvent(): Promise<OpenHouseView | null> {
   const events = await loadUpcoming();
-  return events[0] ?? null;
+  return events.find((e) => OPEN_HOUSE_RE.test(e.title)) ?? events[0] ?? null;
 }
 
 /** Upcoming public events within `days` (default 30) for the portal calendar. */
