@@ -33,6 +33,11 @@ const contentSchema = z.object({
   questions: z.array(z.string()).optional(),
   reflection: z.string().optional(),
 }).nullable().optional();
+// Anthropic Skills Course (skills_jar) — class name + SkillsJar link.
+const courseSchema = z.object({
+  name: z.string().max(300).nullable().optional(),
+  url: z.string().max(2000).nullable().optional(),
+}).nullable().optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -50,6 +55,7 @@ const createSchema = z.object({
   program_id: z.string().uuid().nullable().optional(),
   video: videoSchema,
   content: contentSchema,
+  course: courseSchema,
 });
 
 const updateSchema = z.object({
@@ -68,6 +74,7 @@ const updateSchema = z.object({
   order: z.number().int().optional(),
   video: videoSchema,
   content: contentSchema,
+  course: courseSchema,
 }).strict();
 
 // One-click: build a full video-card draft from a title (find a real video +

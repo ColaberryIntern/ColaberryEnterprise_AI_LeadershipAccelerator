@@ -39,6 +39,7 @@ export interface CreateCardInput {
   program_id?: string | null;
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
+  course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
 }
 
 /** PURE — normalize an author's video input into the stored metadata shape, or
@@ -61,6 +62,17 @@ export function buildContentMeta(content: CreateCardInput['content']): Record<st
   if (Array.isArray(content.questions) && content.questions.length) out.questions = content.questions.map(String);
   if (typeof content.reflection === 'string' && content.reflection.trim()) out.reflection = content.reflection;
   return Object.keys(out).length ? out : null;
+}
+
+/** PURE — normalize a Skills Course link (class name + SkillsJar URL) into the
+ *  stored metadata shape, or null when neither is given. */
+export function buildCourseMeta(course: CreateCardInput['course']): { name: string | null; url: string | null } | null {
+  if (!course || typeof course !== 'object') return null;
+  const str = (s: any) => (typeof s === 'string' && s.trim() ? s.trim() : null);
+  const name = str(course.name);
+  const url = str(course.url);
+  if (!name && !url) return null;
+  return { name, url };
 }
 
 /**
@@ -102,6 +114,7 @@ export function composeCardAttributes(
       authored: true,
       ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}),
       ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content), content_at: new Date().toISOString() } : {}),
+      ...(buildCourseMeta(input.course) ? { course: buildCourseMeta(input.course) } : {}),
     },
   };
 }
@@ -167,7 +180,7 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   // Video + content live in the metadata blob; merge them (setting/clearing each
   // key) without disturbing other metadata. Start from the latest metadata (or
   // whatever a prior branch already staged in clean.metadata).
-  if ('video' in patch || 'content' in patch) {
+  if ('video' in patch || 'content' in patch || 'course' in patch) {
     const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
     if ('video' in patch) {
       const v = buildVideoMeta(patch.video);
@@ -178,6 +191,10 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
       // Stamp content_at so the 30-day student-refresh clock starts at save time.
       if (c) { meta.content = c; meta.content_at = new Date().toISOString(); }
       else { delete meta.content; delete meta.content_at; }
+    }
+    if ('course' in patch) {
+      const co = buildCourseMeta(patch.course);
+      if (co) meta.course = co; else delete meta.course;
     }
     clean.metadata = meta;
   }

@@ -1,4 +1,4 @@
-import { contentFromMetadata, normalizeCapabilities } from '../../services/timeline/timelineService';
+import { contentFromMetadata, normalizeCapabilities, courseFromMetadata } from '../../services/timeline/timelineService';
 
 // contentFromMetadata is what decides whether AI-generated content reaches the
 // student feed. It must ignore empty/garbage and surface only real fields.
@@ -38,5 +38,19 @@ describe('normalizeCapabilities', () => {
   it('keeps only trimmed non-empty strings', () => {
     expect(normalizeCapabilities(['ai_chat', ' quiz ', '', '  ', 3, null, 'reflection']))
       .toEqual(['ai_chat', 'quiz', 'reflection']);
+  });
+});
+
+// courseFromMetadata feeds the Skills Course card its class name + SkillsJar link.
+describe('courseFromMetadata', () => {
+  it('returns null when neither name nor url is present', () => {
+    expect(courseFromMetadata(null)).toBeNull();
+    expect(courseFromMetadata({})).toBeNull();
+    expect(courseFromMetadata({ course: {} })).toBeNull();
+    expect(courseFromMetadata({ course: { name: '  ', url: '' } })).toBeNull();
+  });
+  it('surfaces trimmed name/url, filling the other with null', () => {
+    expect(courseFromMetadata({ course: { name: ' Intro to MCP ', url: '' } })).toEqual({ name: 'Intro to MCP', url: null });
+    expect(courseFromMetadata({ course: { name: '', url: ' https://x.skilljar.com/c ' } })).toEqual({ name: null, url: 'https://x.skilljar.com/c' });
   });
 });

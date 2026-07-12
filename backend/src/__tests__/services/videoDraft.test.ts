@@ -1,5 +1,5 @@
 import { youtubeId } from '../../services/timeline/videoDraftService';
-import { buildContentMeta } from '../../services/timeline/timelineAdminService';
+import { buildContentMeta, buildCourseMeta } from '../../services/timeline/timelineAdminService';
 
 // youtubeId feeds the poster thumbnail + oEmbed validation. It must pull the id
 // out of every common share shape and reject anything that isn't a YouTube video.
@@ -33,5 +33,19 @@ describe('buildContentMeta', () => {
   it('keeps only the non-empty fields and coerces question entries', () => {
     expect(buildContentMeta({ summary: 'S', body_html: '  ', questions: [1, 2] as any, reflection: 'R' }))
       .toEqual({ summary: 'S', questions: ['1', '2'], reflection: 'R' });
+  });
+});
+
+// buildCourseMeta stores the Skills Course class name + link; empty → null so a
+// blank box never writes a course onto a non-Skills card.
+describe('buildCourseMeta', () => {
+  it('returns null when neither field is usable', () => {
+    expect(buildCourseMeta(null)).toBeNull();
+    expect(buildCourseMeta({})).toBeNull();
+    expect(buildCourseMeta({ name: '   ', url: '' })).toBeNull();
+  });
+  it('trims and fills the missing field with null', () => {
+    expect(buildCourseMeta({ name: ' Intro to MCP ', url: ' https://x.skilljar.com/c ' })).toEqual({ name: 'Intro to MCP', url: 'https://x.skilljar.com/c' });
+    expect(buildCourseMeta({ name: 'Only name' })).toEqual({ name: 'Only name', url: null });
   });
 });
