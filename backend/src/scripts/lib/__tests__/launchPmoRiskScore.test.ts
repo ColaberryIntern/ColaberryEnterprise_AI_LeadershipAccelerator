@@ -1,3 +1,4 @@
+export {};
 /**
  * Unit tests for the deterministic PMBOK risk scorer. Covers the four
  * mandatory test types (CLAUDE.md): happy path, failure path, boundary cases,

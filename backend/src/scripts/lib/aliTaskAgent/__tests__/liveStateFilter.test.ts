@@ -1,3 +1,4 @@
+export {};
 /**
  * Unit tests for the ATA live-state guard. Covers the four mandatory test types
  * (CLAUDE.md): happy path, failure path (fail-open on unverifiable, drop on
