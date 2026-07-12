@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchSchedule, OnboardingSchedule } from '../../../services/onboardingApi';
-import { countdown, firstClassTargetMs } from '../today/shellUtils';
+import { countdown, firstClassTargetMs, fmtCentralDateTime } from '../today/shellUtils';
 
 // The "next live event (session)" strip — the same beat every page carries just
 // under its hero, matching the Today page. Reuses the cohort schedule so the
@@ -24,7 +24,7 @@ const NextSessionStrip: React.FC = () => {
 
   const targetMs = oh ? new Date(oh.starts_at).getTime() : firstClassTargetMs(fc);
   const cd = countdown(targetMs, now);
-  const when = oh ? new Date(oh.starts_at).toLocaleString() : (fc?.start_date ? `Starts ${fc.start_date}` : '');
+  const when = oh ? fmtCentralDateTime(oh.starts_at) : (fc?.start_date ? `Starts ${fc.start_date}` : '');
 
   return (
     <div className="te-oh">

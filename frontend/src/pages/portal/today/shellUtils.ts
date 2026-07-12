@@ -3,6 +3,45 @@
 // (Today / Path / Schedule) can all use them without a circular import.
 import { OnboardingSchedule } from '../../../services/onboardingApi';
 
+// ── Central Time (CST/CDT) formatting. Program times are canonical Central, so
+// every viewer sees the same time regardless of their own timezone. ──
+export const CENTRAL_TZ = 'America/Chicago';
+
+function toDate(v: string | Date): Date | null {
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** e.g. "Jul 16, 6:30 PM CDT" */
+export function fmtCentralDateTime(v: string | Date): string {
+  const d = toDate(v);
+  return d ? new Intl.DateTimeFormat('en-US', { timeZone: CENTRAL_TZ, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(d) : '';
+}
+
+/** e.g. "6:30 PM CDT" */
+export function fmtCentralTime(v: string | Date): string {
+  const d = toDate(v);
+  return d ? new Intl.DateTimeFormat('en-US', { timeZone: CENTRAL_TZ, hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(d) : '';
+}
+
+/** e.g. "Jul 16" (Central calendar date) */
+export function fmtCentralDate(v: string | Date): string {
+  const d = toDate(v);
+  return d ? new Intl.DateTimeFormat('en-US', { timeZone: CENTRAL_TZ, month: 'short', day: 'numeric' }).format(d) : '';
+}
+
+/** The instant's calendar parts AS SEEN in Central — for bucketing on a Central-day calendar. */
+export function centralParts(v: string | Date): { y: number; mo: number; d: number; h: number; mi: number } | null {
+  const d = toDate(v);
+  if (!d) return null;
+  const parts: Record<string, string> = {};
+  for (const p of new Intl.DateTimeFormat('en-US', { timeZone: CENTRAL_TZ, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(d)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  let h = Number(parts.hour); if (h === 24) h = 0;
+  return { y: Number(parts.year), mo: Number(parts.month) - 1, d: Number(parts.day), h, mi: Number(parts.minute) };
+}
+
 export function readParticipant(): { email: string; initials: string } {
   try {
     const t = localStorage.getItem('participant_token');

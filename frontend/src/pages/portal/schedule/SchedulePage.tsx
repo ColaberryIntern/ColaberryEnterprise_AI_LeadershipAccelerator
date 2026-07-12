@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import portalApi from '../../../utils/portalApi';
 import { fetchSchedule, fetchPublicEvents, OpenHouseView, FirstClassView } from '../../../services/onboardingApi';
+import { fmtCentralTime, centralParts } from '../today/shellUtils';
 import './SchedulePage.css';
 
 /**
@@ -44,7 +45,6 @@ type Mode = 'month' | 'week' | 'agenda';
 const DAY_MS = 7 * 864e5;
 
 const dkey = (d: Date): string => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-const dateOnly = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const mondayOf = (d: Date): Date => { const x = new Date(d); x.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return x; };
 
 /** Parse a DATEONLY 'YYYY-MM-DD' as a LOCAL date (avoids a UTC off-by-one). */
@@ -93,11 +93,12 @@ function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstCl
     });
   }
   for (const e of events) {
-    const dt = new Date(e.starts_at);
-    if (isNaN(dt.getTime())) continue;
-    add(dateOnly(dt), {
+    // Bucket + label events in Central time (program-canonical), regardless of viewer tz.
+    const cp = centralParts(e.starts_at);
+    if (!cp) continue;
+    add(new Date(cp.y, cp.mo, cp.d), {
       id: e.id, kind: 'event', title: e.title,
-      time: fmtTime(null, dt), hour: hourOf(null, dt), state: 'up',
+      time: fmtCentralTime(e.starts_at), hour: cp.h, state: 'up',
       href: e.registration_url || undefined, external: true,
       sub: /open house/i.test(e.title) ? 'Open House' : 'Event',
     });
