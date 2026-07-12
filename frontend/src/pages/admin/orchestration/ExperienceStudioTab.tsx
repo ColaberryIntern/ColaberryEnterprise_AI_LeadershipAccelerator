@@ -62,7 +62,8 @@ const ExperienceStudioTab: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState({ category: '', difficulty: '', status: '', capability: '', domain: '', approval: '' });
+  // Default the library to APPROVED-only (the checkbox below); uncheck to see all.
+  const [filter, setFilter] = useState({ category: '', difficulty: '', status: '', capability: '', domain: '', approval: 'approved' });
   const [analytics, setAnalytics] = useState<any>(null);
   const [depGraph, setDepGraph] = useState<any>(null);
   const [sel, setSel] = useState<Cmp | null>(null);
@@ -263,7 +264,14 @@ const ExperienceStudioTab: React.FC = () => {
             <input className="es-in" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />
             <button className="es-btn pri" onClick={() => setGen({ open: true, desc: '', recipe: '', draft: null })}>✦ Generate component</button>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
+            {/* Default view = approved only; uncheck to show everything. The
+                dropdown still offers the explicit "Not approved" view. */}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#2B2B2B', cursor: 'pointer', whiteSpace: 'nowrap', padding: '0 4px' }}
+              title="Show only components approved for curriculum">
+              <input type="checkbox" checked={filter.approval === 'approved'} onChange={(e) => setFilter({ ...filter, approval: e.target.checked ? 'approved' : '' })} />
+              Approved only
+            </label>
             <select className="es-in" style={{ width: 'auto' }} value={filter.category} onChange={(e) => setFilter({ ...filter, category: e.target.value })}><option value="">All categories</option>{allCategories.map((c) => <option key={c}>{c}</option>)}</select>
             <select className="es-in" style={{ width: 'auto' }} value={filter.difficulty} onChange={(e) => setFilter({ ...filter, difficulty: e.target.value })}><option value="">All difficulty</option>{['intro', 'core', 'stretch'].map((c) => <option key={c}>{c}</option>)}</select>
             <select className="es-in" style={{ width: 'auto' }} value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}><option value="">All status</option>{['draft', 'ready', 'published', 'deprecated'].map((c) => <option key={c}>{c}</option>)}</select>
