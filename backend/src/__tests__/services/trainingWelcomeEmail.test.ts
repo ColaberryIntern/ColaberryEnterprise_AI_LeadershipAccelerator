@@ -70,6 +70,11 @@ describe('buildTrainingWelcomeHtml', () => {
     expect(html).toContain('Access Your Portal');
     expect(html).toContain('training.colaberry.com');
   });
+  it('includes the Colaberry logo image', () => {
+    const html = buildTrainingWelcomeHtml({ to: 'x@y.com', fullName: 'Jane', portalLink: link });
+    expect(html).toContain('colaberry-logo-transparent.png');
+    expect(html).toContain('alt="Colaberry"');
+  });
   it('escapes untrusted name input', () => {
     const html = buildTrainingWelcomeHtml({ to: 'x@y.com', fullName: '<script>alert(1)</script>', portalLink: link });
     expect(html).not.toContain('<script>alert(1)</script>');
