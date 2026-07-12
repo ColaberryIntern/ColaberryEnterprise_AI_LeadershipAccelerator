@@ -139,6 +139,12 @@ export const studioCss = `
   .es-tabs{display:flex;gap:4px;border-bottom:1px solid #E4E4E4;margin-bottom:14px;flex-wrap:wrap}
   .es-tab{font-size:12.5px;font-weight:600;padding:7px 12px;border:none;background:none;cursor:pointer;color:#8A8A8A;border-bottom:2px solid transparent;margin-bottom:-1px}
   .es-tab.on{color:#367895;border-bottom-color:#367895}
+  .es-advtab{color:#B0B0B0;font-weight:600}
+  .es-adv{margin-top:4px}
+  .es-adv>summary{cursor:pointer;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#A0A0A0;padding:6px 0;list-style:none}
+  .es-adv>summary::-webkit-details-marker{display:none}
+  .es-adv>summary::before{content:'▸ ';color:#C0C0C0}
+  .es-adv[open]>summary::before{content:'▾ '}
   .es-pipe{display:flex;flex-direction:column;align-items:stretch}
   .es-stage{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid #E4E4E4;border-radius:9px;padding:8px 10px;background:#fff;cursor:pointer}
   .es-stage.on{border-color:#367895;background:#F5FAFB}.es-stage small{display:block;color:#A0A0A0;font-size:10.5px}.es-stage b{font-size:12.5px}
