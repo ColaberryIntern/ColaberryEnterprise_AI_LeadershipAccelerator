@@ -9,6 +9,7 @@ import {
   listTimeline, createCard, updateCard, deleteCard, reorderCards, cloneCard,
 } from '../services/timeline/timelineAdminService';
 import { generateCardContent } from '../services/timeline/cardContentService';
+import { generateVideoDraft } from '../services/timeline/videoDraftService';
 
 const bucketEnum = z.enum(['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance']);
 const visibilityEnum = z.enum(['draft', 'scheduled', 'published', 'archived']);
@@ -23,6 +24,14 @@ const videoSchema = z.object({
   url: z.string().max(2000).nullable().optional(),
   presenter: z.string().max(200).nullable().optional(),
   poster: z.string().max(2000).nullable().optional(),
+}).nullable().optional();
+// AI-generated student content saved onto the card (metadata.content).
+const contentSchema = z.object({
+  title: z.string().optional(),
+  summary: z.string().optional(),
+  body_html: z.string().optional(),
+  questions: z.array(z.string()).optional(),
+  reflection: z.string().optional(),
 }).nullable().optional();
 
 const createSchema = z.object({
@@ -40,6 +49,7 @@ const createSchema = z.object({
   release_date: z.string().datetime().nullable().optional(),
   program_id: z.string().uuid().nullable().optional(),
   video: videoSchema,
+  content: contentSchema,
 });
 
 const updateSchema = z.object({
@@ -57,7 +67,18 @@ const updateSchema = z.object({
   priority: z.number().int().optional(),
   order: z.number().int().optional(),
   video: videoSchema,
+  content: contentSchema,
 }).strict();
+
+// One-click: build a full video-card draft from a title (find a real video +
+// write the copy/content). Returned to the editor as a draft to review + save.
+const videoDraftSchema = z.object({
+  type: z.string().min(1),
+  title: z.string().min(1).max(500),
+  subtitle: z.string().max(500).nullable().optional(),
+  description: z.string().nullable().optional(),
+  video: videoSchema,
+});
 
 const reorderSchema = z.object({
   items: z.array(z.object({
@@ -119,5 +140,15 @@ export async function handleCloneCard(req: Request, res: Response, next: NextFun
 export async function handleGenerateCardContent(req: Request, res: Response, next: NextFunction) {
   try {
     res.json(await generateCardContent(String(req.params.id)));
+  } catch (err) { fail(res, err, next); }
+}
+
+// One-click: from a title (no saved card needed), find a real video and write
+// the subtitle/description/poster/presenter + lesson content. Returns a DRAFT —
+// nothing is persisted; the editor merges it and the author saves.
+export async function handleGenerateVideoDraft(req: Request, res: Response, next: NextFunction) {
+  try {
+    const b = videoDraftSchema.parse(req.body);
+    res.json(await generateVideoDraft(b));
   } catch (err) { fail(res, err, next); }
 }
