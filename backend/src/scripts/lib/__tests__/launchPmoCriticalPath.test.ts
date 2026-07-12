@@ -1,3 +1,4 @@
+export {};
 /**
  * Unit tests for the deterministic critical-path (CPM) engine. Covers the four
  * mandatory test types (CLAUDE.md): happy path, failure path (empty / cycles /
