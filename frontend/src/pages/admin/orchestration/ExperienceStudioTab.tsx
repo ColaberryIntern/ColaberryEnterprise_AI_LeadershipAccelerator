@@ -34,6 +34,16 @@ type DTab = typeof DTABS[number]['key'];
 const FAV_KEY = 'studio.favorites';
 const loadFavs = (): string[] => { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } };
 
+// Which capabilities ("Parts") actually apply to a given interaction (render_band).
+// null = no filter (show all). Video is fully mapped per the Studio audit; other
+// bands fall back to "show all" until they're mapped (Video-first).
+const BAND_CAPS: Record<string, string[]> = {
+  media: ['video', 'transcript', 'ai_chat', 'reflection', 'quiz', 'discussion', 'comments', 'likes', 'bookmarks', 'sharing', 'notifications', 'scoring', 'voice', 'camera'],
+  live_class: ['video', 'transcript', 'ai_chat', 'reflection', 'quiz', 'discussion', 'comments', 'likes', 'bookmarks', 'sharing', 'notifications', 'scoring'],
+  video_feedback: ['video', 'voice', 'camera', 'ai_chat', 'rubric', 'evaluation', 'scoring', 'mentor_review', 'portfolio', 'evidence'],
+};
+const bandCaps = (band?: string): string[] | null => BAND_CAPS[String(band || '')] || null;
+
 // What a student actually gets for this interaction (render_band) — plain English.
 const studentUIFor = (band?: string): string => {
   const b = String(band || '');
@@ -68,6 +78,8 @@ const ExperienceStudioTab: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [gen, setGen] = useState<{ open: boolean; desc: string; recipe: string; draft: any } | null>(null);
   const [detailTab, setDetailTab] = useState<DTab>('pipeline');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAllCaps, setShowAllCaps] = useState(false);
   const [favs, setFavs] = useState<string[]>(loadFavs);
   const toggleFav = (slug: string) => setFavs((f) => { const next = f.includes(slug) ? f.filter((x) => x !== slug) : [...f, slug]; localStorage.setItem(FAV_KEY, JSON.stringify(next)); return next; });
 
@@ -274,11 +286,23 @@ const ExperienceStudioTab: React.FC = () => {
             </div>
           </div>
 
-          <div className="es-tabs">
-            {DTABS.map((t) => (
-              <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
-            ))}
-          </div>
+          {(() => {
+            const PRIMARY = ['preview', 'versions'];
+            const primary = DTABS.filter((t) => PRIMARY.includes(t.key));
+            const advanced = DTABS.filter((t) => !PRIMARY.includes(t.key));
+            const advOpen = showAdvanced || advanced.some((t) => t.key === detailTab);
+            return (
+              <div className="es-tabs">
+                {primary.map((t) => (
+                  <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.key === 'preview' ? 'Build & Preview' : t.label}</button>
+                ))}
+                <button className="es-tab es-advtab" title="Rarely needed for a video — prompt pipeline, renderer templating, sandbox, lifecycle" onClick={() => setShowAdvanced((v) => !v)}>Advanced {advOpen ? '▾' : '▸'}</button>
+                {advOpen && advanced.map((t) => (
+                  <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
+                ))}
+              </div>
+            );
+          })()}
 
           <div className="es-cols">
             {/* LEFT: switches by detail tab */}
@@ -434,8 +458,31 @@ const ExperienceStudioTab: React.FC = () => {
               {detailTab === 'versions' && <VersionCompare sel={sel} versions={versions} onRestore={restore} />}
             </div>
 
-            {/* RIGHT: co-designer, variables, capabilities, estimate, versions */}
+            {/* RIGHT: variables + parts (the real controls); everything else under Advanced */}
             <aside>
+              <div className="es-panel"><div className="es-lab">Variables · the inputs</div>
+                {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
+                  <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
+                ))}</div>
+
+              <div className="es-panel">
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div className="es-lab" style={{ margin: 0 }}>Parts · what the student gets</div>
+                  {bandCaps(sel.render_band) && <button className="es-btn" style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 7px' }} onClick={() => setShowAllCaps((v) => !v)}>{showAllCaps ? 'Show relevant' : 'Show all 25'}</button>}
+                </div>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
+                  {(showAllCaps || !bandCaps(sel.render_band) ? caps : caps.filter((c) => bandCaps(sel.render_band)!.includes(c.id))).map((cap) => {
+                    const on = (sel.capabilities || []).includes(cap.id); return (
+                      <button key={cap.id} title={cap.description} className={`es-capchip ${on ? 'on' : ''}`} onClick={() => toggleCap(cap.id)}>{cap.label}</button>
+                    ); })}
+                </div>
+                <div className="es-muted" style={{ marginTop: 6 }}>Toggling a part updates the preview.{bandCaps(sel.render_band) && !showAllCaps ? ' Showing the parts that apply to this type.' : ''}</div>
+              </div>
+
+              <details className="es-adv">
+                <summary>Advanced · component details</summary>
+                <p className="es-muted" style={{ margin: '2px 0 10px' }}>Rarely needed for a video — AI review, cost estimate, demo analytics, output contracts, dependencies, export, versions.</p>
+
               <div className="es-panel">
                 <div style={{ display: 'flex', alignItems: 'center' }}><div className="es-lab" style={{ margin: 0 }}>AI Co-Designer</div>
                   <button className="es-btn pri" style={{ marginLeft: 'auto' }} disabled={busy === 'codesign'} onClick={runCoDesign}>{busy === 'codesign' ? '…' : 'Review'}</button></div>
@@ -454,19 +501,6 @@ const ExperienceStudioTab: React.FC = () => {
                     ))}
                   </div>
                 )}
-              </div>
-
-              <div className="es-panel"><div className="es-lab">Variables</div>
-                {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
-                  <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
-                ))}</div>
-
-              <div className="es-panel"><div className="es-lab">Capabilities</div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {caps.map((cap) => { const on = (sel.capabilities || []).includes(cap.id); return (
-                    <button key={cap.id} title={cap.description} className={`es-capchip ${on ? 'on' : ''}`} onClick={() => toggleCap(cap.id)}>{cap.label}</button>
-                  ); })}
-                </div>
               </div>
 
               <div className="es-panel"><div className="es-lab">Estimate</div>
@@ -518,6 +552,7 @@ const ExperienceStudioTab: React.FC = () => {
                     <span>v{v.version}{v.label ? ` · ${v.label}` : ''}</span><button className="es-btn" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => restore(v.version)}>Restore</button>
                   </div>
                 ))}</div>
+              </details>
             </aside>
           </div>
         </div>
