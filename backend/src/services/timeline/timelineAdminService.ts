@@ -14,7 +14,9 @@ import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 import TimelineCard, { TimelineBucket, TimelineCardAttributes } from '../../models/TimelineCard';
 import TimelineCardProgress from '../../models/TimelineCardProgress';
+import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType, allTypes, CardTypeDef } from './typeRegistry';
+import { normalizeCapabilities } from './timelineService';
 
 export const BUCKETS: TimelineBucket[] = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
 const VISIBILITIES = ['draft', 'scheduled', 'published', 'archived'] as const;
@@ -100,6 +102,11 @@ export async function listTimeline() {
     where: { cohort_id: null },
     order: [['week', 'ASC'], ['bucket', 'ASC'], ['order', 'ASC']],
   });
+  // The type's Parts (capabilities) live on the DB CurriculumTypeDefinition
+  // (what the Studio "Parts" panel edits), keyed by slug — merged in so the
+  // editor's "finished product" preview gates sections like the live render.
+  const capRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const capsBySlug = new Map(capRows.map((c) => [c.slug, normalizeCapabilities(c.capabilities)]));
   // Authorable types only — system types are engine-emitted, not hand-placed.
   const types = allTypes()
     .filter((t) => !t.system)
@@ -108,6 +115,7 @@ export async function listTimeline() {
       bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty,
       learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
       competencies: t.competencies, event: !!t.event,
+      capabilities: capsBySlug.get(t.slug) || [],
     }));
   return { scope: 'global', buckets: BUCKETS, cards, types };
 }

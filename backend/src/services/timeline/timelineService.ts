@@ -9,6 +9,7 @@ import { Op } from 'sequelize';
 import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineCardProgress';
 import Enrollment from '../../models/Enrollment';
+import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType } from './typeRegistry';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
@@ -49,6 +50,13 @@ export interface FeedCard {
   completed_at: Date | null;
   video: FeedVideo | null;
   content: FeedContent | null;
+  capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
+}
+
+/** PURE — normalize a capabilities blob (JSONB, may be junk) into a string[]. */
+export function normalizeCapabilities(caps: any): string[] {
+  if (!Array.isArray(caps)) return [];
+  return caps.filter((c) => typeof c === 'string' && c.trim()).map((c) => c.trim());
 }
 
 /** PURE — the saved AI content from a card's metadata blob, or null. */
@@ -134,6 +142,11 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   });
   const progressByCard = new Map(progressRows.map((p) => [p.card_id, p]));
 
+  // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
+  // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
+  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
+
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
     const progress = progressByCard.get(card.id);
@@ -157,6 +170,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       completed_at: progress?.completed_at ?? null,
       video: videoFromMetadata(card.metadata),
       content: contentFromMetadata(card.metadata),
+      capabilities: capsBySlug.get(card.type) || [],
     };
   });
 
