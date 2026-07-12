@@ -10,6 +10,17 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Portal Schedule: show cohort class-start on the calendar + clickable events open link in new tab (2026-07-12)
+- [x] **Calendar now marks the cohort kickoff; event items link out in a new tab from every view**
+  - Date: 2026-07-12
+  - Session: CC-20260712-e3k7
+  - What changed: `frontend/src/pages/portal/schedule/SchedulePage.tsx`
+    - Added a "Class starts · <cohort>" marker on the cohort's first-class date (from the onboarding schedule's `first_class`, the same source as the topbar "Next class" countdown), so the class-start is visible on the calendar even when no per-session rows exist yet (all upcoming prod cohorts currently have 0 seeded `live_sessions`). Deduped against a real session on that day.
+    - Calendar items are now clickable in ALL views (Month/Week/Agenda) via a shared `renderItem` helper: public events render as `<a target="_blank" rel="noopener noreferrer">` (opens the Eventbrite registration link in a new tab), class sessions as an in-app `<Link>`, and the non-linked kickoff marker as a plain div. Replaced the Agenda `<button>` + removed the `onClick`/`useNavigate` handler. Accessible-by-default (native anchors), so no `jsx-a11y` regression.
+  - Why: Ali reported the "new class starting" wasn't visible on the calendar (only sessions were rendered, and none are seeded), and that clicking an event should open its link in a new tab.
+  - Verification: CI frontend typecheck + prod nginx CRA build (eslint) authoritative — could not run locally. Manual review: complete hook deps, native anchors (no clickable divs), no unused symbols.
+  - Notes: only ONE live public "Open House" exists in CCPP right now (7/16); the many other live CCPP events are bootcamp/community sessions excluded by the `%Open House%` filter — widening that filter is a pending product decision.
+
 ### Portal Schedule calendar wired to real data (class sessions + CCPP public events) (2026-07-12)
 - [x] **`SchedulePage.tsx` no longer a static mock — renders real sessions + public events**
   - Date: 2026-07-12
