@@ -8,7 +8,7 @@ import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
   handleFreeSignup, handleGetPoints,
-  handleGetOnboardingSchedule, handleRsvpOpenHouse,
+  handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
@@ -73,6 +73,7 @@ router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPr
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
 router.get('/api/portal/points', requireParticipant, handleGetPoints);
 router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
+router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // public events (CCPP) for the calendar
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
 router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
 router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);

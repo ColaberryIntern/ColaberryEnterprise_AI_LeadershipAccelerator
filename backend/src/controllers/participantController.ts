@@ -8,6 +8,7 @@ import {
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
+import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
 
 export async function handleIngestBackground(req: Request, res: Response, next: NextFunction) {
@@ -40,6 +41,15 @@ export async function handleGetOnboardingSchedule(req: Request, res: Response, n
   try {
     const schedule = await getOnboardingSchedule(req.participant!.sub);
     res.json(schedule);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetPublicEvents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const raw = parseInt(String(req.query.days ?? ''), 10);
+    const days = Number.isFinite(raw) ? Math.min(90, Math.max(1, raw)) : 30;
+    const events = await getUpcomingPublicEvents(days);
+    res.json({ events, window_days: days });
   } catch (err) { next(err); }
 }
 
