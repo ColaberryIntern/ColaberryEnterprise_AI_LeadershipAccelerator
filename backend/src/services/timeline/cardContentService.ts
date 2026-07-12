@@ -73,9 +73,53 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
     reflection: typeof parsed.reflection === 'string' ? parsed.reflection : undefined,
   };
 
-  // Persist onto the shared card so every student sees EXACTLY this.
+  // Persist onto the shared card so every student sees EXACTLY this. Stamp
+  // content_at so the copy expires after 30 days (see ensureFreshContent).
   const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
-  await card.update({ metadata: { ...meta, content } });
+  await card.update({ metadata: { ...meta, content, content_at: new Date().toISOString() } });
 
   return { content, resolved_prompt: resolved, cost_usd: cost(model, res) };
+}
+
+/** Student-facing content expires after 30 days; the first student past that
+ *  window regenerates it once (class-wide), and the fresh copy lasts 30 days. */
+export const CONTENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Ensure a card's student content is fresh, regenerating it (once, class-wide)
+ * when it is missing or older than 30 days — the "first student in the cohort
+ * past 30 days regenerates" model. Returns the content (existing or fresh), or
+ * null when the card has nothing to generate from.
+ *
+ * Idempotent + cheap on the hot path: a fresh copy is returned without any LLM
+ * call or write. Only a stale/absent copy triggers a regenerate.
+ */
+export async function ensureFreshContent(cardId: string): Promise<{ content: CardContent | null; regenerated: boolean }> {
+  const card = await TimelineCard.findByPk(cardId);
+  if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
+  const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
+  const existing = meta.content && typeof meta.content === 'object' ? (meta.content as CardContent) : null;
+  const at = typeof meta.content_at === 'string' ? Date.parse(meta.content_at) : null;
+
+  // Only content the ADMIN populated is refreshed here — never auto-generate for
+  // a card that was intentionally left without content.
+  if (!existing) return { content: null, regenerated: false };
+
+  const fresh = at !== null && !Number.isNaN(at) && Date.now() - at <= CONTENT_TTL_MS;
+  if (fresh) return { content: existing, regenerated: false };
+
+  // Legacy content with no timestamp: start its 30-day clock now, no regenerate
+  // (nothing pre-existing suddenly re-bills).
+  if (at === null || Number.isNaN(at)) {
+    await card.update({ metadata: { ...meta, content_at: new Date().toISOString() } }).catch(() => {});
+    return { content: existing, regenerated: false };
+  }
+
+  // Existing but past the 30-day TTL → regenerate once (class-wide).
+  try {
+    const r = await generateCardContent(cardId);
+    return { content: r.content, regenerated: true };
+  } catch {
+    return { content: existing, regenerated: false }; // never 500 a student view
+  }
 }
