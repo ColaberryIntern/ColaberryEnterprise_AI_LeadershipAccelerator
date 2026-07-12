@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
-import portalApi from '../../utils/portalApi';
-import { fetchSchedule, fetchPublicEvents, OpenHouseView } from '../../services/onboardingApi';
+import portalApi from '../../../utils/portalApi';
+import { fetchSchedule, fetchPublicEvents, OpenHouseView } from '../../../services/onboardingApi';
 import './SchedulePage.css';
 
 /**
