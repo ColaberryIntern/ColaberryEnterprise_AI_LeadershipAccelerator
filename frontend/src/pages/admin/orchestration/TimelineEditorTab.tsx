@@ -9,6 +9,9 @@ import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
 import VideoEmbed from '../../../components/timeline/VideoEmbed';
 import { parseVideoUrl } from '../../../utils/videoEmbed';
+import CardDetailBody from '../../../components/timeline/CardDetailBody';
+import { adaptToFeedCard } from '../../../utils/cardAdapter';
+import '../../../components/timeline/timeline.css';
 
 /**
  * TimelineEditorTab — the AUTHOR side of the Classroom, built to feel like the
@@ -79,6 +82,7 @@ interface Card {
 interface TypeDef {
   slug: string; label: string; bucket: Bucket; render_band: string; difficulty: string;
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
+  capabilities?: string[];   // the type's Parts — gate the preview's optional sections
 }
 interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
 
@@ -172,18 +176,9 @@ const BucketSection: React.FC<{
 };
 
 // ── right-side create / edit drawer (like the student detail panel) ──────────
-// Wrap AI body_html for a SANDBOXED iframe (no scripts run) — same safe render
-// the student drawer uses, so the editor preview matches the classroom exactly.
-function lessonDoc(bodyHtml: string): string {
-  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
-    body{font-family:Roboto,system-ui,sans-serif;margin:0;padding:2px;color:#1A1A1A;font-size:13.5px;line-height:1.6}
-    h1,h2,h3{line-height:1.3;margin:12px 0 6px} h1{font-size:17px} h2{font-size:15px} h3{font-size:13.5px}
-    p{margin:0 0 9px} ul,ol{padding-left:20px;margin:0 0 9px} li{margin-bottom:3px} a{color:#367895} img{max-width:100%}
-    pre,code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#F2F2F2;border-radius:6px}
-    pre{padding:9px;overflow:auto} code{padding:1px 4px}
-  </style>${bodyHtml}`;
-}
-
+// The "finished product" preview renders the SHARED <CardDetailBody> (the exact
+// component the student drawer uses) via adaptToFeedCard, so the editor preview
+// is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: boolean; onGenerate: () => void;
@@ -193,8 +188,16 @@ const EditDrawer: React.FC<{
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
-  const videoSource = draft.video?.url ? parseVideoUrl(draft.video.url) : null;
-  const content = draft.metadata?.content || null;
+  // The preview IS the student drawer: build the same synthetic card the Studio
+  // preview uses and render the shared <CardDetailBody preview/> — one renderer.
+  const previewCard = adaptToFeedCard({
+    slug: draft.type, render_band: band,
+    label: draft.title || typeDef?.label, student_label: typeDef?.label,
+    subtitle: draft.subtitle, description: draft.description,
+    difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
+    points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
+    capabilities: typeDef?.capabilities,
+  });
   return (
     <div className="te-scrim" onClick={onClose}>
       <div className="te-drawer" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -221,38 +224,25 @@ const EditDrawer: React.FC<{
           {draft.type && (
             <div style={{ marginBottom: 18 }}>
               <div className="te-plabel">Finished product · what the student sees</div>
-              <div className="te-pcard">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isVideo || draft.description ? 12 : 0 }}>
-                  <TypeThumb band={band} size={30} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A' }}>{draft.title || typeDef?.label || 'Untitled'}</div>
-                    {draft.subtitle && <div style={{ fontSize: 12, color: '#8A8A8A' }}>{draft.subtitle}</div>}
-                  </div>
+              <div className="tl-de">
+                <div className="tld-inlinepanel">
+                  <CardDetailBody card={previewCard} preview />
                 </div>
-                {isVideo && (videoSource
-                  ? <div className="tl-vwrap"><VideoEmbed source={videoSource} title={draft.title || ''} poster={draft.video?.poster || null} /></div>
-                  : <div style={{ fontSize: 12.5, color: '#C29A0A', background: '#FEF7E6', border: '1px solid #F5E4B8', borderRadius: 9, padding: '10px 12px' }}>⚠ No video linked yet — add a Video URL below (or ✦ Fill with AI) so students can play it right here.</div>)}
-                {draft.description && <p style={{ fontSize: 13.5, color: '#4A4A4A', lineHeight: 1.55, margin: '12px 0 0' }}>{draft.description}</p>}
-                {content && (content.summary || content.body_html || (content.questions && content.questions.length > 0)) && (
-                  <div style={{ marginTop: 12, borderTop: '1px solid #EEE', paddingTop: 12 }}>
-                    {content.summary && <p style={{ fontSize: 13.5, color: '#1A1A1A', lineHeight: 1.55, margin: '0 0 10px' }}>{content.summary}</p>}
-                    {content.body_html && <iframe className="te-lessonframe" title="Lesson" sandbox="" srcDoc={lessonDoc(content.body_html)} />}
-                    {Array.isArray(content.questions) && content.questions.length > 0 && (
-                      <><div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#8A8A8A', margin: '10px 0 5px' }}>Questions</div>
-                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#4A4A4A', lineHeight: 1.5 }}>{content.questions.map((q: string, i: number) => <li key={i}>{q}</li>)}</ul></>
-                    )}
-                  </div>
-                )}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="button" className="te-act" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
                   onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
                 <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
-                  disabled={genBusy || isNew || !draft.title} title={isNew ? 'Save the card first, then generate its content' : !draft.title ? 'Give it a title first' : 'Generate the real content students see (summary, body, questions) and save it to this card'}
-                  onClick={onGenerate}>{genBusy ? '✦ Generating…' : content ? '↻ Regenerate content' : '✦ Generate content'}</button>
+                  disabled={genBusy || !draft.title}
+                  title={!draft.title ? 'Give it a title first' : isVideo ? 'Find a video for this title and fill everything — subtitle, description, poster, presenter, and the lesson. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
+                  onClick={onGenerate}>{genBusy ? (isVideo ? '✦ Finding video…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
               </div>
-              {isNew && <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>Add the card first, then Generate content to write what students see.</div>}
+              <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
+                {isVideo
+                  ? 'Just add a title and click Generate content — it finds a matching video and fills the rest. Then Save changes. (Or fill it all in yourself and paste your own video.)'
+                  : 'Add a title and click Generate content to write what students see. Then Save changes.'}
+              </div>
             </div>
           )}
 
@@ -424,19 +414,22 @@ const TimelineEditorTab: React.FC = () => {
       // Per-card "unique" data (the video/link) rides along as `video`; the API
       // merges it into metadata.video, which the student feed + Runtime read.
       const videoPayload = draft.video && (draft.video.url || '').trim() ? draft.video : null;
+      // AI-generated (or authored) student content rides along in metadata.content
+      // so "Generate content → Save" persists exactly what the preview showed.
+      const contentPayload = (draft.metadata as any)?.content || null;
       if (isNew) {
         await api.post('/api/admin/orchestration/timeline/cards', {
           type: draft.type, title: draft.title, subtitle: draft.subtitle || null,
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
-          points: draft.points, visibility: draft.visibility, video: videoPayload,
+          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
           title: draft.title, subtitle: draft.subtitle || null, description: draft.description || null,
           week: draft.week ?? null, bucket: draft.bucket, difficulty: draft.difficulty,
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
-          video: videoPayload,
+          video: videoPayload, content: contentPayload,
         });
       }
       setDraft(null);
@@ -471,17 +464,30 @@ const TimelineEditorTab: React.FC = () => {
     finally { setAiBusy(false); }
   };
 
-  // "Generate content" — run the card's type generation prompt on its real inputs,
-  // SAVE the result onto the card (metadata.content), and show it in the preview.
-  // This is what students actually see: preview == classroom.
+  // "Generate content" — the one-click. From just a Title, find a REAL video and
+  // write the subtitle/description/poster/presenter + the lesson content, all
+  // into the draft (nothing saved yet — the author reviews the live preview, then
+  // Save persists it). Works before the card exists; keeps any copy already typed.
   const genContent = async () => {
-    if (!draft?.id) return;
+    if (!draft?.type || !draft.title) return;
     setGenBusy(true); setError('');
     try {
-      const r = await api.post(`/api/admin/orchestration/timeline/cards/${draft.id}/generate`, {});
-      const content = r.data?.content || null;
-      setDraft((d) => d && ({ ...d, metadata: { ...(d.metadata || {}), content } }));
-      loadBoard();
+      const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
+        type: draft.type, title: draft.title,
+        subtitle: draft.subtitle || null, description: draft.description || null,
+        video: draft.video || null,
+      });
+      const g = r.data || {};
+      setDraft((d) => d && ({
+        ...d,
+        subtitle: g.subtitle ?? d.subtitle,
+        description: g.description ?? d.description,
+        video: g.video || d.video,
+        metadata: { ...(d.metadata || {}), content: g.content || (d.metadata as any)?.content },
+      }));
+      if (g.video && g.video_verified === false) {
+        setError('Heads up: could not verify the suggested video plays — check it in the preview or paste your own URL.');
+      }
     } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
     finally { setGenBusy(false); }
   };

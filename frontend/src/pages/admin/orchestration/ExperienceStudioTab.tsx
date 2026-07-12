@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
 import {
-  Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, frameHtml, Row, studioCss,
+  Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, Row, studioCss,
 } from './studio/studioKit';
+import StudentPreview from './studio/StudentPreview';
 import RendererEngine from './studio/RendererEngine';
 import LifecycleStepper from './studio/LifecycleStepper';
 import VersionCompare from './studio/VersionCompare';
@@ -33,6 +34,27 @@ type DTab = typeof DTABS[number]['key'];
 const FAV_KEY = 'studio.favorites';
 const loadFavs = (): string[] => { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } };
 
+// Which capabilities ("Parts") actually apply to a given interaction (render_band).
+// null = no filter (show all). Video is fully mapped per the Studio audit; other
+// bands fall back to "show all" until they're mapped (Video-first).
+const BAND_CAPS: Record<string, string[]> = {
+  media: ['video', 'transcript', 'ai_chat', 'reflection', 'quiz', 'discussion', 'comments', 'likes', 'bookmarks', 'sharing', 'notifications', 'scoring', 'voice', 'camera'],
+  live_class: ['video', 'transcript', 'ai_chat', 'reflection', 'quiz', 'discussion', 'comments', 'likes', 'bookmarks', 'sharing', 'notifications', 'scoring'],
+  video_feedback: ['video', 'voice', 'camera', 'ai_chat', 'rubric', 'evaluation', 'scoring', 'mentor_review', 'portfolio', 'evidence'],
+};
+const bandCaps = (band?: string): string[] | null => BAND_CAPS[String(band || '')] || null;
+
+// What a student actually gets for this interaction (render_band) — plain English.
+const studentUIFor = (band?: string): string => {
+  const b = String(band || '');
+  if (['media', 'live_class', 'video_feedback'].includes(b)) return 'an in-app video player + notes';
+  if (b === 'promptlab') return 'a prompt-lab workspace + AI evaluation';
+  if (['reflection', 'survey', 'question'].includes(b)) return 'a reflection flow';
+  if (b === 'interview') return 'an AI mock-interview flow';
+  if (['quiz', 'exam'].includes(b)) return 'an auto-graded knowledge check';
+  return 'a reading card';
+};
+
 const ExperienceStudioTab: React.FC = () => {
   const [list, setList] = useState<Cmp[]>([]);
   const [caps, setCaps] = useState<Cap[]>([]);
@@ -49,6 +71,13 @@ const ExperienceStudioTab: React.FC = () => {
   const [stageTest, setStageTest] = useState<any>(null);
   const [preview, setPreview] = useState<any>(null);
   const [videoUrl, setVideoUrl] = useState('');
+  // Card-field inputs for a Video type — the SAME fields as the Timeline editor,
+  // so the two surfaces match. (Non-video types still use {{variables}} below.)
+  const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [presenter, setPresenter] = useState('');
+  const [poster, setPoster] = useState('');
   const [coDesign, setCoDesign] = useState<any>(null);
   const [busy, setBusy] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -56,6 +85,8 @@ const ExperienceStudioTab: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [gen, setGen] = useState<{ open: boolean; desc: string; recipe: string; draft: any } | null>(null);
   const [detailTab, setDetailTab] = useState<DTab>('pipeline');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAllCaps, setShowAllCaps] = useState(false);
   const [favs, setFavs] = useState<string[]>(loadFavs);
   const toggleFav = (slug: string) => setFavs((f) => { const next = f.includes(slug) ? f.filter((x) => x !== slug) : [...f, slug]; localStorage.setItem(FAV_KEY, JSON.stringify(next)); return next; });
 
@@ -73,6 +104,7 @@ const ExperienceStudioTab: React.FC = () => {
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
       setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('preview'); setPreview(null); setVideoUrl('');
+      setTitle(''); setSubtitle(''); setDescription(''); setPresenter(''); setPoster('');
       setVars(Object.fromEntries((r.data.variable_keys || []).map((k: string) => [k, sampleFor(k)])));
       api.get(`/api/admin/components/${slug}/analytics`).then((a) => setAnalytics(a.data)).catch(() => {});
       api.get(`/api/admin/components/${slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {});
@@ -123,6 +155,24 @@ const ExperienceStudioTab: React.FC = () => {
     try { const r = await api.post(`/api/admin/components/${sel.slug}/preview`, { variables: vars }); setPreview(r.data); }
     catch (e: any) { setError(e?.response?.data?.error || 'Preview failed'); } finally { setBusy(''); }
   };
+  // Video one-click — the SAME engine the Timeline editor uses: from a title,
+  // find a real video and fill the copy + content. Keeps the two surfaces in sync.
+  const runVideoFlow = async () => {
+    if (!sel) return; setBusy('preview'); setPreview(null); setError(''); setNotice('');
+    try {
+      const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
+        type: sel.slug, title: title || sel.label,
+        subtitle: subtitle || null, description: description || null,
+        video: { url: videoUrl || null, presenter: presenter || null, poster: poster || null },
+      });
+      const g = r.data || {};
+      if (g.video?.url) { setVideoUrl(g.video.url); setPresenter(g.video.presenter || ''); setPoster(g.video.poster || ''); }
+      if (g.subtitle) setSubtitle(g.subtitle);
+      if (g.description) setDescription(g.description);
+      setPreview({ experience: { title: title || sel.label, ...(g.content || {}) }, cost_usd: 0, runtime_ms: 0 });
+      if (g.video && g.video_verified === false) setNotice('Could not verify the suggested video plays — check it in the preview or paste your own URL.');
+    } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); } finally { setBusy(''); }
+  };
   const runCoDesign = async () => {
     if (!sel) return; setBusy('codesign'); setCoDesign(null); setError('');
     try { const r = await api.post(`/api/admin/components/${sel.slug}/codesign`, {}); setCoDesign(r.data); }
@@ -131,7 +181,7 @@ const ExperienceStudioTab: React.FC = () => {
   // The fields the editor can actually persist (the Co-Designer's Apply can only
   // touch these; anything else can't be saved and would silently vanish).
   const SAVE_FIELDS = ['label', 'student_label', 'description', 'category', 'status', 'difficulty', 'render_band', 'bucket_default',
-    'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags', 'renderers'];
+    'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags', 'renderers', 'evaluation_type'];
   const buildPayload = (src: Cmp) => {
     const payload: any = {};
     STAGES.forEach((s) => { payload[s.field] = src[s.field] ?? null; });
@@ -251,11 +301,34 @@ const ExperienceStudioTab: React.FC = () => {
             <button className="es-btn pri" disabled={busy === 'save' || !dirty} onClick={save}>{busy === 'save' ? 'Saving…' : dirty ? 'Save version' : 'Saved'}</button>
           </div>
 
-          <div className="es-tabs">
-            {DTABS.map((t) => (
-              <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
-            ))}
+          <div className="es-buildbar">
+            <div className="es-pillar"><div className="es-plab">1 · Interaction</div><div className="es-pval">{(sel.render_band || 'reading').replace(/_/g, ' ')}<small>students get {studentUIFor(sel.render_band)}</small></div></div>
+            <div className="es-pillar"><div className="es-plab">2 · Parts</div><div className="es-pval">{(sel.capabilities || []).length} on<small>toggle sections in Capabilities → (updates the preview)</small></div></div>
+            <div className="es-pillar"><div className="es-plab">3 · Content</div><div className="es-pval">AI-generated<small>the Generation prompt · run it in Preview</small></div></div>
+            <div className="es-pillar"><div className="es-plab">4 · Assessment</div>
+              <select className="es-in" style={{ padding: '4px 6px', fontSize: 12 }} value={sel.evaluation_type || 'none'} onChange={(e) => setField('evaluation_type', e.target.value)}>
+                {['none', 'ai', 'rubric', 'instructor', 'peer'].map((v) => <option key={v} value={v}>{v === 'none' ? 'not scored' : v}</option>)}
+              </select>
+            </div>
           </div>
+
+          {(() => {
+            const PRIMARY = ['preview', 'versions'];
+            const primary = DTABS.filter((t) => PRIMARY.includes(t.key));
+            const advanced = DTABS.filter((t) => !PRIMARY.includes(t.key));
+            const advOpen = showAdvanced || advanced.some((t) => t.key === detailTab);
+            return (
+              <div className="es-tabs">
+                {primary.map((t) => (
+                  <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.key === 'preview' ? 'Build & Preview' : t.label}</button>
+                ))}
+                <button className="es-tab es-advtab" title="Rarely needed for a video — prompt pipeline, renderer templating, sandbox, lifecycle" onClick={() => setShowAdvanced((v) => !v)}>Advanced {advOpen ? '▾' : '▸'}</button>
+                {advOpen && advanced.map((t) => (
+                  <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
+                ))}
+              </div>
+            );
+          })()}
 
           <div className="es-cols">
             {/* LEFT: switches by detail tab */}
@@ -263,11 +336,13 @@ const ExperienceStudioTab: React.FC = () => {
               {detailTab === 'preview' && (
                 <div>
                   <div className="es-lab">The flow · inputs → prompt → content → the student's card</div>
-                  <p className="es-help">Follow <b>one example</b> all the way through. Set the inputs, see the <b>Generation</b> prompt that turns them into content, then watch <b>that exact content</b> become the card a student sees. Press <b>▶ Run the whole flow</b> and steps 3 and 4 come from the same run — so they always match.</p>
+                  <p className="es-help">Follow <b>one example</b> all the way through. {isVideo ? <>These are the <b>same fields as the Timeline card editor</b> — add a <b>Title</b> and press <b>✦ Generate content</b> to find a matching video and fill the rest. Steps 3 and 4 come from that run, so they always match.</> : <>Set the inputs, see the <b>Generation</b> prompt that turns them into content, then watch <b>that exact content</b> become the card a student sees. Press <b>▶ Run the whole flow</b> and steps 3 and 4 come from the same run — so they always match.</>}</p>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 16px', flexWrap: 'wrap' }}>
-                    <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>
-                    {!sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
-                    {preview && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
+                    {isVideo
+                      ? <button className="es-btn pri" disabled={busy === 'preview' || !title} title={!title ? 'Add a title first' : 'Find a video for this title and fill everything — subtitle, description, poster, presenter, and the lesson'} onClick={runVideoFlow}>{busy === 'preview' ? '✦ Finding video…' : preview ? '↻ Regenerate' : '✦ Generate content'}</button>
+                      : <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>}
+                    {isVideo ? <span className="es-muted">Just add a title — Generate finds a matching video and fills the rest.</span> : !sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
+                    {preview && !isVideo && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
                   </div>
 
                   {/* STEP 1 — inputs */}
@@ -275,14 +350,26 @@ const ExperienceStudioTab: React.FC = () => {
                     <div className="es-flownum">1</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="es-lab" style={{ marginTop: 0 }}>The inputs · this example</div>
-                      {isVideo && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div className="es-sublab">Video link</div>
-                          <input className="es-in" placeholder="Paste a YouTube / Vimeo / Loom / Wistia / .mp4 link…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-                          {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={sel.label} /></div>}
+                      {isVideo ? (
+                        // The SAME fields as the Timeline card editor, so the two match.
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          <div><div className="es-sublab">Title</div>
+                            <input className="es-in" placeholder="e.g., Video: anatomy of an AI operating system" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+                          <div><div className="es-sublab">Subtitle</div>
+                            <input className="es-in" placeholder="(optional)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} /></div>
+                          <div><div className="es-sublab">Description</div>
+                            <textarea className="es-in" style={{ minHeight: 54 }} placeholder="(optional)" value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                          <div><div className="es-sublab">Video URL</div>
+                            <input className="es-in" placeholder="Paste a link — or leave blank and Generate finds one" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+                            {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={title || sel.label} poster={poster || null} /></div>}</div>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <div style={{ flex: 1 }}><div className="es-sublab">Presenter</div>
+                              <input className="es-in" placeholder="(optional)" value={presenter} onChange={(e) => setPresenter(e.target.value)} /></div>
+                            <div style={{ flex: 1 }}><div className="es-sublab">Poster image URL</div>
+                              <input className="es-in" placeholder="(auto)" value={poster} onChange={(e) => setPoster(e.target.value)} /></div>
+                          </div>
                         </div>
-                      )}
-                      {(sel.variable_keys || []).length === 0
+                      ) : (sel.variable_keys || []).length === 0
                         ? <div className="es-muted">No variables — this activity reads the same for every student.</div>
                         : (sel.variable_keys || []).map((k) => (
                           <div key={k} style={{ marginBottom: 6 }}>
@@ -330,15 +417,15 @@ const ExperienceStudioTab: React.FC = () => {
                   <div className="es-flowstepbox">
                     <div className="es-flownum">4</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="es-lab" style={{ marginTop: 0 }}>What the student sees · the same content, as a card</div>
-                      {!preview
-                        ? <div className="es-empty"><div style={{ fontSize: 24 }}>🎓</div><span className="es-muted">Run the flow to render the student card.</span></div>
+                      <div className="es-lab" style={{ marginTop: 0 }}>What the student sees · the real {(sel.render_band || 'activity').replace(/_/g, ' ')} experience</div>
+                      {!preview && !(isVideo && videoSource)
+                        ? <div className="es-empty"><div style={{ fontSize: 24 }}>🎓</div><span className="es-muted">Run the flow to render the student experience.</span></div>
                         : (
                           <div className="es-devices">
-                            {([['🖥 Desktop', 1000], ['📱 Phone', 375]] as [string, number][]).map(([name, w]) => (
-                              <div key={name} className="es-device">
+                            {([['🖥 Desktop', false], ['📱 Phone', true]] as [string, boolean][]).map(([name, phone]) => (
+                              <div key={name} className="es-device" style={phone ? { flex: 'none', width: 340 } : {}}>
                                 <div className="es-devlabel">{name}</div>
-                                <iframe title={name} className="es-frame" style={{ width: w > 480 ? '100%' : w, maxWidth: '100%' }} sandbox="" srcDoc={frameHtml(preview.experience, sel)} />
+                                <StudentPreview band={String(sel.render_band || '')} label={isVideo ? (title || sel.label) : sel.label} experience={preview?.experience || null} videoUrl={videoUrl} presenter={presenter} poster={poster} parts={sel.capabilities} />
                               </div>
                             ))}
                           </div>
@@ -411,8 +498,31 @@ const ExperienceStudioTab: React.FC = () => {
               {detailTab === 'versions' && <VersionCompare sel={sel} versions={versions} onRestore={restore} />}
             </div>
 
-            {/* RIGHT: co-designer, variables, capabilities, estimate, versions */}
+            {/* RIGHT: variables + parts (the real controls); everything else under Advanced */}
             <aside>
+              <div className="es-panel"><div className="es-lab">Variables · the inputs</div>
+                {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
+                  <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
+                ))}</div>
+
+              <div className="es-panel">
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div className="es-lab" style={{ margin: 0 }}>Parts · what the student gets</div>
+                  {bandCaps(sel.render_band) && <button className="es-btn" style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 7px' }} onClick={() => setShowAllCaps((v) => !v)}>{showAllCaps ? 'Show relevant' : 'Show all 25'}</button>}
+                </div>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
+                  {(showAllCaps || !bandCaps(sel.render_band) ? caps : caps.filter((c) => bandCaps(sel.render_band)!.includes(c.id))).map((cap) => {
+                    const on = (sel.capabilities || []).includes(cap.id); return (
+                      <button key={cap.id} title={cap.description} className={`es-capchip ${on ? 'on' : ''}`} onClick={() => toggleCap(cap.id)}>{cap.label}</button>
+                    ); })}
+                </div>
+                <div className="es-muted" style={{ marginTop: 6 }}>Toggling a part updates the preview.{bandCaps(sel.render_band) && !showAllCaps ? ' Showing the parts that apply to this type.' : ''}</div>
+              </div>
+
+              <details className="es-adv">
+                <summary>Advanced · component details</summary>
+                <p className="es-muted" style={{ margin: '2px 0 10px' }}>Rarely needed for a video — AI review, cost estimate, demo analytics, output contracts, dependencies, export, versions.</p>
+
               <div className="es-panel">
                 <div style={{ display: 'flex', alignItems: 'center' }}><div className="es-lab" style={{ margin: 0 }}>AI Co-Designer</div>
                   <button className="es-btn pri" style={{ marginLeft: 'auto' }} disabled={busy === 'codesign'} onClick={runCoDesign}>{busy === 'codesign' ? '…' : 'Review'}</button></div>
@@ -431,19 +541,6 @@ const ExperienceStudioTab: React.FC = () => {
                     ))}
                   </div>
                 )}
-              </div>
-
-              <div className="es-panel"><div className="es-lab">Variables</div>
-                {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
-                  <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
-                ))}</div>
-
-              <div className="es-panel"><div className="es-lab">Capabilities</div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {caps.map((cap) => { const on = (sel.capabilities || []).includes(cap.id); return (
-                    <button key={cap.id} title={cap.description} className={`es-capchip ${on ? 'on' : ''}`} onClick={() => toggleCap(cap.id)}>{cap.label}</button>
-                  ); })}
-                </div>
               </div>
 
               <div className="es-panel"><div className="es-lab">Estimate</div>
@@ -495,6 +592,7 @@ const ExperienceStudioTab: React.FC = () => {
                     <span>v{v.version}{v.label ? ` · ${v.label}` : ''}</span><button className="es-btn" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => restore(v.version)}>Restore</button>
                   </div>
                 ))}</div>
+              </details>
             </aside>
           </div>
         </div>

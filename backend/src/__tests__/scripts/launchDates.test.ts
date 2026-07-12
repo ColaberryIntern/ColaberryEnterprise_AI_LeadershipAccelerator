@@ -16,6 +16,7 @@
  * Basecamp.
  */
 
+export {}; // make this a module so top-level consts don't collide with other test files (TS2451)
 /* eslint-disable @typescript-eslint/no-var-requires */
 const { LAUNCH } = require('../../scripts/lib/launchPmoTeam');
 const { shortDate } = require('../../scripts/lib/launchPmoDailyUpdate');
