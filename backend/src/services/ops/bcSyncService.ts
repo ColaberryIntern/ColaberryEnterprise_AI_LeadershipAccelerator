@@ -21,6 +21,7 @@ import OpsBcProject from '../../models/OpsBcProject';
 import { sequelize } from '../../config/database';
 import { getBcToken, refreshBcToken, isAuthError } from './basecampToken';
 import { BC_RETRYABLE_STATUS, bcBackoffMs, bcPace, sleep } from './bcRetry';
+import { reconcileAction, is404 } from './bcReconcile';
 
 // Projects with no BC activity (no todo updated, no project metadata
 // touched) in this many days get auto-demoted out of the CB-managed set
@@ -129,6 +130,8 @@ export interface BcSyncResult {
   todos_seen: number;
   todos_inserted: number;
   todos_updated: number;
+  todos_reconciled: number;
+  todos_marked_done: number;
   errors: Array<{ stage: string; message: string }>;
 }
 
@@ -215,6 +218,8 @@ export async function runBcSync(): Promise<BcSyncResult> {
       todos_seen: 0,
       todos_inserted: 0,
       todos_updated: 0,
+      todos_reconciled: 0,
+      todos_marked_done: 0,
       errors: [{ stage: 'skipped', message: 'previous sync still in flight' }],
     };
   }
@@ -239,6 +244,8 @@ async function runBcSyncInner(): Promise<BcSyncResult> {
     todos_seen: 0,
     todos_inserted: 0,
     todos_updated: 0,
+    todos_reconciled: 0,
+    todos_marked_done: 0,
     errors: [],
   };
 
@@ -348,8 +355,87 @@ async function runBcSyncInner(): Promise<BcSyncResult> {
     result.errors.push({ stage: 'cb_managed_autodetect', message: err.message });
   }
 
+  // Completion reconcile (Layer 2): self-heal stale 'active' rows the feed
+  // sweep can never re-see once they are completed.
+  try {
+    await reconcileCompletions(result);
+  } catch (err: any) {
+    result.errors.push({ stage: 'reconcile', message: err.message });
+  }
+
   result.finished_at = new Date();
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Completion reconcile (Layer 2)
+//
+// The incremental feed sweep above only SEES a todo while it is active in the
+// recordings feed; once completed, Basecamp stops surfacing it, so the row
+// keeps status='active' forever and - being overdue - floats to the TOP of the
+// ATA / ops queues (observed 2026-07-10: the top items of Ali's digest were all
+// already completed). This pass re-verifies a bounded batch of the STALEST
+// active rows per tick against live Basecamp and flips the ones that are
+// actually completed (or 404-gone). Over successive ticks it rotates through the
+// whole active set, so completions are caught within ~(active_rows / batch)
+// ticks and the mirror self-heals - which also clears any existing backlog with
+// no one-off migration. Bounded + rate-limited (reuses bcGet pacing/retry) and
+// conservative: a row is only ever flipped on a positive completed=true or 404.
+//
+// Tunable via env: OPS_RECONCILE_BATCH (rows/tick, default 60; 0 disables the
+// pass), OPS_RECONCILE_MIN_AGE_MIN (skip rows synced within N minutes, def 120).
+// ---------------------------------------------------------------------------
+const RECONCILE_BATCH = Math.max(0, Number(process.env.OPS_RECONCILE_BATCH ?? 60));
+const RECONCILE_MIN_AGE_MIN = Math.max(0, Number(process.env.OPS_RECONCILE_MIN_AGE_MIN ?? 120));
+
+interface StaleRow {
+  bc_id: string;
+  project_id: string;
+}
+
+async function reconcileCompletions(result: BcSyncResult): Promise<void> {
+  if (RECONCILE_BATCH === 0) return; // kill switch
+
+  let rows: StaleRow[];
+  try {
+    const [r] = (await sequelize.query(
+      `SELECT bc_id, project_id
+         FROM ops_bc_todos
+        WHERE status = 'active'
+          AND last_synced_at < NOW() - (:age_min || ' minutes')::interval
+        ORDER BY last_synced_at ASC NULLS FIRST
+        LIMIT :batch`,
+      { replacements: { age_min: RECONCILE_MIN_AGE_MIN, batch: RECONCILE_BATCH } },
+    )) as [StaleRow[], unknown];
+    rows = r;
+  } catch (err: any) {
+    result.errors.push({ stage: 'reconcile_query', message: err.message });
+    return;
+  }
+
+  for (const row of rows) {
+    let live: { ok: boolean; completed?: boolean; notFound?: boolean };
+    try {
+      const todo = await bcGet<BcTodo>(`/buckets/${row.project_id}/todos/${row.bc_id}.json`);
+      live = { ok: true, completed: !!todo.completed };
+    } catch (err: any) {
+      live = { ok: false, notFound: is404(err && err.message) };
+    }
+
+    const action = reconcileAction(live);
+    if (action === 'skip') continue; // transient error -> leave for a later tick
+    result.todos_reconciled++;
+    try {
+      const patch =
+        action === 'mark_completed'
+          ? { status: 'completed', last_synced_at: new Date() }
+          : { last_synced_at: new Date() };
+      await OpsBcTodo.update(patch as any, { where: { bc_id: row.bc_id } });
+      if (action === 'mark_completed') result.todos_marked_done++;
+    } catch (err: any) {
+      result.errors.push({ stage: `reconcile_update:${row.bc_id}`, message: err.message });
+    }
+  }
 }
 
 async function upsertTodo(
