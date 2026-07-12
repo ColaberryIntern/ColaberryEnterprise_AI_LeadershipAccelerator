@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed from './VideoEmbed';
@@ -9,9 +9,10 @@ import { parseVideoUrl } from '../../utils/videoEmbed';
  * card. Rendered by the student drawer (CardDetailDrawer), the Experience Studio
  * preview, and the Timeline editor preview — so those can never diverge again.
  *
- * `preview` (admin contexts) disables the live-only actions: the video-augment
- * call, auto-complete, and Enter-workspace navigation. Everything visual is
- * identical to what a student sees, by construction.
+ * The lesson content is admin-populated and expires after 30 days; the first
+ * student to open a card past that window regenerates it once (server-side,
+ * class-wide). `preview` (admin contexts) disables the live-only calls
+ * (content refresh, auto-complete, Enter-workspace nav).
  */
 
 export function totalPoints(p: TimelineFeedCard['points']): number {
@@ -38,33 +39,30 @@ interface Props {
 }
 
 const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWorkspace, onClose }) => {
-  const [augment, setAugment] = useState<any>(null);
-  const [augBusy, setAugBusy] = useState(false);
-  useEffect(() => { setAugment(null); setAugBusy(false); }, [card.id]);
-
-  const makeInteractive = useCallback(async () => {
-    if (preview) return; // no portal API in the admin preview
-    setAugBusy(true);
-    try {
-      const r = await portalApi.post(`/api/portal/runtime/cards/${card.id}/video-augment`, {});
-      setAugment(r.data?.augment ?? r.data ?? null);
-    } catch { /* leave the button available to retry */ }
-    finally { setAugBusy(false); }
-  }, [card.id, preview]);
+  // The admin-populated lesson content is the single source of notes. It expires
+  // after 30 days; on open (live only) we ask the server to ensure it's fresh —
+  // the first student past 30 days triggers a class-wide regenerate. Until that
+  // returns, show whatever the feed already carried.
+  const [content, setContent] = useState<TimelineFeedCard['content']>(card.content || null);
+  useEffect(() => { setContent(card.content || null); }, [card.id, card.content]);
+  useEffect(() => {
+    if (preview) return;
+    // Only content-bearing cards refresh (video, or anything that already has content).
+    const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content;
+    if (!contentBearing) return;
+    let alive = true;
+    portalApi.post(`/api/portal/runtime/cards/${card.id}/content`, {})
+      .then((r) => { if (alive && r.data?.content) setContent(r.data.content); })
+      .catch(() => { /* keep showing the feed copy */ });
+    return () => { alive = false; };
+  }, [card.id, card.render_band, card.content, preview]);
 
   const source = parseVideoUrl(card.video?.url);
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
-  // Parts (capabilities) gate optional sections. Backward-compatible: a card
-  // whose type has NO Parts configured shows everything (today's behavior); once
-  // Parts are set, only the included ones render — so the Studio "Parts" toggles
-  // == what the student actually gets.
-  const caps = card.capabilities || [];
-  const hasPart = (c: string) => caps.length === 0 || caps.includes(c);
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
   const duration = card.estimated_time ? `${card.estimated_time} min` : null;
-  const content = card.content || null;
 
   return (
     <>
@@ -127,43 +125,10 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
-        {isVideo && source && hasPart('ai_chat') && (
-          <div className="tld-augment">
-            <div className="tld-lab">Interactive notes</div>
-            {!augment ? (
-              <>
-                <p className="tld-desc muted" style={{ margin: '0 0 10px', fontSize: 13.5 }}>Get an AI summary, the key moments, flashcards, and a quick self-check for this video.</p>
-                <button type="button" className="tl-btn primary sm" disabled={augBusy || preview} onClick={makeInteractive} title={preview ? 'Live for students' : undefined}>{augBusy ? 'Generating…' : '✦ Make it interactive'}</button>
-                {preview && <span className="tld-note" style={{ display: 'inline-block', marginLeft: 8, padding: '4px 8px' }}>live for students</span>}
-              </>
-            ) : (
-              <>
-                {augment.summary && <p className="tld-desc" style={{ marginBottom: 12 }}>{augment.summary}</p>}
-                {Array.isArray(augment.chapters) && augment.chapters.length > 0 && (
-                  <><div className="tld-sublab">Key moments</div>
-                    <ul className="tld-alist">{augment.chapters.map((c: any, i: number) => <li key={i}><b>{c.t}</b> {c.title}</li>)}</ul></>
-                )}
-                {Array.isArray(augment.flashcards) && augment.flashcards.length > 0 && (
-                  <><div className="tld-sublab">Flashcards</div>
-                    <ul className="tld-alist">{augment.flashcards.map((f: any, i: number) => <li key={i}><b>{typeof f === 'string' ? f : f.front}</b>{f && f.back ? ` — ${f.back}` : ''}</li>)}</ul></>
-                )}
-                {Array.isArray(augment.quiz) && augment.quiz.length > 0 && hasPart('quiz') && (
-                  <><div className="tld-sublab">Check yourself</div>
-                    <ul className="tld-alist">{augment.quiz.map((q: any, i: number) => <li key={i}>{typeof q === 'string' ? q : q.q}</li>)}</ul></>
-                )}
-                {Array.isArray(augment.reflection) && augment.reflection.length > 0 && hasPart('reflection') && (
-                  <><div className="tld-sublab">Reflect</div>
-                    <ul className="tld-alist">{augment.reflection.map((r: any, i: number) => <li key={i}>{typeof r === 'string' ? r : r.q || r.prompt}</li>)}</ul></>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
         {isVideo && (
           <div className="tld-note">
             {source
-              ? 'Watch the video, use “Make it interactive” for notes, then mark it complete to earn your points.'
+              ? 'Watch the video, then mark it complete to earn your points.'
               : 'No video link is attached to this card yet. An admin can add one from Orchestration → Timeline.'}
           </div>
         )}

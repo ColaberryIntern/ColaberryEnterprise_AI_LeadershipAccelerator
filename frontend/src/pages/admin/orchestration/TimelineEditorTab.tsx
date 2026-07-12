@@ -499,6 +499,8 @@ const TimelineEditorTab: React.FC = () => {
         title: anchor === 'video' ? (g.title ?? d.title) : d.title,   // keep title when title-anchored
         subtitle: g.subtitle ?? d.subtitle,
         description: g.description ?? d.description,
+        estimated_time: typeof g.estimated_time === 'number' ? g.estimated_time : d.estimated_time,
+        points: g.points || d.points,                                  // AI-guessed XP
         video: g.video || d.video,                                     // g.video keeps the URL when video-anchored
         metadata: { ...(d.metadata || {}), content: g.content || (d.metadata as any)?.content },
       }));

@@ -30,7 +30,6 @@ const RuntimeWorkspace: React.FC = () => {
   const [evalResult, setEvalResult] = useState<PromptEval | null>(null);
   const [reflectionQs, setReflectionQs] = useState<string[]>([]);
   const [reflectionText, setReflectionText] = useState('');
-  const [augment, setAugment] = useState<any>(null);
   const [artifact, setArtifact] = useState<any>(null);
   const [completed, setCompleted] = useState(false);
 
@@ -76,10 +75,6 @@ const RuntimeWorkspace: React.FC = () => {
     if (!card) return; setBusy('reflect');
     try { setReflectionQs((await runtimeApi.reflection(card.id)).questions); } catch { /* ignore */ } finally { setBusy(''); }
   };
-  const makeInteractive = async () => {
-    if (!card) return; setBusy('augment');
-    try { setAugment((await runtimeApi.videoAugment(card.id)).augment); } catch { /* ignore */ } finally { setBusy(''); }
-  };
   const complete = async () => {
     if (!card) return; setBusy('complete');
     try {
@@ -108,20 +103,7 @@ const RuntimeWorkspace: React.FC = () => {
         {/* CENTER — activity */}
         <main className="rt-mid">
           {isVideo && (
-            <>
-              <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.title} poster={card.video?.poster || null} />
-              <div className="rt-row">
-                <button className="rt-btn pri" disabled={busy === 'augment'} onClick={makeInteractive}>{busy === 'augment' ? 'Thinking…' : '✦ Make it interactive'}</button>
-                <span className="rt-muted">chapters · summary · quiz · flashcards</span>
-              </div>
-              {augment && (
-                <div className="rt-card">
-                  {augment.summary && <><div className="rt-lab">Summary</div><p>{augment.summary}</p></>}
-                  {Array.isArray(augment.chapters) && augment.chapters.length > 0 && <><div className="rt-lab">Chapters</div><ul className="rt-list">{augment.chapters.map((c: any, i: number) => <li key={i}><b className="mono">{c.t}</b> {c.title}</li>)}</ul></>}
-                  {Array.isArray(augment.quiz) && augment.quiz.length > 0 && <><div className="rt-lab">Quiz</div><ul className="rt-list">{augment.quiz.map((q: any, i: number) => <li key={i}>{q.q}</li>)}</ul></>}
-                </div>
-              )}
-            </>
+            <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.title} poster={card.video?.poster || null} />
           )}
 
           {isLab && (

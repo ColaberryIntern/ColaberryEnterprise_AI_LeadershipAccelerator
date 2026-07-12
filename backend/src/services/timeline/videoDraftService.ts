@@ -34,9 +34,18 @@ export interface VideoDraft {
   title: string | null;               // only set when anchor='video' (generated from the video)
   subtitle: string | null;
   description: string | null;
+  estimated_time: number | null;      // whole minutes (AI estimate — admin can correct)
+  points: { learning: number; builder: number; community: number } | null; // AI-guessed XP
   video: { url: string; presenter: string | null; poster: string | null } | null;
   content: { summary?: string; body_html?: string; questions?: string[]; reflection?: string };
   video_verified: boolean;
+}
+
+/** Clamp an AI-suggested integer into a sane range (junk → fallback). */
+function clampInt(v: any, min: number, max: number, fallback: number): number {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
 }
 
 /** PURE — pull the 11-char YouTube id out of the common URL shapes, or null. */
@@ -135,15 +144,22 @@ async function generateText(
     model, temperature: 0.6, max_tokens: 1600, response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: `You write a course video card for an AI Systems Architect student. Return STRICT json.` },
-      { role: 'user', content: `${args.title ? `Card title: "${args.title}". ` : ''}${args.videoTitle ? `The chosen video is "${args.videoTitle}". ` : ''}\n${resolved}\n\nReturn json with keys: ${wantTitle ? 'title (a concise, specific card title for this video, e.g. "Video: <topic>"), ' : ''}subtitle (string, short), description (string, 1-2 sentences on what the video covers), summary (string), body_html (clean self-contained HTML lesson notes, no scripts), questions (string[]), reflection (string).` },
+      { role: 'user', content: `${args.title ? `Card title: "${args.title}". ` : ''}${args.videoTitle ? `The chosen video is "${args.videoTitle}". ` : ''}\n${resolved}\n\nReturn json with keys: ${wantTitle ? 'title (a concise, specific card title for this video, e.g. "Video: <topic>"), ' : ''}subtitle (string, short), description (string, 1-2 sentences on what the video covers), estimated_time (integer: your best estimate of the video length in whole MINUTES), points (object { "learning": int, "builder": int, "community": int } — XP to award: learning is the main driver for a watch-and-learn video (typically 10-25), builder is 0 unless it prompts hands-on building, community is 0 unless it sparks discussion), summary (string), body_html (clean self-contained HTML lesson notes, no scripts), questions (string[]), reflection (string).` },
     ],
   });
   let p: any = {};
   try { p = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { p = {}; }
+  const pts = p.points && typeof p.points === 'object' ? p.points : {};
   return {
     title: typeof p.title === 'string' && p.title.trim() ? p.title.trim() : null,
     subtitle: typeof p.subtitle === 'string' && p.subtitle.trim() ? p.subtitle.trim() : null,
     description: typeof p.description === 'string' && p.description.trim() ? p.description.trim() : null,
+    estimated_time: clampInt(p.estimated_time, 1, 180, 12),
+    points: {
+      learning: clampInt(pts.learning, 0, 100, 15),
+      builder: clampInt(pts.builder, 0, 100, 0),
+      community: clampInt(pts.community, 0, 50, 0),
+    },
     content: {
       summary: typeof p.summary === 'string' ? p.summary : undefined,
       body_html: typeof p.body_html === 'string' ? p.body_html : undefined,
@@ -191,6 +207,8 @@ export async function generateVideoDraft(input: VideoDraftInput, model = DEFAULT
     title: anchor === 'video' ? (text.title || videoTitle || null) : null,
     subtitle: text.subtitle,
     description: text.description,
+    estimated_time: text.estimated_time,   // AI estimate of the video length (minutes)
+    points: text.points,                   // AI-guessed learning/builder/community XP
     video,
     content: text.content,
     video_verified: verified,

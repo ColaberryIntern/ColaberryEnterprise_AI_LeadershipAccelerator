@@ -6,9 +6,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
-import { coach, reflectionPrompts, videoAugment, MentorMode } from '../services/runtime/mentorService';
+import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
+import { ensureFreshContent } from '../services/timeline/cardContentService';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -33,11 +34,10 @@ export async function handleMentor(req: Request, res: Response, next: NextFuncti
 export async function handleReflection(req: Request, res: Response, next: NextFunction) {
   try { res.json(await reflectionPrompts(await cardContext(String(req.params.cardId)))); } catch (e) { fail(res, e, next); }
 }
-export async function handleVideoAugment(req: Request, res: Response, next: NextFunction) {
-  try {
-    const force = req.query.force === 'true' || req.body?.force === true;
-    res.json(await videoAugment(await cardContext(String(req.params.cardId)), force));
-  } catch (e) { fail(res, e, next); }
+// The first student to open a card whose content is missing or >30 days old
+// regenerates it once (class-wide); the fresh copy then lasts 30 days.
+export async function handleEnsureContent(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await ensureFreshContent(String(req.params.cardId))); } catch (e) { fail(res, e, next); }
 }
 
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });
