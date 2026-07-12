@@ -1,6 +1,13 @@
 import { Router, Request, Response } from 'express';
 
+import { requireAdmin } from '../../middlewares/authMiddleware';
+
 const router = Router();
+
+// SECURITY (TBI audit P0-1): test-setup endpoints shipped with NO auth in production —
+// require an authenticated admin. (Test harnesses must authenticate; consider also
+// disabling this router entirely when NODE_ENV === 'production'.)
+router.use(requireAdmin);
 
 // ─── Create Test Enrollments (Cold + Warm) ──────────────────────────
 

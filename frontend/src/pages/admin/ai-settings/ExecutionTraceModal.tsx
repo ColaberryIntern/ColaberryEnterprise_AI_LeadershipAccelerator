@@ -28,10 +28,10 @@ const RESULT_COLORS: Record<string, string> = {
 };
 
 const DOT_COLORS: Record<string, string> = {
-  success: '#38a169',
-  failed: '#e53e3e',
-  skipped: '#718096',
-  pending: '#e0a800',
+  success: 'var(--status-success)',
+  failed: 'var(--status-danger)',
+  skipped: 'var(--status-info)',
+  pending: 'var(--status-warning)',
 };
 
 function formatDuration(ms: number | null): string {
@@ -100,7 +100,7 @@ export default function ExecutionTraceModal({
                       top: 8,
                       bottom: 8,
                       width: 2,
-                      backgroundColor: 'var(--color-border, #e2e8f0)',
+                      backgroundColor: 'var(--border-subtle)',
                     }}
                   />
 
@@ -114,9 +114,9 @@ export default function ExecutionTraceModal({
                           top: 6,
                           width: 12,
                           height: 12,
-                          backgroundColor: DOT_COLORS[step.result] || '#718096',
-                          border: '2px solid white',
-                          boxShadow: '0 0 0 1px ' + (DOT_COLORS[step.result] || '#718096'),
+                          backgroundColor: DOT_COLORS[step.result] || 'var(--status-info)',
+                          border: '2px solid var(--surface-card)',
+                          boxShadow: '0 0 0 1px ' + (DOT_COLORS[step.result] || 'var(--status-info)'),
                         }}
                       />
 

@@ -21,11 +21,12 @@ function PortalVerifyPage() {
     portalApi.get(`/api/portal/verify?token=${token}`)
       .then((res) => {
         login(res.data.jwt);
-        // Land on Home — it routes first-run users to the build chooser (or the
-        // live demo if a build is in flight) and existing users to the dashboard.
-        // (Previously went to /portal/project → blueprint, which showed an empty
-        // "nothing to execute" page to brand-new users.)
-        navigate('/portal/home', { replace: true });
+        // Land on Today — the student's daily command center (your day, next
+        // step, schedule, streak). This is the ONE universal post-login and
+        // post-signup home for every account (PortalFreeSignupPage lands here
+        // too). The build/requirements wizard is never forced; it opens only when
+        // the user explicitly starts a project from Projects.
+        navigate('/portal/today', { replace: true });
       })
       .catch((err) => {
         setError(err.response?.data?.error || 'Invalid or expired link. Please request a new one.');
@@ -39,7 +40,7 @@ function PortalVerifyPage() {
         <div className="card-body p-4 p-md-5 text-center">
           {verifying && !error ? (
             <>
-              <div className="spinner-border mb-3" style={{ color: 'var(--color-primary)' }} role="status">
+              <div className="spinner-border mb-3" style={{ color: '#FB2832' }} role="status">
                 <span className="visually-hidden">Verifying...</span>
               </div>
               <h2 className="h5 fw-semibold">Verifying Your Access</h2>
@@ -54,7 +55,7 @@ function PortalVerifyPage() {
               </div>
               <h2 className="h5 fw-semibold">Verification Failed</h2>
               <p className="text-muted small">{error}</p>
-              <a href="/portal/login" className="btn btn-primary btn-sm" style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}>
+              <a href="/portal/login" className="btn btn-sm" style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}>
                 Request New Link
               </a>
             </>

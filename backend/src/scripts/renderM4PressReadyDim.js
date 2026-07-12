@@ -54,6 +54,41 @@ const PDF_OUT = path.resolve(REPO, outPath);
   .press-wrapper { width: ${PAGE_W}in; height: ${PAGE_H}in; padding: ${BLEED}in; box-sizing: border-box; background: white; }
   .ad-mockup { box-shadow: none !important; border: 1px solid #ddd !important; }
 ${styles}
+  /* ===== PRESS-FIT OVERRIDES ===== */
+  /* The .ad-mockup has aspect-ratio 1.54/1 + overflow:hidden in the
+     multi-mockup doc, which was clipping the bottom of the ad in the
+     PDF render (V8 hero strip + V8 headline block + V9 NRECA tagline
+     added height beyond the aspect-ratio box). Kill those constraints
+     and tighten vertical spacing so the ad fits naturally in the
+     half-page horizontal trim height. */
+  .press-wrapper .ad-mockup {
+    aspect-ratio: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .press-wrapper .m4-bar-v5 { padding: 11px 24px !important; font-size: 16px !important; }
+  .press-wrapper .m4-v8 .m4-hero-strip-v8 { padding: 9px 24px 11px !important; }
+  .press-wrapper .m4-v8 .m4-hero-strip-v8 .hero-bullets { font-size: 11.5px !important; letter-spacing: 2px !important; }
+  .press-wrapper .m4-v8 .m4-headline-block-v8 { padding: 10px 28px 8px !important; }
+  .press-wrapper .m4-v8 .m4-headline-block-v8 .m4-headline { font-size: 19px !important; margin: 0 0 4px !important; line-height: 1.18 !important; }
+  .press-wrapper .m4-v8 .m4-headline-block-v8 .m4-subhead { font-size: 9.5px !important; line-height: 1.3 !important; }
+  .press-wrapper .m4-v5 .m4-tile { padding: 9px 8px 6px !important; }
+  .press-wrapper .m4-v5 .m4-tile .name { font-size: 12px !important; margin-bottom: 4px !important; }
+  .press-wrapper .m4-v5 .m4-tile .desc { font-size: 9.5px !important; line-height: 1.2 !important; min-height: 0 !important; }
+  .press-wrapper .m4-v5 .m4-tile .roi { font-size: 9.5px !important; line-height: 1.18 !important; margin-top: 3px !important; padding-top: 3px !important; }
+  .press-wrapper .m4-v7 .m4-tile { padding: 9px 8px 6px !important; }
+  .press-wrapper .m4-v7 .m4-tile .name { min-height: 28px !important; }
+  .press-wrapper .m4-v7 .m4-tile .desc { min-height: 38px !important; line-height: 1.2 !important; }
+  .press-wrapper .m4-v5 .m4-roi-strip-v5 { padding: 8px 22px !important; font-size: 12.5px !important; letter-spacing: 1.7px !important; }
+  .press-wrapper .m4-v5 .m4-footer-v5 { padding: 9px 22px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-colaberry img.logo { height: 22px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-colaberry .url-with-qr .inline-qr { width: 30px !important; height: 30px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-nreca .nreca-badge { padding: 6px 14px !important; font-size: 12px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-nreca .nreca-tagline-v9 { font-size: 8.5px !important; margin-top: 3px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-david .david-name { font-size: 10.5px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-david .david-email { font-size: 9.5px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-david .please-contact { font-size: 8.5px !important; }
+  .press-wrapper .m4-v7 .m4-footer-v7 .col-colaberry .qr-stack .scan-label { font-size: 8px !important; }
 </style>
 </head><body>
 <div class="press-wrapper">

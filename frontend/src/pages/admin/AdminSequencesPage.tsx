@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 type CampaignChannel = 'email' | 'voice' | 'sms';
 
@@ -46,10 +47,18 @@ const CHANNEL_LABELS: Record<CampaignChannel, string> = {
   sms: 'SMS',
 };
 
+// Channel -> brand chart token used as the step-card accent and channel chip.
 const CHANNEL_COLORS: Record<CampaignChannel, string> = {
-  email: '#0d6efd',
-  voice: '#198754',
-  sms: '#6f42c1',
+  email: 'var(--chart-1)',
+  voice: 'var(--chart-2)',
+  sms: 'var(--chart-3)',
+};
+
+// Channel -> StatusBadge tone for the channel pills in the sequence table.
+const CHANNEL_TONE: Record<CampaignChannel, 'info' | 'success' | 'primary'> = {
+  email: 'info',
+  voice: 'success',
+  sms: 'primary',
 };
 
 function AdminSequencesPage() {
@@ -194,6 +203,45 @@ function AdminSequencesPage() {
     });
   };
 
+  // Deterministic KPI roll-up from the loaded sequence list.
+  const kpis = useMemo(() => {
+    const total = sequences.length;
+    const active = sequences.filter((s) => s.is_active).length;
+    const totalSteps = sequences.reduce((sum, s) => sum + (s.steps?.length || 0), 0);
+    const multiChannel = sequences.filter(
+      (s) => new Set((s.steps || []).map((st) => st.channel || 'email')).size > 1
+    ).length;
+    return { total, active, totalSteps, multiChannel };
+  }, [sequences]);
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from live sequence health.
+  const trust: TrustSignal = useMemo(() => {
+    const { total, active } = kpis;
+    return {
+      level: 'live',
+      source: 'sequences table',
+      updatedAt: new Date().toISOString(),
+      summary: `${total} sequences, ${active} active, ${kpis.totalSteps} steps configured.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: 'live',
+          evidence: [
+            { label: 'Total', value: String(total) },
+            { label: 'Active', value: String(active) },
+          ],
+        },
+      ],
+    };
+  }, [kpis]);
+
+  const headerActions = !showForm ? (
+    <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>
+      Create Sequence
+    </button>
+  ) : undefined;
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -206,22 +254,29 @@ function AdminSequencesPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Sequences' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="h3 fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>
-            Campaign Sequences
-          </h1>
-          <p className="text-muted small mb-0">
-            Multi-channel automated sequences: email, voice (Synthflow), and SMS per step
-          </p>
+      <PageHeader
+        title="Sequences"
+        icon="mail-send-line"
+        subtitle="Multi-channel automated sequences: email, voice (Synthflow), and SMS per step."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Sequences' }]}
+        trust={trust}
+        actions={headerActions}
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Sequences" value={kpis.total} icon="mail-send-line" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Active" value={kpis.active} icon="play-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Total Steps" value={kpis.totalSteps} icon="stack-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Multi-Channel" value={kpis.multiChannel} icon="git-merge-line" tone="neutral" />
+          </div>
         </div>
-        {!showForm && (
-          <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>
-            Create Sequence
-          </button>
-        )}
-      </div>
+      </PageHeader>
 
       <p className="text-muted small mb-4">
         Template variables: {'{{name}}'}, {'{{company}}'}, {'{{title}}'}, {'{{email}}'}, {'{{phone}}'}
@@ -231,11 +286,8 @@ function AdminSequencesPage() {
       </p>
 
       {showForm && (
-        <div className="card admin-table-card mb-4">
-          <div className="card-header fw-bold py-3">
-            {editingId ? 'Edit Sequence' : 'New Multi-Channel Sequence'}
-          </div>
-          <div className="card-body">
+        <div className="mb-4">
+          <SectionCard title={editingId ? 'Edit Sequence' : 'New Multi-Channel Sequence'}>
             <div className="row mb-3">
               <div className="col-md-6">
                 <label className="form-label small">Sequence Name</label>
@@ -269,16 +321,15 @@ function AdminSequencesPage() {
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div className="d-flex align-items-center gap-2">
-                      <span
-                        className="badge"
-                        style={{ backgroundColor: CHANNEL_COLORS[step.channel || 'email'] }}
-                      >
-                        Step {idx + 1}: {CHANNEL_LABELS[step.channel || 'email']}
-                      </span>
+                      <StatusBadge
+                        label={`Step ${idx + 1}: ${CHANNEL_LABELS[step.channel || 'email']}`}
+                        tone={CHANNEL_TONE[step.channel || 'email'] || 'neutral'}
+                      />
                       {step.fallback_channel && (
-                        <span className="badge bg-warning text-dark" style={{ fontSize: '0.7rem' }}>
-                          Fallback: {CHANNEL_LABELS[step.fallback_channel]}
-                        </span>
+                        <StatusBadge
+                          label={`Fallback: ${CHANNEL_LABELS[step.fallback_channel]}`}
+                          tone="warning"
+                        />
                       )}
                     </div>
                     <div className="d-flex gap-1">
@@ -572,20 +623,16 @@ function AdminSequencesPage() {
               </button>
               <button className="btn btn-secondary" onClick={resetForm}>Cancel</button>
             </div>
-          </div>
+          </SectionCard>
         </div>
       )}
 
-      <div className="card admin-table-card">
-        <div className="card-header fw-bold py-3">
-          Sequences ({sequences.length})
-        </div>
-        <div className="card-body p-0">
-          {sequences.length === 0 ? (
-            <div className="text-center text-muted py-4">
-              No sequences created yet
-            </div>
-          ) : (
+      <SectionCard title={`Sequences (${sequences.length})`} padded={false}>
+        {sequences.length === 0 ? (
+          <div className="text-center text-muted py-4">
+            No sequences created yet
+          </div>
+        ) : (
             <div className="table-responsive">
               <table className="table table-hover mb-0">
                 <thead className="table-light">
@@ -625,26 +672,31 @@ function AdminSequencesPage() {
                         <td>
                           <div className="d-flex gap-1 flex-wrap">
                             {channels.map((ch) => (
-                              <span
+                              <StatusBadge
                                 key={ch}
-                                className="badge"
-                                style={{
-                                  backgroundColor: CHANNEL_COLORS[ch as CampaignChannel] || '#6c757d',
-                                  fontSize: '0.7rem',
-                                }}
-                              >
-                                {CHANNEL_LABELS[ch as CampaignChannel] || ch}
-                              </span>
+                                label={CHANNEL_LABELS[ch as CampaignChannel] || ch}
+                                tone={CHANNEL_TONE[ch as CampaignChannel] || 'neutral'}
+                              />
                             ))}
                           </div>
                         </td>
                         <td>
                           <span
-                            className={`badge rounded-pill ${seq.is_active ? 'bg-success' : 'bg-secondary'}`}
                             style={{ cursor: 'pointer' }}
                             onClick={() => handleToggleActive(seq)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleToggleActive(seq);
+                              }
+                            }}
                           >
-                            {seq.is_active ? 'Active' : 'Inactive'}
+                            <StatusBadge
+                              label={seq.is_active ? 'Active' : 'Inactive'}
+                              tone={seq.is_active ? 'success' : 'neutral'}
+                            />
                           </span>
                         </td>
                         <td className="text-muted small">
@@ -675,8 +727,7 @@ function AdminSequencesPage() {
               </table>
             </div>
           )}
-        </div>
-      </div>
+      </SectionCard>
 
       <ConfirmModal
         show={!!deleteTarget}

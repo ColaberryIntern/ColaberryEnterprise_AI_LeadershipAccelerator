@@ -1,0 +1,4 @@
+# Append-only logs: union-merge keeps BOTH sides instead of producing a conflict.
+# Eliminates the recurring PROGRESS.md merge conflicts across concurrent Claude sessions
+# (which were blocking ~6 of 9 open PRs). "union" is a built-in git merge driver — no config needed.
+PROGRESS.md merge=union

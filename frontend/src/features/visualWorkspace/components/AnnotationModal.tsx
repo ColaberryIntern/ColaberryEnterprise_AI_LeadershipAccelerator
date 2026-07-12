@@ -77,7 +77,7 @@ const AnnotationModal: React.FC<Props> = ({ open, pin, onCancel, onSave }) => {
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)' }}>
               new annotation
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-primary)' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#FB2832' }}>
               Pin the issue
             </div>
           </div>
@@ -124,7 +124,8 @@ const AnnotationModal: React.FC<Props> = ({ open, pin, onCancel, onSave }) => {
             <div className="col-5 d-flex align-items-end">
               <button
                 type="button"
-                className="btn btn-sm btn-outline-primary w-100"
+                className="btn btn-sm w-100"
+                style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                 onClick={aiSuggest}
                 title="Pre-fill description and expected outcome from a curated pattern"
               >
@@ -184,7 +185,8 @@ const AnnotationModal: React.FC<Props> = ({ open, pin, onCancel, onSave }) => {
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm"
+            style={{ background: '#FB2832', color: '#fff', border: 'none' }}
             onClick={handleSave}
             disabled={submitting || !description.trim()}
           >

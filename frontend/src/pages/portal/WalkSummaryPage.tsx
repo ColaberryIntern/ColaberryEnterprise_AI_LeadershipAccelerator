@@ -172,7 +172,7 @@ const WalkSummaryPage: React.FC = () => {
           <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)', fontWeight: 600 }}>
             Walk summary
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--color-primary)', marginTop: 4 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 600, color: '#FB2832', marginTop: 4 }}>
             {walk.caps.length} caps · filter "{walk.filter}"
           </h2>
           <div className="small text-muted">
@@ -190,7 +190,8 @@ const WalkSummaryPage: React.FC = () => {
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm"
+            style={{ background: '#FB2832', color: '#fff', border: 'none' }}
             onClick={handleCopy}
             disabled={!compiledPrompt}
           >
@@ -236,7 +237,7 @@ const WalkSummaryPage: React.FC = () => {
                           backgroundColor: 'var(--color-bg-alt)',
                           padding: '6px 10px',
                           borderRadius: 4,
-                          borderLeft: '3px solid var(--color-primary-light)',
+                          borderLeft: '3px solid #C20E1E',
                           whiteSpace: 'pre-wrap',
                         }}>
                           {cap.cap_level_note}

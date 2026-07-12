@@ -29,8 +29,8 @@ function ArchitectureGraph({ links, usability }: { links: Props['links']; usabil
   const layers = [
     { id: 'fe', label: 'Frontend', count: fe.length, status: usability.frontend || 'missing', color: '#10b981', icon: 'layout-wtf', y: 20 },
     { id: 'api', label: 'API Routes', count: be.filter(f => f.includes('route')).length, status: usability.backend || 'missing', color: '#3b82f6', icon: 'plug', y: 80 },
-    { id: 'svc', label: 'Services', count: be.filter(f => f.includes('service') || f.includes('Service')).length, status: usability.backend || 'missing', color: '#6366f1', icon: 'gear', y: 140 },
-    { id: 'agent', label: 'Agents', count: ag.length, status: usability.agent || 'missing', color: '#8b5cf6', icon: 'cpu', y: 200 },
+    { id: 'svc', label: 'Services', count: be.filter(f => f.includes('service') || f.includes('Service')).length, status: usability.backend || 'missing', color: '#FB2832', icon: 'gear', y: 140 },
+    { id: 'agent', label: 'Agents', count: ag.length, status: usability.agent || 'missing', color: '#367895', icon: 'cpu', y: 200 },
     { id: 'db', label: 'Database', count: db.length, status: db.length > 0 ? 'ready' : 'missing', color: '#f59e0b', icon: 'database', y: 260 },
   ];
 
@@ -72,7 +72,7 @@ function ArchitectureGraph({ links, usability }: { links: Props['links']; usabil
             {/* Status dot */}
             <circle cx="220" cy={layer.y + 8} r="5" fill={statusColor(layer.status)} />
             {/* Label */}
-            <text x="50" y={layer.y + 18} fontSize="11" fontWeight="600" fill={missing ? '#9ca3af' : 'var(--color-primary, #1a365d)'}>{layer.label}</text>
+            <text x="50" y={layer.y + 18} fontSize="11" fontWeight="600" fill={missing ? '#9ca3af' : 'var(--color-primary, #FB2832)'}>{layer.label}</text>
             <text x="50" y={layer.y + 31} fontSize="9" fill="#9ca3af">{layer.count} {layer.count === 1 ? 'file' : 'files'}{missing ? ' — missing' : ''}</text>
           </g>
         );
@@ -170,7 +170,7 @@ export default function ProcessVisualPanel({ links, usability, repoUrl }: Props)
                       const name = f.split('/').pop()?.replace('.ts', '').replace('.js', '') || f;
                       return (
                         <div key={i} className="d-flex align-items-center gap-2 py-1" style={{ borderBottom: '1px solid #f0f0f0' }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#8b5cf6' }}></span>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#367895' }}></span>
                           {repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none" style={{ fontSize: 10 }}>{name}</a> : <span style={{ fontSize: 10 }}>{name}</span>}
                         </div>
                       );

@@ -7,6 +7,23 @@ import {
 } from '../models';
 import { sendPortalMagicLink } from './emailService';
 
+/**
+ * Sign a 7-day participant session JWT. Shared by the magic-link verify flow
+ * and the free/guest self-serve signup flow so both issue identical tokens.
+ */
+export function signParticipantJwt(enrollment: { id: string; email: string; cohort_id: string | null }): string {
+  return jwt.sign(
+    {
+      sub: enrollment.id,
+      email: enrollment.email,
+      cohort_id: enrollment.cohort_id,
+      role: 'participant' as const,
+    },
+    env.jwtSecret,
+    { expiresIn: '7d' }
+  );
+}
+
 export async function requestMagicLink(email: string): Promise<{ success: boolean; message: string }> {
   const enrollment = await Enrollment.findOne({
     where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: true },
@@ -56,16 +73,7 @@ export async function verifyMagicLink(token: string): Promise<{ jwt: string; enr
   // Keep token reusable — don't clear it. The token expires naturally
   // via portal_token_expires_at. This lets users bookmark their portal link.
 
-  const jwtToken = jwt.sign(
-    {
-      sub: enrollment.id,
-      email: enrollment.email,
-      cohort_id: enrollment.cohort_id,
-      role: 'participant' as const,
-    },
-    env.jwtSecret,
-    { expiresIn: '7d' }
-  );
+  const jwtToken = signParticipantJwt(enrollment);
 
   return {
     jwt: jwtToken,
@@ -218,7 +226,7 @@ export async function createParticipantSubmission(enrollmentId: string, data: {
   title: string;
   content_json?: any;
 }) {
-  return AssignmentSubmission.create({
+  const submission = await AssignmentSubmission.create({
     enrollment_id: enrollmentId,
     session_id: data.session_id || null,
     assignment_type: data.assignment_type,
@@ -227,6 +235,13 @@ export async function createParticipantSubmission(enrollmentId: string, data: {
     status: 'submitted',
     submitted_at: new Date(),
   } as any);
+
+  // Non-blocking: failure here must never affect the submission response
+  import('./mentorFeedbackService').then(svc =>
+    svc.processSubmissionForMentor(submission.id)
+  ).catch(err => console.error('[Participant] Mentor feedback trigger failed:', err.message));
+
+  return submission;
 }
 
 export async function uploadParticipantSubmission(enrollmentId: string, submissionId: string, file: { path: string; originalname: string }) {
@@ -241,6 +256,12 @@ export async function uploadParticipantSubmission(enrollmentId: string, submissi
     status: 'submitted',
     submitted_at: new Date(),
   });
+
+  // Non-blocking: idempotent — will no-op if a review item already exists
+  import('./mentorFeedbackService').then(svc =>
+    svc.processSubmissionForMentor(submissionId)
+  ).catch(err => console.error('[Participant] Mentor feedback trigger (upload) failed:', err.message));
+
   return submission;
 }
 

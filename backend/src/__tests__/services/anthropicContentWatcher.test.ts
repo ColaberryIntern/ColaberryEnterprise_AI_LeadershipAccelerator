@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { runContentWatcher } from '../../services/anthropicContentWatcher';
 import AnthropicContentRegistry from '../../models/AnthropicContentRegistry';
 
@@ -162,6 +163,22 @@ describe('runContentWatcher — failure paths', () => {
     expect(result.errors).toBe(1);
     // Second row was still processed
     expect(okRow.update).toHaveBeenCalled();
+  });
+});
+
+describe('runContentWatcher — registry scoping (collision guard)', () => {
+  it('queries only non-course rows so it never overwrites the catalog scraper\'s outline hash', async () => {
+    const findAll = jest.fn().mockResolvedValue([]);
+    MockRegistry.findAll = findAll;
+
+    await runContentWatcher();
+
+    expect(findAll).toHaveBeenCalledTimes(1);
+    const arg = findAll.mock.calls[0][0] as any;
+    // content_type must be filtered with Op.ne 'course' — course rows are owned
+    // exclusively by anthropicCatalogScraper (outline hash), and the watcher
+    // hashes the full page body into the same content_hash column.
+    expect(arg?.where?.content_type?.[Op.ne]).toBe('course');
   });
 });
 

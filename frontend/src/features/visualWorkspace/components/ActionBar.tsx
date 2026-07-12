@@ -29,7 +29,8 @@ const ActionBar: React.FC<Props> = ({
       <div className="vw-action-bar-left">
         <button
           type="button"
-          className={`btn btn-sm ${annotateMode ? 'btn-primary' : 'btn-outline-primary'}`}
+          className={`btn btn-sm`}
+          style={annotateMode ? { background: '#FB2832', color: '#fff', border: 'none' } : { border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
           onClick={onToggleAnnotate}
         >
           <i className={`bi ${annotateMode ? 'bi-bullseye' : 'bi-cursor'} me-1`}></i>
@@ -67,7 +68,8 @@ const ActionBar: React.FC<Props> = ({
         </button>
         <button
           type="button"
-          className="btn btn-sm btn-outline-primary"
+          className="btn btn-sm"
+          style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
           onClick={onCompileAll}
           disabled={!hasWork || generating}
         >
@@ -76,7 +78,8 @@ const ActionBar: React.FC<Props> = ({
         </button>
         <button
           type="button"
-          className="btn btn-sm btn-primary"
+          className="btn btn-sm"
+          style={{ background: '#FB2832', color: '#fff', border: 'none' }}
           onClick={onSendToBuildCenter}
           disabled={!hasWork}
         >

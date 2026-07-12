@@ -49,6 +49,12 @@ const DEFAULTS: Record<string, any> = {
   ghl_enabled: false,
   ghl_api_key: '',
   ghl_location_id: 'JFWwp8q7l6T12NWTIOKG',
+  // Consent gate (TBI P0-3): 'off' | 'shadow' | 'enforce'. Default shadow = evaluate + log every
+  // outbound send's consent verdict but NEVER block, until Ali flips it to 'enforce'.
+  consent_enforcement: 'shadow',
+  // ABAC agent-authorization gate (TBI P2-1): 'off' | 'shadow' | 'enforce'. Default shadow =
+  // evaluate + log every agent action's authorization verdict but NEVER block, until flipped on.
+  abac_enforcement: 'shadow',
 };
 
 export async function getSetting(key: string): Promise<any> {

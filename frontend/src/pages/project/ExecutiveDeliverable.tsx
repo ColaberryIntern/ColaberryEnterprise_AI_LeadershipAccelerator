@@ -28,12 +28,13 @@ function ExecutiveDeliverable() {
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
+        <h1 className="h4 fw-bold mb-0" style={{ color: '#FB2832' }}>
           <i className="bi bi-file-earmark-richtext me-2"></i>Executive Deliverable
         </h1>
         <div className="d-flex gap-2">
           <button
-            className="btn btn-sm btn-outline-primary"
+            className="btn btn-sm"
+            style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
             onClick={handleRefresh}
             disabled={refreshing}
           >

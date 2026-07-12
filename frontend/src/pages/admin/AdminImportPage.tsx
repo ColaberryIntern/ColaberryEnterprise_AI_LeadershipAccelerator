@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface ImportResult {
   imported: number;
@@ -21,6 +22,24 @@ function AdminImportPage() {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
+
+  // Per-page trust signal (Basecamp todo 10027085963): the import tool writes
+  // straight to the live leads store, so the signal reflects that uploads land
+  // in the system of record after duplicate screening.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'import',
+    updatedAt: new Date().toISOString(),
+    summary: 'CSV uploads write directly to the live leads store after duplicate screening.',
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Destination',
+        status: 'live',
+        evidence: [{ label: 'Writes to', value: 'leads (deduped by email)' }],
+      },
+    ],
+  }), []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
@@ -66,111 +85,96 @@ function AdminImportPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Import' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Import Leads
-        </h1>
-        <button className="btn btn-outline-primary btn-sm" onClick={handleDownloadTemplate}>
-          Download CSV Template
-        </button>
-      </div>
+      <PageHeader
+        title="Import"
+        icon="upload-2-line"
+        subtitle="Upload a CSV of leads. Duplicates are screened by email before they reach the live store."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Import' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-outline-primary btn-sm" onClick={handleDownloadTemplate}>
+            <i className="ri-download-line" aria-hidden="true" /> Download CSV Template
+          </button>
+        }
+      />
 
       {/* Instructions */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-header fw-bold py-3">CSV Format</div>
-        <div className="card-body">
-          <p className="small text-muted mb-2">
-            Upload a CSV file with leads. Required columns: <strong>name</strong> and <strong>email</strong>.
-            All other columns are optional. Duplicates (by email) are automatically skipped.
-          </p>
-          <div className="bg-light p-3 rounded">
-            <code className="small" style={{ whiteSpace: 'pre-wrap' }}>
-              {EXPECTED_COLUMNS.join(', ')}
-            </code>
-          </div>
+      <SectionCard title="CSV Format" icon="file-list-3-line" className="mb-4">
+        <p className="small text-muted mb-2">
+          Upload a CSV file with leads. Required columns: <strong>name</strong> and <strong>email</strong>.
+          All other columns are optional. Duplicates (by email) are automatically skipped.
+        </p>
+        <div className="p-3 rounded" style={{ background: 'var(--surface-subtle)' }}>
+          <code className="small" style={{ whiteSpace: 'pre-wrap' }}>
+            {EXPECTED_COLUMNS.join(', ')}
+          </code>
         </div>
-      </div>
+      </SectionCard>
 
       {/* Upload Area */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-header fw-bold py-3">Upload</div>
-        <div className="card-body">
-          <div className="mb-3">
-            <input
-              type="file"
-              className="form-control"
-              accept=".csv"
-              onChange={handleFileChange}
-            />
-          </div>
-
-          {file && (
-            <div className="mb-3">
-              <span className="text-muted small">Selected: </span>
-              <span className="fw-medium small">{file.name}</span>
-              <span className="text-muted small ms-2">({(file.size / 1024).toFixed(1)} KB)</span>
-            </div>
-          )}
-
-          {error && <div className="alert alert-danger py-2 small">{error}</div>}
-
-          <button
-            className="btn btn-primary"
-            onClick={handleUpload}
-            disabled={!file || uploading}
-          >
-            {uploading ? 'Importing...' : 'Import Leads'}
-          </button>
+      <SectionCard title="Upload" icon="upload-cloud-2-line" className="mb-4">
+        <div className="mb-3">
+          <input
+            type="file"
+            className="form-control"
+            accept=".csv"
+            onChange={handleFileChange}
+          />
         </div>
-      </div>
+
+        {file && (
+          <div className="mb-3">
+            <span className="text-muted small">Selected: </span>
+            <span className="fw-medium small">{file.name}</span>
+            <span className="text-muted small ms-2">({(file.size / 1024).toFixed(1)} KB)</span>
+          </div>
+        )}
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+        <button
+          className="btn btn-primary"
+          onClick={handleUpload}
+          disabled={!file || uploading}
+        >
+          {uploading ? 'Importing...' : 'Import Leads'}
+        </button>
+      </SectionCard>
 
       {/* Results */}
       {result && (
-        <div className="card admin-table-card">
-          <div className="card-header fw-bold py-3">Import Results</div>
-          <div className="card-body">
-            <div className="row g-3 mb-3">
-              <div className="col-md-3">
-                <div className="card bg-light p-3 text-center">
-                  <div className="text-muted small">Total Rows</div>
-                  <div className="h4 fw-bold mb-0">{result.total}</div>
-                </div>
+        <SectionCard title="Import Results" icon="checkbox-circle-line">
+          <div className="row g-3 mb-3">
+            <div className="col-6 col-lg-3">
+              <StatCard label="Total Rows" value={result.total} icon="table-line" tone="info" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Imported" value={result.imported} icon="checkbox-circle-line" tone="success" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Skipped (Duplicate)" value={result.skipped} icon="filter-off-line" tone={result.skipped ? 'warning' : 'neutral'} />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Errors" value={result.errors.length} icon="error-warning-line" tone={result.errors.length ? 'danger' : 'neutral'} />
+            </div>
+          </div>
+
+          {result.errors.length > 0 && (
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <h6 className="fw-bold mb-0">Errors</h6>
+                <StatusBadge label={`${result.errors.length} failed`} tone="danger" />
               </div>
-              <div className="col-md-3">
-                <div className="card bg-light p-3 text-center">
-                  <div className="text-muted small">Imported</div>
-                  <div className="h4 fw-bold mb-0 text-success">{result.imported}</div>
-                </div>
-              </div>
-              <div className="col-md-3">
-                <div className="card bg-light p-3 text-center">
-                  <div className="text-muted small">Skipped (Duplicate)</div>
-                  <div className="h4 fw-bold mb-0 text-warning">{result.skipped}</div>
-                </div>
-              </div>
-              <div className="col-md-3">
-                <div className="card bg-light p-3 text-center">
-                  <div className="text-muted small">Errors</div>
-                  <div className="h4 fw-bold mb-0 text-danger">{result.errors.length}</div>
-                </div>
+              <div className="p-3 rounded" style={{ background: 'var(--surface-subtle)', maxHeight: '200px', overflowY: 'auto' }}>
+                {result.errors.map((err, idx) => (
+                  <div key={idx} className="small mb-1" style={{ color: 'var(--status-danger)' }}>
+                    Row {err.row}: {err.message}
+                  </div>
+                ))}
               </div>
             </div>
-
-            {result.errors.length > 0 && (
-              <div>
-                <h6 className="fw-bold mb-2">Errors</h6>
-                <div className="bg-light p-3 rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                  {result.errors.map((err, idx) => (
-                    <div key={idx} className="small text-danger mb-1">
-                      Row {err.row}: {err.message}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+          )}
+        </SectionCard>
       )}
     </>
   );

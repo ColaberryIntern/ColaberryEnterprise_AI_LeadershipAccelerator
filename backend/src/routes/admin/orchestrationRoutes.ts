@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import path from 'path';
 import { requireAdmin } from '../../middlewares/authMiddleware';
+import { getInstrumentedOpenAI } from '../../services/openaiInstrumented';
 import {
   handleListPrograms, handleGetProgram, handleCreateProgram,
   handleUpdateProgram, handleDeleteProgram, handleCloneProgram,
@@ -1070,8 +1071,7 @@ router.post('/api/admin/orchestration/mentor-preview', requireAdmin, async (req,
     const { message, lesson_id } = req.body;
     if (!message) return res.status(400).json({ error: 'message is required' });
 
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'orchestration' });
     const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 
     // Build a simple system prompt for admin preview

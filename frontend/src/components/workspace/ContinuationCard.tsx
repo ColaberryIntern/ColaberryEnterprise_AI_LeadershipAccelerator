@@ -17,6 +17,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ActivePath } from '../../hooks/useActivePath';
+import { renderMd } from '../../utils/renderMd';
 
 interface Props {
   path: ActivePath | null;
@@ -104,7 +105,7 @@ const ContinuationCard: React.FC<Props> = ({ path }) => {
             fontStyle: 'italic',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {path.detail}
+            {renderMd(path.detail)}
           </div>
         )}
       </div>

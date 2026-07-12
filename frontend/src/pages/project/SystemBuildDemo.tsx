@@ -174,7 +174,7 @@ export default function SystemBuildDemo() {
       {/* Header */}
       <div className="d-flex align-items-center justify-content-between px-4 py-3" style={{ background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
         <div className="d-flex align-items-center gap-3">
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <i className="bi bi-robot" style={{ fontSize: 18, color: '#fff' }}></i>
           </div>
           <div>
@@ -195,7 +195,7 @@ export default function SystemBuildDemo() {
       {/* Progress */}
       <div className="px-4 py-2" style={{ background: '#fff', borderBottom: '1px solid #f1f5f9' }}>
         <div className="progress" style={{ height: 4, borderRadius: 4 }}>
-          <div className="progress-bar" style={{ width: `${progress}%`, background: progress === 100 ? '#10b981' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)', borderRadius: 4, transition: 'width 0.6s ease' }}></div>
+          <div className="progress-bar" style={{ width: `${progress}%`, background: progress === 100 ? 'var(--color-success)' : 'var(--color-primary)', borderRadius: 4, transition: 'width 0.6s ease' }}></div>
         </div>
       </div>
 
@@ -280,7 +280,7 @@ export default function SystemBuildDemo() {
               <>
                 {/* ROI Analysis */}
                 {roi && (
-                  <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #1a365d, #2b6cb0)', color: '#fff' }}>
+                  <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))', color: '#fff' }}>
                     <div className="card-body p-4">
                       <h6 className="fw-bold mb-3" style={{ fontSize: 14, color: '#fff' }}><i className="bi bi-graph-up-arrow me-2"></i>Cost & ROI Analysis</h6>
                       <div className="row g-3 mb-3">

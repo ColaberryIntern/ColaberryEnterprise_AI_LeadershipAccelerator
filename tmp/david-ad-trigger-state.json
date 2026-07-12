@@ -1,5 +1,5 @@
 {
-  "lastProcessedMessageId": "19e89bd2686aa27e",
-  "version": 4,
-  "note": "Marker initialized 2026-06-02 14:28 CDT. Last processed: David's June 2 19:08 UTC reply on Mockup 4 (V4 sent in response). Bump version on next iteration."
+  "lastProcessedMessageId": "19e8e12e2028669c",
+  "version": 7,
+  "note": "Marker advanced 2026-06-03 by Ali/Claude (session CC-20260603-v7da) after manual V7 send. Last processed: David's June 3 15:20 UTC \"lastest edits\" reply (message 19e8e12e2028669c); V7 sent in response (Mandrill b31f374c, BC comment 9959353947). Subject hint list broadened + threadId fallback added in same commit (Phase 1.4f) so the trigger no longer misses free-form subjects. Trigger remains KILLED on prod via tmp/david-trigger-killed.flag until Playwright Chromium is reinstalled on the prod host."
 }

@@ -190,7 +190,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                 <button
                   className="btn px-4 py-2"
                   style={{
-                    background: '#6366f1',
+                    background: '#FB2832',
                     color: '#fff',
                     borderRadius: 8,
                     fontSize: 13,
@@ -234,7 +234,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
             style={{
               height: '100%',
               width: `${((currentIndex + (showAnswered ? 1 : 0)) / total) * 100}%`,
-              background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+              background: 'linear-gradient(90deg, #FB2832, #367895)',
               transition: 'width 0.3s ease',
             }}
           />
@@ -245,7 +245,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
           <p className="fw-semibold mb-3" style={{ fontSize: 14, color: '#1e293b' }}>
             <span
               className="d-inline-flex align-items-center justify-content-center rounded-circle me-2"
-              style={{ width: 24, height: 24, background: '#eef2ff', color: '#6366f1', fontSize: 12, fontWeight: 700 }}
+              style={{ width: 24, height: 24, background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 12, fontWeight: 700 }}
             >
               {currentIndex + 1}
             </span>
@@ -262,7 +262,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
 
               let borderColor = '#e2e8f0';
               let bg = '#fff';
-              if (isSelected && !showAnswered) { borderColor = '#6366f1'; bg = '#eef2ff'; }
+              if (isSelected && !showAnswered) { borderColor = '#FB2832'; bg = 'rgba(251,40,50,0.08)'; }
               if (isCorrectOpt) { borderColor = '#10b981'; bg = '#ecfdf5'; }
               if (isWrong) { borderColor = '#ef4444'; bg = '#fef2f2'; }
 
@@ -284,7 +284,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                     checked={isSelected}
                     readOnly
                     disabled={showAnswered}
-                    style={{ accentColor: '#6366f1' }}
+                    style={{ accentColor: '#FB2832' }}
                   />
                   <span style={{ fontSize: 13, color: '#334155' }}>{opt}</span>
                   {isCorrectOpt && <i className="bi bi-check-circle-fill ms-auto" style={{ color: '#10b981' }}></i>}
@@ -311,9 +311,9 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                 <button
                   className="btn btn-sm d-flex align-items-center gap-1"
                   style={{
-                    background: '#eef2ff',
-                    color: '#6366f1',
-                    border: '1px solid #c7d2fe',
+                    background: 'rgba(251,40,50,0.08)',
+                    color: '#FB2832',
+                    border: '1px solid rgba(251,40,50,0.25)',
                     borderRadius: 6,
                     fontSize: 12,
                     fontWeight: 600,
@@ -373,7 +373,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                 <button
                   className="btn px-4 py-2"
                   style={{
-                    background: '#6366f1',
+                    background: '#FB2832',
                     color: '#fff',
                     borderRadius: 8,
                     fontSize: 13,

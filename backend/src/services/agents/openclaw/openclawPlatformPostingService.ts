@@ -1,9 +1,21 @@
 import axios from 'axios';
 import crypto from 'crypto';
+import { isKillSwitchActive } from '../../launchSafety';
 
 interface PostResult {
   post_url: string;
   platform_post_id: string;
+}
+
+/**
+ * SECURITY (TBI audit P0-2): social posting must be stoppable by the global kill switch.
+ * Throws when the switch is active so the calling orchestrator/quality-gate aborts the post
+ * (these functions have no skip-return shape; an Error is the clear abort signal here).
+ */
+async function assertPostingAllowed(platform: string): Promise<void> {
+  if (await isKillSwitchActive()) {
+    throw new Error(`Social posting to ${platform} blocked: global kill switch is active`);
+  }
 }
 
 /**
@@ -15,6 +27,8 @@ export async function postToDevTo(
   bodyMarkdown: string,
   articleUrl?: string,
 ): Promise<PostResult> {
+  await assertPostingAllowed('Dev.to');
+
   const apiKey = process.env.DEVTO_API_KEY;
   if (!apiKey) throw new Error('DEVTO_API_KEY not configured');
 
@@ -79,6 +93,8 @@ export async function postToHashnode(
   contentMarkdown: string,
   articleUrl?: string,
 ): Promise<PostResult> {
+  await assertPostingAllowed('Hashnode');
+
   const token = process.env.HASHNODE_ACCESS_TOKEN;
   if (!token) throw new Error('HASHNODE_ACCESS_TOKEN not configured');
 
@@ -453,6 +469,8 @@ export async function publishArticleToDevTo(
   tags: string[] = ['ai', 'machinelearning', 'programming'],
   series?: string,
 ): Promise<PostResult> {
+  await assertPostingAllowed('Dev.to article');
+
   const apiKey = process.env.DEVTO_API_KEY;
   if (!apiKey) throw new Error('DEVTO_API_KEY not configured');
 

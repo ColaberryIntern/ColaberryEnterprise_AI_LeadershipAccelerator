@@ -35,7 +35,7 @@ const PromptPreviewModal: React.FC<Props> = ({ open, prompt, source, onClose, on
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)' }}>
               compiled prompt
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-primary)' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#FB2832' }}>
               Ready to paste into Claude Code
             </div>
           </div>
@@ -78,14 +78,16 @@ const PromptPreviewModal: React.FC<Props> = ({ open, prompt, source, onClose, on
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-outline-primary"
+            className="btn btn-sm"
+            style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
             onClick={() => window.open(`data:text/plain;charset=utf-8,${encodeURIComponent(prompt)}`, '_blank')}
           >
             <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
           </button>
           <button
             type="button"
-            className={`btn btn-sm ${copied ? 'btn-success' : 'btn-outline-primary'}`}
+            className="btn btn-sm"
+            style={copied ? { background: '#15803d', color: '#fff', border: 'none' } : { border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
             onClick={handleCopy}
           >
             <i className={`bi ${copied ? 'bi-check2' : 'bi-clipboard'} me-1`}></i>
@@ -93,7 +95,8 @@ const PromptPreviewModal: React.FC<Props> = ({ open, prompt, source, onClose, on
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm"
+            style={{ background: '#FB2832', color: '#fff', border: 'none' }}
             onClick={onOpenBuildCenter}
           >
             <i className="bi bi-rocket me-1"></i>Send to Blueprint

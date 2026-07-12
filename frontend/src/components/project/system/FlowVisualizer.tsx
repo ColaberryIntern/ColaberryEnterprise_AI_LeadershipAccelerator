@@ -12,9 +12,9 @@ export default function FlowVisualizer({ hasBackend, hasFrontend, hasAgents, has
     { id: 'trigger', label: 'User Action', shape: 'rounded' as const, x: 120, y: 25, color: '#10b981', active: hasFrontend },
     { id: 'api', label: 'API Request', shape: 'hexagon' as const, x: 120, y: 80, color: '#3b82f6', active: hasBackend },
     { id: 'validate', label: 'Validate?', shape: 'diamond' as const, x: 120, y: 140, color: '#f59e0b', active: hasBackend },
-    { id: 'service', label: 'Process', shape: 'rect' as const, x: 65, y: 200, color: '#6366f1', active: hasBackend },
+    { id: 'service', label: 'Process', shape: 'rect' as const, x: 65, y: 200, color: '#FB2832', active: hasBackend },
     { id: 'error', label: 'Error', shape: 'rect' as const, x: 190, y: 200, color: '#ef4444', active: hasBackend },
-    { id: 'agent', label: 'AI Agent', shape: 'circle' as const, x: 65, y: 260, color: '#8b5cf6', active: hasAgents },
+    { id: 'agent', label: 'AI Agent', shape: 'circle' as const, x: 65, y: 260, color: '#367895', active: hasAgents },
     { id: 'db', label: 'Save', shape: 'cylinder' as const, x: 65, y: 320, color: '#f59e0b', active: hasDatabase },
     { id: 'response', label: 'Response', shape: 'rounded' as const, x: 120, y: 375, color: '#10b981', active: true },
   ];

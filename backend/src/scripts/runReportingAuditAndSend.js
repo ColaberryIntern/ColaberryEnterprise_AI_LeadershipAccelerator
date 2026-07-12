@@ -34,10 +34,31 @@ const { REPORTS: REGISTRY, shouldFireToday } = require('./lib/reportingRegistry'
 const { getBasecampToken } = require('./lib/basecampToken');
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
+const { summarizeReporting, shouldSendAuditEmail } = require('./lib/reportingAuditDecision');
+const { sendMailWithRetry } = require('./lib/sendMailWithRetry');
+
+// Crash isolation: a transient socket/TLS error in a report's SMTP send can
+// surface as an unhandled rejection that kills the whole orchestrator mid-run
+// (observed 2026-06-23, Interview Prep). Log it loudly and exit non-zero so
+// cron records a failure (and any heartbeat fires), instead of dying silently.
+process.on('unhandledRejection', (reason) => {
+  console.error('[audit] FATAL unhandledRejection:', (reason && reason.stack) || reason);
+  process.exit(1);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[audit] FATAL uncaughtException:', (err && err.stack) || err);
+  process.exit(1);
+});
 
 const AUDIT_ONLY = process.argv.includes('--audit-only');
 const FORCE_ALL = process.argv.includes('--force-all'); // Ignore cadence; fire every report once
 const ALL_HOURS = process.argv.includes('--all-hours') || FORCE_ALL; // Ignore sendHourUTC filter
+// --ct-now: minute-precise, DST-correct path. Fires ONLY reports whose registry
+// `sendCT` ("HH:MM" America/Chicago) equals the current Central time. Used by a
+// dedicated cron for off-the-hour / pre-business-hours slots (e.g. 5:30 AM CST)
+// that the integer-UTC-hour stagger cannot express. Reports with `sendCT` are
+// excluded from the normal hourly path so they fire exactly once.
+const CT_NOW = process.argv.includes('--ct-now');
 const REPO = path.resolve(__dirname, '../../..');
 
 // ---------------- Report registry (LEGACY inline copy - now driven by lib/reportingRegistry.js) ----------------
@@ -243,17 +264,31 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   //   3. skip flags (manual override)
   //   4. --force-all (ignore cadence too)
   const currentHourUTC = now.getUTCHours();
-  // Warn loudly on any report missing sendHourUTC (we treat undefined as
-  // "do not fire" — fail-safe against the original 8-reports-at-8-AM bug.
-  // A developer who forgets sendHourUTC will see this log every hour
-  // until they fix it, which is the point.)
-  const missingHour = REGISTRY.filter((r) => r.sendHourUTC === undefined && shouldFireToday(r, now));
-  if (missingHour.length && !ALL_HOURS) {
-    console.warn(`[audit] WARN: ${missingHour.length} report(s) missing sendHourUTC and will NOT fire: ${missingHour.map((r) => r.name).join(', ')}. Add sendHourUTC to reportingRegistry.js.`);
+  const nowCTHHMM = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+  const [ctH, ctM] = nowCTHHMM.split(':').map(Number);
+  const nowCTMin = ctH * 60 + ctM;
+  // Match a report's sendCT within a 10-minute window AFTER its slot, so cron
+  // jitter (a run that lands at :31 instead of :30) still fires it exactly once.
+  const ctMatch = (sendCT) => {
+    if (!sendCT) return false;
+    const [h, m] = String(sendCT).split(':').map(Number);
+    const delta = nowCTMin - (h * 60 + m);
+    return delta >= 0 && delta <= 9;
+  };
+  if (CT_NOW) console.log(`[audit] --ct-now: current Central time ${nowCTHHMM}; firing reports whose sendCT is within the last 10 min`);
+  // Warn loudly on any report missing BOTH sendHourUTC and sendCT (we treat that
+  // as "do not fire" — fail-safe against the original 8-reports-at-8-AM bug).
+  const missingHour = REGISTRY.filter((r) => r.sendHourUTC === undefined && !r.sendCT && shouldFireToday(r, now));
+  if (missingHour.length && !ALL_HOURS && !CT_NOW) {
+    console.warn(`[audit] WARN: ${missingHour.length} report(s) missing sendHourUTC/sendCT and will NOT fire: ${missingHour.map((r) => r.name).join(', ')}. Add sendHourUTC to reportingRegistry.js.`);
   }
   const active = REGISTRY
     .filter((r) => FORCE_ALL || shouldFireToday(r, now))
-    .filter((r) => ALL_HOURS || r.sendHourUTC === currentHourUTC)
+    .filter((r) => {
+      if (CT_NOW) return ctMatch(r.sendCT);              // minute-precise Central path (10-min jitter window)
+      if (r.sendCT) return false;                        // CT-scheduled reports never fire on the hourly path
+      return ALL_HOURS || r.sendHourUTC === currentHourUTC;
+    })
     .filter((r) => !process.argv.includes(r.skipFlag));
   const skippedForCadence = REGISTRY.filter((r) => !FORCE_ALL && !shouldFireToday(r, now));
   const skippedForHour = REGISTRY.filter((r) => !ALL_HOURS && shouldFireToday(r, now) && r.sendHourUTC !== undefined && r.sendHourUTC !== currentHourUTC);
@@ -285,23 +320,37 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
     if (a.overall === 'fail') { console.log(`[audit] skip ${r.name} - preflight failed`); sendResults.push({ exitCode: -2, stdout: '', stderr: 'preflight failed', durationMs: 0 }); continue; }
     console.log(`[audit] sending ${r.name}...`);
     const scriptAbs = path.resolve(REPO, r.scriptPath);
-    const result = await runScript(r.name, scriptAbs, r.args || []);
+    let result;
+    try {
+      result = await runScript(r.name, scriptAbs, r.args || []);
+    } catch (e) {
+      // runScript resolves on child 'close'/'error', so this is a last-resort
+      // guard: one report blowing up can never abort the remaining reports.
+      result = { exitCode: -3, stdout: '', stderr: `orchestrator error: ${e.message}`, durationMs: 0 };
+    }
     sendResults.push(result);
     console.log(`   exit=${result.exitCode} dur=${result.durationMs}ms`);
   }
 
   // 3. Render + send audit email
   const html = renderAuditEmail(now, auditResults, sendResults);
-  const totalFail = auditResults.filter((r) => r.overall === 'fail').length;
-  const totalWarn = auditResults.filter((r) => r.overall === 'warn').length;
-  const sentCount = sendResults.filter((s) => s?.exitCode === 0).length;
-  const subject = `[Reporting Audit] ${now.toISOString().slice(0, 10)} - ${totalFail ? `${totalFail} FAIL` : `${sentCount}/${active.length} sent`}${totalWarn ? ` (${totalWarn} warn)` : ''}`;
+  const counts = summarizeReporting(auditResults, sendResults);
+  const { totalFail, totalWarn, sentCount, sendFailCount } = counts;
+  const failTotal = totalFail + sendFailCount;
+  // The alert only sends on failure (see shouldSendAuditEmail). Subject deliberately
+  // drops the "Reporting Audit" phrase: a Gmail filter on ali@colaberry.com was
+  // auto-trashing everything matching it, so the Jun-19 failure alerts landed in
+  // Trash unseen (2026-06-23 / CC-20260623-q8m4). The distinct "Reporting FAILED"
+  // subject + sender dodges that stale filter. NOTE: deleting the filter is the
+  // real fix (can't be done via API); the gmail.com CC also bypasses it.
+  const subject = `🔴 Reporting FAILED ${now.toISOString().slice(0, 10)}: ${failTotal} report${failTotal === 1 ? '' : 's'} did not send${totalWarn ? ` (${totalWarn} warn)` : ''}`;
   const text = `Daily Reporting Audit ${now.toISOString().slice(0, 10)}
 
 ${active.length} reports audited.
 PASS: ${auditResults.filter((r) => r.overall === 'ok').length}
 WARN: ${totalWarn}
-FAIL: ${totalFail}
+PREFLIGHT FAIL: ${totalFail}
+SEND FAIL: ${sendFailCount}
 SENT: ${sentCount}
 
 Per-report:
@@ -309,28 +358,46 @@ ${auditResults.map((r, i) => `- ${r.name}: ${r.overall}${sendResults[i] ? `, sen
 
 Recipients on every regular report: ali@colaberry.com (to) + alimuwwakkil@gmail.com + ram@colaberry.com (cc).`;
 
-  validateBeforeSend(html, text);
-  // CHANGED 2026-06-05 (CC-20260603-v7da, Ali approved): only email the
-  // audit on real failure. Healthy days log to stdout (cron pipes to
-  // /var/log/reporting-audit.log) and the per-report dashboards already
-  // reach Ali's inbox. Sending an email that says "1/1 sent (1 warn)"
-  // every weekday is meta-noise — the email-about-the-email pattern.
-  const auditEmailNeeded = totalFail > 0;
+  // The audit email is a SYSTEM email and legitimately contains em-dashes (e.g.
+  // report names like "Interview Prep - Priority & Readiness"). The author-style
+  // preflight (em-dash / branded-signature rules) is for Ali's authored outbound,
+  // not for this. Run it as a NON-FATAL lint so a style nit can never crash the
+  // orchestrator (root cause of the 2026-06-22 "Mandrill preflight failed" crash).
+  try {
+    validateBeforeSend(html, text);
+  } catch (e) {
+    console.warn(`[audit] audit-email style lint flagged (non-fatal, sending anyway): ${String(e.message).split('\n')[0]}`);
+  }
+
+  // CHANGED 2026-06-05 (CC-20260603-v7da, Ali approved): suppress the audit
+  // email on healthy days (the email-about-the-email anti-pattern).
+  // CHANGED 2026-06-23 (CC-20260623-q8m4): alert on EITHER a preflight failure
+  // OR a send failure. Previously this fired only on preflight failures
+  // (`totalFail > 0`), so a report that passed preflight then failed its actual
+  // send (exit != 0) was silently suppressed - which is exactly how Anthropic
+  // Partner Network and Interview Prep stayed broken for days with no alert.
+  const auditEmailNeeded = shouldSendAuditEmail(counts);
   if (auditEmailNeeded) {
-    const transport = nodemailer.createTransport({
-      host: 'smtp.mandrillapp.com', port: 587,
-      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
-    });
-    const sentAudit = await transport.sendMail({
-      from: '"CB System" <ali@colaberry.com>',
-      to: 'ali@colaberry.com',
-      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
-      subject, text, html,
-      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
-    });
-    console.log(`[audit] audit email sent (FAIL detected): ${sentAudit.messageId}`);
+    try {
+      const transport = nodemailer.createTransport({
+        host: 'smtp.mandrillapp.com', port: 587,
+        auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
+      });
+      const sentAudit = await sendMailWithRetry(transport, {
+        from: '"CB Reporting Alert" <ali@colaberry.com>',
+        to: 'ali@colaberry.com',
+        cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+        subject, text, html,
+        headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+      }, { log: (m) => console.warn(`[audit] ${m}`) });
+      console.log(`[audit] audit email sent (${failTotal} FAIL detected): ${sentAudit.messageId}`);
+    } catch (e) {
+      // The alert itself failed to send. Make that maximally loud in the log so
+      // a heartbeat / log scan can catch it; do not crash.
+      console.error(`[audit] ERROR: failed to send audit alert email after retries: ${e.message}`);
+    }
   } else {
     console.log(`[audit] healthy run - audit email suppressed (${sentCount}/${active.length} sent, ${totalWarn} warn). Log to /var/log/reporting-audit.log.`);
   }
-  console.log(`[audit] summary: ${sentCount}/${active.length} reports sent, ${totalFail} preflight failures, ${totalWarn} warnings`);
+  console.log(`[audit] summary: ${sentCount}/${active.length} reports sent, ${totalFail} preflight failures, ${sendFailCount} send failures, ${totalWarn} warnings`);
 })().catch((e) => { console.error('[audit] FATAL:', e.stack || e.message); process.exit(1); });

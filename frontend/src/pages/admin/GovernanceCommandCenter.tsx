@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -173,50 +175,42 @@ function SystemLimitsTab() {
         <>
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <span className={`badge ${config.source === 'database' ? 'bg-success' : 'bg-warning text-dark'} me-2`}>
-                Source: {config.source}
-              </span>
+              <StatusBadge
+                label={`Source: ${config.source}`}
+                tone={config.source === 'database' ? 'success' : 'warning'}
+              />
             </div>
             <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || Object.keys(edits).length === 0}>
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
 
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Autonomy & Execution</div>
-            <div className="card-body">
-              <div className="row">
-                {field('autonomy_mode', 'Autonomy Mode', 'select')}
-                {field('max_auto_executions_per_hour', 'Max Auto-Executions / Hour')}
-                {field('max_risk_budget_per_hour', 'Max Risk Budget / Hour')}
-                {field('auto_execute_risk_threshold', 'Risk Threshold (auto-execute below)')}
-                {field('auto_execute_confidence_threshold', 'Confidence Threshold (auto-execute above)')}
-                {field('approval_required_for_critical', 'Require Approval for Critical Actions', 'boolean')}
-              </div>
+          <SectionCard title="Autonomy & Execution" className="mb-4">
+            <div className="row">
+              {field('autonomy_mode', 'Autonomy Mode', 'select')}
+              {field('max_auto_executions_per_hour', 'Max Auto-Executions / Hour')}
+              {field('max_risk_budget_per_hour', 'Max Risk Budget / Hour')}
+              {field('auto_execute_risk_threshold', 'Risk Threshold (auto-execute below)')}
+              {field('auto_execute_confidence_threshold', 'Confidence Threshold (auto-execute above)')}
+              {field('approval_required_for_critical', 'Require Approval for Critical Actions', 'boolean')}
             </div>
-          </div>
+          </SectionCard>
 
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Resource Limits</div>
-            <div className="card-body">
-              <div className="row">
-                {field('max_dynamic_agents', 'Max Dynamic Agents')}
-                {field('max_agents_total', 'Max Agents Total')}
-                {field('max_proposed_pending', 'Max Pending Proposals')}
-                {field('max_concurrent_monitoring', 'Max Concurrent Monitors')}
-              </div>
+          <SectionCard title="Resource Limits" className="mb-4">
+            <div className="row">
+              {field('max_dynamic_agents', 'Max Dynamic Agents')}
+              {field('max_agents_total', 'Max Agents Total')}
+              {field('max_proposed_pending', 'Max Pending Proposals')}
+              {field('max_concurrent_monitoring', 'Max Concurrent Monitors')}
             </div>
-          </div>
+          </SectionCard>
 
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Experiments</div>
-            <div className="card-body">
-              <div className="row">
-                {field('max_experiments_per_agent', 'Max Experiments per Agent')}
-                {field('max_system_experiments', 'Max System Experiments')}
-              </div>
+          <SectionCard title="Experiments" className="mb-4">
+            <div className="row">
+              {field('max_experiments_per_agent', 'Max Experiments per Agent')}
+              {field('max_system_experiments', 'Max System Experiments')}
             </div>
-          </div>
+          </SectionCard>
         </>
       )}
     </div>
@@ -433,31 +427,29 @@ function RiskScoringTab() {
   if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
 
   const weightTable = (title: string, weights: Record<string, number>) => (
-    <div className="card border-0 shadow-sm mb-4">
-      <div className="card-header bg-white fw-semibold">{title}</div>
-      <div className="card-body p-0">
-        <table className="table table-hover mb-0">
-          <thead className="table-light">
-            <tr>
-              <th className="small fw-medium">Action Type</th>
-              <th className="small fw-medium text-end">Weight</th>
+    <SectionCard title={title} padded={false} className="mb-4">
+      <table className="table table-hover mb-0">
+        <thead className="table-light">
+          <tr>
+            <th className="small fw-medium">Action Type</th>
+            <th className="small fw-medium text-end">Weight</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(weights).sort(([,a], [,b]) => b - a).map(([key, val]) => (
+            <tr key={key}>
+              <td className="small">{key.replace(/_/g, ' ')}</td>
+              <td className="small text-end">
+                <StatusBadge
+                  label={String(val)}
+                  tone={val >= 70 ? 'danger' : val >= 40 ? 'warning' : 'success'}
+                />
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {Object.entries(weights).sort(([,a], [,b]) => b - a).map(([key, val]) => (
-              <tr key={key}>
-                <td className="small">{key.replace(/_/g, ' ')}</td>
-                <td className="small text-end">
-                  <span className={`badge ${val >= 70 ? 'bg-danger' : val >= 40 ? 'bg-warning text-dark' : 'bg-success'}`}>
-                    {val}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          ))}
+        </tbody>
+      </table>
+    </SectionCard>
   );
 
   return (
@@ -467,38 +459,41 @@ function RiskScoringTab() {
 
       {config && (
         <>
-          <span className={`badge ${config.source === 'database' ? 'bg-success' : 'bg-warning text-dark'} mb-3`}>
-            Source: {config.source}
-          </span>
+          <div className="mb-3">
+            <StatusBadge
+              label={`Source: ${config.source}`}
+              tone={config.source === 'database' ? 'success' : 'warning'}
+            />
+          </div>
 
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold d-flex justify-content-between">
-              <span>Intent Thresholds</span>
+          <SectionCard
+            title="Intent Thresholds"
+            className="mb-4"
+            actions={
               <button className="btn btn-primary btn-sm" onClick={handleSaveIntents} disabled={saving || Object.keys(intentEdits).length === 0}>
                 {saving ? 'Saving...' : 'Save Thresholds'}
               </button>
+            }
+          >
+            <div className="row">
+              {Object.entries(config.intent_thresholds).map(([key, val]) => {
+                const edited = intentEdits[key] !== undefined ? intentEdits[key] : val;
+                return (
+                  <div className="col-md-6 col-lg-3 mb-3" key={key}>
+                    <label className="form-label small fw-medium">{key.replace(/_/g, ' ')}</label>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={edited}
+                      min={0}
+                      max={100}
+                      onChange={(e) => setIntentEdits({ ...intentEdits, [key]: parseInt(e.target.value, 10) || 0 })}
+                    />
+                  </div>
+                );
+              })}
             </div>
-            <div className="card-body">
-              <div className="row">
-                {Object.entries(config.intent_thresholds).map(([key, val]) => {
-                  const edited = intentEdits[key] !== undefined ? intentEdits[key] : val;
-                  return (
-                    <div className="col-md-6 col-lg-3 mb-3" key={key}>
-                      <label className="form-label small fw-medium">{key.replace(/_/g, ' ')}</label>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        value={edited}
-                        min={0}
-                        max={100}
-                        onChange={(e) => setIntentEdits({ ...intentEdits, [key]: parseInt(e.target.value, 10) || 0 })}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          </SectionCard>
 
           {weightTable('Blast Radius Weights', config.blast_radius_weights)}
           {weightTable('Reversibility Weights', config.reversibility_weights)}
@@ -537,41 +532,39 @@ function AutonomyRulesTab() {
     <div>
       {error && <div className="alert alert-danger alert-dismissible py-2 small"><button type="button" className="btn-close btn-close-sm" onClick={() => setError('')} />{error}</div>}
 
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold">Active Autonomy Rules ({rules.length})</div>
-        <div className="card-body p-0">
-          {rules.length === 0 ? (
-            <div className="p-3 text-muted small">No autonomy rules configured.</div>
-          ) : (
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th className="small fw-medium">Name</th>
-                  <th className="small fw-medium">Mode</th>
-                  <th className="small fw-medium">Priority</th>
-                  <th className="small fw-medium">Conditions</th>
+      <SectionCard title={`Active Autonomy Rules (${rules.length})`} padded={false}>
+        {rules.length === 0 ? (
+          <div className="p-3 text-muted small">No autonomy rules configured.</div>
+        ) : (
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th className="small fw-medium">Name</th>
+                <th className="small fw-medium">Mode</th>
+                <th className="small fw-medium">Priority</th>
+                <th className="small fw-medium">Conditions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map((rule: any, idx: number) => (
+                <tr key={idx}>
+                  <td className="small fw-medium">{rule.name || `Rule ${idx + 1}`}</td>
+                  <td className="small">
+                    <StatusBadge
+                      label={rule.mode}
+                      tone={rule.mode === 'full' ? 'success' : rule.mode === 'safe' ? 'warning' : 'danger'}
+                    />
+                  </td>
+                  <td className="small">{rule.priority ?? 0}</td>
+                  <td className="small text-muted">
+                    {rule.conditions?.length ? `${rule.conditions.length} condition(s)` : 'No conditions'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {rules.map((rule: any, idx: number) => (
-                  <tr key={idx}>
-                    <td className="small fw-medium">{rule.name || `Rule ${idx + 1}`}</td>
-                    <td className="small">
-                      <span className={`badge ${rule.mode === 'full' ? 'bg-success' : rule.mode === 'safe' ? 'bg-warning text-dark' : 'bg-danger'}`}>
-                        {rule.mode}
-                      </span>
-                    </td>
-                    <td className="small">{rule.priority ?? 0}</td>
-                    <td className="small text-muted">
-                      {rule.conditions?.length ? `${rule.conditions.length} condition(s)` : 'No conditions'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </SectionCard>
     </div>
   );
 }
@@ -581,18 +574,33 @@ function AutonomyRulesTab() {
 function GovernanceCommandCenter() {
   const [activeTab, setActiveTab] = useState('system');
 
+  // Per-page trust signal (Basecamp todo 10027085963) — governance is a config
+  // control surface, so the signal reflects that the limits/schedules shown are
+  // the live source of record for the autonomy engine.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'governance / autonomy',
+    updatedAt: new Date().toISOString(),
+    summary: 'Live safety limits, agent schedules, and risk thresholds governing autonomous execution.',
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Governance Source',
+        status: 'live',
+        evidence: [{ label: 'Backed by', value: 'governance_center config' }],
+      },
+    ],
+  }), []);
+
   return (
     <div className="container-fluid py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h4 className="mb-1 fw-bold" style={{ color: 'var(--color-primary)' }}>
-            Governance Command Center
-          </h4>
-          <p className="text-muted small mb-0">
-            Centralized control for all system governance, safety limits, agent schedules, and risk configuration.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Governance Command Center"
+        icon="shield-keyhole-line"
+        subtitle="Centralized control for all system governance, safety limits, agent schedules, and risk configuration."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Governance' }]}
+        trust={trust}
+      />
 
       <ul className="nav nav-tabs mb-4">
         {TABS.map((tab) => (
@@ -717,11 +725,11 @@ function ExecutiveAwarenessTab() {
 
   if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
 
-  const severityBadge = (sev: number) => {
-    if (sev >= 5) return { label: 'Critical', cls: 'bg-danger' };
-    if (sev >= 4) return { label: 'High', cls: 'bg-warning text-dark' };
-    if (sev >= 2) return { label: 'Important', cls: 'bg-info' };
-    return { label: 'Info', cls: 'bg-secondary' };
+  const severityBadge = (sev: number): { label: string; tone: 'danger' | 'warning' | 'info' | 'neutral' } => {
+    if (sev >= 5) return { label: 'Critical', tone: 'danger' };
+    if (sev >= 4) return { label: 'High', tone: 'warning' };
+    if (sev >= 2) return { label: 'Important', tone: 'info' };
+    return { label: 'Info', tone: 'neutral' };
   };
 
   return (
@@ -751,10 +759,8 @@ function ExecutiveAwarenessTab() {
           </div>
 
           {/* Quiet Hours & Weekend */}
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Quiet Hours & Weekend</div>
-            <div className="card-body">
-              <div className="row">
+          <SectionCard title="Quiet Hours & Weekend" className="mb-4">
+            <div className="row">
                 <div className="col-md-4 mb-3">
                   <label className="form-label small fw-medium">Quiet Start</label>
                   <input type="text" className="form-control form-control-sm" value={getValue('quiet_hours_start')} onChange={(e) => setEdit('quiet_hours_start', e.target.value)} placeholder="22:00" />
@@ -785,104 +791,89 @@ function ExecutiveAwarenessTab() {
                     <label className="form-check-label small fw-medium">Ack suppresses</label>
                   </div>
                 </div>
-              </div>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Severity → Channel Mapping */}
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Severity → Channel Mapping</div>
-            <div className="card-body p-0">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th className="small fw-medium">Severity</th>
-                    <th className="small fw-medium">Channels</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(['info', 'important', 'high', 'critical'] as const).map((sev) => {
-                    const channels = (getValue('severity_channel_map') || {})[sev] || [];
-                    return (
-                      <tr key={sev}>
-                        <td className="small fw-medium text-capitalize">{sev}</td>
-                        <td className="small">
-                          {channels.map((ch: string) => (
-                            <span key={ch} className="badge bg-light text-dark me-1">{ch}</span>
-                          ))}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <SectionCard title="Severity → Channel Mapping" padded={false} className="mb-4">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th className="small fw-medium">Severity</th>
+                  <th className="small fw-medium">Channels</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(['info', 'important', 'high', 'critical'] as const).map((sev) => {
+                  const channels = (getValue('severity_channel_map') || {})[sev] || [];
+                  return (
+                    <tr key={sev}>
+                      <td className="small fw-medium text-capitalize">{sev}</td>
+                      <td className="small">
+                        {channels.map((ch: string) => (
+                          <span key={ch} className="badge bg-light text-dark me-1">{ch}</span>
+                        ))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </SectionCard>
 
           {/* Rate Limits */}
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Rate Limits</div>
-            <div className="card-body">
-              <div className="row">
-                {Object.entries(getValue('rate_limits') || {}).map(([ch, limit]: [string, any]) => (
-                  <div className="col-md-4 mb-3" key={ch}>
-                    <label className="form-label small fw-medium">{ch} (max/hr)</label>
-                    <input type="number" className="form-control form-control-sm" value={limit.max_per_hour} readOnly />
-                  </div>
-                ))}
-              </div>
+          <SectionCard title="Rate Limits" className="mb-4">
+            <div className="row">
+              {Object.entries(getValue('rate_limits') || {}).map(([ch, limit]: [string, any]) => (
+                <div className="col-md-4 mb-3" key={ch}>
+                  <label className="form-label small fw-medium">{ch} (max/hr)</label>
+                  <input type="number" className="form-control form-control-sm" value={limit.max_per_hour} readOnly />
+                </div>
+              ))}
             </div>
-          </div>
+          </SectionCard>
 
           {/* Digest Settings */}
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Digest Settings</div>
-            <div className="card-body">
-              <div className="row">
-                <div className="col-md-4 mb-3">
-                  <div className="form-check form-switch">
-                    <input className="form-check-input" type="checkbox" checked={getValue('digest_enabled')} onChange={(e) => setEdit('digest_enabled', e.target.checked)} />
-                    <label className="form-check-label small fw-medium">Digest Enabled</label>
-                  </div>
-                </div>
-                <div className="col-md-4 mb-3">
-                  <label className="form-label small fw-medium">Morning Cron</label>
-                  <input type="text" className="form-control form-control-sm" value={getValue('digest_morning_cron')} onChange={(e) => setEdit('digest_morning_cron', e.target.value)} />
-                </div>
-                <div className="col-md-4 mb-3">
-                  <label className="form-label small fw-medium">Evening Cron</label>
-                  <input type="text" className="form-control form-control-sm" value={getValue('digest_evening_cron')} onChange={(e) => setEdit('digest_evening_cron', e.target.value)} />
+          <SectionCard title="Digest Settings" className="mb-4">
+            <div className="row">
+              <div className="col-md-4 mb-3">
+                <div className="form-check form-switch">
+                  <input className="form-check-input" type="checkbox" checked={getValue('digest_enabled')} onChange={(e) => setEdit('digest_enabled', e.target.checked)} />
+                  <label className="form-check-label small fw-medium">Digest Enabled</label>
                 </div>
               </div>
+              <div className="col-md-4 mb-3">
+                <label className="form-label small fw-medium">Morning Cron</label>
+                <input type="text" className="form-control form-control-sm" value={getValue('digest_morning_cron')} onChange={(e) => setEdit('digest_morning_cron', e.target.value)} />
+              </div>
+              <div className="col-md-4 mb-3">
+                <label className="form-label small fw-medium">Evening Cron</label>
+                <input type="text" className="form-control form-control-sm" value={getValue('digest_evening_cron')} onChange={(e) => setEdit('digest_evening_cron', e.target.value)} />
+              </div>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Test Escalation */}
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Test Escalation</div>
-            <div className="card-body">
-              <div className="d-flex gap-2 align-items-end">
-                <div>
-                  <label className="form-label small fw-medium">Severity</label>
-                  <select className="form-select form-select-sm" value={testSeverity} onChange={(e) => setTestSeverity(e.target.value)}>
-                    <option value="info">Info</option>
-                    <option value="important">Important</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
-                <button className="btn btn-outline-danger btn-sm" onClick={handleTestEscalation} disabled={testing}>
-                  {testing ? 'Sending...' : 'Send Test Event'}
-                </button>
+          <SectionCard title="Test Escalation" className="mb-4">
+            <div className="d-flex gap-2 align-items-end">
+              <div>
+                <label className="form-label small fw-medium">Severity</label>
+                <select className="form-select form-select-sm" value={testSeverity} onChange={(e) => setTestSeverity(e.target.value)}>
+                  <option value="info">Info</option>
+                  <option value="important">Important</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
               </div>
+              <button className="btn btn-outline-danger btn-sm" onClick={handleTestEscalation} disabled={testing}>
+                {testing ? 'Sending...' : 'Send Test Event'}
+              </button>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Recent Events */}
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">Recent Executive Events</div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
+          <SectionCard title="Recent Executive Events" padded={false}>
+            <div className="table-responsive">
                 <table className="table table-hover mb-0">
                   <thead className="table-light">
                     <tr>
@@ -903,22 +894,22 @@ function ExecutiveAwarenessTab() {
                           <td className="small text-muted text-nowrap">
                             {new Date(evt.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </td>
-                          <td><span className={`badge ${badge.cls}`} style={{ fontSize: '0.65rem' }}>{badge.label}</span></td>
+                          <td><StatusBadge label={badge.label} tone={badge.tone} /></td>
                           <td className="small">{evt.title}</td>
                           <td className="small"><span className="badge bg-light text-dark">{evt.metadata?.executive_category || '-'}</span></td>
                           <td className="small">
-                            <span className={`badge ${evt.status === 'new' ? 'bg-info' : evt.status === 'acknowledged' ? 'bg-success' : 'bg-secondary'}`} style={{ fontSize: '0.65rem' }}>
-                              {evt.status}
-                            </span>
+                            <StatusBadge
+                              label={evt.status}
+                              tone={evt.status === 'new' ? 'info' : evt.status === 'acknowledged' ? 'success' : 'neutral'}
+                            />
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-              </div>
             </div>
-          </div>
+          </SectionCard>
         </>
       )}
     </div>
@@ -1030,17 +1021,17 @@ function AICOOTab() {
   if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
 
   const stabilityColor = (score: number) => {
-    if (score >= 80) return '#38a169';
-    if (score >= 60) return '#d69e2e';
-    if (score >= 40) return '#dd6b20';
-    return '#e53e3e';
+    if (score >= 80) return 'var(--status-success)';
+    if (score >= 60) return 'var(--status-warning)';
+    if (score >= 40) return 'var(--chart-4)';
+    return 'var(--status-danger)';
   };
 
-  const priorityBadge = (p: string) => {
-    if (p === 'critical') return 'bg-danger';
-    if (p === 'high') return 'bg-warning text-dark';
-    if (p === 'medium') return 'bg-info';
-    return 'bg-secondary';
+  const priorityTone = (p: string): 'danger' | 'warning' | 'info' | 'neutral' => {
+    if (p === 'critical') return 'danger';
+    if (p === 'high') return 'warning';
+    if (p === 'medium') return 'info';
+    return 'neutral';
   };
 
   const fmtCurrency = (v: number) => {
@@ -1055,108 +1046,95 @@ function AICOOTab() {
 
       {/* 1. Strategic Stability Score */}
       {risk && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-semibold">Strategic Stability Score</div>
-          <div className="card-body">
-            <div className="row align-items-center">
-              <div className="col-md-3 text-center">
-                <div style={{ fontSize: '3rem', fontWeight: 700, color: stabilityColor(risk.stabilityScore) }}>
-                  {risk.stabilityScore}
-                </div>
-                <span className={`badge ${risk.riskLevel === 'stable' ? 'bg-success' : risk.riskLevel === 'watch' ? 'bg-warning text-dark' : risk.riskLevel === 'elevated' ? 'bg-warning text-dark' : 'bg-danger'}`}>
-                  {risk.riskLevel}
-                </span>
+        <SectionCard title="Strategic Stability Score" className="mb-4">
+          <div className="row align-items-center">
+            <div className="col-md-3 text-center">
+              <div style={{ fontSize: '3rem', fontWeight: 700, color: stabilityColor(risk.stabilityScore) } as React.CSSProperties}>
+                {risk.stabilityScore}
               </div>
-              <div className="col-md-9">
-                <div className="row">
-                  {Object.entries(risk.components).map(([key, val]) => (
-                    <div className="col-md-4 mb-2" key={key}>
-                      <div className="d-flex justify-content-between small">
-                        <span className="text-muted">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                        <span className="fw-medium">{val}</span>
-                      </div>
-                      <div className="progress" style={{ height: 6 }}>
-                        <div className="progress-bar" role="progressbar" style={{ width: `${val}%`, backgroundColor: stabilityColor(100 - val) }} />
-                      </div>
+              <StatusBadge
+                label={risk.riskLevel}
+                tone={risk.riskLevel === 'stable' ? 'success' : risk.riskLevel === 'watch' || risk.riskLevel === 'elevated' ? 'warning' : 'danger'}
+              />
+            </div>
+            <div className="col-md-9">
+              <div className="row">
+                {Object.entries(risk.components).map(([key, val]) => (
+                  <div className="col-md-4 mb-2" key={key}>
+                    <div className="d-flex justify-content-between small">
+                      <span className="text-muted">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                      <span className="fw-medium">{val}</span>
                     </div>
+                    <div className="progress" style={{ height: 6 }}>
+                      <div className="progress-bar" role="progressbar" style={{ width: `${val}%`, backgroundColor: stabilityColor(100 - val) } as React.CSSProperties} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {risk.topRisks.length > 0 && (
+                <div className="mt-2">
+                  {risk.topRisks.map((r, i) => (
+                    <span key={i} className="badge bg-light text-dark me-1 mb-1" style={{ fontSize: '0.65rem' }}>{r}</span>
                   ))}
                 </div>
-                {risk.topRisks.length > 0 && (
-                  <div className="mt-2">
-                    {risk.topRisks.map((r, i) => (
-                      <span key={i} className="badge bg-light text-dark me-1 mb-1" style={{ fontSize: '0.65rem' }}>{r}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* 2. Key Metrics Overview */}
       {metrics && (
-        <div className="row mb-4">
+        <div className="row g-3 mb-4">
           {[
-            { label: 'Revenue', val: fmtCurrency(metrics.revenue.totalRevenue), sub: `${metrics.revenue.totalEnrollments} enrolled` },
-            { label: 'Pipeline', val: fmtCurrency(metrics.opportunities.pipelineValue), sub: `${metrics.opportunities.stalledCount} stalled` },
-            { label: 'Leads', val: String(metrics.funnel.totalLeads), sub: `${metrics.funnel.conversionRate}% conv.` },
-            { label: 'Visitors Today', val: String(metrics.visitors.today), sub: `${metrics.visitors.bounceRate.toFixed(0)}% bounce` },
-            { label: 'Agent Fleet', val: `${metrics.operations.healthyAgents}/${metrics.operations.totalAgents}`, sub: `${metrics.operations.errors24h} errors 24h` },
-            { label: 'Campaigns', val: String(metrics.campaign.activeCampaigns), sub: `${metrics.campaign.avgOpenRate.toFixed(1)}% open` },
+            { label: 'Revenue', val: fmtCurrency(metrics.revenue.totalRevenue), sub: `${metrics.revenue.totalEnrollments} enrolled`, icon: 'money-dollar-circle-line', tone: 'success' as const },
+            { label: 'Pipeline', val: fmtCurrency(metrics.opportunities.pipelineValue), sub: `${metrics.opportunities.stalledCount} stalled`, icon: 'funds-line', tone: 'info' as const },
+            { label: 'Leads', val: String(metrics.funnel.totalLeads), sub: `${metrics.funnel.conversionRate}% conv.`, icon: 'user-add-line', tone: 'primary' as const },
+            { label: 'Visitors Today', val: String(metrics.visitors.today), sub: `${metrics.visitors.bounceRate.toFixed(0)}% bounce`, icon: 'eye-line', tone: 'neutral' as const },
+            { label: 'Agent Fleet', val: `${metrics.operations.healthyAgents}/${metrics.operations.totalAgents}`, sub: `${metrics.operations.errors24h} errors 24h`, icon: 'robot-2-line', tone: metrics.operations.erroredAgents > 0 ? 'warning' as const : 'success' as const },
+            { label: 'Campaigns', val: String(metrics.campaign.activeCampaigns), sub: `${metrics.campaign.avgOpenRate.toFixed(1)}% open`, icon: 'megaphone-line', tone: 'info' as const },
           ].map((card, i) => (
-            <div className="col-md-2 mb-3" key={i}>
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body py-2 px-3 text-center">
-                  <div className="text-muted" style={{ fontSize: '0.65rem' }}>{card.label}</div>
-                  <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>{card.val}</div>
-                  <div className="text-muted" style={{ fontSize: '0.65rem' }}>{card.sub}</div>
-                </div>
-              </div>
+            <div className="col-6 col-md-4 col-lg-2" key={i}>
+              <StatCard label={card.label} value={card.val} icon={card.icon} tone={card.tone} hint={card.sub} />
             </div>
           ))}
         </div>
       )}
 
       {/* 3. Recommendations */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold">Strategic Recommendations ({recommendations.length})</div>
-        <div className="card-body p-0">
-          {recommendations.length === 0 ? (
-            <div className="p-3 text-muted small">No actionable recommendations at this time.</div>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th className="small fw-medium">Priority</th>
-                    <th className="small fw-medium">Domain</th>
-                    <th className="small fw-medium">Insight</th>
-                    <th className="small fw-medium">Action</th>
-                    <th className="small fw-medium text-end">Confidence</th>
+      <SectionCard title={`Strategic Recommendations (${recommendations.length})`} padded={false} className="mb-4">
+        {recommendations.length === 0 ? (
+          <div className="p-3 text-muted small">No actionable recommendations at this time.</div>
+        ) : (
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th className="small fw-medium">Priority</th>
+                  <th className="small fw-medium">Domain</th>
+                  <th className="small fw-medium">Insight</th>
+                  <th className="small fw-medium">Action</th>
+                  <th className="small fw-medium text-end">Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendations.slice(0, 10).map((rec, i) => (
+                  <tr key={i}>
+                    <td><StatusBadge label={rec.priority} tone={priorityTone(rec.priority)} /></td>
+                    <td className="small"><span className="badge bg-light text-dark">{rec.domain}</span></td>
+                    <td className="small">{rec.summary}</td>
+                    <td className="small text-muted">{rec.recommendation}</td>
+                    <td className="small text-end">{(rec.confidence * 100).toFixed(0)}%</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {recommendations.slice(0, 10).map((rec, i) => (
-                    <tr key={i}>
-                      <td><span className={`badge ${priorityBadge(rec.priority)}`} style={{ fontSize: '0.65rem' }}>{rec.priority}</span></td>
-                      <td className="small"><span className="badge bg-light text-dark">{rec.domain}</span></td>
-                      <td className="small">{rec.summary}</td>
-                      <td className="small text-muted">{rec.recommendation}</td>
-                      <td className="small text-end">{(rec.confidence * 100).toFixed(0)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
 
       {/* 4. Scenario Lab */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold">Scenario Lab</div>
-        <div className="card-body">
+      <SectionCard title="Scenario Lab" className="mb-4">
           <div className="row align-items-end mb-3">
             <div className="col-md-4">
               <label className="form-label small fw-medium">Scenario Type</label>
@@ -1207,13 +1185,13 @@ function AICOOTab() {
               </div>
             </div>
           )}
-        </div>
-      </div>
+      </SectionCard>
 
       {/* 5. Executive Narrative */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>Executive Report</span>
+      <SectionCard
+        title="Executive Report"
+        className="mb-4"
+        actions={
           <div className="d-flex gap-2 align-items-center">
             <select className="form-select form-select-sm" value={narrativePeriod} onChange={(e) => setNarrativePeriod(e.target.value as 'morning' | 'evening')} style={{ width: 120 }}>
               <option value="morning">Morning</option>
@@ -1223,12 +1201,13 @@ function AICOOTab() {
               {loadingNarrative ? 'Loading...' : 'Generate'}
             </button>
           </div>
-        </div>
-        {narrative && (
-          <div className="card-body">
+        }
+      >
+        {narrative ? (
+          <>
             <div className="d-flex justify-content-between align-items-center mb-3">
               <span className="badge bg-light text-dark">{narrative.period} report</span>
-              <span style={{ fontSize: '0.75rem', color: stabilityColor(narrative.stabilityScore) }}>
+              <span style={{ fontSize: '0.75rem', color: stabilityColor(narrative.stabilityScore) } as React.CSSProperties}>
                 Stability: {narrative.stabilityScore}/100
               </span>
             </div>
@@ -1242,7 +1221,7 @@ function AICOOTab() {
             )}
             {Object.entries(narrative.sections || {}).map(([key, val]) => (
               <div key={key} className="mb-3">
-                <h6 className="small fw-bold text-capitalize mb-1" style={{ color: 'var(--color-primary)' }}>
+                <h6 className="small fw-bold text-capitalize mb-1" style={{ color: 'var(--text-strong)' }}>
                   {key.replace(/([A-Z])/g, ' $1').trim()}
                 </h6>
                 <pre className="small text-muted mb-0" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.75rem' }}>
@@ -1250,9 +1229,9 @@ function AICOOTab() {
                 </pre>
               </div>
             ))}
-          </div>
-        )}
-      </div>
+          </>
+        ) : null}
+      </SectionCard>
     </div>
   );
 }

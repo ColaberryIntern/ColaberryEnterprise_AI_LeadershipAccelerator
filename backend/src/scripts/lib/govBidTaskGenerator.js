@@ -38,8 +38,8 @@ Return ONLY the JSON array of tasks.`;
 async function generateTasksFromContent({ bidConfig, fileTexts, openaiKey, model = 'gpt-4o' }) {
   const key = openaiKey || process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY required for task generation');
-  const OpenAI = require(path.resolve(__dirname, '../../../../node_modules/openai')).default;
-  const openai = new OpenAI({ apiKey: key });
+  const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './openaiInstrumented'));
+  const openai = getInstrumentedOpenAI({ workflow_id: 'gov_bid_task_gen' }, { apiKey: key });
 
   const corpus = fileTexts.map((f) => `=== FILE: ${f.filename}${f.truncated ? ' (truncated)' : ''} ===\n${f.text}`).join('\n\n');
   const userPrompt = `Bid metadata:

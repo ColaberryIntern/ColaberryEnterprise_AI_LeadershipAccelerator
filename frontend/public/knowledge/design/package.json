@@ -1,0 +1,38 @@
+{
+  "name": "colaberry-design-system",
+  "version": "1.0.0",
+  "description": "Brand foundations, design tokens, 20 accessible components, and UI guidelines for Colaberry — the School of Data Science & Analytics.",
+  "homepage": "https://colaberry.github.io/colaberry-design-system/",
+  "license": "MIT",
+  "author": "Colaberry, Inc.",
+  "keywords": [
+    "design-system",
+    "design-tokens",
+    "css-variables",
+    "components",
+    "colaberry",
+    "brand"
+  ],
+  "files": [
+    "styles.css",
+    "tokens",
+    "components",
+    "assets",
+    "_ds_bundle.js",
+    "BRAND.md",
+    "IMPLEMENTATION.md"
+  ],
+  "exports": {
+    "./styles.css": "./styles.css",
+    "./bundle": "./_ds_bundle.js",
+    "./tokens/*": "./tokens/*"
+  },
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/colaberry/colaberry-design-system.git"
+  }
+}

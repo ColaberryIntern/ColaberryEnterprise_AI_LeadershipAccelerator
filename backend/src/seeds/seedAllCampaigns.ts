@@ -6,6 +6,7 @@ import { seedAliOutreachCampaign } from './seedAliOutreachCampaign';
 import { seedColdOutboundPhases } from './seedColdOutboundPhases';
 import { seedOfferCampaigns } from './seedOfferCampaigns';
 import { seedPilotProgramCampaigns } from './seedPilotProgramCampaigns';
+import { seedOpenHouseCampaigns } from './seedOpenHouseCampaigns';
 
 /**
  * Idempotent seed for all core campaigns.
@@ -173,6 +174,17 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     console.warn('[Seed] Pilot program campaigns seed skipped:', err?.message);
   }
 
+  // ─── 20-22. AI Systems Architect Open House (DRAFT — pending approval) ──
+  // Creates the shared 5-email sequence + 3 segment campaigns as DRAFTS only.
+  // No leads enrolled, nothing activated: nothing can send until approved + activated.
+  if (createdBy) {
+    try {
+      await seedOpenHouseCampaigns(createdBy);
+    } catch (err: any) {
+      console.warn('[Seed] Open House campaigns seed skipped:', err?.message);
+    }
+  }
+
   console.log('[Seed] All core campaigns seeded.');
 }
 
@@ -201,8 +213,10 @@ async function upsertCampaign(data: {
 
   const existing = await Campaign.findOne({ where: { name: data.name } });
   if (existing) {
-    // Update sequence link and status
-    await existing.update({ sequence_id: sequence.id, status: data.status } as any);
+    // Link the sequence but do NOT clobber the operator's status on restart —
+    // manual pauses/activations must persist across boots. Status is only set on
+    // create (below). See CC-20260710-a9f2 (campaign reactivation-on-boot fix).
+    await existing.update({ sequence_id: sequence.id } as any);
     return;
   }
 

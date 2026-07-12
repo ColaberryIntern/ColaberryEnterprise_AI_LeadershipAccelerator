@@ -117,7 +117,7 @@ const ScanButton: React.FC<Props> = ({ pageRoute, onScanComplete, onScan, disabl
         style={{
           fontSize: 12, fontWeight: 600,
           padding: '5px 10px',
-          background: scanning ? 'var(--color-bg-alt)' : 'var(--color-primary)',
+          background: scanning ? 'var(--color-bg-alt)' : '#FB2832',
           color: scanning ? 'var(--color-text-light)' : 'white',
           border: 'none', borderRadius: 3,
           cursor: scanning || disabled ? 'not-allowed' : 'pointer',

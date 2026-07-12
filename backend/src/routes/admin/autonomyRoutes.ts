@@ -9,7 +9,13 @@ import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 import crypto from 'crypto';
 
+import { requireAdmin } from '../../middlewares/authMiddleware';
+
 const router = Router();
+
+// SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
+// endpoints publicly callable. Require an authenticated admin for every route below.
+router.use(requireAdmin);
 
 // GET /intelligence/autonomy/decisions — List decisions
 router.get('/intelligence/autonomy/decisions', async (req: Request, res: Response) => {

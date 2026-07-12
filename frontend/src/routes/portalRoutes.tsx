@@ -4,9 +4,12 @@ import { ParticipantAuthProvider } from '../contexts/ParticipantAuthContext';
 import PortalProtectedRoute from '../components/PortalProtectedRoute';
 import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
+import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
 import PortalDashboardPage from '../pages/portal/PortalDashboardPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
+import ClassroomPage from '../pages/portal/ClassroomPage';
+import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
 import PortalLessonPage from '../pages/portal/PortalLessonPage';
 import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
 import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
@@ -26,18 +29,38 @@ import WalkCapsPage from '../pages/portal/WalkCapsPage';
 import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
 import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
+import TodayShell from '../pages/portal/today/TodayShell';
+import PathPage from '../pages/portal/path/PathPage';
+import SchedulePage from '../pages/portal/schedule/SchedulePage';
+import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
+import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 import ExecutionLane from '../pages/project/ExecutionLane';
 import SystemView from '../pages/project/SystemView';
 
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
     <Route path="/portal/login" element={<PortalLoginPage />} />
+    <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
     <Route element={<PortalProtectedRoute />}>
+      {/* Today shell (Design E onboarding experience) renders its own chrome,
+          so it sits outside PortalLayout. */}
+      <Route path="/portal/today" element={<TodayShell />} />
+      {/* Path + Schedule share the Design E shell (PortalShell), like Today. */}
+      <Route path="/portal/path" element={<PathPage />} />
+      <Route path="/portal/schedule" element={<SchedulePage />} />
+      {/* Projects tab: portal-native builds (lists + tasks, FB vibe), opens on
+          the new-build wizard. Renders its own PortalShell chrome like Today. */}
+      <Route path="/portal/projects" element={<ProjectsPage />} />
+      {/* Classroom (Design E timeline) renders its own PortalShell chrome, like Today/Path/Projects. */}
+      <Route path="/portal/classroom" element={<ClassroomPage />} />
+      {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
+      <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
+        <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
         {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
         <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
@@ -82,3 +105,4 @@ const portalRoutes = (
 );
 
 export default portalRoutes;
+

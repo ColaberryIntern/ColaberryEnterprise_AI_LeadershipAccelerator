@@ -1,0 +1,3983 @@
+{
+  "schema": "colaberry.kb/v1",
+  "version": "1.0",
+  "name": "Colaberry Knowledge Base",
+  "description": "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund and cancellation terms are drafted, not final. The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
+  "generated_from": [
+    "sales/kb-data.js",
+    "marketing/hub-data.js",
+    "data/design-kb.js",
+    "data/curriculum-kb.js",
+    "data/product-kb.js",
+    "data/compliance-kb.js"
+  ],
+  "core_facts": "Program public name: AI Systems Architect Accelerator, powered by Anthropic + Claude Code. Tagline: Learn With Claude. Build Through Colaberry. Deploy In The Real World. It is a 12-week program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder. Journey: Weeks 1-3 Build Your AI Foundation, Weeks 4-6 Create Your AI Team, Weeks 7-9 Connect AI To The Real World, Weeks 10-12 Design AI That Scales. Certification: Anthropic Architect certification. Brand proof point: 5,000+ careers since 2012. Open House (free): Thursday, July 16, 2026. Cohort 1 kickoff: Thursday, July 23, 2026. The Open House precedes the cohort it feeds by one week. Founding Cohort: 40 seats (cap). Pricing (Ali-confirmed 2026-06-25): $149/mo founding annual rate, $199/mo monthly. Pricing is revealed at the Open House, so it stays out of awareness posts. Student-paid third-party tool costs, disclosed before enrollment and paid directly to providers: an Anthropic subscription for Claude Code (about $20/mo) and LLM API usage (most projects under $10/mo). Campaign goal: generate free Open House registrations, then convert attendees into Founding Cohort enrollment. Audiences: alumni, dropouts, prospects. Channels: LinkedIn (primary), X, Instagram, plus the parallel 5-email sequence. Open items: the Open House registration URL [reg link] and exact start time [time + TZ] are not set yet; refund and cancellation terms are drafted and pending Ali. Do not invent these. If a detail is not in this knowledge base, say so plainly and point to the relevant document or the Open House. Never invent facts, metrics, testimonials, names, or claims.",
+  "categories_by_domain": {
+    "sales": [
+      {
+        "key": "program-basics",
+        "title": "Program basics & format"
+      },
+      {
+        "key": "pricing-billing",
+        "title": "Pricing & billing"
+      },
+      {
+        "key": "founding-urgency",
+        "title": "Founding Cohort & urgency"
+      },
+      {
+        "key": "eligibility",
+        "title": "Eligibility & prerequisites"
+      },
+      {
+        "key": "time-schedule",
+        "title": "Time & schedule"
+      },
+      {
+        "key": "curriculum-build",
+        "title": "Curriculum & what you build"
+      },
+      {
+        "key": "certification",
+        "title": "Certification & credibility"
+      },
+      {
+        "key": "refunds-guarantee",
+        "title": "Refunds & guarantees"
+      },
+      {
+        "key": "career-outcomes",
+        "title": "Careers, portfolio & internship"
+      },
+      {
+        "key": "enrollment-logistics",
+        "title": "Enrollment & onboarding"
+      },
+      {
+        "key": "objections-comparisons",
+        "title": "Objections & comparisons"
+      }
+    ],
+    "marketing": [
+      {
+        "key": "campaign",
+        "title": "Campaign & goal"
+      },
+      {
+        "key": "audience",
+        "title": "Audience & segments"
+      },
+      {
+        "key": "messaging",
+        "title": "Messaging & positioning"
+      },
+      {
+        "key": "social",
+        "title": "Social channels & cadence"
+      },
+      {
+        "key": "sequence",
+        "title": "The 5-beat sequence & prompt engine"
+      },
+      {
+        "key": "copy",
+        "title": "Post copy & CTAs"
+      },
+      {
+        "key": "hashtags",
+        "title": "Hashtags"
+      },
+      {
+        "key": "calendar",
+        "title": "Calendar & timing"
+      },
+      {
+        "key": "creative",
+        "title": "Creative & image specs"
+      },
+      {
+        "key": "program",
+        "title": "Program facts"
+      },
+      {
+        "key": "pricing",
+        "title": "Pricing & student costs"
+      },
+      {
+        "key": "measure",
+        "title": "KPIs & measurement"
+      },
+      {
+        "key": "brand",
+        "title": "Brand & voice rules"
+      },
+      {
+        "key": "approvals",
+        "title": "Open items & approvals"
+      }
+    ],
+    "design": [
+      {
+        "key": "overview",
+        "title": "Overview & architecture"
+      },
+      {
+        "key": "color",
+        "title": "Color"
+      },
+      {
+        "key": "typography",
+        "title": "Typography"
+      },
+      {
+        "key": "logo",
+        "title": "Logo"
+      },
+      {
+        "key": "icons",
+        "title": "Iconography"
+      },
+      {
+        "key": "components",
+        "title": "Components"
+      },
+      {
+        "key": "templates",
+        "title": "Templates & UI kits"
+      },
+      {
+        "key": "motion",
+        "title": "Motion"
+      },
+      {
+        "key": "a11y",
+        "title": "Accessibility"
+      },
+      {
+        "key": "voice",
+        "title": "Voice"
+      },
+      {
+        "key": "usage",
+        "title": "Using & prompting it"
+      },
+      {
+        "key": "roadmap",
+        "title": "Roadmap & governance"
+      }
+    ],
+    "curriculum": [
+      {
+        "key": "overview",
+        "title": "Overview & philosophy"
+      },
+      {
+        "key": "intensives",
+        "title": "The four intensives"
+      },
+      {
+        "key": "skills",
+        "title": "Tools & skills you build"
+      },
+      {
+        "key": "experience",
+        "title": "Project, internship & portfolio"
+      },
+      {
+        "key": "levels",
+        "title": "Levels & progression"
+      },
+      {
+        "key": "certification",
+        "title": "Certification"
+      },
+      {
+        "key": "logistics",
+        "title": "Format, schedule & dates"
+      }
+    ],
+    "product": [
+      {
+        "key": "platform",
+        "title": "The student platform"
+      },
+      {
+        "key": "membership",
+        "title": "The membership & what's included"
+      },
+      {
+        "key": "tracks",
+        "title": "Membership tracks"
+      },
+      {
+        "key": "tools",
+        "title": "AI tools & costs"
+      },
+      {
+        "key": "access",
+        "title": "Getting started"
+      }
+    ],
+    "compliance": [
+      {
+        "key": "credentials",
+        "title": "Credentials & regulation"
+      },
+      {
+        "key": "track-record",
+        "title": "Track record"
+      },
+      {
+        "key": "students",
+        "title": "Student protections & support"
+      },
+      {
+        "key": "transparency",
+        "title": "How we communicate"
+      }
+    ]
+  },
+  "domains": [
+    {
+      "key": "sales",
+      "label": "Sales",
+      "status": "active"
+    },
+    {
+      "key": "marketing",
+      "label": "Marketing",
+      "status": "active"
+    },
+    {
+      "key": "design",
+      "label": "Design",
+      "status": "active"
+    },
+    {
+      "key": "curriculum",
+      "label": "Curriculum & Training",
+      "status": "active"
+    },
+    {
+      "key": "product",
+      "label": "Product & Platform",
+      "status": "active"
+    },
+    {
+      "key": "compliance",
+      "label": "Compliance & Trust",
+      "status": "active"
+    }
+  ],
+  "generated_at": "2026-06-26T17:58:16.523Z",
+  "count": 212,
+  "entries": [
+    {
+      "id": "sales-1",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "What exactly is the AI Systems Architect Accelerator?",
+      "answer": "It's a membership built around a 12-week, project-based program, powered by Anthropic and Claude Code. Most people consume AI; here you learn to build with it. You arrive with an idea and leave with a deployed AI system.",
+      "detail": "Positioning: Learn from Anthropic. Build through Colaberry. Deploy in the real world.",
+      "tags": [
+        "overview",
+        "format",
+        "membership"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-2",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "How long is the program and what's the time commitment each week?",
+      "answer": "It's a 12-week program at 4 hours of live time per week: a 2-hour Monday Architecture Day and a 2-hour Thursday Build Day. It's built for working professionals.",
+      "detail": "Live sessions only total 4 hours weekly, split across two days so it fits around a full-time job.",
+      "tags": [
+        "schedule",
+        "time-commitment",
+        "format"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-3",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "What's included in the membership, and are there extra course fees?",
+      "answer": "One membership includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course fees and no per-course tuition.",
+      "detail": "It is a membership, not per-course tuition. Everything is bundled into the single price.",
+      "tags": [
+        "membership",
+        "inclusions",
+        "pricing"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-4",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "What does it cost?",
+      "answer": "It's $149 a month billed annually, which is our best-value founding rate, or $199 a month month-to-month with cancel anytime. Founding members lock the $149 rate for as long as their membership stays active, even as prices rise for later cohorts.",
+      "detail": "The $149/mo founding rate is the recommended option and stays locked while the membership remains active.",
+      "tags": [
+        "pricing",
+        "founding-rate",
+        "membership"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-5",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "What will I actually walk away with when I finish?",
+      "answer": "You finish with a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification. Our principle is simple: Anthropic certifies knowledge; Colaberry certifies capability.",
+      "detail": "You build a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+      "tags": [
+        "outcomes",
+        "certification",
+        "portfolio"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-6",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "Do I need to be a software engineer or have a coding background to join?",
+      "answer": "No professional engineering background is required. It's built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and who have a real business problem to solve.",
+      "detail": "You should arrive with an idea or business problem; the program guides you to a deployed solution.",
+      "tags": [
+        "prerequisites",
+        "audience",
+        "eligibility"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-7",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "When does it start and how do I sign up?",
+      "answer": "There's a free Open House on Thursday July 16, 2026, and the Founding Cohort kicks off Thursday July 23, 2026, leading to the Architect Expo in early October. You can enroll at training.colaberry.com.",
+      "detail": "The Founding Cohort is capped at 40 seats, so encourage prospects to secure a spot early. Single CTA everywhere is training.colaberry.com.",
+      "tags": [
+        "dates",
+        "enrollment",
+        "open-house"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-8",
+      "domain": "sales",
+      "category": "Program basics & format",
+      "category_key": "program-basics",
+      "question": "What's your refund or cancellation policy if it isn't a fit?",
+      "answer": "On the monthly plan you can cancel anytime and keep access through the month you paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff; after that it's non-refundable, but your membership stays active the full year and your founding rate stays locked.",
+      "detail": "These refund terms are proposed and pending final approval, so confirm before committing them in writing to a prospect.",
+      "tags": [
+        "refund",
+        "cancellation",
+        "policy"
+      ],
+      "reference": "sales/index.html#cat-program-basics",
+      "reference_label": "Program basics & format",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-9",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "How much does the program cost?",
+      "answer": "It is one membership at $149 a month billed annually, which is our best value and locks in the founding rate. If you prefer to pay monthly and cancel anytime, it is $199 a month. That one price includes everything in the program.",
+      "detail": "$149/mo billed annually (founding rate, best value) vs $199/mo monthly. ONE membership covers all four Architect Intensives, Anthropic certification prep, the internship experience, and guided GitHub portfolio projects.",
+      "tags": [
+        "price",
+        "membership",
+        "annual",
+        "monthly"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-10",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "What exactly does the membership include? Are there extra course fees?",
+      "answer": "There are no separate course fees. The one membership includes all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. Everything is covered under that single price.",
+      "detail": "It is a membership, not per-course tuition. No add-ons or hidden fees.",
+      "tags": [
+        "inclusions",
+        "membership",
+        "no-extra-fees"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-11",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "What is the difference between the $149 and the $199 plan?",
+      "answer": "The $149 a month plan is billed annually and is our best value, and it locks in your founding rate. The $199 a month plan is billed monthly so you can cancel anytime. Same full membership either way, the only difference is how you pay.",
+      "detail": "Annual: $149/mo (founding rate locked). Monthly: $199/mo (cancel anytime). Identical access and inclusions.",
+      "tags": [
+        "plans",
+        "annual",
+        "monthly",
+        "comparison"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-12",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "What is the founding rate and will my price go up later?",
+      "answer": "As a founding member you lock the $149 a month founding rate for as long as your membership stays active, even as the price rises for later cohorts. The founding cohort is capped at 40 seats, so that rate is tied to getting in now.",
+      "detail": "Founding rate ($149/mo annual) stays locked while membership remains active; later cohorts will pay more. Founding cohort capped at 40 seats.",
+      "tags": [
+        "founding-rate",
+        "price-lock",
+        "40-seats"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-13",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "Can I cancel anytime?",
+      "answer": "Yes. On the monthly plan at $199 a month you can cancel anytime and keep access through the month you have paid for, with no partial-month refund. The annual plan is the better value if you are committed to the full program.",
+      "detail": "DRAFT cancellation terms pending Ali's final approval: monthly cancels anytime, access through the paid month, no partial-month refund.",
+      "tags": [
+        "cancellation",
+        "monthly",
+        "cancel-anytime"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-14",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "Is there a refund if I change my mind on the annual plan?",
+      "answer": "The annual plan has a 14-day money-back window from the July 23 kickoff. After that it is non-refundable, but your membership stays active for the full year and your founding rate stays locked.",
+      "detail": "DRAFT refund terms pending Ali's final approval: 14-day money-back window from kickoff (Jul 23, 2026); after that non-refundable, membership remains active the full year, founding rate locked.",
+      "tags": [
+        "refund",
+        "annual",
+        "money-back",
+        "14-day"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-15",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "How do I enroll and where do I pay?",
+      "answer": "You enroll at training.colaberry.com. That is the single place to sign up and choose your plan, and seats in the founding cohort are capped at 40.",
+      "detail": "Single CTA everywhere is training.colaberry.com. Founding cohort capped at 40 seats.",
+      "tags": [
+        "enroll",
+        "checkout",
+        "cta"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-16",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "Do I have to pay to attend the Open House before I decide?",
+      "answer": "No. The Open House on Thursday July 16, 2026 is free. You can come see the program first, then enroll at training.colaberry.com before the founding cohort kicks off on July 23.",
+      "detail": "Free Open House Jul 16, 2026; Founding Cohort kickoff Jul 23, 2026. Enroll at training.colaberry.com.",
+      "tags": [
+        "open-house",
+        "free",
+        "trial",
+        "dates"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-17",
+      "domain": "sales",
+      "category": "Founding Cohort & urgency",
+      "category_key": "founding-urgency",
+      "question": "How many spots are in the founding cohort?",
+      "answer": "The Founding Cohort is capped at 40 seats. That cap is firm because the program runs as a small live cohort, so once those 40 are filled, enrollment for this cohort closes.",
+      "detail": "Use the cap to create real urgency. 4 live hours a week with a small group is the whole point, so the number does not flex.",
+      "tags": [
+        "seats",
+        "cap",
+        "cohort"
+      ],
+      "reference": "sales/index.html#cat-founding-urgency",
+      "reference_label": "Founding Cohort & urgency",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-18",
+      "domain": "sales",
+      "category": "Founding Cohort & urgency",
+      "category_key": "founding-urgency",
+      "question": "What do I actually get by joining as a founding member instead of waiting for a later cohort?",
+      "answer": "Founding members lock the $149 a month founding rate for as long as their membership stays active, even as the price rises for later cohorts. You also get one of only 40 seats in the very first cohort working directly with the Anthropic and Claude Code material.",
+      "detail": "The locked founding rate is the strongest financial reason to act now. Pair it with the 40-seat cap for urgency.",
+      "tags": [
+        "founding-rate",
+        "price-lock",
+        "benefits"
+      ],
+      "reference": "sales/index.html#cat-founding-urgency",
+      "reference_label": "Founding Cohort & urgency",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-19",
+      "domain": "sales",
+      "category": "Founding Cohort & urgency",
+      "category_key": "founding-urgency",
+      "question": "Is the $149 price going to go up later?",
+      "answer": "Yes, the $149 a month is the founding rate, and the price rises for later cohorts. If you join now and keep your membership active, you keep $149 a month locked in even after the price goes up.",
+      "detail": "Frame it as: the price you lock today is the price you keep, as long as you stay a member.",
+      "tags": [
+        "pricing",
+        "founding-rate",
+        "increase"
+      ],
+      "reference": "sales/index.html#cat-founding-urgency",
+      "reference_label": "Founding Cohort & urgency",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-20",
+      "domain": "sales",
+      "category": "Founding Cohort & urgency",
+      "category_key": "founding-urgency",
+      "question": "When does enrollment close and when does the program start?",
+      "answer": "There is a free Open House on Thursday July 16, 2026, and the Founding Cohort kicks off with the first class on Thursday July 23, 2026. Seats close as soon as we hit 40, so the practical deadline is whenever the cohort fills, and that can be before kickoff.",
+      "detail": "Architect Expo is early October 2026. Push prospects to claim a seat ahead of the Open House rather than waiting for kickoff.",
+      "tags": [
+        "dates",
+        "deadline",
+        "kickoff"
+      ],
+      "reference": "sales/index.html#cat-founding-urgency",
+      "reference_label": "Founding Cohort & urgency",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-21",
+      "domain": "sales",
+      "category": "Founding Cohort & urgency",
+      "category_key": "founding-urgency",
+      "question": "Why should I decide now instead of thinking about it for a few weeks?",
+      "answer": "Two reasons. There are only 40 founding seats and they fill on a first-come basis, and the $149 a month founding rate is only available to this cohort. Waiting risks losing both the seat and the locked rate.",
+      "detail": "Combine scarcity (40 seats) with the price lock. Both disappear once the cohort fills.",
+      "tags": [
+        "urgency",
+        "scarcity",
+        "decision"
+      ],
+      "reference": "sales/index.html#cat-founding-urgency",
+      "reference_label": "Founding Cohort & urgency",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-22",
+      "domain": "sales",
+      "category": "Founding Cohort & urgency",
+      "category_key": "founding-urgency",
+      "question": "What if I reserve a seat now but the program isn't right for me?",
+      "answer": "On the annual plan you have a 14-day money-back window from the July 23 kickoff, so you can join, experience the first sessions, and still step back if it is not a fit. On monthly, you can cancel anytime and keep access through the month you paid for.",
+      "detail": "These refund and cancellation terms are proposed and pending final approval, so confirm before putting them in writing to a prospect.",
+      "tags": [
+        "refund",
+        "risk",
+        "guarantee"
+      ],
+      "reference": "sales/index.html#cat-founding-urgency",
+      "reference_label": "Founding Cohort & urgency",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-23",
+      "domain": "sales",
+      "category": "Founding Cohort & urgency",
+      "category_key": "founding-urgency",
+      "question": "How do I lock in my founding seat?",
+      "answer": "Enroll at training.colaberry.com. That is the single place to claim one of the 40 founding seats and lock the $149 a month founding rate before the cohort fills.",
+      "detail": "training.colaberry.com is the one CTA everywhere. Direct every interested prospect there to secure the seat.",
+      "tags": [
+        "enroll",
+        "cta",
+        "signup"
+      ],
+      "reference": "sales/index.html#cat-founding-urgency",
+      "reference_label": "Founding Cohort & urgency",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-24",
+      "domain": "sales",
+      "category": "Eligibility & prerequisites",
+      "category_key": "eligibility",
+      "question": "Do I need a software engineering or computer science background to join?",
+      "answer": "No professional engineering background is required. This program is built for career changers and working professionals who are comfortable with basic software concepts and want to build with AI.",
+      "detail": "The Accelerator is project-based and guided. You arrive with an idea and leave with a deployed system, supported through every step.",
+      "tags": [
+        "background",
+        "prerequisites",
+        "career-changers"
+      ],
+      "reference": "sales/index.html#cat-eligibility",
+      "reference_label": "Eligibility & prerequisites",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-25",
+      "domain": "sales",
+      "category": "Eligibility & prerequisites",
+      "category_key": "eligibility",
+      "question": "What technical skills do I actually need before starting?",
+      "answer": "You should be comfortable with basic software concepts like git and the command line. Beyond that, no advanced coding or engineering experience is needed.",
+      "detail": "The ideal member is a working professional or career changer who has a real business problem they want to solve with AI.",
+      "tags": [
+        "skills",
+        "prerequisites",
+        "git",
+        "command-line"
+      ],
+      "reference": "sales/index.html#cat-eligibility",
+      "reference_label": "Eligibility & prerequisites",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-26",
+      "domain": "sales",
+      "category": "Eligibility & prerequisites",
+      "category_key": "eligibility",
+      "question": "Is this right for me if I'm changing careers and not currently in tech?",
+      "answer": "Yes. This program is specifically designed for career changers and working professionals. If you understand basic software concepts and have a business problem to solve, you are exactly who this is built for.",
+      "detail": "You will build real systems including a Business Workflow Assistant, a multi-agent AI team, an MCP server, and a complete Solution Architecture Package, plus a GitHub portfolio to show for it.",
+      "tags": [
+        "career-changers",
+        "fit",
+        "non-technical"
+      ],
+      "reference": "sales/index.html#cat-eligibility",
+      "reference_label": "Eligibility & prerequisites",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-27",
+      "domain": "sales",
+      "category": "Eligibility & prerequisites",
+      "category_key": "eligibility",
+      "question": "I have a full-time job. Can I realistically keep up with this program?",
+      "answer": "Yes. The program is built for working professionals. It is four hours live per week, a two-hour Monday Architecture Day and a two-hour Thursday Build Day.",
+      "detail": "The schedule is intentionally structured so you can fit it around full-time work.",
+      "tags": [
+        "working-professionals",
+        "schedule",
+        "time-commitment"
+      ],
+      "reference": "sales/index.html#cat-eligibility",
+      "reference_label": "Eligibility & prerequisites",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-28",
+      "domain": "sales",
+      "category": "Eligibility & prerequisites",
+      "category_key": "eligibility",
+      "question": "Do I need to come in with a project idea, or will one be assigned to me?",
+      "answer": "Come in with a business problem you want to solve. The principle is arrive with an idea, leave with a deployed system. The program guides you to build it into something real.",
+      "detail": "Over twelve weeks you build a deployed AI system and a guided GitHub portfolio around your own problem.",
+      "tags": [
+        "project-idea",
+        "prerequisites",
+        "fit"
+      ],
+      "reference": "sales/index.html#cat-eligibility",
+      "reference_label": "Eligibility & prerequisites",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-29",
+      "domain": "sales",
+      "category": "Eligibility & prerequisites",
+      "category_key": "eligibility",
+      "question": "Are there any prerequisite courses or certifications I need before enrolling?",
+      "answer": "No prerequisite courses or certifications are required. One membership includes everything, including Anthropic Architect certification prep, so you start and finish all in one program.",
+      "detail": "There are no separate course fees and no gating prerequisites. You enroll at training.colaberry.com.",
+      "tags": [
+        "prerequisites",
+        "certification",
+        "enrollment"
+      ],
+      "reference": "sales/index.html#cat-eligibility",
+      "reference_label": "Eligibility & prerequisites",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-30",
+      "domain": "sales",
+      "category": "Eligibility & prerequisites",
+      "category_key": "eligibility",
+      "question": "Is there an application or screening, and how many spots are there?",
+      "answer": "The Founding Cohort is capped at 40 seats, so spots are limited. The best way to see if it is a fit is the free Open House on Thursday July 16, then enroll at training.colaberry.com.",
+      "detail": "Founding members lock the 149 dollar per month founding rate for as long as their membership stays active. Any formal screening criteria beyond the stated fit profile are not confirmed.",
+      "tags": [
+        "seats",
+        "founding-cohort",
+        "open-house",
+        "enrollment"
+      ],
+      "reference": "sales/index.html#cat-eligibility",
+      "reference_label": "Eligibility & prerequisites",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-31",
+      "domain": "sales",
+      "category": "Time & schedule",
+      "category_key": "time-schedule",
+      "question": "How many hours a week do I actually need to commit?",
+      "answer": "Plan on 4 hours of live class each week: a 2-hour Architecture Day on Monday and a 2-hour Build Day on Thursday. The program is deliberately built for working professionals, so it fits around a full-time job.",
+      "detail": "Live commitment is fixed at 4 hours/week across two sessions. Outside of live time you'll work on your guided GitHub portfolio projects at your own pace.",
+      "tags": [
+        "hours",
+        "weekly",
+        "schedule"
+      ],
+      "reference": "sales/index.html#cat-time-schedule",
+      "reference_label": "Time & schedule",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-32",
+      "domain": "sales",
+      "category": "Time & schedule",
+      "category_key": "time-schedule",
+      "question": "What days and times are the classes?",
+      "answer": "Classes run twice a week: Monday is Architecture Day for 2 hours, and Thursday is Build Day for 2 hours. Two focused sessions, four hours total, every week.",
+      "detail": "Monday Architecture Day (2h) covers the design and architecture concepts; Thursday Build Day (2h) is hands-on building. Specific clock times are not yet published, so confirm exact start times before quoting them.",
+      "tags": [
+        "days",
+        "monday",
+        "thursday"
+      ],
+      "reference": "sales/index.html#cat-time-schedule",
+      "reference_label": "Time & schedule",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-33",
+      "domain": "sales",
+      "category": "Time & schedule",
+      "category_key": "time-schedule",
+      "question": "How long is the whole program?",
+      "answer": "The program is 12 weeks, project-based from day one. You arrive with an idea and leave with a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.",
+      "detail": "12-week, project-based program inside the membership. Kickoff is Thursday July 23, 2026, building toward the Architect Expo in early October 2026.",
+      "tags": [
+        "duration",
+        "length",
+        "weeks"
+      ],
+      "reference": "sales/index.html#cat-time-schedule",
+      "reference_label": "Time & schedule",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-34",
+      "domain": "sales",
+      "category": "Time & schedule",
+      "category_key": "time-schedule",
+      "question": "Can I do this while working a full-time job?",
+      "answer": "Yes, that is exactly who this is built for. The live commitment is just 4 hours a week, split between Monday and Thursday, so working professionals can keep their day job while they build.",
+      "detail": "The schedule is intentionally designed for working professionals and career changers who have a business problem to solve. No professional engineering background is required, just comfort with basic concepts like git and the command line.",
+      "tags": [
+        "working",
+        "full-time",
+        "professionals"
+      ],
+      "reference": "sales/index.html#cat-time-schedule",
+      "reference_label": "Time & schedule",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-35",
+      "domain": "sales",
+      "category": "Time & schedule",
+      "category_key": "time-schedule",
+      "question": "What are the key dates I need to know?",
+      "answer": "There is a free Open House on Thursday July 16, 2026, the Founding Cohort kicks off Thursday July 23, 2026, and we wrap with the Architect Expo in early October 2026. The founding cohort is capped at 40 seats.",
+      "detail": "Free Open House Jul 16 → Founding Cohort first class Jul 23 → Architect Expo early October 2026. Enroll at training.colaberry.com.",
+      "tags": [
+        "dates",
+        "kickoff",
+        "open-house"
+      ],
+      "reference": "sales/index.html#cat-time-schedule",
+      "reference_label": "Time & schedule",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-36",
+      "domain": "sales",
+      "category": "Time & schedule",
+      "category_key": "time-schedule",
+      "question": "What happens if I cancel or fall behind, time-wise?",
+      "answer": "On the monthly plan you can cancel anytime and keep access through the month you've paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff, and after that your membership stays active for the full year with your founding rate locked in.",
+      "detail": "These cancellation terms are proposed and pending final approval, so confirm before committing them in writing. Annual: 14-day refund window from kickoff, then non-refundable but access continues the full year. Monthly: cancel anytime, access through the paid month, no partial-month refund.",
+      "tags": [
+        "cancel",
+        "refund",
+        "commitment"
+      ],
+      "reference": "sales/index.html#cat-time-schedule",
+      "reference_label": "Time & schedule",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-37",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "What will I actually build by the end of the program?",
+      "answer": "You build four real systems: a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package. You arrive with an idea and leave with a deployed system and a GitHub portfolio.",
+      "detail": "These four projects map to the four Architect Intensives and are designed to be portfolio-ready, not toy exercises.",
+      "tags": [
+        "projects",
+        "portfolio",
+        "deliverables"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-38",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "How long is the program and how is it structured?",
+      "answer": "It is a 12-week, project-based program built around four Architect Intensives. Every week you go from architecture to a working build, so by the end you have a deployed AI system rather than just notes.",
+      "detail": "The membership wraps the 12-week program plus certification prep, an internship experience, and guided GitHub projects.",
+      "tags": [
+        "duration",
+        "structure",
+        "12-week"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-39",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "How much time do I need to commit each week?",
+      "answer": "Four hours live per week: a two-hour Monday Architecture Day and a two-hour Thursday Build Day. It is built for working professionals, so you can keep your job while you go through it.",
+      "detail": "Monday teaches the design and architecture; Thursday is hands-on building.",
+      "tags": [
+        "schedule",
+        "time-commitment",
+        "working-professionals"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-40",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "Do I need to be a software engineer or have a technical background?",
+      "answer": "No professional engineering background is required. It is built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and who have a business problem they want to solve.",
+      "detail": "The ideal fit is someone who understands the basics and wants to learn to build real AI systems, not a seasoned developer.",
+      "tags": [
+        "prerequisites",
+        "who-its-for",
+        "background"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-41",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "What is an MCP server and why am I building one?",
+      "answer": "You build a working MCP server that integrates with a real system, which is one of the four core projects in the program. It is hands-on systems work that shows you can connect AI to live tools, not just chat with a model.",
+      "detail": "MCP work sits alongside the Business Workflow Assistant, the multi-agent team, and the Solution Architecture Package as the four build projects.",
+      "tags": [
+        "mcp",
+        "projects",
+        "integration"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-42",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "What do I walk away with when I finish?",
+      "answer": "Three things: a deployed AI system, a GitHub portfolio of your work, and the Anthropic Architect certification. As we put it, Anthropic certifies knowledge and Colaberry certifies capability.",
+      "detail": "Certification prep is included in the membership, so you finish ready to certify and with proof you can build.",
+      "tags": [
+        "outcomes",
+        "certification",
+        "portfolio"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-43",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "Who is actually teaching this and what platform do we build on?",
+      "answer": "The program is powered by Anthropic and Claude Code: you learn from Anthropic, build through Colaberry, and deploy in the real world. The curriculum is built directly on Claude Code, the same tooling used to build production AI systems.",
+      "detail": "This pairing is the core promise: Anthropic-grade training delivered through Colaberry's hands-on build model.",
+      "tags": [
+        "anthropic",
+        "claude-code",
+        "instruction"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-44",
+      "domain": "sales",
+      "category": "Curriculum & what you build",
+      "category_key": "curriculum-build",
+      "question": "Is the certification prep part of the program or a separate cost?",
+      "answer": "It is included. One membership covers everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course fees.",
+      "detail": "It is a membership model, not per-course tuition, so certification prep is bundled with the build projects and internship experience.",
+      "tags": [
+        "certification",
+        "membership",
+        "whats-included"
+      ],
+      "reference": "sales/index.html#cat-curriculum-build",
+      "reference_label": "Curriculum & what you build",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-45",
+      "domain": "sales",
+      "category": "Certification & credibility",
+      "category_key": "certification",
+      "question": "What certification do I actually walk away with?",
+      "answer": "You earn the Anthropic Architect certification. The program includes full Anthropic Architect certification prep, and the membership is built so you arrive with an idea and leave with the cert plus a deployed AI system and a GitHub portfolio.",
+      "detail": "Anthropic certification prep is bundled into the one membership at no separate fee. The certification is paired with real, demonstrable output rather than standing alone.",
+      "tags": [
+        "anthropic",
+        "credential",
+        "outcomes"
+      ],
+      "reference": "sales/index.html#cat-certification",
+      "reference_label": "Certification & credibility",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-46",
+      "domain": "sales",
+      "category": "Certification & credibility",
+      "category_key": "certification",
+      "question": "Is this an Anthropic-recognized certification or just a Colaberry certificate?",
+      "answer": "It is the Anthropic Architect certification, and the program is powered by Anthropic and Claude Code. Our principle says it best: Anthropic certifies knowledge, Colaberry certifies capability.",
+      "detail": "The credibility comes from both sides. Anthropic backs the knowledge credential, and Colaberry validates that you can actually build and deploy by having you ship a real system.",
+      "tags": [
+        "anthropic",
+        "recognition",
+        "credibility"
+      ],
+      "reference": "sales/index.html#cat-certification",
+      "reference_label": "Certification & credibility",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-47",
+      "domain": "sales",
+      "category": "Certification & credibility",
+      "category_key": "certification",
+      "question": "Will I have anything to show employers besides a certificate?",
+      "answer": "Yes. You leave with three things: the Anthropic Architect certification, a deployed AI system running in the real world, and a GitHub portfolio of guided projects. Employers see proof you can build, not just a piece of paper.",
+      "detail": "Concrete builds include a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+      "tags": [
+        "portfolio",
+        "github",
+        "outcomes"
+      ],
+      "reference": "sales/index.html#cat-certification",
+      "reference_label": "Certification & credibility",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-48",
+      "domain": "sales",
+      "category": "Certification & credibility",
+      "category_key": "certification",
+      "question": "What exactly will be in my portfolio by the end?",
+      "answer": "You build a Business Workflow Assistant plus reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package. All of it lives in your GitHub portfolio.",
+      "detail": "These are real, deployable artifacts tied to a business problem you bring in, which is what makes the certification credible to employers.",
+      "tags": [
+        "portfolio",
+        "projects",
+        "github"
+      ],
+      "reference": "sales/index.html#cat-certification",
+      "reference_label": "Certification & credibility",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-49",
+      "domain": "sales",
+      "category": "Certification & credibility",
+      "category_key": "certification",
+      "question": "Do I need an engineering background to earn the certification?",
+      "answer": "No professional engineering background is required. It is built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and who have a business problem to solve.",
+      "detail": "The 12-week, project-based structure and 4 live hours per week are designed for working professionals to reach the Anthropic Architect certification.",
+      "tags": [
+        "prerequisites",
+        "career-changers",
+        "accessibility"
+      ],
+      "reference": "sales/index.html#cat-certification",
+      "reference_label": "Certification & credibility",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-50",
+      "domain": "sales",
+      "category": "Certification & credibility",
+      "category_key": "certification",
+      "question": "Is the certification prep included or is it an extra cost?",
+      "answer": "It is fully included. One membership covers everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course or certification fees.",
+      "detail": "Membership is $149/mo billed annually at the founding rate or $199/mo monthly. Founding members lock the $149/mo rate for as long as the membership stays active.",
+      "tags": [
+        "pricing",
+        "included",
+        "membership"
+      ],
+      "reference": "sales/index.html#cat-certification",
+      "reference_label": "Certification & credibility",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-51",
+      "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "If I sign up and it's not for me, can I get my money back?",
+      "answer": "Yes. On the annual plan you have a 14-day money-back window starting from kickoff on July 23, so you can join the founding cohort, experience the program, and get a full refund if it isn't the right fit within those first two weeks.",
+      "detail": "Annual plan: 14-day money-back window from the July 23 kickoff. After that the membership is non-refundable but stays active the full year and your founding rate stays locked. These terms are pending final approval, so confirm before quoting verbatim.",
+      "tags": [
+        "refund",
+        "money-back",
+        "annual"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-52",
+      "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "Can I cancel the monthly plan whenever I want?",
+      "answer": "Yes, the monthly plan cancels anytime. You keep full access through the month you've already paid for, and there's no partial-month refund.",
+      "detail": "Monthly plan is $199/mo, cancel anytime, access continues through the paid month, no partial-month refund. Terms are proposed and pending Ali's final approval.",
+      "tags": [
+        "cancellation",
+        "monthly",
+        "refund"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-53",
+      "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "Is there a guarantee that I'll actually finish with a real project and a certification?",
+      "answer": "The program is built so you leave with three concrete outcomes: a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification. The principle is simple: Anthropic certifies knowledge, Colaberry certifies capability.",
+      "detail": "Outcomes are core to the model: you arrive with an idea and leave with a deployed system, plus a portfolio and the Anthropic Architect certification. This is the program design, not a separate written guarantee.",
+      "tags": [
+        "guarantee",
+        "outcome",
+        "certification"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-54",
+      "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "If I pay annually and decide to leave halfway through the year, do I get a refund?",
+      "answer": "After the 14-day money-back window from kickoff, the annual plan is non-refundable, but your membership stays active for the full year and your founding rate stays locked the entire time. So you don't lose access by changing your mind midway.",
+      "detail": "Annual: full refund within 14 days of the July 23 kickoff; after that non-refundable, membership active the full year, founding rate locked. Pending Ali's final approval.",
+      "tags": [
+        "annual",
+        "refund",
+        "non-refundable"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-55",
+      "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "Do I have to commit before I see what the program is like?",
+      "answer": "No. We host a free Open House on Thursday July 16, before the cohort even starts on July 23, so you can see exactly how the program works before you commit a dollar.",
+      "detail": "Free Open House is Thursday July 16, 2026; founding cohort kickoff is Thursday July 23, 2026. The Open House lets prospects evaluate the program at no cost before enrolling.",
+      "tags": [
+        "free",
+        "open-house",
+        "trial"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-56",
+      "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "If the price goes up later, will my rate change after I've paid?",
+      "answer": "No. Founding members lock the $149/mo founding rate for as long as their membership stays active, even as the price rises for later cohorts. Joining now protects your rate permanently.",
+      "detail": "Founding rate is $149/mo billed annually. The locked rate persists as long as membership stays active, including across an annual term where the membership remains active the full year.",
+      "tags": [
+        "founding-rate",
+        "price-lock",
+        "pricing"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-57",
+      "domain": "sales",
+      "category": "Careers, portfolio & internship",
+      "category_key": "career-outcomes",
+      "question": "What will I actually have to show for this when I'm done?",
+      "answer": "You finish with three things: a real AI system deployed in the real world, a GitHub portfolio of guided projects, and the Anthropic Architect certification. Anthropic certifies your knowledge; Colaberry certifies your capability. You arrive with an idea and leave with a deployed system.",
+      "detail": "Concrete builds during the program: a Business Workflow Assistant plus reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+      "tags": [
+        "portfolio",
+        "outcomes",
+        "deliverables"
+      ],
+      "reference": "sales/index.html#cat-career-outcomes",
+      "reference_label": "Careers, portfolio & internship",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-58",
+      "domain": "sales",
+      "category": "Careers, portfolio & internship",
+      "category_key": "career-outcomes",
+      "question": "Is the internship a real job, or just part of the coursework?",
+      "answer": "It's a full-time internship experience built right into the membership at no extra cost. You don't just learn the concepts, you apply them on real work so you graduate with hands-on experience, not just theory.",
+      "detail": "The internship experience is included in the single membership alongside all four Architect Intensives, certification prep, and guided GitHub portfolio projects. No separate fees.",
+      "tags": [
+        "internship",
+        "experience",
+        "hands-on"
+      ],
+      "reference": "sales/index.html#cat-career-outcomes",
+      "reference_label": "Careers, portfolio & internship",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-59",
+      "domain": "sales",
+      "category": "Careers, portfolio & internship",
+      "category_key": "career-outcomes",
+      "question": "What specific projects will end up in my GitHub portfolio?",
+      "answer": "You build four portfolio-grade projects: a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package. These are guided, real, and yours to show employers.",
+      "detail": "",
+      "tags": [
+        "portfolio",
+        "projects",
+        "github"
+      ],
+      "reference": "sales/index.html#cat-career-outcomes",
+      "reference_label": "Careers, portfolio & internship",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-60",
+      "domain": "sales",
+      "category": "Careers, portfolio & internship",
+      "category_key": "career-outcomes",
+      "question": "I'm a career changer with no engineering background. Can I realistically get to a portfolio that matters?",
+      "answer": "Yes. This is built for career changers and working professionals who are comfortable with basic software concepts like git and the command line and have a business problem to solve. No professional engineering background is required, and you leave with a deployed system, a GitHub portfolio, and the Anthropic Architect certification.",
+      "detail": "",
+      "tags": [
+        "career-change",
+        "beginner",
+        "portfolio"
+      ],
+      "reference": "sales/index.html#cat-career-outcomes",
+      "reference_label": "Careers, portfolio & internship",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-61",
+      "domain": "sales",
+      "category": "Careers, portfolio & internship",
+      "category_key": "career-outcomes",
+      "question": "What is the Anthropic Architect certification and why does it matter to an employer?",
+      "answer": "It's a credential you prep for and earn through the program, powered by Anthropic and Claude Code. The principle is simple: Anthropic certifies your knowledge and Colaberry certifies your capability through a real deployed system, so you walk into conversations with both the credential and the proof.",
+      "detail": "",
+      "tags": [
+        "certification",
+        "anthropic",
+        "credential"
+      ],
+      "reference": "sales/index.html#cat-career-outcomes",
+      "reference_label": "Careers, portfolio & internship",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-62",
+      "domain": "sales",
+      "category": "Careers, portfolio & internship",
+      "category_key": "career-outcomes",
+      "question": "When will I have a finished project I can actually show off?",
+      "answer": "The 12-week program kicks off Thursday July 23, 2026, and culminates in the Architect Expo in early October 2026, where you showcase your deployed system. By then you have your GitHub portfolio and your path to the Anthropic Architect certification.",
+      "detail": "Free Open House is Thursday July 16, 2026; kickoff is Thursday July 23, 2026; Architect Expo is early October 2026.",
+      "tags": [
+        "timeline",
+        "expo",
+        "milestones"
+      ],
+      "reference": "sales/index.html#cat-career-outcomes",
+      "reference_label": "Careers, portfolio & internship",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-63",
+      "domain": "sales",
+      "category": "Careers, portfolio & internship",
+      "category_key": "career-outcomes",
+      "question": "Can I keep building my portfolio and stay connected after the 12 weeks end?",
+      "answer": "Yes. This is a membership, not a one-time course, so your access continues. Founding members also lock the $149 a month founding rate for as long as the membership stays active, even as prices rise for later cohorts.",
+      "detail": "Annual founding rate is $149/mo; the founding rate stays locked while the membership remains active. Specific post-program access details beyond membership continuity are not yet documented; verify before promising specifics.",
+      "tags": [
+        "membership",
+        "ongoing-access",
+        "founding-rate"
+      ],
+      "reference": "sales/index.html#cat-career-outcomes",
+      "reference_label": "Careers, portfolio & internship",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-64",
+      "domain": "sales",
+      "category": "Enrollment & onboarding",
+      "category_key": "enrollment-logistics",
+      "question": "How do I actually enroll, and is the Open House the same as signing up?",
+      "answer": "Enrollment happens at training.colaberry.com, that is the one place to sign up. The Open House on Thursday July 16 is a free, no-commitment session to see the program before you join. Classes officially kick off Thursday July 23, so you can attend the Open House first and enroll right after.",
+      "detail": "Single CTA everywhere is training.colaberry.com. Open House July 16 is free; Founding Cohort kickoff (first class) is July 23, 2026.",
+      "tags": [
+        "enroll",
+        "open-house",
+        "signup"
+      ],
+      "reference": "sales/index.html#cat-enrollment-logistics",
+      "reference_label": "Enrollment & onboarding",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-65",
+      "domain": "sales",
+      "category": "Enrollment & onboarding",
+      "category_key": "enrollment-logistics",
+      "question": "Do I have to attend the Open House to join the program?",
+      "answer": "No. The Open House on July 16 is free and optional, it is simply your chance to see exactly how the program works before committing. You can enroll any time at training.colaberry.com, with or without attending.",
+      "detail": "Free Open House Thursday July 16, 2026; enrollment CTA is training.colaberry.com.",
+      "tags": [
+        "open-house",
+        "optional",
+        "enroll"
+      ],
+      "reference": "sales/index.html#cat-enrollment-logistics",
+      "reference_label": "Enrollment & onboarding",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-66",
+      "domain": "sales",
+      "category": "Enrollment & onboarding",
+      "category_key": "enrollment-logistics",
+      "question": "How many seats are there, and what happens if I wait to decide?",
+      "answer": "The Founding Cohort is capped at 40 seats. Once those fill, the founding rate of 149 dollars a month closes, so the safest move is to lock your seat early at training.colaberry.com. Founding members keep that 149 rate for as long as their membership stays active, even as the price rises for later cohorts.",
+      "detail": "Founding cohort capped at 40 seats. $149/mo billed annually is the founding rate; founding members lock it as long as membership stays active.",
+      "tags": [
+        "seats",
+        "founding-rate",
+        "deadline"
+      ],
+      "reference": "sales/index.html#cat-enrollment-logistics",
+      "reference_label": "Enrollment & onboarding",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-67",
+      "domain": "sales",
+      "category": "Enrollment & onboarding",
+      "category_key": "enrollment-logistics",
+      "question": "When do classes start and what does the weekly schedule look like once I am in?",
+      "answer": "The Founding Cohort kicks off Thursday July 23, 2026. From there it is a 12-week, project-based program with 4 live hours per week, Monday Architecture Day for 2 hours and Thursday Build Day for 2 hours. It is built for working professionals, and the program wraps with the Architect Expo in early October 2026.",
+      "detail": "Kickoff July 23, 2026; 12 weeks; Mon Architecture Day (2h) + Thu Build Day (2h) = 4 live hours/week; Architect Expo early October 2026.",
+      "tags": [
+        "schedule",
+        "kickoff",
+        "weekly-hours"
+      ],
+      "reference": "sales/index.html#cat-enrollment-logistics",
+      "reference_label": "Enrollment & onboarding",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-68",
+      "domain": "sales",
+      "category": "Enrollment & onboarding",
+      "category_key": "enrollment-logistics",
+      "question": "What exactly does my membership include once I enroll?",
+      "answer": "One membership includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course fees, it is one membership, not per-course tuition. You arrive with an idea and leave with a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.",
+      "detail": "Membership model, no separate course fees. Outcome: deployed AI system, GitHub portfolio, Anthropic Architect certification.",
+      "tags": [
+        "membership",
+        "whats-included",
+        "onboarding"
+      ],
+      "reference": "sales/index.html#cat-enrollment-logistics",
+      "reference_label": "Enrollment & onboarding",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-69",
+      "domain": "sales",
+      "category": "Enrollment & onboarding",
+      "category_key": "enrollment-logistics",
+      "question": "If I sign up and it is not for me, can I get my money back?",
+      "answer": "Yes, you are protected. On the monthly plan you can cancel anytime and keep access through the month you paid for. On the annual plan you get a 14-day money-back window from the July 23 kickoff. After that the annual plan is non-refundable, but your membership stays active the full year and your founding rate stays locked.",
+      "detail": "Refund terms are proposed and pending Ali's final approval. Monthly: cancel anytime, access through paid month, no partial-month refund. Annual: 14-day money-back from kickoff (Jul 23), then non-refundable but membership stays active full year.",
+      "tags": [
+        "refund",
+        "cancellation",
+        "money-back"
+      ],
+      "reference": "sales/index.html#cat-enrollment-logistics",
+      "reference_label": "Enrollment & onboarding",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-70",
+      "domain": "sales",
+      "category": "Objections & comparisons",
+      "category_key": "objections-comparisons",
+      "question": "Why would I pay for this when Anthropic puts so much AI content on YouTube for free?",
+      "answer": "Free videos teach you about AI. This membership makes you build with it. Over 12 weeks you ship a deployed AI system, a GitHub portfolio, and sit for the Anthropic Architect certification. The principle is simple: Anthropic certifies knowledge, Colaberry certifies capability. Most people consume AI. Very few learn to build with it, and that is exactly the gap this closes.",
+      "detail": "Lead with the four concrete builds: a Business Workflow Assistant with reusable Skills, a multi-agent AI team plus Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+      "tags": [
+        "free-content",
+        "youtube",
+        "diy"
+      ],
+      "reference": "sales/index.html#cat-objections-comparisons",
+      "reference_label": "Objections & comparisons",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-71",
+      "domain": "sales",
+      "category": "Objections & comparisons",
+      "category_key": "objections-comparisons",
+      "question": "I could just teach myself with the docs and Claude Code. What do I actually get here that I can't get on my own?",
+      "answer": "Self-teaching gives you scattered knowledge. This gives you structure and proof. You arrive with an idea and leave with a deployed system, a GitHub portfolio, and the Anthropic Architect certification, guided live across 12 weeks by people who do this. You also get a full-time internship experience and guided portfolio projects, all in one membership with no separate course fees.",
+      "detail": "Reinforce 'Arrive with an idea. Leave with a deployed system.' DIY rarely produces a finished, deployed, certifiable result; this program is built to.",
+      "tags": [
+        "diy",
+        "self-taught",
+        "value"
+      ],
+      "reference": "sales/index.html#cat-objections-comparisons",
+      "reference_label": "Objections & comparisons",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-72",
+      "domain": "sales",
+      "category": "Objections & comparisons",
+      "category_key": "objections-comparisons",
+      "question": "How is this different from a coding bootcamp?",
+      "answer": "A bootcamp turns you into a junior engineer over months of full-time study. This is a 12-week, project-based membership built for working professionals, just 4 hours live per week, Monday Architecture Day and Thursday Build Day. You don't need an engineering background, only basic comfort with git and the command line and a real business problem to solve. You finish with a deployed AI system and the Anthropic Architect certification.",
+      "detail": "Emphasize the working-professional fit (4 hrs/week live) versus a full-time bootcamp grind, and that no professional engineering background is required.",
+      "tags": [
+        "bootcamp",
+        "comparison",
+        "working-professionals"
+      ],
+      "reference": "sales/index.html#cat-objections-comparisons",
+      "reference_label": "Objections & comparisons",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-73",
+      "domain": "sales",
+      "category": "Objections & comparisons",
+      "category_key": "objections-comparisons",
+      "question": "Bootcamps cost way more than this. Why is it so cheap, and what's the catch?",
+      "answer": "There's no catch. It's one membership at $149 a month billed annually, the founding rate, and it includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. No separate course fees. The founding cohort is capped at 40 seats, and founding members lock that $149 rate for as long as their membership stays active, even as the price rises for later cohorts.",
+      "detail": "Monthly option is $199/mo, cancel anytime. Use the 40-seat cap and locked founding rate to create urgency honestly. Enroll at training.colaberry.com.",
+      "tags": [
+        "pricing",
+        "bootcamp",
+        "membership"
+      ],
+      "reference": "sales/index.html#cat-objections-comparisons",
+      "reference_label": "Objections & comparisons",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-74",
+      "domain": "sales",
+      "category": "Objections & comparisons",
+      "category_key": "objections-comparisons",
+      "question": "Free courses don't give me anything to show an employer. Does this?",
+      "answer": "Yes, that's the whole point. You walk away with three things you can put in front of any employer: a deployed AI system, a GitHub portfolio of real projects, and the Anthropic Architect certification. Free courses leave you with a watch history. This leaves you with proof of capability.",
+      "detail": "Name the builds as portfolio pieces: Business Workflow Assistant, multi-agent AI team plus Enterprise Prompt Library, a working MCP server, and a Solution Architecture Package.",
+      "tags": [
+        "free-content",
+        "portfolio",
+        "outcomes"
+      ],
+      "reference": "sales/index.html#cat-objections-comparisons",
+      "reference_label": "Objections & comparisons",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-75",
+      "domain": "sales",
+      "category": "Objections & comparisons",
+      "category_key": "objections-comparisons",
+      "question": "If I try the DIY route and don't like this, am I stuck paying for a year?",
+      "answer": "No. The monthly plan is cancel anytime, so you keep access through the month you've paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff, and after that the membership stays active the full year with your founding rate locked. Either way you can start without feeling trapped.",
+      "detail": "Refund and cancellation terms are proposed and pending Ali's final approval, so confirm before quoting them as policy. Monthly is $199/mo; annual is $149/mo (founding rate).",
+      "tags": [
+        "refund",
+        "cancellation",
+        "risk"
+      ],
+      "reference": "sales/index.html#cat-objections-comparisons",
+      "reference_label": "Objections & comparisons",
+      "needs_verification": true
+    },
+    {
+      "id": "sales-76",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "Are there any costs beyond the Colaberry membership fee?",
+      "answer": "Yes, and we are upfront about it. On top of your Colaberry membership you cover your own third-party tool costs, which Colaberry does not cover: an Anthropic subscription for Claude Code (about $20 a month) and LLM API usage billed to your own key (most projects stay under $10 a month).",
+      "detail": "These are paid directly to the providers (Anthropic, and any LLM API you use), not to Colaberry. They are required because you build and deploy real systems on your own keys, exactly as you would on the job.",
+      "tags": [
+        "costs",
+        "fees",
+        "anthropic",
+        "api",
+        "claude code"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-77",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "Does Colaberry cover the Anthropic subscription or the API usage costs?",
+      "answer": "No. The Anthropic subscription for Claude Code (around $20 a month) and any LLM API usage (billed to your own key, usually under $10 a month per project) are paid by you, directly to the provider. Your Colaberry membership covers the program, not third-party tool fees.",
+      "detail": "Be clear about this before enrollment so there are no surprises. It is a small, real, usage-based cost that comes with building on live AI tools.",
+      "tags": [
+        "not covered",
+        "fees",
+        "anthropic",
+        "api",
+        "disclosure"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-78",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
+      "question": "Why do I need my own Anthropic subscription and API key?",
+      "answer": "Because you build and deploy real systems, not demos. You use Claude Code and live LLM APIs on your own account, which is exactly how you would in a job or your own venture. Budget about $20 a month for the Anthropic subscription and usually under $10 a month for API usage.",
+      "detail": "Owning your keys means your projects, your portfolio, and your costs are portable and real after the program.",
+      "tags": [
+        "api key",
+        "subscription",
+        "why",
+        "build",
+        "claude code"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-1",
+      "domain": "marketing",
+      "category": "Campaign & goal",
+      "category_key": "campaign",
+      "question": "What is this campaign and what is the single goal?",
+      "answer": "It is the marketing push for the AI Systems Architect Accelerator. The single goal is to generate free registrations for the Open House on July 16, then convert attendees into the Founding Cohort. Every post and email drives to the Open House.",
+      "detail": "",
+      "tags": [
+        "goal",
+        "objective",
+        "why"
+      ],
+      "reference": "marketing/docs/campaign-brief.html",
+      "reference_label": "campaign brief",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-2",
+      "domain": "marketing",
+      "category": "Campaign & goal",
+      "category_key": "campaign",
+      "question": "What is the funnel?",
+      "answer": "Alumni, dropouts, and prospects see awareness content on social and email, register for the free Open House on July 16, attend (where pricing is revealed), and enroll in the Founding Cohort, which kicks off July 23.",
+      "detail": "",
+      "tags": [
+        "funnel",
+        "flow",
+        "stages"
+      ],
+      "reference": "marketing/docs/campaign-brief.html",
+      "reference_label": "campaign brief",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-3",
+      "domain": "marketing",
+      "category": "Campaign & goal",
+      "category_key": "campaign",
+      "question": "Why drive to the Open House instead of straight to enrollment?",
+      "answer": "The free Open House is the low-friction entry point. It lets people see the program, removes the price objection from cold traffic, and is where Founding Cohort pricing and enrollment details are revealed. The whole sequence is built to fill that event.",
+      "detail": "",
+      "tags": [
+        "open house",
+        "why event",
+        "not enroll"
+      ],
+      "reference": "marketing/docs/open-house-playbook.html",
+      "reference_label": "open house playbook",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-4",
+      "domain": "marketing",
+      "category": "Campaign & goal",
+      "category_key": "campaign",
+      "question": "What are the key dates?",
+      "answer": "Open House (free): Thursday, July 16, 2026. Cohort 1 kickoff: Thursday, July 23, 2026. The Open House sits one week before the cohort it feeds, so the funnel ordering is valid.",
+      "detail": "",
+      "tags": [
+        "dates",
+        "when",
+        "timeline"
+      ],
+      "reference": "marketing/docs/campaign-brief.html",
+      "reference_label": "campaign brief",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-5",
+      "domain": "marketing",
+      "category": "Campaign & goal",
+      "category_key": "campaign",
+      "question": "How do the email and social campaigns relate?",
+      "answer": "They share one spine: the same five beats run on both. Social seeds awareness and reach; the approved five-email sequence carries the registration and reminder load. See the Email and Social Alignment doc for the day-by-day mapping.",
+      "detail": "",
+      "tags": [
+        "email",
+        "social",
+        "reinforce"
+      ],
+      "reference": "marketing/docs/email-social-alignment.html",
+      "reference_label": "email social alignment",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-6",
+      "domain": "marketing",
+      "category": "Audience & segments",
+      "category_key": "audience",
+      "question": "Who are we targeting?",
+      "answer": "Three audiences: alumni (past Colaberry learners), dropouts (started a program but did not finish), and prospects (new, AI-curious leads). On organic social these are content angles you broadcast; for paid or retargeting they can be true audience segments.",
+      "detail": "",
+      "tags": [
+        "who",
+        "targets",
+        "segments"
+      ],
+      "reference": "marketing/docs/audience-segments.html",
+      "reference_label": "audience segments",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-7",
+      "domain": "marketing",
+      "category": "Audience & segments",
+      "category_key": "audience",
+      "question": "What is the message for alumni?",
+      "answer": "You've already invested in your future. Now learn how to build with AI. This is the approved alumni primary message.",
+      "detail": "",
+      "tags": [
+        "alumni",
+        "message"
+      ],
+      "reference": "marketing/docs/audience-segments.html",
+      "reference_label": "audience segments",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-8",
+      "domain": "marketing",
+      "category": "Audience & segments",
+      "category_key": "audience",
+      "question": "What is the message for dropouts?",
+      "answer": "Your journey doesn't have to end here. Here's a new opportunity built for today's AI economy. This is the approved dropout primary message.",
+      "detail": "",
+      "tags": [
+        "dropouts",
+        "comeback",
+        "message"
+      ],
+      "reference": "marketing/docs/audience-segments.html",
+      "reference_label": "audience segments",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-9",
+      "domain": "marketing",
+      "category": "Audience & segments",
+      "category_key": "audience",
+      "question": "What is the message for prospects?",
+      "answer": "Most people are consuming AI. Very few are learning how to build with it. This is the approved prospect primary message.",
+      "detail": "",
+      "tags": [
+        "prospects",
+        "message",
+        "top of funnel"
+      ],
+      "reference": "marketing/docs/audience-segments.html",
+      "reference_label": "audience segments",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-10",
+      "domain": "marketing",
+      "category": "Messaging & positioning",
+      "category_key": "messaging",
+      "question": "What is the tagline?",
+      "answer": "Learn With Claude. Build Through Colaberry. Deploy In The Real World.",
+      "detail": "",
+      "tags": [
+        "tagline",
+        "positioning"
+      ],
+      "reference": "marketing/docs/messaging-positioning.html",
+      "reference_label": "messaging positioning",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-11",
+      "domain": "marketing",
+      "category": "Messaging & positioning",
+      "category_key": "messaging",
+      "question": "What is the one-line value proposition?",
+      "answer": "A 12-week program that takes you from using AI to building real AI systems, with a deployed system and a portfolio to show for it.",
+      "detail": "",
+      "tags": [
+        "value prop",
+        "one line",
+        "consumer to builder"
+      ],
+      "reference": "marketing/docs/messaging-positioning.html",
+      "reference_label": "messaging positioning",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-12",
+      "domain": "marketing",
+      "category": "Messaging & positioning",
+      "category_key": "messaging",
+      "question": "What are the message pillars?",
+      "answer": "Build real systems, not just better prompts. Learn with Claude and modern AI agents. A structured 12-week journey from foundation to scale. Earn the Anthropic Architect certification, backed by Colaberry's track record since 2012.",
+      "detail": "",
+      "tags": [
+        "pillars",
+        "themes",
+        "why us"
+      ],
+      "reference": "marketing/docs/messaging-positioning.html",
+      "reference_label": "messaging positioning",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-13",
+      "domain": "marketing",
+      "category": "Messaging & positioning",
+      "category_key": "messaging",
+      "question": "What proof points can we use?",
+      "answer": "The approved brand proof point is 5,000+ careers since 2012. You may also reference the Anthropic Architect certification and the powered by Anthropic + Claude Code co-brand. Do not invent testimonials, placement rates, or salary figures.",
+      "detail": "",
+      "tags": [
+        "proof",
+        "credibility",
+        "stats"
+      ],
+      "reference": "marketing/docs/messaging-positioning.html",
+      "reference_label": "messaging positioning",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-14",
+      "domain": "marketing",
+      "category": "Messaging & positioning",
+      "category_key": "messaging",
+      "question": "What is the co-brand line and can we say Anthropic partner?",
+      "answer": "Use powered by Anthropic + Claude Code, and reference learning with Claude. Do not claim a formal Anthropic partner status in posts unless Ali approves that language. Flag it as needs approval if you want to use it.",
+      "detail": "",
+      "tags": [
+        "co-brand",
+        "anthropic",
+        "claude code"
+      ],
+      "reference": "marketing/docs/messaging-positioning.html",
+      "reference_label": "messaging positioning",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-15",
+      "domain": "marketing",
+      "category": "Social channels & cadence",
+      "category_key": "social",
+      "question": "Which channels do we use and what is each for?",
+      "answer": "LinkedIn is primary for alumni and working professionals. X is for short, punchy posts. Instagram is for visual content, carousels, and stories. Email is the parallel owned channel running the approved five-email sequence.",
+      "detail": "",
+      "tags": [
+        "channels",
+        "linkedin",
+        "x",
+        "instagram",
+        "roles"
+      ],
+      "reference": "marketing/docs/social-strategy.html",
+      "reference_label": "social strategy",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-16",
+      "domain": "marketing",
+      "category": "Social channels & cadence",
+      "category_key": "social",
+      "question": "What is the posting cadence?",
+      "answer": "Five beats across the roughly two weeks before the Open House: a launch post, a user-versus-builder post, a what-you-will-build carousel, a founding cohort and 40-seats post, and a final reminder on event day. An optional teaser can run earlier.",
+      "detail": "",
+      "tags": [
+        "cadence",
+        "frequency",
+        "how often"
+      ],
+      "reference": "marketing/docs/content-calendar.html",
+      "reference_label": "content calendar",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-17",
+      "domain": "marketing",
+      "category": "Social channels & cadence",
+      "category_key": "social",
+      "question": "What is the engagement plan for comments and DMs?",
+      "answer": "Reply promptly and warmly, answer from the FAQ and Objection Bank, and route every question back to registering for the free Open House. Do not improvise facts. If you do not know, say you will check and point to the Open House.",
+      "detail": "",
+      "tags": [
+        "engagement",
+        "replies",
+        "comments",
+        "sop"
+      ],
+      "reference": "marketing/docs/distribution-repurposing.html",
+      "reference_label": "distribution repurposing",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-18",
+      "domain": "marketing",
+      "category": "Social channels & cadence",
+      "category_key": "social",
+      "question": "Do we run paid ads?",
+      "answer": "The core plan is organic plus the email sequence. Paid and retargeting are optional amplifiers where the three audiences become true targetable segments. Paid is not required for the launch and is deferred unless Ali approves a budget.",
+      "detail": "",
+      "tags": [
+        "paid",
+        "ads",
+        "retargeting"
+      ],
+      "reference": "marketing/docs/social-strategy.html",
+      "reference_label": "social strategy",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-19",
+      "domain": "marketing",
+      "category": "The 5-beat sequence & prompt engine",
+      "category_key": "sequence",
+      "question": "What are the five beats?",
+      "answer": "1) The shift is already happening. 2) From AI user to AI builder. 3) See what you'll build. 4) Meet the Founding Cohort. 5) Final reminder. The same spine runs on email and social.",
+      "detail": "",
+      "tags": [
+        "beats",
+        "sequence",
+        "overview"
+      ],
+      "reference": "marketing/docs/content-sequences-prompts.html",
+      "reference_label": "content sequences prompts",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-20",
+      "domain": "marketing",
+      "category": "The 5-beat sequence & prompt engine",
+      "category_key": "sequence",
+      "question": "What is Beat 1?",
+      "answer": "Theme: the shift is already happening. Goal: awareness and curiosity. Approved subject options include Most People Use AI. Very Few Build With It. CTA: Reserve Your Free Seat.",
+      "detail": "",
+      "tags": [
+        "beat 1",
+        "shift",
+        "subject"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-21",
+      "domain": "marketing",
+      "category": "The 5-beat sequence & prompt engine",
+      "category_key": "sequence",
+      "question": "What is Beat 2?",
+      "answer": "Theme: from AI user to AI builder. Goal: introduce the Open House. Approved subject options include The Difference Between AI Users And AI Builders and Why Prompts Are No Longer Enough. CTA: Register For The Open House.",
+      "detail": "",
+      "tags": [
+        "beat 2",
+        "user to builder",
+        "subject"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-22",
+      "domain": "marketing",
+      "category": "The 5-beat sequence & prompt engine",
+      "category_key": "sequence",
+      "question": "What is Beat 3?",
+      "answer": "Theme: see what you'll build. Goal: introduce the program structure across the four phases. Approved subject options include What Happens During The 12 Weeks? and Bring Your Idea. Leave With A Working AI System. CTA: Reserve Your Seat.",
+      "detail": "",
+      "tags": [
+        "beat 3",
+        "what you build",
+        "12 weeks",
+        "subject"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-23",
+      "domain": "marketing",
+      "category": "The 5-beat sequence & prompt engine",
+      "category_key": "sequence",
+      "question": "What is Beat 4?",
+      "answer": "Theme: meet the Founding Cohort. Goal: urgency. Approved subject options include Founding Cohort Enrollment Opens Soon, Only 40 Seats Available, and This Is Your Invitation To Build. CTA: Register Before Seats Fill.",
+      "detail": "",
+      "tags": [
+        "beat 4",
+        "founding cohort",
+        "40 seats",
+        "subject"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-24",
+      "domain": "marketing",
+      "category": "The 5-beat sequence & prompt engine",
+      "category_key": "sequence",
+      "question": "What is Beat 5?",
+      "answer": "Theme: final reminder. Goal: maximize attendance. Approved subject options include We're Live Tomorrow and Your Open House Starts Tomorrow. CTA: Add To Calendar.",
+      "detail": "",
+      "tags": [
+        "beat 5",
+        "final reminder",
+        "subject"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-25",
+      "domain": "marketing",
+      "category": "The 5-beat sequence & prompt engine",
+      "category_key": "sequence",
+      "question": "How does the prompt-based engine work?",
+      "answer": "The Accelerator runs a native, prompt-based campaign engine. Each segment campaign has its own ai_system_prompt; posts and emails are generated at send time. Baked-in rules: no price, no em-dash, one CTA to the Open House. Output queues for approval and nothing auto-sends.",
+      "detail": "",
+      "tags": [
+        "prompt engine",
+        "ai_system_prompt",
+        "generated",
+        "how it works"
+      ],
+      "reference": "marketing/docs/content-sequences-prompts.html",
+      "reference_label": "content sequences prompts",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-26",
+      "domain": "marketing",
+      "category": "Post copy & CTAs",
+      "category_key": "copy",
+      "question": "What are the hero post directions?",
+      "answer": "Three directions for the launch post: A, the shift (contrarian, recommended); B, the builder invitation (aspirational); C, the direct invite (plain). Pick one, then it is adapted to LinkedIn, X, and Instagram.",
+      "detail": "",
+      "tags": [
+        "hero",
+        "directions",
+        "launch post"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-27",
+      "domain": "marketing",
+      "category": "Post copy & CTAs",
+      "category_key": "copy",
+      "question": "What is the standard call to action?",
+      "answer": "Reserve a free seat at the Open House, linking to the registration URL. Variants by beat: Reserve Your Free Seat, Register For The Open House, Register Before Seats Fill, Add To Calendar.",
+      "detail": "",
+      "tags": [
+        "cta",
+        "call to action"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-28",
+      "domain": "marketing",
+      "category": "Post copy & CTAs",
+      "category_key": "copy",
+      "question": "Where do the posts link?",
+      "answer": "To the Open House registration page, which is env.openHouseLandingUrl plus UTM and campaign_id tags. Registrations return through the OpenHouseModal to /api/leads as open_house_ leads. The final registration URL is still a placeholder, shown as [reg link].",
+      "detail": "",
+      "tags": [
+        "link",
+        "where",
+        "registration",
+        "utm"
+      ],
+      "reference": "marketing/docs/open-house-playbook.html",
+      "reference_label": "open house playbook",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-29",
+      "domain": "marketing",
+      "category": "Post copy & CTAs",
+      "category_key": "copy",
+      "question": "Do you have a sample LinkedIn launch post?",
+      "answer": "Yes, in the Post Copy Bank. The recommended hook: AI is not replacing people. It is replacing people who never learned to build with it. Body contrasts AI users with AI builders, then invites the reader to the free Open House on July 16. CTA: reserve your free seat.",
+      "detail": "",
+      "tags": [
+        "sample",
+        "example",
+        "linkedin"
+      ],
+      "reference": "marketing/docs/post-copy-bank.html",
+      "reference_label": "post copy bank",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-30",
+      "domain": "marketing",
+      "category": "Hashtags",
+      "category_key": "hashtags",
+      "question": "What hashtags do we use on LinkedIn?",
+      "answer": "Three to five, tight: #AI #AIagents #FutureOfWork #Upskilling #Claude.",
+      "detail": "",
+      "tags": [
+        "linkedin",
+        "tags"
+      ],
+      "reference": "marketing/docs/hashtag-strategy.html",
+      "reference_label": "hashtag strategy",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-31",
+      "domain": "marketing",
+      "category": "Hashtags",
+      "category_key": "hashtags",
+      "question": "What hashtags do we use on X?",
+      "answer": "Two to three only: #AI #AIagents.",
+      "detail": "",
+      "tags": [
+        "x",
+        "twitter",
+        "tags"
+      ],
+      "reference": "marketing/docs/hashtag-strategy.html",
+      "reference_label": "hashtag strategy",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-32",
+      "domain": "marketing",
+      "category": "Hashtags",
+      "category_key": "hashtags",
+      "question": "What hashtags do we use on Instagram?",
+      "answer": "Six to eight in the first comment, not the caption: #AI #AIagents #BuildWithAI #Upskilling #CareerChange #Claude #FutureOfWork #LearnAI. Avoid hashtag walls.",
+      "detail": "",
+      "tags": [
+        "instagram",
+        "tags",
+        "first comment"
+      ],
+      "reference": "marketing/docs/hashtag-strategy.html",
+      "reference_label": "hashtag strategy",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-33",
+      "domain": "marketing",
+      "category": "Calendar & timing",
+      "category_key": "calendar",
+      "question": "When does each beat post?",
+      "answer": "Suggested and adjustable: Jul 7 Beat 1 launch, Jul 9 Beat 2, Jul 13 Beat 3 carousel, Jul 15 Beat 4 with 40 seats, Jul 16 Beat 5 plus a live-today story. Open House is Jul 16. An optional teaser can run Jul 2.",
+      "detail": "",
+      "tags": [
+        "schedule",
+        "when post",
+        "dates"
+      ],
+      "reference": "marketing/docs/content-calendar.html",
+      "reference_label": "content calendar",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-34",
+      "domain": "marketing",
+      "category": "Calendar & timing",
+      "category_key": "calendar",
+      "question": "What are the suggested posting times?",
+      "answer": "Placeholders tuned to a US working audience, roughly 8:30 to 11:30 in the morning, adjustable to your timezone and your own best windows. Times are suggestions, not locked.",
+      "detail": "",
+      "tags": [
+        "times",
+        "best time",
+        "when to post"
+      ],
+      "reference": "marketing/docs/content-calendar.html",
+      "reference_label": "content calendar",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-35",
+      "domain": "marketing",
+      "category": "Calendar & timing",
+      "category_key": "calendar",
+      "question": "When is the Open House and when does class start?",
+      "answer": "Open House is Thursday, July 16, 2026. Cohort 1 starts Thursday, July 23, 2026.",
+      "detail": "",
+      "tags": [
+        "open house date",
+        "kickoff date"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-36",
+      "domain": "marketing",
+      "category": "Creative & image specs",
+      "category_key": "creative",
+      "question": "What images do we need?",
+      "answer": "A user-versus-builder split graphic, a four-phase carousel, a 40-seats scarcity graphic, and a live-tomorrow story. Each comes with alt text and a one-line design note in the Creative and Image Ideas doc.",
+      "detail": "",
+      "tags": [
+        "images",
+        "visuals",
+        "what to make"
+      ],
+      "reference": "marketing/docs/creative-image-ideas.html",
+      "reference_label": "creative image ideas",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-37",
+      "domain": "marketing",
+      "category": "Creative & image specs",
+      "category_key": "creative",
+      "question": "What are the image specs per channel?",
+      "answer": "LinkedIn 1200x627, Instagram square 1080x1080, Instagram story 1080x1920, X 1600x900. Confirm against current platform guidance before final export.",
+      "detail": "",
+      "tags": [
+        "specs",
+        "sizes",
+        "dimensions"
+      ],
+      "reference": "marketing/docs/creative-image-ideas.html",
+      "reference_label": "creative image ideas",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-38",
+      "domain": "marketing",
+      "category": "Creative & image specs",
+      "category_key": "creative",
+      "question": "What is the alt-text rule?",
+      "answer": "Every image and every image idea needs alt text, and we never rely on color alone to carry meaning. Keep captions clean and put hashtags in the first comment on Instagram.",
+      "detail": "",
+      "tags": [
+        "alt text",
+        "accessibility"
+      ],
+      "reference": "marketing/docs/creative-image-ideas.html",
+      "reference_label": "creative image ideas",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-39",
+      "domain": "marketing",
+      "category": "Creative & image specs",
+      "category_key": "creative",
+      "question": "What goes in the carousel?",
+      "answer": "A cover slide, one slide per phase (Foundation, Your AI Team, Real World, Scale), and a CTA slide. The carousel is the Beat 3 see-what-you-will-build asset.",
+      "detail": "",
+      "tags": [
+        "carousel",
+        "slides",
+        "content"
+      ],
+      "reference": "marketing/docs/creative-image-ideas.html",
+      "reference_label": "creative image ideas",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-40",
+      "domain": "marketing",
+      "category": "Program facts",
+      "category_key": "program",
+      "question": "What is the AI Systems Architect Accelerator?",
+      "answer": "A 12-week, implementation-focused program that moves people from AI consumer to AI builder. You learn with Claude and modern AI agents, build real systems, and finish with a deployed system, a portfolio, and the Anthropic Architect certification.",
+      "detail": "",
+      "tags": [
+        "what is it",
+        "program",
+        "overview"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-41",
+      "domain": "marketing",
+      "category": "Program facts",
+      "category_key": "program",
+      "question": "Who is it for?",
+      "answer": "Working professionals, career changers, builders, and technical professionals who want to build with AI rather than just use it. Confirm specific prerequisites against the program team before quoting them.",
+      "detail": "",
+      "tags": [
+        "who is it for",
+        "audience",
+        "prerequisites"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-42",
+      "domain": "marketing",
+      "category": "Program facts",
+      "category_key": "program",
+      "question": "How long is it and how is it structured?",
+      "answer": "12 weeks, in four phases: Weeks 1-3 Build Your AI Foundation, Weeks 4-6 Create Your AI Team, Weeks 7-9 Connect AI To The Real World, Weeks 10-12 Design AI That Scales.",
+      "detail": "",
+      "tags": [
+        "how long",
+        "structure",
+        "weeks"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-43",
+      "domain": "marketing",
+      "category": "Program facts",
+      "category_key": "program",
+      "question": "What are the four phases?",
+      "answer": "Build Your AI Foundation, Create Your AI Team, Connect AI To The Real World, and Design AI That Scales. The Open House walks attendees through this journey in detail.",
+      "detail": "",
+      "tags": [
+        "phases",
+        "journey",
+        "what you learn"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-44",
+      "domain": "marketing",
+      "category": "Program facts",
+      "category_key": "program",
+      "question": "Is there a certification?",
+      "answer": "Yes, the Anthropic Architect certification. Pair it with the powered by Anthropic + Claude Code co-brand when describing credibility.",
+      "detail": "",
+      "tags": [
+        "certification",
+        "credential",
+        "anthropic architect"
+      ],
+      "reference": "marketing/docs/faq-objections.html",
+      "reference_label": "faq objections",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-45",
+      "domain": "marketing",
+      "category": "Program facts",
+      "category_key": "program",
+      "question": "Do students really build with Claude?",
+      "answer": "Yes. Students build and deploy on real, live AI tools using Claude and modern AI agents and workflows. That is also why there are student-paid tool costs, disclosed before enrollment.",
+      "detail": "",
+      "tags": [
+        "claude",
+        "anthropic",
+        "tools",
+        "real"
+      ],
+      "reference": "marketing/docs/faq-objections.html",
+      "reference_label": "faq objections",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-46",
+      "domain": "marketing",
+      "category": "Pricing & student costs",
+      "category_key": "pricing",
+      "question": "What does it cost?",
+      "answer": "Founding pricing, confirmed by Ali on 2026-06-25, is $149/mo on the annual rate and $199/mo monthly. Pricing is revealed at the Open House, so keep it out of awareness posts and use it in reference and sales contexts only.",
+      "detail": "",
+      "tags": [
+        "price",
+        "cost",
+        "tuition",
+        "how much"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-47",
+      "domain": "marketing",
+      "category": "Pricing & student costs",
+      "category_key": "pricing",
+      "question": "When do we reveal pricing?",
+      "answer": "At the Open House. Awareness content, social posts, captions, and the calendar stay price-free and drive to the free event. Reference docs like the fact sheet and FAQ may state pricing, labeled as revealed at the Open House.",
+      "detail": "",
+      "tags": [
+        "when price",
+        "reveal",
+        "open house"
+      ],
+      "reference": "marketing/docs/faq-objections.html",
+      "reference_label": "faq objections",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-48",
+      "domain": "marketing",
+      "category": "Pricing & student costs",
+      "category_key": "pricing",
+      "question": "Are there extra costs students pay?",
+      "answer": "Yes, and they must be disclosed before enrollment. On top of the membership, students cover their own third-party tool costs, paid directly to providers: an Anthropic subscription for Claude Code at about $20/mo and LLM API usage, usually under $10/mo per project. These exist because students build on real, live AI tools.",
+      "detail": "",
+      "tags": [
+        "extra costs",
+        "api",
+        "claude code",
+        "tools",
+        "disclosure"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-49",
+      "domain": "marketing",
+      "category": "Pricing & student costs",
+      "category_key": "pricing",
+      "question": "How many founding seats are there?",
+      "answer": "40 founding seats, confirmed by Ali on 2026-06-25. An earlier email draft said 25; that is superseded. Use 40 everywhere and update any live post or email that still says 25.",
+      "detail": "",
+      "tags": [
+        "seats",
+        "founding cohort",
+        "how many",
+        "25 40"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-50",
+      "domain": "marketing",
+      "category": "KPIs & measurement",
+      "category_key": "measure",
+      "question": "What are the KPIs?",
+      "answer": "The funnel KPIs are Open House registrations, attendance rate, and Founding Cohort enrollment, supported by social reach, engagement, and click-through. Any specific numeric target is a placeholder until Ali sets it.",
+      "detail": "",
+      "tags": [
+        "kpis",
+        "metrics",
+        "targets"
+      ],
+      "reference": "marketing/docs/kpi-measurement.html",
+      "reference_label": "kpi measurement",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-51",
+      "domain": "marketing",
+      "category": "KPIs & measurement",
+      "category_key": "measure",
+      "question": "What is the UTM plan?",
+      "answer": "Tag every link to env.openHouseLandingUrl with source, medium, campaign, and content, plus campaign_id, so registrations attribute back to the right beat and channel. See the KPIs and Measurement doc for the parameter table.",
+      "detail": "",
+      "tags": [
+        "utm",
+        "tracking",
+        "attribution"
+      ],
+      "reference": "marketing/docs/kpi-measurement.html",
+      "reference_label": "kpi measurement",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-52",
+      "domain": "marketing",
+      "category": "KPIs & measurement",
+      "category_key": "measure",
+      "question": "How do we read results?",
+      "answer": "On a weekly read against the funnel: registrations to date, by channel and beat, then attendance and enrollment after the event. Use the dashboard table in the KPIs and Measurement doc; targets are confirmed by Ali, not assumed.",
+      "detail": "",
+      "tags": [
+        "read",
+        "review",
+        "weekly"
+      ],
+      "reference": "marketing/docs/kpi-measurement.html",
+      "reference_label": "kpi measurement",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-53",
+      "domain": "marketing",
+      "category": "Brand & voice rules",
+      "category_key": "brand",
+      "question": "What are the brand colors?",
+      "answer": "Cherry red #FB2832 is the primary accent and the constant. Leaf green #77BB4A signals growth. Berry blue #367895 is trust and links. Charts use the dedicated chart palette, never raw brand ramps.",
+      "detail": "",
+      "tags": [
+        "colors",
+        "palette",
+        "hex"
+      ],
+      "reference": "marketing/docs/brand-visual-style.html",
+      "reference_label": "brand visual style",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-54",
+      "domain": "marketing",
+      "category": "Brand & voice rules",
+      "category_key": "brand",
+      "question": "What are the voice rules?",
+      "answer": "Warm and credible, sentence case, speak to you, lead with proof, friendly calls to action. Plain and confident, never hype.",
+      "detail": "",
+      "tags": [
+        "voice",
+        "tone",
+        "how we sound"
+      ],
+      "reference": "marketing/docs/messaging-positioning.html",
+      "reference_label": "messaging positioning",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-55",
+      "domain": "marketing",
+      "category": "Brand & voice rules",
+      "category_key": "brand",
+      "question": "Can we use emoji or em-dashes?",
+      "answer": "No emoji anywhere, and no em-dash characters. Use periods or commas instead. These are firm brand rules and are baked into the campaign engine.",
+      "detail": "",
+      "tags": [
+        "emoji",
+        "em-dash",
+        "do not"
+      ],
+      "reference": "marketing/docs/brand-visual-style.html",
+      "reference_label": "brand visual style",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-56",
+      "domain": "marketing",
+      "category": "Brand & voice rules",
+      "category_key": "brand",
+      "question": "What are the logo rules?",
+      "answer": "Foreground inverts with the background and the cherry mark stays constant. Do not recolor the mark, and do not substitute Inter or Arial for the brand fonts. Full rules are in the Brand and Visual Style doc.",
+      "detail": "",
+      "tags": [
+        "logo",
+        "mark",
+        "inversion"
+      ],
+      "reference": "marketing/docs/brand-visual-style.html",
+      "reference_label": "brand visual style",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-57",
+      "domain": "marketing",
+      "category": "Open items & approvals",
+      "category_key": "approvals",
+      "question": "What is still needed before we can publish?",
+      "answer": "Four items: the Open House registration URL, the exact start time and timezone, the refund and cancellation terms, and a cleanup pass to change any 25-seat copy to 40 and scrub the stale 6/21 date from the live landing page and viral video.",
+      "detail": "",
+      "tags": [
+        "needs approval",
+        "before publishing",
+        "open items",
+        "blockers"
+      ],
+      "reference": "marketing/docs/launch-checklist.html",
+      "reference_label": "launch checklist",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-58",
+      "domain": "marketing",
+      "category": "Open items & approvals",
+      "category_key": "approvals",
+      "question": "Do we have the registration link?",
+      "answer": "Not yet. It comes from BC 9946499609 and is shown as the token [reg link] throughout the kit. Set env.openHouseLandingUrl once it exists; no copy change is needed beyond filling the token.",
+      "detail": "",
+      "tags": [
+        "registration link",
+        "url",
+        "reg link"
+      ],
+      "reference": "marketing/docs/launch-checklist.html",
+      "reference_label": "launch checklist",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-59",
+      "domain": "marketing",
+      "category": "Open items & approvals",
+      "category_key": "approvals",
+      "question": "Do we have the Open House start time?",
+      "answer": "Not yet. The exact start time and timezone are shown as [time + TZ]. Fill them in before the final reminder and any add-to-calendar links go out.",
+      "detail": "",
+      "tags": [
+        "time",
+        "start time",
+        "timezone"
+      ],
+      "reference": "marketing/docs/launch-checklist.html",
+      "reference_label": "launch checklist",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-60",
+      "domain": "marketing",
+      "category": "Open items & approvals",
+      "category_key": "approvals",
+      "question": "What is the refund policy?",
+      "answer": "Refund and cancellation terms are drafted and pending Ali's final approval. Do not quote specific terms yet. Treat this as needs approval and confirm before publishing anything that states a policy.",
+      "detail": "",
+      "tags": [
+        "refund",
+        "cancellation",
+        "guarantee",
+        "policy"
+      ],
+      "reference": "marketing/docs/faq-objections.html",
+      "reference_label": "faq objections",
+      "needs_verification": false
+    },
+    {
+      "id": "marketing-61",
+      "domain": "marketing",
+      "category": "Open items & approvals",
+      "category_key": "approvals",
+      "question": "Why do some materials say 25 seats?",
+      "answer": "An earlier email draft said 25 seats. Ali confirmed 40 on 2026-06-25, which supersedes it. This kit uses 40. Update the email and any already-published post to 40 for consistency.",
+      "detail": "",
+      "tags": [
+        "25",
+        "40",
+        "seats",
+        "discrepancy"
+      ],
+      "reference": "marketing/docs/program-fact-sheet.html",
+      "reference_label": "program fact sheet",
+      "needs_verification": false
+    },
+    {
+      "id": "design-1",
+      "domain": "design",
+      "category": "Overview & architecture",
+      "category_key": "overview",
+      "question": "What is the Colaberry Design System?",
+      "answer": "It is the brand turned into an executable UI language. The same tokens, colors, and components shown in the docs are the code that ships to production, so humans, developers, and AI agents all read from one source. Change a token and every surface updates.",
+      "detail": "It is a running, branded system, not a static style guide. Live docs are in design-system.html.",
+      "tags": [
+        "what",
+        "overview",
+        "executable",
+        "design system"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "design-2",
+      "domain": "design",
+      "category": "Overview & architecture",
+      "category_key": "overview",
+      "question": "Who owns it and how was it built?",
+      "answer": "Brand, design direction, and review are owned and directed by the designer, Mohammad Abdul Aleem (AI/UX Designer and Analyst). Claude ran as the executing agent for each step, from tracing the logo to building the tokens, components, and living docs.",
+      "detail": "",
+      "tags": [
+        "who",
+        "owner",
+        "aleem",
+        "claude",
+        "built"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "design-3",
+      "domain": "design",
+      "category": "Overview & architecture",
+      "category_key": "overview",
+      "question": "Where does the design system live and what is the source of truth?",
+      "answer": "The repo is github.com/aleemcolaberry/colaberry-design-system, mirrored here under the design section. BRAND.md plus the assets folder are the designer source of truth; the living guide is design-system.html; the agent entry point is the colaberry-design skill (SKILL.md).",
+      "detail": "",
+      "tags": [
+        "source of truth",
+        "where",
+        "github",
+        "repo"
+      ],
+      "reference": "design/design-system.html",
+      "reference_label": "Design system guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-4",
+      "domain": "design",
+      "category": "Overview & architecture",
+      "category_key": "overview",
+      "question": "What is the three-layer architecture?",
+      "answer": "Design layer: BRAND.md plus assets (logo, fonts), where the designer edits. Code layer: styles.css, the tokens files, and the components bundle a developer imports. Agent layer: SKILL.md, the living docs, and IMPLEMENTATION.md, which an AI agent reads to generate on-brand UI.",
+      "detail": "",
+      "tags": [
+        "architecture",
+        "layers",
+        "design",
+        "code",
+        "agent"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "design-5",
+      "domain": "design",
+      "category": "Overview & architecture",
+      "category_key": "overview",
+      "question": "How many design tokens are there?",
+      "answer": "245 design tokens, light and dark, each a semantic CSS variable. They are exported as tokens.json for Style Dictionary, Figma Tokens, or Tailwind.",
+      "detail": "",
+      "tags": [
+        "tokens",
+        "count",
+        "tokens.json"
+      ],
+      "reference": "design/design-system.html",
+      "reference_label": "Design system guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-6",
+      "domain": "design",
+      "category": "Overview & architecture",
+      "category_key": "overview",
+      "question": "What license is it under?",
+      "answer": "Source code is MIT. Roboto and Roboto Mono use Apache License 2.0; Quicksand uses the SIL Open Font License 1.1. The Colaberry logo and brand assets are owned by Colaberry; use outside Colaberry needs permission.",
+      "detail": "",
+      "tags": [
+        "license",
+        "mit",
+        "fonts"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "design-7",
+      "domain": "design",
+      "category": "Color",
+      "category_key": "color",
+      "question": "What are the brand colors?",
+      "answer": "Cherry red #FB2832 is the primary action color and the constant accent. Leaf green #77BB4A is growth and the secondary. Berry blue #367895 is trust, links, and the wordmark.",
+      "detail": "Each has a 10-step ramp plus semantic aliases. The cherry accent never changes across light and dark.",
+      "tags": [
+        "colors",
+        "palette",
+        "cherry",
+        "leaf",
+        "berry",
+        "hex"
+      ],
+      "reference": "design/design-system.html#colors",
+      "reference_label": "Color tokens",
+      "needs_verification": false
+    },
+    {
+      "id": "design-8",
+      "domain": "design",
+      "category": "Color",
+      "category_key": "color",
+      "question": "How do I use color correctly?",
+      "answer": "Always reference semantic tokens like --brand-accent, --surface-page, --text-strong, and --border-default, never raw hex ramp values. The semantic layer is what adapts across themes.",
+      "detail": "",
+      "tags": [
+        "semantic tokens",
+        "how to use",
+        "no hex"
+      ],
+      "reference": "design/design-system.html#colors",
+      "reference_label": "Color tokens",
+      "needs_verification": false
+    },
+    {
+      "id": "design-9",
+      "domain": "design",
+      "category": "Color",
+      "category_key": "color",
+      "question": "Is there a dark mode?",
+      "answer": "Yes. Set data-theme=\"dark\" on the html element. The foreground inverts with the background and the cherry accent stays constant; green and blue are nudged lighter for contrast.",
+      "detail": "",
+      "tags": [
+        "dark mode",
+        "theme"
+      ],
+      "reference": "design/design-system.html#colors",
+      "reference_label": "Color tokens",
+      "needs_verification": false
+    },
+    {
+      "id": "design-10",
+      "domain": "design",
+      "category": "Color",
+      "category_key": "color",
+      "question": "What palette should charts use?",
+      "answer": "Use the dedicated data-visualization palette, never raw brand ramps for series. Categorical: --chart-1 through --chart-8 in order, tuned for adjacent separation and color-blind safety. Sequential: --seq-1 to --seq-6. Diverging: --div-neg-2 through --div-pos-2. All adapt in dark mode.",
+      "detail": "",
+      "tags": [
+        "charts",
+        "data viz",
+        "palette",
+        "color-blind"
+      ],
+      "reference": "design/design-system.html#colors",
+      "reference_label": "Color tokens",
+      "needs_verification": false
+    },
+    {
+      "id": "design-11",
+      "domain": "design",
+      "category": "Typography",
+      "category_key": "typography",
+      "question": "What fonts does the brand use?",
+      "answer": "Roboto for display (Bold) and body (Regular). Roboto Mono for code, metrics, and tabular data. Quicksand for the logotype only, never for UI.",
+      "detail": "",
+      "tags": [
+        "fonts",
+        "roboto",
+        "quicksand",
+        "mono"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-12",
+      "domain": "design",
+      "category": "Typography",
+      "category_key": "typography",
+      "question": "What is the type scale?",
+      "answer": "H1 48, H2 36, H3 28, H4 22, body 18, caption 14.",
+      "detail": "",
+      "tags": [
+        "type scale",
+        "sizes",
+        "h1",
+        "body"
+      ],
+      "reference": "design/design-system.html",
+      "reference_label": "Design system guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-13",
+      "domain": "design",
+      "category": "Typography",
+      "category_key": "typography",
+      "question": "Are there any type don'ts?",
+      "answer": "Do not substitute Inter or Arial for Roboto in final work, and do not set the wordmark in any font other than Quicksand.",
+      "detail": "",
+      "tags": [
+        "dont",
+        "substitutes",
+        "inter",
+        "arial"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-14",
+      "domain": "design",
+      "category": "Logo",
+      "category_key": "logo",
+      "question": "What is the logo?",
+      "answer": "The mark is two cherries on a shared stem forming the C of Colaberry, signaling growth, pairs, and collaboration. The wordmark sets olaberry in Quicksand with a green to blue gradient. Files live in assets/logo, including color, mono-white, and mono-black marks plus a full favicon, app-icon, and OG export set.",
+      "detail": "",
+      "tags": [
+        "logo",
+        "mark",
+        "wordmark",
+        "cherries"
+      ],
+      "reference": "design/design-system.html",
+      "reference_label": "Design system guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-15",
+      "domain": "design",
+      "category": "Logo",
+      "category_key": "logo",
+      "question": "What is the logo inversion rule?",
+      "answer": "Foreground inverts with the background; the cherry red stays constant. Light background: full-color or black mark. Dark, photo, or cherry background: the white mark.",
+      "detail": "",
+      "tags": [
+        "inversion",
+        "white mark",
+        "background"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-16",
+      "domain": "design",
+      "category": "Logo",
+      "category_key": "logo",
+      "question": "What are the clear space and minimum size rules?",
+      "answer": "Keep clear space equal to the cherry-mark height on all sides. Minimum size is 120px wide for the horizontal lockup and 24px for the mark alone.",
+      "detail": "",
+      "tags": [
+        "clear space",
+        "minimum size"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-17",
+      "domain": "design",
+      "category": "Logo",
+      "category_key": "logo",
+      "question": "What are the logo don'ts?",
+      "answer": "Never recolor the cherries, never add gradients or shadows to the mark, and never re-set the wordmark in another font.",
+      "detail": "",
+      "tags": [
+        "dont",
+        "recolor",
+        "gradient"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-18",
+      "domain": "design",
+      "category": "Iconography",
+      "category_key": "icons",
+      "question": "What icon set do we use?",
+      "answer": "RemixIcon is the standard set, loaded automatically via styles.css. Prefer the -line style to match the soft 2px brand look, and use -fill for emphasis. Lucide SVG icons are also supported inside the same wrapper. Never use emoji.",
+      "detail": "The colaberry-design skill notes Lucide as an option; BRAND.md sets RemixIcon as the default.",
+      "tags": [
+        "icons",
+        "remixicon",
+        "lucide",
+        "cb-i",
+        "emoji"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-19",
+      "domain": "design",
+      "category": "Iconography",
+      "category_key": "icons",
+      "question": "How do I place an icon correctly?",
+      "answer": "Wrap every icon in the .cb-i primitive, which guarantees a centered 1em box with no baseline gap; size it with font-size and color via currentColor. For a colored container, use .cb-icon-tile and resize with --tile.",
+      "detail": "",
+      "tags": [
+        "cb-i",
+        "tile",
+        "alignment",
+        "how to"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-20",
+      "domain": "design",
+      "category": "Components",
+      "category_key": "components",
+      "question": "What components are available?",
+      "answer": "Twenty accessible primitives: Accordion, Avatar, Badge, Breadcrumb, Button, Card, Carousel, Checkbox, Dialog, Drawer, Input, Pagination, Popover, Progress, Skeleton, Switch, Table, Textarea, Toast, and Tooltip. All are live and interactive in the docs.",
+      "detail": "",
+      "tags": [
+        "components",
+        "list",
+        "primitives",
+        "20"
+      ],
+      "reference": "design/design-system.html#components",
+      "reference_label": "Live components",
+      "needs_verification": false
+    },
+    {
+      "id": "design-21",
+      "domain": "design",
+      "category": "Components",
+      "category_key": "components",
+      "question": "How do I use the components in code?",
+      "answer": "Link styles.css for tokens and fonts, then load _ds_bundle.js. The components are exposed on window.ColaberryDesignSystem_098454. Reference semantic tokens, support dark mode with data-theme, and follow IMPLEMENTATION.md for plain HTML, React, Vite, or Next.",
+      "detail": "",
+      "tags": [
+        "use",
+        "code",
+        "bundle",
+        "window"
+      ],
+      "reference": "design/IMPLEMENTATION.md",
+      "reference_label": "Implementation guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-22",
+      "domain": "design",
+      "category": "Components",
+      "category_key": "components",
+      "question": "What does each component ship with?",
+      "answer": "Each primitive ships as a .jsx component plus a .d.ts type file, a .prompt.md usage prompt, and a live card in the docs. Props are documented in the type file; usage is in the prompt file.",
+      "detail": "",
+      "tags": [
+        "component files",
+        "types",
+        "prompt",
+        "docs"
+      ],
+      "reference": "design/design-system.html#components",
+      "reference_label": "Live components",
+      "needs_verification": false
+    },
+    {
+      "id": "design-23",
+      "domain": "design",
+      "category": "Templates & UI kits",
+      "category_key": "templates",
+      "question": "What ready-made templates exist?",
+      "answer": "Fork-ready templates grouped by use case: Web (web page), Social (social post), Deck (deck slide), Print (brochure, one-pager, comparison sheet, certificate), Sales (case study, proposal or quote, business card), Email (email newsletter), and Event (event poster, standee). A WhatsApp kit and program-page template are also included.",
+      "detail": "",
+      "tags": [
+        "templates",
+        "starting points",
+        "brochure",
+        "one-pager",
+        "slide"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "design-24",
+      "domain": "design",
+      "category": "Templates & UI kits",
+      "category_key": "templates",
+      "question": "Is there a UI kit?",
+      "answer": "Yes, a marketing-website UI kit with Home, Program, and Enroll screens, composed only from the components. It doubles as a worked example of the system in use.",
+      "detail": "",
+      "tags": [
+        "ui kit",
+        "marketing website",
+        "home",
+        "program",
+        "enroll"
+      ],
+      "reference": "design/ui_kits/marketing-website/index.html",
+      "reference_label": "Marketing website kit",
+      "needs_verification": false
+    },
+    {
+      "id": "design-25",
+      "domain": "design",
+      "category": "Motion",
+      "category_key": "motion",
+      "question": "What are the motion principles?",
+      "answer": "Motion is functional, not decorative: it confirms an action, guides the eye, or softens a change. It is purposeful, quick (140 to 360ms), gentle (ease-out), and accessible. Never use linear easing or hard bounces, and wrap non-essential motion so it collapses under prefers-reduced-motion.",
+      "detail": "",
+      "tags": [
+        "motion",
+        "principles",
+        "functional"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-26",
+      "domain": "design",
+      "category": "Motion",
+      "category_key": "motion",
+      "question": "What motion tokens exist?",
+      "answer": "Easing: --ease-out (default), --ease-emphasized (big moments), --ease-spring (confirmations), --ease-in (exits), --ease-in-out, and --ease-standard. Duration: --dur-instant 90ms, --dur-fast 140ms, --dur-base 220ms, --dur-slow 360ms, --dur-slower 560ms. Recipes include fade-and-rise enter, staggered sequences, overlay scale, spring confirm, shimmer loading, and fade-and-fall exit.",
+      "detail": "",
+      "tags": [
+        "tokens",
+        "easing",
+        "duration"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-27",
+      "domain": "design",
+      "category": "Accessibility",
+      "category_key": "a11y",
+      "question": "What are the accessibility rules?",
+      "answer": "Built to WCAG 2.2. Body text on white uses neutral-800 (13.6:1) or text-muted (5.3:1). Links use blue-600 (6.0:1). Green text uses green-700 or darker. Cherry and leaf are accent and large-text colors only, never small body text. Every interactive element shows a visible 3px berry-blue focus ring.",
+      "detail": "",
+      "tags": [
+        "accessibility",
+        "wcag",
+        "contrast",
+        "focus"
+      ],
+      "reference": "design/design-system.html#a11y",
+      "reference_label": "WCAG audit",
+      "needs_verification": false
+    },
+    {
+      "id": "design-28",
+      "domain": "design",
+      "category": "Accessibility",
+      "category_key": "a11y",
+      "question": "Where is the contrast audit?",
+      "answer": "In the living docs at design-system.html under the accessibility section. It covers the WCAG 2.2 contrast audit plus guidance beyond contrast: keyboard, focus, touch targets, and semantics.",
+      "detail": "",
+      "tags": [
+        "audit",
+        "where",
+        "keyboard",
+        "touch"
+      ],
+      "reference": "design/design-system.html#a11y",
+      "reference_label": "WCAG audit",
+      "needs_verification": false
+    },
+    {
+      "id": "design-29",
+      "domain": "design",
+      "category": "Voice",
+      "category_key": "voice",
+      "question": "What is the brand voice?",
+      "answer": "Warm and credible. Sentence case. Speak to you. Lead with proof, such as 5,000+ careers since 2012. Use friendly action CTAs like Apply now and Enroll today. No emoji in product or web. Reinforce inclusivity: no degree or tests required, scholarships, and veterans support.",
+      "detail": "",
+      "tags": [
+        "voice",
+        "tone",
+        "sentence case",
+        "no emoji",
+        "proof"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-30",
+      "domain": "design",
+      "category": "Using & prompting it",
+      "category_key": "usage",
+      "question": "How do I install it in a project?",
+      "answer": "Add the stylesheet and component bundle: link styles.css for tokens and fonts, then load _ds_bundle.js for the components. Reference semantic tokens like var(--brand-accent), and set data-theme=\"dark\" for dark mode. Full steps for plain HTML, React, Vite, and Next are in IMPLEMENTATION.md.",
+      "detail": "",
+      "tags": [
+        "install",
+        "link",
+        "styles.css",
+        "bundle"
+      ],
+      "reference": "design/IMPLEMENTATION.md",
+      "reference_label": "Implementation guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-31",
+      "domain": "design",
+      "category": "Using & prompting it",
+      "category_key": "usage",
+      "question": "How do I run it locally?",
+      "answer": "There is no build step; any static server works. Clone the repo and run npm start, which serves the folder. Open index.html for the landing page or design-system.html for the full living system.",
+      "detail": "",
+      "tags": [
+        "run",
+        "local",
+        "no build",
+        "serve"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "design-32",
+      "domain": "design",
+      "category": "Using & prompting it",
+      "category_key": "usage",
+      "question": "How should a marketer prompt Claude to use the system?",
+      "answer": "Start with: Using the Colaberry design system, then answer four things: what you want (post, flyer, email header, slide), the size if it matters, the words (headline, subtext, CTA), and the vibe or program. Ask for 3 options. Claude returns a downloadable HTML file; you never touch code.",
+      "detail": "",
+      "tags": [
+        "prompt",
+        "marketing",
+        "non-technical",
+        "claude"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-33",
+      "domain": "design",
+      "category": "Using & prompting it",
+      "category_key": "usage",
+      "question": "How should a developer prompt Claude to use the system?",
+      "answer": "Tell Claude to link styles.css, use the design-system components from window.ColaberryDesignSystem_098454, reference semantic tokens rather than raw hex, support dark mode, and honor the accessibility rules. Start the prompt with: Using the Colaberry design system.",
+      "detail": "",
+      "tags": [
+        "prompt",
+        "developer",
+        "components",
+        "tokens"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-34",
+      "domain": "design",
+      "category": "Using & prompting it",
+      "category_key": "usage",
+      "question": "Can a non-technical marketer use it?",
+      "answer": "Yes. Ask in plain English and Claude hands back a finished HTML file you can preview and download, such as a social post, flyer, email header, one-pager, slide, or ad. Name the lead brand color (cherry for energy, leaf for growth, berry for trust), keep the voice warm and emoji-free, and ask for options to choose from.",
+      "detail": "",
+      "tags": [
+        "non-technical",
+        "marketer",
+        "plain english"
+      ],
+      "reference": "design/BRAND.md",
+      "reference_label": "Brand guide",
+      "needs_verification": false
+    },
+    {
+      "id": "design-35",
+      "domain": "design",
+      "category": "Roadmap & governance",
+      "category_key": "roadmap",
+      "question": "What is coming next for the design system?",
+      "answer": "The 30-day foundation shipped. Next at 60 days: a Storybook, a publishable @colaberry/design-system npm package, a machine-readable LLM component manifest, self-hosted fonts, and a second UI kit. At 90 days: an MCP server exposing the manifest so any Claude session can pull the system in-IDE, quality gates, a contribution workflow, and a first product integration.",
+      "detail": "",
+      "tags": [
+        "roadmap",
+        "next",
+        "npm",
+        "manifest",
+        "mcp"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "design-36",
+      "domain": "design",
+      "category": "Roadmap & governance",
+      "category_key": "roadmap",
+      "question": "What are the quality gates?",
+      "answer": "Five gates: token lint (catches hardcoded hex or spacing), accessibility with axe (contrast, focus, labels), visual regression (UI drift), security (unsafe inputs, vulnerable deps), and designer signoff in PR review (pattern fit and UX intent).",
+      "detail": "",
+      "tags": [
+        "quality gates",
+        "lint",
+        "a11y",
+        "review"
+      ],
+      "reference": "design/readme.md",
+      "reference_label": "Repo readme",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-1",
+      "domain": "curriculum",
+      "category": "Overview & philosophy",
+      "category_key": "overview",
+      "question": "What is the AI Systems Architect Accelerator curriculum?",
+      "answer": "It is a 12-week, project-based program that moves you from AI consumer to AI builder, powered by Anthropic and Claude Code. You learn by building real systems rather than watching lectures, and the work is organized into four intensives that each end in something you have actually shipped.",
+      "detail": "",
+      "tags": [
+        "what",
+        "overview",
+        "12 weeks",
+        "project based"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-2",
+      "domain": "curriculum",
+      "category": "Overview & philosophy",
+      "category_key": "overview",
+      "question": "What is the teaching philosophy?",
+      "answer": "Learn with Claude, build through Colaberry, deploy in the real world. Every concept is paired with a hands-on build, and an internship and portfolio run alongside the classes so you apply each skill as you learn it instead of saving it for later.",
+      "detail": "",
+      "tags": [
+        "philosophy",
+        "approach",
+        "learn build deploy"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-3",
+      "domain": "curriculum",
+      "category": "Overview & philosophy",
+      "category_key": "overview",
+      "question": "Who is the curriculum built for?",
+      "answer": "Working professionals, career changers, builders, and technical professionals who want to go from using AI to architecting it. No degree and no tests are required to begin, and the difficulty ramps as your foundation grows.",
+      "detail": "",
+      "tags": [
+        "who for",
+        "working professionals",
+        "career changers"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-4",
+      "domain": "curriculum",
+      "category": "The four intensives",
+      "category_key": "intensives",
+      "question": "What are the four intensives?",
+      "answer": "Build your AI foundation (weeks 1 to 3), create your AI team (weeks 4 to 6), connect AI to the real world (weeks 7 to 9), and design AI that scales (weeks 10 to 12). Each intensive builds on the one before it, finishing with a capstone you present at the Architect Expo.",
+      "detail": "The four intensives are the spine of the program; the project, internship, certification, and portfolio lanes run in parallel around them.",
+      "tags": [
+        "structure",
+        "four intensives",
+        "weeks",
+        "phases"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-5",
+      "domain": "curriculum",
+      "category": "The four intensives",
+      "category_key": "intensives",
+      "question": "What happens in intensive one, build your AI foundation?",
+      "answer": "Weeks 1 to 3 give you a working foundation with Claude Code: the fundamentals of Claude Code, building your first agent skills, and using the Claude API to stand up a simple workflow assistant. You finish able to build and run basic AI workflows yourself.",
+      "detail": "",
+      "tags": [
+        "intensive 1",
+        "foundation",
+        "claude code",
+        "agent skills",
+        "api"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-6",
+      "domain": "curriculum",
+      "category": "The four intensives",
+      "category_key": "intensives",
+      "question": "What happens in intensive two, create your AI team?",
+      "answer": "Weeks 4 to 6 are about getting multiple agents to work together: prompt engineering, the Model Context Protocol and advanced MCP, and subagents and multi-agent patterns. You learn to design an AI team, not just a single assistant.",
+      "detail": "",
+      "tags": [
+        "intensive 2",
+        "ai team",
+        "prompt engineering",
+        "mcp",
+        "subagents"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-7",
+      "domain": "curriculum",
+      "category": "The four intensives",
+      "category_key": "intensives",
+      "question": "What happens in intensive three, connect AI to the real world?",
+      "answer": "Weeks 7 to 9 connect your agents to real systems through workflows and automation, with a focus on reliability, so your AI does dependable work against real data and tools instead of one-off demos.",
+      "detail": "",
+      "tags": [
+        "intensive 3",
+        "real world",
+        "workflows",
+        "automation",
+        "reliability"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-8",
+      "domain": "curriculum",
+      "category": "The four intensives",
+      "category_key": "intensives",
+      "question": "What happens in intensive four, design AI that scales?",
+      "answer": "Weeks 10 to 12 take you to architect level: governance, systems architecture, and a capstone you present at the Architect Expo. You leave with a real, scaled system and the judgment to design more like it.",
+      "detail": "",
+      "tags": [
+        "intensive 4",
+        "scale",
+        "governance",
+        "architecture",
+        "capstone",
+        "expo"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-9",
+      "domain": "curriculum",
+      "category": "Tools & skills you build",
+      "category_key": "skills",
+      "question": "What tools and skills will I learn?",
+      "answer": "Claude Code, the Claude API, agent skills, the Model Context Protocol and multi-agent orchestration with subagents, workflow automation, and the reliability, governance, and systems-architecture practices that hold real AI systems together.",
+      "detail": "",
+      "tags": [
+        "tools",
+        "claude code",
+        "mcp",
+        "claude api",
+        "skills list"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-10",
+      "domain": "curriculum",
+      "category": "Tools & skills you build",
+      "category_key": "skills",
+      "question": "Do I need to be a programmer to keep up?",
+      "answer": "No. The program is built so working professionals and career changers can learn to build with AI. You work hands-on with Claude Code from week one, and each intensive layers on the next skill as your foundation grows.",
+      "detail": "",
+      "tags": [
+        "programmer",
+        "coding",
+        "non technical",
+        "ramp"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-11",
+      "domain": "curriculum",
+      "category": "Tools & skills you build",
+      "category_key": "skills",
+      "question": "What does building with Claude actually look like week to week?",
+      "answer": "You use Claude Code as your building environment from the start, then add agent skills, the Claude API, and MCP so your agents can use real tools and data. By the capstone you are orchestrating several agents into a system that does real work.",
+      "detail": "",
+      "tags": [
+        "building",
+        "what it looks like",
+        "hands on",
+        "capstone"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-12",
+      "domain": "curriculum",
+      "category": "Project, internship & portfolio",
+      "category_key": "experience",
+      "question": "What runs alongside the classes?",
+      "answer": "Four lanes run in parallel and schedule around your fixed class times: a guided project build, a full-time internship, certification prep, and a portfolio you grow the whole way through. The classes teach the skill, and the lanes are where you apply it.",
+      "detail": "",
+      "tags": [
+        "lanes",
+        "parallel",
+        "project",
+        "internship",
+        "portfolio"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-13",
+      "domain": "curriculum",
+      "category": "Project, internship & portfolio",
+      "category_key": "experience",
+      "question": "Tell me about the internship.",
+      "answer": "A full-time internship runs alongside the program so you are applying what you learn on real work, not just exercises. It is one of the parallel lanes that schedule around your classes.",
+      "detail": "",
+      "tags": [
+        "internship",
+        "real work",
+        "full time"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-14",
+      "domain": "curriculum",
+      "category": "Project, internship & portfolio",
+      "category_key": "experience",
+      "question": "What do I leave the program with?",
+      "answer": "A portfolio of real systems you built, a capstone you present at the Architect Expo, internship experience, and certification prep, all pointed at being able to architect AI systems in the real world.",
+      "detail": "",
+      "tags": [
+        "portfolio",
+        "outcome",
+        "leave with",
+        "proof"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-15",
+      "domain": "curriculum",
+      "category": "Levels & progression",
+      "category_key": "levels",
+      "question": "How does progression through the program work?",
+      "answer": "You move through four levels as you build: apprentice, builder, architect, and principal architect. The levels track real capability, from running your first agent to designing systems that scale.",
+      "detail": "",
+      "tags": [
+        "levels",
+        "progression",
+        "apprentice",
+        "builder",
+        "architect",
+        "principal"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-16",
+      "domain": "curriculum",
+      "category": "Certification",
+      "category_key": "certification",
+      "question": "What certification do I work toward?",
+      "answer": "You prepare for the Anthropic Architect certification. Certification prep is one of the lanes that runs alongside the program, so you are getting ready for it as you build.",
+      "detail": "",
+      "tags": [
+        "certification",
+        "anthropic",
+        "architect",
+        "credential"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-17",
+      "domain": "curriculum",
+      "category": "Format, schedule & dates",
+      "category_key": "logistics",
+      "question": "How long is the program and what is the format?",
+      "answer": "Twelve weeks, project-based, delivered through live online classes, with the parallel project, internship, certification, and portfolio lanes running around them.",
+      "detail": "",
+      "tags": [
+        "length",
+        "format",
+        "online",
+        "live classes"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-18",
+      "domain": "curriculum",
+      "category": "Format, schedule & dates",
+      "category_key": "logistics",
+      "question": "When does it start?",
+      "answer": "The free Open House is Thursday, July 16, 2026, and the first Founding Cohort class is Thursday, July 23, 2026. The Open House comes one week before the cohort it feeds, so you can see the program before you commit.",
+      "detail": "",
+      "tags": [
+        "dates",
+        "start",
+        "open house",
+        "kickoff",
+        "july"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-19",
+      "domain": "curriculum",
+      "category": "Format, schedule & dates",
+      "category_key": "logistics",
+      "question": "What is included and what does it cost to join?",
+      "answer": "All four intensives, certification prep, the full-time internship, and the guided portfolio are included in the Colaberry AI Membership. The founding rate is $149 a month billed annually, or $199 a month month to month. You also cover your own third-party tool costs, an Anthropic subscription for Claude Code (about $20 a month) and light LLM API usage (most projects under $10 a month), paid directly to those providers.",
+      "detail": "",
+      "tags": [
+        "cost",
+        "included",
+        "membership",
+        "price",
+        "tool costs"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-1",
+      "domain": "product",
+      "category": "The student platform",
+      "category_key": "platform",
+      "question": "What is the student platform?",
+      "answer": "The Accelerator runs on Colaberry's online student platform. It is where you take the live classes, follow the curriculum, track your progress through the levels, and do the program end to end, all from your browser.",
+      "detail": "",
+      "tags": [
+        "platform",
+        "what",
+        "student",
+        "online"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-2",
+      "domain": "product",
+      "category": "The student platform",
+      "category_key": "platform",
+      "question": "Where and how do I access the program?",
+      "answer": "Everything is online. You join the live classes and use the platform from any modern browser, so you can take part from anywhere.",
+      "detail": "",
+      "tags": [
+        "access",
+        "where",
+        "anywhere",
+        "browser"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-3",
+      "domain": "product",
+      "category": "The student platform",
+      "category_key": "platform",
+      "question": "Is the platform built on the Colaberry design system?",
+      "answer": "Yes. The platform and the program materials use the Colaberry design system, the same brand and component language documented in the Design section of this knowledge base, so everything feels like one product.",
+      "detail": "",
+      "tags": [
+        "design system",
+        "brand",
+        "look"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-4",
+      "domain": "product",
+      "category": "The membership & what's included",
+      "category_key": "membership",
+      "question": "What is the Colaberry AI Membership?",
+      "answer": "It is the product that gives you the full AI Systems Architect Accelerator: all four intensives, certification prep, the full-time internship, and a guided portfolio, with no separate course fees. The membership is the program.",
+      "detail": "",
+      "tags": [
+        "membership",
+        "what is",
+        "full program",
+        "included"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-5",
+      "domain": "product",
+      "category": "The membership & what's included",
+      "category_key": "membership",
+      "question": "What are the plans and pricing?",
+      "answer": "Two plans. $149 a month billed annually, the founding rate that locks for the life of your membership, or $199 a month month to month, which you can cancel anytime. The Founding Cohort is the first cohort at the locked founding rate.",
+      "detail": "",
+      "tags": [
+        "pricing",
+        "plans",
+        "founding",
+        "149",
+        "199"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-6",
+      "domain": "product",
+      "category": "The membership & what's included",
+      "category_key": "membership",
+      "question": "Is there still a separate per-course or bundle fee?",
+      "answer": "No. The membership replaced the older per-intensive and bundle pricing. One membership covers the whole program.",
+      "detail": "",
+      "tags": [
+        "bundle",
+        "per course",
+        "499",
+        "1497",
+        "replaced"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-7",
+      "domain": "product",
+      "category": "Membership tracks",
+      "category_key": "tracks",
+      "question": "Are there different paths for different starting points?",
+      "answer": "Yes. There are membership paths for working professionals, for beginners, and for builders, so the on-ramp matches where you are starting from. All paths lead into the same Accelerator.",
+      "detail": "",
+      "tags": [
+        "personas",
+        "tracks",
+        "beginners",
+        "builders",
+        "professionals"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-8",
+      "domain": "product",
+      "category": "AI tools & costs",
+      "category_key": "tools",
+      "question": "What AI tools will I use, and what do they cost?",
+      "answer": "You build with Claude Code and the Claude API throughout the program. Those are third-party tools you pay for directly: an Anthropic subscription for Claude Code is about $20 a month, and your own LLM API usage is usually under $10 a month per project. Colaberry discloses these before you enroll, and they are on top of your membership.",
+      "detail": "",
+      "tags": [
+        "tools",
+        "claude code",
+        "api",
+        "costs",
+        "third party"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-9",
+      "domain": "product",
+      "category": "AI tools & costs",
+      "category_key": "tools",
+      "question": "Why does Colaberry build the program on Claude and Anthropic?",
+      "answer": "The Accelerator is powered by Anthropic and Claude Code, so you learn on the same tools professionals use to build real AI systems. That is also why you work toward the Anthropic Architect certification.",
+      "detail": "",
+      "tags": [
+        "why claude",
+        "anthropic",
+        "powered by"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "product-10",
+      "domain": "product",
+      "category": "Getting started",
+      "category_key": "access",
+      "question": "How do I get started?",
+      "answer": "Start at the free Open House on Thursday, July 16, 2026 to see the program, then join the Founding Cohort, which begins Thursday, July 23, 2026. You reserve a free Open House seat first, then enroll.",
+      "detail": "",
+      "tags": [
+        "start",
+        "open house",
+        "enroll",
+        "first step"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-1",
+      "domain": "compliance",
+      "category": "Credentials & regulation",
+      "category_key": "credentials",
+      "question": "Is Colaberry a regulated school?",
+      "answer": "Yes. Colaberry operates as a regulated Texas career school. The Colaberry School of Data Analytics holds a Texas Workforce Commission Certificate of Approval, school code U5306, first approved in 2018 and renewed since. Colaberry is an established institution, not a pop-up bootcamp.",
+      "detail": "The Certificate of Approval covers the data analytics school and its programs; it is the foundation of credibility the AI Systems Architect Accelerator is built on.",
+      "tags": [
+        "accredited",
+        "regulated",
+        "twc",
+        "coa",
+        "u5306"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-2",
+      "domain": "compliance",
+      "category": "Credentials & regulation",
+      "category_key": "credentials",
+      "question": "Who regulates career schools like Colaberry in Texas?",
+      "answer": "The Texas Workforce Commission, through its Career Schools and Colleges program, oversees licensed career schools in Texas, including reporting and student-protection requirements. Colaberry's data analytics school is approved under that framework.",
+      "detail": "",
+      "tags": [
+        "who regulates",
+        "texas workforce commission",
+        "oversight"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-3",
+      "domain": "compliance",
+      "category": "Track record",
+      "category_key": "track-record",
+      "question": "What is Colaberry's track record?",
+      "answer": "Colaberry has helped launch more than 5,000 careers since 2012. That track record, built over more than a decade, is the foundation the AI Systems Architect Accelerator stands on, not a single new course.",
+      "detail": "",
+      "tags": [
+        "track record",
+        "5000",
+        "careers",
+        "2012",
+        "proof"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-4",
+      "domain": "compliance",
+      "category": "Track record",
+      "category_key": "track-record",
+      "question": "How long has Colaberry been operating?",
+      "answer": "Since 2012. Over more than a decade Colaberry has built and run career programs and the regulated data analytics school behind them.",
+      "detail": "",
+      "tags": [
+        "how long",
+        "since 2012",
+        "established"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-5",
+      "domain": "compliance",
+      "category": "Student protections & support",
+      "category_key": "students",
+      "question": "Who can join, and are there barriers to entry?",
+      "answer": "No degree and no tests are required to begin. Colaberry is built around access, with scholarships and support for veterans, so motivated people can start regardless of background.",
+      "detail": "",
+      "tags": [
+        "barriers",
+        "no degree",
+        "scholarships",
+        "veterans",
+        "access"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-6",
+      "domain": "compliance",
+      "category": "Student protections & support",
+      "category_key": "students",
+      "question": "How are students protected?",
+      "answer": "As a regulated Texas career school, Colaberry operates under student-protection and reporting requirements. We also disclose costs up front, including the third-party tool costs you pay directly to providers, so there are no surprises after you enroll.",
+      "detail": "",
+      "tags": [
+        "protections",
+        "disclosure",
+        "costs up front"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-7",
+      "domain": "compliance",
+      "category": "How we communicate",
+      "category_key": "transparency",
+      "question": "How does Colaberry decide what it claims publicly?",
+      "answer": "We lead with proof and we do not invent facts, metrics, or outcomes. Where a detail is still being finalized, we say so plainly rather than state it as final.",
+      "detail": "",
+      "tags": [
+        "claims",
+        "honesty",
+        "proof",
+        "no invented facts"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "compliance-8",
+      "domain": "compliance",
+      "category": "How we communicate",
+      "category_key": "transparency",
+      "question": "Are the refund and cancellation terms final?",
+      "answer": "Not yet. The specific refund and cancellation terms are drafted and pending final approval, so we do not quote them as final. Ask at the Open House for the current terms before you enroll.",
+      "detail": "",
+      "tags": [
+        "refund",
+        "cancellation",
+        "terms",
+        "drafted",
+        "not final"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    }
+  ]
+}

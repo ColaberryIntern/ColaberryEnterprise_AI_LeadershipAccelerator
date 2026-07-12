@@ -11,6 +11,14 @@ interface LessonSummary {
   status: string;
 }
 
+interface CourseLinkInfo {
+  module_number: number;
+  provider: 'skilljar' | 'external_cert' | 'colaberry_original';
+  course_title: string | null;
+  course_url: string | null;
+  link_status: 'confirmed' | 'pending_confirmation' | 'not_applicable';
+}
+
 interface ModuleSummary {
   id: string;
   module_number: number;
@@ -20,6 +28,7 @@ interface ModuleSummary {
   total_lessons: number;
   completed_lessons: number;
   lessons: LessonSummary[];
+  course_link?: CourseLinkInfo | null;
 }
 
 interface CurriculumData {
@@ -95,6 +104,49 @@ function proficiencyColor(level: number): string {
   return '#ef4444';
 }
 
+// Per-week course CTA (deep-link delivery, BC decision 9985688697):
+//  - confirmed Skilljar / cert URL -> a real "open in new tab" link
+//  - pending_confirmation          -> a "coming soon" pill (no dead link shipped)
+//  - colaberry_original            -> a muted "original module" tag (no external course)
+function CourseLinkCta({ link }: { link?: CourseLinkInfo | null }) {
+  if (!link) return null;
+
+  if (link.link_status === 'pending_confirmation') {
+    return (
+      <span className="badge mt-2 d-inline-flex align-items-center" style={{ background: '#fffbeb', color: '#b45309', fontSize: 11, fontWeight: 600 }}>
+        <i className="bi bi-hourglass-split me-1"></i>Anthropic course link coming soon
+      </span>
+    );
+  }
+
+  if (link.provider === 'colaberry_original') {
+    return (
+      <span className="badge mt-2 d-inline-flex align-items-center" style={{ background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 11, fontWeight: 600 }}>
+        <i className="bi bi-stars me-1"></i>Colaberry-original module
+      </span>
+    );
+  }
+
+  if (link.link_status === 'confirmed' && link.course_url) {
+    const isCert = link.provider === 'external_cert';
+    return (
+      <a
+        href={link.course_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn btn-sm mt-2 d-inline-flex align-items-center gap-1"
+        style={{ background: isCert ? 'var(--color-success)' : 'var(--color-primary)', color: '#fff', fontSize: 12, fontWeight: 600, borderRadius: 6 }}
+        aria-label={`${isCert ? 'Go to certification exam' : 'Open course'}: ${link.course_title ?? ''} (opens in a new tab)`}
+      >
+        <i className={`bi ${isCert ? 'bi-patch-check' : 'bi-box-arrow-up-right'}`}></i>
+        {isCert ? 'Go to CCA-F exam' : 'Open course on Skilljar'}
+      </a>
+    );
+  }
+
+  return null;
+}
+
 function PortalCurriculumPage() {
   const [data, setData] = useState<CurriculumData | null>(null);
   const [genome, setGenome] = useState<SkillGenomeData | null>(null);
@@ -133,7 +185,7 @@ function PortalCurriculumPage() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: '#6366f1' }} role="status">
+        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -159,13 +211,13 @@ function PortalCurriculumPage() {
         <p className="text-muted small mb-1">
           <i className="bi bi-mortarboard me-1"></i>Personalized Curriculum
         </p>
-        <h1 className="h4 fw-bold" style={{ color: '#1e293b' }}>
+        <h1 className="h4 fw-bold" style={{ color: 'var(--color-text)' }}>
           AI Leadership Learning Path
         </h1>
       </div>
 
       {/* Progress Bar */}
-      <div className="card border-0 shadow-sm mb-4" style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' }}>
+      <div className="card border-0 shadow-sm mb-4" style={{ background: 'var(--color-primary)' }}>
         <div className="card-body py-3 text-white">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <span className="small fw-medium">Overall Progress</span>
@@ -187,7 +239,7 @@ function PortalCurriculumPage() {
       {/* Stats Row */}
       <div className="row g-3 mb-4">
         {[
-          { label: 'Skills / Modules', value: `${completedModules}`, sub: `of ${data.modules.length}`, icon: 'bi-layers', color: '#6366f1' },
+          { label: 'Skills / Modules', value: `${completedModules}`, sub: `of ${data.modules.length}`, icon: 'bi-layers', color: '#FB2832' },
           { label: 'Completion', value: `${Math.round(data.overall_progress)}%`, sub: `${data.completed_lessons} lessons`, icon: 'bi-graph-up-arrow', color: '#3b82f6' },
           { label: 'Lessons Done', value: `${data.completed_lessons}`, sub: `of ${data.total_lessons}`, icon: 'bi-check2-square', color: '#10b981' },
           { label: 'Time Remaining', value: `${data.hours_remaining}h`, sub: `${Math.round(data.hours_remaining * 60)} min`, icon: 'bi-clock', color: '#f59e0b' },
@@ -201,7 +253,7 @@ function PortalCurriculumPage() {
                 >
                   <i className={`bi ${card.icon}`} style={{ fontSize: 18, color: card.color }}></i>
                 </div>
-                <div className="fw-bold" style={{ fontSize: 22, color: '#1e293b' }}>{card.value}</div>
+                <div className="fw-bold" style={{ fontSize: 22, color: 'var(--color-text)' }}>{card.value}</div>
                 <div className="text-muted" style={{ fontSize: 11 }}>{card.sub}</div>
                 <div className="text-muted small">{card.label}</div>
               </div>
@@ -216,7 +268,7 @@ function PortalCurriculumPage() {
           {/* Module List */}
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-header bg-white border-bottom" style={{ padding: '12px 16px' }}>
-              <span className="fw-semibold small" style={{ color: '#1e293b' }}>
+              <span className="fw-semibold small" style={{ color: 'var(--color-text)' }}>
                 <i className="bi bi-collection me-2"></i>Modules
               </span>
             </div>
@@ -246,7 +298,7 @@ function PortalCurriculumPage() {
                             {mod.module_number}
                           </div>
                           <div>
-                            <div className="fw-semibold" style={{ fontSize: 13, color: '#1e293b' }}>{mod.title}</div>
+                            <div className="fw-semibold" style={{ fontSize: 13, color: 'var(--color-text)' }}>{mod.title}</div>
                             <div style={{ fontSize: 11, color: '#94a3b8' }}>{mod.completed_lessons}/{mod.total_lessons} lessons</div>
                           </div>
                         </div>
@@ -279,7 +331,7 @@ function PortalCurriculumPage() {
                               {(lesson.status === 'available' || lesson.status === 'in_progress') && (
                                 <button
                                   className="btn btn-sm px-2 py-0"
-                                  style={{ fontSize: 11, background: '#6366f1', color: '#fff', borderRadius: 4 }}
+                                  style={{ fontSize: 11, background: 'var(--color-primary)', color: '#fff', borderRadius: 4 }}
                                   onClick={(e) => { e.stopPropagation(); navigate(`/portal/curriculum/lessons/${lesson.id}`); }}
                                 >
                                   {lesson.status === 'in_progress' ? 'Continue' : 'Start'}
@@ -300,11 +352,11 @@ function PortalCurriculumPage() {
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-white border-bottom" style={{ padding: '12px 16px' }}>
               <div className="d-flex align-items-center justify-content-between">
-                <span className="fw-semibold small" style={{ color: '#1e293b' }}>
+                <span className="fw-semibold small" style={{ color: 'var(--color-text)' }}>
                   <i className="bi bi-diagram-3 me-2"></i>Skill Genome
                 </span>
                 {genome && (
-                  <span className="badge" style={{ background: '#eef2ff', color: '#6366f1', fontSize: 10 }}>
+                  <span className="badge" style={{ background: 'var(--color-primary-bg, rgba(251,40,50,0.08))', color: 'var(--color-primary)', fontSize: 10 }}>
                     {genome.skills_started}/{genome.total_skills} skills
                   </span>
                 )}
@@ -316,10 +368,10 @@ function PortalCurriculumPage() {
                   {/* Overall proficiency */}
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <span className="small" style={{ color: '#64748b' }}>Overall Proficiency</span>
-                    <span className="fw-bold small" style={{ color: '#6366f1' }}>{genome.overall_proficiency}%</span>
+                    <span className="fw-bold small" style={{ color: 'var(--color-primary)' }}>{genome.overall_proficiency}%</span>
                   </div>
                   <div className="progress mb-3" style={{ height: 6, background: '#f1f5f9', borderRadius: 3 }}>
-                    <div className="progress-bar" style={{ width: `${genome.overall_proficiency}%`, background: '#6366f1', borderRadius: 3 }}></div>
+                    <div className="progress-bar" style={{ width: `${genome.overall_proficiency}%`, background: 'var(--color-primary)', borderRadius: 3 }}></div>
                   </div>
 
                   {/* Layers as accordion */}
@@ -345,7 +397,7 @@ function PortalCurriculumPage() {
                             >
                               <div style={{ width: 8, height: 8, borderRadius: '50%', background: layerColor }}></div>
                             </div>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>{layer.name}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>{layer.name}</span>
                           </div>
                           <div className="d-flex align-items-center gap-2">
                             <span style={{ fontSize: 11, color: layerColor, fontWeight: 600 }}>
@@ -458,8 +510,9 @@ function PortalCurriculumPage() {
                         {SKILL_LABELS[activeModule.skill_area]}
                       </span>
                     </div>
-                    <h5 className="fw-bold mb-1" style={{ color: '#1e293b' }}>{activeModule.title}</h5>
+                    <h5 className="fw-bold mb-1" style={{ color: 'var(--color-text)' }}>{activeModule.title}</h5>
                     <p className="text-muted small mb-0">{activeModule.description}</p>
+                    <CourseLinkCta link={activeModule.course_link} />
                   </div>
                   <div className="text-end">
                     <div className="fw-bold" style={{ fontSize: 20, color: SKILL_COLORS[activeModule.skill_area] || '#6366f1' }}>
@@ -499,7 +552,7 @@ function PortalCurriculumPage() {
 
                           <div>
                             <div className="d-flex align-items-center gap-2 mb-1">
-                              <span className="fw-semibold" style={{ fontSize: 13, color: '#1e293b' }}>
+                              <span className="fw-semibold" style={{ fontSize: 13, color: 'var(--color-text)' }}>
                                 {lesson.title}
                               </span>
                             </div>
@@ -528,7 +581,7 @@ function PortalCurriculumPage() {
                             <button
                               className="btn btn-sm px-3"
                               style={{
-                                background: '#6366f1',
+                                background: 'var(--color-primary)',
                                 color: '#fff',
                                 borderRadius: 6,
                                 fontSize: 12,

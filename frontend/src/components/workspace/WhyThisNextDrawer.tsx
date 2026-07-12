@@ -55,7 +55,7 @@ const WhyThisNextDrawer: React.FC<Props> = ({ open, onClose }) => {
       subtitle={next.reason}
       footer={
         <>
-          <Link to="/portal/project/blueprint" onClick={onClose} className="btn btn-sm btn-primary" style={{ fontSize: 12 }}>
+          <Link to="/portal/project/blueprint" onClick={onClose} className="btn btn-sm" style={{ fontSize: 12, background: '#FB2832', color: '#fff', border: 'none' }}>
             <i className="bi bi-arrow-right me-1"></i>Open in Blueprint
           </Link>
         </>
@@ -67,10 +67,10 @@ const WhyThisNextDrawer: React.FC<Props> = ({ open, onClose }) => {
         </h6>
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7, color: 'var(--color-text)' }}>
           {reqKey && (
-            <li><strong>Requirement</strong>: <code style={{ fontSize: 11, color: 'var(--color-primary-light)', background: 'var(--color-bg-alt)', padding: '0.05rem 0.35rem', borderRadius: 3 }}>{reqKey}</code> has no linked artifact yet</li>
+            <li><strong>Requirement</strong>: <code style={{ fontSize: 11, color: '#C20E1E', background: 'var(--color-bg-alt)', padding: '0.05rem 0.35rem', borderRadius: 3 }}>{reqKey}</code> has no linked artifact yet</li>
           )}
           {actionType && (
-            <li><strong>Action type</strong>: <code style={{ fontSize: 11, color: 'var(--color-primary-light)', background: 'var(--color-bg-alt)', padding: '0.05rem 0.35rem', borderRadius: 3 }}>{actionType}</code></li>
+            <li><strong>Action type</strong>: <code style={{ fontSize: 11, color: '#C20E1E', background: 'var(--color-bg-alt)', padding: '0.05rem 0.35rem', borderRadius: 3 }}>{actionType}</code></li>
           )}
           <li><strong>Estimated time</strong>: {next.time_est_minutes ? `~${next.time_est_minutes} min` : 'not estimated'}</li>
           <li><strong>Blast radius</strong>: {next.blast_radius.band}{next.blast_radius.reason ? ` — ${next.blast_radius.reason}` : ''}</li>
@@ -112,7 +112,7 @@ const WhyThisNextDrawer: React.FC<Props> = ({ open, onClose }) => {
           <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {files.slice(0, 8).map(f => (
               <li key={f}>
-                <code style={{ fontSize: 11, color: 'var(--color-primary-light)', background: 'var(--color-bg-alt)', padding: '0.15rem 0.5rem', borderRadius: 3, display: 'inline-block', wordBreak: 'break-all' }}>{f}</code>
+                <code style={{ fontSize: 11, color: '#C20E1E', background: 'var(--color-bg-alt)', padding: '0.15rem 0.5rem', borderRadius: 3, display: 'inline-block', wordBreak: 'break-all' }}>{f}</code>
               </li>
             ))}
           </ul>

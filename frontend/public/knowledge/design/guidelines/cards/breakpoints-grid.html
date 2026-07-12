@@ -1,0 +1,31 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Breakpoints & grid" subtitle="Responsive breakpoints + 12-column layout grid" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 22px 26px; background: var(--surface-page); font-family: var(--font-body); }
+  .bps { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .bp { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 8px 14px; }
+  .bp b { display: block; font-size: 13px; color: var(--text-strong); }
+  .bp span { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; }
+  .col { height: 34px; background: var(--blue-100); border-radius: var(--radius-xs); }
+</style>
+</head>
+<body>
+  <div class="bps">
+    <div class="bp"><b>sm</b><span>640px</span></div>
+    <div class="bp"><b>md</b><span>768px</span></div>
+    <div class="bp"><b>lg</b><span>1024px</span></div>
+    <div class="bp"><b>xl</b><span>1280px</span></div>
+    <div class="bp"><b>2xl</b><span>1536px</span></div>
+  </div>
+  <div class="grid">
+    <div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div>
+    <div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div>
+    <div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div>
+  </div>
+</body>
+</html>

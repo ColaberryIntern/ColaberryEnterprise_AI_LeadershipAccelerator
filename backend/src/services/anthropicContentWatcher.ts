@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Op } from 'sequelize';
 import AnthropicContentRegistry, { ChangeSummary } from '../models/AnthropicContentRegistry';
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -160,7 +161,17 @@ export interface ContentWatcherRunResult {
 export async function runContentWatcher(): Promise<ContentWatcherRunResult> {
   log('info', 'run_start', {});
 
-  const rows = await AnthropicContentRegistry.findAll();
+  // Exclude content_type='course' rows: those are owned exclusively by
+  // anthropicCatalogScraper, which fingerprints the course OUTLINE into
+  // content_hash. This watcher fingerprints the FULL page body into the same
+  // content_hash column, so if it also touched course rows the two services
+  // would overwrite each other's hash every run and perpetually flip
+  // change_detected=true — firing false curriculum-change alerts. Course-page
+  // monitoring is intentionally outline-only (alert on real outline/link change,
+  // not arbitrary page churn); the scraper is the single writer for those rows.
+  const rows = await AnthropicContentRegistry.findAll({
+    where: { content_type: { [Op.ne]: 'course' } },
+  });
 
   if (rows.length === 0) {
     log('warn', 'registry_empty', { outcome: 'partial' });

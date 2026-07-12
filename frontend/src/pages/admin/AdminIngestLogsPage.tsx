@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
 interface IngestTailRow {
   id: string;
@@ -25,13 +26,15 @@ interface IngestStats {
   tail: IngestTailRow[];
 }
 
-function statusBadge(status: string) {
+// Map an ingest status to a StatusBadge tone (success / error->danger / pending->warning).
+type BadgeTone = 'success' | 'danger' | 'warning' | 'neutral';
+function statusTone(status: string): BadgeTone {
   switch (status) {
-    case 'accepted': return 'bg-success';
-    case 'rejected': return 'bg-warning text-dark';
-    case 'error':    return 'bg-danger';
-    case 'pending':  return 'bg-secondary';
-    default:         return 'bg-secondary';
+    case 'accepted': return 'success';
+    case 'rejected': return 'warning';
+    case 'error':    return 'danger';
+    case 'pending':  return 'neutral';
+    default:         return 'neutral';
   }
 }
 
@@ -59,6 +62,31 @@ export default function AdminIngestLogsPage() {
     return () => clearInterval(interval);
   }, [fetchStats]);
 
+  // Per-page trust signal (Basecamp todo 10027085963) derived from live ingest health.
+  const trust: TrustSignal = useMemo(() => {
+    const counts = stats?.status_counts_24h ?? {};
+    const accepted = counts.accepted ?? 0;
+    const errors = counts.error ?? 0;
+    const level: TrustLevel = errors > 0 ? 'stale' : accepted > 0 ? 'live' : 'unverified';
+    return {
+      level,
+      source: 'ingest logs',
+      updatedAt: new Date().toISOString(),
+      summary: `${accepted} accepted, ${errors} errored in the last 24h.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Ingestion',
+          status: level,
+          evidence: [
+            { label: 'Accepted (24h)', value: String(accepted) },
+            { label: 'Errors (24h)', value: String(errors) },
+          ],
+        },
+      ],
+    };
+  }, [stats]);
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -70,59 +98,45 @@ export default function AdminIngestLogsPage() {
   }
 
   if (error || !stats) {
-    return <div className="container-fluid py-4"><div className="alert alert-danger">{error || 'No data'}</div></div>;
+    return <div className="alert alert-danger">{error || 'No data'}</div>;
   }
 
   const counts = stats.status_counts_24h;
   const leadsBySource = stats.leads_by_source[window];
 
   return (
-    <div className="container-fluid py-4">
-      <Breadcrumb items={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Ingest Logs' }]} />
-
-      <div className="mb-4">
-        <h1 className="h3 mb-1">Ingest Activity</h1>
-        <p className="text-muted mb-0 small">Live tail of incoming lead ingestion across all sources. Auto-refreshes every 10 seconds.</p>
-      </div>
-
-      <div className="row g-3 mb-4">
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body">
-              <div className="text-muted small fw-medium">Accepted (24h)</div>
-              <div className="h3 mb-0 text-success">{counts.accepted ?? 0}</div>
-            </div>
+    <>
+      <PageHeader
+        title="Ingest Logs"
+        icon="file-list-3-line"
+        subtitle="Live tail of incoming lead ingestion across all sources. Auto-refreshes every 10 seconds."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Ingest Logs' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-outline-primary btn-sm" onClick={fetchStats} disabled={loading}>
+            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
+          </button>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Accepted (24h)" value={counts.accepted ?? 0} icon="checkbox-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Rejected (24h)" value={counts.rejected ?? 0} icon="error-warning-line" tone="warning" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Errors (24h)" value={counts.error ?? 0} icon="close-circle-line" tone={counts.error ? 'danger' : 'neutral'} />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Pending (24h)" value={counts.pending ?? 0} icon="time-line" tone="neutral" />
           </div>
         </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body">
-              <div className="text-muted small fw-medium">Rejected (24h)</div>
-              <div className="h3 mb-0 text-warning">{counts.rejected ?? 0}</div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body">
-              <div className="text-muted small fw-medium">Errors (24h)</div>
-              <div className="h3 mb-0 text-danger">{counts.error ?? 0}</div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body">
-              <div className="text-muted small fw-medium">Pending (24h)</div>
-              <div className="h3 mb-0 text-secondary">{counts.pending ?? 0}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </PageHeader>
 
       <div className="row g-3 mb-4">
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
+          <SectionCard padded={false}>
             <div className="card-header bg-white d-flex justify-content-between align-items-center">
               <span className="fw-semibold">Leads by source</span>
               <div className="btn-group" role="group">
@@ -150,10 +164,10 @@ export default function AdminIngestLogsPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
+          <SectionCard padded={false}>
             <div className="card-header bg-white fw-semibold">Conversion by entry point</div>
             <div className="table-responsive">
               <table className="table table-hover mb-0">
@@ -180,11 +194,11 @@ export default function AdminIngestLogsPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
 
-      <div className="card border-0 shadow-sm">
+      <SectionCard padded={false}>
         <div className="card-header bg-white fw-semibold">Live tail (latest 25)</div>
         <div className="table-responsive">
           <table className="table table-hover mb-0">
@@ -202,7 +216,7 @@ export default function AdminIngestLogsPage() {
                 <tr key={row.id}>
                   <td className="small text-muted">{new Date(row.received_at).toLocaleString()}</td>
                   <td className="small"><code>{row.source_slug || '-'}</code> / <code>{row.entry_slug || '-'}</code></td>
-                  <td><span className={`badge ${statusBadge(row.status)}`}>{row.status}</span></td>
+                  <td><StatusBadge label={row.status} tone={statusTone(row.status)} /></td>
                   <td className="small">
                     {row.lead_name ? <span className="fw-medium">{row.lead_name}</span> : <span className="text-muted">-</span>}
                     {row.lead_email && <span className="text-muted"> ({row.lead_email})</span>}
@@ -213,7 +227,7 @@ export default function AdminIngestLogsPage() {
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+      </SectionCard>
+    </>
   );
 }

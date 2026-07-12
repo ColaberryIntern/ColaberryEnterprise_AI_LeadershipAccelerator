@@ -106,8 +106,8 @@ async function buildExecSummary({ totalOpen, totalHuman, totalAi, overdueCount, 
     return `${totalHuman} item${totalHuman === 1 ? '' : 's'} on Ali Personal need your decision today. ${overdueCount > 0 ? `${overdueCount} overdue.` : 'No overdue.'} Top lists: ${perGroupNext.slice(0, 3).map((g) => g.name).join(', ') || 'none'}.`;
   }
   try {
-    const OpenAI = require(path.resolve(__dirname, '../../../node_modules/openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './lib/openaiInstrumented'));
+    const openai = getInstrumentedOpenAI({ workflow_id: 'daily_ali_personal_decisions' });
     const groupsList = perGroupNext.slice(0, 6).map((g) => `- ${g.name}: ${g.task.content.slice(0, 80)}`).join('\n');
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

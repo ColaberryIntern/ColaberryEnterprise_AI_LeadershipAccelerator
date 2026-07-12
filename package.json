@@ -13,7 +13,11 @@
     "build:backend": "npm run build --workspace=backend",
     "build:frontend": "npm run build --workspace=frontend",
     "test": "npm run test --workspaces",
-    "lint": "npm run lint --workspaces"
+    "lint": "npm run lint --workspaces",
+    "dev:setup": "bash scripts/dev-setup.sh",
+    "seed:admin": "npm run seed:admin --workspace=backend",
+    "seed:students": "npm run seed:students --workspace=backend",
+    "seed:github": "npm run seed:github --workspace=backend"
   },
   "engines": {
     "node": ">=20.0.0"

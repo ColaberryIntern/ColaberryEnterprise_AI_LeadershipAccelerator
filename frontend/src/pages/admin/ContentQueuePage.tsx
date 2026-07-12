@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface ContentItem {
   id: string;
@@ -13,12 +15,12 @@ interface ContentItem {
   post_status: string;
 }
 
-const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
-  medium: { bg: '#000000', label: 'Medium' },
-  linkedin: { bg: '#0077b5', label: 'LinkedIn' },
-  devto: { bg: '#0a0a0a', label: 'Dev.to' },
-  hashnode: { bg: '#2962ff', label: 'Hashnode' },
-  producthunt: { bg: '#da552f', label: 'Product Hunt' },
+const PLATFORM_LABELS: Record<string, string> = {
+  medium: 'Medium',
+  linkedin: 'LinkedIn',
+  devto: 'Dev.to',
+  hashnode: 'Hashnode',
+  producthunt: 'Product Hunt',
 };
 
 export default function ContentQueuePage() {
@@ -32,7 +34,7 @@ export default function ContentQueuePage() {
   const fetchQueue = useCallback(async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: Record<string, string> = {};
       if (platform !== 'all') params.platform = platform;
       const res = await api.get('/api/admin/content-queue', { params });
       setItems(res.data.items || []);
@@ -41,7 +43,7 @@ export default function ContentQueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [platform]);
+  }, [platform, showToast]);
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
 
@@ -75,20 +77,77 @@ export default function ContentQueuePage() {
     }
   };
 
-  const platformBadge = (p: string) => {
-    const cfg = PLATFORM_COLORS[p] || { bg: '#6c757d', label: p };
-    return <span className="badge" style={{ backgroundColor: cfg.bg, color: 'white' }}>{cfg.label}</span>;
-  };
+  // KPI summary derived from the live queue.
+  const summary = useMemo(() => {
+    const total = items.length;
+    const pending = items.filter(i => i.post_status === 'pending').length;
+    const approved = items.filter(i => i.post_status === 'approved').length;
+    const published = items.filter(i => i.post_status === 'published').length;
+    const platforms = new Set(items.map(i => i.platform)).size;
+    return { total, pending, approved, published, platforms };
+  }, [items]);
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from the content queue.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'content queue',
+    updatedAt: new Date().toISOString(),
+    summary: `${summary.total} items ready to post across ${summary.platforms} platform${summary.platforms === 1 ? '' : 's'}.`,
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Queue',
+        status: 'live',
+        evidence: [
+          { label: 'Ready', value: String(summary.total) },
+          { label: 'Platforms', value: String(summary.platforms) },
+        ],
+      },
+    ],
+  }), [summary]);
+
+  const platformBadge = (p: string) => (
+    <StatusBadge label={PLATFORM_LABELS[p] || p} tone="neutral" />
+  );
 
   return (
-    <div>
-      <h4 className="fw-semibold mb-1">Content to Post</h4>
-      <p className="text-muted small mb-3">
-        AI-generated content ready for manual posting. Copy, paste into the platform, then mark as posted.
-      </p>
+    <>
+      <PageHeader
+        title="Content Queue"
+        icon="article-line"
+        subtitle="AI-generated content ready for manual posting. Copy, paste into the platform, then mark as posted."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Content Queue' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-outline-primary btn-sm" onClick={fetchQueue} disabled={loading}>
+            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
+          </button>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Ready" value={summary.total} icon="inbox-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Pending" value={summary.pending} icon="time-line" tone="warning" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Approved" value={summary.approved} icon="checkbox-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Platforms" value={summary.platforms} icon="apps-line" tone="primary" />
+          </div>
+        </div>
+      </PageHeader>
 
       <div className="d-flex gap-2 mb-3 align-items-center">
-        <select className="form-select form-select-sm" style={{ width: 160 }} value={platform} onChange={e => setPlatform(e.target.value)}>
+        <select
+          className="form-select form-select-sm"
+          style={{ width: 160 }}
+          value={platform}
+          onChange={e => setPlatform(e.target.value)}
+          aria-label="Filter by platform"
+        >
           <option value="all">All Platforms</option>
           <option value="medium">Medium</option>
           <option value="linkedin">LinkedIn</option>
@@ -107,8 +166,8 @@ export default function ContentQueuePage() {
         <div className="row g-3">
           {items.map(item => (
             <div key={item.id} className="col-12">
-              <div className="card border-0 shadow-sm">
-                <div className="card-header bg-white d-flex justify-content-between align-items-center">
+              <SectionCard padded={false}>
+                <div className="d-flex justify-content-between align-items-center p-3 border-bottom">
                   <div className="d-flex gap-2 align-items-center">
                     {platformBadge(item.platform)}
                     <span className="small text-muted">{new Date(item.created_at).toLocaleDateString()}</span>
@@ -129,7 +188,7 @@ export default function ContentQueuePage() {
                     </button>
                   </div>
                 </div>
-                <div className="card-body">
+                <div className="p-3">
                   <div
                     className="small"
                     style={{
@@ -155,11 +214,11 @@ export default function ContentQueuePage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </SectionCard>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }

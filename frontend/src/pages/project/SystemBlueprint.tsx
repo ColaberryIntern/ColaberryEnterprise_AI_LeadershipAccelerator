@@ -100,7 +100,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
 };
 
 const MATURITY_COLORS: Record<number, string> = {
-  0: '#9ca3af', 1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#10b981', 5: '#8b5cf6',
+  0: '#9ca3af', 1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#10b981', 5: '#367895',
 };
 
 // Completion-based color for progress bars / percent text. Maturity color
@@ -342,7 +342,7 @@ function generateCoryPlan(components: SystemComponent[], _systemLayers: { backen
   // Single flat phase — steps are the actual next steps from the backend
   const steps: CoryPlanStep[] = incomplete.map((c, i) => {
     const target = c.promptTarget || 'backend_improvement';
-    const color = target === 'agent_enhancement' ? '#8b5cf6' : target === 'frontend_exposure' ? '#10b981' : target === 'reliability_improvement' ? '#f59e0b' : '#3b82f6';
+    const color = target === 'agent_enhancement' ? '#367895' : target === 'frontend_exposure' ? '#10b981' : target === 'reliability_improvement' ? '#f59e0b' : '#3b82f6';
     return {
       id: `plan-${c.id}`,
       title: c.nextStep || `Build ${c.name}`,
@@ -413,7 +413,7 @@ function transformCapabilities(bps: any[]): SystemComponent[] {
     });
 }
 
-function showToast(msg: string, color: string = '#1a365d') {
+function showToast(msg: string, color: string = '#FB2832') {
   const el = document.createElement('div');
   el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:${color};color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-check-circle me-2"></i>${msg}</div>`;
   document.body.appendChild(el);
@@ -1063,7 +1063,7 @@ export default function SystemBlueprint() {
             <strong style={{ color: 'var(--color-warning)' }}>Legacy Blueprint surface.</strong>
             &nbsp;The new lean execution lane is at <code>/portal/project/blueprint</code>. This page is preserved for rollback while specialized flows migrate over.
           </span>
-          <Link to="/portal/project/blueprint" className="btn btn-sm btn-primary" style={{ fontSize: 11 }}>
+          <Link to="/portal/project/blueprint" className="btn btn-sm" style={{ fontSize: 11, background: '#FB2832', color: '#fff', border: 'none' }}>
             <i className="bi bi-arrow-right me-1"></i>Open new Blueprint
           </Link>
         </div>
@@ -1072,12 +1072,12 @@ export default function SystemBlueprint() {
       {/* ── Header ── */}
       <div className="d-flex justify-content-between align-items-start mb-4">
         <div>
-          <h4 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>
+          <h4 className="fw-bold mb-1" style={{ color: '#FB2832' }}>
             {project.organization_name || 'AI Project'}
           </h4>
           <div className="d-flex align-items-center gap-2">
             {project.industry && (
-              <span className="badge" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10 }}>{project.industry}</span>
+              <span className="badge" style={{ background: '#FB2832', color: '#fff', fontSize: 10 }}>{project.industry}</span>
             )}
             <span className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 10 }}>
               {project.project_stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
@@ -1095,9 +1095,9 @@ export default function SystemBlueprint() {
                     onChange={() => setAutonomousMode(!autonomousMode)}
                     style={{ cursor: 'pointer', width: 28, height: 14 }} />
                 </div>
-                <span style={{ fontWeight: autonomousMode ? 600 : 400, color: autonomousMode ? '#8b5cf6' : '#9ca3af', fontSize: 10 }}>Autonomous</span>
+                <span style={{ fontWeight: autonomousMode ? 600 : 400, color: autonomousMode ? '#367895' : '#9ca3af', fontSize: 10 }}>Autonomous</span>
               </div>
-              <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={startDemo}>
+              <button className="btn btn-sm" style={{ fontSize: 10, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={startDemo}>
                 <i className="bi bi-play-circle me-1"></i>Watch 60s Demo
               </button>
             </>
@@ -1114,8 +1114,8 @@ export default function SystemBlueprint() {
           className="mb-3"
           style={{
             background: 'white',
-            border: '1px solid var(--color-primary-light)',
-            borderLeft: '4px solid var(--color-primary)',
+            border: '1px solid #C20E1E',
+            borderLeft: '4px solid #FB2832',
             borderRadius: 8,
             boxShadow: '0 2px 6px rgba(26, 54, 93, 0.06)',
             overflow: 'hidden',
@@ -1127,7 +1127,7 @@ export default function SystemBlueprint() {
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '0.75rem 1rem',
-              background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%)',
+              background: 'linear-gradient(135deg, #FB2832 0%, #C20E1E 100%)',
               color: 'white',
             }}
           >
@@ -1185,7 +1185,8 @@ export default function SystemBlueprint() {
               </button>
               <button
                 type="button"
-                className="btn btn-sm btn-outline-primary"
+                className="btn btn-sm"
+                style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                 onClick={() => window.open(`data:text/plain;charset=utf-8,${encodeURIComponent(pendingCritiquePrompt)}`, '_blank')}
               >
                 <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
@@ -1211,19 +1212,19 @@ export default function SystemBlueprint() {
           style={{
             background: 'var(--color-bg-alt)',
             border: '1px solid var(--color-border)',
-            borderLeft: '3px solid var(--color-primary)',
+            borderLeft: '3px solid #FB2832',
             borderRadius: 6,
             padding: '0.5rem 0.85rem',
             fontSize: 12,
           }}
         >
           <span style={{ color: 'var(--color-text-light)' }}>
-            <i className="bi bi-house me-1" style={{ color: 'var(--color-primary)' }}></i>
-            <strong style={{ color: 'var(--color-primary)' }}>Cory</strong> decides what's next ·
+            <i className="bi bi-house me-1" style={{ color: '#FB2832' }}></i>
+            <strong style={{ color: '#FB2832' }}>Cory</strong> decides what's next ·
             <strong style={{ color: 'var(--color-text)' }}> Blueprint</strong> executes it.
             Recommendations and the operational queue live at Home.
           </span>
-          <Link to="/portal/home" className="btn btn-sm btn-outline-primary" style={{ fontSize: 11 }}>
+          <Link to="/portal/home" className="btn btn-sm" style={{ fontSize: 11, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}>
             <i className="bi bi-arrow-right me-1"></i>Open Home
           </Link>
         </div>
@@ -1232,7 +1233,7 @@ export default function SystemBlueprint() {
       {/* ── Beta Banner ── */}
       {!bannerDismissed && !demoActive && (
         <div className="d-flex align-items-center justify-content-between mb-3 px-3 py-2" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
-          <span style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+          <span style={{ fontSize: 12, color: '#FB2832' }}>
             <i className="bi bi-stars me-1"></i>
             <strong>New:</strong> Guided Build Mode (Beta) — Build your system step-by-step with AI guidance
           </span>
@@ -1247,7 +1248,7 @@ export default function SystemBlueprint() {
         <div className="card-body py-3 px-4">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <div className="d-flex align-items-center gap-3">
-              <span className="fw-semibold" style={{ fontSize: 13, color: 'var(--color-primary)' }}>Production Readiness</span>
+              <span className="fw-semibold" style={{ fontSize: 13, color: '#FB2832' }}>Production Readiness</span>
               <span className="badge" style={{ background: `${MATURITY_COLORS[Math.floor(Number(systemLevel.level.replace('L', '')))]}20`, color: MATURITY_COLORS[Math.floor(Number(systemLevel.level.replace('L', '')))], fontSize: 10, fontWeight: 700 }}>
                 {systemLevel.level} {systemLevel.label}
               </span>
@@ -1277,8 +1278,8 @@ export default function SystemBlueprint() {
             <div className="card-body p-4">
               <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
                 <div className="d-flex align-items-center gap-2">
-                  <i className="bi bi-file-text" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
-                  <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Your System Blueprint</h5>
+                  <i className="bi bi-file-text" style={{ color: '#FB2832', fontSize: 14 }}></i>
+                  <h5 className="fw-bold mb-0" style={{ color: '#FB2832', fontSize: 16 }}>Your System Blueprint</h5>
                 </div>
                 {!promptEditing && (() => {
                   const storedNow = (project.project_variables?.system_prompt || '').trim();
@@ -1289,7 +1290,7 @@ export default function SystemBlueprint() {
                         <i className={`bi ${promptExpanded ? 'bi-arrows-collapse' : 'bi-arrows-expand'} me-1`}></i>
                         {promptExpanded ? 'Collapse' : 'Expand'}
                       </button>
-                      <button className="btn btn-outline-primary btn-sm" style={{ fontSize: 11 }}
+                      <button className="btn btn-sm" style={{ fontSize: 11, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                         onClick={() => {
                           const seed = storedNow || autoDerivedDraft || `You are building ${deriveSystemSummary(components)}.`;
                           setPromptDraftText(seed);
@@ -1310,9 +1311,9 @@ export default function SystemBlueprint() {
                   || (autoDerivedDraft != null ? (autoDerivedDraft || fallback) : '');
                 const loadingDraft = !stored && autoDerivedDraft === null;
                 return (
-                  <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)' }}>
+                  <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid #FB2832' }}>
                     <div className="d-flex justify-content-between align-items-center mb-2">
-                      <div className="fw-medium" style={{ fontSize: 10, color: 'var(--color-primary)' }}>
+                      <div className="fw-medium" style={{ fontSize: 10, color: '#FB2832' }}>
                         {stored ? 'System Prompt' : 'System Prompt (auto-derived from your requirements)'}
                       </div>
                       {usingDraft && text && (
@@ -1346,7 +1347,7 @@ export default function SystemBlueprint() {
                 const stored = (project.project_variables?.system_prompt || '').trim();
                 const overlayStyle: React.CSSProperties = promptMaximized
                   ? { position: 'fixed', inset: '4%', zIndex: 9999, background: '#fff', borderRadius: 12, boxShadow: '0 25px 80px rgba(0,0,0,0.35)', padding: 24, display: 'flex', flexDirection: 'column' }
-                  : { background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)', padding: 12 };
+                  : { background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid #FB2832', padding: 12 };
                 return (
                   <>
                     {promptMaximized && (
@@ -1354,7 +1355,7 @@ export default function SystemBlueprint() {
                     )}
                     <div style={overlayStyle}>
                       <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                        <div className="fw-medium" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                        <div className="fw-medium" style={{ fontSize: 11, color: '#FB2832' }}>
                           <i className="bi bi-pencil-square me-1"></i>Editing System Prompt {promptMaximized && <span className="text-muted ms-2">(Maximized)</span>}
                         </div>
                         <div className="d-flex gap-2 flex-wrap">
@@ -1382,7 +1383,7 @@ export default function SystemBlueprint() {
                             onClick={() => { setPromptEditing(false); setPromptMaximized(false); setPromptDraftText(''); }}>
                             Cancel
                           </button>
-                          <button className="btn btn-primary btn-sm" style={{ fontSize: 11, fontWeight: 600 }}
+                          <button className="btn btn-sm" style={{ fontSize: 11, fontWeight: 600, background: '#FB2832', color: '#fff', border: 'none' }}
                             disabled={promptSaving}
                             onClick={async () => {
                               setPromptSaving(true);
@@ -1424,7 +1425,7 @@ export default function SystemBlueprint() {
 
       {/* ── Execute-All Preparing screen ── shown briefly between click and the per-step build flow */}
       {execPreparing && (
-        <div className="card border-0 shadow-sm mb-4" style={{ background: 'linear-gradient(135deg, #1a365d, #8b5cf6)', color: '#fff' }}>
+        <div className="card border-0 shadow-sm mb-4" style={{ background: 'linear-gradient(135deg, #FB2832, #367895)', color: '#fff' }}>
           <div className="card-body py-5 px-4 text-center">
             <div className="mb-3">
               <i className="bi bi-lightning-charge-fill" style={{ fontSize: 40, color: '#fbbf24', filter: 'drop-shadow(0 0 12px #fbbf2466)' }}></i>
@@ -1448,20 +1449,20 @@ export default function SystemBlueprint() {
 
       {/* ── Execution Mode Header ── */}
       {isExecuting && !execPreparing && (
-        <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #1a365d08, #8b5cf608)', border: '1px solid #8b5cf620' }}>
+        <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, rgba(251,40,50,0.03), rgba(54,120,149,0.06))', border: '1px solid rgba(54,120,149,0.10)' }}>
           <div className="card-body py-3 px-4">
             <div className="d-flex align-items-center justify-content-between">
               <div>
                 <div className="d-flex align-items-center gap-2 mb-1">
-                  <i className="bi bi-lightning-fill" style={{ color: '#8b5cf6' }}></i>
-                  <span className="fw-bold" style={{ fontSize: 13, color: 'var(--color-primary)' }}>
+                  <i className="bi bi-lightning-fill" style={{ color: '#367895' }}></i>
+                  <span className="fw-bold" style={{ fontSize: 13, color: '#FB2832' }}>
                     Executing Your System Plan
                   </span>
                 </div>
                 <div className="d-flex align-items-center gap-3" style={{ fontSize: 11 }}>
                   <span className="text-muted">Step {execIndex + 1} of {execQueue.length}</span>
                   {execQueue[execIndex] && (
-                    <span style={{ color: '#8b5cf6', fontWeight: 500 }}>{execQueue[execIndex].title}</span>
+                    <span style={{ color: '#367895', fontWeight: 500 }}>{execQueue[execIndex].title}</span>
                   )}
                   {execPaused && <span className="badge bg-warning text-dark" style={{ fontSize: 8 }}>Paused</span>}
                 </div>
@@ -1472,7 +1473,7 @@ export default function SystemBlueprint() {
                     <i className="bi bi-pause-fill me-1"></i>Pause
                   </button>
                 ) : (
-                  <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={handleExecResume}>
+                  <button className="btn btn-sm" style={{ fontSize: 10, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={handleExecResume}>
                     <i className="bi bi-play-fill me-1"></i>Resume
                   </button>
                 )}
@@ -1483,7 +1484,7 @@ export default function SystemBlueprint() {
             </div>
             {/* Progress bar */}
             <div className="progress mt-2" style={{ height: 4, borderRadius: 2 }}>
-              <div className="progress-bar" style={{ width: `${((execIndex + (build.phase === 'validated' ? 1 : 0)) / execQueue.length) * 100}%`, background: '#8b5cf6', borderRadius: 2, transition: 'width 0.5s ease' }} />
+              <div className="progress-bar" style={{ width: `${((execIndex + (build.phase === 'validated' ? 1 : 0)) / execQueue.length) * 100}%`, background: '#367895', borderRadius: 2, transition: 'width 0.5s ease' }} />
             </div>
             {/* Completed steps */}
             {execIndex > 0 && (
@@ -1501,16 +1502,16 @@ export default function SystemBlueprint() {
 
       {/* ── Cory — Unified Build Guide (merged Plan + Build Step) ── */}
       {recommended && !execPreparing && (
-        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
+        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${autonomousMode ? '#367895' : '#3b82f6'}` }}>
           <div className="card-body p-4">
             {/* Cory header */}
             <div className="d-flex align-items-center justify-content-between mb-3">
               <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 16 }}></i>
-                <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>
+                <i className="bi bi-robot" style={{ color: autonomousMode ? '#367895' : '#3b82f6', fontSize: 16 }}></i>
+                <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#367895' : '#FB2832' }}>
                   Cory — Your Next Step
                 </h6>
-                {autonomousMode && <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}><i className="bi bi-lightning-fill me-1"></i>Autonomous</span>}
+                {autonomousMode && <span className="badge" style={{ background: 'rgba(54,120,149,0.10)', color: '#367895', fontSize: 8 }}><i className="bi bi-lightning-fill me-1"></i>Autonomous</span>}
               </div>
               {isInFlow && !demoActive && (
                 <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 10 }} onClick={handleStartNext}>
@@ -1538,7 +1539,7 @@ export default function SystemBlueprint() {
               const SOURCE_LABELS: Record<string, { label: string; bg: string; color: string }> = {
                 build: { label: 'Build', bg: '#3b82f620', color: '#3b82f6' },
                 health: { label: 'Health', bg: '#f59e0b20', color: '#92400e' },
-                improve: { label: 'Improve', bg: '#8b5cf620', color: '#8b5cf6' },
+                improve: { label: 'Improve', bg: 'rgba(54,120,149,0.10)', color: '#367895' },
                 ui: { label: 'UI', bg: '#10b98120', color: '#059669' },
               };
               return primary ? (
@@ -1582,7 +1583,7 @@ export default function SystemBlueprint() {
               const primaryTarget = primaryTask?.prompt_target || recommended.promptTarget;
               const primaryStepKey = primaryTask?.ui_step_key;
               const isUIAdvisor = primaryTarget === 'ui_advisor_step';
-              const primaryColor = primaryTarget === 'agent_enhancement' ? '#8b5cf6' : primaryTarget === 'frontend_exposure' ? '#10b981' : primaryTarget === 'reliability_improvement' ? '#f59e0b' : isUIAdvisor ? '#10b981' : '#3b82f6';
+              const primaryColor = primaryTarget === 'agent_enhancement' ? '#367895' : primaryTarget === 'frontend_exposure' ? '#10b981' : primaryTarget === 'reliability_improvement' ? '#f59e0b' : isUIAdvisor ? '#10b981' : '#3b82f6';
               const buttonComp = primaryTask?.component_id && primaryTask.component_id !== recommended.id
                 ? components.find(c => c.id === primaryTask.component_id) || recommended
                 : recommended;
@@ -1632,11 +1633,11 @@ export default function SystemBlueprint() {
                 <div className="d-flex align-items-center gap-2 mb-3 p-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#3b82f6', animation: 'pulse 2s infinite', flexShrink: 0 }} />
                   <div>
-                    <div className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>Run this in Claude Code — your system is about to evolve</div>
+                    <div className="fw-semibold" style={{ fontSize: 12, color: '#FB2832' }}>Run this in Claude Code — your system is about to evolve</div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>Paste this into Claude Code, run it, then bring the result back here</div>
                   </div>
                   <div className="ms-auto">
-                    <a href="https://claude.ai/" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}>
+                    <a href="https://claude.ai/" target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ fontSize: 10, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}>
                       <i className="bi bi-box-arrow-up-right me-1"></i>Open Claude
                     </a>
                   </div>
@@ -1660,11 +1661,11 @@ export default function SystemBlueprint() {
                       Claude Code reads these to plan and build your system. Download both, drop them in your repo root, then run the prompt above. <strong>REQUIREMENTS.md</strong> is your spec; <strong>CLAUDE.md</strong> is the rules of engagement.
                     </div>
                     <div className="d-flex gap-2 flex-wrap">
-                      <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
+                      <button className="btn btn-sm" style={{ fontSize: 10, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                         onClick={() => downloadFoundationFile('/api/portal/project/requirements/download', 'REQUIREMENTS.md')}>
                         <i className="bi bi-download me-1"></i>REQUIREMENTS.md
                       </button>
-                      <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
+                      <button className="btn btn-sm" style={{ fontSize: 10, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                         onClick={() => downloadFoundationFile('/api/portal/project/claude-md/download', 'CLAUDE.md')}>
                         <i className="bi bi-download me-1"></i>CLAUDE.md
                       </button>
@@ -1676,7 +1677,7 @@ export default function SystemBlueprint() {
                   <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => setShowPrompt(!showPrompt)}>
                     <i className={`bi bi-chevron-${showPrompt ? 'up' : 'down'} me-1`}></i>{showPrompt ? 'Hide Prompt' : 'Show Prompt'}
                   </button>
-                  <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={handleCopyPrompt}>
+                  <button className="btn btn-sm" style={{ fontSize: 10, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={handleCopyPrompt}>
                     <i className="bi bi-clipboard me-1"></i>Copy Again
                   </button>
                   <button
@@ -1767,7 +1768,7 @@ export default function SystemBlueprint() {
                           <div className="ms-auto d-flex gap-3 text-center">
                             <span><strong style={{ color: '#059669', fontSize: 16 }}>{summary.phases_shipped || 0}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Phases</span></span>
                             <span><strong style={{ color: '#3b82f6', fontSize: 16 }}>{summary.files_verified_in_repo || 0}/{summary.files_claimed || 0}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Files in repo</span></span>
-                            <span><strong style={{ color: '#8b5cf6', fontSize: 16 }}>{matched.length}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>BPs matched</span></span>
+                            <span><strong style={{ color: '#367895', fontSize: 16 }}>{matched.length}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>BPs matched</span></span>
                           </div>
                         </div>
 
@@ -1788,7 +1789,7 @@ export default function SystemBlueprint() {
                         {/* Capabilities advanced */}
                         {matched.length > 0 && (
                           <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                            <div className="fw-semibold mb-2" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                            <div className="fw-semibold mb-2" style={{ fontSize: 11, color: '#FB2832' }}>
                               <i className="bi bi-check2-circle me-1" style={{ color: '#10b981' }}></i>Capabilities Advanced ({matched.length})
                             </div>
                             <div style={{ maxHeight: 220, overflowY: 'auto' }}>
@@ -1839,14 +1840,14 @@ export default function SystemBlueprint() {
                           <div className="ms-auto d-flex gap-3 text-center">
                             <span><strong style={{ color: '#059669', fontSize: 16 }}>{build.validationResult.metrics_after.reqCoverage}%</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Coverage</span></span>
                             <span><strong style={{ color: '#3b82f6', fontSize: 16 }}>L{build.validationResult.metrics_after.maturityLevel}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Maturity</span></span>
-                            <span><strong style={{ color: '#8b5cf6', fontSize: 16 }}>{build.validationResult.metrics_after.readiness}%</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Readiness</span></span>
+                            <span><strong style={{ color: '#367895', fontSize: 16 }}>{build.validationResult.metrics_after.readiness}%</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Readiness</span></span>
                           </div>
                         )}
                       </div>
 
                       {/* Requirements matched */}
                       <div className="mb-3 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                        <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                        <div className="fw-semibold mb-1" style={{ fontSize: 11, color: '#FB2832' }}>
                           <i className="bi bi-clipboard-check me-1"></i>Requirements Matched
                         </div>
                         <div style={{ fontSize: 12, color: '#059669' }}>
@@ -1865,7 +1866,7 @@ export default function SystemBlueprint() {
                       {/* Files Created */}
                       {build.validationResult.parsed?.filesCreated?.length > 0 && (
                         <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: '#FB2832' }}>
                             <i className="bi bi-file-earmark-plus me-1" style={{ color: '#10b981' }}></i>Files Created ({build.validationResult.parsed.filesCreated.length})
                           </div>
                           <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
@@ -1879,7 +1880,7 @@ export default function SystemBlueprint() {
                       {/* Files Modified */}
                       {build.validationResult.parsed?.filesModified?.length > 0 && (
                         <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: '#FB2832' }}>
                             <i className="bi bi-pencil-square me-1" style={{ color: '#f59e0b' }}></i>Files Modified ({build.validationResult.parsed.filesModified.length})
                           </div>
                           <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
@@ -1893,7 +1894,7 @@ export default function SystemBlueprint() {
                       {/* API Routes */}
                       {build.validationResult.parsed?.routes?.length > 0 && (
                         <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: '#FB2832' }}>
                             <i className="bi bi-signpost-2 me-1" style={{ color: '#3b82f6' }}></i>API Routes Added ({build.validationResult.parsed.routes.length})
                           </div>
                           <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
@@ -1907,8 +1908,8 @@ export default function SystemBlueprint() {
                       {/* Database Changes */}
                       {build.validationResult.parsed?.database?.length > 0 && (
                         <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
-                            <i className="bi bi-database me-1" style={{ color: '#8b5cf6' }}></i>Database Changes
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: '#FB2832' }}>
+                            <i className="bi bi-database me-1" style={{ color: '#367895' }}></i>Database Changes
                           </div>
                           <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
                             {build.validationResult.parsed.database.map((d: string, i: number) => (
@@ -1933,7 +1934,7 @@ export default function SystemBlueprint() {
                       </div>
                       {!demoActive && (
                         isExecuting ? (
-                          <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleExecAdvance}>
+                          <button className="btn btn-sm" style={{ background: '#367895', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleExecAdvance}>
                             {execIndex + 1 < execQueue.length ? (
                               <><i className="bi bi-arrow-right me-1"></i>Next Step ({execIndex + 2}/{execQueue.length})</>
                             ) : (
@@ -1941,7 +1942,7 @@ export default function SystemBlueprint() {
                             )}
                           </button>
                         ) : (
-                          <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={handleStartNext}>
+                          <button className="btn btn-sm" style={{ fontWeight: 600, fontSize: 12, background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleStartNext}>
                             <i className="bi bi-arrow-right me-1"></i>Continue to Next Step
                           </button>
                         )
@@ -1958,7 +1959,7 @@ export default function SystemBlueprint() {
               const SOURCE_LABELS: Record<string, { label: string; bg: string; color: string }> = {
                 build: { label: 'Build', bg: '#3b82f620', color: '#3b82f6' },
                 health: { label: 'Health', bg: '#f59e0b20', color: '#92400e' },
-                improve: { label: 'Improve', bg: '#8b5cf620', color: '#8b5cf6' },
+                improve: { label: 'Improve', bg: 'rgba(54,120,149,0.10)', color: '#367895' },
                 ui: { label: 'UI', bg: '#10b98120', color: '#059669' },
               };
 
@@ -1972,7 +1973,7 @@ export default function SystemBlueprint() {
                 ? []
                 : ot.length > 1
                 ? ot.slice(1).map((t: any) => ({ id: t.id, title: t.title, explanation: t.description, color: t.color, source: t.source, componentId: t.component_id, componentName: t.component_name, promptTarget: t.prompt_target, blocked: t.blocked, trace: t.decision_trace }))
-                : coryPlan.flatMap(p => p.steps.filter(s => !s.done)).slice(1).map(s => ({ id: s.id, title: s.title, explanation: s.explanation, color: s.promptTarget === 'agent_enhancement' ? '#8b5cf6' : s.promptTarget === 'frontend_exposure' ? '#10b981' : '#3b82f6', source: 'build', componentId: s.componentId, componentName: components.find(c => c.id === s.componentId)?.name, promptTarget: s.promptTarget, blocked: false, trace: null }));
+                : coryPlan.flatMap(p => p.steps.filter(s => !s.done)).slice(1).map(s => ({ id: s.id, title: s.title, explanation: s.explanation, color: s.promptTarget === 'agent_enhancement' ? '#367895' : s.promptTarget === 'frontend_exposure' ? '#10b981' : '#3b82f6', source: 'build', componentId: s.componentId, componentName: components.find(c => c.id === s.componentId)?.name, promptTarget: s.promptTarget, blocked: false, trace: null }));
 
               if (upcomingItems.length === 0) return null;
               return (
@@ -2019,7 +2020,7 @@ export default function SystemBlueprint() {
                   {/* Execute all — inside collapsible */}
                   {showUpNext && !isExecuting && (
                     <div className="mt-2">
-                      <button className="btn btn-sm w-100" style={{ background: autonomousMode ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 11 }} onClick={handleStartExecution}>
+                      <button className="btn btn-sm w-100" style={{ background: autonomousMode ? '#367895' : '#FB2832', color: '#fff', fontWeight: 600, fontSize: 11 }} onClick={handleStartExecution}>
                         <i className="bi bi-play-fill me-1"></i>Execute All ({upcomingItems.length + 1} steps)
                       </button>
                     </div>
@@ -2047,9 +2048,9 @@ export default function SystemBlueprint() {
       {!isInFlow && (
         <>
           <div className="mb-2 d-flex justify-content-between align-items-center">
-            <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 14 }}>
+            <h6 className="fw-bold mb-0" style={{ color: '#FB2832', fontSize: 14 }}>
               System Components
-              <span className="badge ms-2" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10 }}>{totalCount}</span>
+              <span className="badge ms-2" style={{ background: '#FB2832', color: '#fff', fontSize: 10 }}>{totalCount}</span>
               {totalCount > 0 && (
                 <span className="ms-2 text-muted" style={{ fontSize: 11, fontWeight: 400 }}>
                   · {fullCompletionCount} of {totalCount} at 100% · {avgCompletion}% avg completion
@@ -2120,15 +2121,15 @@ export default function SystemBlueprint() {
               const isActive = recommended?.id === comp.id;
               return (
                 <div key={comp.id} className="col-md-6 col-lg-4">
-                  <div className="card border-0 shadow-sm h-100" style={{ borderTop: `3px solid ${isActive ? 'var(--color-primary)' : mc}`, outline: isActive ? '2px solid var(--color-primary)' : 'none', outlineOffset: -1, cursor: 'pointer' }}
+                  <div className="card border-0 shadow-sm h-100" style={{ borderTop: `3px solid ${isActive ? '#FB2832' : mc}`, outline: isActive ? '2px solid #FB2832' : 'none', outlineOffset: -1, cursor: 'pointer' }}
                     onClick={() => navigate(`/portal/project/system-v2?componentId=${comp.id}&tab=overview`)}>
                     <div className="card-body p-3">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div className="fw-semibold" style={{ fontSize: 13, color: 'var(--color-text)' }}>
-                          {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#8b5cf6', fontSize: 11 }}></i>}
+                          {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#367895', fontSize: 11 }}></i>}
                           {comp.userStatus === 'verified' && <i className="bi bi-patch-check-fill me-1" style={{ color: '#10b981', fontSize: 12 }} title="Verified by you"></i>}
                           {comp.name}
-                          {isActive && <i className="bi bi-arrow-left ms-1" style={{ color: 'var(--color-primary)', fontSize: 10 }}></i>}
+                          {isActive && <i className="bi bi-arrow-left ms-1" style={{ color: '#FB2832', fontSize: 10 }}></i>}
                         </div>
                         {comp.userStatus === 'verified'
                           ? <span className="badge" style={{ background: '#10b98120', color: '#065f46', fontSize: 9 }}>Verified</span>

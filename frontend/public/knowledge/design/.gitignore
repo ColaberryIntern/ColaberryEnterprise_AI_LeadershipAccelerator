@@ -1,0 +1,18 @@
+# Dependencies (none required — this is a static, dependency-free system)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Build / preview tooling internal to the authoring environment
+.thumbnail
+uploads/
+
+# Logs
+*.log

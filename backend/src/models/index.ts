@@ -41,6 +41,7 @@ import SectionConfig from './SectionConfig';
 import ArtifactDefinition from './ArtifactDefinition';
 import VariableStore from './VariableStore';
 import GitHubConnection from './GitHubConnection';
+import StudentGithubActivity from './StudentGithubActivity';
 import SkillDefinition from './SkillDefinition';
 import ProgramBlueprint from './ProgramBlueprint';
 import MiniSection from './MiniSection';
@@ -87,6 +88,7 @@ import AiAgentActivityLog from './AiAgentActivityLog';
 import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
+import AiEvent from './AiEvent';
 import DatasetRegistry from './DatasetRegistry';
 import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
@@ -151,6 +153,7 @@ import StrategicInitiative from './StrategicInitiative';
 import RequirementsGenerationJob from './RequirementsGenerationJob';
 import MayaConversationOutcome from './MayaConversationOutcome';
 import MentorIntervention from './MentorIntervention';
+import MentorReviewItem from './MentorReviewItem';
 import SectionExecutionLog from './SectionExecutionLog';
 import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
@@ -196,6 +199,9 @@ import RawLeadPayload from './RawLeadPayload';
 import AnthropicContentRegistry from './AnthropicContentRegistry';
 import AnthropicChangeEvent from './AnthropicChangeEvent';
 
+// Enrollment Tracking
+import EnrollmentLead from './EnrollmentLead';
+
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
 import InboxClassification from './InboxClassification';
@@ -206,6 +212,10 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+import InboxOpportunityScore from './InboxOpportunityScore';
+import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
+import InboxSurfacePreference from './InboxSurfacePreference';
+import InboxDeletedEmail from './InboxDeletedEmail';
 
 // --- Universal Lead Ingestion associations ---
 LeadSource.hasMany(EntryPoint, { foreignKey: 'source_id', as: 'entryPoints', onDelete: 'CASCADE' });
@@ -230,6 +240,11 @@ InboxEmail.hasMany(InboxReplyDraft, { foreignKey: 'email_id', as: 'drafts' });
 InboxReplyDraft.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
 InboxEmail.hasMany(InboxAuditLog, { foreignKey: 'email_id', as: 'auditLogs' });
 InboxAuditLog.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+// Missed Opportunities Report — false-negative safety net over hidden emails
+InboxEmail.hasMany(InboxOpportunityScore, { foreignKey: 'email_id', as: 'opportunityScores' });
+InboxOpportunityScore.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+InboxEmail.hasMany(InboxFalseNegativeFeedback, { foreignKey: 'email_id', as: 'falseNegativeFeedback' });
+InboxFalseNegativeFeedback.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
 
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
@@ -253,6 +268,32 @@ import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
+import CurriculumCourseLink from './CurriculumCourseLink';
+import StudentTaskList from './StudentTaskList';
+import StudentTask from './StudentTask';
+import StudentPointsEvent from './StudentPointsEvent';
+import OpenHouseEvent from './OpenHouseEvent';
+import OnboardingProfile from './OnboardingProfile';
+
+// One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
+import Sponsor from './Sponsor';
+import SponsorSeat from './SponsorSeat';
+import Challenge from './Challenge';
+import ChallengeParticipant from './ChallengeParticipant';
+import LeaderboardScore from './LeaderboardScore';
+// Timeline Engine (Classroom rebuild) — universal card + progression models.
+import TimelineCard from './TimelineCard';
+import TimelineCardProgress from './TimelineCardProgress';
+import TimelineEvent from './TimelineEvent';
+import PointsConfig from './PointsConfig';
+import CompetencyDomain from './CompetencyDomain';
+import StudentCompetency from './StudentCompetency';
+import EvidenceRecord from './EvidenceRecord';
+import XpEvent from './XpEvent';
+import BuilderLevel from './BuilderLevel';
+import StudentLevel from './StudentLevel';
+import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
+import ComponentAnalytics from './ComponentAnalytics';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -483,6 +524,10 @@ VariableStore.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_id', as: 'ar
 // GitHubConnection associations
 Enrollment.hasOne(GitHubConnection, { foreignKey: 'enrollment_id', as: 'githubConnection' });
 GitHubConnection.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// StudentGithubActivity associations
+Enrollment.hasOne(StudentGithubActivity, { foreignKey: 'enrollment_id', as: 'githubActivity' });
+StudentGithubActivity.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // SessionGate -> ArtifactDefinition (bidirectional)
 SessionGate.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
@@ -835,6 +880,19 @@ CampaignDeployment.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 CampaignDeployment.belongsTo(LandingPage, { foreignKey: 'landing_page_id', as: 'landingPage' });
 LandingPage.hasMany(CampaignDeployment, { foreignKey: 'landing_page_id', as: 'deployments' });
 
+// --- Student Task List / Task associations ---
+Project.hasMany(StudentTaskList, { foreignKey: 'project_id', as: 'taskLists', onDelete: 'CASCADE' });
+StudentTaskList.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+StudentTaskList.hasMany(StudentTask, { foreignKey: 'task_list_id', as: 'tasks', onDelete: 'CASCADE' });
+StudentTask.belongsTo(StudentTaskList, { foreignKey: 'task_list_id', as: 'taskList' });
+StudentTask.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'studentTasks' });
+StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
+Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
+StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(OnboardingProfile, { foreignKey: 'enrollment_id', as: 'onboardingProfile', onDelete: 'CASCADE' });
+OnboardingProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
 // Capability Agent Map associations
 Capability.hasMany(CapabilityAgentMap, { foreignKey: 'capability_id', as: 'agentMaps' });
 CapabilityAgentMap.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capability' });
@@ -852,6 +910,33 @@ UIElementFeedback.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capa
 // Campaign → Capability (which BP does this campaign serve?)
 Campaign.belongsTo(Capability, { foreignKey: 'capability_id', as: 'businessProcess' });
 Capability.hasMany(Campaign, { foreignKey: 'capability_id', as: 'campaigns' });
+
+// --- One Class, Many Doors: Sponsorship + Challenge/Leaderboard associations ---
+// Door B: a Sponsor (employer) buys seats; the contact is a Lead.
+Sponsor.belongsTo(Lead, { foreignKey: 'contact_lead_id', as: 'contactLead', onDelete: 'SET NULL' });
+Lead.hasMany(Sponsor, { foreignKey: 'contact_lead_id', as: 'sponsorships' });
+
+Sponsor.hasMany(SponsorSeat, { foreignKey: 'sponsor_id', as: 'seats', onDelete: 'CASCADE' });
+SponsorSeat.belongsTo(Sponsor, { foreignKey: 'sponsor_id', as: 'sponsor' });
+
+// A redeemed seat links to the Enrollment that claimed it (reassignable).
+SponsorSeat.belongsTo(Enrollment, { foreignKey: 'assigned_enrollment_id', as: 'assignedEnrollment', onDelete: 'SET NULL' });
+Enrollment.hasMany(SponsorSeat, { foreignKey: 'assigned_enrollment_id', as: 'sponsorSeats' });
+
+// A Challenge may be scoped to a Sponsor (company leaderboard) or global (null).
+Challenge.belongsTo(Sponsor, { foreignKey: 'sponsor_id', as: 'sponsor', onDelete: 'CASCADE' });
+Sponsor.hasMany(Challenge, { foreignKey: 'sponsor_id', as: 'challenges' });
+
+// Participants: one Enrollment in one Challenge.
+Challenge.hasMany(ChallengeParticipant, { foreignKey: 'challenge_id', as: 'participants', onDelete: 'CASCADE' });
+ChallengeParticipant.belongsTo(Challenge, { foreignKey: 'challenge_id', as: 'challenge' });
+
+Enrollment.hasMany(ChallengeParticipant, { foreignKey: 'enrollment_id', as: 'challengeParticipations' });
+ChallengeParticipant.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// One score row per participant (drives the leaderboard).
+ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participant_id', as: 'score', onDelete: 'CASCADE' });
+LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
 
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
@@ -885,6 +970,7 @@ export {
   ContentGenerationLog,
   AiAgent,
   AiAgentActivityLog,
+  AiEvent,
   CampaignHealth,
   CampaignError,
   AiSystemEvent,
@@ -991,6 +1077,10 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  InboxOpportunityScore,
+  InboxFalseNegativeFeedback,
+  InboxSurfacePreference,
+  InboxDeletedEmail,
   LeadSource,
   EntryPoint,
   FormDefinition,
@@ -1041,7 +1131,32 @@ export {
   AnthropicChangeEvent,
   // AI Systems Architect Accelerator
   ProjectDna,
+  StudentGithubActivity,
+  // One Class, Many Doors — Sponsorship + Challenge/Leaderboard
+  Sponsor,
+  SponsorSeat,
+  Challenge,
+  ChallengeParticipant,
+  LeaderboardScore,
+  // Curriculum + enrollment + Skilljar sync (from main)
+  CurriculumCourseLink,
+  EnrollmentLead,
+  StudentTaskList,
+  StudentTask,
+  StudentPointsEvent,
+  OpenHouseEvent,
+  OnboardingProfile,
+  // Timeline Engine (Classroom rebuild)
+  TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
+  CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
+  // Experience Builder (Phase 1)
+  ComponentVersion,
+  ComponentAnalytics,
 };
+
+// --- Enrollment Lead associations ---
+EnrollmentLead.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(EnrollmentLead, { foreignKey: 'enrollment_id', as: 'enrollmentLead' });
 
 // --- AI Company Layer associations ---
 AiCompany.hasMany(CompanyGoal, { foreignKey: 'company_id', as: 'goals' });
@@ -1067,3 +1182,11 @@ SkoolTask.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' }
 
 SkoolResponse.hasMany(SkoolEngagement, { foreignKey: 'response_id', as: 'engagements' });
 SkoolEngagement.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
+
+// --- Timeline Engine associations (Classroom rebuild) ---
+TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });
+TimelineCardProgress.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });
+Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'timelineProgress' });
+TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
+TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });

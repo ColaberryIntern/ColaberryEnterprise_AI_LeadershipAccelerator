@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import api from '../../utils/api';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface PageFunnel {
   page_path: string;
@@ -41,6 +43,31 @@ export default function AdminFunnelPage() {
     return () => { cancelled = true; };
   }, [days]);
 
+  const summary = useMemo(() => {
+    const tracked = pages.length;
+    const visitors = pages.reduce((acc, p) => acc + p.visitors, 0);
+    const booked = pages.reduce((acc, p) => acc + p.booked, 0);
+    const converting = pages.filter((p) => p.booked > 0).length;
+    const leaky = pages.filter((p) => p.visitors > 5 && p.modal_opened === 0 && p.booked === 0).length;
+    return { tracked, visitors, booked, converting, leaky };
+  }, [pages]);
+
+  // Per-page trust signal derived from funnel coverage and conversion health.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'funnel',
+    updatedAt: new Date().toISOString(),
+    summary: `${summary.converting}/${summary.tracked} pages converting, ${summary.leaky} leaky over ${days}d.`,
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Coverage',
+        status: 'live',
+        evidence: [{ label: 'Pages tracked', value: String(summary.tracked) }],
+      },
+    ],
+  }), [summary, days]);
+
   const cellPct = (n: number, pct: number) => (
     <td className="text-center">
       <div className="fw-semibold">{n.toLocaleString()}</div>
@@ -49,29 +76,47 @@ export default function AdminFunnelPage() {
   );
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h4 className="fw-semibold mb-1">Funnel Drop-off by Page</h4>
-          <p className="text-muted small mb-0">Where visitors land, engage, and drop off across the public site.</p>
+    <>
+      <PageHeader
+        title="Funnel"
+        icon="filter-2-line"
+        subtitle="Where visitors land, engage, and drop off across the public site."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Funnel' }]}
+        trust={trust}
+        actions={
+          <div className="btn-group btn-group-sm" role="group" aria-label="Time window">
+            {DAY_OPTIONS.map(d => (
+              <button
+                key={d}
+                type="button"
+                className={`btn ${days === d ? 'btn-primary' : 'btn-outline-primary'}`}
+                onClick={() => setDays(d)}
+              >
+                {d === 1 ? '24h' : `${d} days`}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Visitors" value={summary.visitors.toLocaleString()} icon="user-3-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Pages Tracked" value={summary.tracked} icon="pages-line" tone="neutral" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Converting" value={summary.converting} icon="checkbox-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Leaky" value={summary.leaky} icon="error-warning-line" tone={summary.leaky ? 'warning' : 'neutral'} />
+          </div>
         </div>
-        <div className="btn-group btn-group-sm" role="group">
-          {DAY_OPTIONS.map(d => (
-            <button
-              key={d}
-              type="button"
-              className={`btn ${days === d ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setDays(d)}
-            >
-              {d === 1 ? '24h' : `${d} days`}
-            </button>
-          ))}
-        </div>
-      </div>
+      </PageHeader>
 
       {error && <div className="alert alert-danger">{error}</div>}
 
-      <div className="card border-0 shadow-sm">
+      <SectionCard padded={false}>
         <div className="table-responsive">
           <table className="table table-hover mb-0 align-middle">
             <thead className="table-light">
@@ -97,8 +142,8 @@ export default function AdminFunnelPage() {
                 <tr key={p.page_path}>
                   <td>
                     <code className="small">{p.page_path}</code>
-                    {p.booked > 0 && <span className="badge bg-success ms-2">Converting</span>}
-                    {p.visitors > 5 && p.modal_opened === 0 && p.booked === 0 && <span className="badge bg-warning text-dark ms-2">Leaky</span>}
+                    {p.booked > 0 && <span className="ms-2"><StatusBadge label="Converting" tone="success" /></span>}
+                    {p.visitors > 5 && p.modal_opened === 0 && p.booked === 0 && <span className="ms-2"><StatusBadge label="Leaky" tone="warning" /></span>}
                   </td>
                   <td className="text-center fw-semibold">{p.visitors}</td>
                   {cellPct(p.scrolled, p.scrolled_pct)}
@@ -112,11 +157,11 @@ export default function AdminFunnelPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </SectionCard>
 
       <div className="mt-3 small text-muted">
-        <strong>How to read this:</strong> Each column shows the count and the % of visitors who reached that step. A page with high visitors but low CTA-click % is a copy/positioning problem. A page with high CTA-click but low Modal-Opened is a button/UX problem. High Modal-Opened but low Booked is a form/friction problem. <span className="badge bg-warning text-dark ms-1">Leaky</span> flags pages with 5+ visitors and 0 conversions; <span className="badge bg-success ms-1">Converting</span> flags pages that produced bookings.
+        <strong>How to read this:</strong> Each column shows the count and the % of visitors who reached that step. A page with high visitors but low CTA-click % is a copy/positioning problem. A page with high CTA-click but low Modal-Opened is a button/UX problem. High Modal-Opened but low Booked is a form/friction problem. <span className="ms-1"><StatusBadge label="Leaky" tone="warning" /></span> flags pages with 5+ visitors and 0 conversions; <span className="ms-1"><StatusBadge label="Converting" tone="success" /></span> flags pages that produced bookings.
       </div>
-    </div>
+    </>
   );
 }

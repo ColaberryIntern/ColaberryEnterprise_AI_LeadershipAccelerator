@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 import AgentRegistryTab from './ai-settings/AgentRegistryTab';
 import ActivityDetailModal from './ai-settings/ActivityDetailModal';
 import ExecutionTraceModal from './ai-settings/ExecutionTraceModal';
@@ -159,16 +161,25 @@ const RESULT_COLORS: Record<string, string> = {
   pending: 'warning',
 };
 
-const GOVERNANCE_STATUS_COLORS: Record<string, string> = {
+const AUTONOMY_LABELS: Record<string, { color: string; label: string }> = {
+  full: { color: 'success', label: 'Full Autonomy' },
+  safe: { color: 'warning', label: 'Safe Mode' },
+  manual: { color: 'secondary', label: 'Manual Override' },
+};
+
+// Shell StatusBadge tone maps for the top-level page chrome.
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
+const GOVERNANCE_STATUS_TONES: Record<string, BadgeTone> = {
   healthy: 'success',
   degraded: 'warning',
   critical: 'danger',
 };
 
-const AUTONOMY_LABELS: Record<string, { color: string; label: string }> = {
-  full: { color: 'success', label: 'Full Autonomy' },
-  safe: { color: 'warning', label: 'Safe Mode' },
-  manual: { color: 'secondary', label: 'Manual Override' },
+const AUTONOMY_TONES: Record<string, BadgeTone> = {
+  full: 'success',
+  safe: 'warning',
+  manual: 'neutral',
 };
 
 interface GovernanceOverview {
@@ -380,6 +391,31 @@ function AdminAISettingsPage() {
     }
   };
 
+  // Per-page trust signal (Basecamp todo 10027085963) — derived from the live
+  // AI-ops/governance aggregate so the header chip reflects fleet + error health.
+  const trust: TrustSignal = useMemo(() => {
+    const status = governanceOverview?.system_status;
+    const errors24h = governanceOverview?.errors_24h ?? 0;
+    const totalAgents = overview?.total_agents ?? 0;
+    const erroredAgents = overview?.errored ?? 0;
+    const level: TrustSignal['level'] =
+      status === 'critical' ? 'error' : status === 'degraded' ? 'stale' : 'live';
+    return {
+      level,
+      source: 'AI settings',
+      updatedAt: new Date().toISOString(),
+      summary: `${totalAgents} agents online · ${erroredAgents} errored · ${errors24h} errors in 24h.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Fleet Health',
+          status: erroredAgents === 0 ? 'verified' : erroredAgents <= 2 ? 'live' : 'stale',
+          evidence: [{ label: 'Errored agents', value: `${erroredAgents}/${totalAgents}` }],
+        },
+      ],
+    };
+  }, [governanceOverview, overview]);
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -397,28 +433,29 @@ function AdminAISettingsPage() {
           <strong>MANUAL OVERRIDE ACTIVE</strong> — All AI agent actions require manual approval. Automated operations are paused.
         </div>
       )}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h4 className="mb-1 fw-bold" style={{ color: 'var(--color-primary)' }}>
-            AI Control Center
-          </h4>
-          <p className="text-muted small mb-0">
-            Full observability and control across all {overview?.total_agents || 0} autonomous agents
-          </p>
-        </div>
-        <div className="d-flex gap-2 align-items-center">
-          {governanceOverview && (
-            <>
-              <span className={`badge bg-${GOVERNANCE_STATUS_COLORS[governanceOverview.system_status] || 'secondary'}`}>
-                {governanceOverview.system_status.toUpperCase()}
-              </span>
-              <span className={`badge bg-${AUTONOMY_LABELS[autonomyMode]?.color || 'success'}`}>
-                {AUTONOMY_LABELS[autonomyMode]?.label || 'Full Autonomy'}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="AI Settings"
+        icon="cpu-line"
+        subtitle={`Full observability and control across all ${overview?.total_agents || 0} autonomous agents.`}
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'AI Settings' }]}
+        trust={trust}
+        actions={
+          governanceOverview ? (
+            <div className="d-flex gap-2 align-items-center flex-wrap">
+              <StatusBadge
+                label={governanceOverview.system_status.toUpperCase()}
+                tone={GOVERNANCE_STATUS_TONES[governanceOverview.system_status] || 'neutral'}
+                icon="heart-pulse-line"
+              />
+              <StatusBadge
+                label={AUTONOMY_LABELS[autonomyMode]?.label || 'Full Autonomy'}
+                tone={AUTONOMY_TONES[autonomyMode] || 'success'}
+                icon="robot-2-line"
+              />
+            </div>
+          ) : undefined
+        }
+      />
 
       {/* Tabs */}
       <ul className="nav nav-tabs mb-4">
@@ -450,7 +487,6 @@ function AdminAISettingsPage() {
           onSelectAgent={setSelectedAgentId}
           onSelectCampaign={setSelectedCampaignId}
           governanceOverview={governanceOverview}
-          autonomyMode={autonomyMode}
         />
       )}
       {activeTab === 'registry' && <AgentRegistryTab />}
@@ -562,7 +598,6 @@ function OverviewTab({
   onSelectAgent,
   onSelectCampaign,
   governanceOverview,
-  autonomyMode,
 }: {
   overview: Overview | null;
   health: HealthRecord[];
@@ -571,28 +606,21 @@ function OverviewTab({
   onSelectAgent: (id: string) => void;
   onSelectCampaign: (id: string) => void;
   governanceOverview: GovernanceOverview | null;
-  autonomyMode: string;
 }) {
   if (!overview) return <p className="text-muted">No data available</p>;
 
-  const kpi = (label: string, value: string | number, color: string, subtitle?: string) => (
+  const kpi = (
+    label: string,
+    value: string | number,
+    tone: BadgeTone,
+    icon: string,
+    hint?: string,
+  ) => (
     <div className="col-6 col-md-4 col-xl" key={label}>
-      <div className="card border-0 shadow-sm">
-        <div className="card-body text-center py-3">
-          <div className="small text-muted mb-1">{label}</div>
-          <div className="h4 fw-bold mb-0" style={{ color }}>
-            {value}
-          </div>
-          {subtitle && <div className="small text-muted mt-1">{subtitle}</div>}
-        </div>
-      </div>
+      <StatCard label={label} value={value} tone={tone} icon={icon} hint={hint} />
     </div>
   );
 
-  const govStatusColor = governanceOverview
-    ? GOVERNANCE_STATUS_COLORS[governanceOverview.system_status] || 'secondary'
-    : 'secondary';
-  const autonomyInfo = AUTONOMY_LABELS[autonomyMode] || AUTONOMY_LABELS.full;
   const ss = governanceOverview?.settings_sync;
 
   return (
@@ -602,135 +630,124 @@ function OverviewTab({
         {governanceOverview && (
           <>
             <div className="col-6 col-md-4 col-xl">
-              <div className="card border-0 shadow-sm">
-                <div className="card-body text-center py-3">
-                  <div className="small text-muted mb-1">System Health</div>
-                  <span className={`badge bg-${govStatusColor} fs-6`}>
-                    {governanceOverview.system_status.toUpperCase()}
-                  </span>
-                </div>
-              </div>
+              <StatCard
+                label="System Health"
+                value={
+                  <StatusBadge
+                    label={governanceOverview.system_status.toUpperCase()}
+                    tone={GOVERNANCE_STATUS_TONES[governanceOverview.system_status] || 'neutral'}
+                  />
+                }
+                tone={GOVERNANCE_STATUS_TONES[governanceOverview.system_status] || 'neutral'}
+                icon="heart-pulse-line"
+              />
             </div>
-            {kpi('Errors (24h)', governanceOverview.errors_24h, governanceOverview.errors_24h > 0 ? 'var(--color-secondary)' : 'var(--color-accent)')}
+            {kpi('Errors (24h)', governanceOverview.errors_24h, governanceOverview.errors_24h > 0 ? 'danger' : 'success', 'error-warning-line')}
           </>
         )}
-        {kpi('Total Agents', overview.total_agents, 'var(--color-primary)')}
-        {kpi('Running', overview.running, 'var(--color-primary-light)')}
-        {kpi('Idle', overview.idle, 'var(--color-accent)')}
-        {kpi('Paused', overview.paused, '#e0a800')}
-        {kpi('Errored', overview.errored, 'var(--color-secondary)')}
-        {kpi('Health Score', overview.avg_health_score, overview.avg_health_score >= 80 ? 'var(--color-accent)' : overview.avg_health_score >= 60 ? '#e0a800' : 'var(--color-secondary)')}
-        {kpi('Actions Today', overview.actions_today, 'var(--color-primary-light)')}
-        {kpi('Repairs Today', overview.repairs_today, 'var(--color-accent)')}
+        {kpi('Total Agents', overview.total_agents, 'primary', 'robot-2-line')}
+        {kpi('Running', overview.running, 'info', 'play-circle-line')}
+        {kpi('Idle', overview.idle, 'success', 'pause-circle-line')}
+        {kpi('Paused', overview.paused, 'warning', 'stop-circle-line')}
+        {kpi('Errored', overview.errored, overview.errored > 0 ? 'danger' : 'success', 'alert-line')}
+        {kpi('Health Score', overview.avg_health_score, overview.avg_health_score >= 80 ? 'success' : overview.avg_health_score >= 60 ? 'warning' : 'danger', 'pulse-line')}
+        {kpi('Actions Today', overview.actions_today, 'info', 'flashlight-line')}
+        {kpi('Repairs Today', overview.repairs_today, 'success', 'tools-line')}
       </div>
 
       {/* Settings Sync — Read-Only Mirror */}
       {ss && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-semibold d-flex align-items-center gap-2">
-            Settings Sync
-            <span className="badge bg-secondary small" style={{ fontSize: '0.65rem' }}>READ-ONLY</span>
-          </div>
-          <div className="card-body">
-            <div className="row g-3">
-              <div className="col-md-2 col-sm-6">
-                <div className="text-muted small mb-1">Intent Threshold</div>
-                <div className="fw-bold">{ss.high_intent_threshold}</div>
-              </div>
-              <div className="col-md-2 col-sm-6">
-                <div className="text-muted small mb-1">Price/Enrollment</div>
-                <div className="fw-bold">${ss.price_per_enrollment.toLocaleString()}</div>
-              </div>
-              <div className="col-md-2 col-sm-4">
-                <div className="text-muted small mb-1">Test Mode</div>
-                <span className={`badge bg-${ss.test_mode_enabled ? 'warning' : 'success'}`}>
-                  {ss.test_mode_enabled ? 'ACTIVE' : 'OFF'}
-                </span>
-              </div>
-              <div className="col-md-2 col-sm-4">
-                <div className="text-muted small mb-1">Follow-Up</div>
-                <span className={`badge bg-${ss.follow_up_enabled ? 'success' : 'secondary'}`}>
-                  {ss.follow_up_enabled ? 'ON' : 'OFF'}
-                </span>
-              </div>
-              <div className="col-md-2 col-sm-4">
-                <div className="text-muted small mb-1">Auto Email</div>
-                <span className={`badge bg-${ss.enable_auto_email ? 'success' : 'secondary'}`}>
-                  {ss.enable_auto_email ? 'ON' : 'OFF'}
-                </span>
-              </div>
-              <div className="col-md-2 col-sm-4">
-                <div className="text-muted small mb-1">Voice Calls</div>
-                <span className={`badge bg-${ss.enable_voice_calls ? 'success' : 'secondary'}`}>
-                  {ss.enable_voice_calls ? 'ON' : 'OFF'}
-                </span>
-              </div>
+        <SectionCard
+          title="Settings Sync"
+          actions={<StatusBadge label="READ-ONLY" tone="neutral" />}
+          className="mb-4"
+        >
+          <div className="row g-3">
+            <div className="col-md-2 col-sm-6">
+              <div className="text-muted small mb-1">Intent Threshold</div>
+              <div className="fw-bold">{ss.high_intent_threshold}</div>
             </div>
-            <div className="form-text mt-2">
-              These values are read from Settings. To modify, use the Settings page.
+            <div className="col-md-2 col-sm-6">
+              <div className="text-muted small mb-1">Price/Enrollment</div>
+              <div className="fw-bold">${ss.price_per_enrollment.toLocaleString()}</div>
+            </div>
+            <div className="col-md-2 col-sm-4">
+              <div className="text-muted small mb-1">Test Mode</div>
+              <StatusBadge label={ss.test_mode_enabled ? 'ACTIVE' : 'OFF'} tone={ss.test_mode_enabled ? 'warning' : 'success'} />
+            </div>
+            <div className="col-md-2 col-sm-4">
+              <div className="text-muted small mb-1">Follow-Up</div>
+              <StatusBadge label={ss.follow_up_enabled ? 'ON' : 'OFF'} tone={ss.follow_up_enabled ? 'success' : 'neutral'} />
+            </div>
+            <div className="col-md-2 col-sm-4">
+              <div className="text-muted small mb-1">Auto Email</div>
+              <StatusBadge label={ss.enable_auto_email ? 'ON' : 'OFF'} tone={ss.enable_auto_email ? 'success' : 'neutral'} />
+            </div>
+            <div className="col-md-2 col-sm-4">
+              <div className="text-muted small mb-1">Voice Calls</div>
+              <StatusBadge label={ss.enable_voice_calls ? 'ON' : 'OFF'} tone={ss.enable_voice_calls ? 'success' : 'neutral'} />
             </div>
           </div>
-        </div>
+          <div className="form-text mt-2">
+            These values are read from Settings. To modify, use the Settings page.
+          </div>
+        </SectionCard>
       )}
 
       <div className="row g-3">
         {/* Agent Summary by Category */}
         <div className="col-lg-7">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">
-              All AI Agents ({overview.agents_summary.length})
-            </div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover mb-0 small">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Agent</th>
-                      <th>Category</th>
-                      <th>Status</th>
-                      <th>Runs</th>
-                      <th>Errors</th>
-                      <th>Last Run</th>
+          <SectionCard title={`All AI Agents (${overview.agents_summary.length})`} padded={false}>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0 small">
+                <thead className="table-light">
+                  <tr>
+                    <th>Agent</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Runs</th>
+                    <th>Errors</th>
+                    <th>Last Run</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview.agents_summary.map((a) => (
+                    <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => onSelectAgent(a.id)}>
+                      <td className="fw-medium">{a.name}</td>
+                      <td>
+                        <span className={`badge bg-${CATEGORY_COLORS[a.category] || 'secondary'}`}>
+                          {a.category?.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge bg-${STATUS_COLORS[a.status] || 'secondary'}`}>
+                          {a.status}
+                        </span>
+                        {!a.enabled && <span className="badge bg-danger ms-1">off</span>}
+                      </td>
+                      <td>{a.run_count}</td>
+                      <td>
+                        {a.error_count > 0 ? (
+                          <span className="badge bg-danger">{a.error_count}</span>
+                        ) : (
+                          <span className="text-muted">0</span>
+                        )}
+                      </td>
+                      <td className="text-muted">{timeAgo(a.last_run_at)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {overview.agents_summary.map((a) => (
-                      <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => onSelectAgent(a.id)}>
-                        <td className="fw-medium">{a.name}</td>
-                        <td>
-                          <span className={`badge bg-${CATEGORY_COLORS[a.category] || 'secondary'}`}>
-                            {a.category?.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge bg-${STATUS_COLORS[a.status] || 'secondary'}`}>
-                            {a.status}
-                          </span>
-                          {!a.enabled && <span className="badge bg-danger ms-1">off</span>}
-                        </td>
-                        <td>{a.run_count}</td>
-                        <td>
-                          {a.error_count > 0 ? (
-                            <span className="badge bg-danger">{a.error_count}</span>
-                          ) : (
-                            <span className="text-muted">0</span>
-                          )}
-                        </td>
-                        <td className="text-muted">{timeAgo(a.last_run_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
 
         {/* Campaign Health Summary */}
         <div className="col-lg-5">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-              Campaign Health
+          <SectionCard
+            title="Campaign Health"
+            padded={false}
+            actions={
               <button
                 className="btn btn-sm btn-outline-primary"
                 onClick={onScan}
@@ -738,12 +755,12 @@ function OverviewTab({
               >
                 {scanLoading ? 'Scanning...' : 'Scan Now'}
               </button>
-            </div>
-            <div className="card-body p-0">
-              {health.length === 0 ? (
-                <p className="text-muted p-3 mb-0">No health data yet. Run a scan to populate.</p>
-              ) : (
-                <div className="table-responsive">
+            }
+          >
+            {health.length === 0 ? (
+              <p className="text-muted p-3 mb-0">No health data yet. Run a scan to populate.</p>
+            ) : (
+              <div className="table-responsive">
                   <table className="table table-hover mb-0 small">
                     <thead className="table-light">
                       <tr>
@@ -778,8 +795,7 @@ function OverviewTab({
                   </table>
                 </div>
               )}
-            </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
     </>

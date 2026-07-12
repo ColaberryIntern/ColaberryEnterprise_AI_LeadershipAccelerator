@@ -6,6 +6,7 @@
  * Pass 3: Final sweep — assign stragglers to closest match
  */
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../../services/openaiInstrumented';
 import Capability from '../../models/Capability';
 import Feature from '../../models/Feature';
 import { RequirementsMap } from '../../models';
@@ -13,7 +14,7 @@ import { Op } from 'sequelize';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'requirement_group' });
   return _openai;
 }
 

@@ -9,6 +9,8 @@
  * uses the stored taxonomy deterministically.
  */
 
+import { getInstrumentedOpenAI } from '../../services/openaiInstrumented';
+
 export interface TaxonomyCategory {
   name: string;
   description: string;
@@ -153,8 +155,7 @@ Ticket, Alert are SEPARATE business domains — each needs its own category.`;
 async function deriveIndustry(orgName: string, docSummary: string): Promise<string> {
   if (!docSummary) return 'Technology';
   try {
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'taxonomy_gen' });
     const result = await openai.chat.completions.create({
       model: 'gpt-4o-mini', temperature: 0, max_tokens: 50,
       response_format: { type: 'json_object' },
@@ -179,8 +180,7 @@ async function callLLMForTaxonomy(
   businessContext: string
 ): Promise<TaxonomyCategory[]> {
   try {
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'taxonomy_gen' });
 
     const result = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

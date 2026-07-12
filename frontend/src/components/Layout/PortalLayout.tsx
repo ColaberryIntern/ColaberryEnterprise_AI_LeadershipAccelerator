@@ -62,7 +62,7 @@ function PortalLayout() {
       )}
       <nav className="navbar navbar-expand-lg bg-white border-bottom shadow-sm">
         <div className="container">
-          <span className="navbar-brand fw-bold" style={{ color: 'var(--color-primary)' }}>
+          <span className="navbar-brand fw-bold" style={{ color: '#FB2832' }}>
             Accelerator Portal
           </span>
           <button
@@ -117,7 +117,7 @@ function PortalLayout() {
                           `nav-link ${isActive ? 'fw-semibold' : ''}`
                         }
                         style={({ isActive }) => ({
-                          color: isActive ? 'var(--color-primary)' : 'var(--color-text-light)',
+                          color: isActive ? '#FB2832' : 'var(--color-text-light)',
                         })}
                       >
                         <i className={`bi ${item.icon} me-1`}></i>

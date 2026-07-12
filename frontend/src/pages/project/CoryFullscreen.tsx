@@ -239,7 +239,7 @@ export default function CoryFullscreen() {
         <div className="d-flex align-items-center gap-2">
           <i className="bi bi-robot" style={{ color: '#3b82f6', fontSize: 20 }}></i>
           <div>
-            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: 'var(--color-primary)' }}>
+            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#FB2832' }}>
               Cory — AI System Architect
             </h6>
             <span className="text-muted" style={{ fontSize: 10 }}>
@@ -275,7 +275,7 @@ export default function CoryFullscreen() {
               maxWidth: '85%',
               padding: '14px 18px',
               borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-              background: msg.role === 'user' ? 'var(--color-primary)' : '#fff',
+              background: msg.role === 'user' ? '#FB2832' : '#fff',
               color: msg.role === 'user' ? '#fff' : 'var(--color-text)',
               fontSize: msg.role === 'cory' ? 15 : 14,
               lineHeight: 1.65,
@@ -292,9 +292,9 @@ export default function CoryFullscreen() {
                 <div className="cory-md">
                   <ReactMarkdown
                     components={{
-                      h1: ({ children }) => <h4 style={{ fontSize: 19, fontWeight: 700, color: 'var(--color-primary)', marginTop: 8, marginBottom: 10 }}>{children}</h4>,
-                      h2: ({ children }) => <h5 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-primary)', marginTop: 14, marginBottom: 8 }}>{children}</h5>,
-                      h3: ({ children }) => <h6 style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-primary)', marginTop: 12, marginBottom: 6 }}>{children}</h6>,
+                      h1: ({ children }) => <h4 style={{ fontSize: 19, fontWeight: 700, color: '#FB2832', marginTop: 8, marginBottom: 10 }}>{children}</h4>,
+                      h2: ({ children }) => <h5 style={{ fontSize: 17, fontWeight: 700, color: '#FB2832', marginTop: 14, marginBottom: 8 }}>{children}</h5>,
+                      h3: ({ children }) => <h6 style={{ fontSize: 15, fontWeight: 700, color: '#FB2832', marginTop: 12, marginBottom: 6 }}>{children}</h6>,
                       p: ({ children }) => <p style={{ fontSize: 15, lineHeight: 1.65, marginBottom: 10 }}>{children}</p>,
                       strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--color-text)' }}>{children}</strong>,
                       em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
@@ -303,7 +303,7 @@ export default function CoryFullscreen() {
                       li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
                       code: ({ children }) => <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontSize: 13, fontFamily: 'monospace' }}>{children}</code>,
                       blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #cbd5e1', paddingLeft: 12, marginLeft: 0, color: '#475569', fontStyle: 'italic' }}>{children}</blockquote>,
-                      a: ({ href, children }) => <a href={href} style={{ color: 'var(--color-primary-light)', textDecoration: 'underline' }} target="_blank" rel="noopener noreferrer">{children}</a>,
+                      a: ({ href, children }) => <a href={href} style={{ color: '#C20E1E', textDecoration: 'underline' }} target="_blank" rel="noopener noreferrer">{children}</a>,
                     }}
                   >
                     {msg.text}
@@ -324,7 +324,7 @@ export default function CoryFullscreen() {
                         background: '#f0f4ff',
                         border: '1px solid #bfdbfe',
                         borderRadius: 8,
-                        color: 'var(--color-primary)',
+                        color: '#FB2832',
                         fontSize: 12,
                         padding: '8px 12px',
                         fontWeight: 500,
@@ -374,8 +374,8 @@ export default function CoryFullscreen() {
               }}
             />
             <button
-              className="btn btn-primary"
-              style={{ borderRadius: 12, padding: '0 16px', fontSize: 14 }}
+              className="btn"
+              style={{ borderRadius: 12, padding: '0 16px', fontSize: 14, background: '#FB2832', color: '#fff', border: 'none' }}
               disabled={!input.trim() || sending}
               onClick={() => handleSend()}
             >

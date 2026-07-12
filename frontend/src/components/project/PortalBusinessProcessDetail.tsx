@@ -12,7 +12,7 @@ const PROMPT_TARGETS = [
   { key: 'agent_enhancement', label: 'Enhance Agent', icon: 'bi-cpu' },
 ];
 
-const MATURITY_COLORS: Record<number, string> = { 0: '#9ca3af', 1: 'var(--color-danger)', 2: 'var(--color-warning)', 3: 'var(--color-info)', 4: 'var(--color-success)', 5: '#8b5cf6' };
+const MATURITY_COLORS: Record<number, string> = { 0: '#9ca3af', 1: 'var(--color-danger)', 2: 'var(--color-warning)', 3: 'var(--color-info)', 4: 'var(--color-success)', 5: '#367895' };
 
 function StatusDot({ status }: { status: string }) {
   const c: Record<string, string> = { ready: 'var(--color-success)', partial: 'var(--color-warning)', missing: 'var(--color-danger)' };
@@ -31,7 +31,7 @@ function MetricBar({ label, value, color }: { label: string; value: number; colo
 
 function showToast(msg: string) {
   const el = document.createElement('div');
-  el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
+  el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3000);
 }
@@ -93,7 +93,7 @@ function PageVisualReview({ processId, processName, review, previewUrl, onUpdate
       {/* Header progress bar */}
       <div className="mb-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
         <div className="d-flex justify-content-between align-items-center mb-1" style={{ fontSize: 11 }}>
-          <span className="fw-semibold" style={{ color: 'var(--color-primary)' }}>Visual review progress</span>
+          <span className="fw-semibold" style={{ color: '#FB2832' }}>Visual review progress</span>
           <span style={{ color: barColor, fontWeight: 600 }}>{verifiedCount} / {VISUAL_REVIEW_CATEGORIES.length} verified · {completionPct}%</span>
         </div>
         <div className="progress" style={{ height: 6 }}>
@@ -104,7 +104,7 @@ function PageVisualReview({ processId, processName, review, previewUrl, onUpdate
       {/* Optional preview link */}
       {previewUrl && (
         <div className="mb-3" style={{ fontSize: 11 }}>
-          <i className="bi bi-eye me-1" style={{ color: 'var(--color-primary)' }}></i>
+          <i className="bi bi-eye me-1" style={{ color: '#FB2832' }}></i>
           Preview: <a href={previewUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace' }}>{previewUrl}</a>
         </div>
       )}
@@ -129,7 +129,7 @@ function PageVisualReview({ processId, processName, review, previewUrl, onUpdate
                 onChange={() => { /* handled by row click */ }}
                 style={{ flexShrink: 0, cursor: 'pointer' }}
               />
-              <i className={`bi ${cat.icon} me-1`} style={{ color: verified ? '#10b981' : 'var(--color-primary)', fontSize: 16, marginTop: 1 }}></i>
+              <i className={`bi ${cat.icon} me-1`} style={{ color: verified ? '#10b981' : '#FB2832', fontSize: 16, marginTop: 1 }}></i>
               <div className="flex-grow-1">
                 <div className="fw-semibold" style={{ fontSize: 12, color: verified ? '#065f46' : 'var(--color-text)' }}>
                   {cat.label}
@@ -250,8 +250,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
     return (
       <div className="mb-3">
         <div className="d-flex align-items-center gap-2 mb-2" style={{ cursor: collapsible ? 'pointer' : 'default' }} onClick={() => collapsible && setOpen(!open)}>
-          <span className="badge" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{num}</span>
-          <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: 'var(--color-primary)' }}>{title}</h6>
+          <span className="badge" style={{ background: '#FB2832', color: '#fff', fontSize: 10, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{num}</span>
+          <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: '#FB2832' }}>{title}</h6>
           {collapsible && <i className={`bi bi-chevron-${open ? 'up' : 'down'} ms-auto`} style={{ fontSize: 12, color: '#9ca3af' }}></i>}
         </div>
         {(!collapsible || open) && <div className="ps-4">{children}</div>}
@@ -261,11 +261,11 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
 
   const matColor = MATURITY_COLORS[mat.level] || '#9ca3af';
   const isPageBP = p.is_page_bp || p.source === 'frontend_page';
-  const accentColor = isPageBP ? '#8b5cf6' : 'var(--color-primary)';
+  const accentColor = isPageBP ? '#367895' : '#FB2832';
 
   return (
-    <div className="card border-0 shadow" style={isPageBP ? { background: '#faf5ff' } : undefined}>
-      <div className="card-header bg-white py-3 d-flex justify-content-between align-items-start" style={{ borderBottom: `3px solid ${isPageBP ? '#8b5cf6' : u.usable ? 'var(--color-success)' : 'var(--color-danger)'}` }}>
+    <div className="card border-0 shadow" style={isPageBP ? { background: 'rgba(54,120,149,0.06)' } : undefined}>
+      <div className="card-header bg-white py-3 d-flex justify-content-between align-items-start" style={{ borderBottom: `3px solid ${isPageBP ? '#367895' : u.usable ? 'var(--color-success)' : 'var(--color-danger)'}` }}>
         <div>
           <h5 className="fw-bold mb-1" style={{ color: accentColor }}>
             {isPageBP && <i className="bi bi-layout-wtf me-2"></i>}
@@ -273,11 +273,11 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           </h5>
           <span className="text-muted" style={{ fontSize: 12 }}>
             {isPageBP ? (p.frontend_route || 'Frontend page') : `${p.total_requirements} requirements`}
-            {isPageBP && <span className="badge ms-2" style={{ fontSize: 9, background: '#8b5cf620', color: '#8b5cf6' }}>Page BP</span>}
+            {isPageBP && <span className="badge ms-2" style={{ fontSize: 9, background: 'rgba(54,120,149,0.10)', color: '#367895' }}>Page BP</span>}
           </span>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', fontSize: 10, fontWeight: 700, border: '1px solid #6366f140' }} onClick={async () => {
+          <button className="btn btn-sm" style={{ background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 10, fontWeight: 700, border: '1px solid rgba(251,40,50,0.25)' }} onClick={async () => {
             const featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
             const gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
             const reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
@@ -349,7 +349,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             }
             window.open('https://chatgpt.com', '_blank');
             const toast = document.createElement('div');
-            toast.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>Learn Mode prompt copied — paste in ChatGPT</div>';
+            toast.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>Learn Mode prompt copied — paste in ChatGPT</div>';
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 4000);
           }}>
@@ -405,7 +405,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 { key: 'backend', label: 'Services', icon: 'bi-gear', color: 'var(--color-info)' },
                 { key: 'models', label: 'Database', icon: 'bi-database', color: 'var(--color-warning)' },
                 { key: 'frontend', label: 'Frontend', icon: 'bi-layout-wtf', color: 'var(--color-success)' },
-                { key: 'agents', label: 'Agents', icon: 'bi-cpu', color: '#8b5cf6' },
+                { key: 'agents', label: 'Agents', icon: 'bi-cpu', color: '#367895' },
               ].filter(l => (links[l.key] || []).length > 0).map(l => (
                 <div key={l.key} className="col-md-3">
                   <div className="fw-medium small mb-1"><i className={`bi ${l.icon} me-1`} style={{ color: l.color }}></i>{l.label} ({links[l.key].length})</div>
@@ -447,7 +447,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         await portalApi.put(`/api/portal/project/business-processes/${processId}/frontend-route`, { route: newRoute || null });
                         // Show confirmation
                         const el = document.createElement('div');
-                        el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:var(--color-primary);color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-check-circle me-1"></i>Route saved: ${newRoute || '/'}</div>`;
+                        el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-check-circle me-1"></i>Route saved: ${newRoute || '/'}</div>`;
                         document.body.appendChild(el); setTimeout(() => el.remove(), 2000);
                         load();
                       } catch (err: any) {
@@ -494,7 +494,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         position: 'absolute', inset: 0,
                         display: 'flex', flexDirection: 'column',
                         alignItems: 'center', justifyContent: 'center',
-                        background: 'rgba(26, 54, 93, 0.08)',
+                        background: 'rgba(251,40,50,0.08)',
                         borderRadius: 8, pointerEvents: 'none',
                       }}
                     >
@@ -503,21 +503,21 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                           {previewStatus.status === 'failed' ? (
                             <>
                               <i className="bi bi-exclamation-triangle" style={{ fontSize: 24, color: 'var(--color-secondary)' }}></i>
-                              <div className="fw-semibold mt-2" style={{ color: 'var(--color-primary)' }}>Preview failed to start</div>
+                              <div className="fw-semibold mt-2" style={{ color: '#FB2832' }}>Preview failed to start</div>
                               <div className="text-muted small mt-1" style={{ fontSize: 11 }}>{previewStatus.failure_reason || 'Check the admin preview panel for details.'}</div>
                             </>
                           ) : previewStatus.status === 'archived' ? (
                             <>
                               <i className="bi bi-archive" style={{ fontSize: 24, color: 'var(--color-text-light)' }}></i>
-                              <div className="fw-semibold mt-2" style={{ color: 'var(--color-primary)' }}>Preview archived</div>
+                              <div className="fw-semibold mt-2" style={{ color: '#FB2832' }}>Preview archived</div>
                               <div className="text-muted small mt-1" style={{ fontSize: 11 }}>Ask an admin to restore this preview before continuing.</div>
                             </>
                           ) : (
                             <>
-                              <div className="spinner-border" style={{ color: 'var(--color-primary-light)' }} role="status">
+                              <div className="spinner-border" style={{ color: '#C20E1E' }} role="status">
                                 <span className="visually-hidden">Booting preview…</span>
                               </div>
-                              <div className="fw-semibold mt-2" style={{ color: 'var(--color-primary)' }}>Booting your preview</div>
+                              <div className="fw-semibold mt-2" style={{ color: '#FB2832' }}>Booting your preview</div>
                               <div className="text-muted small mt-1" style={{ fontSize: 11 }}>
                                 This takes 10–30 seconds on first access. We'll unlock it as soon as it's ready.
                               </div>
@@ -531,7 +531,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 </div>
                 <div className="d-flex justify-content-between align-items-center mt-1">
                   <div className="d-flex gap-2 align-items-center">
-                    <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
+                    <button className="btn btn-sm" style={{ fontSize: 10, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                       disabled={analyzingPage}
                       onClick={async () => {
                         setAnalyzingPage(true);
@@ -574,7 +574,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   <input className="form-control form-control-sm" style={{ maxWidth: 300, fontSize: 11 }}
                     placeholder="https://your-app.vercel.app" value={previewUrlInput}
                     onChange={e => setPreviewUrlInput(e.target.value)} />
-                  <button className="btn btn-sm btn-primary" disabled={!previewUrlInput.trim()} onClick={async () => {
+                  <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} disabled={!previewUrlInput.trim()} onClick={async () => {
                     try {
                       const portalApi = (await import('../../utils/portalApi')).default;
                       await portalApi.put('/api/portal/project/preview-url', { url: previewUrlInput.trim() });
@@ -662,7 +662,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
 
               {/* Fix All button — prominent */}
               {elementFeedback?.items?.filter((f: any) => f.status === 'open').length > 0 && (
-                <button className="btn btn-primary w-100 mb-2" style={{ fontWeight: 700 }}
+                <button className="btn w-100 mb-2" style={{ fontWeight: 700, background: '#FB2832', color: '#fff', border: 'none' }}
                   onClick={() => {
                     const openIssues = elementFeedback.items.filter((f: any) => f.status === 'open');
                     const prompt = `Fix ALL ${openIssues.length} UI issues on the "${p.name}" page (${p.frontend_route || '/'}):\n\n${openIssues.map((f: any, i: number) => `${i + 1}. [${f.severity}] ${f.title}\n   ${f.description}\n   Fix: ${f.suggestion || 'Fix as described.'}`).join('\n\n')}\n\nFiles to modify:\n${(links.frontend || []).slice(0, 10).join('\n')}\n\nFix all issues listed above. Make each change carefully.`;
@@ -670,7 +670,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     ta.value = prompt; ta.style.cssText = 'position:fixed;left:-9999px';
                     document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
                     const el = document.createElement('div');
-                    el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 24px;border-radius:10px;font-size:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2)"><i class="bi bi-clipboard-check me-2"></i>Fix All prompt copied (${openIssues.length} issues) — paste into Claude Code</div>`;
+                    el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:12px 24px;border-radius:10px;font-size:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2)"><i class="bi bi-clipboard-check me-2"></i>Fix All prompt copied (${openIssues.length} issues) — paste into Claude Code</div>`;
                     document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
                   }}>
                   <i className="bi bi-wrench me-2"></i>Fix All {elementFeedback.items.filter((f: any) => f.status === 'open').length} Issues — Copy Prompt
@@ -697,14 +697,14 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         {f.suggestion && <div style={{ color: 'var(--color-info)', fontSize: 9 }}><i className="bi bi-lightbulb me-1"></i>{f.suggestion?.substring(0, 120)}</div>}
                       </div>
                       <div className="d-flex gap-1 flex-shrink-0">
-                        <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 8, padding: '1px 6px' }} title="Copy fix prompt for Claude Code"
+                        <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} title="Copy fix prompt for Claude Code"
                           onClick={() => {
                             const prompt = `Fix this UI issue on the "${p.name}" page (${p.frontend_route || '/'}):\n\nIssue: ${f.title}\n${f.description}\n\nSuggestion: ${f.suggestion || 'Fix the issue as described above.'}\n\nFiles to check:\n${(links.frontend || []).slice(0, 5).join('\n')}\n\nMake the fix. Do not change unrelated code.`;
                             const ta = document.createElement('textarea');
                             ta.value = prompt; ta.style.cssText = 'position:fixed;left:-9999px';
                             document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
                             const el = document.createElement('div');
-                            el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Fix prompt copied — paste into Claude Code</div>';
+                            el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Fix prompt copied — paste into Claude Code</div>';
                             document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
                           }}>
                           <i className="bi bi-wrench me-1"></i>Fix
@@ -773,7 +773,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         <thead className="table-light"><tr><th style={{ width: 60 }}>Method</th><th>Path</th><th>Details</th><th>File</th></tr></thead>
                         <tbody>
                           {backendCtx.api_routes.slice(0, 25).map((r: any, i: number) => {
-                            const methodColors: Record<string, string> = { GET: '#10b981', POST: '#3b82f6', PUT: '#f59e0b', DELETE: '#ef4444', PATCH: '#8b5cf6' };
+                            const methodColors: Record<string, string> = { GET: '#10b981', POST: '#3b82f6', PUT: '#f59e0b', DELETE: '#ef4444', PATCH: '#367895' };
                             return (
                               <tr key={i}>
                                 <td><span className="badge" style={{ background: `${methodColors[r.method] || '#6b7280'}20`, color: methodColors[r.method] || '#6b7280', fontSize: 9 }}>{r.method}</span></td>
@@ -800,7 +800,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                       <div key={i} className="mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, border: '1px solid var(--color-border)' }}>
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
-                            <span className="fw-semibold" style={{ fontSize: 11, color: 'var(--color-primary)' }}>{m.name}</span>
+                            <span className="fw-semibold" style={{ fontSize: 11, color: '#FB2832' }}>{m.name}</span>
                             <span className="text-muted ms-1" style={{ fontSize: 10 }}>({m.table_name})</span>
                           </div>
                           <span className="text-muted" style={{ fontSize: 9 }}>{m.source_file?.split('/').pop()}</span>
@@ -833,17 +833,17 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 {/* Agents — with descriptions + method details */}
                 {backendCtx.agents?.length > 0 && (
                   <div className="mb-3">
-                    <div className="fw-medium small mb-1"><i className="bi bi-cpu me-1" style={{ color: '#8b5cf6' }}></i>Agents ({backendCtx.agents.length})</div>
+                    <div className="fw-medium small mb-1"><i className="bi bi-cpu me-1" style={{ color: '#367895' }}></i>Agents ({backendCtx.agents.length})</div>
                     {backendCtx.agents.map((a: any, i: number) => (
-                      <div key={i} className="mb-2 p-2" style={{ background: '#faf5ff', borderRadius: 6, border: '1px solid #8b5cf620' }}>
-                        <div className="fw-semibold" style={{ fontSize: 11, color: '#8b5cf6' }}>{a.name}</div>
+                      <div key={i} className="mb-2 p-2" style={{ background: 'rgba(54,120,149,0.06)', borderRadius: 6, border: '1px solid rgba(54,120,149,0.10)' }}>
+                        <div className="fw-semibold" style={{ fontSize: 11, color: '#367895' }}>{a.name}</div>
                         {a.description && <div className="text-muted mb-1" style={{ fontSize: 9 }}>{a.description}</div>}
                         <span className="text-muted" style={{ fontSize: 9 }}>{a.source_file?.split('/').pop()}</span>
                         {a.methods?.length > 0 && (
                           <div className="mt-1">
                             {a.methods.slice(0, 8).map((m2: any, j: number) => (
                               <div key={j} style={{ fontSize: 9, fontFamily: 'monospace' }} className="d-flex gap-1">
-                                <span style={{ color: '#8b5cf6' }}>{m2.name}</span>
+                                <span style={{ color: '#367895' }}>{m2.name}</span>
                                 <span className="text-muted">({m2.params || ''})</span>
                                 {m2.description && <span className="text-muted ms-1">— {m2.description}</span>}
                               </div>
@@ -1019,7 +1019,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             </div>
           )}
           {(mat.next_level_requirements || []).length > 0 && (
-            <div><div className="fw-medium small mb-1">To reach next level:</div>{mat.next_level_requirements.map((r: string, i: number) => <div key={i} className="text-muted small"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-primary-light)' }}></i>{r}</div>)}</div>
+            <div><div className="fw-medium small mb-1">To reach next level:</div>{mat.next_level_requirements.map((r: string, i: number) => <div key={i} className="text-muted small"><i className="bi bi-arrow-right me-1" style={{ color: '#C20E1E' }}></i>{r}</div>)}</div>
           )}
         </Section>
 
@@ -1027,7 +1027,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         {p.autonomous_enhancements?.count > 0 && (
           <Section num={7.5} title={`Autonomous Enhancements (${p.autonomous_enhancements.count})`} collapsible defaultOpen>
             <div className="mb-2 d-flex align-items-center gap-2">
-              <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 10 }}>
+              <span className="badge" style={{ background: 'rgba(54,120,149,0.10)', color: '#367895', fontSize: 10 }}>
                 <i className="bi bi-robot me-1"></i>System Generated
               </span>
               <span className="text-muted" style={{ fontSize: 10 }}>
@@ -1043,8 +1043,8 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 behavior: 'bi-person-lines-fill', intelligence: 'bi-lightbulb', optimization: 'bi-speedometer2', reporting: 'bi-bar-chart-line',
               };
               return (
-                <div key={r.key} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: '#faf5ff', borderRadius: 6, borderLeft: '3px solid #8b5cf6' }}>
-                  <i className={`bi ${gapTypeIcons[r.gap_type] || 'bi-gear'}`} style={{ color: '#8b5cf6', fontSize: 14, marginTop: 2 }}></i>
+                <div key={r.key} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'rgba(54,120,149,0.06)', borderRadius: 6, borderLeft: '3px solid #367895' }}>
+                  <i className={`bi ${gapTypeIcons[r.gap_type] || 'bi-gear'}`} style={{ color: '#367895', fontSize: 14, marginTop: 2 }}></i>
                   <div className="flex-grow-1">
                     <div className="d-flex justify-content-between align-items-start">
                       <div style={{ fontSize: 11 }}>{r.text}</div>
@@ -1160,7 +1160,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
               <div className="modal-content">
                 <div className="modal-header py-2" style={{ borderBottom: '3px solid #10b981' }}>
-                  <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
+                  <h6 className="modal-title fw-bold" style={{ color: '#FB2832' }}>
                     <i className="bi bi-patch-check-fill me-2" style={{ color: '#10b981' }}></i>Confirm Verified
                   </h6>
                   {verifyModal !== 'submitting' && <button className="btn-close" onClick={() => setVerifyModal(null)}></button>}
@@ -1215,7 +1215,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             <div className="modal-dialog modal-lg modal-dialog-centered" onClick={e => e.stopPropagation()}>
               <div className="modal-content">
                 <div className="modal-header py-2" style={{ borderBottom: '3px solid var(--color-accent)' }}>
-                  <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
+                  <h6 className="modal-title fw-bold" style={{ color: '#FB2832' }}>
                     <i className="bi bi-clipboard-check me-2"></i>Submit Validation Report
                   </h6>
                   <button className="btn-close" onClick={() => setShowReportModal(false)}></button>
@@ -1245,7 +1245,8 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         />
                       </div>
                       <button
-                        className="btn btn-sm btn-primary"
+                        className="btn btn-sm"
+                        style={{ background: '#FB2832', color: '#fff', border: 'none' }}
                         disabled={!reportText.trim() || submittingReport}
                         onClick={async () => {
                           setSubmittingReport(true);
@@ -1298,7 +1299,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                           <span className="small"><strong>{reportResult.metrics_after.readiness}%</strong> readiness</span>
                         </div>
                       )}
-                      <button className="btn btn-sm btn-outline-primary mt-3" onClick={() => { setShowReportModal(false); onUpdate(); }}>
+                      <button className="btn btn-sm mt-3" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={() => { setShowReportModal(false); onUpdate(); }}>
                         <i className="bi bi-check me-1"></i>Done
                       </button>
                     </div>
@@ -1314,7 +1315,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
               <div className="modal-content">
                 <div className="modal-header py-2" style={{ borderBottom: `3px solid ${resyncModal.what_changed?.status === 'complete' ? 'var(--color-success)' : resyncModal.what_changed?.status === 'incomplete' ? 'var(--color-warning)' : 'var(--color-info)'}` }}>
-                  <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
+                  <h6 className="modal-title fw-bold" style={{ color: '#FB2832' }}>
                     <i className="bi bi-arrow-repeat me-2"></i>Resync Complete
                   </h6>
                   <button className="btn-close" onClick={() => { setResyncModal(null); onUpdate(); }}></button>
@@ -1388,12 +1389,12 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 </div>
                 <div className="modal-footer py-2 d-flex justify-content-between align-items-center">
                   <div className="d-flex align-items-center gap-2 flex-grow-1 me-3">
-                    <i className="bi bi-robot" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
+                    <i className="bi bi-robot" style={{ color: '#FB2832', fontSize: 14 }}></i>
                     <input className="form-control form-control-sm" style={{ fontSize: 11 }}
                       placeholder="Want to improve this? Tell the Architect..."
                       onKeyDown={(e: any) => { if (e.key === 'Enter' && e.target.value.trim()) { setResyncModal(null); onUpdate(); /* ArchitectChat picks up via global state */ } }} />
                   </div>
-                  <button className="btn btn-sm btn-primary" onClick={() => { setResyncModal(null); onUpdate(); }}>
+                  <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={() => { setResyncModal(null); onUpdate(); }}>
                     <i className="bi bi-arrow-right me-1"></i>Continue
                   </button>
                 </div>

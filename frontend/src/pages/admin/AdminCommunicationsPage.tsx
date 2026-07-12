@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import Pagination from '../../components/ui/Pagination';
 import useDebounce from '../../hooks/useDebounce';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 /* ------------------------------------------------------------------ */
 /*  Interfaces                                                         */
@@ -64,49 +66,44 @@ const DATE_PRESETS = [
   { value: '', label: 'All Time' },
 ];
 
-const OUTCOME_BADGES: Record<string, { label: string; cls: string }> = {
-  sent: { label: 'Sent', cls: 'bg-secondary' },
-  opened: { label: 'Opened', cls: 'bg-success' },
-  clicked: { label: 'Clicked', cls: 'bg-info' },
-  replied: { label: 'Replied', cls: 'bg-primary' },
-  bounced: { label: 'Bounced', cls: 'bg-danger' },
-  failed: { label: 'Failed', cls: 'bg-danger' },
-  delivered: { label: 'Delivered', cls: 'bg-success' },
-  voicemail: { label: 'Voicemail', cls: 'bg-warning text-dark' },
-  answered: { label: 'Answered', cls: 'bg-success' },
-  no_answer: { label: 'No Answer', cls: 'bg-secondary' },
-  declined: { label: 'Declined', cls: 'bg-secondary' },
-  pending: { label: 'Pending', cls: 'bg-light text-muted' },
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
+const OUTCOME_BADGES: Record<string, { label: string; tone: BadgeTone }> = {
+  sent: { label: 'Sent', tone: 'neutral' },
+  opened: { label: 'Opened', tone: 'success' },
+  clicked: { label: 'Clicked', tone: 'info' },
+  replied: { label: 'Replied', tone: 'primary' },
+  bounced: { label: 'Bounced', tone: 'danger' },
+  failed: { label: 'Failed', tone: 'danger' },
+  delivered: { label: 'Delivered', tone: 'success' },
+  voicemail: { label: 'Voicemail', tone: 'warning' },
+  answered: { label: 'Answered', tone: 'success' },
+  no_answer: { label: 'No Answer', tone: 'neutral' },
+  declined: { label: 'Declined', tone: 'neutral' },
+  pending: { label: 'Pending', tone: 'warning' },
 };
 
 const CHANNEL_ICONS: Record<string, string> = {
-  email: 'M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.758 2.855L15 11.114v-5.73zm-.034 6.878L9.271 8.82 8 9.583 6.728 8.82l-5.694 3.44A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.739zM1 11.114l4.758-2.876L1 5.383v5.73z',
-  sms: 'M5 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M2.165 15.803l.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.272.362a21.673 21.673 0 0 0 .693-.125z',
-  voice: 'M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.568 17.568 0 0 0 4.168 6.608 17.569 17.569 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.678.678 0 0 0-.58-.122l-2.19.547a1.745 1.745 0 0 1-1.657-.459L5.482 8.062a1.745 1.745 0 0 1-.46-1.657l.548-2.19a.678.678 0 0 0-.122-.58L3.654 1.328zM1.884.511a1.745 1.745 0 0 1 2.612.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.678.678 0 0 0 .178.643l2.457 2.457a.678.678 0 0 0 .644.178l2.189-.547a1.745 1.745 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.634 18.634 0 0 1-7.01-4.42 18.634 18.634 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877L1.885.511z',
+  email: 'mail-line',
+  sms: 'message-2-line',
+  voice: 'phone-line',
 };
 
 /* ------------------------------------------------------------------ */
 /*  Campaign Colors                                                    */
 /* ------------------------------------------------------------------ */
 
-// Deterministic color palette for campaigns — visually distinct, accessible against white
+// Deterministic color palette for campaigns — drawn from the design-system
+// data-viz tokens (color-blind safe, max adjacent separation). Cycled by index.
 const CAMPAIGN_COLORS = [
-  '#1a365d', // navy
-  '#2b6cb0', // blue
-  '#2c7a7b', // teal
-  '#276749', // forest
-  '#6b46c1', // purple
-  '#c05621', // orange
-  '#b7791f', // gold
-  '#9b2c2c', // crimson
-  '#2d3748', // charcoal
-  '#0987a0', // cyan
-  '#805ad5', // violet
-  '#d53f8c', // pink
-  '#38a169', // green
-  '#dd6b20', // amber
-  '#3182ce', // cerulean
-  '#e53e3e', // red
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+  'var(--chart-6)',
+  'var(--chart-7)',
+  'var(--chart-8)',
 ];
 
 function getCampaignColor(campaignId: string, campaignMap: Map<string, number>): string {
@@ -186,6 +183,39 @@ function AdminCommunicationsPage() {
     fetchRows().finally(() => setLoading(false));
   }, [fetchRows]);
 
+  /* ---------- channel mix (KPI row) ---------- */
+
+  const channelMix = useMemo(() => {
+    let email = 0, sms = 0, voice = 0;
+    rows.forEach(r => {
+      if (r.channel === 'email') email++;
+      else if (r.channel === 'sms') sms++;
+      else if (r.channel === 'voice') voice++;
+    });
+    return { email, sms, voice };
+  }, [rows]);
+
+  /* ---------- per-page trust signal ---------- */
+
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'communications',
+    updatedAt: new Date().toISOString(),
+    summary: `${total} communications across email, SMS, and voice.`,
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Channel Activity',
+        status: 'live',
+        evidence: [
+          { label: 'Email', value: String(channelMix.email) },
+          { label: 'SMS', value: String(channelMix.sms) },
+          { label: 'Voice', value: String(channelMix.voice) },
+        ],
+      },
+    ],
+  }), [total, channelMix]);
+
   const toggleDetail = async (id: string) => {
     if (expandedId === id) {
       setExpandedId(null);
@@ -212,14 +242,12 @@ function AdminCommunicationsPage() {
   };
 
   const channelIcon = (ch: string) => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="me-1">
-      <path d={CHANNEL_ICONS[ch] || CHANNEL_ICONS.email} />
-    </svg>
+    <i className={`ri-${CHANNEL_ICONS[ch] || CHANNEL_ICONS.email} me-1`} aria-hidden="true" />
   );
 
   const outcomeBadge = (outcome: string) => {
-    const b = OUTCOME_BADGES[outcome] || { label: outcome, cls: 'bg-secondary' };
-    return <span className={`badge ${b.cls} me-1`}>{b.label}</span>;
+    const b = OUTCOME_BADGES[outcome] || { label: outcome, tone: 'neutral' as BadgeTone };
+    return <StatusBadge label={b.label} tone={b.tone} />;
   };
 
   const bestOutcome = (row: CommRow): string => {
@@ -235,7 +263,28 @@ function AdminCommunicationsPage() {
 
   return (
     <>
-      <h1 className="h3 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>Communications</h1>
+      <PageHeader
+        title="Communications"
+        icon="chat-3-line"
+        subtitle="Every outbound email, SMS, and voice touch across the pipeline, with per-lead engagement detail."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Communications' }]}
+        trust={trust}
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Total" value={total} icon="chat-3-line" tone="primary" hint="matching filters" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Email" value={channelMix.email} icon="mail-line" tone="info" hint="this page" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="SMS" value={channelMix.sms} icon="message-2-line" tone="success" hint="this page" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Voice" value={channelMix.voice} icon="phone-line" tone="warning" hint="this page" />
+          </div>
+        </div>
+      </PageHeader>
 
       {/* Filter Bar */}
       <div className="row g-2 mb-4">
@@ -297,7 +346,7 @@ function AdminCommunicationsPage() {
       })()}
 
       {/* Table */}
-      <div className="card border-0 shadow-sm">
+      <SectionCard padded={false}>
         <div className="table-responsive">
           <table className="table table-hover mb-0" style={{ tableLayout: 'fixed' }}>
             <colgroup>
@@ -357,7 +406,7 @@ function AdminCommunicationsPage() {
                   <td className="small text-end">
                     <button className="btn btn-sm btn-outline-secondary py-0 px-2"
                       onClick={e => { e.stopPropagation(); toggleDetail(row.id); }}>
-                      {expandedId === row.id ? '▲' : '▼'}
+                      <i className={`ri-arrow-${expandedId === row.id ? 'up' : 'down'}-s-line`} aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -365,59 +414,54 @@ function AdminCommunicationsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </SectionCard>
 
       {/* Expanded Detail Panel — rendered outside the table to avoid layout issues */}
       {expandedId && (() => {
         const row = rows.find(r => r.id === expandedId);
         if (!row) return null;
         return (
-          <div className="card border-0 shadow-sm mt-0 mb-3" style={{ borderTop: '3px solid var(--color-primary)' }}>
-            <div className="card-header bg-light d-flex justify-content-between align-items-center py-2">
-              <span className="small fw-semibold">
-                {row.lead_name} &middot; {row.channel} &middot; {fmtTime(row.created_at)}
-              </span>
-              <button className="btn-close btn-close-sm" aria-label="Close" onClick={() => { setExpandedId(null); setDetail(null); }} />
-            </div>
-            <div className="card-body p-3">
-              {detailLoading ? (
-                <div className="text-center text-muted py-3">Loading details...</div>
-              ) : detail ? (
-                <div className="row g-3">
-                  {/* Left: Content */}
-                  <div className="col-lg-8">
-                    {row.channel === 'voice' && detail.communication?.transcript ? (
-                      <div className="card border-0 mb-3">
-                        <div className="card-header bg-white fw-semibold small">Call Transcript</div>
-                        <div className="card-body small" style={{ maxHeight: 300, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
-                          {detail.communication.transcript}
-                        </div>
-                        {detail.communication.recording_url && (
-                          <div className="card-footer bg-white">
-                            <a href={detail.communication.recording_url} target="_blank" rel="noreferrer"
-                              className="btn btn-sm btn-outline-primary">Listen to Recording</a>
+          <div className="mt-0 mb-3" style={{ borderTop: '3px solid var(--color-primary)' }}>
+            <SectionCard padded={false}>
+              <div className="admin-section-card__head d-flex justify-content-between align-items-center">
+                <span className="small fw-semibold">
+                  {row.lead_name} &middot; {row.channel} &middot; {fmtTime(row.created_at)}
+                </span>
+                <button className="btn-close btn-close-sm" aria-label="Close" onClick={() => { setExpandedId(null); setDetail(null); }} />
+              </div>
+              <div className="p-3">
+                {detailLoading ? (
+                  <div className="text-center text-muted py-3">Loading details...</div>
+                ) : detail ? (
+                  <div className="row g-3">
+                    {/* Left: Content */}
+                    <div className="col-lg-8">
+                      {row.channel === 'voice' && detail.communication?.transcript ? (
+                        <SectionCard title="Call Transcript" className="mb-3">
+                          <div className="small" style={{ maxHeight: 300, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                            {detail.communication.transcript}
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="card border-0 mb-3">
-                        <div className="card-header bg-white fw-semibold small">
-                          {row.channel === 'sms' ? 'SMS Message' : 'Email Content'}
-                        </div>
-                        <div className="card-body small">
-                          {detail.communication?.subject && (
-                            <div className="fw-medium mb-2">Subject: {detail.communication.subject}</div>
+                          {detail.communication.recording_url && (
+                            <div className="mt-2">
+                              <a href={detail.communication.recording_url} target="_blank" rel="noreferrer"
+                                className="btn btn-sm btn-outline-primary">Listen to Recording</a>
+                            </div>
                           )}
-                          <div style={{ maxHeight: 250, overflowY: 'auto' }}
-                            dangerouslySetInnerHTML={{ __html: detail.communication?.body || detail.communication?.body_preview || '(no content)' }} />
-                        </div>
-                      </div>
-                    )}
+                        </SectionCard>
+                      ) : (
+                        <SectionCard title={row.channel === 'sms' ? 'SMS Message' : 'Email Content'} className="mb-3">
+                          <div className="small">
+                            {detail.communication?.subject && (
+                              <div className="fw-medium mb-2">Subject: {detail.communication.subject}</div>
+                            )}
+                            <div style={{ maxHeight: 250, overflowY: 'auto' }}
+                              dangerouslySetInnerHTML={{ __html: detail.communication?.body || detail.communication?.body_preview || '(no content)' }} />
+                          </div>
+                        </SectionCard>
+                      )}
 
-                    {detail.outcomes && detail.outcomes.length > 0 && (
-                      <div className="card border-0 mb-3">
-                        <div className="card-header bg-white fw-semibold small">Engagement Timeline</div>
-                        <div className="card-body p-0">
+                      {detail.outcomes && detail.outcomes.length > 0 && (
+                        <SectionCard title="Engagement Timeline" padded={false} className="mb-3">
                           <ul className="list-group list-group-flush">
                             {detail.outcomes.map((o, i) => (
                               <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2">
@@ -426,14 +470,11 @@ function AdminCommunicationsPage() {
                               </li>
                             ))}
                           </ul>
-                        </div>
-                      </div>
-                    )}
+                        </SectionCard>
+                      )}
 
-                    {detail.temperature_changes && detail.temperature_changes.length > 0 && (
-                      <div className="card border-0">
-                        <div className="card-header bg-white fw-semibold small">Temperature Changes</div>
-                        <div className="card-body p-0">
+                      {detail.temperature_changes && detail.temperature_changes.length > 0 && (
+                        <SectionCard title="Temperature Changes" padded={false}>
                           <ul className="list-group list-group-flush">
                             {detail.temperature_changes.map((tc, i) => (
                               <li key={i} className="list-group-item py-2 small">
@@ -443,78 +484,75 @@ function AdminCommunicationsPage() {
                               </li>
                             ))}
                           </ul>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right: Lead Context */}
-                  <div className="col-lg-4">
-                    <div className="card border-0 mb-3">
-                      <div className="card-header bg-white fw-semibold small">Lead Profile</div>
-                      <div className="card-body small">
-                        <div className="fw-medium mb-1">
-                          <Link to={`/admin/leads/${row.lead_id}`}>{detail.communication?.lead_name}</Link>
-                        </div>
-                        <div className="text-muted">{detail.communication?.lead_email}</div>
-                        {detail.communication?.lead_phone && <div className="text-muted">{detail.communication.lead_phone}</div>}
-                        {detail.communication?.lead_company && <div className="text-muted">{detail.communication.lead_company}</div>}
-                        <hr className="my-2" />
-                        <div className="d-flex justify-content-between">
-                          <span>Temperature</span>
-                          <span className="fw-medium">{detail.communication?.lead_temperature || '--'}</span>
-                        </div>
-                        <div className="d-flex justify-content-between">
-                          <span>Pipeline</span>
-                          <span className="fw-medium">{detail.communication?.pipeline_stage || '--'}</span>
-                        </div>
-                        <div className="d-flex justify-content-between">
-                          <span>Score</span>
-                          <span className="fw-medium">{detail.communication?.lead_score || '--'}</span>
-                        </div>
-                      </div>
+                        </SectionCard>
+                      )}
                     </div>
 
-                    {detail.enrollment && (
-                      <div className="card border-0 mb-3">
-                        <div className="card-header bg-white fw-semibold small">Campaign</div>
-                        <div className="card-body small">
+                    {/* Right: Lead Context */}
+                    <div className="col-lg-4">
+                      <SectionCard title="Lead Profile" className="mb-3">
+                        <div className="small">
                           <div className="fw-medium mb-1">
-                            <Link to={`/admin/campaigns/${row.campaign_id}`}>{detail.communication?.campaign_name}</Link>
+                            <Link to={`/admin/leads/${row.lead_id}`}>{detail.communication?.lead_name}</Link>
+                          </div>
+                          <div className="text-muted">{detail.communication?.lead_email}</div>
+                          {detail.communication?.lead_phone && <div className="text-muted">{detail.communication.lead_phone}</div>}
+                          {detail.communication?.lead_company && <div className="text-muted">{detail.communication.lead_company}</div>}
+                          <hr className="my-2" />
+                          <div className="d-flex justify-content-between">
+                            <span>Temperature</span>
+                            <span className="fw-medium">{detail.communication?.lead_temperature || '--'}</span>
                           </div>
                           <div className="d-flex justify-content-between">
-                            <span>Status</span>
-                            <span className="badge bg-success">{detail.enrollment.enrollment_status}</span>
+                            <span>Pipeline</span>
+                            <span className="fw-medium">{detail.communication?.pipeline_stage || '--'}</span>
                           </div>
-                          <div className="d-flex justify-content-between mt-1">
-                            <span>Progress</span>
-                            <span>{detail.enrollment.steps_completed}/{detail.enrollment.total_steps || '?'} steps</span>
+                          <div className="d-flex justify-content-between">
+                            <span>Score</span>
+                            <span className="fw-medium">{detail.communication?.lead_score || '--'}</span>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      </SectionCard>
 
-                    {detail.scheduled_action && (
-                      <div className="card border-0">
-                        <div className="card-header bg-white fw-semibold small">Action Details</div>
-                        <div className="card-body small">
-                          <div className="d-flex justify-content-between">
-                            <span>Step</span>
-                            <span>{detail.scheduled_action.step_index}</span>
+                      {detail.enrollment && (
+                        <SectionCard title="Campaign" className="mb-3">
+                          <div className="small">
+                            <div className="fw-medium mb-1">
+                              <Link to={`/admin/campaigns/${row.campaign_id}`}>{detail.communication?.campaign_name}</Link>
+                            </div>
+                            <div className="d-flex justify-content-between align-items-center">
+                              <span>Status</span>
+                              <StatusBadge label={detail.enrollment.enrollment_status} tone="success" />
+                            </div>
+                            <div className="d-flex justify-content-between mt-1">
+                              <span>Progress</span>
+                              <span>{detail.enrollment.steps_completed}/{detail.enrollment.total_steps || '?'} steps</span>
+                            </div>
                           </div>
-                          <div className="d-flex justify-content-between mt-1">
-                            <span>AI Generated</span>
-                            <span>{detail.scheduled_action.ai_generated ? 'Yes' : 'No'}</span>
+                        </SectionCard>
+                      )}
+
+                      {detail.scheduled_action && (
+                        <SectionCard title="Action Details">
+                          <div className="small">
+                            <div className="d-flex justify-content-between">
+                              <span>Step</span>
+                              <span>{detail.scheduled_action.step_index}</span>
+                            </div>
+                            <div className="d-flex justify-content-between mt-1">
+                              <span>AI Generated</span>
+                              <span>{detail.scheduled_action.ai_generated ? 'Yes' : 'No'}</span>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    )}
+                        </SectionCard>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center text-muted py-3">Failed to load details</div>
-              )}
-            </div>
+                ) : (
+                  <div className="text-center text-muted py-3">Failed to load details</div>
+                )}
+              </div>
+            </SectionCard>
           </div>
         );
       })()}

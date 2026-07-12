@@ -142,17 +142,17 @@ function RequirementsTab() {
   if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
 
   const statusBadge = (status: string) => {
-    const map: Record<string, string> = { matched: 'bg-success', verified: 'bg-primary', partial: 'bg-warning text-dark', unmatched: 'bg-secondary' };
+    const map: Record<string, string> = { matched: 'bg-success', verified: 'bg-success', partial: 'bg-warning text-dark', unmatched: 'bg-secondary' };
     return <span className={`badge ${map[status] || 'bg-secondary'}`}>{status}</span>;
   };
 
   return (
     <>
       <div className="d-flex gap-2 mb-3 align-items-center">
-        <button className="btn btn-sm btn-primary" onClick={handleExtract} disabled={extracting}>
+        <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleExtract} disabled={extracting}>
           {extracting ? <><span className="spinner-border spinner-border-sm me-1"></span>Extracting...</> : <><i className="bi bi-file-earmark-text me-1"></i>Extract Requirements</>}
         </button>
-        <button className="btn btn-sm btn-outline-primary" onClick={handleMatch} disabled={matching || extracting}>
+        <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={handleMatch} disabled={matching || extracting}>
           {matching ? <><span className="spinner-border spinner-border-sm me-1"></span>Matching...</> : <><i className="bi bi-github me-1"></i>Match to Repo</>}
         </button>
       </div>
@@ -168,7 +168,7 @@ function RequirementsTab() {
             <div className="progress" style={{ height: 6 }}>
               <div className="progress-bar" style={{
                 width: `${extractProgress}%`,
-                background: extractProgress >= 100 ? 'var(--color-accent)' : 'var(--color-primary-light)',
+                background: extractProgress >= 100 ? 'var(--color-accent)' : '#C20E1E',
                 transition: 'width 0.5s ease',
               }} />
             </div>
@@ -297,16 +297,16 @@ function GitHubTab() {
             <i className="bi bi-github me-1"></i>{ghData.repo_owner}/{ghData.repo_name}
           </a>
         </div>
-        <button className="btn btn-sm btn-outline-primary" onClick={handleSync} disabled={syncing}>
+        <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={handleSync} disabled={syncing}>
           {syncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Syncing...</> : <><i className="bi bi-arrow-repeat me-1"></i>Sync Now</>}
         </button>
       </div>
 
       <div className="row g-3 mb-4">
         {[
-          { value: ghData.file_count || 0, label: 'Files', icon: 'bi-file-earmark-code', color: 'var(--color-primary)' },
+          { value: ghData.file_count || 0, label: 'Files', icon: 'bi-file-earmark-code', color: '#FB2832' },
           { value: ghData.language || '-', label: 'Language', icon: 'bi-braces', color: 'var(--color-accent)' },
-          { value: ghData.total_commits || commits.length, label: 'Total Commits', icon: 'bi-git', color: '#8b5cf6' },
+          { value: ghData.total_commits || commits.length, label: 'Total Commits', icon: 'bi-git', color: '#367895' },
           { value: ghData.last_sync ? formatTimeAgo(ghData.last_sync) : 'Never', label: 'Last Sync', icon: 'bi-clock', color: '#f59e0b' },
         ].map(card => (
           <div key={card.label} className="col-md-3">
@@ -351,7 +351,7 @@ function GitHubTab() {
                       <div className="fw-medium" style={{ fontSize: 12 }}>{c.message}</div>
                       <div className="d-flex gap-2 mt-1" style={{ fontSize: 10 }}>
                         <span className="text-muted"><i className="bi bi-person me-1"></i>{c.author || 'Unknown'}</span>
-                        <code style={{ color: 'var(--color-primary-light)', background: '#eef2ff', padding: '0 4px', borderRadius: 3 }}>{c.sha}</code>
+                        <code style={{ color: '#C20E1E', background: 'rgba(251,40,50,0.08)', padding: '0 4px', borderRadius: 3 }}>{c.sha}</code>
                         {c.files_changed > 0 && <span className="text-muted"><i className="bi bi-file-diff me-1"></i>{c.files_changed} files</span>}
                       </div>
                     </div>
@@ -388,17 +388,17 @@ function GitHubTab() {
                 <div className="d-flex gap-3 mb-3 text-muted" style={{ fontSize: 11 }}>
                   <span><i className="bi bi-person me-1"></i>{selectedCommit.author || 'Unknown'}</span>
                   <span><i className="bi bi-clock me-1"></i>{selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : '-'}</span>
-                  <code style={{ color: 'var(--color-primary-light)' }}>{selectedCommit.sha}</code>
+                  <code style={{ color: '#C20E1E' }}>{selectedCommit.sha}</code>
                 </div>
                 {repoBase && (
-                  <a href={`${repoBase}/commit/${selectedCommit.sha}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary mb-3" style={{ fontSize: 11 }}>
+                  <a href={`${repoBase}/commit/${selectedCommit.sha}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm mb-3" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent', fontSize: 11 }}>
                     <i className="bi bi-github me-1"></i>View on GitHub
                   </a>
                 )}
                 <div className="border-top pt-2">
                   <div className="fw-medium small mb-1">What This Commit Likely Contains:</div>
                   <div className="text-muted small">
-                    {selectedCommit.message?.toLowerCase().includes('agent') && <div><i className="bi bi-cpu me-1" style={{ color: '#8b5cf6' }}></i>Agent implementation</div>}
+                    {selectedCommit.message?.toLowerCase().includes('agent') && <div><i className="bi bi-cpu me-1" style={{ color: '#367895' }}></i>Agent implementation</div>}
                     {selectedCommit.message?.toLowerCase().includes('service') && <div><i className="bi bi-gear me-1" style={{ color: '#3b82f6' }}></i>Backend service</div>}
                     {selectedCommit.message?.toLowerCase().includes('route') && <div><i className="bi bi-signpost me-1" style={{ color: '#f59e0b' }}></i>API route</div>}
                     {selectedCommit.message?.toLowerCase().includes('model') && <div><i className="bi bi-database me-1" style={{ color: '#10b981' }}></i>Database model</div>}
@@ -487,7 +487,7 @@ function CompileTab() {
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <p className="small text-muted mb-0">System documents compiled from your project. Click to view, edit, or replace.</p>
-        <button className="btn btn-sm btn-primary" onClick={handleCompileAll} disabled={!!compiling}>
+        <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={handleCompileAll} disabled={!!compiling}>
           {compiling === 'all' ? 'Compiling All...' : 'Compile All'}
         </button>
       </div>
@@ -501,7 +501,7 @@ function CompileTab() {
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <h6 className="fw-semibold mb-0"><i className={`bi ${docIcons[dt]} me-2`}></i>{docLabels[dt]}</h6>
-                    <button className="btn btn-sm btn-outline-primary" onClick={e => { e.stopPropagation(); handleCompile(dt); }} disabled={!!compiling}>
+                    <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={e => { e.stopPropagation(); handleCompile(dt); }} disabled={!!compiling}>
                       {compiling === dt ? 'Compiling...' : 'Compile'}
                     </button>
                   </div>
@@ -551,10 +551,10 @@ function CompileTab() {
               </div>
               <div className="modal-footer">
                 <button className="btn btn-sm btn-outline-secondary" onClick={() => setSelectedDoc(null)}>Cancel</button>
-                <button className="btn btn-sm btn-outline-primary" onClick={() => { navigator.clipboard.writeText(editContent); }}>
+                <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={() => { navigator.clipboard.writeText(editContent); }}>
                   <i className="bi bi-clipboard me-1"></i>Copy
                 </button>
-                <button className="btn btn-sm btn-primary" disabled={saving} onClick={async () => {
+                <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} disabled={saving} onClick={async () => {
                   setSaving(true);
                   try {
                     if (selectedDoc.type === 'requirements') {
@@ -565,7 +565,7 @@ function CompileTab() {
                     setSelectedDoc(null);
                     loadStatus();
                     const el = document.createElement('div');
-                    el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px">Document saved</div>';
+                    el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px">Document saved</div>';
                     document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
                   } catch { alert('Save failed'); } finally { setSaving(false); }
                 }}>
@@ -621,7 +621,7 @@ function ReadinessTab() {
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h6 className="fw-semibold mb-0">Production Readiness</h6>
-        <button className="btn btn-sm btn-outline-primary" onClick={handleRefresh} disabled={refreshing}>
+        <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={handleRefresh} disabled={refreshing}>
           {refreshing ? 'Refreshing...' : 'Refresh Scores'}
         </button>
       </div>
@@ -735,7 +735,7 @@ function AddBusinessProcessCard({ onAdded }: { onAdded: () => void }) {
             value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAdd()}
             style={{ fontSize: 12 }} />
-          <button className="btn btn-sm btn-primary" onClick={handleAdd} disabled={adding || !input.trim()} style={{ whiteSpace: 'nowrap' }}>
+          <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none', whiteSpace: 'nowrap' }} onClick={handleAdd} disabled={adding || !input.trim()}>
             {adding ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Adding...</> : <><i className="bi bi-plus-lg me-1"></i>Add</>}
           </button>
         </div>
@@ -833,13 +833,13 @@ function ProjectSystemPromptCard() {
       <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
         <span className="fw-semibold small"><i className="bi bi-file-text me-2"></i>Project System Prompt</span>
         {!editing ? (
-          <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => setEditing(true)}>
+          <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent', fontSize: 10 }} onClick={() => setEditing(true)}>
             <i className="bi bi-pencil me-1"></i>Edit
           </button>
         ) : (
           <div className="d-flex gap-1">
             <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => setEditing(false)}>Cancel</button>
-            <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} onClick={handleSave} disabled={saving}>
+            <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none', fontSize: 10 }} onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
@@ -911,9 +911,9 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
                 <div>
                   <div className="text-muted small mb-1">
                     <i className="bi bi-flag me-1"></i>Next Business Process
-                    {topProcess.priority_rank && <span className="badge bg-primary ms-2" style={{ fontSize: 9 }}>#{topProcess.priority_rank}</span>}
+                    {topProcess.priority_rank && <span className="badge ms-2" style={{ fontSize: 9, background: '#FB2832', color: '#fff' }}>#{topProcess.priority_rank}</span>}
                   </div>
-                  <h6 className="fw-bold mb-1" style={{ color: 'var(--color-primary)', fontSize: 14 }}>{topProcess.name}</h6>
+                  <h6 className="fw-bold mb-1" style={{ color: '#FB2832', fontSize: 14 }}>{topProcess.name}</h6>
                   <div className="d-flex gap-2 flex-wrap text-muted" style={{ fontSize: 10 }}>
                     <span>{topProcess.total_requirements || 0} reqs</span>
                     <span>Readiness: {readiness}%</span>
@@ -921,7 +921,7 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
                     <span style={{ color: u.usable ? '#10b981' : '#ef4444' }}>{u.usable ? 'Ready' : 'Not Ready'}</span>
                   </div>
                 </div>
-                <button className="btn btn-sm btn-primary" onClick={onNavigate}>
+                <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={onNavigate}>
                   <i className="bi bi-arrow-right me-1"></i>Start Work
                 </button>
               </div>
@@ -933,7 +933,7 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
           <div className="col-lg-6">
             <div className="d-flex align-items-center gap-2 mb-1">
               <span className="text-muted" style={{ fontSize: 10 }}><i className="bi bi-sliders me-1"></i>Project Target Mode</span>
-              <span className="fw-semibold" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+              <span className="fw-semibold" style={{ fontSize: 11, color: '#FB2832' }}>
                 <i className={`bi ${modes.find(md => md.value === mode)?.icon || 'bi-server'} me-1`}></i>
                 {modes.find(md => md.value === mode)?.label || 'Production'}
               </span>
@@ -947,13 +947,13 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
                 value={modes.findIndex(md => md.value === mode)}
                 onChange={(e) => handleModeChange(modes[parseInt(e.target.value)].value)}
                 disabled={saving}
-                style={{ width: '100%', accentColor: 'var(--color-primary)', cursor: saving ? 'wait' : 'pointer' }}
+                style={{ width: '100%', accentColor: '#FB2832', cursor: saving ? 'wait' : 'pointer' }}
               />
               <div className="d-flex justify-content-between" style={{ marginTop: -2 }}>
                 {modes.map((md, i) => {
                   const active = mode === md.value;
                   return (
-                    <span key={md.value} style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? 'var(--color-primary)' : 'var(--color-text-light)', cursor: 'pointer', userSelect: 'none' }}
+                    <span key={md.value} style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? '#FB2832' : 'var(--color-text-light)', cursor: 'pointer', userSelect: 'none' }}
                       onClick={() => handleModeChange(md.value)}>
                       {md.label}
                     </span>
@@ -1019,7 +1019,7 @@ function CoryPlanSection() {
   if (hasBackend) intelligenceSteps.push({ title: 'Add AI agents', done: hasAgents });
   intelligenceSteps.push({ title: 'Add monitoring & observability', done: false });
   if (intelligenceSteps.some(s => !s.done)) {
-    phases.push({ title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', steps: intelligenceSteps });
+    phases.push({ title: 'Intelligence', icon: 'bi-cpu', color: '#367895', steps: intelligenceSteps });
   }
 
   if (phases.length === 0) return null;
@@ -1027,7 +1027,7 @@ function CoryPlanSection() {
   return (
     <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #3b82f6' }}>
       <div className="card-body p-4">
-        <h6 className="fw-semibold mb-1" style={{ fontSize: 14, color: 'var(--color-primary)' }}>
+        <h6 className="fw-semibold mb-1" style={{ fontSize: 14, color: '#FB2832' }}>
           <i className="bi bi-map me-2"></i>Cory's Recommended Plan
         </h6>
         <p className="text-muted mb-3" style={{ fontSize: 11 }}>
@@ -1060,7 +1060,7 @@ const GAP_CATEGORIES = [
   { type: 'behavior', label: 'Behavior', icon: 'bi-person-lines-fill', color: '#3b82f6' },
   { type: 'intelligence', label: 'Intelligence', icon: 'bi-lightbulb', color: '#f59e0b' },
   { type: 'optimization', label: 'Optimization', icon: 'bi-speedometer2', color: '#10b981' },
-  { type: 'reporting', label: 'Reporting', icon: 'bi-bar-chart-line', color: '#8b5cf6' },
+  { type: 'reporting', label: 'Reporting', icon: 'bi-bar-chart-line', color: '#367895' },
 ];
 
 function AISuggestionsSection() {
@@ -1109,9 +1109,9 @@ function AISuggestionsSection() {
   if (grouped.length === 0) return null;
 
   return (
-    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #8b5cf6' }}>
+    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #367895' }}>
       <div className="card-body p-4">
-        <h6 className="fw-semibold mb-1" style={{ fontSize: 14, color: '#8b5cf6' }}>
+        <h6 className="fw-semibold mb-1" style={{ fontSize: 14, color: '#367895' }}>
           <i className="bi bi-robot me-2"></i>AI Suggestions
         </h6>
         <p className="text-muted mb-3" style={{ fontSize: 11 }}>
@@ -1261,7 +1261,7 @@ function VisualBuilderSection(props: any) {
     return (
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body p-4">
-          <h6 className="fw-semibold small mb-2"><i className="bi bi-palette me-2" style={{ color: '#8b5cf6' }}></i>Visual Builder</h6>
+          <h6 className="fw-semibold small mb-2"><i className="bi bi-palette me-2" style={{ color: '#367895' }}></i>Visual Builder</h6>
           <p className="text-muted small mb-0">No page components with preview available. Build some frontend pages first.</p>
         </div>
       </div>
@@ -1272,10 +1272,10 @@ function VisualBuilderSection(props: any) {
   const openIssues = (vbFeedback?.items || []).filter((f: any) => f.status === 'open');
 
   return (
-    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #8b5cf6' }}>
+    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #367895' }}>
       <div className="card-body p-4">
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h6 className="fw-semibold mb-0" style={{ fontSize: 14, color: '#8b5cf6' }}>
+          <h6 className="fw-semibold mb-0" style={{ fontSize: 14, color: '#367895' }}>
             <i className="bi bi-palette me-2"></i>Visual Builder
           </h6>
           {pageBPs.length > 1 && (
@@ -1303,7 +1303,7 @@ function VisualBuilderSection(props: any) {
             <h6 className="fw-semibold mt-2 mb-1" style={{ fontSize: 13, color: 'var(--color-text)' }}>Preview not available yet</h6>
             <p className="text-muted small mb-3">Your system needs a frontend route before we can render a live preview.</p>
             {vbProcessId && (
-              <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={async () => {
+              <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none', fontSize: 11 }} onClick={async () => {
                 try {
                   const { generatePrompt } = await import('../../services/portalBusinessProcessApi');
                   const res = await generatePrompt(vbProcessId, 'frontend_exposure');
@@ -1330,14 +1330,14 @@ function VisualBuilderSection(props: any) {
 
         {/* Analyzing spinner */}
         {vbAnalyzing && (
-          <div className="d-flex align-items-center gap-2 mb-3" style={{ fontSize: 12, color: '#8b5cf6' }}>
+          <div className="d-flex align-items-center gap-2 mb-3" style={{ fontSize: 12, color: '#367895' }}>
             <span className="spinner-border spinner-border-sm"></span>Analyzing page...
           </div>
         )}
 
         {/* Fix All button */}
         {openIssues.length > 0 && (
-          <button className="btn btn-sm w-100 mb-3" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleFixAll}>
+          <button className="btn btn-sm w-100 mb-3" style={{ background: '#367895', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleFixAll}>
             <i className="bi bi-wrench me-1"></i>Fix All {openIssues.length} Issues — Copy Prompt
           </button>
         )}
@@ -1432,7 +1432,7 @@ function copyToClipboardFallback(text: string) {
 
 function showToastMsg(msg: string) {
   const el = document.createElement('div');
-  el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
+  el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }

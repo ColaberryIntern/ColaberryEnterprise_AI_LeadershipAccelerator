@@ -96,7 +96,7 @@
   cursor: pointer;
 }
 .vw-section-toggle:hover {
-  color: var(--color-primary);
+  color: #FB2832;
 }
 .vw-section-count {
   margin-left: 6px;

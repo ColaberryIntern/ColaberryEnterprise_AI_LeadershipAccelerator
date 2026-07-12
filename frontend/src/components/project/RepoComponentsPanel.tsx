@@ -24,8 +24,8 @@ interface Props {
 }
 
 const TYPE_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  service: { label: 'Services', icon: 'bi-gear', color: '#2b6cb0' },
-  agent: { label: 'Agents', icon: 'bi-cpu', color: '#8b5cf6' },
+  service: { label: 'Services', icon: 'bi-gear', color: '#C20E1E' },
+  agent: { label: 'Agents', icon: 'bi-cpu', color: '#367895' },
   route: { label: 'Routes', icon: 'bi-signpost-split', color: '#059669' },
   model: { label: 'Models', icon: 'bi-diagram-3', color: '#d97706' },
   test: { label: 'Tests', icon: 'bi-bug', color: '#dc2626' },

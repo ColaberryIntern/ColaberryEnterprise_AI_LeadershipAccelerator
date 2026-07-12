@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../styles.css">
+<script src="./support.js"></script>
+<template id="__bundler_thumbnail" data-bg-color="#1f8a5b">
+<svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+<rect width="1200" height="800" fill="#1f8a5b"/>
+<circle cx="600" cy="360" r="170" fill="#ffffff"/>
+<path d="M600 250 a110 110 0 1 0 0 220 a110 110 0 1 0 0 -220 z M540 540 l60 -90 60 90 z" fill="#1f8a5b"/>
+<rect x="380" y="560" width="440" height="46" rx="23" fill="#ffffff" opacity="0.6"/>
+</svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+</helmet>
+<div data-theme="{{ theme }}" style="background:var(--surface-subtle);min-height:100vh;padding:48px;font-family:var(--font-body);box-sizing:border-box">
+  <div style="max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:18px">
+
+    <!-- BOARD HEADER -->
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span class="cb-icon-tile" style="--tile:34px;background:#25D366"><span class="cb-i" style="color:#fff"><i class="ri-whatsapp-line"></i></span></span>
+          <span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--neutral-500);font-weight:600">WhatsApp Batch Kit</span>
+        </div>
+        <h1 style="font-family:var(--font-display);font-weight:900;font-size:30px;line-height:1.05;letter-spacing:-.02em;color:var(--text-strong);margin:0">New-batch group, ready in minutes</h1>
+        <p style="font-size:14px;color:var(--text-muted);margin:8px 0 0;display:flex;align-items:center;gap:7px"><span class="cb-i" style="font-size:15px;color:var(--green-700)"><i class="ri-download-2-line"></i></span>Hover any card for <b style="font-weight:600">Download</b> &amp; <b style="font-weight:600">Edit</b> — save it as a full-res PNG, or copy a prompt to tweak just that card in a new chat.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:var(--radius-pill);padding:8px 16px;box-shadow:var(--shadow-xs)">
+        <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--neutral-500)">Batch</span>
+        <span style="font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--text-strong)">{{ batchName }}</span>
+      </div>
+    </div>
+
+    <!-- ============ GROUP DISPLAY PICTURES ============ -->
+    <section>
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px">
+        <span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--neutral-500);font-weight:600">Group display picture (DP)</span>
+        <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:12px;color:var(--neutral-400)">640 × 640 · WhatsApp crops to a circle — keep art centred</span></sc-if>
+      </div>
+      <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+
+        <!-- DP A — cherry -->
+        <div data-card data-name="colaberry-dp-cherry" data-w="640" style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <div style="width:208px;height:208px;border-radius:50%;overflow:hidden;box-shadow:var(--shadow-lg)">
+            <div data-art style="width:208px;height:208px;background:radial-gradient(120% 120% at 30% 20%,var(--red-500),var(--red-700) 80%);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;box-sizing:border-box;padding:30px">
+              <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:56px">
+              <div style="text-align:center;line-height:1.0">
+                <div style="font-family:var(--font-display);font-weight:800;font-size:25px;letter-spacing:-.02em">AI Training</div>
+                <div style="font-family:var(--font-display);font-weight:700;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;opacity:.82;margin-top:7px">Community</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Cherry · primary</span></sc-if>
+          </div>
+        </div>
+
+        <!-- DP B — dark -->
+        <div data-card data-name="colaberry-dp-dark" data-w="640" style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <div style="width:208px;height:208px;border-radius:50%;overflow:hidden;box-shadow:var(--shadow-lg)">
+            <div data-art style="width:208px;height:208px;background:var(--neutral-900);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;box-sizing:border-box;padding:30px;position:relative">
+              <div style="position:absolute;inset:0;background:radial-gradient(90% 90% at 50% 120%,rgba(251,40,50,.4),transparent 60%)"></div>
+              <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:54px;position:relative">
+              <div style="position:relative;text-align:center;line-height:1.2">
+                <div style="font-family:var(--font-display);font-weight:900;font-size:15px">{{ batchName }}</div>
+                <div style="display:inline-block;margin-top:6px;background:var(--red-500);font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:3px 10px;border-radius:var(--radius-pill)">2026</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Dark · alt</span></sc-if>
+          </div>
+        </div>
+
+        <!-- DP C — leaf, mark only -->
+        <div data-card data-name="colaberry-dp-leaf" data-w="640" style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <div style="width:208px;height:208px;border-radius:50%;overflow:hidden;box-shadow:var(--shadow-lg)">
+            <div data-art style="width:208px;height:208px;background:linear-gradient(150deg,var(--green-500),var(--green-700));color:#fff;display:flex;align-items:center;justify-content:center;box-sizing:border-box">
+              <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:96px">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Leaf · mark only</span></sc-if>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============ PINNED WELCOME POST ============ -->
+    <section>
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px">
+        <span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--neutral-500);font-weight:600">Pinned welcome post</span>
+        <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:12px;color:var(--neutral-400)">1080 × 1080 · pin to the top of the group</span></sc-if>
+      </div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+
+        <!-- Welcome square -->
+        <div data-card data-name="colaberry-welcome" data-w="1080" style="display:flex;flex-direction:column;gap:10px">
+          <div data-art style="width:380px;height:380px;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);background:var(--neutral-0);color:var(--text-strong);display:flex;flex-direction:column;padding:34px;box-sizing:border-box;border:1px solid var(--border-subtle);position:relative">
+            <div style="position:absolute;top:0;left:0;right:0;height:6px;display:flex"><i style="flex:1;background:var(--red-500)"></i><i style="flex:1;background:var(--blue-500)"></i><i style="flex:1;background:var(--green-500)"></i></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+              <img src="../../assets/logo/colaberry-horizontal.png" alt="Colaberry" style="height:24px">
+              <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--green-700);background:var(--green-50);padding:5px 11px;border-radius:var(--radius-pill)">You're in</span>
+            </div>
+            <h2 style="font-family:var(--font-display);font-weight:900;font-size:34px;line-height:1.03;letter-spacing:-.02em;margin:26px 0 0;text-wrap:balance">Welcome to {{ batchName }}</h2>
+            <p style="font-size:15px;line-height:1.45;color:var(--text-body);margin:14px 0 0">This is your home base for the cohort. Three quick things to get started:</p>
+            <div style="display:flex;flex-direction:column;gap:11px;margin-top:18px">
+              <div style="display:flex;align-items:center;gap:12px"><span class="cb-icon-tile" style="--tile:32px;background:var(--red-50)"><span class="cb-i" style="color:var(--red-600)"><i class="ri-user-smile-line"></i></span></span><span style="font-size:14px;font-weight:500">Introduce yourself below</span></div>
+              <div style="display:flex;align-items:center;gap:12px"><span class="cb-icon-tile" style="--tile:32px;background:var(--blue-50)"><span class="cb-i" style="color:var(--blue-600)"><i class="ri-pushpin-line"></i></span></span><span style="font-size:14px;font-weight:500">Check the pinned resources</span></div>
+              <div style="display:flex;align-items:center;gap:12px"><span class="cb-icon-tile" style="--tile:32px;background:var(--green-50)"><span class="cb-i" style="color:var(--green-700)"><i class="ri-calendar-event-line"></i></span></span><span style="font-size:14px;font-weight:500">Kickoff {{ kickoff }}</span></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Welcome · 1080 × 1080</span></sc-if>
+          </div>
+        </div>
+
+        <!-- Ground rules square -->
+        <div data-card data-name="colaberry-ground-rules" data-w="1080" style="display:flex;flex-direction:column;gap:10px">
+          <div data-art style="width:380px;height:380px;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);background:linear-gradient(160deg,var(--blue-600),var(--blue-900));color:#fff;display:flex;flex-direction:column;padding:34px;box-sizing:border-box">
+            <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:30px;align-self:flex-start">
+            <h2 style="font-family:var(--font-display);font-weight:900;font-size:28px;line-height:1.05;letter-spacing:-.02em;margin:24px 0 0">How we keep this group useful</h2>
+            <div style="display:flex;flex-direction:column;gap:13px;margin-top:auto">
+              <div style="display:flex;align-items:flex-start;gap:12px"><span class="cb-i" style="font-size:18px;color:#fff;margin-top:1px"><i class="ri-chat-3-line"></i></span><span style="font-size:14.5px;line-height:1.35;font-weight:500">Ask questions here — someone always knows</span></div>
+              <div style="display:flex;align-items:flex-start;gap:12px"><span class="cb-i" style="font-size:18px;color:#fff;margin-top:1px"><i class="ri-time-line"></i></span><span style="font-size:14.5px;line-height:1.35;font-weight:500">Keep chat to 8am–10pm CST out of respect</span></div>
+              <div style="display:flex;align-items:flex-start;gap:12px"><span class="cb-i" style="font-size:18px;color:#fff;margin-top:1px"><i class="ri-heart-3-line"></i></span><span style="font-size:14.5px;line-height:1.35;font-weight:500">Be kind — every level is welcome here</span></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Ground rules · 1080 × 1080</span></sc-if>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============ ANNOUNCEMENTS ============ -->
+    <section>
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px">
+        <span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--neutral-500);font-weight:600">Event &amp; class announcements</span>
+        <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:12px;color:var(--neutral-400)">share in chat · 1080 × 1080</span></sc-if>
+      </div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+
+        <!-- Upcoming live session -->
+        <div data-card data-name="colaberry-live-session" data-w="1080" style="display:flex;flex-direction:column;gap:10px">
+          <div data-art style="width:380px;height:380px;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);background:linear-gradient(150deg,var(--red-500),var(--red-700));color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:34px;box-sizing:border-box;position:relative">
+            <div style="position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.1)"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;position:relative">
+              <span style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.16);font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:6px 13px;border-radius:var(--radius-pill)"><span class="cb-i"><i class="ri-broadcast-line"></i></span>Live session</span>
+              <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:28px">
+            </div>
+            <h2 style="font-family:var(--font-display);font-weight:900;font-size:33px;line-height:1.02;letter-spacing:-.02em;margin:0;text-wrap:balance;position:relative">{{ eventTitle }}</h2>
+            <div style="position:relative">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="cb-i" style="font-size:19px"><i class="ri-calendar-2-line"></i></span><span style="font-size:16px;font-weight:700">{{ eventDate }}</span></div>
+              <div style="display:flex;align-items:center;gap:10px"><span class="cb-i" style="font-size:19px"><i class="ri-time-line"></i></span><span style="font-size:16px;font-weight:700">{{ eventTime }}</span></div>
+              <div style="margin-top:18px;text-align:center;background:#fff;color:var(--red-600);font-weight:700;font-size:15px;padding:13px;border-radius:var(--radius-pill)">Join link in chat &darr;</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Live session announcement</span></sc-if>
+          </div>
+        </div>
+
+        <!-- Session reminder / countdown -->
+        <div data-card data-name="colaberry-reminder" data-w="1080" style="display:flex;flex-direction:column;gap:10px">
+          <div data-art style="width:300px;height:300px;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);background:var(--neutral-0);color:var(--text-strong);display:flex;flex-direction:column;justify-content:space-between;padding:30px;box-sizing:border-box;border:1px solid var(--border-subtle)">
+            <span style="display:inline-flex;align-self:flex-start;align-items:center;gap:7px;background:var(--red-50);color:var(--red-600);font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:6px 13px;border-radius:var(--radius-pill)"><span class="cb-i"><i class="ri-alarm-line"></i></span>Reminder</span>
+            <div>
+              <div style="font-family:var(--font-display);font-weight:900;font-size:30px;line-height:1.0;letter-spacing:-.02em;color:var(--red-600)">Starts in 1 hour</div>
+              <p style="font-size:14.5px;line-height:1.4;color:var(--text-body);margin:12px 0 0">Today's session kicks off at {{ eventTime }}. Grab water, open your laptop — see you there.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px"><img src="../../assets/logo/colaberry-mark.png" alt="Colaberry" style="height:20px"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">{{ batchName }}</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Session reminder · 1080 × 1080</span></sc-if>
+          </div>
+        </div>
+
+        <!-- Milestone / congrats -->
+        <div data-card data-name="colaberry-milestone" data-w="1080" style="display:flex;flex-direction:column;gap:10px">
+          <div data-art style="width:300px;height:300px;border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);background:linear-gradient(150deg,var(--green-600),var(--green-800));color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:30px;box-sizing:border-box">
+            <span class="cb-i" style="font-size:34px;color:#fff"><i class="ri-trophy-line"></i></span>
+            <div>
+              <div style="font-family:var(--font-display);font-weight:900;font-size:27px;line-height:1.05;letter-spacing:-.02em">Week 1 done!</div>
+              <p style="font-size:14px;line-height:1.4;opacity:.92;margin:10px 0 0">You shipped your first project. Proud of this group — keep the momentum going.</p>
+            </div>
+            <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:22px;align-self:flex-start">
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Milestone · 1080 × 1080</span></sc-if>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============ STATUS ============ -->
+    <section>
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px">
+        <span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--neutral-500);font-weight:600">WhatsApp Status</span>
+        <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:12px;color:var(--neutral-400)">1080 × 1920 · 9:16 full-screen</span></sc-if>
+      </div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+
+        <!-- Status — announcement -->
+        <div data-card data-name="colaberry-status-kickoff" data-w="1080" style="display:flex;flex-direction:column;gap:10px">
+          <div data-art style="width:220px;height:391px;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg);background:linear-gradient(165deg,var(--red-500),var(--red-700) 70%,#8f0f1c);color:#fff;display:flex;flex-direction:column;padding:22px;box-sizing:border-box;position:relative">
+            <div style="display:flex;gap:4px;margin-bottom:20px"><span style="flex:1;height:3px;border-radius:2px;background:#fff"></span></div>
+            <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:26px;align-self:flex-start">
+            <div style="margin-top:auto">
+              <span style="display:inline-block;background:rgba(255,255,255,.18);font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:5px 11px;border-radius:var(--radius-pill)">New cohort</span>
+              <h2 style="font-family:var(--font-display);font-weight:900;font-size:28px;line-height:1.03;letter-spacing:-.02em;margin:14px 0 0;text-wrap:balance">{{ batchName }} starts now</h2>
+              <p style="font-size:13px;opacity:.92;margin:10px 0 0">Kickoff {{ kickoff }} · powered by Anthropic + Claude Code</p>
+            </div>
+            <div style="margin-top:20px;text-align:center;background:#fff;color:var(--red-600);font-weight:700;font-size:14px;padding:12px;border-radius:var(--radius-pill)">training.colaberry.com</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Cohort kickoff</span></sc-if>
+          </div>
+        </div>
+
+        <!-- Status — countdown -->
+        <div data-card data-name="colaberry-status-countdown" data-w="1080" style="display:flex;flex-direction:column;gap:10px">
+          <div data-art style="width:220px;height:391px;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg);background:var(--neutral-900);color:#fff;display:flex;flex-direction:column;padding:22px;box-sizing:border-box;position:relative">
+            <div style="position:absolute;inset:0;background:radial-gradient(80% 50% at 50% 110%,rgba(119,187,74,.4),transparent 60%)"></div>
+            <div style="display:flex;gap:4px;margin-bottom:20px;position:relative"><span style="flex:1;height:3px;border-radius:2px;background:#fff"></span></div>
+            <img src="../../assets/logo/colaberry-mark-white.png" alt="Colaberry" style="height:26px;align-self:flex-start;position:relative">
+            <div style="margin:auto 0;position:relative">
+              <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.8;margin-bottom:8px">Live session today</div>
+              <div style="font-family:var(--font-display);font-weight:900;font-size:48px;line-height:.95;letter-spacing:-.03em;color:var(--green-400)">{{ eventTime }}</div>
+              <p style="font-size:14px;opacity:.9;margin:14px 0 0;line-height:1.4">{{ eventTitle }}</p>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:11px;opacity:.8;position:relative">See you in the group &uarr;</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <sc-if value="{{ showDims }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--font-mono);font-size:11px;color:var(--neutral-500)">Session countdown</span></sc-if>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1320, &quot;height&quot;: 1480 },
+  &quot;dark&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;showDims&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;batchName&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;AI Architect · Cohort 01&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;kickoff&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Mon, Jul 13&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;eventTitle&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Building your first AI agent&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;eventDate&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Wednesday, Jul 15&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;eventTime&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;7:30 PM CST&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      theme: (this.props.dark ?? false) ? 'dark' : 'light',
+      showDims: this.props.showDims ?? true,
+      batchName: this.props.batchName ?? 'AI Architect · Cohort 01',
+      kickoff: this.props.kickoff ?? 'Mon, Jul 13',
+      eventTitle: this.props.eventTitle ?? 'Building your first AI agent',
+      eventDate: this.props.eventDate ?? 'Wednesday, Jul 15',
+      eventTime: this.props.eventTime ?? '7:30 PM CST',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -60,8 +60,8 @@ This file lets every piece of downstream work — code, marketing, sales, legal 
 ## A5. Cohort cadence and size
 
 **LOCKED (provisional, subject to capacity test):**
-- **Cohort cadence:** Quarterly. Cohort 1 starts 2026-07-13, Cohort 2 starts 2026-10-12, Cohort 3 starts 2027-01-11.
-- **Cohort size cap:** **25 students** for Cohort 1 (Founding Cohort). Allows close mentor attention without overwhelming the 4 AI agents. Can raise to 50 in Cohort 2 if the platform holds.
+- **Cohort cadence:** Two 2026 cohorts. Cohort 1 orientation 2026-07-23 / classes start 2026-07-27, Cohort 2 starts 2026-11-02. (Cohort 3 removed, 2026-06-19.)
+- **Cohort size cap:** **40 students** for Cohort 1 (Founding Cohort). Allows close mentor attention without overwhelming the 4 AI agents. Can raise to 50 in Cohort 2 if the platform holds.
 
 **If you override:**
 - Revenue model changes (current conservative scenario assumes 100 students/year = 4 quarterly cohorts × 25).
@@ -84,8 +84,8 @@ This file lets every piece of downstream work — code, marketing, sales, legal 
 
 **LOCKED:**
 - Enrollment opens: **Friday 2026-07-10**
-- Cohort 1 kickoff: **Monday 2026-07-13**
-- Cohort 1 ends + Architect Expo: **~Friday 2026-10-02** (12 weeks × Mon/Thu)
+- Cohort 1 orientation: **Thursday 2026-07-23**; classes start: **Monday 2026-07-27**
+- Cohort 1 ends + Architect Expo: **~Friday 2026-10-16** (12 weeks × Mon/Thu)
 
 **If you override:** Whole 41-day plan shifts.
 

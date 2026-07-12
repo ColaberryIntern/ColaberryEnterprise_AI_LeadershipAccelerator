@@ -3,13 +3,14 @@
 // Returns null when API key is missing — callers fall back to rule-based logic.
 
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../../services/openaiInstrumented';
 import type { ChatCompletionMessageParam, ChatCompletionTool, ChatCompletion } from 'openai/resources/chat/completions';
 
 let _client: OpenAI | null = null;
 
 export function getOpenAIClient(): OpenAI | null {
   if (!process.env.OPENAI_API_KEY) return null;
-  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_client) _client = getInstrumentedOpenAI({ workflow_id: 'assistant' });
   return _client;
 }
 

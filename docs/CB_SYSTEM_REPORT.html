@@ -1,0 +1,217 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CB System - Architecture &amp; Management Report</title>
+<style>
+  :root{--navy:#0f172a;--ink:#1a202c;--slate:#475569;--line:#e2e8f0;--bg:#f1f5f9;--card:#fff;--gold:#fbbf24;--blue:#0369a1;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 22px 70px}
+  header{background:var(--navy);color:#fff;padding:30px 0 26px;margin-bottom:8px}
+  header .wrap{padding-bottom:0}
+  .eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);font-weight:700}
+  h1{font-size:27px;margin:6px 0 6px}
+  header .sub{color:#cbd5e1;font-size:14px;max-width:780px}
+  h2{font-size:18px;margin:38px 0 10px;padding-bottom:7px;border-bottom:2px solid var(--line)}
+  h2 .n{color:var(--blue);font-weight:700;margin-right:8px}
+  p{max-width:880px}
+  code{background:#eef2f7;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:12.5px;font-family:'SF Mono',Consolas,monospace}
+  .diagram{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 3px rgba(15,23,42,.05);overflow-x:auto}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#1a365d;color:#fff;font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+  tr:last-child td{border-bottom:0}
+  .callout{background:#e0f2fe;border-left:4px solid var(--blue);border-radius:8px;padding:12px 16px;margin:14px 0;font-size:14px}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:18px 0;font-size:14px}
+  .toc a{color:var(--blue);text-decoration:none;margin-right:18px;white-space:nowrap}
+  ol,ul{max-width:880px}
+  .foot{margin-top:36px;color:#94a3b8;font-size:12px;text-align:center}
+</style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { useMaxWidth: true }, securityLevel: 'loose' });
+</script>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Colaberry · Internal Systems</div>
+    <h1>CB System - Architecture &amp; Management Report</h1>
+    <div class="sub">The autonomous Basecamp agent: every moving part, how the pieces connect, what data it produces, and how you manage it. Prepared for Ali Muwwakkil.</div>
+  </div>
+</header>
+<div class="wrap">
+
+  <div class="toc">
+    <strong>Contents:</strong>
+    <a href="#s1">1 · Engine vs product</a>
+    <a href="#s2">2 · The layers</a>
+    <a href="#s3">3 · @CB mention lifecycle</a>
+    <a href="#s4">4 · Data it produces</a>
+    <a href="#s5">5 · The dashboard</a>
+    <a href="#s6">6 · Reliability work</a>
+  </div>
+
+  <p><strong>CB System is the autonomous agent that lives inside Basecamp.</strong> It reads @-mentions, drafts deliverables, scores and tracks to-dos, watches itself, and reports to you. It is the <strong>engine</strong> that the advisor app's <code>/my-day</code> product is built on - it is what connects the two projects.</p>
+
+  <h2 id="s1"><span class="n">1</span>The big picture - engine vs. product</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  BC[("Basecamp\naccount 3945211\nprojects · to-dos · @CB mentions")]
+  subgraph ENG["CB System - the ENGINE (managed in enterprise)"]
+    D["Inbound dispatcher"]
+    H["GPT-4o handler"]
+    R["AI task runners"]
+    S["BC to-do sync + scorer"]
+    W["Watchdog + workers"]
+  end
+  MD["advisor /my-day\n(the PRODUCT, multi-user)"]
+  DASH["enterprise /admin/cb-system\n(CB System Command - MANAGE the engine)"]
+  BC <-->|"read mentions / to-dos, write replies"| ENG
+  ENG -->|"scored, mirrored to-dos"| MD
+  ENG -->|"health · activity · cost"| DASH
+  classDef eng fill:#faf5ff,stroke:#6d28d9,color:#1a202c;
+  classDef prod fill:#e0f2fe,stroke:#0369a1,color:#1a202c;
+  class ENG eng; class MD,DASH prod;
+  </pre></div>
+  <div class="callout"><strong>Key point:</strong> <code>/my-day</code> (advisor) is the product; CB System (enterprise) is the shared engine. The enterprise "Run My Day" page was a duplicate of <code>/my-day</code> and has been <strong>retired</strong> - replaced by <strong>CB System Command</strong>, which <em>manages the engine</em> instead of re-implementing the product.</div>
+
+  <h2 id="s2"><span class="n">2</span>The moving parts, by layer</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TB
+  subgraph L1["1 · INPUT - senses Basecamp"]
+    A1["Inbound dispatcher\nevery 3 min · catches @CB mentions"]
+    A2["Context walker\n4-layer graph"]
+  end
+  subgraph L2["2 · BRAIN - decides & acts"]
+    B1["CB handler (GPT-4o)\ntools: reply · email · queue · complete"]
+    B2["Guardrails\ndrafts only · circuit breaker · audit log"]
+  end
+  subgraph L3["3 · PROACTIVE WORK"]
+    C1["AI task runners\nnightly deliverable drafts"]
+    C2["Autonomous worker\n15 min · #auto-* recipes"]
+  end
+  subgraph L4["4 · MIRROR & SCORING"]
+    E1["BC sync\nevery 2 min · incremental"]
+    E2["Priority engine\nscore 0-100 + category"]
+    E3["Automation rules"]
+  end
+  subgraph L5["5 · COMMS"]
+    F1["Digests · reminders · backlog · reports"]
+  end
+  subgraph L6["6 · HEALTH & QUALITY"]
+    G1["Watchdog · coverage · self-improve · dup cleanup"]
+  end
+  L1 --> L2 --> L3
+  L1 --> L4 --> L5
+  L4 --> L6
+  </pre></div>
+  <table>
+    <tr><th>Layer</th><th>Component</th><th>What it does</th><th>Cadence</th></tr>
+    <tr><td>Input</td><td><b>Inbound dispatcher</b></td><td>Catches @CB mentions across all projects, dedups, routes</td><td>every 3 min</td></tr>
+    <tr><td>Input</td><td><b>Context walker</b></td><td>Pulls full context (todolist, todo, comments, linked docs/PDFs)</td><td>on demand</td></tr>
+    <tr><td>Brain</td><td><b>CB handler (GPT-4o)</b></td><td>Interprets the request, calls tools (reply / email / queue / complete)</td><td>per mention</td></tr>
+    <tr><td>Brain</td><td><b>Guardrails</b></td><td>Drafts-only, duplicate-reply circuit breaker, JSONL audit log</td><td>always</td></tr>
+    <tr><td>Work</td><td><b>AI task runners</b></td><td>Auto-draft first-pass deliverables for upcoming AI-tier to-dos</td><td>nightly</td></tr>
+    <tr><td>Work</td><td><b>Autonomous worker</b></td><td>Runs <code>#auto-*</code> recipe to-dos (grep / SQL / status)</td><td>every 15 min</td></tr>
+    <tr><td>Data</td><td><b>BC sync</b></td><td>Mirrors Basecamp to-dos into Postgres (incremental, ~2 s)</td><td>every 2 min</td></tr>
+    <tr><td>Data</td><td><b>Priority engine</b></td><td>Scores every to-do 0-100 + category</td><td>every 2 min</td></tr>
+    <tr><td>Data</td><td><b>Automation rules</b></td><td>Deterministic flag / tag / count</td><td>every 2 min</td></tr>
+    <tr><td>Comms</td><td><b>Digests / reminders / backlog / reports</b></td><td>Email summaries + nudges</td><td>scheduled</td></tr>
+    <tr><td>Health</td><td><b>Watchdog / coverage / self-improve / dup cleanup</b></td><td>Detects anomalies, fixes weak answers, trims duplicates</td><td>daily + on demand</td></tr>
+  </table>
+
+  <h2 id="s3"><span class="n">3</span>What happens when you @-mention CB</h2>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant Ali
+  participant BC as Basecamp
+  participant DSP as Dispatcher (3-min)
+  participant CTX as Context walker
+  participant LLM as GPT-4o handler
+  participant LOG as Audit log
+  Ali->>BC: comment "@CB System draft the reply…"
+  DSP->>BC: poll new comments
+  BC-->>DSP: new @CB mention
+  DSP->>DSP: dedup + allowed-requester + not-an-agent-card
+  DSP->>CTX: gather thread context
+  CTX->>BC: todolist + todo + comments + linked docs
+  BC-->>CTX: full context
+  CTX-->>LLM: context bundle
+  LLM->>LLM: decide + draft (breaker: max 2 replies/comment)
+  LLM->>BC: post reply (draft) / queue follow-up
+  LLM->>LOG: record invocation (who · tools · outcome)
+  </pre></div>
+  <p>The <strong>circuit breaker</strong> caps replies per comment so a bug can never spam a thread again. The <strong>audit log</strong> (<code>cb-handler-log.jsonl</code>) powers the dashboard's Activity feed.</p>
+
+  <h2 id="s4"><span class="n">4</span>The data CB System produces (the dashboard's fuel)</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph PG["Postgres (ops_* tables)"]
+    T1["ops_bc_todos\nmirror + score + category"]
+    T2["ops_ai_assessments\nscore history + cost"]
+    T3["ops_metrics_daily"]
+  end
+  subgraph FILES["Host files (mounted read-only)"]
+    F1["cb-handler-log.jsonl"]
+    F2["inbound-state.json"]
+    F3["cb-inbound.log"]
+  end
+  PG --> API["/api/admin/cb-system/*"]
+  FILES --> API
+  API --> DASH["CB System Command dashboard"]
+  </pre></div>
+  <table>
+    <tr><th>Source</th><th>Holds</th><th>Feeds</th></tr>
+    <tr><td><code>ops_bc_todos</code></td><td>every tracked to-do + urgency score + category</td><td>per-project pane</td></tr>
+    <tr><td><code>ops_ai_assessments</code></td><td>score history, model, token cost</td><td>throughput/cost pane</td></tr>
+    <tr><td><code>ops_metrics_daily</code></td><td>approvals, automations fired, agent cost</td><td>throughput pane</td></tr>
+    <tr><td><code>cb-handler-log.jsonl</code></td><td>every @CB invocation: requester, tools, outcome</td><td>activity + exceptions</td></tr>
+    <tr><td><code>inbound-state.json</code></td><td>processed comments + circuit-breaker trips</td><td>health + exceptions</td></tr>
+    <tr><td><code>cb-inbound.log</code></td><td>dispatcher tick health, errors</td><td>health pane</td></tr>
+  </table>
+
+  <h2 id="s5"><span class="n">5</span>How you manage it - the dashboard</h2>
+  <p><code>enterprise.colaberry.ai/admin/cb-system</code> - six panes, fed entirely by the data above (no new instrumentation):</p>
+  <ol>
+    <li><b>Health</b> - one GREEN / YELLOW / RED light: is it running, catching mentions, erroring, or tripping its safety breaker.</li>
+    <li><b>Throughput &amp; cost</b> - chart of requests handled and agent cost over time.</li>
+    <li><b>Per-project</b> - which projects it's working, open to-dos, mentions answered.</li>
+    <li><b>Activity feed</b> - live list of what CB just did (who asked, what, outcome).</li>
+    <li><b>Exceptions &amp; quality</b> - errors and quality flags; the "needs a human look" list.</li>
+    <li><b>Subsystems</b> - each component's status + a "Run sync now" control.</li>
+  </ol>
+  <div class="callout">The mirror that the priority engine reads now tracks <strong>only real work</strong> (~1.6k to-dos) after excluding the high-volume <strong>Center of Excellence</strong> (student) and <strong>RMG Mortgage</strong> (bulk) projects.</div>
+
+  <h2 id="s6"><span class="n">6</span>Reliability work done (June 2026)</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TB
+  P0["Symptom: duplicate comments;\nmirror not updating"]
+  P1["Dispatcher loop fixed\n(incremental state save)"]
+  P2["Duplicate-reply circuit breaker + alarm"]
+  P3["Activity-scoped scan (~38x faster)"]
+  P4["AI-runner idempotency + 249 dupes cleaned"]
+  P5["Token auto-refresh from CCPP"]
+  P6["Rate-limit handling (pace + backoff + single-flight)"]
+  P7["Incremental + filtered sync\n~20 min -> ~3 s; 30k -> 1.6k"]
+  P8["Automated-agent-card guard"]
+  P0-->P1-->P2-->P3-->P4-->P5-->P6-->P7-->P8
+  </pre></div>
+  <table>
+    <tr><th>Fix</th><th>Before</th><th>After</th></tr>
+    <tr><td>Dispatcher duplicate-reply loop</td><td>~25 dupes/comment, ran for hours</td><td>incremental save + circuit breaker (max 2)</td></tr>
+    <tr><td>Dispatcher scan speed</td><td>re-walks 64 projects each tick</td><td>account-wide recordings feed (~38× faster)</td></tr>
+    <tr><td>AI runner</td><td>re-posts deliverables every run</td><td>idempotent; 249 dupes cleaned</td></tr>
+    <tr><td>Basecamp token</td><td>401 on 2-week rotation, manual fix</td><td>auto-refreshes from CCPP in-app</td></tr>
+    <tr><td>OpsBcSync rate limits</td><td>227-348 <code>429</code> errors/run</td><td>pacing + backoff + single-flight, 0 errors</td></tr>
+    <tr><td>OpsBcSync speed/volume</td><td>~20 min, 30k to-dos (86% student data)</td><td>~3 s incremental, 1.6k real to-dos</td></tr>
+    <tr><td>Agent-card feedback loop</td><td>19 → 53 comments, self-feeding</td><td>dispatcher skips automated-agent cards</td></tr>
+  </table>
+
+  <div class="foot">Generated by Claude Code for the CB System Command initiative · live dashboard <code>enterprise.colaberry.ai/admin/cb-system</code> · <span id="d"></span></div>
+</div>
+<script>document.getElementById('d').textContent=new Date().toISOString().slice(0,10);</script>
+</body>
+</html>

@@ -19,7 +19,13 @@ import {
   RevenueOpportunity,
 } from '../../models';
 
+import { requireAdmin } from '../../middlewares/authMiddleware';
+
 const router = Router();
+
+// SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
+// endpoints publicly callable. Require an authenticated admin for every route below.
+router.use(requireAdmin);
 const BASE = '/api/admin/openclaw';
 
 // ── Dashboard Aggregate Stats ─────────────────────────────────────

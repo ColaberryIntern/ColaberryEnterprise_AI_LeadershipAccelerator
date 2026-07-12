@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
-const OpenAI = require(path.resolve(__dirname, '../../../node_modules/openai')).default;
+const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './lib/openaiInstrumented'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 const recorder = require(path.resolve(__dirname, './lib/reportRunRecorder'));
 
@@ -232,7 +232,7 @@ async function generateProjectFraming(analysis) {
         : `No human action is currently required. Project is either fully unblocked, idle, or complete.`,
     };
   }
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getInstrumentedOpenAI({ workflow_id: 'daily_client_projects_report' });
   const ctx = [
     `Project: ${analysis.projectName}`,
     analysis.description ? `Description: ${analysis.description}` : '',

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { countPriorEmailsFromSender } from './senderHistory';
 
 const LOG_PREFIX = '[InboxCOS][LLM]';
@@ -77,7 +78,7 @@ Respond in JSON only:
  */
 export async function classifyWithLLM(email: NormalizedEmail): Promise<ClassificationResult> {
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = getInstrumentedOpenAI({ workflow_id: 'inbox_classify' });
 
     const headers = email.headers || {};
     const headerKeys = Object.keys(headers);

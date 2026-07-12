@@ -151,6 +151,33 @@ const REPORTS = [
     sendHourUTC: 13,  // 8 AM CT on Saturday (Saturday already has nothing else firing)
     description: 'Weekly intern activity report. STRONG (3+ updates), LIGHT (1-2), INACTIVE (0) buckets over last 10 days.',
   },
+  // ---- IPBC interview preparation ----
+  {
+    name: 'Interview Prep — Priority & Readiness',
+    scriptPath: 'backend/src/scripts/interviewPrepReport.js',
+    args: [],
+    projectId: null, // CCPP-based (vw_ColaberryInterviewPreparation_UpcomingInterviews)
+    needsOpenai: false,
+    recipients: { to: 'ali@colaberry.com', cc: [] }, // Ali only (per Ali 2026-06-10: "just me"); single address, no duplicate copies
+    cbRunnerState: null,
+    skipFlag: '--skip-interview-prep',
+    cadence: 'daily',
+    sendCT: '05:30',  // 5:30 AM Central, DST-correct (fired via --ct-now cron, not the hourly stagger)
+    description: 'Ranks active IPBC interviews by urgency x preparation. Readiness scatter, prep heatmap, priority queue, post-interview survey-owed queue, mentor coaching load, and the de-duplicated student-nudge plan (one combined email per student). CCPP-driven, email-safe HTML. This is Ali’s single daily interview email.',
+  },
+  {
+    name: 'Interview Prep Nudges (PREVIEW by default)',
+    scriptPath: 'backend/src/scripts/dailyInterviewPrepNudges.js',
+    args: [],
+    projectId: null, // CCPP-based
+    needsOpenai: false,
+    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com'] },
+    cbRunnerState: 'tmp/ops-engine/interview-prep-nudge-state.json',
+    skipFlag: '--skip-interview-nudges',
+    cadence: 'daily',
+    sendCT: '05:30',  // right after the report; NO-OP in preview (report carries the plan), sends students when mode=live
+    description: 'Student-facing interview-prep nudges. Sends ONE combined email per person (de-duplicated across all their interviews + IPBC accounts). PREVIEW = sends nothing (the report shows the plan). LIVE (mode file = "live") = emails students only; no separate Ali confirmation (the report carries the plan; failures surface via the reporting audit). Mode: tmp/ops-engine/interview-prep-nudge-mode.txt.',
+  },
   // ---- Cohort training report ----
   {
     name: 'Weekly Cohort Performance Report',

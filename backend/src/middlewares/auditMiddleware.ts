@@ -65,9 +65,11 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
   res.on('finish', () => {
     // Only log successful operations
     if (res.statusCode >= 200 && res.statusCode < 400) {
-      const adminUser = (req as any).adminUser;
+      // req.admin is populated by requireAdmin/requireSalesOrAdmin (AuthPayload: sub/email/role).
+      // The prior code read (req as any).adminUser — a field nothing ever sets — so every admin
+      // write was logged with admin_user_id=null (no actor). Use the real authenticated identity.
       AuditLog.create({
-        admin_user_id: adminUser?.id || null,
+        admin_user_id: req.admin?.sub || null,
         action: methodToAction(req.method),
         entity_type: entityType,
         entity_id: entityId,

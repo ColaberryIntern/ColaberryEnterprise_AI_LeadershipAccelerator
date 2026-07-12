@@ -7,6 +7,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import DatasetRegistry from '../../models/DatasetRegistry';
+import { emitToolCall, emitRetrieval } from '../../services/aiEventService';
 import {
   chatCompletionWithTools,
   type ChatCompletionMessageParam,
@@ -487,6 +488,14 @@ async function executeSearchKnowledge(query: string, topK?: number): Promise<any
     const results = await executeVectorSearch(['semantic_entity_search'], query);
     const successful = results.filter((r) => r.status === 'success');
     const items = successful.flatMap((r) => r.data).slice(0, topK || 3);
+    // Persist retrieval provenance (TBI P1-6) — vector source IDs/titles. Swallow-safe.
+    emitRetrieval({
+      method: 'vector',
+      count: items.length,
+      sources: items.map((it: any) => ({ id: it?.id ?? it?.entity_id, title: it?.title ?? it?.name ?? it?.label, category: it?.type ?? it?.category })),
+      workflowId: 'cory_search',
+      agentId: 'Cory',
+    }).catch(() => {});
     return { results: items, count: items.length };
   } catch {
     return { results: [], count: 0, note: 'Vector search unavailable' };
@@ -638,14 +647,24 @@ export async function runCoryAgenticLoop(
         const t0 = Date.now();
         const result = await executeToolCall(tc.fn.name, args, { sqlResults, charts, ticketsCreated });
         const duration = Date.now() - t0;
+        const resultSummary = summarizeResult(tc.fn.name, result);
 
         toolTrace.push({
           round: rounds,
           tool: tc.fn.name,
           args,
-          result_summary: summarizeResult(tc.fn.name, result),
+          result_summary: resultSummary,
           duration_ms: duration,
         });
+        // Observability (TBI P1-6): record the tool call (name + arg keys + redacted summary). Swallow-safe.
+        emitToolCall({
+          tool: tc.fn.name,
+          workflowId: 'cory_agentic',
+          agentId: 'Cory',
+          args,
+          resultSummary,
+          durationMs: duration,
+        }).catch(() => {});
 
         return {
           role: 'tool' as const,

@@ -227,9 +227,9 @@ const ScoreBars: React.FC<{ breakdown: Record<string, number> }> = ({ breakdown 
             </div>
             <div className="progress" style={{ height: 6 }} aria-label={`${key} contribution`}>
               <div
-                className={`progress-bar ${negative ? 'bg-danger' : 'bg-primary'}`}
+                className={`progress-bar ${negative ? 'bg-danger' : ''}`}
                 role="progressbar"
-                style={{ width: `${pct}%` }}
+                style={{ width: `${pct}%`, ...(negative ? {} : { background: '#FB2832' }) }}
                 aria-valuenow={pct}
                 aria-valuemin={0}
                 aria-valuemax={100}

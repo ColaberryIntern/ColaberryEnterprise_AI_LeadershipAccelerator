@@ -1,243 +1,260 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
-import { STANDARD_CTAS } from '../config/programSchedule';
-import StrategyCallModal from '../components/StrategyCallModal';
+import { Button, ButtonProps } from '../colaberry/components/core/Button';
+import { Badge } from '../colaberry/components/core/Badge';
+import { Card } from '../colaberry/components/core/Card';
 import IndustryDemoGrid from '../components/IndustryDemoGrid';
 
-function AdvisoryPage() {
-  const [showBooking, setShowBooking] = useState(false);
-  const services = [
-    {
-      icon: '🗺️',
-      title: 'AI Roadmap Workshops',
-      description:
-        'Structured 2-day working sessions to refine and operationalize your 90-Day AI Roadmap. Includes resource planning, vendor evaluation, and governance checkpoints.',
-      format: '2-day working session',
-      idealFor: 'Teams 4–6 weeks post-accelerator',
-    },
-    {
-      icon: '🏗️',
-      title: 'Enterprise AI Architecture Design',
-      description:
-        'Colaberry architects work alongside your technical team to design the data pipelines, model serving infrastructure, and integration patterns for your priority AI initiative.',
-      format: 'Engagement: 4–8 weeks',
-      idealFor: 'Organizations preparing for first production AI deployment',
-    },
-    {
-      icon: '🤖',
-      title: 'AI Agent Implementation Projects',
-      description:
-        'End-to-end implementation support for AI agent and automation projects. From architecture review through deployment and monitoring setup.',
-      format: 'Engagement: 8–16 weeks',
-      idealFor: 'Organizations with approved AI initiative and allocated team',
-    },
-    {
-      icon: '🛡️',
-      title: 'AI Governance Advisory',
-      description:
-        'Design and implement AI governance frameworks appropriate to your industry and regulatory environment. Covers model risk, data governance, audit trails, and compliance posture.',
-      format: 'Engagement: 3–6 weeks',
-      idealFor: 'Finance, Healthcare, Government, and regulated industries',
-    },
-    {
-      icon: '👥',
-      title: 'AI Talent Deployment',
-      description:
-        'Access Colaberry\'s network of enterprise-trained AI practitioners for embedded or project-based engagements. Accelerator-trained talent who understand enterprise architecture.',
-      format: 'Ongoing | project-based or embedded',
-      idealFor: 'Organizations scaling AI teams faster than organic hiring allows',
-    },
-  ];
+// AdvisoryPage — /advisory
+// REFRAME: dropped the standalone enterprise-retainer pitch. Advisory is now a
+// slim note FOR SPONSORS — a light-touch wrap around the one class — that points
+// employers to "Sponsor Your Team". DS-only, semantic tokens only.
 
-  const industries = [
-    { icon: '💻', name: 'Technology' },
-    { icon: '🏦', name: 'Finance & Banking' },
-    { icon: '🏥', name: 'Healthcare & Life Sciences' },
-    { icon: '🏭', name: 'Manufacturing' },
-    { icon: '⚡', name: 'Energy & Utilities' },
-    { icon: '🛒', name: 'Retail & eCommerce' },
-    { icon: '🏛️', name: 'Government & Public Sector' },
-    { icon: '🚚', name: 'Logistics & Supply Chain' },
-  ];
-
+// CtaButton: the DS Button only forwards href + on* handlers to its host element
+// (it drops React Router's `to`), so we route via href + onClick — a real anchor
+// for crawlers/focus, client-side nav without a full reload.
+interface CtaButtonProps extends Omit<ButtonProps, 'href' | 'onClick'> {
+  to: string;
+}
+function CtaButton({ to, children, ...rest }: CtaButtonProps) {
+  const navigate = useNavigate();
   return (
-    <>
+    <Button
+      href={to}
+      onClick={(e: React.MouseEvent<HTMLElement>) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+        e.preventDefault();
+        navigate(to);
+      }}
+      {...rest}
+    >
+      {children}
+    </Button>
+  );
+}
+
+const CSS = `
+.cbadv-root{font-family:var(--font-body);color:var(--text-body);background:var(--surface-page);line-height:var(--lh-relaxed);-webkit-font-smoothing:antialiased}
+.cbadv-root *{box-sizing:border-box}
+.cbadv-root h1,.cbadv-root h2,.cbadv-root h3,.cbadv-root h4{font-family:var(--font-display);color:var(--text-strong);margin:0;line-height:var(--lh-heading);letter-spacing:var(--ls-tight)}
+.cbadv-wrap{max-width:var(--container-lg);margin:0 auto;padding:0 var(--space-6)}
+.cbadv-narrow{max-width:var(--container-md)}
+.cbadv-eyebrow{font-size:var(--fs-overline);font-weight:var(--fw-bold);letter-spacing:var(--ls-overline);text-transform:uppercase;color:var(--brand-accent)}
+.cbadv-sec{padding:var(--space-24) 0}
+.cbadv-sec-sm{padding:var(--space-16) 0}
+.cbadv-alt{background:var(--surface-subtle)}
+.cbadv-h2{font-size:var(--fs-h2);font-weight:var(--fw-bold)}
+.cbadv-lead{font-size:var(--fs-body-lg);line-height:var(--lh-normal);color:var(--text-muted)}
+.cbadv-mt2{margin-top:var(--space-2)}
+.cbadv-mt4{margin-top:var(--space-4)}
+.cbadv-mt5{margin-top:var(--space-5)}
+
+/* HERO */
+.cbadv-hero{background:var(--surface-inverse);color:var(--text-on-inverse);padding:var(--space-24) 0 var(--space-20);position:relative;overflow:hidden}
+.cbadv-hero h1{color:var(--text-on-inverse);font-size:var(--fs-hero-fluid);font-weight:var(--fw-black);max-width:18ch}
+.cbadv-hero .cbadv-eyebrow{color:var(--red-300)}
+.cbadv-hero .cbadv-lead{color:var(--neutral-300);max-width:60ch;margin-top:var(--space-5)}
+.cbadv-hero-cta{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-top:var(--space-10)}
+
+/* POSITIONING */
+.cbadv-frame{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-6);margin-top:var(--space-10)}
+.cbadv-frame-step{padding:var(--space-8) var(--space-6);text-align:center;height:100%}
+.cbadv-frame-step .ic{font-size:var(--fs-h1);line-height:1;margin-bottom:var(--space-4)}
+.cbadv-frame-step h3{font-size:var(--fs-h5)}
+.cbadv-frame-step p{margin:var(--space-2) 0 0;color:var(--text-muted);font-size:var(--fs-body-sm)}
+
+/* SPONSOR ADVISORY NOTE */
+.cbadv-note{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-6);margin-top:var(--space-10);align-items:start}
+.cbadv-incl{padding:var(--space-8)}
+.cbadv-incl h3{font-size:var(--fs-h4)}
+.cbadv-incl ul{list-style:none;margin:var(--space-5) 0 0;padding:0;display:flex;flex-direction:column;gap:var(--space-4)}
+.cbadv-incl li{display:flex;gap:var(--space-3);font-size:var(--fs-body-sm);color:var(--text-body)}
+.cbadv-incl li .ck{color:var(--status-success);font-weight:var(--fw-bold);flex:none}
+.cbadv-aside{background:var(--surface-inverse);color:var(--text-on-inverse);border-radius:var(--radius-xl);padding:var(--space-8);display:flex;flex-direction:column;height:100%}
+.cbadv-aside h3{color:var(--text-on-inverse);font-size:var(--fs-h4);max-width:20ch}
+.cbadv-aside p{color:var(--neutral-300);font-size:var(--fs-body-sm);margin:var(--space-4) 0 var(--space-8)}
+.cbadv-aside .cbadv-cta{margin-top:auto;display:flex;gap:var(--space-3);flex-wrap:wrap}
+
+/* INDUSTRIES */
+.cbadv-inds{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-4);margin-top:var(--space-10)}
+.cbadv-ind{padding:var(--space-6);text-align:center}
+.cbadv-ind .ic{font-size:var(--fs-h2);line-height:1}
+.cbadv-ind h3{font-size:var(--fs-body-sm);font-weight:var(--fw-medium);margin-top:var(--space-3)}
+
+/* CLOSING */
+.cbadv-closing{text-align:center}
+.cbadv-closing h2{font-size:var(--fs-h1);max-width:22ch;margin:0 auto}
+.cbadv-closing .cbadv-lead{max-width:56ch;margin:var(--space-5) auto var(--space-8)}
+.cbadv-closing-cta{display:flex;gap:var(--space-4);justify-content:center;flex-wrap:wrap}
+
+@media(max-width:900px){
+  .cbadv-frame,.cbadv-note{grid-template-columns:1fr}
+  .cbadv-inds{grid-template-columns:1fr 1fr}
+}
+`;
+
+const FRAME = [
+  { ic: '🚪', title: 'One class, two doors', desc: 'Individuals self-serve a membership. Employers sponsor seat blocks. Everyone learns in the same program.' },
+  { ic: '🛠️', title: 'They build on the job', desc: 'Your people learn on their own time and ship a real AI build scoped to their actual work — no one leaves their seat.' },
+  { ic: '🔭', title: 'You discover talent', desc: 'A company leaderboard and Demo Day surface who your real AI builders are — without taking anyone off the job.' },
+];
+
+const SPONSOR_INCLUDES = [
+  'A kickoff working session to map your seat block to the teams and problems that matter most',
+  'A private company leaderboard so you can see who is building, not just who enrolled',
+  'Demo Day seats where your sponsored builders present what they shipped to your leaders',
+  'A light-touch check-in cadence — we keep momentum without adding a project to anyone’s plate',
+];
+
+const INDUSTRIES = [
+  { ic: '💻', name: 'Technology' },
+  { ic: '🏦', name: 'Finance & Banking' },
+  { ic: '🏥', name: 'Healthcare' },
+  { ic: '🏭', name: 'Manufacturing' },
+  { ic: '⚡', name: 'Energy & Utilities' },
+  { ic: '🛒', name: 'Retail & eCommerce' },
+  { ic: '🏛️', name: 'Public Sector' },
+  { ic: '🚚', name: 'Logistics' },
+];
+
+function AdvisoryPage() {
+  return (
+    <div className="cbadv-root">
+      <style>{CSS}</style>
       <SEOHead
-        title="Enterprise AI Advisory"
-        description="Colaberry Enterprise AI Advisory Services — AI Roadmap Workshops, Architecture Design, Agent Implementation, Governance Advisory, and AI Talent Deployment for enterprise organizations."
+        title="Advisory for Sponsors"
+        description="Light-touch advisory wrapped around the Colaberry AI Challenge. Sponsor a seat block, watch your real AI builders surface on a company leaderboard, and meet them at Demo Day — without taking anyone off the job."
       />
 
-      {/* Header */}
-      <section
-        className="hero-bg text-light py-5"
-        aria-label="Page Header"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=80)' }}
-      >
-        <div className="container text-center py-4">
-          <img src="/colaberry-icon.png" alt="" width="44" height="44" className="mb-3 logo-hero" />
-          <h1 className="display-5 fw-bold text-light">🌐 Enterprise AI Advisory Services</h1>
-          <p className="lead">
-            For organizations ready to move beyond the accelerator and deploy AI at scale.
+      {/* HERO */}
+      <header className="cbadv-hero">
+        <div className="cbadv-wrap">
+          <div className="cbadv-eyebrow">Advisory for Sponsors</div>
+          <h1 className="cb-balance cbadv-mt4">Find out who your real AI builders are — without taking anyone off the job.</h1>
+          <p className="cbadv-lead">
+            We no longer sell a separate enterprise retainer. Advisory is now a light-touch wrap around one
+            program: you sponsor seats, your people build on their own time, and you discover the talent already
+            inside your organization.
           </p>
-        </div>
-      </section>
-
-      {/* Advisory Context */}
-      <section className="section" aria-label="Advisory Context">
-        <div className="container text-center">
-          <h2 className="mb-4">From Accelerator to Enterprise Execution</h2>
-          <p className="text-muted mb-5" style={{ maxWidth: '700px', margin: '0 auto' }}>
-            The Executive Accelerator gives your team the vocabulary, POC, and roadmap.
-            Advisory services take you from roadmap to deployed, governed AI systems
-            operating in production.
-          </p>
-          <div className="row g-4 justify-content-center align-items-center" style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <div className="col-md-4">
-              <div className="p-4 bg-white rounded shadow-sm">
-                <div className="fs-1 mb-2" aria-hidden="true">🎓</div>
-                <h3 className="h6">Accelerator</h3>
-                <p className="text-muted small mb-0">Build foundational capability, POC, roadmap</p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="p-4 bg-white rounded shadow-sm">
-                <div className="fs-1 mb-2" aria-hidden="true">🔧</div>
-                <h3 className="h6">Advisory</h3>
-                <p className="text-muted small mb-0">Architecture, implementation, governance</p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="p-4 bg-white rounded shadow-sm">
-                <div className="fs-1 mb-2" aria-hidden="true">🚀</div>
-                <h3 className="h6">Scale</h3>
-                <p className="text-muted small mb-0">Enterprise-wide AI deployment</p>
-              </div>
-            </div>
+          <div className="cbadv-hero-cta">
+            <CtaButton to="/sponsorship" size="lg" trailingIcon={<span aria-hidden>→</span>}>
+              Sponsor Your Team
+            </CtaButton>
+            <CtaButton to="/challenge" size="lg" variant="outline">
+              See How It Works
+            </CtaButton>
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* Service Offerings */}
-      <section className="section-alt" aria-label="Service Offerings">
-        <div className="container">
-          <h2 className="text-center mb-5">🔧 Advisory Service Offerings</h2>
-          <div className="row g-4">
-            {services.map((service) => (
-              <div className="col-md-6" key={service.title}>
-                <div className="card h-100 border-0 shadow-sm p-4">
-                  <div className="d-flex align-items-center mb-3">
-                    <span className="fs-1 me-3" aria-hidden="true">{service.icon}</span>
-                    <h3 className="h5 mb-0">{service.title}</h3>
-                  </div>
-                  <p className="text-muted">{service.description}</p>
-                  <div className="mt-auto">
-                    <span className="badge bg-secondary me-2">📅 {service.format}</span>
-                    <br className="d-md-none" />
-                    <span className="badge bg-light text-dark mt-2">🎯 Ideal for: {service.idealFor}</span>
-                  </div>
-                </div>
-              </div>
+      {/* POSITIONING */}
+      <section className="cbadv-sec">
+        <div className="cbadv-wrap">
+          <div className="cbadv-eyebrow">The Model</div>
+          <h2 className="cbadv-h2 cbadv-mt2">Talent discovery, not another training contract.</h2>
+          <p className="cbadv-lead cbadv-mt4 cbadv-narrow">
+            The old advisory engagement asked you to staff a project and run a months-long deployment. The new
+            model asks for far less and tells you far more: who in your company can actually build with AI.
+          </p>
+          <div className="cbadv-frame">
+            {FRAME.map((f) => (
+              <Card key={f.title} elevation="sm" className="cbadv-frame-step">
+                <div className="ic" aria-hidden>{f.ic}</div>
+                <h3>{f.title}</h3>
+                <p>{f.desc}</p>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How Engagements Work */}
-      <section className="section" aria-label="Engagement Process">
-        <div className="container">
-          <div className="row align-items-center g-5">
-            <div className="col-lg-5">
-              <div className="img-accent-frame">
-                <img
-                  src="https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=800&q=80"
-                  alt="Enterprise team engaged in AI architecture whiteboard session"
-                  className="img-feature img-feature-tall"
-                />
-              </div>
-            </div>
-            <div className="col-lg-7">
-              <h2 className="mb-5">🔄 How Advisory Engagements Work</h2>
-              <div className="d-flex align-items-start mb-4">
-                <div className="fs-1 me-3" aria-hidden="true">1️⃣</div>
-                <div>
-                  <h3 className="h5">Strategy Alignment Call</h3>
-                  <p className="text-muted">
-                    30-minute strategy call with our Enterprise AI team to understand
-                    your roadmap, constraints, and objectives.
-                  </p>
-                </div>
-              </div>
-              <div className="d-flex align-items-start mb-4">
-                <div className="fs-1 me-3" aria-hidden="true">2️⃣</div>
-                <div>
-                  <h3 className="h5">Engagement Design</h3>
-                  <p className="text-muted">
-                    Customized scope, timeline, and deliverables based on your
-                    organization's specific AI roadmap and priorities.
-                  </p>
-                </div>
-              </div>
-              <div className="d-flex align-items-start mb-4">
-                <div className="fs-1 me-3" aria-hidden="true">3️⃣</div>
-                <div>
-                  <h3 className="h5">Embedded Execution</h3>
-                  <p className="text-muted mb-0">
-                    Colaberry team works alongside yours — not for you.
-                    We transfer capability, not just deliverables.
-                  </p>
-                </div>
+      {/* SPONSOR ADVISORY NOTE */}
+      <section className="cbadv-sec cbadv-alt">
+        <div className="cbadv-wrap">
+          <div className="cbadv-eyebrow">What Sponsors Get</div>
+          <h2 className="cbadv-h2 cbadv-mt2">A thin layer of advisory, wrapped around the one class.</h2>
+          <div className="cbadv-note">
+            <Card elevation="sm" className="cbadv-incl">
+              <Badge tone="blue" outline>Included with a sponsored seat block</Badge>
+              <h3 className="cbadv-mt4">Advisory that earns its keep</h3>
+              <ul>
+                {SPONSOR_INCLUDES.map((item) => (
+                  <li key={item}><span className="ck" aria-hidden>✓</span><span>{item}</span></li>
+                ))}
+              </ul>
+            </Card>
+            <div className="cbadv-aside">
+              <Badge tone="red" solid>For Employers</Badge>
+              <h3 className="cbadv-mt4">Sponsor a seat block and let the leaderboard do the talking.</h3>
+              <p>
+                You buy annual seats, your employees redeem codes and climb a company leaderboard, and the
+                strongest builders present at Demo Day. We stay close enough to keep momentum, light enough that
+                no one has to leave their day job.
+              </p>
+              <div className="cbadv-cta">
+                <CtaButton to="/sponsorship" tone="red" trailingIcon={<span aria-hidden>→</span>}>
+                  Sponsor Your Team
+                </CtaButton>
+                <CtaButton to="/leaderboard" variant="ghost" tone="blue">
+                  View a Leaderboard
+                </CtaButton>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="container" style={{ maxWidth: 900 }}>
-        <IndustryDemoGrid trackContext="advisory" />
-      </div>
+      {/* DEMO */}
+      <section className="cbadv-sec-sm">
+        <div className="cbadv-wrap cbadv-narrow">
+          <div className="cbadv-eyebrow">See It In Action</div>
+          <h2 className="cbadv-h2 cbadv-mt2">The kind of build your people will ship.</h2>
+          <p className="cbadv-lead cbadv-mt4">
+            Every door leads to the same outcome: a working AI build, not a certificate. Explore a few by industry.
+          </p>
+          <div className="cbadv-mt5">
+            <IndustryDemoGrid trackContext="advisory" />
+          </div>
+        </div>
+      </section>
 
-      {/* Industries Served */}
-      <section className="section-alt" aria-label="Industries Served">
-        <div className="container text-center">
-          <h2 className="mb-4">🌍 Industries We Serve</h2>
-          <div className="row g-4">
-            {industries.map((industry) => (
-              <div className="col-md-3 col-6" key={industry.name}>
-                <div className="p-4 bg-white rounded shadow-sm">
-                  <div className="fs-1 mb-2" aria-hidden="true">{industry.icon}</div>
-                  <h3 className="h6 mb-0">{industry.name}</h3>
-                </div>
-              </div>
+      {/* INDUSTRIES */}
+      <section className="cbadv-sec cbadv-alt">
+        <div className="cbadv-wrap">
+          <div className="cbadv-eyebrow">Who Sponsors</div>
+          <h2 className="cbadv-h2 cbadv-mt2">Builders surface in every industry.</h2>
+          <div className="cbadv-inds">
+            {INDUSTRIES.map((ind) => (
+              <Card key={ind.name} elevation="flat" className="cbadv-ind">
+                <div className="ic" aria-hidden>{ind.ic}</div>
+                <h3>{ind.name}</h3>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section
-        className="cta-bg text-light text-center py-5"
-        aria-label="Call to Action"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1920&q=80)' }}
-      >
-        <div className="container py-4">
-          <h2 className="text-light mb-3">🚀 Ready to Discuss an Advisory Engagement?</h2>
-          <p className="mb-4">
-            Most engagements begin with a 30-minute strategy call.
+      {/* CLOSING */}
+      <section className="cbadv-sec">
+        <div className="cbadv-wrap cbadv-closing">
+          <div className="cbadv-eyebrow">Pick Your Door</div>
+          <h2 className="cb-balance cbadv-mt4">Sponsor your team, or join the Challenge yourself.</h2>
+          <p className="cbadv-lead">
+            Employers sponsor seat blocks to discover their AI builders. Individuals join the same class on a
+            membership. One program, two doors.
           </p>
-          <div className="d-flex justify-content-center gap-3 flex-wrap">
-            <button className="btn btn-accent btn-lg" onClick={() => setShowBooking(true)}>
-              {STANDARD_CTAS.secondary}
-            </button>
-            <Link to="/program" className="btn btn-outline-light btn-lg">
-              View the Accelerator
-            </Link>
+          <div className="cbadv-closing-cta">
+            <CtaButton to="/sponsorship" size="lg" trailingIcon={<span aria-hidden>→</span>}>
+              Sponsor Your Team
+            </CtaButton>
+            <CtaButton to="/enroll" size="lg" variant="outline">
+              Join the Challenge
+            </CtaButton>
           </div>
         </div>
       </section>
-
-      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/advisory" />
-    </>
+    </div>
   );
 }
 

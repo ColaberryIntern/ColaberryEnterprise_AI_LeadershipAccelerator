@@ -73,7 +73,7 @@ export default function VariableInspectorPanel({ lessonId, miniSections, token, 
       </div>
 
       {/* Created Variables */}
-      <h6 className="small fw-semibold mb-1" style={{ color: 'var(--color-accent, #38a169)' }}>
+      <h6 className="small fw-semibold mb-1" style={{ color: 'var(--color-accent, var(--status-success))' }}>
         <i className="bi bi-plus-circle me-1"></i>Variables Created by This Lesson
       </h6>
       {data.created.length === 0 ? (
@@ -91,7 +91,7 @@ export default function VariableInspectorPanel({ lessonId, miniSections, token, 
       )}
 
       {/* Referenced Variables */}
-      <h6 className="small fw-semibold mb-1" style={{ color: 'var(--color-primary-light, #2b6cb0)' }}>
+      <h6 className="small fw-semibold mb-1" style={{ color: 'var(--color-primary-light, var(--blue-500))' }}>
         <i className="bi bi-arrow-right-circle me-1"></i>Variables Referenced by This Lesson
       </h6>
       {data.referenced.length === 0 ? (
@@ -128,7 +128,7 @@ export default function VariableInspectorPanel({ lessonId, miniSections, token, 
             const uses = ms.associated_variable_keys || [];
             if (creates.length === 0 && uses.length === 0) return null;
             return (
-              <div key={ms.id} className="d-flex align-items-start gap-1 mb-1 py-1" style={{ borderBottom: '1px solid var(--color-border, #e2e8f0)' }}>
+              <div key={ms.id} className="d-flex align-items-start gap-1 mb-1 py-1" style={{ borderBottom: '1px solid var(--color-border, var(--border-subtle))' }}>
                 <span className="badge bg-light text-dark border flex-shrink-0" style={{ fontSize: 9, minWidth: 24 }}>#{ms.mini_section_order}</span>
                 <div>
                   <span className="fw-medium">{ms.title}</span>

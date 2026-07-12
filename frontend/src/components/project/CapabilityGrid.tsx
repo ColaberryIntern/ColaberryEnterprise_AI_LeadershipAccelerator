@@ -76,7 +76,7 @@ export default function CapabilityGrid() {
       <div className="card-body text-center py-4">
         <i className="bi bi-grid-3x3-gap d-block mb-2" style={{ fontSize: 28, color: 'var(--color-text-light)' }}></i>
         <p className="text-muted small mb-2">No capabilities yet. Activate your project with a requirements document to generate the capability hierarchy.</p>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowBuilder(true)}><i className="bi bi-plus-lg me-1"></i>Add Feature with AI</button>
+        <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={() => setShowBuilder(true)}><i className="bi bi-plus-lg me-1"></i>Add Feature with AI</button>
         {showBuilder && <AIFeatureBuilder onCreated={load} onClose={() => setShowBuilder(false)} />}
       </div>
     </div>
@@ -91,7 +91,7 @@ export default function CapabilityGrid() {
         <div className="card-body p-3">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <div>
-              <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)', fontSize: 14 }}>
+              <h6 className="fw-semibold mb-0" style={{ color: '#FB2832', fontSize: 14 }}>
                 <i className="bi bi-speedometer2 me-2"></i>
                 {noRequirementsExtracted ? 'Build composition' : 'Project Completion'}
               </h6>
@@ -122,8 +122,8 @@ export default function CapabilityGrid() {
 
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)', fontSize: 14 }}><i className="bi bi-grid-3x3-gap me-2"></i>Capabilities ({caps.length})</h6>
-        <button className="btn btn-sm btn-outline-primary" onClick={() => setShowBuilder(true)}><i className="bi bi-plus-lg me-1"></i>Add Feature</button>
+        <h6 className="fw-semibold mb-0" style={{ color: '#FB2832', fontSize: 14 }}><i className="bi bi-grid-3x3-gap me-2"></i>Capabilities ({caps.length})</h6>
+        <button className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={() => setShowBuilder(true)}><i className="bi bi-plus-lg me-1"></i>Add Feature</button>
       </div>
 
       {/* Cards */}
@@ -142,12 +142,12 @@ export default function CapabilityGrid() {
           // for Not built yet. Falls back to legacy completion-% color
           // when no BP signal is available.
           const buildColor = builtness === 'Built' ? 'var(--color-accent)'
-            : builtness === 'Wired' ? 'var(--color-primary-light)'
+            : builtness === 'Wired' ? '#C20E1E'
             : builtness === 'Partial' || builtness === 'Foundation' ? '#f59e0b'
             : builtness === 'Not built yet' ? '#9ca3af'
             : cap.completion_pct >= 75 ? 'var(--color-accent)'
             : cap.completion_pct >= 40 ? '#f59e0b'
-            : 'var(--color-primary-light)';
+            : '#C20E1E';
           const color = cap.status === 'disabled' ? '#9ca3af' : buildColor;
           return (
             <div key={cap.id} className="col-md-6 col-lg-4">
@@ -155,7 +155,7 @@ export default function CapabilityGrid() {
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="fw-semibold small d-flex align-items-center gap-2" style={{ color: 'var(--color-primary)', flexWrap: 'wrap' }}>
+                      <div className="fw-semibold small d-flex align-items-center gap-2" style={{ color: '#FB2832', flexWrap: 'wrap' }}>
                         <span>{cap.name}</span>
                         {kind && (
                           <span title={`${kind} BP`} style={{

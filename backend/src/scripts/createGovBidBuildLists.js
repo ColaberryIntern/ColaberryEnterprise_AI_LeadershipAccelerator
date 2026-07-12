@@ -118,8 +118,13 @@ function tasks(p) {
   const features = p.coreFeatures;
   const demoUrl = `https://${p.demoDomain}`;
   const slug = p.slug;
-  const repoPath = `gov-bid-builds/${slug}/`;
-  const requirementsPath = `${repoPath}requirements.md`;
+  const buildRepo = `ColaberryIntern/${slug}`;
+  const buildRepoUrl = `https://github.com/${buildRepo}`;
+  // Each build now lives in its OWN repo (the intern works in a fork of it),
+  // not in a gov-bid-builds/ subfolder of the Enterprise monorepo. Paths are
+  // therefore relative to the build repo root.
+  const repoPath = '';
+  const requirementsPath = `requirements.md`;
   const proposalListUrl = `https://app.basecamp.com/3945211/buckets/47346103/todolists/${p.proposalListId}`;
   const opUrl = `http://95.216.199.47/admin/bonfire/${p.rfpUuid}/submission-readiness`;
 
@@ -151,10 +156,10 @@ function tasks(p) {
     assignee: p.intern, kind: 'human',
     description: `<div><strong>What to do</strong></div>
 <ol>
-<li>Open <code>${repoPath}</code> in your editor.</li>
-<li>Confirm the scaffolded structure: <code>README.md</code>, <code>SETUP.md</code>, <code>requirements.md</code>, <code>package.json</code>, <code>.env.example</code>, <code>app/</code>, <code>seeds/</code>, <code>deploy/</code>, <code>docs/</code>, <code>MOVE_TO_OWN_REPO.md</code>.</li>
+<li>Fork <a href="${buildRepoUrl}">${buildRepo}</a> to your own GitHub account, then clone <strong>your fork</strong> to a permanent folder (never a Temp folder). See <code>INTERN_WORKFLOW.md</code> in the repo for the exact steps.</li>
+<li>Confirm the scaffolded structure: <code>README.md</code>, <code>SETUP.md</code>, <code>requirements.md</code>, <code>package.json</code>, <code>.env.example</code>, <code>seeds/</code>, <code>docs/</code>, <code>CLAUDE.md</code>, <code>INTERN_WORKFLOW.md</code>.</li>
 <li>Read <code>README.md</code> and <code>SETUP.md</code>. Confirm the demo URL convention is what we want: <code>${demoUrl}</code>.</li>
-<li>Read <code>MOVE_TO_OWN_REPO.md</code> — this is the future split-out plan. Don't do it yet; just understand the eventual path.</li>
+<li>Read <code>INTERN_WORKFLOW.md</code> end-to-end — it is the exact fork → branch → PR flow you follow for every change. You never push to <code>main</code> and never touch the Enterprise repo.</li>
 </ol>
 <div><strong>If something's missing</strong></div>
 <p>Comment on this todo. CB System will regenerate the scaffold.</p>
@@ -286,12 +291,13 @@ function tasks(p) {
 <li>Boot the demo locally.</li>
 <li>Walk through the user story for this feature using a seeded user.</li>
 <li>Take a screenshot of the working flow. Save to <code>${repoPath}docs/screenshots/feature-${i + 1}-${f.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png</code>.</li>
-<li>Commit + push. PR title: "Feature ${i + 1}: ${f.name}".</li>
+<li>Push to a branch on <strong>your fork</strong> (never <code>main</code>, never the Enterprise repo): <code>git checkout -b workstream/feature-${i + 1}</code>, then <code>git add .</code>, <code>git commit -m "Feature ${i + 1}: ${f.name}"</code>, <code>git push origin workstream/feature-${i + 1}</code>.</li>
+<li>Open a Pull Request from your branch into <a href="${buildRepoUrl}">${buildRepo}</a> <code>main</code>, titled "Feature ${i + 1}: ${f.name}". <strong>Do not merge it yourself</strong> — tag @Ali Muwwakkil to review and merge.</li>
 </ol>
 <div><strong>If stuck</strong></div>
 <p>Comment on this todo with what you've tried + where you're blocked. Tag @CB System if you want code help; tag @Ali Muwwakkil if you need a product decision.</p>
 <div><strong>Done when</strong></div>
-<p>Screenshot in <code>docs/screenshots/</code>, PR merged, this todo checked.</p>`,
+<p>Screenshot in <code>docs/screenshots/</code>, PR opened from your fork and merged by Ali, this todo checked.</p>`,
     });
   }
 

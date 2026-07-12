@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Web · Web Page" description="On-brand marketing / landing page — hero, stats, content sections, CTA." -->
+<helmet>
+<script src="./ds-base.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+</helmet>
+<div data-export="colaberry-program-page" data-export-w="1440" style="font-family:var(--font-body);color:var(--text-body);background:var(--surface-page);min-height:100vh">
+
+  <!-- Header -->
+  <header style="display:flex;align-items:center;justify-content:space-between;max-width:1160px;margin:0 auto;padding:20px 24px">
+    <img src="../../assets/logo/colaberry-horizontal.png" alt="Colaberry" style="height:30px">
+    <nav style="display:flex;gap:26px;align-items:center">
+      <a href="#" style="font-size:15px;font-weight:500;color:var(--text-body);text-decoration:none">Programs</a>
+      <a href="#" style="font-size:15px;font-weight:500;color:var(--text-body);text-decoration:none">Outcomes</a>
+      <a href="#" style="font-size:15px;font-weight:500;color:var(--text-body);text-decoration:none">Scholarships</a>
+      <x-import component-from-global-scope="ColaberryDesignSystem_098454.Button" size="sm" hint-size="120px,40px">Apply now</x-import>
+    </nav>
+  </header>
+
+  <!-- Hero -->
+  <section style="max-width:1160px;margin:0 auto;padding:64px 24px 48px;display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center">
+    <div>
+      <x-import component-from-global-scope="ColaberryDesignSystem_098454.Badge" tone="green" dot="{{ true }}" hint-size="160px,28px">Now enrolling · Spring</x-import>
+      <h1 style="font-family:var(--font-display);font-weight:900;font-size:clamp(38px,5vw,58px);line-height:1.04;letter-spacing:-.02em;color:var(--text-strong);margin:18px 0 16px;text-wrap:balance">Become job-ready in data analytics.</h1>
+      <p style="font-size:var(--fs-body-lg);color:var(--text-muted);max-width:46ch;margin:0 0 28px;line-height:1.6;text-wrap:pretty">Twelve weeks of instructor-led, project-based training — with mentorship and a year of job support. No degree required.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <x-import component-from-global-scope="ColaberryDesignSystem_098454.Button" size="lg" hint-size="150px,52px">Apply now</x-import>
+        <x-import component-from-global-scope="ColaberryDesignSystem_098454.Button" variant="outline" size="lg" hint-size="170px,52px">Download catalog</x-import>
+      </div>
+    </div>
+    <div style="aspect-ratio:4/3;border-radius:var(--radius-2xl);background:linear-gradient(135deg,var(--blue-500),var(--green-600));box-shadow:var(--shadow-lg);display:grid;place-items:center">
+      <span style="font-family:var(--font-mono);font-size:13px;color:rgba(255,255,255,.85);background:rgba(0,0,0,.25);padding:8px 14px;border-radius:var(--radius-pill)">Replace with program photo</span>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section style="max-width:1100px;margin:0 auto;padding:8px 24px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+    <div style="text-align:center;padding:22px 8px;border-right:1px solid var(--border-subtle)"><div style="font-family:var(--font-display);font-weight:900;font-size:38px;color:var(--red-500);line-height:1">5,000+</div><div style="font-size:14px;color:var(--text-muted);margin-top:8px">Careers changed</div></div>
+    <div style="text-align:center;padding:22px 8px;border-right:1px solid var(--border-subtle)"><div style="font-family:var(--font-display);font-weight:900;font-size:38px;color:var(--green-600);line-height:1">12 wks</div><div style="font-size:14px;color:var(--text-muted);margin-top:8px">To job-ready</div></div>
+    <div style="text-align:center;padding:22px 8px;border-right:1px solid var(--border-subtle)"><div style="font-family:var(--font-display);font-weight:900;font-size:38px;color:var(--blue-500);line-height:1">1:1</div><div style="font-size:14px;color:var(--text-muted);margin-top:8px">Mentorship</div></div>
+    <div style="text-align:center;padding:22px 8px"><div style="font-family:var(--font-display);font-weight:900;font-size:38px;color:var(--red-500);line-height:1">2012</div><div style="font-size:14px;color:var(--text-muted);margin-top:8px">Founded for veterans</div></div>
+  </section>
+
+  <!-- Curriculum -->
+  <section style="max-width:1160px;margin:0 auto;padding:64px 24px">
+    <h2 style="font-family:var(--font-display);font-weight:900;font-size:var(--fs-h2);color:var(--text-strong);margin:0 0 8px;letter-spacing:-.02em">What you'll learn</h2>
+    <p style="font-size:var(--fs-body-lg);color:var(--text-muted);margin:0 0 32px">Four modules, one portfolio-ready project.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+      <x-import component-from-global-scope="ColaberryDesignSystem_098454.Card" padded="{{ true }}" accent="blue" hint-size="100%,180px">
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--blue-600)">Weeks 1–4</span>
+        <h3 style="font-size:var(--fs-h4);color:var(--text-strong);margin:8px 0 6px">SQL &amp; databases</h3>
+        <p style="font-size:14px;color:var(--text-muted);margin:0;line-height:1.5">Querying, joins, and building reporting tables.</p>
+      </x-import>
+      <x-import component-from-global-scope="ColaberryDesignSystem_098454.Card" padded="{{ true }}" accent="green" hint-size="100%,180px">
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--green-700)">Weeks 5–8</span>
+        <h3 style="font-size:var(--fs-h4);color:var(--text-strong);margin:8px 0 6px">Reporting &amp; ETL</h3>
+        <p style="font-size:14px;color:var(--text-muted);margin:0;line-height:1.5">Pipelines, report architecture, automated delivery.</p>
+      </x-import>
+      <x-import component-from-global-scope="ColaberryDesignSystem_098454.Card" padded="{{ true }}" accent="red" hint-size="100%,180px">
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--red-600)">Weeks 9–12</span>
+        <h3 style="font-size:var(--fs-h4);color:var(--text-strong);margin:8px 0 6px">Dashboards &amp; story</h3>
+        <p style="font-size:14px;color:var(--text-muted);margin:0;line-height:1.5">Turn analysis into a compelling capstone.</p>
+      </x-import>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section style="padding:24px">
+    <div style="max-width:1100px;margin:0 auto;background:linear-gradient(135deg,var(--red-500),var(--red-700));border-radius:var(--radius-2xl);padding:60px 48px;text-align:center;box-shadow:var(--shadow-brand)">
+      <h2 style="font-family:var(--font-display);font-weight:900;color:#fff;font-size:var(--fs-h2);margin:0 0 12px;letter-spacing:-.02em">Your data career starts here.</h2>
+      <p style="color:rgba(255,255,255,.88);font-size:var(--fs-body-lg);margin:0 auto 28px;max-width:48ch">Scholarships and flexible payment plans available. Everyone with a diploma or GED is welcome.</p>
+      <x-import component-from-global-scope="ColaberryDesignSystem_098454.Button" tone="green" size="lg" hint-size="150px,52px">Apply now</x-import>
+    </div>
+  </section>
+
+  <footer style="max-width:1160px;margin:0 auto;padding:40px 24px;border-top:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+    <img src="../../assets/logo/colaberry-horizontal.png" alt="Colaberry" style="height:26px">
+    <span style="font-size:13px;color:var(--text-subtle)">© 2026 Colaberry, Inc. · Plano, TX &amp; Boston, MA</span>
+  </footer>
+</div>
+</x-dc>
+</body>
+</html>

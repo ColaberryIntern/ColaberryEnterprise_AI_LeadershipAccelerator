@@ -41,7 +41,7 @@ s1.addText('Colaberry / Anthropic Partner Network', { x: 0.6, y: 0.5, w: 12, h: 
 s1.addText('AI Systems Architect Accelerator', { x: 0.6, y: 1.0, w: 12, h: 1.5, fontSize: 48, color: WHITE, bold: true });
 s1.addText('Bring your idea. We help you turn it into a real AI system.', { x: 0.6, y: 3.3, w: 12, h: 0.6, fontSize: 22, color: SLATE_300, italic: true });
 s1.addText('12-week project-driven residency built on enterprise.colaberry.com', { x: 0.6, y: 4.1, w: 12, h: 0.5, fontSize: 18, color: WHITE });
-s1.addText('Target launch: 2026-07-13 cohort kickoff (41 days from now)', { x: 0.6, y: 4.7, w: 12, h: 0.4, fontSize: 14, color: WARM });
+s1.addText('Target launch: Cohort 1 classes start Mon 2026-07-27 (orientation Thu 2026-07-23)', { x: 0.6, y: 4.7, w: 12, h: 0.4, fontSize: 14, color: WARM });
 s1.addText('Team kickoff deck v1  -  for review and discussion', { x: 0.6, y: 6.8, w: 12, h: 0.4, fontSize: 11, color: SLATE_300, italic: true });
 
 // SLIDE 2 - Why now
@@ -145,7 +145,7 @@ const timeRows = [
   [{ text: 'Wk 5', options: { fontSize: 11, bold: true } }, { text: 'Jul 5 - Jul 10', options: { fontSize: 11 } }, { text: 'QA on test cohort, marketing site live, enrollment opens Jul 10', options: { fontSize: 11 } }],
 ];
 s6.addTable(timeRows, { x: 0.5, y: 2.0, w: 12.3, colW: [0.9, 2.3, 9.1], rowH: 0.55, border: { type: 'solid', color: SLATE_300, pt: 1 } });
-s6.addText('Cohort kicks off Mon Jul 13. Architect Expo around 2026-10-02.', { x: 0.5, y: 6.5, w: 12, h: 0.5, fontSize: 14, color: NAVY, bold: true, italic: true });
+s6.addText('Cohort 1 classes start Mon 2026-07-27 (orientation Thu 2026-07-23). Architect Expo around 2026-10-16.', { x: 0.5, y: 6.5, w: 12, h: 0.5, fontSize: 14, color: NAVY, bold: true, italic: true });
 
 // SLIDE 7 - Tech we are shipping
 const s7 = pres.addSlide();

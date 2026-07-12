@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface ICPProfileInput {
   name: string;
@@ -55,6 +56,8 @@ const SENIORITY_OPTIONS = [
   { value: 'senior', label: 'Senior' },
   { value: 'entry', label: 'Entry' },
 ];
+
+const STEP_LABELS = ['Define ICPs', 'Source Leads', 'Configure Sequence', 'Review & Create'];
 
 export default function CampaignBuilderPage() {
   const navigate = useNavigate();
@@ -154,21 +157,20 @@ export default function CampaignBuilderPage() {
   };
 
   const renderProfileForm = (profile: ICPProfileInput, idx: number) => (
-    <div key={idx} className="card border-0 shadow-sm mb-3">
-      <div className="card-header bg-white d-flex justify-content-between align-items-center">
-        <span className="fw-semibold">
-          {profile.role === 'primary' ? 'Primary ICP' : 'Secondary ICP'} — {profile.name || 'Untitled'}
-        </span>
-        {profiles.length > 1 && (
-          <button
-            className="btn btn-outline-danger btn-sm"
-            onClick={() => setProfiles((p) => p.filter((_, i) => i !== idx))}
-          >
-            Remove
-          </button>
-        )}
-      </div>
-      <div className="card-body">
+    <div key={idx} className="mb-3">
+      <SectionCard
+        title={`${profile.role === 'primary' ? 'Primary ICP' : 'Secondary ICP'} — ${profile.name || 'Untitled'}`}
+        actions={
+          profiles.length > 1 ? (
+            <button
+              className="btn btn-outline-danger btn-sm"
+              onClick={() => setProfiles((p) => p.filter((_, i) => i !== idx))}
+            >
+              Remove
+            </button>
+          ) : undefined
+        }
+      >
         <div className="row g-3 mb-3">
           <div className="col-md-6">
             <label className="form-label small fw-medium">Profile Name</label>
@@ -302,7 +304,7 @@ export default function CampaignBuilderPage() {
           placeholder="e.g. Hiring AI roles, Budget season"
           badgeClass="bg-success"
         />
-      </div>
+      </SectionCard>
     </div>
   );
 
@@ -396,30 +398,58 @@ export default function CampaignBuilderPage() {
 
   const selectedTemplateData = templates.find((t) => t.id === selectedTemplate);
 
+  // Per-page trust signal (Basecamp todo 10027085963): the builder is a live,
+  // in-session form — surface progress as the trust summary. Hooks before return.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'campaign builder',
+    updatedAt: new Date().toISOString(),
+    summary: `Step ${step} of ${STEP_LABELS.length} — ${STEP_LABELS[step - 1]}. ${profiles.length} ICP profile${profiles.length !== 1 ? 's' : ''} defined.`,
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Progress',
+        status: 'live',
+        score: Math.round((step / STEP_LABELS.length) * 100),
+        evidence: [
+          { label: 'Step', value: `${step}/${STEP_LABELS.length}` },
+          { label: 'ICP profiles', value: String(profiles.length) },
+        ],
+      },
+    ],
+  }), [step, profiles.length]);
+
   return (
-    <div>
-      <Breadcrumb
-        items={[
-          { label: 'Dashboard', to: '/admin/dashboard' },
+    <>
+      <PageHeader
+        title="Campaign Builder"
+        icon="draft-line"
+        subtitle="Build a cold outbound campaign: define ICPs, source leads from Apollo, configure the sequence, and launch."
+        breadcrumb={[
+          { label: 'Admin', to: '/admin/dashboard' },
           { label: 'Campaigns', to: '/admin/campaigns' },
-          { label: 'Build Cold Campaign' },
+          { label: 'Build' },
         ]}
-      />
-
-      <h2 className="mb-4">Build Cold Outbound Campaign</h2>
-
-      {/* Step indicators */}
-      <div className="d-flex gap-2 mb-4">
-        {['Define ICPs', 'Source Leads', 'Configure Sequence', 'Review & Create'].map((label, i) => (
-          <button
-            key={i}
-            className={`btn btn-sm ${step === i + 1 ? 'btn-primary' : step > i + 1 ? 'btn-outline-success' : 'btn-outline-secondary'}`}
-            onClick={() => setStep(i + 1)}
-          >
-            {i + 1}. {label}
+        trust={trust}
+        actions={
+          <button className="btn btn-outline-secondary btn-sm" onClick={() => navigate('/admin/campaigns')}>
+            <i className="ri-close-line" aria-hidden="true" /> Cancel
           </button>
-        ))}
-      </div>
+        }
+      >
+        {/* Step indicators */}
+        <div className="d-flex gap-2 flex-wrap">
+          {STEP_LABELS.map((label, i) => (
+            <button
+              key={i}
+              className={`btn btn-sm ${step === i + 1 ? 'btn-primary' : step > i + 1 ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+              onClick={() => setStep(i + 1)}
+            >
+              {i + 1}. {label}
+            </button>
+          ))}
+        </div>
+      </PageHeader>
 
       {error && (
         <div className="alert alert-danger alert-dismissible" role="alert">
@@ -457,9 +487,8 @@ export default function CampaignBuilderPage() {
       {/* ── Step 2: Source Leads ───────────────────────────────────────── */}
       {step === 2 && (
         <>
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Apollo Lead Sourcing</div>
-            <div className="card-body">
+          <div className="mb-4">
+            <SectionCard title="Apollo Lead Sourcing" icon="search-line">
               <div className="form-check mb-3">
                 <input
                   className="form-check-input"
@@ -541,7 +570,7 @@ export default function CampaignBuilderPage() {
                   </div>
                 );
               })}
-            </div>
+            </SectionCard>
           </div>
           <div className="d-flex justify-content-between">
             <button className="btn btn-outline-secondary" onClick={() => setStep(1)}>
@@ -557,9 +586,8 @@ export default function CampaignBuilderPage() {
       {/* ── Step 3: Configure Sequence ────────────────────────────────── */}
       {step === 3 && (
         <>
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Outreach Sequence</div>
-            <div className="card-body">
+          <div className="mb-4">
+            <SectionCard title="Outreach Sequence" icon="route-line">
               <div className="mb-3">
                 <label className="form-label small fw-medium">Sequence Template</label>
                 <div className="d-flex gap-2 flex-wrap">
@@ -582,11 +610,10 @@ export default function CampaignBuilderPage() {
                     {selectedTemplateData.steps.map((s: any, i: number) => (
                       <div key={i} className="list-group-item px-0 py-2">
                         <div className="d-flex align-items-center gap-2">
-                          <span
-                            className={`badge ${s.channel === 'voice' ? 'bg-warning text-dark' : s.channel === 'sms' ? 'bg-info text-dark' : 'bg-primary'}`}
-                          >
-                            {s.channel || 'email'}
-                          </span>
+                          <StatusBadge
+                            label={s.channel || 'email'}
+                            tone={s.channel === 'voice' ? 'warning' : s.channel === 'sms' ? 'info' : 'primary'}
+                          />
                           <span className="small fw-medium">
                             {s.days_before_cohort_start != null
                               ? `T-${s.days_before_cohort_start}d`
@@ -621,7 +648,7 @@ export default function CampaignBuilderPage() {
                   personalized email/voice content for each lead.
                 </div>
               </div>
-            </div>
+            </SectionCard>
           </div>
           <div className="d-flex justify-content-between">
             <button className="btn btn-outline-secondary" onClick={() => setStep(2)}>
@@ -637,9 +664,40 @@ export default function CampaignBuilderPage() {
       {/* ── Step 4: Review & Create ───────────────────────────────────── */}
       {step === 4 && (
         <>
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Campaign Details</div>
-            <div className="card-body">
+          {/* KPI roll-up of the configured campaign */}
+          <div className="row g-3 mb-4">
+            <div className="col-6 col-lg-3">
+              <StatCard label="ICP Profiles" value={profiles.length} icon="contacts-line" tone="info" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Max Leads"
+                value={apolloImport ? maxLeads : 0}
+                icon="group-line"
+                tone={apolloImport ? 'primary' : 'neutral'}
+                hint={apolloImport ? 'Apollo import' : 'Manual enrollment'}
+              />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Sequence Steps"
+                value={selectedTemplateData?.stepCount ?? '—'}
+                icon="route-line"
+                tone="success"
+              />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Status"
+                value={createAsActive ? 'Active' : 'Draft'}
+                icon={createAsActive ? 'play-circle-line' : 'draft-line'}
+                tone={createAsActive ? 'success' : 'neutral'}
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <SectionCard title="Campaign Details" icon="information-line">
               <div className="mb-3">
                 <label className="form-label small fw-medium">Campaign Name *</label>
                 <input
@@ -659,12 +717,11 @@ export default function CampaignBuilderPage() {
                   placeholder="Campaign objectives and notes..."
                 />
               </div>
-            </div>
+            </SectionCard>
           </div>
 
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-semibold">Summary</div>
-            <div className="card-body">
+          <div className="mb-4">
+            <SectionCard title="Summary" icon="file-list-3-line">
               <div className="row g-3">
                 <div className="col-md-4">
                   <div className="small text-muted">ICP Profiles</div>
@@ -673,10 +730,8 @@ export default function CampaignBuilderPage() {
                   </div>
                   <ul className="list-unstyled small mt-1">
                     {profiles.map((p, i) => (
-                      <li key={i}>
-                        <span className={`badge ${p.role === 'primary' ? 'bg-primary' : 'bg-secondary'} me-1`}>
-                          {p.role}
-                        </span>
+                      <li key={i} className="d-flex align-items-center gap-1 mb-1">
+                        <StatusBadge label={p.role} tone={p.role === 'primary' ? 'primary' : 'neutral'} />
                         {p.name}
                       </li>
                     ))}
@@ -703,7 +758,7 @@ export default function CampaignBuilderPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </SectionCard>
           </div>
 
           <div className="d-flex justify-content-between align-items-center">
@@ -737,6 +792,6 @@ export default function CampaignBuilderPage() {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }

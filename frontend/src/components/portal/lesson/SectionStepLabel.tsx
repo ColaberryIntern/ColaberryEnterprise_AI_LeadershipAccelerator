@@ -11,7 +11,7 @@ export default function SectionStepLabel({ stepNumber, totalSteps, label, status
   const color = status === 'completed'
     ? 'var(--color-accent)'
     : status === 'active'
-      ? 'var(--color-primary)'
+      ? '#FB2832'
       : 'var(--color-text-light)';
 
   const icon = status === 'completed'

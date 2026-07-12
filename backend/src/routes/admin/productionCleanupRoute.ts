@@ -29,7 +29,13 @@ import {
   LeadTemperatureHistory,
 } from '../../models';
 
+import { requireAdmin } from '../../middlewares/authMiddleware';
+
 const router = Router();
+
+// SECURITY (TBI audit P0-1, CRITICAL): production-cleanup mutates prod data — it shipped
+// with NO auth. Require an authenticated admin for every route below.
+router.use(requireAdmin);
 
 // Protected campaign types — NEVER touch campaign_leads for these
 const PROTECTED_CAMPAIGN_TYPES = ['alumni', 'alumni_re_engagement', 'cold_outbound'];

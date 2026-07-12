@@ -9,6 +9,7 @@ import InboxClassification from '../../models/InboxClassification';
 import InboxEmail from '../../models/InboxEmail';
 import InboxDigestLog from '../../models/InboxDigestLog';
 import { logAuditEvent } from './inboxAuditService';
+import { inboxCosAlertsEnabled } from './inboxAlertsConfig';
 
 const LOG_PREFIX = '[InboxCOS][Digest]';
 
@@ -21,6 +22,10 @@ const DIGEST_RECIPIENTS = ['ali@colaberry.com', 'ali_muwwakkil@hotmail.com'];
  * previous digest, builds an HTML email with action buttons, and sends it.
  */
 export async function sendPendingDigests(): Promise<{ sent: boolean; count: number }> {
+  if (!inboxCosAlertsEnabled()) {
+    console.log(`${LOG_PREFIX} alerts disabled (INBOX_COS_ALERTS_ENABLED!=true) - digest skipped`);
+    return { sent: false, count: 0 };
+  }
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
     console.error(`${LOG_PREFIX} JWT_SECRET not configured — cannot generate digest action tokens`);

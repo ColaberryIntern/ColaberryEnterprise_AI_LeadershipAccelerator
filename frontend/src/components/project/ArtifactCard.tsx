@@ -22,7 +22,7 @@ function ArtifactCard({ title, status, version, stage, score, submittedAt, artif
     <div className="card border-0 shadow-sm h-100">
       <div className="card-body d-flex flex-column">
         <div className="d-flex justify-content-between align-items-start mb-2">
-          <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)', fontSize: '0.9rem' }}>
+          <h6 className="fw-semibold mb-0" style={{ color: '#FB2832', fontSize: '0.9rem' }}>
             {artifactDefinitionName || title}
           </h6>
           <span className={`badge ${STATUS_BADGE[status] || 'bg-secondary'}`}>{status}</span>

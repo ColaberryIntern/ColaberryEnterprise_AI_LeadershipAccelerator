@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { PageHeader, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 import ErrorBoundary from '../../components/ui/ErrorBoundary';
 import ProgramOverviewTab from './orchestration/ProgramOverviewTab';
 import SessionControlTab from './orchestration/SessionControlTab';
@@ -12,31 +14,30 @@ import ProgramBlueprintTab from './orchestration/ProgramBlueprintTab';
 import MiniSectionControlTab from './orchestration/MiniSectionControlTab';
 import BulkConfigPanel from './orchestration/builder/BulkConfigPanel';
 import HealthDashboardTab from './orchestration/HealthDashboardTab';
-import CurriculumTypesTab from './orchestration/CurriculumTypesTab';
+import ExperienceStudioTab from './orchestration/ExperienceStudioTab';
+import CurriculumComposerTab from './orchestration/composer/CurriculumComposerTab';
+import TimelineEditorTab from './orchestration/TimelineEditorTab';
 import WorkstationTab from './orchestration/WorkstationTab';
 import '../../styles/orchestration.css';
 
 const API = process.env.REACT_APP_API_URL || '';
 
+// The forward-looking curriculum pipeline: design in the Composer, from approved
+// Experience Studio components, published to the Timeline. Legacy pre-redesign
+// tabs (Blueprint/Overview/Sessions/Sections/Mini-Sections/Artifacts/Skills/
+// Gating/Workstation/Bulk) are retired from the nav; their components remain in
+// the codebase and can be re-surfaced if needed.
 const TABS = [
-  { id: 'blueprint', label: 'Blueprint' },
-  { id: 'overview', label: 'Overview' },
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'sections', label: 'Sections' },
-  { id: 'mini-sections', label: 'Mini-Sections' },
-  { id: 'types', label: 'Types' },
-  { id: 'artifacts', label: 'Artifacts' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'gating', label: 'Gating' },
+  { id: 'composer', label: 'Curriculum Composer' },
+  { id: 'types', label: 'Experience Studio' },
+  { id: 'timeline', label: 'Timeline' },
   { id: 'analytics', label: 'Analytics' },
-  { id: 'workstation', label: 'Workstation' },
-  { id: 'bulk', label: 'Bulk Config' },
   { id: 'health', label: 'Health' },
 ];
 
 export default function AdminOrchestrationPage() {
   const { token } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('composer');
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
   const handleNavigateToMiniSections = (lessonId: string) => {
@@ -44,56 +45,65 @@ export default function AdminOrchestrationPage() {
     setActiveTab('mini-sections');
   };
 
+  // Per-page trust signal (Basecamp todo 10027085963) — the orchestration engine
+  // is the live source of record for program-wide AI curriculum configuration.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'orchestration',
+    updatedAt: new Date().toISOString(),
+    summary: 'Live program-wide AI curriculum configuration: sessions, sections, artifacts, skills, and gating.',
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Configuration Source',
+        status: 'live',
+        evidence: [{ label: 'Backed by', value: 'orchestration engine config' }],
+      },
+    ],
+  }), []);
+
   const tabProps = { token: token || '', apiUrl: API };
 
   return (
     <div className="orch-engine">
       <div className="container-fluid py-4" style={{ maxWidth: activeTab === 'mini-sections' ? 1600 : 1200 }}>
 
-        {/* Header */}
-        <div className="d-flex align-items-center justify-content-between mb-4">
-          <div>
-            <h5 className="fw-semibold mb-1" style={{ color: 'var(--orch-text)' }}>
-              Orchestration Engine
-            </h5>
-            <p className="mb-0" style={{ color: 'var(--orch-text-muted)', fontSize: 13 }}>
-              Program-wide AI curriculum configuration
-            </p>
-          </div>
-          <div className="d-flex align-items-center gap-2">
-            <span className="orch-badge" style={{ fontSize: 11 }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: 'var(--orch-accent-green)', display: 'inline-block',
-              }} />
-              System Online
-            </span>
-          </div>
-        </div>
+        <PageHeader
+          title="Orchestration"
+          icon="git-branch-line"
+          subtitle="Program-wide AI curriculum configuration."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Orchestration' }]}
+          trust={trust}
+          actions={<StatusBadge label="System Online" tone="success" icon="pulse-line" />}
+        />
 
         {/* Tab Navigation */}
-        <div className="orch-tab-nav mb-4">
-          <div className="d-flex flex-wrap gap-0">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                className={`orch-tab-btn ${activeTab === tab.id ? 'orch-tab-btn-active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+        <SectionCard padded={false} className="mb-4">
+          <div className="orch-tab-nav">
+            <div className="d-flex flex-wrap gap-0">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  className={`orch-tab-btn ${activeTab === tab.id ? 'orch-tab-btn-active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </SectionCard>
 
         {/* Tab Content */}
         <ErrorBoundary key={activeTab}>
           {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
           {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
+          {activeTab === 'timeline' && <TimelineEditorTab />}
           {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
           {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
           {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
-          {activeTab === 'types' && <CurriculumTypesTab />}
+          {activeTab === 'types' && <ExperienceStudioTab />}
+          {activeTab === 'composer' && <CurriculumComposerTab />}
           {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
           {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
           {activeTab === 'gating' && <GatingControlTab {...tabProps} />}

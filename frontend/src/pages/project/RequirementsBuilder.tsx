@@ -319,10 +319,10 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
       {/* Header */}
       <div className="d-flex align-items-center justify-content-between mb-4">
         <div className="d-flex align-items-center gap-3">
-          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#FB2832', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <i className="bi bi-robot" style={{ fontSize: 20, color: '#fff' }}></i>
           </div>
-          <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Build Your Requirements</h5>
+          <h5 className="fw-bold mb-0" style={{ color: '#1A1A1A', fontSize: 16 }}>Build Your Requirements</h5>
         </div>
         <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => { if (phase !== 'choose') { setError(null); setPhase('choose'); } else { navigate('/portal/project/blueprint'); } }}>
           <i className="bi bi-arrow-left me-1"></i>Back
@@ -333,11 +333,11 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
       {phase !== 'idea' && phase !== 'choose' && (
         <div className="mb-4">
           <div className="d-flex justify-content-between mb-1">
-            <span style={{ fontSize: 11, color: 'var(--color-primary)', fontWeight: 500 }}>{STAGE_LABELS[stage] || ''}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: progress === 100 ? '#059669' : '#3b82f6' }}>{progress}%</span>
+            <span style={{ fontSize: 11, color: '#FB2832', fontWeight: 500 }}>{STAGE_LABELS[stage] || ''}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: progress === 100 ? '#059669' : '#FB2832' }}>{progress}%</span>
           </div>
           <div className="progress" style={{ height: 6, borderRadius: 6 }}>
-            <div className="progress-bar" style={{ width: `${progress}%`, background: progress === 100 ? '#10b981' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)', borderRadius: 6, transition: 'width 0.5s ease' }}></div>
+            <div className="progress-bar" style={{ width: `${progress}%`, background: progress === 100 ? '#10b981' : '#FB2832', borderRadius: 6, transition: 'width 0.5s ease' }}></div>
           </div>
           {progressMsg && phase === 'generating' && <div className="text-muted mt-1" style={{ fontSize: 11 }}>{progressMsg}</div>}
         </div>
@@ -357,12 +357,12 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
               </button>
               <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
                 onClick={() => { setBuildType('full'); setPhase('idea'); setError(null); }}>
-                <div className="d-flex align-items-center gap-2"><i className="bi bi-buildings" style={{ color: '#3b82f6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A full project</span><span className="badge ms-auto" style={{ background: '#dbeafe', color: '#1d4ed8', fontSize: 10 }}>~13 min</span></div>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-buildings" style={{ color: '#367895', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>A full project</span><span className="badge ms-auto" style={{ background: '#e8f4f8', color: '#367895', fontSize: 10 }}>~13 min</span></div>
                 <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>The AI Project Architect designs the complete system. Explore a live preview of your AI agent org while it builds.</div>
               </button>
               <button className="btn text-start py-3" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, paddingLeft: 18, paddingRight: 18 }}
                 onClick={() => { setBuildType('autonomous'); setPhase('idea'); setError(null); }}>
-                <div className="d-flex align-items-center gap-2"><i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>Fully autonomous</span><span className="badge ms-auto" style={{ background: '#f3e8ff', color: '#7c3aed', fontSize: 10 }}>~21 min · deepest</span></div>
+                <div className="d-flex align-items-center gap-2"><i className="bi bi-stars" style={{ color: '#FB2832', fontSize: 18 }}></i><span className="fw-semibold" style={{ fontSize: 14 }}>Fully autonomous</span><span className="badge ms-auto" style={{ background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 10 }}>~21 min · deepest</span></div>
                 <div className="text-muted mt-1" style={{ fontSize: 11.5 }}>Same as a full project, but the Architect runs its most thorough setting for the most in-depth specification.</div>
               </button>
             </div>
@@ -391,7 +391,7 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
               <span className="text-muted" style={{ fontSize: 11 }}>
                 {originalIdea.length < 30 ? `${30 - originalIdea.length} more characters needed` : <><i className="bi bi-check-circle text-success me-1"></i>Ready</>}
               </span>
-              <button className="btn btn-primary" style={{ fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '8px 20px' }}
+              <button className="btn" style={{ background: '#FB2832', color: '#fff', fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '8px 20px', border: 'none' }}
                 onClick={handleIdeaSubmit} disabled={originalIdea.trim().length < 30}>
                 Continue <i className="bi bi-arrow-right ms-1"></i>
               </button>
@@ -417,8 +417,8 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body p-4">
               {/* Idea context */}
-              <div className="p-2 mb-3" style={{ background: '#f0f4ff', borderRadius: 6, borderLeft: '3px solid #3b82f6' }}>
-                <div style={{ fontSize: 11, color: '#3b82f6', fontWeight: 500 }}>Your idea</div>
+              <div className="p-2 mb-3" style={{ background: 'rgba(251,40,50,0.05)', borderRadius: 6, borderLeft: '3px solid #FB2832' }}>
+                <div style={{ fontSize: 11, color: '#FB2832', fontWeight: 500 }}>Your idea</div>
                 <div style={{ fontSize: 12, color: '#475569' }}>{originalIdea.length > 100 ? originalIdea.substring(0, 100) + '...' : originalIdea}</div>
               </div>
 
@@ -427,11 +427,11 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
               </div>
 
               {/* Question + A/B/C suggested option choices */}
-              <p className="mb-1" style={{ fontSize: 12, color: '#3b82f6', fontWeight: 500 }}>
+              <p className="mb-1" style={{ fontSize: 12, color: '#FB2832', fontWeight: 500 }}>
                 Based on your idea — pick the level that fits best
               </p>
               <h6 className="fw-bold mb-1" style={{ fontSize: 16 }}>{questions[currentQ].text}</h6>
-              <span className="badge mb-3" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10 }}>{questions[currentQ].category}</span>
+              <span className="badge mb-3" style={{ background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 10 }}>{questions[currentQ].category}</span>
 
               <div className="d-flex flex-column gap-2 mb-2">
                 {questions[currentQ].options.map(opt => {
@@ -465,7 +465,7 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
                 <div className="mb-2">
                   <textarea className="form-control mb-2" rows={2} placeholder="Add a clarifying note for this choice (optional)" value={modifyText} onChange={e => setModifyText(e.target.value)} style={{ fontSize: 13, borderRadius: 8 }} />
                   <div className="d-flex gap-2">
-                    <button className="btn btn-primary btn-sm" style={{ borderRadius: 6, fontSize: 12 }} onClick={handleNoteSubmit}>Save note</button>
+                    <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', borderRadius: 6, fontSize: 12, border: 'none' }} onClick={handleNoteSubmit}>Save note</button>
                     <button className="btn btn-outline-secondary btn-sm" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setShowModify(false)}>Cancel</button>
                   </div>
                 </div>
@@ -493,7 +493,7 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
 
           {/* All tiers continue to the repo step (the repo is synced after the build). */}
           {answeredCount >= 5 && (
-            <button className="btn w-100 py-3" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
+            <button className="btn w-100 py-3" style={{ background: '#FB2832', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
               onClick={() => { setError(null); setPhase('repo'); }}>
               <i className="bi bi-arrow-right-circle me-2"></i>Continue — connect your repo ({selectedCount} levels)
             </button>
@@ -521,7 +521,7 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
               <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 12 }} onClick={() => { setError(null); setPhase('questions'); }} disabled={startingBuild}>
                 <i className="bi bi-arrow-left me-1"></i>Back
               </button>
-              <button className="btn py-2 px-4" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
+              <button className="btn py-2 px-4" style={{ background: '#FB2832', color: '#fff', fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none' }}
                 disabled={!repoUrl.trim() || startingBuild} onClick={buildType === 'workflow' ? handleWorkflowBuild : handleFullBuild}>
                 {startingBuild ? <><span className="spinner-border spinner-border-sm me-2"></span>Starting…</> : <>{buildType === 'workflow' ? 'Generate my requirements' : buildType === 'autonomous' ? 'Start autonomous build' : 'Start full build'} <i className="bi bi-arrow-right ms-1"></i></>}
               </button>
@@ -582,7 +582,7 @@ export default function RequirementsBuilder({ onComplete }: RequirementsBuilderP
             <i className="bi bi-check-circle-fill d-block mb-3" style={{ fontSize: 44, color: '#10b981' }}></i>
             <h5 className="fw-bold mb-2" style={{ color: '#059669', fontSize: 16 }}>Your system is ready!</h5>
             <p className="text-muted mb-3" style={{ fontSize: 13 }}>Your requirements are saved and organized into capabilities. Open your Blueprint to see what&rsquo;s next.</p>
-            <button className="btn btn-primary" style={{ borderRadius: 8, fontWeight: 600, fontSize: 13 }} onClick={() => {
+            <button className="btn" style={{ background: '#FB2832', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 13, border: 'none' }} onClick={() => {
               // Clear the draft so a refresh doesn't re-resume the finished flow.
               try { localStorage.removeItem(draftKey()); } catch { /* ignore */ }
               if (onComplete) {

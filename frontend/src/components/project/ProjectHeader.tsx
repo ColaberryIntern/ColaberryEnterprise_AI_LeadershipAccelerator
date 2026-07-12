@@ -10,7 +10,7 @@ interface ProjectHeaderProps {
 
 const STAGE_CONFIG: Record<string, { label: string; badge: string; icon: string }> = {
   discovery: { label: 'Discovery', badge: 'bg-info', icon: 'bi-compass' },
-  architecture: { label: 'Architecture', badge: 'bg-primary', icon: 'bi-diagram-3' },
+  architecture: { label: 'Architecture', badge: '', icon: 'bi-diagram-3' },
   implementation: { label: 'Implementation', badge: 'bg-warning text-dark', icon: 'bi-gear' },
   portfolio: { label: 'Portfolio', badge: 'bg-success', icon: 'bi-collection' },
   complete: { label: 'Complete', badge: 'bg-dark', icon: 'bi-trophy' },
@@ -24,7 +24,7 @@ function ProjectHeader({ organizationName, industry, projectStage, selectedUseCa
       <div className="card-body">
         <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
           <div>
-            <h1 className="h4 fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>
+            <h1 className="h4 fw-bold mb-1" style={{ color: '#FB2832' }}>
               <i className="bi bi-rocket-takeoff me-2"></i>
               {organizationName ? `${organizationName} — AI Project` : 'Enterprise AI Project'}
             </h1>
@@ -48,13 +48,13 @@ function ProjectHeader({ organizationName, industry, projectStage, selectedUseCa
           <div className="mt-3 pt-3 border-top">
             {primaryBusinessProblem && (
               <p className="small mb-1">
-                <span className="fw-medium" style={{ color: 'var(--color-primary)' }}>Business Problem:</span>{' '}
+                <span className="fw-medium" style={{ color: '#FB2832' }}>Business Problem:</span>{' '}
                 <span className="text-muted">{primaryBusinessProblem}</span>
               </p>
             )}
             {selectedUseCase && (
               <p className="small mb-0">
-                <span className="fw-medium" style={{ color: 'var(--color-primary)' }}>AI Use Case:</span>{' '}
+                <span className="fw-medium" style={{ color: '#FB2832' }}>AI Use Case:</span>{' '}
                 <span className="text-muted">{selectedUseCase}</span>
               </p>
             )}

@@ -91,7 +91,7 @@ const VisualStage: React.FC<Props> = ({ src, annotateMode, pins, onPinClick, onS
           position: 'absolute',
           top: 12,
           left: 12,
-          background: 'var(--color-primary)',
+          background: '#FB2832',
           color: 'white',
           fontSize: 11,
           fontWeight: 600,
@@ -116,7 +116,7 @@ const VisualStage: React.FC<Props> = ({ src, annotateMode, pins, onPinClick, onS
             top: 0,
             width: 1,
             height: '100%',
-            background: 'rgba(43, 108, 176, 0.35)',
+            background: 'rgba(194,14,30,0.35)',
             pointerEvents: 'none',
             zIndex: 25,
           }} />
@@ -126,7 +126,7 @@ const VisualStage: React.FC<Props> = ({ src, annotateMode, pins, onPinClick, onS
             top: hoverPos.y,
             width: '100%',
             height: 1,
-            background: 'rgba(43, 108, 176, 0.35)',
+            background: 'rgba(194,14,30,0.35)',
             pointerEvents: 'none',
             zIndex: 25,
           }} />

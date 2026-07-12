@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import TicketDetailModal from '../../components/admin/TicketDetailModal';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface Ticket {
   id: string;
@@ -44,23 +46,31 @@ interface Stats {
   byType: Record<string, number>;
 }
 
-const COLUMNS: Array<{ key: keyof BoardData; label: string; color: string }> = [
-  { key: 'backlog', label: 'Backlog', color: 'secondary' },
-  { key: 'todo', label: 'To Do', color: 'info' },
-  { key: 'in_progress', label: 'In Progress', color: 'primary' },
-  { key: 'in_review', label: 'In Review', color: 'warning' },
-  { key: 'done', label: 'Done', color: 'success' },
+type Tone = 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral';
+
+// Board columns. Each column accent maps to a brand chart token in column order,
+// replacing the old Bootstrap color-name strings.
+const COLUMNS: Array<{ key: keyof BoardData; label: string }> = [
+  { key: 'backlog', label: 'Backlog' },
+  { key: 'todo', label: 'To Do' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'in_review', label: 'In Review' },
+  { key: 'done', label: 'Done' },
 ];
 
-const PRIORITY_BADGES: Record<string, string> = {
+const columnColor = (index: number): string => `var(--chart-${(index % 7) + 1})`;
+
+// Priority -> StatusBadge tone (replaces hardcoded bg-* badge classes).
+const PRIORITY_TONE: Record<string, Tone> = {
   critical: 'danger',
   high: 'warning',
   medium: 'info',
-  low: 'secondary',
+  low: 'neutral',
 };
 
-const TYPE_BADGES: Record<string, string> = {
-  task: 'secondary',
+// Ticket type -> StatusBadge tone.
+const TYPE_TONE: Record<string, Tone> = {
+  task: 'neutral',
   bug: 'danger',
   feature: 'success',
   curriculum: 'info',
@@ -69,9 +79,9 @@ const TYPE_BADGES: Record<string, string> = {
 };
 
 const SOURCE_ICONS: Record<string, string> = {
-  cory: 'cpu',
-  manual: 'person',
-  system: 'gear',
+  cory: 'cpu-line',
+  manual: 'user-line',
+  system: 'settings-3-line',
 };
 
 export default function AdminTicketBoardPage() {
@@ -152,10 +162,47 @@ export default function AdminTicketBoardPage() {
   };
 
   const getSourceIcon = (source: string) => {
-    if (source.startsWith('cory')) return 'cpu';
-    if (source.startsWith('agent')) return 'robot';
-    return SOURCE_ICONS[source] || 'tag';
+    if (source.startsWith('cory')) return 'cpu-line';
+    if (source.startsWith('agent')) return 'robot-line';
+    return SOURCE_ICONS[source] || 'price-tag-3-line';
   };
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from ticket stats.
+  const trust: TrustSignal = useMemo(() => {
+    const total = stats?.total ?? 0;
+    const open = stats?.open ?? 0;
+    return {
+      level: 'live',
+      source: 'tickets',
+      updatedAt: new Date().toISOString(),
+      summary: `${open} open of ${total} total tickets across the board.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: 'live',
+          evidence: [{ label: 'Open / total', value: `${open}/${total}` }],
+        },
+      ],
+    };
+  }, [stats]);
+
+  const kpiRow = (
+    <div className="row g-3">
+      <div className="col-6 col-lg-3">
+        <StatCard label="Total" value={stats?.total ?? 0} icon="ticket-2-line" tone="info" />
+      </div>
+      <div className="col-6 col-lg-3">
+        <StatCard label="Open" value={stats?.open ?? 0} icon="record-circle-line" tone="primary" />
+      </div>
+      <div className="col-6 col-lg-3">
+        <StatCard label="Critical" value={stats?.byPriority?.critical ?? 0} icon="alarm-warning-line" tone={stats?.byPriority?.critical ? 'danger' : 'neutral'} />
+      </div>
+      <div className="col-6 col-lg-3">
+        <StatCard label="Done" value={stats?.byStatus?.done ?? 0} icon="checkbox-circle-line" tone="success" />
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -168,32 +215,21 @@ export default function AdminTicketBoardPage() {
   }
 
   return (
-    <div className="container-fluid px-4 py-3">
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h4 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>Ticket Board</h4>
-          <p className="text-muted small mb-0">
-            {stats ? `${stats.open} open · ${stats.total} total` : ''}
-          </p>
-        </div>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowCreateModal(true)}>
-          + New Ticket
-        </button>
-      </div>
-
-      {/* Stats Row */}
-      {stats && (
-        <div className="row g-2 mb-3">
-          {(['critical', 'high', 'medium', 'low'] as const).map((p) => (
-            <div key={p} className="col-auto">
-              <span className={`badge bg-${PRIORITY_BADGES[p]} bg-opacity-10 text-${PRIORITY_BADGES[p]} border border-${PRIORITY_BADGES[p]} border-opacity-25`}>
-                {p}: {stats.byPriority[p] || 0}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+    <>
+      <PageHeader
+        title="Tickets"
+        icon="ticket-2-line"
+        subtitle="Drag tickets between columns to update their status."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Tickets' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-sm btn-primary" onClick={() => setShowCreateModal(true)}>
+            <i className="ri-add-line" aria-hidden="true" /> New Ticket
+          </button>
+        }
+      >
+        {kpiRow}
+      </PageHeader>
 
       {/* Filters */}
       <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
@@ -225,62 +261,67 @@ export default function AdminTicketBoardPage() {
       </div>
 
       {/* Kanban Board */}
-      <div className="d-flex gap-3 overflow-auto pb-3" style={{ minHeight: 500 }}>
-        {COLUMNS.map(({ key, label, color }) => (
-          <div
-            key={key}
-            className="flex-shrink-0"
-            style={{ width: 280, minWidth: 280 }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => handleDrop(e, key)}
-          >
-            <div className="d-flex align-items-center mb-2">
-              <span className={`badge bg-${color} me-2`}>{board?.[key]?.length || 0}</span>
-              <span className="fw-semibold small">{label}</span>
-            </div>
-            <div className="d-flex flex-column gap-2" style={{ minHeight: 400 }}>
-              {board?.[key]?.map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="card border-0 shadow-sm"
-                  style={{ cursor: 'pointer' }}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, ticket.id)}
-                  onClick={() => setSelectedTicket(ticket.id)}
-                >
-                  <div className="card-body p-2">
-                    <div className="d-flex justify-content-between align-items-start mb-1">
-                      <span className="text-muted" style={{ fontSize: '0.7rem' }}>TK-{ticket.ticket_number}</span>
-                      <span className={`badge bg-${PRIORITY_BADGES[ticket.priority] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>
-                        {ticket.priority}
-                      </span>
-                    </div>
-                    <p className="mb-1 small fw-medium" style={{ lineHeight: 1.3 }}>{ticket.title}</p>
-                    <div className="d-flex gap-1 flex-wrap">
-                      <span className={`badge bg-${TYPE_BADGES[ticket.type] || 'secondary'} bg-opacity-75`} style={{ fontSize: '0.6rem' }}>
-                        {ticket.type}
-                      </span>
-                      {ticket.assigned_to_id && (
-                        <span className="badge bg-light text-dark" style={{ fontSize: '0.6rem' }}>
-                          {ticket.assigned_to_id.length > 20 ? ticket.assigned_to_id.slice(0, 20) + '...' : ticket.assigned_to_id}
-                        </span>
-                      )}
-                      {ticket.source.startsWith('cory') && (
-                        <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.6rem' }}>Cory</span>
-                      )}
+      <SectionCard padded={false} className="admin-section-card--bare">
+        <div className="d-flex gap-3 overflow-auto p-3" style={{ minHeight: 500 }}>
+          {COLUMNS.map(({ key, label }, index) => (
+            <div
+              key={key}
+              className="flex-shrink-0"
+              style={{ width: 280, minWidth: 280 }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, key)}
+            >
+              <div
+                className="rounded-top px-3 py-2 text-white fw-bold small d-flex justify-content-between align-items-center"
+                style={{ backgroundColor: columnColor(index) } as React.CSSProperties}
+              >
+                <span>{label}</span>
+                <StatusBadge label={String(board?.[key]?.length || 0)} tone="neutral" />
+              </div>
+              <div
+                className="rounded-bottom p-2 d-flex flex-column gap-2"
+                style={{ minHeight: 400, background: 'var(--surface-subtle)' }}
+              >
+                {board?.[key]?.map((ticket) => (
+                  <div
+                    key={ticket.id}
+                    className="card border-0 shadow-sm"
+                    style={{ cursor: 'pointer' }}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, ticket.id)}
+                    onClick={() => setSelectedTicket(ticket.id)}
+                  >
+                    <div className="card-body p-2">
+                      <div className="d-flex justify-content-between align-items-start mb-1">
+                        <span className="text-muted" style={{ fontSize: '0.7rem' }}>TK-{ticket.ticket_number}</span>
+                        <StatusBadge label={ticket.priority} tone={PRIORITY_TONE[ticket.priority] || 'neutral'} />
+                      </div>
+                      <p className="mb-1 small fw-medium" style={{ lineHeight: 1.3 }}>{ticket.title}</p>
+                      <div className="d-flex gap-1 flex-wrap align-items-center">
+                        <StatusBadge label={ticket.type} tone={TYPE_TONE[ticket.type] || 'neutral'} />
+                        {ticket.assigned_to_id && (
+                          <StatusBadge
+                            label={ticket.assigned_to_id.length > 20 ? ticket.assigned_to_id.slice(0, 20) + '...' : ticket.assigned_to_id}
+                            tone="neutral"
+                          />
+                        )}
+                        {ticket.source.startsWith('cory') && (
+                          <StatusBadge label="Cory" tone="primary" icon={getSourceIcon(ticket.source)} />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              {(!board?.[key] || board[key].length === 0) && (
-                <div className="text-center text-muted small py-4 border border-dashed rounded" style={{ borderStyle: 'dashed' }}>
-                  No tickets
-                </div>
-              )}
+                ))}
+                {(!board?.[key] || board[key].length === 0) && (
+                  <div className="text-center text-muted small py-4 border rounded" style={{ borderStyle: 'dashed' }}>
+                    No tickets
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </SectionCard>
 
       {/* Ticket Detail Modal */}
       {selectedTicket && (
@@ -356,6 +397,6 @@ export default function AdminTicketBoardPage() {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }

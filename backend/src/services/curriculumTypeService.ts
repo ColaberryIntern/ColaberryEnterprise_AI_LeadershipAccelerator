@@ -1,11 +1,12 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 import MiniSection from '../models/MiniSection';
 const { v4: uuidv4 } = require('uuid');
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'curriculum_type' });
   return _openai;
 }
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';

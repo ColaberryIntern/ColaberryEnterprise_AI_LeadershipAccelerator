@@ -40,8 +40,8 @@ interface NextActionData {
   };
 }
 
-const ACTION_TYPE_BADGES: Record<string, { label: string; className: string }> = {
-  create_artifact: { label: 'Create Artifact', className: 'bg-primary' },
+const ACTION_TYPE_BADGES: Record<string, { label: string; className: string; style?: React.CSSProperties }> = {
+  create_artifact: { label: 'Create Artifact', className: '', style: { background: '#FB2832', color: '#fff', border: 'none' } },
   update_artifact: { label: 'Update Artifact', className: 'bg-warning text-dark' },
   build_feature: { label: 'Build Feature', className: 'bg-info text-dark' },
   fix_issue: { label: 'Fix Issue', className: 'bg-danger' },
@@ -131,10 +131,10 @@ function ProjectNextActionPanel() {
   // Loading state
   if (loading) {
     return (
-      <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid var(--color-primary)' }}>
+      <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #FB2832' }}>
         <div className="card-body py-3">
           <div className="d-flex align-items-center gap-2">
-            <div className="spinner-border spinner-border-sm" style={{ color: 'var(--color-primary)' }} role="status">
+            <div className="spinner-border spinner-border-sm" style={{ color: '#FB2832' }} role="status">
               <span className="visually-hidden">Loading...</span>
             </div>
             <span className="small text-muted">Determining next action...</span>
@@ -165,19 +165,19 @@ function ProjectNextActionPanel() {
 
   return (
     <>
-    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid var(--color-primary)' }}>
+    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #FB2832' }}>
       <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
         <div className="fw-semibold small">
-          <i className="bi bi-rocket-takeoff me-2" style={{ color: 'var(--color-primary)' }}></i>
+          <i className="bi bi-rocket-takeoff me-2" style={{ color: '#FB2832' }}></i>
           Next Action
           {reqKey && <span className="text-muted ms-2">({reqKey})</span>}
         </div>
-        <span className={`badge ${badge.className}`}>{badge.label}</span>
+        <span className={`badge ${badge.className}`} style={badge.style}>{badge.label}</span>
       </div>
       <div className="card-body py-3">
         {/* Title + Confidence */}
         <div className="d-flex justify-content-between align-items-start mb-2">
-          <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>{action.title}</h6>
+          <h6 className="fw-bold mb-0" style={{ color: '#FB2832' }}>{action.title}</h6>
           <span className="small text-nowrap ms-3" style={{ color: confidencePct >= 80 ? 'var(--color-accent)' : 'var(--color-text-light)' }}>
             {confidencePct}% confidence
           </span>
@@ -231,7 +231,8 @@ function ProjectNextActionPanel() {
         <div className="d-flex gap-2">
           {!isAccepted ? (
             <button
-              className="btn btn-sm btn-primary"
+              className="btn btn-sm"
+              style={{ background: '#FB2832', color: '#fff', border: 'none' }}
               onClick={handleAccept}
               disabled={!!acting}
             >
@@ -242,7 +243,7 @@ function ProjectNextActionPanel() {
               )}
             </button>
           ) : (
-            <span className="badge bg-primary d-flex align-items-center py-2 px-3">
+            <span className="badge d-flex align-items-center py-2 px-3" style={{ background: '#FB2832' }}>
               <i className="bi bi-check me-1"></i>In Progress
             </span>
           )}

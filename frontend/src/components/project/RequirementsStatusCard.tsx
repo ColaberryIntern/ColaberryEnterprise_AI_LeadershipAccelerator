@@ -55,7 +55,7 @@ function RequirementsStatusCard() {
   return (
     <div className="card border-0 shadow-sm h-100">
       <div className="card-body py-3">
-        <div className="small fw-semibold mb-2" style={{ color: 'var(--color-primary)' }}>
+        <div className="small fw-semibold mb-2" style={{ color: '#FB2832' }}>
           <i className="bi bi-file-earmark-code me-1"></i>Requirements Document
         </div>
 

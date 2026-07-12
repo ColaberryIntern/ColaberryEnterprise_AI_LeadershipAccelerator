@@ -23,9 +23,12 @@ import AdminVisitorsPage from '../pages/admin/AdminVisitorsPage';
 import AdminOpportunitiesPage from '../pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from '../pages/admin/AdminAcceleratorPage';
 import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
+import WorkforceOSPage from '../pages/admin/workforce/WorkforceOSPage';
+import EnterpriseIntelligencePage from '../pages/admin/intelligence/EnterpriseIntelligencePage';
 import IntelligenceOSPage from '../pages/admin/intelligence/IntelligenceOSPage';
 import IntelligenceDiscoveryPage from '../pages/admin/intelligence/IntelligenceDiscoveryPage';
 import IntelligenceSettingsPage from '../pages/admin/intelligence/IntelligenceSettingsPage';
+import MissedOpportunitiesPage from '../pages/admin/MissedOpportunitiesPage';
 import AgentOrphansPage from '../pages/admin/AgentOrphansPage';
 import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketingDashboardPage';
 import AdminCommunicationsPage from '../pages/admin/AdminCommunicationsPage';
@@ -44,7 +47,8 @@ import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
 import AdminReportsPage from '../pages/admin/AdminReportsPage';
 import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
-import AiOpsCommandCenter from '../pages/admin/AiOpsCommandCenter';
+import CbSystemCommand from '../pages/admin/CbSystemCommand';
+import AdminTrustCenterPage from '../pages/admin/AdminTrustCenterPage';
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
@@ -72,8 +76,13 @@ const adminRoutes = (
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
+        {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
+        <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
+        <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        <Route path="/admin/brain" element={<EnterpriseIntelligencePage />} />
         <Route path="/admin/ai-settings" element={<Navigate to="/admin/intelligence" replace />} />
         <Route path="/admin/intelligence" element={<IntelligenceOSPage />} />
+        <Route path="/admin/missed-opportunities" element={<MissedOpportunitiesPage />} />
         <Route path="/admin/intelligence/discovery" element={<IntelligenceDiscoveryPage />} />
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
@@ -93,7 +102,11 @@ const adminRoutes = (
         <Route path="/admin/automation" element={<AdminAutomationPage />} />
         <Route path="/admin/reports" element={<AdminReportsPage />} />
         <Route path="/admin/ceo" element={<CEOCommandCenter />} />
-        <Route path="/admin/ops" element={<AiOpsCommandCenter />} />
+        <Route path="/admin/cb-system" element={<CbSystemCommand />} />
+        {/* Old "Run My Day" port retired — it duplicated the advisor's /my-day.
+            Redirect the old URL to the CB System Command dashboard. */}
+        <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
+        <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
       </Route>
     </Route>
   </>

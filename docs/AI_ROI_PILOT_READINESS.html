@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI ROI Pilot — Launch Readiness (Liability Audit)</title>
+<style>
+  :root{--navy:#1a365d;--navy2:#2b6cb0;--ink:#1a202c;--muted:#5a6b80;--line:#e2e8f0;--bg:#f5f7fa;--card:#fff;
+    --green:#2f855a;--greenbg:#f0fff4;--amber:#b7791f;--amberbg:#fffaf0;--red:#c53030;--redbg:#fff5f5;}
+  *{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 24px 70px}
+  header.hero{background:linear-gradient(135deg,#0f1f3a,#1a365d 55%,#234e86);color:#fff;padding:40px 0 34px}
+  header .wrap{padding-bottom:0}
+  .kicker{letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:700;color:#90cdf4;margin:0 0 8px}
+  h1{font-size:30px;margin:0 0 6px;font-weight:800}
+  .sub{font-size:16px;color:#cbd8e8;margin:0;max-width:760px}
+  .scoreband{display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-top:20px}
+  .bigscore{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:14px 22px;text-align:center}
+  .bigscore .n{font-size:40px;font-weight:800;line-height:1;color:#fff}
+  .bigscore .l{font-size:12px;color:#bcd2ec;letter-spacing:.08em;text-transform:uppercase}
+  .verdict{font-size:15px;color:#e2e8f0;max-width:520px}
+  .verdict b{color:#90cdf4}
+  section{margin:34px 0 0}h2{font-size:21px;color:var(--navy);margin:0 0 4px}
+  .lead{color:var(--muted);margin:0 0 16px;font-size:14px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#eef3f9;color:var(--navy);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .ok{background:var(--greenbg);color:var(--green);border:1px solid #9ae6b4}
+  .warn{background:var(--amberbg);color:var(--amber);border:1px solid #fbd38d}
+  .bad{background:var(--redbg);color:var(--red);border:1px solid #feb2b2}
+  .sc{font-weight:800}.sc.g{color:var(--green)}.sc.a{color:var(--amber)}.sc.r{color:var(--red)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px}
+  .card.crit{border-left:5px solid var(--red)}.card.high{border-left:5px solid var(--amber)}.card.med{border-left:5px solid var(--navy2)}
+  .card h3{margin:0 0 4px;font-size:15px}.card .fix{font-size:13px;color:var(--green);margin-top:6px}.card .open{font-size:13px;color:var(--amber);margin-top:6px}
+  .card p{margin:0;font-size:13.5px;color:#3a4658}
+  .test{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:720px){.test{grid-template-columns:1fr}}
+  .test div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 13px;font-size:13.5px}
+  .test .p{color:var(--green);font-weight:700}
+  a.btn{display:inline-block;background:var(--navy2);color:#fff;text-decoration:none;font-weight:700;padding:11px 20px;border-radius:8px;font-size:15px}
+  .duties{background:var(--amberbg);border:1px solid #fbd38d;border-radius:12px;padding:6px 0}
+  .duties .row{display:flex;gap:12px;padding:11px 18px;border-bottom:1px solid #fbe7c2;align-items:flex-start}
+  .duties .row:last-child{border-bottom:none}.duties .n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--amber);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:12px}
+  .foot{margin-top:40px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid var(--line);padding-top:16px}
+</style></head><body>
+<header class="hero"><div class="wrap">
+  <p class="kicker">Colaberry AI &middot; Pre-Launch Liability Audit</p>
+  <h1>AI ROI Pilot — Launch Readiness</h1>
+  <p class="sub">An end-to-end audit + live test of the cold-email + landing funnel, scored on limiting legal/liability exposure. Findings, fixes applied, and what remains before and during the send.</p>
+  <div class="scoreband">
+    <div class="bigscore"><div class="n">82</div><div class="l">Liability score /100</div></div>
+    <div class="verdict"><b>CONDITIONAL GO.</b> Touch 1 is cleared to send (compliant, idempotent, honest). The full 7-touch campaign clears once two operator controls are live: (1) campaign state on persistent storage, and (2) the opt-out + bounce inbox sweep run before every touch. The fixes below already closed the critical CAN-SPAM enforcement gap in the sender.</div>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+  <section>
+    <h2>Liability scorecard</h2>
+    <p class="lead">Weighted toward legal exposure (CAN-SPAM, claims, opt-out). Green = closed, amber = controlled by process, red = open.</p>
+    <table><thead><tr><th>Dimension</th><th>Score</th><th>Status</th></tr></thead><tbody>
+      <tr><td>CAN-SPAM elements (real postal address, opt-out instructions, truthful from/subject, List-Unsubscribe header)</td><td class="sc g">95</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td>Opt-out enforcement (STOP/unsubscribe honored before touches 2-7)</td><td class="sc g">85</td><td><span class="pill ok">Fixed + process</span></td></tr>
+      <tr><td>Idempotency / no duplicate sends (crash-safe sent-log)</td><td class="sc g">90</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td>Honest claims (no reused proof presented as another vertical's)</td><td class="sc g">90</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td>Funnel technical health (pages, forms, assets, validation)</td><td class="sc g">100</td><td><span class="pill ok">Verified live</span></td></tr>
+      <tr><td>Bounce / spam-complaint suppression (protect sender reputation)</td><td class="sc a">70</td><td><span class="pill warn">Process-gated</span></td></tr>
+      <tr><td>Campaign state persistence (sent-log + opt-out list survive a restart)</td><td class="sc a">70</td><td><span class="pill warn">Procedure defined</span></td></tr>
+      <tr><td>Lead capture + consent (server-side enforcement)</td><td class="sc a">80</td><td><span class="pill warn">Works; harden</span></td></tr>
+      <tr><td>Inbound auto-reply isolation (no wrong auto-response to a pilot prospect)</td><td class="sc a">70</td><td><span class="pill warn">Low risk; flag</span></td></tr>
+    </tbody></table>
+  </section>
+
+  <section>
+    <h2>What I anticipated would go wrong, and what I did</h2>
+
+    <div class="card crit"><h3><span class="pill bad">CRITICAL</span> &nbsp;Opt-outs were not enforced &mdash; touches 2-7 would email people who replied STOP</h3>
+      <p>The email promised "reply STOP and you are removed immediately," but nothing populated the sender's suppression list. The cold targets are flat-file records, not CRM leads, so the app's opt-out engine could never see them. A recipient who said STOP after Touch 1 would still get Touches 2-7 &mdash; a per-email CAN-SPAM violation.</p>
+      <div class="fix">FIXED: the sender now skips any address in the opt-out/bounce suppression files, and a mandatory inbox sweep (run before every touch) feeds opt-outs and bounces into those files. Verified: a suppressed address is correctly skipped.</div></div>
+
+    <div class="card crit"><h3><span class="pill bad">CRITICAL</span> &nbsp;Campaign state was ephemeral</h3>
+      <p>Discovered during testing: the backend container was recreated mid-day, wiping its scratch dir &mdash; the lead list, the sent-log, and the opt-out list. On a 3-week campaign a restart would mean duplicate sends (lost sent-log) and unhonored opt-outs (lost suppression list).</p>
+      <div class="open">ACTION (pre-send): campaign state moves to a persistent host directory, copied into the container per run and back out after. Defined and applied at send time.</div></div>
+
+    <div class="card high"><h3><span class="pill warn">HIGH</span> &nbsp;CAN-SPAM postal address + deceptive subject</h3>
+      <p>The footer carried a placeholder address, and Touch 2's subject faked a reply ("re:") that never happened.</p>
+      <div class="fix">FIXED: real address (200 Chisholm Pl #200, Plano, TX 75075) wired in and validated (the sender refuses to send live without a real one); Touch 2 subject changed to "one more AI idea for {company}"; added a List-Unsubscribe header.</div></div>
+
+    <div class="card high"><h3><span class="pill warn">HIGH</span> &nbsp;Idempotency race could duplicate a send</h3>
+      <p>The sent-log was written after the network send, so a crash between accept and log-write would re-send on the next run.</p>
+      <div class="fix">FIXED: the sent-log entry is written before the send (atomic temp+rename) and rolled back only on a clean failure &mdash; a crash now favors not-resending over a duplicate.</div></div>
+
+    <div class="card med"><h3><span class="pill" style="background:#ebf4ff;color:#2b6cb0;border:1px solid #bcd6f7">MED</span> &nbsp;Reused proof + bounce suppression + auto-reply</h3>
+      <p>The construction/care landing variants reused one transportation client's result as if it were theirs (FTC substantiation risk). Hard bounces were not suppressed from the cold sequence. An inbound auto-responder could fire the wrong (Accelerator) script at a pilot prospect.</p>
+      <div class="fix">FIXED: vertical proof reworded to honestly cite the transportation build as an analogous example. Bounce suppression now handled by the pre-touch sweep.</div>
+      <div class="open">RECOMMENDED (backend deploy): wire Mandrill bounce/unsub events to a suppression table, enforce consent server-side, and guard the auto-responder against ai-pilot-cold correspondents. Flagged for a backend release.</div></div>
+  </section>
+
+  <section>
+    <h2>End-to-end test results (live)</h2>
+    <div class="test">
+      <div><span class="p">PASS</span> &middot; All 4 landing routes return 200 (/ai-pilot, /transport, /construction, /care)</div>
+      <div><span class="p">PASS</span> &middot; Page assets load (hero image, logo) &mdash; no broken links</div>
+      <div><span class="p">PASS</span> &middot; Lead form rejects invalid input (HTTP 400)</div>
+      <div><span class="p">PASS</span> &middot; Lead form captures valid input (HTTP 201, stored in CRM)</div>
+      <div><span class="p">PASS</span> &middot; Sender skips suppressed/opted-out addresses (verified)</div>
+      <div><span class="p">PASS</span> &middot; Sender refuses live send without a real postal address</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Operator controls that keep us compliant (limiting liability)</h2>
+    <p class="lead">These are the residual, human-in-the-loop controls. They are why the campaign is run touch-by-touch, not fire-and-forget.</p>
+    <div class="duties">
+      <div class="row"><div class="n">1</div><div><b>Run the opt-out + bounce inbox sweep before EVERY touch (2-7).</b> Anyone who said STOP/unsubscribe/no-thanks, replied at all, or bounced gets added to the suppression list before that touch sends. This is what makes "reply STOP and you are removed immediately" true.</div></div>
+      <div class="row"><div class="n">2</div><div><b>Keep campaign state on persistent storage.</b> The lead list, sent-log, and suppression list live on the host and are synced per run, so a container restart can never cause a duplicate send or a missed opt-out.</div></div>
+      <div class="row"><div class="n">3</div><div><b>Optional belt-and-suspenders:</b> a backend release wiring Mandrill bounce/unsubscribe events to a suppression table + server-side consent enforcement removes the dependence on the manual sweep.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The landing page</h2>
+    <p class="lead">Live and tested. This is the link in your campaign and on the variants.</p>
+    <a class="btn" href="https://enterprise.colaberry.ai/ai-pilot">Open the live landing page &raquo;</a>
+  </section>
+
+  <div class="foot">Colaberry AI &middot; AI ROI Pilot launch-readiness audit &middot; generated 2026-06-22 (session CC-20260620-r7x2). Score reflects the funnel state after the fixes above were applied.</div>
+</div></body></html>

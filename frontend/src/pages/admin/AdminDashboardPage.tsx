@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 /* ------------------------------------------------------------------ */
 /*  Interfaces                                                         */
@@ -116,13 +118,24 @@ function settled<T>(r: PromiseSettledResult<T>): T | null {
 }
 
 const PIPELINE_STAGES: Record<string, { label: string; color: string }> = {
-  new_lead: { label: 'New Lead', color: '#6c757d' },
-  contacted: { label: 'Contacted', color: '#0dcaf0' },
-  meeting_scheduled: { label: 'Meeting', color: '#0d6efd' },
-  proposal_sent: { label: 'Proposal', color: '#6f42c1' },
-  negotiation: { label: 'Negotiation', color: '#fd7e14' },
-  enrolled: { label: 'Enrolled', color: '#198754' },
-  lost: { label: 'Lost', color: '#dc3545' },
+  new_lead: { label: 'New Lead', color: 'var(--chart-8)' },
+  contacted: { label: 'Contacted', color: 'var(--chart-1)' },
+  meeting_scheduled: { label: 'Meeting', color: 'var(--chart-6)' },
+  proposal_sent: { label: 'Proposal', color: 'var(--chart-5)' },
+  negotiation: { label: 'Negotiation', color: 'var(--chart-4)' },
+  enrolled: { label: 'Enrolled', color: 'var(--chart-3)' },
+  lost: { label: 'Lost', color: 'var(--chart-2)' },
+};
+
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
+const COHORT_STATUS_TONE: Record<string, BadgeTone> = {
+  open: 'success',
+  active: 'success',
+  closed: 'danger',
+  completed: 'neutral',
+  paused: 'warning',
+  draft: 'neutral',
 };
 
 /* ------------------------------------------------------------------ */
@@ -178,6 +191,20 @@ function AdminDashboardPage() {
     }).finally(() => setLoading(false));
   }, []);
 
+  /* ---------- per-page trust signal ---------- */
+
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'dashboard aggregate',
+    updatedAt: new Date().toISOString(),
+    summary: 'Live KPIs from leads, campaigns, and scheduler.',
+    href: '/admin/trust',
+    pillars: [
+      { name: 'Freshness', status: 'live', evidence: [{ label: 'Window', value: 'real-time' }] },
+      { name: 'Sources', status: 'live', evidence: [{ label: 'Feeds', value: 'leads · campaigns · scheduler · health' }] },
+    ],
+  }), []);
+
   /* ---------- formatters ---------- */
 
   const fmtCurrency = (n: number) =>
@@ -192,56 +219,30 @@ function AdminDashboardPage() {
       d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   };
 
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = { open: 'bg-success', closed: 'bg-danger', completed: 'bg-secondary', active: 'bg-success', paused: 'bg-warning text-dark', draft: 'bg-secondary' };
-    return <span className={`badge rounded-pill ${colors[status] || 'bg-secondary'}`}>{status}</span>;
-  };
-
-  /* ---------- KPI card ---------- */
-
-  const kpiLink = (to: string, label: string, value: string | number, color: string, sub?: React.ReactNode) => (
-    <div className="col-sm-6 col-lg-2">
-      <Link to={to} className="text-decoration-none">
-        <div className="card border-0 shadow-sm h-100" style={{ borderLeft: `4px solid ${color}` }}>
-          <div className="card-body p-3">
-            <div className="text-muted small">{label}</div>
-            <div className="h4 fw-bold mb-0" style={{ color }}>{value}</div>
-            {sub && <div className="text-muted small mt-1">{sub}</div>}
-          </div>
-        </div>
-      </Link>
-    </div>
-  );
-
-  /* ---------- status card ---------- */
+  /* ---------- status card (system status tile) ---------- */
 
   const statusCard = (label: string, status: 'ok' | 'warning' | 'critical' | 'unknown', detail: string, to: string) => {
-    const dotColor = status === 'ok' ? '#38a169' : status === 'warning' ? '#dd6b20' : status === 'critical' ? '#e53e3e' : '#a0aec0';
+    const dotColor =
+      status === 'ok' ? 'var(--status-success)'
+        : status === 'warning' ? 'var(--status-warning)'
+          : status === 'critical' ? 'var(--status-danger)'
+            : 'var(--text-muted)';
     return (
       <div className="col-sm-6 col-lg-3">
         <Link to={to} className="text-decoration-none">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body p-3 d-flex align-items-center">
+          <SectionCard className="h-100">
+            <div className="d-flex align-items-center">
               <div className="rounded-circle me-3 flex-shrink-0" style={{ width: 12, height: 12, background: dotColor }} />
               <div>
                 <div className="text-muted small">{label}</div>
-                <div className="fw-semibold" style={{ color: 'var(--color-text)' }}>{detail}</div>
+                <div className="fw-semibold" style={{ color: 'var(--text-strong)' }}>{detail}</div>
               </div>
             </div>
-          </div>
+          </SectionCard>
         </Link>
       </div>
     );
   };
-
-  /* ---------- section header ---------- */
-
-  const sectionHeader = (title: string, to?: string) => (
-    <div className="d-flex justify-content-between align-items-center mb-3">
-      <h2 className="h5 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>{title}</h2>
-      {to && <Link to={to} className="btn btn-sm btn-outline-secondary">View All</Link>}
-    </div>
-  );
 
   const APPT_TYPE_LABELS: Record<string, string> = {
     strategy_call: 'Strategy Call', demo: 'Demo', follow_up: 'Follow Up', enrollment_close: 'Enrollment Close',
@@ -261,26 +262,30 @@ function AdminDashboardPage() {
   if (loading) {
     return (
       <>
-        <h1 className="h3 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>Dashboard</h1>
+        <PageHeader
+          title="Dashboard"
+          icon="dashboard-line"
+          subtitle="Live KPIs across pipeline, campaigns, and system health."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Dashboard' }]}
+          trust={trust}
+        />
         {[0, 1].map(row => (
           <div key={row} className="row g-3 mb-3">
             {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="col-sm-6 col-lg-2">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-body p-3">
-                    <div className="placeholder-glow">
-                      <span className="placeholder col-8 mb-2" style={{ height: 12 }} />
-                      <span className="placeholder col-5" style={{ height: 24 }} />
-                    </div>
+              <div key={i} className="col-6 col-lg-2">
+                <SectionCard>
+                  <div className="placeholder-glow">
+                    <span className="placeholder col-8 mb-2" style={{ height: 12 }} />
+                    <span className="placeholder col-5" style={{ height: 24 }} />
                   </div>
-                </div>
+                </SectionCard>
               </div>
             ))}
           </div>
         ))}
         <div className="row g-3 mb-4">
-          <div className="col-lg-7"><div className="card border-0 shadow-sm"><div className="card-body"><div className="placeholder-glow"><span className="placeholder w-100" style={{ height: 200 }} /></div></div></div></div>
-          <div className="col-lg-5"><div className="card border-0 shadow-sm"><div className="card-body"><div className="placeholder-glow"><span className="placeholder w-100" style={{ height: 200 }} /></div></div></div></div>
+          <div className="col-lg-7"><SectionCard><div className="placeholder-glow"><span className="placeholder w-100" style={{ height: 200 }} /></div></SectionCard></div>
+          <div className="col-lg-5"><SectionCard><div className="placeholder-glow"><span className="placeholder w-100" style={{ height: 200 }} /></div></SectionCard></div>
         </div>
       </>
     );
@@ -308,48 +313,80 @@ function AdminDashboardPage() {
 
   return (
     <>
-      <h1 className="h3 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>Dashboard</h1>
+      <PageHeader
+        title="Dashboard"
+        icon="dashboard-line"
+        subtitle="Live KPIs across pipeline, campaigns, and system health."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Dashboard' }]}
+        trust={trust}
+      />
 
       {/* ============================================================ */}
       {/* ROW 1: Executive KPIs                                        */}
       {/* ============================================================ */}
       <div className="row g-3 mb-3">
-        {kpiLink('/admin/pipeline', 'Pipeline Value', oppSummary ? fmtCurrency(oppSummary.total_pipeline_value) : '--', '#1a365d')}
-        {kpiLink('/admin/opportunities', 'Weighted Forecast', forecast ? fmtCurrency(forecast.weighted_pipeline_value) : '--', '#2b6cb0',
-          forecast ? `${forecast.total_projected_enrollments.toFixed(1)} proj. enrollments` : undefined
-        )}
-        {kpiLink('/admin/leads', 'Total Leads', leadStats?.total ?? '--', '#0dcaf0',
-          leadStats ? `${leadStats.thisMonth} this month` : undefined
-        )}
-        {kpiLink('/admin/leads', 'Call Conversion', leadStats ? `${leadStats.conversionRate}%` : '--', '#e53e3e',
-          leadStats ? `${(leadStats as any).bookedCalls ?? 0} calls booked` : undefined
-        )}
-        {kpiLink('/admin/accelerator', 'Enrollments', stats?.totalEnrollments ?? '--', '#3182ce',
-          stats && stats.pendingInvoice > 0 ? `${stats.pendingInvoice} pending` : undefined
-        )}
-        {kpiLink('/admin/revenue', 'Revenue', stats ? fmtCurrency(stats.totalRevenue) : '--', '#38a169')}
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/pipeline" label="Pipeline Value" icon="funds-line" tone="primary"
+            value={oppSummary ? fmtCurrency(oppSummary.total_pipeline_value) : '--'} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/opportunities" label="Weighted Forecast" icon="line-chart-line" tone="info"
+            value={forecast ? fmtCurrency(forecast.weighted_pipeline_value) : '--'}
+            hint={forecast ? `${forecast.total_projected_enrollments.toFixed(1)} proj. enrollments` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/leads" label="Total Leads" icon="group-line" tone="info"
+            value={leadStats?.total ?? '--'}
+            hint={leadStats ? `${leadStats.thisMonth} this month` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/leads" label="Call Conversion" icon="phone-line" tone="warning"
+            value={leadStats ? `${leadStats.conversionRate}%` : '--'}
+            hint={leadStats ? `${(leadStats as any).bookedCalls ?? 0} calls booked` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/accelerator" label="Enrollments" icon="graduation-cap-line" tone="primary"
+            value={stats?.totalEnrollments ?? '--'}
+            hint={stats && stats.pendingInvoice > 0 ? `${stats.pendingInvoice} pending` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/revenue" label="Revenue" icon="money-dollar-circle-line" tone="success"
+            value={stats ? fmtCurrency(stats.totalRevenue) : '--'} />
+        </div>
       </div>
 
       {/* ============================================================ */}
       {/* ROW 2: Campaign Activity                                     */}
       {/* ============================================================ */}
       <div className="row g-3 mb-3">
-        {kpiLink('/admin/communications?channel=email', 'Emails Sent', campaignActivity?.emails_sent_today ?? '--', '#2b6cb0',
-          campaignActivity ? `${campaignActivity.emails_sent_week} this week` : undefined
-        )}
-        {kpiLink('/admin/communications?channel=sms', 'SMS Sent', campaignActivity?.sms_sent_today ?? '--', '#6f42c1',
-          campaignActivity ? `${campaignActivity.sms_sent_week} this week` : undefined
-        )}
-        {kpiLink('/admin/communications?channel=voice', 'Voice Calls', campaignActivity?.voice_calls_today ?? '--', '#805ad5',
-          campaignActivity ? `${campaignActivity.voice_calls_week} this week` : undefined
-        )}
-        {kpiLink('/admin/campaigns', 'Open Rate (7d)', campaignActivity ? `${campaignActivity.open_rate}%` : '--', '#38a169',
-          campaignActivity ? `${campaignActivity.active_campaigns} active campaigns` : undefined
-        )}
-        {kpiLink('/admin/campaigns', 'Click Rate (7d)', campaignActivity ? `${campaignActivity.click_rate}%` : '--', '#0dcaf0')}
-        {kpiLink('/admin/leads?temperature=hot', 'Hot Leads', campaignActivity?.hot_leads_count ?? '--', '#e53e3e',
-          'Engaged 2+ times'
-        )}
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/communications?channel=email" label="Emails Sent" icon="mail-send-line" tone="info"
+            value={campaignActivity?.emails_sent_today ?? '--'}
+            hint={campaignActivity ? `${campaignActivity.emails_sent_week} this week` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/communications?channel=sms" label="SMS Sent" icon="message-2-line" tone="primary"
+            value={campaignActivity?.sms_sent_today ?? '--'}
+            hint={campaignActivity ? `${campaignActivity.sms_sent_week} this week` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/communications?channel=voice" label="Voice Calls" icon="phone-line" tone="primary"
+            value={campaignActivity?.voice_calls_today ?? '--'}
+            hint={campaignActivity ? `${campaignActivity.voice_calls_week} this week` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/campaigns" label="Open Rate (7d)" icon="mail-open-line" tone="success"
+            value={campaignActivity ? `${campaignActivity.open_rate}%` : '--'}
+            hint={campaignActivity ? `${campaignActivity.active_campaigns} active campaigns` : undefined} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/campaigns" label="Click Rate (7d)" icon="cursor-line" tone="info"
+            value={campaignActivity ? `${campaignActivity.click_rate}%` : '--'} />
+        </div>
+        <div className="col-6 col-lg-2">
+          <StatCard to="/admin/leads?temperature=hot" label="Hot Leads" icon="fire-line" tone="danger"
+            value={campaignActivity?.hot_leads_count ?? '--'} hint="Engaged 2+ times" />
+        </div>
       </div>
 
       {/* ============================================================ */}
@@ -376,39 +413,38 @@ function AdminDashboardPage() {
       {/* ============================================================ */}
       <div className="row g-4 mb-4">
         <div className="col-12">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-              Pipeline at a Glance
-              <Link to="/admin/pipeline" className="btn btn-sm btn-outline-secondary">View Pipeline</Link>
+          <SectionCard
+            title="Pipeline at a Glance"
+            icon="git-merge-line"
+            actions={<Link to="/admin/pipeline" className="btn btn-sm btn-outline-secondary">View Pipeline</Link>}
+          >
+            <div className="d-flex align-items-center gap-2">
+              {Object.entries(PIPELINE_STAGES).map(([key, { label, color }]) => {
+                const count = pipelineStats[key] || 0;
+                const pct = Math.max((count / totalPipeline) * 100, count > 0 ? 3 : 0);
+                return (
+                  <div key={key} className="text-center" style={{ flex: pct || 1 }}>
+                    <div style={{ height: 28, background: color, borderRadius: 4, opacity: count > 0 ? 1 : 0.15 }} />
+                    <div className="small text-muted mt-1">{label}</div>
+                    <div className="small fw-semibold">{count}</div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="card-body">
-              <div className="d-flex align-items-center gap-2">
-                {Object.entries(PIPELINE_STAGES).map(([key, { label, color }]) => {
-                  const count = pipelineStats[key] || 0;
-                  const pct = Math.max((count / totalPipeline) * 100, count > 0 ? 3 : 0);
-                  return (
-                    <div key={key} className="text-center" style={{ flex: pct || 1 }}>
-                      <div style={{ height: 28, background: color, borderRadius: 4, opacity: count > 0 ? 1 : 0.15 }} />
-                      <div className="small text-muted mt-1">{label}</div>
-                      <div className="small fw-semibold">{count}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
 
       {/* ============================================================ */}
       {/* SECTION: Campaign Performance                                 */}
       {/* ============================================================ */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          Campaign Performance
-          <Link to="/admin/campaigns" className="btn btn-sm btn-outline-secondary">View All</Link>
-        </div>
-        <div className="card-body p-0">
+      <div className="mb-4">
+        <SectionCard
+          title="Campaign Performance"
+          icon="megaphone-line"
+          padded={false}
+          actions={<Link to="/admin/campaigns" className="btn btn-sm btn-outline-secondary">View All</Link>}
+        >
           <div className="table-responsive">
             <table className="table table-hover mb-0" style={{ tableLayout: 'fixed' }}>
               <colgroup>
@@ -508,7 +544,7 @@ function AdminDashboardPage() {
               )}
             </table>
           </div>
-        </div>
+        </SectionCard>
       </div>
 
       {/* ============================================================ */}
@@ -517,13 +553,11 @@ function AdminDashboardPage() {
       <div className="row g-4">
         {/* Upcoming Appointments */}
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-header bg-white fw-semibold">Upcoming Appointments</div>
-            <div className="card-body p-0">
-              {appointments.length === 0 ? (
-                <div className="text-center text-muted small py-4">No upcoming appointments</div>
-              ) : (
-                <ul className="list-group list-group-flush">
+          <SectionCard title="Upcoming Appointments" icon="calendar-event-line" padded={false} className="h-100">
+            {appointments.length === 0 ? (
+              <div className="text-center text-muted small py-4">No upcoming appointments</div>
+            ) : (
+              <ul className="list-group list-group-flush">
                   {appointments.slice(0, 5).map(a => {
                     const isExpanded = expandedAppt === a.id;
                     return (
@@ -551,13 +585,13 @@ function AdminDashboardPage() {
                             </div>
                           </div>
                           <div className="d-flex align-items-center gap-2">
-                            <span className="badge bg-info">{fmtDateTime(a.scheduled_at)}</span>
-                            <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'} small text-muted`} />
+                            <StatusBadge label={fmtDateTime(a.scheduled_at)} tone="info" icon="calendar-line" />
+                            <i className={`ri-arrow-${isExpanded ? 'up' : 'down'}-s-line text-muted`} aria-hidden="true" />
                           </div>
                         </div>
 
                         {isExpanded && (
-                          <div className="px-3 pb-3 border-top" style={{ background: 'var(--color-bg-alt)' }}>
+                          <div className="px-3 pb-3 border-top" style={{ background: 'var(--surface-subtle)' }}>
                             <div className="row g-2 mt-1">
                               <div className="col-sm-6">
                                 <div className="text-muted small">Title</div>
@@ -569,9 +603,10 @@ function AdminDashboardPage() {
                               </div>
                               <div className="col-sm-3">
                                 <div className="text-muted small">Status</div>
-                                <span className={`badge ${a.status === 'scheduled' ? 'bg-primary' : a.status === 'completed' ? 'bg-success' : a.status === 'no_show' ? 'bg-danger' : 'bg-secondary'}`}>
-                                  {a.status}
-                                </span>
+                                <StatusBadge
+                                  label={a.status}
+                                  tone={a.status === 'scheduled' ? 'primary' : a.status === 'completed' ? 'success' : a.status === 'no_show' ? 'danger' : 'neutral'}
+                                />
                               </div>
                             </div>
 
@@ -618,21 +653,21 @@ function AdminDashboardPage() {
                     );
                   })}
                 </ul>
-              )}
-            </div>
-          </div>
+            )}
+          </SectionCard>
         </div>
 
         {/* Cohorts */}
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-              Cohorts
-              <Link to="/admin/accelerator" className="btn btn-sm btn-outline-secondary">Manage</Link>
-            </div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
+          <SectionCard
+            title="Cohorts"
+            icon="group-2-line"
+            padded={false}
+            className="h-100"
+            actions={<Link to="/admin/accelerator" className="btn btn-sm btn-outline-secondary">Manage</Link>}
+          >
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
                   <thead className="table-light">
                     <tr>
                       <th className="small fw-medium">Name</th>
@@ -648,15 +683,16 @@ function AdminDashboardPage() {
                         <td className="small">{c.name}</td>
                         <td className="small">{fmtDate(c.start_date)}</td>
                         <td className="small text-center">{c.seats_taken}/{c.max_seats}</td>
-                        <td className="small text-center">{statusBadge(c.status)}</td>
+                        <td className="small text-center">
+                          <StatusBadge label={c.status} tone={COHORT_STATUS_TONE[c.status] || 'neutral'} />
+                        </td>
                         <td><Link to={`/admin/cohorts/${c.id}`} className="btn btn-sm btn-outline-secondary">View</Link></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
             </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
     </>

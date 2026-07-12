@@ -20,7 +20,10 @@ import { buildProjectRequirementsContext } from './projectRequirementsContextSer
 import { createNewVersion } from './artifactVersionService';
 import { attachArtifactToProject, createProjectForEnrollment, getProjectByEnrollment } from './projectService';
 import { refreshProjectOutputs } from './portfolioEnhancementService';
+import { createTasksFromRequirements } from './studentTaskService';
+import { materializeRequirementsFromDocument } from './requirementsMaterializeService';
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -29,7 +32,7 @@ function getOpenAI(): OpenAI {
   // (observed). 4-min timeout + 1 retry caps a single call to ~8 min worst case;
   // a real stall now fails the job cleanly so the UI surfaces a retry instead of
   // spinning forever. (Failure-First: no unbounded external call.)
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 240000, maxRetries: 1 });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'requirements_gen' }, { timeout: 240000, maxRetries: 1 });
   return _openai;
 }
 
@@ -313,6 +316,17 @@ async function executeJob(jobId: string, enrollmentId: string): Promise<void> {
     refreshProjectOutputs(enrollmentId).catch(err =>
       console.error('[RequirementsGen] Portfolio refresh failed:', err.message)
     );
+
+    // Parse the generated spec into keyed RequirementsMap rows (the missing
+    // link), THEN seed native task lists from those clusters. Non-blocking and
+    // non-fatal — a parse/seed failure never fails the completed generation job.
+    if (project) {
+      materializeRequirementsFromDocument(project.id, document)
+        .then(() => createTasksFromRequirements(project.id))
+        .catch(err =>
+          console.error('[RequirementsGen] Requirement materialize / task seeding failed:', err.message)
+        );
+    }
   } catch (err: any) {
     console.error(`[RequirementsGen] Job ${jobId} failed:`, err.message);
     await job.update({

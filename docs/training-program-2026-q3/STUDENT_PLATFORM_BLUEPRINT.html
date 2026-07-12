@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Systems Architect Accelerator - Student Platform Blueprint</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  window.addEventListener('load', function () {
+    if (window.mermaid) { mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' }); }
+  });
+</script>
+<style>
+  :root{
+    --ink:#0f1a2b; --muted:#5b6b82; --line:#e3e8f0; --bg:#f6f8fb; --card:#ffffff;
+    --navy:#13294b; --accent:#1f6feb; --green:#0f9d58; --amber:#b8860b; --slate:#334155;
+    --rep:#1f6feb; --link:#0f9d58; --reuse:#6b46c1; --skip:#94a3b8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;font-size:15px}
+  header{background:linear-gradient(135deg,#13294b,#1f3a63);color:#fff;padding:38px 40px}
+  header h1{margin:0 0 6px;font-size:26px;letter-spacing:.2px}
+  header .sub{opacity:.85;font-size:14px}
+  header .meta{margin-top:14px;font-size:12.5px;opacity:.8}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 40px 80px}
+  h2{font-size:20px;margin:42px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line);color:var(--navy)}
+  h3{font-size:16px;margin:26px 0 8px;color:var(--slate)}
+  p{margin:10px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:16px 0;box-shadow:0 1px 3px rgba(16,30,54,.04)}
+  .diagram{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin:16px 0;overflow:auto;text-align:center}
+  .mermaid{font-size:14px}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#eef2f8;color:var(--navy);font-weight:600}
+  tr:nth-child(even) td{background:#fafbfd}
+  .tag{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap}
+  .t-rep{background:var(--rep)} .t-link{background:var(--link)} .t-reuse{background:var(--reuse)} .t-skip{background:var(--skip)}
+  .legend span{margin-right:14px;font-size:12px}
+  .callout{border-left:4px solid var(--accent);background:#eef4ff;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .done{border-left-color:var(--green);background:#eafaf0}
+  .warn{border-left-color:var(--amber);background:#fdf6e3}
+  ul{margin:8px 0 8px 0;padding-left:22px} li{margin:4px 0}
+  code{background:#eef2f8;padding:1px 6px;border-radius:5px;font-size:12.5px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:20px}}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:30px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Student Platform Blueprint</h1>
+  <div class="sub">AI Systems Architect Accelerator - fusing Skool + Basecamp + Anthropic + our platform into one system</div>
+  <div class="meta">2026-06-10 · for Ali · Session CC-20260610-q4d7 · Launch 2026-07-13 · Companion to STUDENT_PLATFORM_BUILD_SPEC.md</div>
+</header>
+<div class="wrap">
+
+  <div class="callout done"><strong>Already live:</strong> the Curriculum list in Basecamp (project 47502609, list 9946468992) is rebuilt as 12 week-groups × a 5-item checklist (60 todos), each week mapped to its Anthropic course, deadlines staggered before launch, Ali co-signing Intensive&nbsp;1. Scripts are on <code>main</code> and the VPS. This blueprint is for building the <em>student-facing platform</em> around it.</div>
+
+  <h2>1. The system we are building</h2>
+  <p>One synced platform where each student takes the week's Anthropic course, applies it to <strong>their own project</strong> through an AI advisor that turns an idea into requirements and a task list, builds it in Claude Code (pushing to GitHub where we verify progress), previews it live, assembles a portfolio, and does it all inside a Skool-style community. We fuse four systems:</p>
+  <div class="diagram">
+  <pre class="mermaid">
+graph TB
+  SK["SKOOL&lt;br/&gt;Community · Gamification"]:::src
+  BC["BASECAMP&lt;br/&gt;Project · List · Task"]:::src
+  AN["ANTHROPIC&lt;br/&gt;Skilljar LMS · Courses"]:::src
+  US["OUR PLATFORM&lt;br/&gt;Advisor · Portfolio · Preview"]:::src
+  SYS(("AI Systems Architect&lt;br/&gt;Student Platform")):::sys
+  SK -- "REPLICATE" --&gt; SYS
+  BC -- "REPLICATE native" --&gt; SYS
+  AN -- "LINK / wrap" --&gt; SYS
+  US -- "REUSE foundation" --&gt; SYS
+  classDef src fill:#eef2f8,stroke:#13294b,stroke-width:1px,color:#13294b;
+  classDef sys fill:#1f6feb,stroke:#13294b,color:#fff,stroke-width:2px;
+  </pre>
+  </div>
+
+  <h2>2. The student journey (one synced flow)</h2>
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart LR
+  A([Start program]) --&gt; B[Pick Project DNA]
+  B --&gt; C[Add project]
+  C --&gt; D[Give raw idea]
+  D --&gt; E[10-question enhance]
+  E --&gt; F[Requirements doc]
+  F --&gt; G[Native task list]
+  G --&gt; H[Connect GitHub]
+  H --&gt; I[Build in Claude Code → push]
+  I --&gt; J[Portal ingests → VERIFIED]
+  J --&gt; K[Live preview]
+  K --&gt; L[Portfolio artifacts]
+  L --&gt; M[Weekly build-log → #Colaberry]
+  M --&gt; N{{Community: feed · comments · presence · levels}}
+  classDef done fill:#eafaf0,stroke:#0f9d58;
+  class B,C,F,H,J,K,L done
+  </pre>
+  </div>
+  <p class="legend"><span style="color:#0f9d58">▮ green = already exists in our codebase (reuse)</span> · the rest = build/port.</p>
+
+  <h2>3. Curriculum &amp; build schedule (LIVE)</h2>
+  <div class="diagram">
+  <pre class="mermaid">
+gantt
+  title Curriculum build (staggered, all before 7/13 launch) vs delivery
+  dateFormat YYYY-MM-DD
+  axisFormat %m/%d
+  section Build (pre-launch)
+  Intensive 1 build (W1-3)   :done, b1, 2026-06-10, 2026-06-19
+  Intensive 2 build (W4-6)   :active, b2, 2026-06-19, 2026-06-26
+  Intensive 3 build (W7-9)   :b3, 2026-06-26, 2026-07-03
+  Intensive 4 build (W10-12) :b4, 2026-07-03, 2026-07-10
+  section Delivery (cohort)
+  Intensive 1 taught :d1, 2026-07-13, 21d
+  Intensive 2 taught :d2, after d1, 21d
+  Intensive 3 taught :d3, after d2, 21d
+  Intensive 4 taught :d4, after d3, 21d
+  </pre>
+  </div>
+  <table>
+    <tr><th>Intensive</th><th>Weeks · themes</th><th>Build due</th><th>Sign-off</th></tr>
+    <tr><td>1 - Build Your AI Foundation</td><td>Claude Code Foundations · Agent Skills · Claude API</td><td><strong>06-19</strong></td><td>Ali + Swati</td></tr>
+    <tr><td>2 - Create Your AI Team</td><td>Prompt Engineering · MCP Foundations · Advanced MCP</td><td><strong>06-26</strong></td><td>Swati</td></tr>
+    <tr><td>3 - Connect AI To The Real World</td><td>Subagents · Workflows/Automation · Reliability</td><td><strong>07-03</strong></td><td>Swati</td></tr>
+    <tr><td>4 - Design AI That Scales</td><td>Governance · Systems Architecture · Capstone+Expo</td><td><strong>07-10</strong></td><td>Swati</td></tr>
+  </table>
+  <p>Per week, 5 build tasks: <strong>Anthropic course mapped</strong> (Kes) · <strong>Lab + artifact spec</strong> · <strong>Assessment pack</strong> (quiz+survey) · <strong>NotebookLM video</strong> · <strong>sign-off</strong>.</p>
+
+  <h2>4. Unified data model</h2>
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart TB
+  EN[Enrollment] --&gt; PR[Project<br/>DNA · stage · repo · preview · readiness]
+  PR --&gt; RQ[Requirement<br/>4-state · github evidence]
+  PR --&gt; TL[Task List]
+  TL --&gt; TK[Task<br/>assignee=student · due · subtasks · comments]
+  PR --&gt; AR[Artifact<br/>Tier A build · Tier B showcase]
+  PR --&gt; BL[BuildLog → social drafter]
+  COM[Community] --&gt; PO[Post → Comment → Like→points]
+  COM --&gt; ME[Member<br/>profile · level · points · presence]
+  COM --&gt; LB[Leaderboard 7d/30d/all]
+  COM --&gt; EV[Events / Calendar]
+  LMS[LMS] --&gt; CL[CourseLink → Skilljar SSO]
+  LMS --&gt; QZ[Quiz + Survey + mirrored progress]
+  </pre>
+  </div>
+
+  <h2>5. Functionality checklist - the four systems</h2>
+  <p class="legend">
+    <span class="tag t-rep">REPLICATE</span> build native &nbsp;
+    <span class="tag t-link">LINK</span> integrate external &nbsp;
+    <span class="tag t-reuse">REUSE</span> already in our code &nbsp;
+    <span class="tag t-skip">SKIP</span> out of v1
+  </p>
+
+  <h3>Skool - community &amp; gamification (replicate)</h3>
+  <table>
+    <tr><th>Feature</th><th>Decision</th><th>Note</th></tr>
+    <tr><td>Central feed · rich posts · polls</td><td><span class="tag t-rep">REPLICATE</span></td><td>Build-logs + announcements flow here</td></tr>
+    <tr><td>Comments + nested replies</td><td><span class="tag t-rep">REPLICATE</span></td><td></td></tr>
+    <tr><td>Likes → points</td><td><span class="tag t-rep">REPLICATE</span></td><td>1 like = 1 point (gamification currency)</td></tr>
+    <tr><td>Categories · pinned · @mentions</td><td><span class="tag t-rep">REPLICATE</span></td><td></td></tr>
+    <tr><td>Profiles + member directory</td><td><span class="tag t-rep">REPLICATE</span></td><td>name · photo · bio · level</td></tr>
+    <tr><td><strong>Presence - "who's online"</strong></td><td><span class="tag t-rep">REPLICATE</span></td><td><strong>P2 · needs websocket layer (the long pole)</strong></td></tr>
+    <tr><td>Direct messages (1:1)</td><td><span class="tag t-rep">REPLICATE</span></td><td></td></tr>
+    <tr><td><strong>Points → Levels → Leaderboards</strong></td><td><span class="tag t-rep">REPLICATE</span></td><td>Skool's killer feature; 7/30/all-time</td></tr>
+    <tr><td>Level-gated unlockable content</td><td><span class="tag t-rep">REPLICATE</span></td><td>Unlock weeks/labs at levels</td></tr>
+    <tr><td>Classroom: modules → lessons → video</td><td><span class="tag t-reuse">REUSE</span></td><td>Align portal curriculum to module/lesson</td></tr>
+    <tr><td>Drip / scheduled unlock</td><td><span class="tag t-rep">REPLICATE</span></td><td>Cohort cadence</td></tr>
+    <tr><td>Calendar / events + reminders</td><td><span class="tag t-reuse">REUSE</span></td><td>Mon/Thu sessions, Open Houses</td></tr>
+    <tr><td>Notifications (in-app/email/push) + digest</td><td><span class="tag t-rep">REPLICATE</span></td><td></td></tr>
+    <tr><td>Membership / paywall / tiers / trials</td><td><span class="tag t-reuse">REUSE</span></td><td>Multi-tenant + paid projects exist</td></tr>
+    <tr><td>Admin / moderation / roles / approval</td><td><span class="tag t-rep">REPLICATE</span></td><td></td></tr>
+    <tr><td>Native mobile app</td><td><span class="tag t-skip">SKIP</span></td><td>Responsive web first</td></tr>
+  </table>
+
+  <h3>Basecamp - project / list / task (replicate natively)</h3>
+  <table>
+    <tr><th>Feature</th><th>Decision</th><th>Note</th></tr>
+    <tr><td>Project = workspace + membership boundary</td><td><span class="tag t-reuse">REUSE</span></td><td><code>Project.ts</code> multi-tenant</td></tr>
+    <tr><td>To-do lists (title · desc · progress)</td><td><span class="tag t-reuse">REUSE</span></td><td>Map to requirement clusters</td></tr>
+    <tr><td>Groups within a list</td><td><span class="tag t-reuse">REUSE</span></td><td>We just shipped <code>createTodoGroup</code></td></tr>
+    <tr><td>To-dos · assignee · due · notify-done · complete</td><td><span class="tag t-rep">REPLICATE</span></td><td>Native student tasks</td></tr>
+    <tr><td>Subtasks (independently assignable)</td><td><span class="tag t-rep">REPLICATE</span></td><td>Shallow second level</td></tr>
+    <tr><td>Comments + attachments on tasks</td><td><span class="tag t-rep">REPLICATE</span></td><td></td></tr>
+    <tr><td>Card Table (Triage→In Progress→Done)</td><td><span class="tag t-rep">REPLICATE</span></td><td>Student build board</td></tr>
+    <tr><td>Docs &amp; Files (vault)</td><td><span class="tag t-rep">REPLICATE</span></td><td>Project docs + artifacts</td></tr>
+    <tr><td><strong>Hill Charts</strong> (uphill/downhill)</td><td><span class="tag t-rep">REPLICATE</span></td><td>P1/P2 · "are we actually on track"</td></tr>
+    <tr><td>Automatic Check-ins</td><td><span class="tag t-rep">REPLICATE</span></td><td>P1 · async standup per student</td></tr>
+    <tr><td><strong>My Assignments / Do Today</strong></td><td><span class="tag t-reuse">REUSE</span></td><td>This IS the student CB-System / CoryHome</td></tr>
+    <tr><td>Calm notifications (Hey! · Work-Can-Wait)</td><td><span class="tag t-rep">REPLICATE</span></td><td></td></tr>
+    <tr><td>Reports (overdue · who's-on-what)</td><td><span class="tag t-reuse">REUSE</span></td><td>Mentor/admin dashboards</td></tr>
+    <tr><td>Per-seat student Basecamp</td><td><span class="tag t-skip">SKIP</span></td><td>Portal-native instead (cost + complexity)</td></tr>
+  </table>
+
+  <h3>Anthropic Skilljar - LMS &amp; courses (link + wrap)</h3>
+  <table>
+    <tr><th>Feature</th><th>Decision</th><th>Note</th></tr>
+    <tr><td>Course catalog + player (5 priority courses)</td><td><span class="tag t-link">LINK</span></td><td>Deep-link / SSO / embed - Kes to confirm method</td></tr>
+    <tr><td>Progress tracking</td><td><span class="tag t-link">LINK</span></td><td>Mirror into our dashboard</td></tr>
+    <tr><td>Quizzes / assessments</td><td><span class="tag t-rep">REPLICATE</span></td><td>Our 5-q + 10-q wrap each course</td></tr>
+    <tr><td>CCA-F certification (Week 12)</td><td><span class="tag t-link">LINK</span></td><td>claudecertifications.com</td></tr>
+    <tr><td>Companion-course wrapper (pre/during/post)</td><td><span class="tag t-rep">REPLICATE</span></td><td>objectives→coach→lab→quiz→artifact</td></tr>
+  </table>
+
+  <h3>Our current platform - the foundation (reuse)</h3>
+  <table>
+    <tr><th>Capability</th><th>Decision</th><th>File(s)</th></tr>
+    <tr><td>Multi-tenant per-student projects</td><td><span class="tag t-reuse">REUSE</span></td><td><code>Project.ts · projectService.ts</code></td></tr>
+    <tr><td>Project-DNA advisor wizard</td><td><span class="tag t-reuse">REUSE</span></td><td><code>ProjectDnaWizard.tsx</code> (extend to 10-Q)</td></tr>
+    <tr><td>Requirements 4-state engine</td><td><span class="tag t-reuse">REUSE</span></td><td><code>requirementsEngine.ts</code></td></tr>
+    <tr><td>GitHub sync → requirement evidence</td><td><span class="tag t-reuse">REUSE</span></td><td><code>githubService.ts</code></td></tr>
+    <tr><td>Live preview stacks</td><td><span class="tag t-reuse">REUSE</span></td><td><code>PreviewStack.ts</code></td></tr>
+    <tr><td>Portfolio + readiness score</td><td><span class="tag t-reuse">REUSE</span></td><td><code>portfolioGenerationService.ts</code></td></tr>
+    <tr><td>CB-System ops engine</td><td><span class="tag t-reuse">REUSE</span></td><td><code>services/ops/* · AiOpsCommandCenter.tsx</code></td></tr>
+    <tr><td>Advisor idea→requirements brain</td><td><span class="tag t-rep">PORT</span></td><td>advisor repo (MCP-free) → portal, Claude-targeted</td></tr>
+  </table>
+
+  <h2>6. Design workstream - Aleem (UI is undefined; design gates build)</h2>
+  <div class="card">
+  <ol>
+    <li>Student home / Command Center dashboard (the most important screen)</li>
+    <li>Project builder flow (idea → 10-Q → requirements → tasks)</li>
+    <li>Community feed + post composer (Skool-style)</li>
+    <li>Member profile + leaderboard + level badge (gamification language)</li>
+    <li>Classroom / week view (course + lab + quiz + NotebookLM video)</li>
+    <li>Portfolio page (Tier-A build + Tier-B showcase, shareable)</li>
+    <li>Live-preview embed</li>
+    <li>Presence / who's-online + chat UI (P2)</li>
+    <li>Design-system extension for community + gamification (on baseline-ui)</li>
+  </ol>
+  Each: Figma mockup → Aleem + Ali approval → handoff to Kes.
+  </div>
+
+  <h2>7. Build epics for Kes (→ Basecamp tasks)</h2>
+  <div class="grid">
+    <div class="card"><h3>Epic 1 - Project Builder</h3><ul><li>Port idea + 10-Q + requirements brain (Claude-targeted)</li><li>Wizard → requirements → native tasks</li><li>GitHub connect + ingest loop</li><li>Design approval (Aleem) ← gates</li></ul></div>
+    <div class="card"><h3>Epic 2 - Student CB-System</h3><ul><li><code>StudentTask</code> + <code>studentOpsRoutes</code> from <code>ops/*</code></li><li>Priority + approval + Run My Day on CoryHome</li><li>Per-task Claude Code prompt generator</li></ul></div>
+    <div class="card"><h3>Epic 3 - Anthropic / LMS link</h3><ul><li>Skilljar delivery (deep-link/SSO/embed)</li><li>Per-week wiring + progress mirror</li><li>Quiz + survey engine; CCA-F link</li></ul></div>
+    <div class="card"><h3>Epic 4 - Community + Gamification</h3><ul><li>Feed · comments · likes · profiles</li><li>Points → levels → leaderboards → unlocks</li><li>Build-log → social drafter</li><li><strong>P2:</strong> presence + chat (websockets)</li></ul></div>
+    <div class="card"><h3>Epic 5 - Portfolio + Artifacts</h3><ul><li>Tier-A build slots (Lego model)</li><li>Tier-B showcase slots + AI drafting</li><li>Shareable portfolio + readiness</li></ul></div>
+    <div class="card"><h3>Epic 6 - Curriculum content</h3><ul><li>Already tracked on the Curriculum list</li><li>12 weeks × 5 items (Swati + CB)</li></ul></div>
+  </div>
+
+  <h2>8. Open decisions for Ali</h2>
+  <div class="callout warn">
+  <ol>
+    <li><strong>Week 4 (Prompt Engineering)</strong> - no Anthropic course: build original / fold into Week 3 / point at Claude 101.</li>
+    <li><strong>Skilljar delivery</strong> - deep-link vs SSO vs embed vs Partner content (gates Epic 3).</li>
+    <li><strong>Presence at launch?</strong> - realtime "who's online" is the long pole; default P2.</li>
+    <li><strong>Gamification depth at launch</strong> - points+levels P1, or pull into P0 for day-one engagement?</li>
+    <li><strong>Community native vs interim Skool</strong> - locked NATIVE; re-confirm given timeline.</li>
+  </ol>
+  </div>
+
+  <p style="margin-top:28px"><em>Diagrams render with an internet connection (Mermaid via CDN). Full written detail is in <code>STUDENT_PLATFORM_BUILD_SPEC.md</code>.</em></p>
+</div>
+<footer>Colaberry · AI Systems Architect Accelerator · Student Platform Blueprint · 2026-06-10</footer>
+</body>
+</html>

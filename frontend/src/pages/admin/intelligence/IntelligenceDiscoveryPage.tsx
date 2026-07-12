@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   getHealth,
   getDatasets,
@@ -7,6 +7,8 @@ import {
   HealthStatus,
   DatasetEntry,
 } from '../../../services/intelligenceApi';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../components/admin/shell';
+import { TrustSignal } from '../../../components/admin/shell/trust';
 
 export default function IntelligenceDiscoveryPage() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -53,79 +55,87 @@ export default function IntelligenceDiscoveryPage() {
     }
   };
 
-  return (
-    <div className="p-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h4 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>Data Discovery</h4>
-          <small className="text-muted">Auto-discover and profile database tables</small>
-        </div>
-        <div className="d-flex gap-2">
-          {health && (
-            <span className={`badge ${health.engine_status === 'online' ? 'bg-success' : 'bg-danger'} align-self-center`}>
-              Engine: {health.engine_status}
-            </span>
-          )}
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={handleRunDiscovery}
-            disabled={discoveryRunning}
-          >
-            {discoveryRunning ? (
-              <>
-                <span className="spinner-border spinner-border-sm me-1" role="status">
-                  <span className="visually-hidden">Running...</span>
-                </span>
-                Running Discovery...
-              </>
-            ) : (
-              'Run Discovery'
-            )}
-          </button>
-        </div>
-      </div>
+  // Per-page trust signal (Basecamp todo 10027085963) derived from discovery engine health.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'intelligence discovery',
+    updatedAt: new Date().toISOString(),
+    summary: `${datasets.length} tables discovered; engine ${health?.engine_status || 'unknown'}.`,
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Engine',
+        status: health?.engine_status === 'online' ? 'verified' : 'error',
+        evidence: [{ label: 'Status', value: health?.engine_status || 'unknown' }],
+      },
+    ],
+  }), [datasets.length, health]);
 
-      {/* KPI Cards */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center">
-              <div className="fs-3 fw-bold" style={{ color: 'var(--color-primary)' }}>{datasets.length}</div>
-              <small className="text-muted">Tables Discovered</small>
-            </div>
+  return (
+    <>
+      <PageHeader
+        title="Intelligence Discovery"
+        icon="search-eye-line"
+        subtitle="Auto-discover and profile database tables."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Intelligence Discovery' }]}
+        trust={trust}
+        actions={
+          <div className="d-flex gap-2 align-items-center">
+            {health && (
+              <StatusBadge
+                label={`Engine: ${health.engine_status}`}
+                tone={health.engine_status === 'online' ? 'success' : 'danger'}
+              />
+            )}
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={handleRunDiscovery}
+              disabled={discoveryRunning}
+            >
+              {discoveryRunning ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-1" role="status">
+                    <span className="visually-hidden">Running...</span>
+                  </span>
+                  Running Discovery...
+                </>
+              ) : (
+                'Run Discovery'
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Tables Discovered" value={datasets.length} icon="table-line" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Total Rows"
+              value={datasets.reduce((sum, d) => sum + (d.row_count || 0), 0).toLocaleString()}
+              icon="database-2-line"
+              tone="info"
+            />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Active Datasets"
+              value={datasets.filter((d) => d.status === 'discovered').length}
+              icon="checkbox-circle-line"
+              tone="success"
+            />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Last Scan"
+              value={health?.last_discovery ? new Date(health.last_discovery).toLocaleDateString() : 'Never'}
+              icon="time-line"
+              tone="neutral"
+            />
           </div>
         </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center">
-              <div className="fs-3 fw-bold" style={{ color: 'var(--color-accent)' }}>
-                {datasets.reduce((sum, d) => sum + (d.row_count || 0), 0).toLocaleString()}
-              </div>
-              <small className="text-muted">Total Rows</small>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center">
-              <div className="fs-3 fw-bold" style={{ color: 'var(--color-primary-light)' }}>
-                {datasets.filter((d) => d.status === 'discovered').length}
-              </div>
-              <small className="text-muted">Active Datasets</small>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center">
-              <div className="fs-3 fw-bold" style={{ color: 'var(--color-text-light)' }}>
-                {health?.last_discovery ? new Date(health.last_discovery).toLocaleDateString() : 'Never'}
-              </div>
-              <small className="text-muted">Last Scan</small>
-            </div>
-          </div>
-        </div>
-      </div>
+      </PageHeader>
 
       {/* Tabs */}
       <nav className="nav nav-tabs mb-4">
@@ -144,7 +154,7 @@ export default function IntelligenceDiscoveryPage() {
       </nav>
 
       {activeTab === 'datasets' && (
-        <div className="card border-0 shadow-sm">
+        <SectionCard padded={false}>
           <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
@@ -169,9 +179,10 @@ export default function IntelligenceDiscoveryPage() {
                     <td className="small">{ds.column_count}</td>
                     <td className="small">{ds.row_count?.toLocaleString()}</td>
                     <td>
-                      <span className={`badge ${ds.status === 'discovered' ? 'bg-success' : 'bg-secondary'}`}>
-                        {ds.status}
-                      </span>
+                      <StatusBadge
+                        label={ds.status}
+                        tone={ds.status === 'discovered' ? 'success' : 'neutral'}
+                      />
                     </td>
                     <td className="small text-muted">
                       {ds.last_scanned ? new Date(ds.last_scanned).toLocaleString() : '-'}
@@ -181,25 +192,23 @@ export default function IntelligenceDiscoveryPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {activeTab === 'dictionary' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body">
-            {!dictionary ? (
-              <div className="text-center py-4 text-muted">
-                <p>No data dictionary available.</p>
-                <small>Run discovery to generate the data dictionary.</small>
-              </div>
-            ) : (
-              <pre className="bg-light p-3 rounded small" style={{ maxHeight: '600px', overflow: 'auto' }}>
-                {JSON.stringify(dictionary, null, 2)}
-              </pre>
-            )}
-          </div>
-        </div>
+        <SectionCard>
+          {!dictionary ? (
+            <div className="text-center py-4 text-muted">
+              <p>No data dictionary available.</p>
+              <small>Run discovery to generate the data dictionary.</small>
+            </div>
+          ) : (
+            <pre className="bg-light p-3 rounded small" style={{ maxHeight: '600px', overflow: 'auto' }}>
+              {JSON.stringify(dictionary, null, 2)}
+            </pre>
+          )}
+        </SectionCard>
       )}
-    </div>
+    </>
   );
 }

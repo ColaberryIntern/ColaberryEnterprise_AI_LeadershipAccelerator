@@ -19,6 +19,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const { sendWithBcAttach } = require(path.resolve(__dirname, './lib/sendWithBcAttach'));
 const { getBasecampToken } = require(path.resolve(__dirname, './lib/basecampToken'));
 const { renderFamilyBriefingEmail } = require(path.resolve(__dirname, './lib/renderFamilyBriefingEmail'));
+const { compileFamilyBriefingData, hasFamilyData } = require(path.resolve(__dirname, './lib/compileFamilyBriefingData'));
 
 const BUCKET_ID = 33392153;
 const BC_BASE = 'https://3.basecampapi.com/3945211';
@@ -28,6 +29,9 @@ const MESSAGE_SUBJECT_PATTERN = /family command center.*daily briefing/i;
 const MODE = process.argv.includes('--weekly') ? 'weekly' : 'daily';
 const DRY_RUN = process.argv.includes('--dry-run');
 const TEST = process.argv.includes('--test');
+// --preview: compile live data and write the rendered HTML to /tmp without sending.
+// Used to visually verify a real render before enabling the daily cron.
+const PREVIEW = process.argv.includes('--preview');
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const LOCK_DIR = path.join(os.tmpdir(), 'family-command-center');
@@ -74,12 +78,13 @@ async function findMessagePost() {
   return msg;
 }
 
-// Legacy path: previously the script dumped the browser-targeted HTML into the
-// email body, which Outlook stripped/collapsed. We now render an email-safe
-// table-based body via renderFamilyBriefingEmail() and ignore the static doc
-// for the email itself (it remains the source of truth for "view in browser").
-function buildEmailHtml() {
-  return renderFamilyBriefingEmail({ date: new Date() });
+// V2: compile live data, then render the email-safe table-based body. Nothing is
+// baked in — if the family-calendar source is unavailable, compile() records it in
+// meta.degraded and runDaily() refuses to send (see the guard below), so a stale or
+// empty briefing can never reach Addie.
+async function buildEmailHtml() {
+  const data = await compileFamilyBriefingData({ date: new Date() });
+  return { html: renderFamilyBriefingEmail(data), data };
 }
 
 function buildEmailText() {
@@ -127,17 +132,44 @@ function buildWeeklyCommentHtml() {
 }
 
 async function runDaily() {
-  if (!TEST && fs.existsSync(LOCK_FILE)) {
+  if (!TEST && !PREVIEW && fs.existsSync(LOCK_FILE)) {
     console.log(`[Family CC daily] Already sent today (${TODAY}), skipping.`);
     return;
   }
 
-  console.log(`[Family CC daily] Mode: ${TEST ? 'TEST (Ali only, no lock)' : 'PROD (Ali+Addie, lock)'}`);
+  console.log(`[Family CC daily] Mode: ${PREVIEW ? 'PREVIEW (render only, no send)' : TEST ? 'TEST (Ali only, no lock)' : 'PROD (Ali+Addie, lock)'}`);
+
+  // === Compile live data FIRST (before any BC lookup) ===
+  console.log('[Family CC daily] Compiling live briefing data...');
+  const { html: emailHtml, data } = await buildEmailHtml();
+  const degraded = (data.meta && data.meta.degraded) || [];
+  const sources = (data.meta && data.meta.sources) || [];
+  console.log(`[Family CC daily] Sources OK: [${sources.join(', ') || 'none'}] | degraded: [${degraded.join(', ') || 'none'}]`);
+
+  // === PREVIEW: write rendered HTML to a tmp file and stop (no send, no BC) ===
+  if (PREVIEW) {
+    const out = path.join(LOCK_DIR, `preview-${TODAY}.html`);
+    fs.writeFileSync(out, emailHtml);
+    console.log(`[Family CC daily] PREVIEW written: ${out}`);
+    console.log(`[Family CC daily] hasFamilyData: ${hasFamilyData(data)}`);
+    return;
+  }
+
+  // === SAFETY GUARD: never send if the live family source did not succeed ===
+  // Nothing is baked in, so a degraded family-calendar source means we have no
+  // real "today/week" content. Refuse to send rather than email a hollow briefing.
+  // Until GOOGLE_FAMILY_CALENDAR_ID is configured & verified, this skips cleanly.
+  if (degraded.includes('family calendar')) {
+    console.error('[Family CC daily] BLOCKED: family-calendar source unavailable (degraded). Not sending.');
+    console.error('[Family CC daily] Configure & verify GOOGLE_FAMILY_CALENDAR_ID, then run with --preview to confirm.');
+    process.exitCode = 2;
+    return; // no lock written -> a later run can send once the source is healthy
+  }
+
   console.log('[Family CC daily] Looking up anchor todo...');
   const anchor = await findAnchorTodo();
   console.log(`[Family CC daily] Anchor todo: ${anchor.id}`);
 
-  const emailHtml = buildEmailHtml();
   const emailText = buildEmailText();
   const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const subject = TEST

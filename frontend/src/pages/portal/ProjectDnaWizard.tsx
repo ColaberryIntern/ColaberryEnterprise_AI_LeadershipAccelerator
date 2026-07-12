@@ -141,7 +141,7 @@ function ProjectDnaWizard() {
           style={{ width: 64, height: 64, background: 'var(--color-success-bg)' }}>
           <i className="bi bi-check-lg" style={{ fontSize: 32, color: 'var(--color-success)' }}></i>
         </span>
-        <h2 className="h5 fw-bold mb-2" style={{ color: '#1e293b' }}>Project DNA Saved</h2>
+        <h2 className="h5 fw-bold mb-2" style={{ color: 'var(--color-text)' }}>Project DNA Saved</h2>
         <p className="text-muted small mb-4">Your project blueprint is ready. Every week will be personalized around it.</p>
         <button
           className="btn btn-primary px-4"
@@ -159,7 +159,7 @@ function ProjectDnaWizard() {
   return (
     <div style={{ maxWidth: 680, margin: '0 auto' }}>
       <div className="mb-4">
-        <h1 className="h4 fw-bold mb-1" style={{ color: '#1e293b' }}>Project DNA Wizard</h1>
+        <h1 className="h4 fw-bold mb-1" style={{ color: 'var(--color-text)' }}>Project DNA Wizard</h1>
         <p className="text-muted small mb-0">Define your project to personalize your 12-week AI Systems build.</p>
       </div>
 
@@ -187,7 +187,7 @@ function ProjectDnaWizard() {
                 <span className="mt-1" style={{
                   fontSize: 11, whiteSpace: 'nowrap',
                   fontWeight: active ? 600 : 400,
-                  color: active ? '#1e293b' : 'var(--color-text-light)',
+                  color: active ? 'var(--color-text)' : 'var(--color-text-light)',
                 }}>{label}</span>
               </div>
               {i < STEPS.length - 1 && (
@@ -208,7 +208,7 @@ function ProjectDnaWizard() {
           {/* ── Step 0: Business ── */}
           {step === 0 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
                 <i className="bi bi-briefcase me-2" style={{ color: 'var(--color-purple)' }}></i>Business Context
               </h6>
               <div className="mb-3">
@@ -329,7 +329,7 @@ function ProjectDnaWizard() {
           {/* ── Step 1: Technical ── */}
           {step === 1 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
                 <i className="bi bi-code-slash me-2" style={{ color: 'var(--color-purple)' }}></i>Technical Footprint
               </h6>
               <div className="mb-4">
@@ -355,7 +355,7 @@ function ProjectDnaWizard() {
                           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('projectTypes', value)}
                         >
                           <i className={`bi ${icon}`} style={{ fontSize: 18, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
-                          <span className="small fw-medium" style={{ color: sel ? '#1e293b' : 'var(--color-text-light)' }}>{label}</span>
+                          <span className="small fw-medium" style={{ color: sel ? 'var(--color-text)' : 'var(--color-text-light)' }}>{label}</span>
                         </div>
                       </div>
                     );
@@ -387,7 +387,7 @@ function ProjectDnaWizard() {
                         >
                           <i className={`bi ${sel ? 'bi-check-square-fill' : 'bi-square'}`}
                             style={{ fontSize: 14, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}></i>
-                          <span className="small" style={{ color: sel ? '#1e293b' : 'var(--color-text-light)' }}>{label}</span>
+                          <span className="small" style={{ color: sel ? 'var(--color-text)' : 'var(--color-text-light)' }}>{label}</span>
                         </div>
                       </div>
                     );
@@ -400,7 +400,7 @@ function ProjectDnaWizard() {
           {/* ── Step 2: AI Components + Track ── */}
           {step === 2 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
                 <i className="bi bi-cpu me-2" style={{ color: 'var(--color-purple)' }}></i>AI Components
               </h6>
               <div className="mb-4">
@@ -430,7 +430,7 @@ function ProjectDnaWizard() {
                           style={{ fontSize: 18, color: sel ? 'var(--color-purple)' : 'var(--color-text-light)', flexShrink: 0 }}
                         ></i>
                         <div>
-                          <div className="small fw-semibold" style={{ color: '#1e293b' }}>{label}</div>
+                          <div className="small fw-semibold" style={{ color: 'var(--color-text)' }}>{label}</div>
                           <div style={{ fontSize: 11, color: 'var(--color-text-light)' }}>{desc}</div>
                         </div>
                       </div>
@@ -459,7 +459,7 @@ function ProjectDnaWizard() {
           {/* ── Step 3: Review ── */}
           {step === 3 && (
             <>
-              <h6 className="fw-semibold mb-3" style={{ color: '#1e293b' }}>
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-text)' }}>
                 <i className="bi bi-clipboard-check me-2" style={{ color: 'var(--color-purple)' }}></i>Review Your Project DNA
               </h6>
               {[
@@ -490,14 +490,14 @@ function ProjectDnaWizard() {
               ].map((section) => (
                 <div key={section.title} className="mb-3 p-3 rounded"
                   style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}>
-                  <div className="small fw-semibold mb-2" style={{ color: '#1e293b' }}>
+                  <div className="small fw-semibold mb-2" style={{ color: 'var(--color-text)' }}>
                     <i className={`bi ${section.icon} me-2`} style={{ color: 'var(--color-purple)' }}></i>
                     {section.title}
                   </div>
                   {section.rows.map(([label, value]) => (
                     <div key={label} className="d-flex gap-2 mb-1" style={{ fontSize: 13 }}>
                       <span className="text-muted" style={{ minWidth: 120, flexShrink: 0 }}>{label}:</span>
-                      <span style={{ color: '#1e293b', wordBreak: 'break-word' }}>{value || '—'}</span>
+                      <span style={{ color: 'var(--color-text)', wordBreak: 'break-word' }}>{value || '—'}</span>
                     </div>
                   ))}
                 </div>

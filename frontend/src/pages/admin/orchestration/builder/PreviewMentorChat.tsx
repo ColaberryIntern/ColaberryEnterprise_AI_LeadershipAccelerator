@@ -28,24 +28,24 @@ interface PreviewMentorChatProps {
 /* Mentor face SVG — matches PortalMentorChat */
 const MentorFace = ({ size = 40 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="32" cy="32" r="30" fill="#eef2ff" stroke="#c7d2fe" strokeWidth="2" />
-    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" fill="none" />
-    <circle cx="22" cy="30" r="3.5" fill="#6366f1" />
-    <circle cx="42" cy="30" r="3.5" fill="#6366f1" />
-    <circle cx="23.2" cy="28.8" r="1.2" fill="#fff" />
-    <circle cx="43.2" cy="28.8" r="1.2" fill="#fff" />
-    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-    <rect x="7" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <rect x="51" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" fill="none" />
-    <circle cx="19" cy="45" r="2" fill="#8b5cf6" />
+    <circle cx="32" cy="32" r="30" fill="var(--surface-blue-subtle)" stroke="var(--blue-200)" strokeWidth="2" />
+    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="var(--chart-1)" strokeWidth="3" strokeLinecap="round" fill="none" />
+    <circle cx="22" cy="30" r="3.5" fill="var(--chart-1)" />
+    <circle cx="42" cy="30" r="3.5" fill="var(--chart-1)" />
+    <circle cx="23.2" cy="28.8" r="1.2" fill="var(--neutral-0)" />
+    <circle cx="43.2" cy="28.8" r="1.2" fill="var(--neutral-0)" />
+    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="var(--chart-1)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+    <rect x="7" y="24" width="6" height="10" rx="3" fill="var(--chart-5)" />
+    <rect x="51" y="24" width="6" height="10" rx="3" fill="var(--chart-5)" />
+    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="var(--chart-5)" strokeWidth="2" strokeLinecap="round" fill="none" />
+    <circle cx="19" cy="45" r="2" fill="var(--chart-5)" />
   </svg>
 );
 
 const MentorAvatar = ({ size = 28 }: { size?: number }) => (
   <div
     className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-    style={{ width: size, height: size, background: '#eef2ff', overflow: 'hidden' }}
+    style={{ width: size, height: size, background: 'var(--surface-blue-subtle)', overflow: 'hidden' }}
   >
     <MentorFace size={size} />
   </div>
@@ -59,7 +59,7 @@ function renderInline(text: string): React.ReactNode {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
     }
     if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={i} style={{ background: '#e2e8f0', padding: '1px 4px', borderRadius: 3, fontSize: 11, fontFamily: 'monospace' }}>{part.slice(1, -1)}</code>;
+      return <code key={i} style={{ background: 'var(--neutral-200)', padding: '1px 4px', borderRadius: 3, fontSize: 11, fontFamily: 'monospace' }}>{part.slice(1, -1)}</code>;
     }
     return part;
   });
@@ -93,7 +93,7 @@ function renderMarkdown(text: string, fs: boolean): React.ReactNode[] {
     if (numMatch) {
       elements.push(
         <div key={i} className="d-flex gap-2 mb-1" style={{ fontSize: baseFontSize }}>
-          <span className="flex-shrink-0" style={{ color: '#6366f1', fontWeight: 600, minWidth: 16 }}>{numMatch[1]}.</span>
+          <span className="flex-shrink-0" style={{ color: 'var(--red-500)', fontWeight: 600, minWidth: 16 }}>{numMatch[1]}.</span>
           <span>{renderInline(numMatch[2])}</span>
         </div>
       );
@@ -105,7 +105,7 @@ function renderMarkdown(text: string, fs: boolean): React.ReactNode[] {
     if (bulletMatch) {
       elements.push(
         <div key={i} className="d-flex gap-2 mb-1" style={{ fontSize: baseFontSize }}>
-          <span style={{ color: '#6366f1', marginTop: 2 }}>&bull;</span>
+          <span style={{ color: 'var(--red-500)', marginTop: 2 }}>&bull;</span>
           <span>{renderInline(bulletMatch[1])}</span>
         </div>
       );
@@ -121,7 +121,7 @@ function renderMarkdown(text: string, fs: boolean): React.ReactNode[] {
         i++;
       }
       elements.push(
-        <pre key={i} className="p-2 rounded mb-2" style={{ background: '#1e293b', color: '#a7f3d0', fontSize: 11, lineHeight: 1.5, fontFamily: 'monospace', whiteSpace: 'pre-wrap', overflowX: 'auto' }}>
+        <pre key={i} className="p-2 rounded mb-2" style={{ background: 'var(--surface-inverse)', color: 'var(--green-300)', fontSize: 11, lineHeight: 1.5, fontFamily: 'monospace', whiteSpace: 'pre-wrap', overflowX: 'auto' }}>
           {codeLines.join('\n')}
         </pre>
       );
@@ -213,12 +213,12 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
         zIndex: 1060,
         display: 'flex',
         flexDirection: 'column',
-        background: '#f7f7f8',
+        background: 'var(--surface-subtle)',
       } : {
         height: '100%',
-        background: '#fff',
+        background: 'var(--surface-card)',
         borderRadius: 8,
-        border: '1px solid var(--color-border, #e2e8f0)',
+        border: '1px solid var(--border-subtle)',
         overflow: 'hidden',
       }}
     >
@@ -227,19 +227,19 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
         className="d-flex align-items-center gap-2"
         style={{
           padding: fs ? '10px 20px' : '8px 12px',
-          background: fs ? '#fff' : '#f8fafc',
-          borderBottom: '1px solid #e2e8f0',
+          background: fs ? 'var(--surface-card)' : 'var(--surface-subtle)',
+          borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
         }}
       >
         <div className="d-flex align-items-center gap-2 flex-grow-1">
           <div
             className="d-flex align-items-center justify-content-center rounded-circle"
-            style={{ width: fs ? 32 : 28, height: fs ? 32 : 28, background: '#eef2ff', overflow: 'hidden' }}
+            style={{ width: fs ? 32 : 28, height: fs ? 32 : 28, background: 'var(--surface-blue-subtle)', overflow: 'hidden' }}
           >
             <MentorFace size={fs ? 32 : 28} />
           </div>
-          <span className="fw-semibold" style={{ fontSize: fs ? 14 : 12, color: '#1e293b' }}>AI Mentor Preview</span>
+          <span className="fw-semibold" style={{ fontSize: fs ? 14 : 12, color: 'var(--text-strong)' }}>AI Mentor Preview</span>
           {!fs && <span className="badge bg-secondary ms-auto" style={{ fontSize: 9 }}>Preview</span>}
         </div>
         <div className="d-flex align-items-center gap-1">
@@ -251,9 +251,9 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
               width: 28,
               height: 28,
               borderRadius: 6,
-              color: '#64748b',
-              border: '1px solid #e2e8f0',
-              background: '#fff',
+              color: 'var(--text-muted)',
+              border: '1px solid var(--border-subtle)',
+              background: 'var(--surface-card)',
               fontSize: 13,
               lineHeight: 1,
               flexShrink: 0,
@@ -270,9 +270,9 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
                 width: 28,
                 height: 28,
                 borderRadius: 6,
-                color: '#64748b',
-                border: '1px solid #e2e8f0',
-                background: '#fff',
+                color: 'var(--text-muted)',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--surface-card)',
                 fontSize: 14,
                 lineHeight: 1,
                 flexShrink: 0,
@@ -291,15 +291,15 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
           overflowY: 'auto',
           minHeight: 0,
           padding: fs ? '24px 16px' : '8px 12px',
-          background: fs ? '#f7f7f8' : undefined,
+          background: fs ? 'var(--surface-subtle)' : undefined,
         }}
       >
         <div style={fs ? { maxWidth: 768, margin: '0 auto', width: '100%' } : {}}>
           {messages.length === 0 && (
             <div className="text-center py-4">
               <MentorFace size={48} />
-              <p className="fw-semibold small mt-2 mb-1" style={{ color: '#1e293b' }}>AI Mentor Preview</p>
-              <p className="small mb-0" style={{ color: '#94a3b8' }}>
+              <p className="fw-semibold small mt-2 mb-1" style={{ color: 'var(--text-strong)' }}>AI Mentor Preview</p>
+              <p className="small mb-0" style={{ color: 'var(--text-muted)' }}>
                 Test how the AI Mentor responds to student questions for this lesson.
               </p>
             </div>
@@ -325,9 +325,9 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
                     ? (msg.role === 'user' ? 20 : 0)
                     : (msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px'),
                   background: msg.role === 'user'
-                    ? '#6366f1'
-                    : (fs ? 'transparent' : '#f1f5f9'),
-                  color: msg.role === 'user' ? '#fff' : '#334155',
+                    ? 'var(--red-500)'
+                    : (fs ? 'transparent' : 'var(--surface-subtle)'),
+                  color: msg.role === 'user' ? 'var(--text-on-accent)' : 'var(--text-body)',
                   fontSize: fs ? 14 : 12,
                   lineHeight: 1.7,
                   boxShadow: (msg.role === 'assistant' && !fs) ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
@@ -346,14 +346,14 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
                 style={{
                   padding: '8px 12px',
                   borderRadius: fs ? 0 : '12px 12px 12px 4px',
-                  background: fs ? 'transparent' : '#f1f5f9',
+                  background: fs ? 'transparent' : 'var(--surface-subtle)',
                   boxShadow: fs ? 'none' : '0 1px 3px rgba(0,0,0,0.06)',
                 }}
               >
                 <div className="d-flex gap-1">
-                  <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#6366f1' }} role="status"><span className="visually-hidden">Loading...</span></span>
-                  <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#6366f1', animationDelay: '0.15s' }}></span>
-                  <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#6366f1', animationDelay: '0.3s' }}></span>
+                  <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: 'var(--red-500)' }} role="status"><span className="visually-hidden">Loading...</span></span>
+                  <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: 'var(--red-500)', animationDelay: '0.15s' }}></span>
+                  <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: 'var(--red-500)', animationDelay: '0.3s' }}></span>
                 </div>
               </div>
             </div>
@@ -368,22 +368,22 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
         <div
           style={{
             padding: fs ? '12px 16px' : '8px 12px',
-            borderTop: '1px solid #f1f5f9',
-            background: fs ? '#f7f7f8' : undefined,
+            borderTop: '1px solid var(--border-subtle)',
+            background: fs ? 'var(--surface-subtle)' : undefined,
           }}
         >
           <div style={fs ? { maxWidth: 768, margin: '0 auto' } : {}}>
             <button
               className="btn d-flex align-items-center gap-2 w-100 justify-content-center"
               style={{
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                color: '#fff',
+                background: 'linear-gradient(135deg, var(--action-bg) 0%, var(--action-bg-press) 100%)',
+                color: 'var(--text-on-accent)',
                 borderRadius: fs ? 12 : 8,
                 fontSize: fs ? 14 : 12,
                 padding: fs ? '12px 16px' : '10px 12px',
                 fontWeight: 600,
                 border: 'none',
-                boxShadow: '0 2px 8px rgba(16,185,129,0.3)',
+                boxShadow: '0 2px 8px color-mix(in srgb, var(--red-500) 30%, transparent)',
               }}
               onClick={() => {
                 const lastMentorMsg = [...messages].reverse().find(m => m.role === 'assistant');
@@ -442,8 +442,8 @@ Start by summarizing what they need to do and ask which artifact they want to wo
         <div
           style={{
             padding: fs ? '8px 16px' : '4px 12px',
-            borderTop: '1px solid #f1f5f9',
-            background: fs ? '#f7f7f8' : undefined,
+            borderTop: '1px solid var(--border-subtle)',
+            background: fs ? 'var(--surface-subtle)' : undefined,
           }}
         >
           <div className="d-flex flex-wrap gap-1" style={fs ? { maxWidth: 768, margin: '0 auto' } : {}}>
@@ -454,9 +454,9 @@ Start by summarizing what they need to do and ask which artifact they want to wo
                 style={{
                   fontSize: fs ? 12 : 10,
                   padding: fs ? '4px 12px' : '2px 8px',
-                  background: '#eef2ff',
-                  color: '#6366f1',
-                  border: '1px solid #c7d2fe',
+                  background: 'var(--status-info-bg)',
+                  color: 'var(--blue-600)',
+                  border: '1px solid var(--blue-200)',
                   borderRadius: 12,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
@@ -477,8 +477,8 @@ Start by summarizing what they need to do and ask which artifact they want to wo
       <div
         style={{
           padding: fs ? '16px 20px 24px' : '8px 12px',
-          borderTop: fs ? 'none' : '1px solid #e2e8f0',
-          background: fs ? '#f7f7f8' : '#fff',
+          borderTop: fs ? 'none' : '1px solid var(--border-subtle)',
+          background: fs ? 'var(--surface-subtle)' : 'var(--surface-card)',
           flexShrink: 0,
         }}
       >
@@ -503,9 +503,9 @@ Start by summarizing what they need to do and ask which artifact they want to wo
               resize: 'none',
               borderRadius: fs ? 24 : 6,
               padding: fs ? '12px 20px' : undefined,
-              borderColor: fs ? '#d1d5db' : undefined,
+              borderColor: fs ? 'var(--border-default)' : undefined,
               boxShadow: fs ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-              background: fs ? '#fff' : undefined,
+              background: fs ? 'var(--surface-card)' : undefined,
               maxHeight: fs ? 120 : 72,
             }}
           />
@@ -517,8 +517,8 @@ Start by summarizing what they need to do and ask which artifact they want to wo
               width: fs ? 42 : 32,
               height: fs ? 42 : 32,
               borderRadius: fs ? 12 : 6,
-              background: input.trim() ? '#6366f1' : '#e2e8f0',
-              color: input.trim() ? '#fff' : '#94a3b8',
+              background: input.trim() ? 'var(--red-500)' : 'var(--neutral-200)',
+              color: input.trim() ? 'var(--text-on-accent)' : 'var(--text-subtle)',
               border: 'none',
             }}
           >

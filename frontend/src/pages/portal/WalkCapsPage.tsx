@@ -193,7 +193,7 @@ const WalkCapsPage: React.FC = () => {
   if (!walkId) {
     return (
       <div className="container py-4" style={{ maxWidth: 720 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--color-primary)' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: '#FB2832' }}>
           <i className="bi bi-collection me-2"></i>Walk caps
         </h2>
         <p className="text-muted small mb-4">
@@ -292,7 +292,8 @@ const WalkCapsPage: React.FC = () => {
             )}
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn"
+              style={{ background: '#FB2832', color: '#fff', border: 'none' }}
               onClick={startWalk}
               disabled={picker.creating || (picker.filter === 'custom' && selectedCapIds.size === 0)}
             >
@@ -368,7 +369,7 @@ const WalkChrome: React.FC<ChromeProps> = ({ walk, current, onPrev, onNext, onJu
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)', fontWeight: 600 }}>
               Walk · {walk.filter.replace(/_/g, ' ')}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-primary)' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#FB2832' }}>
               Cap {idx + 1} of {total} · {current?.name || '(missing)'}
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-light)', fontFamily: 'var(--font-mono)' }}>
@@ -383,7 +384,7 @@ const WalkChrome: React.FC<ChromeProps> = ({ walk, current, onPrev, onNext, onJu
             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onPrev} disabled={idx === 0}>
               <i className="bi bi-chevron-left"></i> Prev
             </button>
-            <button type="button" className="btn btn-sm btn-outline-primary" onClick={onNext} disabled={idx >= total - 1}>
+            <button type="button" className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }} onClick={onNext} disabled={idx >= total - 1}>
               Next <i className="bi bi-chevron-right"></i>
             </button>
             <button type="button" className="btn btn-sm btn-link" onClick={onJumpToSummary}>
@@ -392,7 +393,7 @@ const WalkChrome: React.FC<ChromeProps> = ({ walk, current, onPrev, onNext, onJu
           </div>
         </div>
         <div className="progress mt-2" style={{ height: 3 }}>
-          <div className="progress-bar bg-primary" role="progressbar" style={{ width: `${pct}%` }} />
+          <div className="progress-bar" role="progressbar" style={{ width: `${pct}%`, background: '#FB2832' }} />
         </div>
       </div>
     </div>
@@ -449,7 +450,8 @@ const CapPanel: React.FC<CapPanelProps> = ({ walkId, cap, previewOrigin, onVerdi
             </span>
             <button
               type="button"
-              className="btn btn-sm btn-outline-primary"
+              className="btn btn-sm"
+              style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
               onClick={() => navigate(`/portal/visual-workspace?bp=${cap.cap_id}&route=${encodeURIComponent(cap.frontend_route || '')}`)}
               disabled={!cap.frontend_route}
               title="Open the Visual Workspace for region-level critique"

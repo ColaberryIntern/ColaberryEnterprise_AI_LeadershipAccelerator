@@ -1,0 +1,41 @@
+<!-- @dsCard group="Brand" viewport="700x260" name="Iconography" subtitle="RemixIcon · the always-centered .cb-i + .cb-icon-tile pattern" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 26px 28px; background: var(--surface-page); font-family: var(--font-body); }
+  .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 14px; }
+  .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 24px; }
+  .ico { font-size: 27px; color: var(--text-strong); }
+  .ico.r { color: var(--red-500); } .ico.g { color: var(--green-600); } .ico.b { color: var(--blue-500); }
+  .note { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin: 0; max-width: 64ch; }
+  code { font-family: var(--font-mono); font-size: .92em; color: var(--text-body); background: var(--surface-sunken); padding: 1px 6px; border-radius: var(--radius-xs); }
+</style>
+</head>
+<body>
+  <p class="lbl">Inline icons · <code>.cb-i</code> (size via font-size, color via currentColor)</p>
+  <div class="row">
+    <span class="cb-i ico"><i class="ri-bar-chart-box-line"></i></span>
+    <span class="cb-i ico r"><i class="ri-cake-3-line"></i></span>
+    <span class="cb-i ico g"><i class="ri-seedling-line"></i></span>
+    <span class="cb-i ico b"><i class="ri-database-2-line"></i></span>
+    <span class="cb-i ico"><i class="ri-award-line"></i></span>
+    <span class="cb-i ico"><i class="ri-team-line"></i></span>
+    <span class="cb-i ico"><i class="ri-rocket-line"></i></span>
+    <span class="cb-i ico"><i class="ri-terminal-box-line"></i></span>
+  </div>
+
+  <p class="lbl">Icon tiles · <code>.cb-icon-tile</code> (resize with <code>--tile</code>)</p>
+  <div class="row">
+    <span class="cb-icon-tile" style="background:var(--red-500)"><span class="cb-i"><i class="ri-presentation-line"></i></span></span>
+    <span class="cb-icon-tile" style="background:var(--blue-500)"><span class="cb-i"><i class="ri-award-line"></i></span></span>
+    <span class="cb-icon-tile" style="background:var(--green-600)"><span class="cb-i"><i class="ri-briefcase-line"></i></span></span>
+    <span class="cb-icon-tile cb-icon-tile--round" style="background:var(--red-500)"><span class="cb-i"><i class="ri-check-line"></i></span></span>
+    <span class="cb-icon-tile" style="--tile:60px;background:var(--blue-600)"><span class="cb-i"><i class="ri-git-repository-line"></i></span></span>
+  </div>
+
+  <p class="note"><b>RemixIcon</b> (Apache-2.0) is the brand's standard set — prefer the <code>-line</code> style to match our soft 2px look; use <code>-fill</code> for emphasis. Always wrap an icon in <code>&lt;span class="cb-i"&gt;</code> — it guarantees a centered 1em box with no baseline gap. For a colored container use <code>.cb-icon-tile</code> (never hand-roll <code>place-items</code> sizing). Never use emoji.</p>
+</body>
+</html>

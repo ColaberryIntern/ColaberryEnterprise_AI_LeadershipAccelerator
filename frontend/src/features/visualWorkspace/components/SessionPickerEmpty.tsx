@@ -92,11 +92,11 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
       padding: '0 1rem',
     }}>
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
-        <i className="bi bi-bullseye" style={{ fontSize: 40, color: 'var(--color-primary)' }}></i>
+        <i className="bi bi-bullseye" style={{ fontSize: 40, color: '#FB2832' }}></i>
         <h2 style={{
           fontSize: 22,
           fontWeight: 600,
-          color: 'var(--color-primary)',
+          color: '#FB2832',
           marginTop: 12,
           marginBottom: 6,
           letterSpacing: '-0.01em',
@@ -133,7 +133,7 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span
                 style={{
-                  background: 'var(--color-primary)',
+                  background: '#FB2832',
                   color: 'white',
                   width: 22,
                   height: 22,
@@ -146,7 +146,7 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
                   flexShrink: 0,
                 }}
               >1</span>
-              <strong style={{ fontSize: 13, color: 'var(--color-primary)' }}>Embed a page</strong>
+              <strong style={{ fontSize: 13, color: '#FB2832' }}>Embed a page</strong>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-light)', lineHeight: 1.55 }}>
               Open a session against any portal route. The page renders in the center stage.
@@ -156,7 +156,7 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span
                 style={{
-                  background: 'var(--color-primary)',
+                  background: '#FB2832',
                   color: 'white',
                   width: 22,
                   height: 22,
@@ -169,7 +169,7 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
                   flexShrink: 0,
                 }}
               >2</span>
-              <strong style={{ fontSize: 13, color: 'var(--color-primary)' }}>Pin critique</strong>
+              <strong style={{ fontSize: 13, color: '#FB2832' }}>Pin critique</strong>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-light)', lineHeight: 1.55 }}>
               Click <strong>Annotate</strong>, then click anywhere on the page. A pin drops; describe the issue.
@@ -179,7 +179,7 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span
                 style={{
-                  background: 'var(--color-primary)',
+                  background: '#FB2832',
                   color: 'white',
                   width: 22,
                   height: 22,
@@ -192,7 +192,7 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
                   flexShrink: 0,
                 }}
               >3</span>
-              <strong style={{ fontSize: 13, color: 'var(--color-primary)' }}>Compile + hand off</strong>
+              <strong style={{ fontSize: 13, color: '#FB2832' }}>Compile + hand off</strong>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-light)', lineHeight: 1.55 }}>
               Click <strong>Compile prompt</strong> to bundle your pins into a Claude Code prompt. Send to Blueprint to run it.
@@ -213,7 +213,7 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
             gap: 6,
           }}
         >
-          <i className="bi bi-cursor" style={{ color: 'var(--color-primary-light)' }}></i>
+          <i className="bi bi-cursor" style={{ color: '#C20E1E' }}></i>
           <span><strong>Try it:</strong> start a new review below — even a blank session lets you see the three-pane layout.</span>
         </div>
       </div>
@@ -267,7 +267,8 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
           <button
             ref={buttonRef}
             type="button"
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm"
+            style={{ background: '#FB2832', color: '#fff', border: 'none' }}
             onClick={handleCreate}
             disabled={submitting || !route.trim()}
           >
@@ -305,12 +306,15 @@ const SessionPickerEmpty: React.FC<Props> = ({ recent, onPick, onCreate, loading
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-primary)' }}>{s.page_route}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#FB2832' }}>{s.page_route}</div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginTop: 2 }}>
                     opened {new Date(s.opened_at).toLocaleString()}
                   </div>
                 </div>
-                <span className={`badge bg-${s.status === 'open' || s.status === 'active' ? 'primary' : 'secondary'}`} style={{ fontSize: 10 }}>
+                <span
+                  className="badge"
+                  style={{ fontSize: 10, background: s.status === 'open' || s.status === 'active' ? '#FB2832' : '#6b7280', color: '#fff' }}
+                >
                   {s.status}
                 </span>
               </button>

@@ -29,7 +29,7 @@ export default function DatabaseERD({ models, repoUrl }: Props) {
     groups.get(domain)!.push(m);
   }
 
-  const domainColors: Record<string, string> = { Campaigns: '#3b82f6', Leads: '#10b981', Users: '#8b5cf6', Intelligence: '#f59e0b', Logging: '#6b7280', Core: '#6366f1' };
+  const domainColors: Record<string, string> = { Campaigns: '#3b82f6', Leads: '#10b981', Users: '#367895', Intelligence: '#f59e0b', Logging: '#6b7280', Core: '#FB2832' };
 
   return (
     <div>

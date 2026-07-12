@@ -87,7 +87,7 @@ function RequirementsGeneratorPanel({ onComplete }: { onComplete?: () => void })
           <span><i className="bi bi-file-earmark-code me-2"></i>Requirements Document Generation</span>
           <span className="badge" style={{
             background: jobStatus.status === 'completed' ? 'var(--color-accent)' :
-              jobStatus.status === 'failed' ? 'var(--color-secondary)' : 'var(--color-primary)',
+              jobStatus.status === 'failed' ? 'var(--color-secondary)' : '#FB2832',
           }}>
             {jobStatus.status === 'queued' ? 'Queued' :
               jobStatus.status === 'running' ? 'Generating...' :
@@ -97,10 +97,10 @@ function RequirementsGeneratorPanel({ onComplete }: { onComplete?: () => void })
         <div className="card-body">
           {(jobStatus.status === 'queued' || jobStatus.status === 'running') && (
             <div className="text-center py-4">
-              <div className="spinner-border mb-3" style={{ color: 'var(--color-primary)', width: '2.5rem', height: '2.5rem' }} role="status">
+              <div className="spinner-border mb-3" style={{ color: '#FB2832', width: '2.5rem', height: '2.5rem' }} role="status">
                 <span className="visually-hidden">Generating...</span>
               </div>
-              <p className="fw-semibold mb-1" style={{ color: 'var(--color-primary)' }}>
+              <p className="fw-semibold mb-1" style={{ color: '#FB2832' }}>
                 Generating System Requirements Document
               </p>
               <p className="small text-muted mb-2">
@@ -122,7 +122,7 @@ function RequirementsGeneratorPanel({ onComplete }: { onComplete?: () => void })
                 Your System Requirements Specification has been saved as a project artifact.
               </p>
               <button
-                className="btn btn-sm btn-outline-primary"
+                className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                 onClick={() => { setJobStatus(null); setJobId(null); }}
               >
                 Generate Another Version
@@ -140,7 +140,7 @@ function RequirementsGeneratorPanel({ onComplete }: { onComplete?: () => void })
                 {jobStatus.error_message || 'An unexpected error occurred.'}
               </p>
               <button
-                className="btn btn-sm btn-outline-primary"
+                className="btn btn-sm" style={{ border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                 onClick={() => { setJobStatus(null); setJobId(null); setError(null); }}
               >
                 Try Again
@@ -175,7 +175,8 @@ function RequirementsGeneratorPanel({ onComplete }: { onComplete?: () => void })
             {(Object.keys(MODE_INFO) as GenerationMode[]).map(m => (
               <button
                 key={m}
-                className={`btn btn-sm flex-fill ${mode === m ? 'btn-primary' : 'btn-outline-secondary'}`}
+                className={`btn btn-sm flex-fill ${mode === m ? '' : 'btn-outline-secondary'}`}
+                style={mode === m ? { background: '#FB2832', color: '#fff', border: 'none' } : {}}
                 onClick={() => setMode(m)}
               >
                 <div className="fw-semibold">{MODE_INFO[m].label}</div>
@@ -199,7 +200,7 @@ function RequirementsGeneratorPanel({ onComplete }: { onComplete?: () => void })
         </div>
 
         <button
-          className="btn btn-sm btn-primary w-100"
+          className="btn btn-sm w-100" style={{ background: '#FB2832', color: '#fff', border: 'none' }}
           onClick={handleGenerate}
           disabled={starting}
         >

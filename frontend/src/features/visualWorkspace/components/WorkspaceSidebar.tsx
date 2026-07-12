@@ -87,7 +87,7 @@ const WorkspaceSidebar: React.FC<Props> = ({
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-light)', fontWeight: 600 }}>
           Visual Workspace
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-primary)', marginTop: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#FB2832', marginTop: 2 }}>
           {pageRoute || '/'}
         </div>
         <div style={{ fontSize: 10, color: 'var(--color-text-light)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Systems Architect Accelerator — Colaberry</title>
+<link rel="icon" href="assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { margin: 0; background: var(--neutral-200); }
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 32px 16px; }
+
+  /* A4 portrait page */
+  .page {
+    width: 794px; max-width: 100%; min-height: 1123px;
+    background: var(--surface-page); position: relative;
+    box-shadow: var(--shadow-lg); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .pad { padding: 34px 60px; }
+
+  /* Running header / footer */
+  .runhead { display: flex; align-items: center; justify-content: space-between; padding: 16px 60px; border-bottom: 1px solid var(--border-subtle); }
+  .runhead img { height: 24px; }
+  .runhead span { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+  .runfoot { margin-top: auto; padding: 12px 60px 22px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-subtle); }
+  .runfoot b { color: var(--red-500); font-weight: var(--fw-bold); }
+
+  /* Cover */
+  .cover { position: relative; color: #fff; flex: 1; justify-content: space-between; overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 88% 8%, rgba(255,255,255,.16), transparent 46%),
+      linear-gradient(152deg, var(--red-500), var(--red-700) 78%, #8f0f1c); }
+  /* technical "blueprint" grid + large watermark mark */
+  .cover::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size: 40px 40px; background-position: -1px -1px;
+    -webkit-mask-image: linear-gradient(160deg, #000 0%, rgba(0,0,0,.35) 48%, transparent 78%);
+            mask-image: linear-gradient(160deg, #000 0%, rgba(0,0,0,.35) 48%, transparent 78%); }
+  .cover__mark { position: absolute; right: -120px; bottom: -90px; width: 520px; opacity: .07; pointer-events: none; }
+  /* tri-color brand stripe at the very top */
+  .cover__stripe { position: absolute; top: 0; left: 0; right: 0; height: 6px; display: flex; z-index: 2; }
+  .cover__stripe i { flex: 1; }
+  .cover__stripe i:nth-child(1) { background: var(--red-500); }
+  .cover__stripe i:nth-child(2) { background: var(--blue-500); }
+  .cover__stripe i:nth-child(3) { background: var(--green-500); }
+  .cover .pad { display: flex; flex-direction: column; justify-content: space-between; flex: 1; position: relative; z-index: 1; padding-top: 50px; }
+  .cover__top { display: flex; align-items: center; justify-content: space-between; }
+  .cover__logo { height: 30px; }
+  .cover__badge { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    border: 1px solid rgba(255,255,255,.4); border-radius: var(--radius-pill); padding: 6px 14px; opacity: .95; }
+  .cover__hero { margin-bottom: 4px; }
+  .cover__eyebrow { display: inline-flex; align-items: center; gap: 14px; font-family: var(--font-mono); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; opacity: .92; margin: 0 0 22px; }
+  .cover__eyebrow::before { content: ""; width: 40px; height: 2px; background: #fff; opacity: .85; }
+  .cover h1 { font-family: var(--font-display); font-weight: 900; font-size: 62px; line-height: .98; letter-spacing: -.03em; color: #fff; margin: 0 0 24px; text-wrap: balance; }
+  .cover__sub { font-size: 20px; line-height: 1.55; opacity: .95; max-width: 34ch; margin: 0; }
+  .cover__sub b { font-weight: var(--fw-bold); }
+  .cover__powered { display: flex; align-items: center; gap: 12px; font-size: 14.5px; opacity: .92; margin-bottom: 22px; }
+  .cover__powered span { width: 34px; height: 1px; background: rgba(255,255,255,.5); }
+  .cover__foot { display: grid; grid-template-columns: repeat(3, auto); gap: 48px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,.28); }
+  .cover__foot b { display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; opacity: .7; margin-bottom: 5px; font-weight: var(--fw-regular); }
+  .cover__foot span { font-size: 15px; font-weight: var(--fw-medium); }
+
+  /* Section heads */
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--red-500); margin: 0 0 10px; }
+  h2.sec { font-family: var(--font-display); font-weight: 900; font-size: 34px; letter-spacing: -.02em; color: var(--text-strong); margin: 0 0 16px; line-height: 1.08; }
+  h3.sub { font-family: var(--font-display); font-weight: 700; font-size: 19px; color: var(--text-strong); margin: 0 0 8px; }
+  p.body { font-size: 15px; line-height: 1.65; color: var(--text-body); margin: 0 0 16px; text-wrap: pretty; }
+  p.body b { color: var(--text-strong); }
+  .lead { font-size: 17px; line-height: 1.6; color: var(--text-muted); margin: 0 0 28px; max-width: 60ch; }
+
+  .who { background: var(--surface-blue-subtle); border-radius: var(--radius-lg); padding: 20px 24px; font-size: 14px; line-height: 1.6; color: var(--text-body); }
+  .who b { color: var(--blue-700); }
+
+  /* Includes list */
+  .inc { display: grid; gap: 16px; margin-top: 8px; }
+  .inc__item { display: flex; gap: 16px; align-items: flex-start; padding: 18px 20px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
+  .inc__ic { --tile: 42px; margin-top: 2px; }
+  .inc__item b { font-size: 16px; color: var(--text-strong); display: block; margin-bottom: 3px; }
+  .inc__item p { margin: 0; font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+
+  /* Build timeline */
+  .build { display: grid; gap: 8px; }
+  .build__row { display: grid; grid-template-columns: 132px 1fr; gap: 18px; align-items: start; padding: 11px 0; border-bottom: 1px solid var(--border-subtle); }
+  .build__row:last-child { border-bottom: none; }
+  .build__wk { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .build__wk b { display: block; font-family: var(--font-display); font-weight: 900; font-size: 15px; color: var(--red-500); margin-bottom: 4px; letter-spacing: -.01em; }
+  .build__d b { color: var(--text-strong); }
+  .build__d { font-size: 14px; line-height: 1.6; color: var(--text-body); }
+
+  /* Pricing */
+  .price { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 8px 0 20px; }
+  .plan { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: 20px 22px; position: relative; }
+  .plan--feat { border: 2px solid var(--red-500); }
+  .plan__tag { position: absolute; top: -11px; left: 24px; background: var(--red-500); color: #fff; font-size: 11px; font-weight: var(--fw-bold); padding: 4px 12px; border-radius: var(--radius-pill); }
+  .plan__name { font-size: 14px; color: var(--text-muted); margin: 0 0 6px; }
+  .plan__price { font-family: var(--font-display); font-weight: 900; font-size: 44px; color: var(--text-strong); line-height: 1; letter-spacing: -.02em; }
+  .plan__price small { font-size: 16px; font-weight: var(--fw-regular); color: var(--text-muted); }
+  .plan__note { font-size: 13px; color: var(--text-muted); margin: 10px 0 0; line-height: 1.5; }
+  .founding { background: linear-gradient(135deg, var(--red-500), var(--red-700)); color: #fff; border-radius: var(--radius-xl); padding: 20px 28px; display: flex; align-items: center; justify-content: space-between; gap: 20px; box-shadow: var(--shadow-brand); }
+  .founding b { font-family: var(--font-display); font-weight: 900; font-size: 22px; display: block; letter-spacing: -.01em; }
+  .founding p { margin: 6px 0 0; font-size: 14px; opacity: .92; line-height: 1.5; max-width: 44ch; }
+  .founding__seats { font-family: var(--font-display); font-weight: 900; font-size: 52px; line-height: .9; flex: none; text-align: center; }
+  .founding__seats span { display: block; font-size: 13px; font-weight: var(--fw-medium); opacity: .9; letter-spacing: .04em; }
+
+  /* Draft pricing flag — pricing numbers not yet locked (Model B / TWC exemption pending) */
+  .draft-flag { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-subtle); border: 1px dashed var(--text-subtle); border-radius: var(--radius-pill); padding: 4px 11px; margin-left: 10px; vertical-align: middle; }
+  .draft-flag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-subtle); }
+  .price-draft { position: relative; border: 1px dashed var(--text-subtle); border-radius: var(--radius-xl); padding: 14px; margin: 6px 0 16px;
+    background: repeating-linear-gradient(135deg, transparent, transparent 11px, rgba(0,0,0,.018) 11px, rgba(0,0,0,.018) 22px); }
+  .price-draft .price { margin: 0; }
+  .price-note { font-family: var(--font-mono); font-size: 11px; line-height: 1.55; color: var(--text-subtle); margin: 11px 0 0; }
+
+  /* Deep dive cards */
+  .dive { border: 1px solid var(--border-subtle); border-left: 4px solid var(--red-500); border-radius: var(--radius-lg); padding: 16px 24px; margin-bottom: 11px; }
+  .dive:nth-child(2) { border-left-color: var(--blue-500); }
+  .dive:nth-child(3) { border-left-color: var(--green-500); }
+  .dive:nth-child(4) { border-left-color: var(--red-500); }
+  .dive:nth-child(5) { border-left-color: var(--blue-500); }
+  .dive__h { display: block; margin-bottom: 10px; }
+  .dive__h b { display: block; font-family: var(--font-display); font-weight: 900; font-size: 19px; color: var(--text-strong); letter-spacing: -.01em; line-height: 1.2; padding-right: 90px; }
+  .dive__wk { float: right; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .dive p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.6; color: var(--text-body); }
+  .dive p:last-child { margin-bottom: 0; }
+  .dive .prereq { font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+
+  /* FAQ */
+  .faq { margin-bottom: 12px; }
+  .faq b { display: block; font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--text-strong); margin-bottom: 6px; }
+  .faq p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-body); }
+
+  /* Dates / CTA */
+  .dates { background: var(--surface-subtle); border-radius: var(--radius-xl); padding: 24px; }
+  .dates__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-bottom: 24px; }
+  .dates__item b { font-family: var(--font-mono); font-size: 12px; color: var(--red-500); letter-spacing: .04em; display: block; margin-bottom: 4px; }
+  .dates__item span { font-size: 15px; color: var(--text-strong); font-weight: var(--fw-medium); }
+  .enroll { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--text-strong); color: var(--neutral-0); border-radius: var(--radius-lg); padding: 22px 28px; }
+  .enroll b { font-family: var(--font-display); font-weight: 900; font-size: 20px; }
+  .enroll span { font-family: var(--font-mono); font-size: 14px; color: var(--neutral-300); }
+
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    .stage { padding: 0; gap: 0; display: block; }
+    /* Force brand colors / gradients to print regardless of the "Background graphics" toggle */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    /* Lock each page to one exact A4 sheet so the bottom-anchored footer sits flush and never clips */
+    .page {
+      width: 210mm; min-height: 297mm; height: 297mm;
+      box-shadow: none; margin: 0; break-after: page; break-inside: avoid;
+      overflow: hidden;
+    }
+    .page:last-child { break-after: auto; }
+    .cover { height: 297mm; }
+    /* Keep groupings from splitting across a page edge */
+    .inc__item, .dive, .faq, .plan, .founding, .build__row, .dates, .price-draft { break-inside: avoid; }
+    h2.sec, .eyebrow { break-after: avoid; }
+    p { orphans: 3; widows: 3; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- PAGE 1 — COVER -->
+  <div class="page cover">
+    <div class="cover__stripe"><i></i><i></i><i></i></div>
+    <img class="cover__mark" src="assets/logo/colaberry-mark-white.png" alt="">
+    <div class="pad">
+      <div class="cover__top">
+        <img class="cover__logo" src="assets/logo/colaberry-horizontal-white.png" alt="Colaberry">
+        <span class="cover__badge">Founding Cohort · 2026</span>
+      </div>
+      <div class="cover__hero">
+        <p class="cover__eyebrow">12-week, project-based accelerator</p>
+        <h1>AI Systems Architect Accelerator</h1>
+        <p class="cover__powered">Powered by Anthropic + Claude Code <span></span></p>
+        <p class="cover__sub"><b>Bring your idea.</b> We help you turn it into a real AI system. Learn from Anthropic. Build through Colaberry. Deploy in the real world.</p>
+      </div>
+      <div class="cover__foot">
+        <div><b>Cohort</b><span>40 seats</span></div>
+        <div><b>Kickoff</b><span>July 13, 2026</span></div>
+        <div><b>Apply at</b><span>training.colaberry.com</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2 — THE PROGRAM -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>AI Systems Architect Accelerator</span></div>
+    <div class="pad">
+      <p class="eyebrow">The Program</p>
+      <h2 class="sec">Arrive with an idea. Leave with a deployed system.</h2>
+      <p class="body">A membership built around a 12-week, project-based program that turns your own venture idea into a working AI system. You do not study toward a generic capstone. You arrive in Week 1 with a real problem, and you leave with a <b>deployed AI system, a GitHub portfolio, and the Anthropic Architect certification</b>.</p>
+      <p class="body">Anthropic certifies knowledge. Colaberry certifies capability. Every graduate leaves with a unique system, not an identical class project.</p>
+      <div class="who">
+        <b>Who it is for:</b> career changers and working professionals who want to build and deploy real AI systems, not sit through prompt-writing tips. Comfort with basic software concepts (git and the command line) and a business problem you want to solve.
+      </div>
+
+      <p class="eyebrow" style="margin-top:28px">What Your Membership Includes</p>
+      <h2 class="sec" style="font-size:26px">One membership, everything included</h2>
+      <div class="inc">
+        <div class="inc__item"><span class="inc__ic cb-icon-tile" style="background:var(--red-500)"><span class="cb-i"><i class="ri-presentation-line"></i></span></span><div><b>Live training programs</b><p>The full 12-week curriculum, all four Architect Intensives, taught live: Monday Architecture Day (2 hours) and Thursday Build Day (2 hours).</p></div></div>
+        <div class="inc__item"><span class="inc__ic cb-icon-tile" style="background:var(--blue-500)"><span class="cb-i"><i class="ri-award-line"></i></span></span><div><b>Anthropic Architect certification prep</b><p>Structured preparation for the Claude Certified Architect, Foundations credential.</p></div></div>
+        <div class="inc__item"><span class="inc__ic cb-icon-tile" style="background:var(--green-600)"><span class="cb-i"><i class="ri-briefcase-line"></i></span></span><div><b>Full-time internships</b><p>Real-world, hands-on experience applying what you build.</p></div></div>
+        <div class="inc__item"><span class="inc__ic cb-icon-tile" style="background:var(--red-500)"><span class="cb-i"><i class="ri-git-repository-line"></i></span></span><div><b>Portfolio projects</b><p>Guided projects that build up your GitHub portfolio with real, demonstrable AI systems.</p></div></div>
+      </div>
+    </div>
+    <div class="runfoot"><span>training.colaberry.com</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+  <!-- PAGE 3 — WHAT YOU BUILD + PRICING -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>AI Systems Architect Accelerator</span></div>
+    <div class="pad">
+      <p class="eyebrow">What You Build</p>
+      <h2 class="sec" style="font-size:26px">Four intensives, four real systems</h2>
+      <div class="build">
+        <div class="build__row"><div class="build__wk"><b>Intensive 1</b>Weeks 1–3</div><div class="build__d"><b>Build Your AI Foundation.</b> A configured Architect Workspace, three reusable AI Skills, and a working Business Workflow Assistant.</div></div>
+        <div class="build__row"><div class="build__wk"><b>Intensive 2</b>Weeks 4–6</div><div class="build__d"><b>Create Your AI Team.</b> A multi-agent system of three coordinated AI agents plus a reusable Enterprise Prompt Library.</div></div>
+        <div class="build__row"><div class="build__wk"><b>Intensive 3</b>Weeks 7–9</div><div class="build__d"><b>Connect AI To The Real World.</b> A working MCP server integrated with a real business system of your choice.</div></div>
+        <div class="build__row"><div class="build__wk"><b>Intensive 4</b>Weeks 10–12</div><div class="build__d"><b>Design AI That Scales.</b> A reliability framework, a governance engine, and a complete Solution Architecture Package.</div></div>
+      </div>
+
+      <p class="eyebrow" style="margin-top:26px">Membership Pricing <span class="draft-flag">Draft · pricing not yet final</span></p>
+      <h2 class="sec" style="font-size:26px">Everything in one membership</h2>
+      <div class="price-draft">
+        <div class="price">
+          <div class="plan plan--feat">
+            <span class="plan__tag">Best value</span>
+            <p class="plan__name">Annual plan</p>
+            <div class="plan__price">$149<small> / mo</small></div>
+            <p class="plan__note">Billed for a full year. The Founding rate locks for as long as you stay a member.</p>
+          </div>
+          <div class="plan">
+            <p class="plan__name">Monthly plan</p>
+            <div class="plan__price">$199<small> / mo</small></div>
+            <p class="plan__note">Cancel anytime. Everything is included in one membership — no separate course fees.</p>
+          </div>
+        </div>
+        <p class="price-note">Provisional — these numbers are not yet locked and may change before launch. This panel is built as a self-contained swap-in: the final price drops in here without touching the rest of the layout.</p>
+      </div>
+      <div class="founding">
+        <div>
+          <b>Founding Cohort</b>
+          <p>Founding members lock the $149/mo founding rate for as long as their membership stays active, even as the price rises for later cohorts. First cohort price holds.</p>
+        </div>
+        <div class="founding__seats">40<span>seats only</span></div>
+      </div>
+    </div>
+    <div class="runfoot"><span>training.colaberry.com</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+  <!-- PAGE 4 — INTENSIVE DEEP DIVES -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>Intensive Deep Dives</span></div>
+    <div class="pad">
+      <p class="eyebrow">Intensive Deep Dives</p>
+      <h2 class="sec" style="font-size:26px">What each intensive delivers</h2>
+      <div class="dive">
+        <div class="dive__h"><b>1 · Build Your AI Foundation</b><span class="dive__wk">Weeks 1–3</span></div>
+        <p>Set up the workspace and habits of a working AI systems architect, then ship your first automation. You build a configured Architect Workspace, three reusable AI Skills in a domain you choose, and a working Business Workflow Assistant connected to one external API.</p>
+        <p>You leave with a workspace reusable on any future project, a portfolio-ready Skills library, and an assistant you can use immediately.</p>
+        <p class="prereq">Prerequisites: basic software concepts (git, command line) and a business problem to address.</p>
+      </div>
+      <div class="dive">
+        <div class="dive__h"><b>2 · Create Your AI Team</b><span class="dive__wk">Weeks 4–6</span></div>
+        <p>Move from a single assistant to a coordinated team of AI agents. You build an Enterprise Prompt Library, a multi-agent system of at least three specialized agents that coordinate on a complex task (for example a Compliance Agent, an Audit Agent, and a Reviewer Agent), and documented coordination patterns.</p>
+        <p>You leave with a reusable prompt library, a multi-agent architecture you can extend, and pattern documentation strong enough for technical interviews.</p>
+      </div>
+      <div class="dive">
+        <div class="dive__h"><b>3 · Connect AI To The Real World</b><span class="dive__wk">Weeks 7–9</span></div>
+        <p>Give your AI access to real business data through the Model Context Protocol (MCP), a scarce and in-demand skill. You build a working MCP server, at least one integration with a business system you select (SQL database, document store, CRM, calendar, or email), and an end-to-end flow showing AI consuming real data.</p>
+        <p>You leave with a reusable MCP server and a real integration suitable for production or portfolio use.</p>
+      </div>
+      <div class="dive">
+        <div class="dive__h"><b>4 · Design AI That Scales</b><span class="dive__wk">Weeks 10–12</span></div>
+        <p>Take an AI system from "it works" to "it is reliable, governed, and ready for production review." You build an AI Reliability Framework (validation, retry logic, confidence scoring), an AI Governance Engine (audit logging, human approval flows, escalation paths), and a complete Solution Architecture Package.</p>
+        <p>You leave with reusable frameworks and a polished package suitable for executive review, technical interviews, or RFP submissions.</p>
+      </div>
+    </div>
+    <div class="runfoot"><span>training.colaberry.com</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+  <!-- PAGE 5 — FAQ + DATES -->
+  <div class="page">
+    <div class="runhead"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry"><span>Common Questions</span></div>
+    <div class="pad">
+      <p class="eyebrow">Common Questions</p>
+      <h2 class="sec" style="font-size:26px">Answers before you ask</h2>
+      <div class="faq"><b>Is this worth $149 a month?</b><p>Your membership is not a course fee. For one monthly price you get live training in all four intensives, Anthropic Architect certification prep, a full-time internship, and guided portfolio projects. Compare that to a traditional bootcamp charging ten to fifteen thousand dollars up front for less.</p></div>
+      <div class="faq"><b>I work full time — can I keep up?</b><p>Live time is four hours a week: Monday and Thursday, two hours each, for 12 weeks. You build your own project between sessions at your own pace, and because the project is yours, the build time doubles as real work.</p></div>
+      <div class="faq"><b>Am I technical enough?</b><p>You need comfort with basic software concepts like git and the command line, a business problem you want to solve, and the willingness to build. You do not need to be a professional engineer.</p></div>
+      <div class="faq"><b>What if it is not for me?</b><p>On the monthly plan, cancel anytime. On the annual plan, a 7-day refund window from your start date lets you begin, see how it runs, and decide with no risk. (Exact annual refund terms pending confirmation.)</p></div>
+      <div class="faq"><b>Why now?</b><p>The Founding Cohort is capped at 40 seats and locks the $149 founding rate for as long as you stay a member. Enrollment opens July 10, 2026 for a July 13, 2026 start.</p></div>
+
+      <div class="dates" style="margin-top:36px">
+        <p class="eyebrow" style="margin-bottom:18px">Dates &amp; Enrollment</p>
+        <div class="dates__grid">
+          <div class="dates__item"><b>ENROLLMENT OPENS</b><span>Friday, July 10, 2026</span></div>
+          <div class="dates__item"><b>FOUNDING COHORT KICKOFF</b><span>Monday, July 13, 2026</span></div>
+          <div class="dates__item"><b>COHORT ENDS · ARCHITECT EXPO</b><span>Early October 2026</span></div>
+          <div class="dates__item"><b>SEATS</b><span>40 founding members</span></div>
+        </div>
+        <div class="enroll">
+          <b>Enroll at training.colaberry.com</b>
+          <span>Powered by Anthropic + Claude Code</span>
+        </div>
+      </div>
+    </div>
+    <div class="runfoot"><span>© 2026 Colaberry, Inc.</span><span><b>Colaberry</b> · School of Data Science &amp; Analytics</span></div>
+  </div>
+
+</div>
+</body>
+</html>

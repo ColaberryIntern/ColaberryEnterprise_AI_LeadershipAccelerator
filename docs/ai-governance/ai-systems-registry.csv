@@ -1,0 +1,29 @@
+System,Area,Tier,User-Facing,HITL Level,Data Sensitivity,Owner (assign),Provisional INPACT band,Provisional GOALS,Target INPACT,Target GOALS,Remediation Phase,Key Gaps,Logging Today
+Maya Admissions Chatbot,Admissions,1,Public,2 Conditional,Lead PII + behavioral,TBD,Moderate/Low,~12/25,>=86%,>=21/25,1-3,T audit+citations / P consent / drift,ChatConversation+ChatMessage tables
+Synthflow Voice Agent,Admissions,1,Public (prospects),3 HITL on initiation,Phone + call transcripts,TBD,Low,~10/25,>=86%,>=21/25,1-3,P consent+recording / T transcript audit / HITL,Call events + transcript processor
+OpenClaw Social Posting,Marketing,1,Public (social),3 HITL (has gate),Brand + public content,TBD,Moderate,~14/25,>=86%,>=21/25,1-3,T audit trail / formalize HITL / brand drift,Drafts+approval state+quality gate logged
+Outbound Email Automation (Mandrill+LLM),Ops/Marketing,1,External recipients,3 HITL,Recipient PII; acts on Ali's behalf,TBD,Low/Moderate,~11/25,>=86%,>=21/25,1-3,P (acts as Ali) / T audit / HITL bound,Send logs; idempotency keys
+Curriculum Generation,Product,1,Students (paid),4 On-the-loop (admin approve),Student records + program data,TBD,Moderate,~14/25,>=86%,>=21/25,1-3,T citations/lineage / S data quality / accuracy validation,CurriculumGenerationLog + ContentGenerationLog
+Content/Lesson Generation,Product,1,Students (paid),1 Full (cached),Student personalization profile,TBD,Moderate,~14/25,>=86%,>=21/25,1-3,Accuracy sampling / T lineage,ContentGenerationLog + llmCallWrapper (tokens/cache)
+Portfolio Generation,Product,1,Students (paid),1 Full,Project artifacts + scores,TBD,Moderate,~13/25,>=86%,>=21/25,1-3,T audit / S quality,Partial; no explicit audit
+Artifact Compiler,Product,1,Students (paid),1 Full,Project deliverables,TBD,Moderate,~13/25,>=86%,>=21/25,1-3,T lineage / versioning,ProjectArtifact versions
+Session Chat Mentor,Product,1,Students (paid),2 Conditional,Enrollment + session context,TBD,Moderate,~14/25,>=86%,>=21/25,1-3,T audit / accuracy sampling,ChatMessage per session + outcome
+ProjectDnaWizard,Product,1,Students (paid),4 On-the-loop,Student project inputs,TBD,Moderate,~14/25,>=86%,>=21/25,1-3,T routing audit / downstream agent trace,Backend routes logged
+Cory Strategic (COO) Agent,Ops,2,Internal,4 On-the-loop,Ops commands + entity refs,TBD,Moderate,~14/25,>=67%,>=16/25,2-4,T decision audit / A feedback loop,Tickets + confidence score + dispatch list
+Curriculum Architect Agent,Product,2,Internal (admin-approved),4 On-the-loop,Program/cohort data,TBD,Moderate,~14/25,>=67%,>=16/25,2-4,T trace / admin-approval gate exists,agentRegistry execution log
+Lead Scoring / Lead Intelligence,Sales,2,Internal,1 Full,Lead PII + behavioral,TBD,Moderate,~13/25,>=67%,>=16/25,2-4,P PII handling / T explainability,Lead/intent score tables
+Inbox LLM Classification,Ops,2,Internal (Ali's inbox),2 Conditional,Email content + sender history,TBD,Moderate,~13/25,>=67%,>=16/25,2-4,T audit of routing decisions,Penalty signals + verdict logged
+Inbox Opportunity Scoring,Sales,2,Internal,1 Full,Email + enrichment,TBD,Moderate,~12/25,>=67%,>=16/25,2-4,T explainability,Score in email metadata
+PMO Daily Email Update,Ops,2,Internal (Ali),4 On-the-loop,Project state,TBD,Good-ish,~16/25,>=67%,>=16/25,2-4,O drift / A validation,Summary logged; idempotent post
+Executive Briefing Service,Ops,2,Internal (Ali),4 On-the-loop,KPIs + anomaly flags,TBD,Good-ish,~15/25,>=67%,>=16/25,2-4,O drift / validation,Briefing content logged
+Campaign Self-Healing Agent,Marketing,2,Internal,2 Conditional,Campaign metrics + content,TBD,Moderate,~13/25,>=67%,>=16/25,2-4,P autonomy bounds / T audit,Healing actions + escalations logged
+Content Optimization Agent,Product,2,Internal,4 On-the-loop,Curriculum + completion data,TBD,Moderate,~13/25,>=67%,>=16/25,2-4,T / adoption tracking,Suggestions logged
+Mentor Matching Agent,Product,2,Student-affecting,4 On-the-loop,Participant + mentor profiles,TBD,Moderate,~13/25,>=67%,>=16/25,2-4,T match rationale,Match scoring logged
+Conversation Intelligence Service,Admissions,2,Internal,1 Full,Conversation transcripts,TBD,Moderate,~13/25,>=67%,>=16/25,2-4,T / PII in transcripts,Outcome stored on conversation
+Behavioral Tracking + Signals,Web,2 (privacy override),Public data subjects,1 Full,Behavioral (consent-sensitive),TBD,Moderate,~13/25,>=67%,>=16/25,1-4,P consent / retention policy,BehavioralSignal table + triggers
+MCP Servers (Portal API / Analytics),Dev,3,Internal (dev),1 Full (read-only),System state + schemas,TBD,Adoption-ready,~17/25,>=50%,>=11/25,2-4,O logging / routine audit,Connection + tool-call logs
+Intelligence OS AI Engine,Analytics,3,Internal,1 Full,Curriculum + metrics + topology,TBD,Adoption-ready,~16/25,>=50%,>=11/25,2-4,O inference logging / drift,Inference latency logged; pgvector
+Vector Memory (RAG),Analytics,3,Internal,1 Full,Curriculum + project context,TBD,Adoption-ready,~15/25,>=50%,>=11/25,2-4,O retrieval-quality metrics,Batch + retry logging
+Prompt Lab Service,Dev,3,Internal (admin),5 Manual,Prompt templates + tests,TBD,Adoption-ready,~17/25,>=50%,>=11/25,2,Become the accuracy regression harness,Execution log w/ tokens+duration
+Anthropic Content Watcher,Research,3,Internal,1 Full,Public doc URLs (no PII),TBD,Adoption-ready,~16/25,>=50%,>=11/25,4,Routine; low risk,AnthropicChangeEvent table
+Agent Registry (135+ agents),Platform,Varies,Mixed,Per-agent,Mixed,TBD,Unassessed,n/a,Per tier,Per tier,0-4,Assign tier+owner+HITL per agent in Phase 0,agentRegistry execution tracking

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { Op } from 'sequelize';
 import MentorConversation from '../models/MentorConversation';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
@@ -9,7 +10,7 @@ import { Enrollment } from '../models';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'mentor' });
   return _openai;
 }
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';

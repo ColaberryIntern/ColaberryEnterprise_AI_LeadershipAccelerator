@@ -47,8 +47,8 @@ export default function StudentStructureTree({ miniSections, selectedId, onSelec
             className={`d-flex align-items-center gap-1 px-2 py-1 rounded ${isSelected ? '' : 'bg-white'}`}
             style={{
               cursor: 'pointer',
-              borderLeft: isSelected ? '3px solid var(--color-primary-light, #2b6cb0)' : '3px solid transparent',
-              backgroundColor: isSelected ? 'var(--color-bg-alt, #f7fafc)' : undefined,
+              borderLeft: isSelected ? '3px solid var(--color-primary-light, var(--red-500))' : '3px solid transparent',
+              backgroundColor: isSelected ? 'var(--color-bg-alt, var(--surface-subtle))' : undefined,
               transition: 'background-color 0.15s',
             }}
             onClick={() => onSelect(ms.id)}
@@ -82,7 +82,7 @@ export default function StudentStructureTree({ miniSections, selectedId, onSelec
             </span>
 
             {/* Icon + student label */}
-            <i className={`bi ${icon} flex-shrink-0`} style={{ fontSize: 13, color: 'var(--color-primary-light, #2b6cb0)' }}></i>
+            <i className={`bi ${icon} flex-shrink-0`} style={{ fontSize: 13, color: 'var(--color-primary-light, var(--red-500))' }}></i>
 
             {/* Content */}
             <div className="d-flex flex-column" style={{ minWidth: 0, flex: 1 }}>

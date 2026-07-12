@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import AnthropicCoursesBento from '../../components/portal/anthropic-bento/AnthropicCoursesBento';
+import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -199,7 +201,7 @@ function SessionChatPanel({ sessionId }: { sessionId: string }) {
         style={{ padding: '12px 16px', flexShrink: 0 }}
       >
         <span className="fw-semibold small" style={{ color: '#1e293b' }}>
-          <i className="bi bi-chat-dots me-2" style={{ color: '#6366f1' }}></i>Session Chat
+          <i className="bi bi-chat-dots me-2" style={{ color: 'var(--color-primary)' }}></i>Session Chat
         </span>
         {activeCount > 0 && (
           <span className="badge" style={{ background: '#ecfdf5', color: '#10b981', fontSize: 11 }}>
@@ -265,7 +267,7 @@ function SessionChatPanel({ sessionId }: { sessionId: string }) {
           onClick={handleSend}
           disabled={!input.trim() || sending}
           style={{
-            background: input.trim() ? '#6366f1' : '#e2e8f0',
+            background: input.trim() ? 'var(--color-primary)' : '#e2e8f0',
             color: input.trim() ? '#fff' : '#94a3b8',
             borderRadius: 8, border: 'none', padding: '6px 14px',
             fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap',
@@ -330,29 +332,35 @@ function PortalSessionDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const s = session?.session ?? null;
+  const attendance_status = session?.attendance_status ?? null;
+  const submissions = session?.submissions ?? [];
+  const materials: any[] = s?.materials_json ?? [];
+  const curriculum: any[] = s?.curriculum_json ?? [];
+  const isUpcoming = s?.status === 'scheduled';
+  const isLive = s?.status === 'live';
+  const isCompleted = s?.status === 'completed';
+  const countdownTarget = (() => {
+    if (!s || !isUpcoming || !s.session_date) return null;
+    const hhmm = parseSessionTimeToHHMM(s.start_time || '09:00');
+    return hhmm ? `${s.session_date}T${hhmm}:00` : null;
+  })();
+  const countdown = useCountdown(countdownTarget);
+  const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
+
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: '#6366f1' }} role="status">
+        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
     );
   }
 
-  if (!session) {
+  if (!session || !s) {
     return <div className="alert alert-danger">Session not found.</div>;
   }
-
-  const { session: s, attendance_status, submissions } = session;
-  const materials = s.materials_json || [];
-  const curriculum = s.curriculum_json || [];
-  const isUpcoming = s.status === 'scheduled';
-  const isLive = s.status === 'live';
-  const isCompleted = s.status === 'completed';
-  const countdownTarget = isUpcoming ? `${s.session_date}T${s.start_time || '09:00'}:00` : null;
-  const countdown = useCountdown(countdownTarget);
-  const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
 
   return (
     <>
@@ -383,7 +391,9 @@ function PortalSessionDetailPage() {
           {/* Session Header Card */}
           <div
             className="card border-0 shadow-sm mb-4"
-            style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' }}
+            style={{ background: s.session_type === 'lab'
+              ? 'linear-gradient(135deg, var(--color-purple) 0%, #4f46e5 100%)'
+              : 'var(--color-primary)' }}
           >
             <div className="card-body py-4 text-white">
               <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
@@ -400,7 +410,7 @@ function PortalSessionDetailPage() {
                   <span className="badge bg-warning text-dark">Lab</span>
                 )}
               </div>
-              <h4 className="fw-bold mb-1">{s.title}</h4>
+              <h4 className="fw-bold mb-1" style={{ color: '#fff' }}>{s.title}</h4>
               <p className="small mb-0" style={{ opacity: 0.8 }}>
                 {s.session_date} &middot; {s.start_time} - {s.end_time} ET
               </p>
@@ -434,7 +444,7 @@ function PortalSessionDetailPage() {
                         border: `1px solid ${isUnder5Min ? '#fecaca' : '#e2e8f0'}`,
                       }}
                     >
-                      <div className="fw-bold" style={{ fontSize: 24, color: isUnder5Min ? '#ef4444' : '#6366f1' }}>
+                      <div className="fw-bold" style={{ fontSize: 24, color: isUnder5Min ? 'var(--color-danger)' : 'var(--color-primary)' }}>
                         {String(unit.value).padStart(2, '0')}
                       </div>
                       <div style={{ fontSize: 11, color: '#94a3b8' }}>{unit.label}</div>
@@ -579,7 +589,7 @@ function PortalSessionDetailPage() {
             <CollapsibleSection title="Topics" icon="bi-book" defaultOpen>
               <ul className="mb-0">
                 {curriculum.map((item: any, i: number) => (
-                  <li key={i} className="small mb-1">
+                  <li key={i} className="small mb-1" style={{ color: 'var(--color-text)' }}>
                     {typeof item === 'string' ? item : item.title || item.topic || JSON.stringify(item)}
                   </li>
                 ))}
@@ -590,17 +600,36 @@ function PortalSessionDetailPage() {
           {/* Collapsible: Materials */}
           {materials.length > 0 && (
             <CollapsibleSection title="Materials" icon="bi-file-earmark">
-              <ul className="mb-0">
-                {materials.map((m: any, i: number) => (
-                  <li key={i} className="small mb-1">
-                    {m.url ? (
-                      <a href={m.url} target="_blank" rel="noopener noreferrer">{m.title || m.url}</a>
-                    ) : (
-                      m.title || JSON.stringify(m)
-                    )}
-                  </li>
-                ))}
-              </ul>
+              {/* Anthropic Skilljar courses rendered as the Colaberry DS bento */}
+              {materials.filter((m: any) => m.url?.includes('anthropic.skilljar.com')).length > 0 && (
+                <div className="mb-2">
+                  <AnthropicCoursesBento
+                    courses={materials
+                      .filter((m: any) => m.url?.includes('anthropic.skilljar.com'))
+                      .map((m: any) => ({
+                        title: m.title || 'Anthropic Course',
+                        url: m.url,
+                        description: m.description,
+                        estimatedMinutes: m.estimated_minutes,
+                        courseNumber: m.course_number,
+                      }))}
+                  />
+                </div>
+              )}
+              {/* All other materials as a plain list */}
+              {materials.filter((m: any) => !m.url?.includes('anthropic.skilljar.com')).length > 0 && (
+                <ul className="mb-0 mt-2">
+                  {materials.filter((m: any) => !m.url?.includes('anthropic.skilljar.com')).map((m: any, i: number) => (
+                    <li key={i} className="small mb-1">
+                      {m.url ? (
+                        <a href={m.url} target="_blank" rel="noopener noreferrer">{m.title || m.url}</a>
+                      ) : (
+                        m.title || JSON.stringify(m)
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CollapsibleSection>
           )}
 

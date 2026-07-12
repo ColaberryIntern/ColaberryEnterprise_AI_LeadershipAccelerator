@@ -14,11 +14,11 @@ interface SystemModel {
 }
 
 const LAYER_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-  frontend: { label: 'Frontend', icon: 'bi-layout-wtf', color: '#8b5cf6', bg: '#f5f3ff' },
+  frontend: { label: 'Frontend', icon: 'bi-layout-wtf', color: '#367895', bg: 'rgba(54,120,149,0.10)' },
   api: { label: 'API Routes', icon: 'bi-signpost', color: '#3b82f6', bg: '#eff6ff' },
   service: { label: 'Services', icon: 'bi-gear', color: '#10b981', bg: '#ecfdf5' },
   data: { label: 'Database', icon: 'bi-database', color: '#f59e0b', bg: '#fffbeb' },
-  agent: { label: 'Agents', icon: 'bi-cpu', color: '#6366f1', bg: '#eef2ff' },
+  agent: { label: 'Agents', icon: 'bi-cpu', color: '#FB2832', bg: 'rgba(251,40,50,0.08)' },
   infra: { label: 'Infrastructure', icon: 'bi-cloud', color: '#64748b', bg: '#f8fafc' },
 };
 
@@ -63,7 +63,7 @@ export default function SystemArchitectureCard() {
     <div className="card border-0 shadow-sm mb-3">
       <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
         <div>
-          <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
+          <span className="fw-semibold small" style={{ color: '#FB2832' }}>
             <i className="bi bi-diagram-3 me-2"></i>System Architecture
           </span>
           <span className="text-muted ms-2" style={{ fontSize: 10 }}>

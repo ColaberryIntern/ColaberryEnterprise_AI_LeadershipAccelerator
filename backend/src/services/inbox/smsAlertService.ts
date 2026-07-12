@@ -22,6 +22,7 @@
 import nodemailer from 'nodemailer';
 import { sequelize } from '../../config/database';
 import { QueryTypes } from 'sequelize';
+import { inboxCosAlertsEnabled } from './inboxAlertsConfig';
 
 const LOG_PREFIX = '[InboxCOS][Alert]';
 const ALERT_TO = process.env.INBOX_COS_ALERT_GMAIL || 'alimuwwakkil@gmail.com';
@@ -42,6 +43,10 @@ const URGENT_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 const AUTH_FAILURE_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function sendSms(message: string): Promise<boolean> {
+  if (!inboxCosAlertsEnabled()) {
+    console.log(`${LOG_PREFIX} alerts disabled (INBOX_COS_ALERTS_ENABLED!=true) - dropped`);
+    return false;
+  }
   if (!process.env.MANDRILL_API_KEY) {
     console.warn(`${LOG_PREFIX} MANDRILL_API_KEY missing - alert dropped`);
     return false;

@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
 import Pagination from '../../components/ui/Pagination';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 const VisitorFlowGraph = lazy(() => import('../../components/admin/visitors/VisitorFlowGraph'));
 
@@ -188,25 +189,23 @@ function DeviceIcon({ type }: { type?: string }) {
   return <DesktopIcon />;
 }
 
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
 function IntentBadge({ score, level }: { score?: number | null; level?: string | null }) {
   if (score == null && !level) return <span className="text-muted small">-</span>;
   const displayScore = score ?? 0;
   const displayLevel = level || 'low';
-  const badgeClass =
-    displayLevel === 'very_high' ? 'bg-danger' :
-    displayLevel === 'high' ? 'bg-warning text-dark' :
-    displayLevel === 'medium' ? 'bg-info text-dark' :
-    'bg-light text-dark';
+  const tone: BadgeTone =
+    displayLevel === 'very_high' ? 'danger' :
+    displayLevel === 'high' ? 'warning' :
+    displayLevel === 'medium' ? 'info' :
+    'neutral';
   const labelText =
     displayLevel === 'very_high' ? 'Very High' :
     displayLevel === 'high' ? 'High' :
     displayLevel === 'medium' ? 'Medium' : 'Low';
 
-  return (
-    <span className={`badge ${badgeClass}`} title={`Intent Score: ${displayScore}/100`}>
-      {displayScore} {labelText}
-    </span>
-  );
+  return <StatusBadge label={`${displayScore} ${labelText}`} tone={tone} />;
 }
 
 function getIntentScore(v: Visitor): number | null {
@@ -454,6 +453,31 @@ function AdminVisitorsPage() {
   }, [activeTab, fetchLive, fetchStats]);
 
   /* ---------------------------------------------------------------- */
+  /*  Per-page trust signal (Basecamp todo 10027085963)               */
+  /* ---------------------------------------------------------------- */
+
+  const trust: TrustSignal = useMemo(() => {
+    const live = stats?.liveCount ?? liveVisitors.length;
+    return {
+      level: 'live',
+      source: 'visitor analytics',
+      updatedAt: new Date().toISOString(),
+      summary: `${live} visitor${live === 1 ? '' : 's'} live now; sessions and intent scored from first-party tracking.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Freshness',
+          status: 'live',
+          evidence: [
+            { label: 'Source', value: 'visitor_sessions / pageviews' },
+            { label: 'Live now', value: String(live) },
+          ],
+        },
+      ],
+    };
+  }, [stats, liveVisitors.length]);
+
+  /* ---------------------------------------------------------------- */
   /*  Filter helpers                                                   */
   /* ---------------------------------------------------------------- */
 
@@ -485,11 +509,9 @@ function AdminVisitorsPage() {
   );
 
   const renderStatusBadge = (v: Visitor) =>
-    v.lead_id ? (
-      <span className="badge bg-success">Known</span>
-    ) : (
-      <span className="badge bg-secondary">Anonymous</span>
-    );
+    v.lead_id
+      ? <StatusBadge label="Known" tone="success" />
+      : <StatusBadge label="Anonymous" tone="neutral" />;
 
   /* ---------------------------------------------------------------- */
   /*  Tab content                                                      */
@@ -501,31 +523,13 @@ function AdminVisitorsPage() {
       {stats && (
         <div className="row g-3 mb-4">
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #38a169' }}>
-                <div className="text-muted small d-flex align-items-center gap-1">
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38a169', display: 'inline-block' }} />
-                  Live Now
-                </div>
-                <div className="h4 fw-bold mb-0">{stats.liveCount ?? liveVisitors.length}</div>
-              </div>
-            </div>
+            <StatCard label="Live Now" value={stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #2b6cb0' }}>
-                <div className="text-muted small">Sessions Today</div>
-                <div className="h4 fw-bold mb-0">{stats.todaySessions ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Sessions Today" value={stats.todaySessions ?? 0} icon="time-line" tone="info" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #1a365d' }}>
-                <div className="text-muted small">Visitors Today</div>
-                <div className="h4 fw-bold mb-0">{stats.todayVisitors ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Visitors Today" value={stats.todayVisitors ?? 0} icon="user-line" tone="primary" />
           </div>
         </div>
       )}
@@ -534,151 +538,134 @@ function AdminVisitorsPage() {
       {stats && (stats.visitors30d > 0 || stats.sessions30d > 0) && (
         <div className="row g-3 mb-4">
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #805ad5' }}>
-                <div className="text-muted small">Visitors (30 days)</div>
-                <div className="h4 fw-bold mb-0">{stats.visitors30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Visitors (30 days)" value={stats.visitors30d ?? 0} icon="group-line" tone="primary" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #319795' }}>
-                <div className="text-muted small">Sessions (30 days)</div>
-                <div className="h4 fw-bold mb-0">{stats.sessions30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Sessions (30 days)" value={stats.sessions30d ?? 0} icon="stack-line" tone="info" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #dd6b20' }}>
-                <div className="text-muted small">Avg Duration / Bounce Rate</div>
-                <div className="h4 fw-bold mb-0">{formatDuration(stats.avgDuration ?? 0)} / {stats.bounceRate ?? 0}%</div>
-              </div>
-            </div>
+            <StatCard
+              label="Avg Duration / Bounce"
+              value={`${formatDuration(stats.avgDuration ?? 0)} / ${stats.bounceRate ?? 0}%`}
+              icon="timer-line"
+              tone="warning"
+            />
           </div>
         </div>
       )}
 
       {/* Live visitors table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>Active Visitors ({liveVisitors.length})</span>
-          <span className="text-muted small">Auto-refreshes every 30s</span>
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
+      <SectionCard
+        title={`Active Visitors (${liveVisitors.length})`}
+        icon="pulse-line"
+        actions={<span className="text-muted small">Auto-refreshes every 30s</span>}
+        padded={false}
+      >
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Visitor</th>
+                <th>Status</th>
+                <th>Intent</th>
+                <th>Current Page</th>
+                <th>Duration</th>
+                <th>Pages</th>
+                <th>Referrer</th>
+                <th>Device</th>
+              </tr>
+            </thead>
+            <tbody>
+              {liveVisitors.length === 0 ? (
                 <tr>
-                  <th>Visitor</th>
-                  <th>Status</th>
-                  <th>Intent</th>
-                  <th>Current Page</th>
-                  <th>Duration</th>
-                  <th>Pages</th>
-                  <th>Referrer</th>
-                  <th>Device</th>
-                </tr>
-              </thead>
-              <tbody>
-                {liveVisitors.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-4">
-                      <div className="text-muted mb-2">No visitors currently on the site.</div>
-                      <button
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={() => setActiveTab('flow')}
-                      >
-                        View Navigation Flow &rarr;
-                      </button>
-                    </td>
-                  </tr>
-                ) : (
-                  liveVisitors.map((v) => (
-                    <tr
-                      key={v.id}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => fetchVisitorDetail(v)}
+                  <td colSpan={8} className="text-center py-4">
+                    <div className="text-muted mb-2">No visitors currently on the site.</div>
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => setActiveTab('flow')}
                     >
-                      <td>{renderVisitorCell(v)}</td>
-                      <td>{renderStatusBadge(v)}</td>
-                      <td><IntentBadge score={getIntentScore(v)} level={getIntentLevel(v)} /></td>
-                      <td className="small text-truncate" style={{ maxWidth: 200 }}>
-                        {v.current_page || v.exit_page || '-'}
-                      </td>
-                      <td className="text-nowrap small">{formatDuration(v.session_duration || 0)}</td>
-                      <td>{v.pageview_count ?? v.total_pageviews ?? 0}</td>
-                      <td className="small">{v.referrer_domain || 'Direct'}</td>
-                      <td><DeviceIcon type={v.device_type} /></td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                      View Navigation Flow &rarr;
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                liveVisitors.map((v) => (
+                  <tr
+                    key={v.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => fetchVisitorDetail(v)}
+                  >
+                    <td>{renderVisitorCell(v)}</td>
+                    <td>{renderStatusBadge(v)}</td>
+                    <td><IntentBadge score={getIntentScore(v)} level={getIntentLevel(v)} /></td>
+                    <td className="small text-truncate" style={{ maxWidth: 200 }}>
+                      {v.current_page || v.exit_page || '-'}
+                    </td>
+                    <td className="text-nowrap small">{formatDuration(v.session_duration || 0)}</td>
+                    <td>{v.pageview_count ?? v.total_pageviews ?? 0}</td>
+                    <td className="small">{v.referrer_domain || 'Direct'}</td>
+                    <td><DeviceIcon type={v.device_type} /></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </SectionCard>
     </>
   );
 
   const renderAllTab = () => (
     <>
       {/* Filters */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-body">
-          <div className="d-flex gap-2 mb-0 flex-wrap align-items-center">
-            <input
-              type="text"
-              className="form-control form-control-sm"
-              style={{ maxWidth: 220 }}
-              placeholder="Search name, email, fingerprint..."
-              value={filters.search}
-              onChange={(e) => updateFilter('search', e.target.value)}
-              aria-label="Search visitors"
-            />
-            <select
-              className="form-select form-select-sm"
-              style={{ maxWidth: 150 }}
-              value={filters.identified}
-              onChange={(e) => updateFilter('identified', e.target.value)}
-            >
-              <option value="">All Visitors</option>
-              <option value="true">Known</option>
-              <option value="false">Anonymous</option>
-            </select>
-            <input
-              type="date"
-              className="form-control form-control-sm"
-              style={{ maxWidth: 150 }}
-              value={filters.dateFrom}
-              onChange={(e) => updateFilter('dateFrom', e.target.value)}
-              aria-label="Date from"
-            />
-            <input
-              type="date"
-              className="form-control form-control-sm"
-              style={{ maxWidth: 150 }}
-              value={filters.dateTo}
-              onChange={(e) => updateFilter('dateTo', e.target.value)}
-              aria-label="Date to"
-            />
-            {hasFilters && (
-              <button className="btn btn-sm btn-outline-secondary" onClick={clearFilters}>
-                Clear
-              </button>
-            )}
-          </div>
+      <SectionCard className="mb-4">
+        <div className="d-flex gap-2 mb-0 flex-wrap align-items-center">
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            style={{ maxWidth: 220 }}
+            placeholder="Search name, email, fingerprint..."
+            value={filters.search}
+            onChange={(e) => updateFilter('search', e.target.value)}
+            aria-label="Search visitors"
+          />
+          <select
+            className="form-select form-select-sm"
+            style={{ maxWidth: 150 }}
+            value={filters.identified}
+            onChange={(e) => updateFilter('identified', e.target.value)}
+          >
+            <option value="">All Visitors</option>
+            <option value="true">Known</option>
+            <option value="false">Anonymous</option>
+          </select>
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            style={{ maxWidth: 150 }}
+            value={filters.dateFrom}
+            onChange={(e) => updateFilter('dateFrom', e.target.value)}
+            aria-label="Date from"
+          />
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            style={{ maxWidth: 150 }}
+            value={filters.dateTo}
+            onChange={(e) => updateFilter('dateTo', e.target.value)}
+            aria-label="Date to"
+          />
+          {hasFilters && (
+            <button className="btn btn-sm btn-outline-secondary" onClick={clearFilters}>
+              Clear
+            </button>
+          )}
         </div>
-      </div>
+      </SectionCard>
 
       {/* All visitors table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold">
-          Visitors ({allTotal})
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
+      <SectionCard title={`Visitors (${allTotal})`} icon="user-search-line" padded={false}>
+        <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
@@ -721,13 +708,12 @@ function AdminVisitorsPage() {
                 )}
               </tbody>
             </table>
-          </div>
         </div>
-        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div className="d-flex justify-content-between align-items-center px-3 py-2 border-top">
           <span className="text-muted small">Page {allPage} of {allTotalPages}</span>
           <Pagination page={allPage} totalPages={allTotalPages} onPageChange={setAllPage} />
         </div>
-      </div>
+      </SectionCard>
     </>
   );
 
@@ -737,48 +723,34 @@ function AdminVisitorsPage() {
       {stats && (
         <div className="row g-3 mb-4">
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #1a365d' }}>
-                <div className="text-muted small">Visitors (30d)</div>
-                <div className="h4 fw-bold mb-0">{stats.visitors30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Visitors (30d)" value={stats.visitors30d ?? 0} icon="group-line" tone="primary" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #2b6cb0' }}>
-                <div className="text-muted small">Sessions (30d)</div>
-                <div className="h4 fw-bold mb-0">{stats.sessions30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Sessions (30d)" value={stats.sessions30d ?? 0} icon="stack-line" tone="info" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #38a169' }}>
-                <div className="text-muted small">Avg Duration</div>
-                <div className="h4 fw-bold mb-0">{formatDuration(stats.avgDuration ?? 0)}</div>
-              </div>
-            </div>
+            <StatCard label="Avg Duration" value={formatDuration(stats.avgDuration ?? 0)} icon="timer-line" tone="success" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #e53e3e' }}>
-                <div className="text-muted small">Bounce Rate</div>
-                <div className="h4 fw-bold mb-0">{stats.bounceRate != null ? `${stats.bounceRate}%` : '-'}</div>
-              </div>
-            </div>
+            <StatCard
+              label="Bounce Rate"
+              value={stats.bounceRate != null ? `${stats.bounceRate}%` : '-'}
+              icon="logout-box-r-line"
+              tone="danger"
+            />
           </div>
         </div>
       )}
 
       {/* By Site (cross-site visibility — lights up as external sites install /v1/track.js) */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>By Site (last 30d)</span>
-          <span className="text-muted small">visitor_sessions.site_slug</span>
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
+      <SectionCard
+        title="By Site (last 30d)"
+        icon="global-line"
+        actions={<span className="text-muted small">visitor_sessions.site_slug</span>}
+        padded={false}
+        className="mb-4"
+      >
+        <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
@@ -815,92 +787,85 @@ function AdminVisitorsPage() {
                 )}
               </tbody>
             </table>
-          </div>
         </div>
-      </div>
+      </SectionCard>
 
       <div className="row g-4">
         {/* Top Pages */}
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">Top Pages</div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
+          <SectionCard title="Top Pages" icon="file-list-3-line" padded={false}>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Page</th>
+                    <th>Views</th>
+                    <th>Unique Visitors</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topPages.length === 0 ? (
                     <tr>
-                      <th>Page</th>
-                      <th>Views</th>
-                      <th>Unique Visitors</th>
+                      <td colSpan={3} className="text-center text-muted py-3">No page data yet.</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {topPages.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="text-center text-muted py-3">No page data yet.</td>
+                  ) : (
+                    topPages.map((p, i) => (
+                      <tr key={i}>
+                        <td className="small text-truncate" style={{ maxWidth: 250 }}>{p.page}</td>
+                        <td>{p.views}</td>
+                        <td>{p.unique_visitors}</td>
                       </tr>
-                    ) : (
-                      topPages.map((p, i) => (
-                        <tr key={i}>
-                          <td className="small text-truncate" style={{ maxWidth: 250 }}>{p.page}</td>
-                          <td>{p.views}</td>
-                          <td>{p.unique_visitors}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
 
         {/* Traffic Sources */}
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">Traffic Sources</div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
+          <SectionCard title="Traffic Sources" icon="route-line" padded={false}>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Source</th>
+                    <th>Visitors</th>
+                    <th>Sessions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trafficSources.length === 0 ? (
                     <tr>
-                      <th>Source</th>
-                      <th>Visitors</th>
-                      <th>Sessions</th>
+                      <td colSpan={3} className="text-center text-muted py-3">No source data yet.</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {trafficSources.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="text-center text-muted py-3">No source data yet.</td>
+                  ) : (
+                    trafficSources.map((s, i) => (
+                      <tr key={i}>
+                        <td className="small">{s.source || 'Direct'}</td>
+                        <td>{s.visitors}</td>
+                        <td>{s.sessions}</td>
                       </tr>
-                    ) : (
-                      trafficSources.map((s, i) => (
-                        <tr key={i}>
-                          <td className="small">{s.source || 'Direct'}</td>
-                          <td>{s.visitors}</td>
-                          <td>{s.sessions}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
     </>
   );
 
   const renderHighIntentTab = () => (
-    <div className="card border-0 shadow-sm">
-      <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-        <span>High Intent Visitors ({highIntentVisitors.length})</span>
-        <span className="text-muted small">Score 20+ (decayed over 7-day half-life)</span>
-      </div>
-      <div className="card-body p-0">
-        <div className="table-responsive">
+    <SectionCard
+      title={`High Intent Visitors (${highIntentVisitors.length})`}
+      icon="fire-line"
+      actions={<span className="text-muted small">Score 20+ (decayed over 7-day half-life)</span>}
+      padded={false}
+    >
+      <div className="table-responsive">
           <table className="table table-hover mb-0">
             <thead className="table-light">
               <tr>
@@ -956,11 +921,9 @@ function AdminVisitorsPage() {
                         {item.last_signal_at ? formatRelative(item.last_signal_at) : '-'}
                       </td>
                       <td>
-                        {lead ? (
-                          <span className="badge bg-success">Known</span>
-                        ) : (
-                          <span className="badge bg-secondary">Anonymous</span>
-                        )}
+                        {lead
+                          ? <StatusBadge label="Known" tone="success" />
+                          : <StatusBadge label="Anonymous" tone="neutral" />}
                       </td>
                     </tr>
                   );
@@ -968,9 +931,8 @@ function AdminVisitorsPage() {
               )}
             </tbody>
           </table>
-        </div>
       </div>
-    </div>
+    </SectionCard>
   );
 
   const renderChatTab = () => (
@@ -979,45 +941,23 @@ function AdminVisitorsPage() {
       {chatStats && (
         <div className="row g-3 mb-4">
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid var(--color-primary, #1a365d)' }}>
-                <div className="text-muted small">Total Conversations</div>
-                <div className="h4 fw-bold mb-0">{chatStats.total_conversations}</div>
-              </div>
-            </div>
+            <StatCard label="Total Conversations" value={chatStats.total_conversations} icon="chat-3-line" tone="primary" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #38a169' }}>
-                <div className="text-muted small">Active Now</div>
-                <div className="h4 fw-bold mb-0">{chatStats.active_conversations}</div>
-              </div>
-            </div>
+            <StatCard label="Active Now" value={chatStats.active_conversations} icon="chat-smile-2-line" tone="success" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #2b6cb0' }}>
-                <div className="text-muted small">Today</div>
-                <div className="h4 fw-bold mb-0">{chatStats.today_conversations}</div>
-              </div>
-            </div>
+            <StatCard label="Today" value={chatStats.today_conversations} icon="calendar-line" tone="info" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #e53e3e' }}>
-                <div className="text-muted small">Avg Messages</div>
-                <div className="h4 fw-bold mb-0">{chatStats.avg_messages}</div>
-              </div>
-            </div>
+            <StatCard label="Avg Messages" value={chatStats.avg_messages} icon="message-2-line" tone="warning" />
           </div>
         </div>
       )}
 
       {/* Conversations table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold">Chat Conversations</div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
+      <SectionCard title="Chat Conversations" icon="chat-history-line" padded={false}>
+        <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
@@ -1044,33 +984,34 @@ function AdminVisitorsPage() {
                       <td className="fw-medium small">
                         {conv.visitor?.lead?.name || `Anonymous (${conv.visitor?.fingerprint?.slice(0, 8)}...)`}
                         {conv.visitor?.lead && (
-                          <span className="badge bg-info ms-1" style={{ fontSize: '0.65rem' }}>Known</span>
+                          <span className="ms-1"><StatusBadge label="Known" tone="info" /></span>
                         )}
                       </td>
                       <td className="text-nowrap small">{formatRelative(conv.started_at)}</td>
                       <td>
-                        <span className="badge bg-light text-dark">{conv.message_count}</span>
+                        <StatusBadge label={String(conv.message_count)} tone="neutral" />
                       </td>
                       <td className="small">{conv.page_category || '-'}</td>
                       <td className="small">
-                        <span className={`badge bg-${conv.trigger_type === 'proactive_behavioral' ? 'warning' : 'light'} text-dark`}>
-                          {conv.trigger_type.replace(/_/g, ' ')}
-                        </span>
+                        <StatusBadge
+                          label={conv.trigger_type.replace(/_/g, ' ')}
+                          tone={conv.trigger_type === 'proactive_behavioral' ? 'warning' : 'neutral'}
+                        />
                       </td>
                       <td>
-                        <span className={`badge bg-${conv.status === 'active' ? 'success' : conv.status === 'escalated' ? 'danger' : 'secondary'}`}>
-                          {conv.status}
-                        </span>
+                        <StatusBadge
+                          label={conv.status}
+                          tone={conv.status === 'active' ? 'success' : conv.status === 'escalated' ? 'danger' : 'neutral'}
+                        />
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
-          </div>
         </div>
         {chatTotalPages > 1 && (
-          <div className="card-footer bg-white">
+          <div className="px-3 py-2 border-top">
             <Pagination
               page={chatPage}
               totalPages={chatTotalPages}
@@ -1078,15 +1019,13 @@ function AdminVisitorsPage() {
             />
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 
   const renderSessionsTab = () => (
-    <div className="card border-0 shadow-sm">
-      <div className="card-header bg-white fw-semibold">Recent Sessions</div>
-      <div className="card-body p-0">
-        <div className="table-responsive">
+    <SectionCard title="Recent Sessions" icon="history-line" padded={false}>
+      <div className="table-responsive">
           <table className="table table-hover mb-0">
             <thead className="table-light">
               <tr>
@@ -1117,11 +1056,9 @@ function AdminVisitorsPage() {
                     <td className="small text-truncate" style={{ maxWidth: 180 }}>{s.entry_page || '-'}</td>
                     <td className="small text-truncate" style={{ maxWidth: 180 }}>{s.exit_page || '-'}</td>
                     <td>
-                      {s.is_bounce ? (
-                        <span className="badge bg-warning text-dark">Yes</span>
-                      ) : (
-                        <span className="badge bg-light text-dark">No</span>
-                      )}
+                      {s.is_bounce
+                        ? <StatusBadge label="Yes" tone="warning" />
+                        : <StatusBadge label="No" tone="neutral" />}
                     </td>
                     <td className="small">{s.referrer_domain || 'Direct'}</td>
                   </tr>
@@ -1129,9 +1066,8 @@ function AdminVisitorsPage() {
               )}
             </tbody>
           </table>
-        </div>
       </div>
-    </div>
+    </SectionCard>
   );
 
   /* ---------------------------------------------------------------- */
@@ -1273,7 +1209,7 @@ function AdminVisitorsPage() {
                                       style={{
                                         width: 40,
                                         height: 6,
-                                        background: '#e2e8f0',
+                                        background: 'var(--neutral-200)',
                                         borderRadius: 3,
                                         overflow: 'hidden',
                                       }}
@@ -1283,9 +1219,9 @@ function AdminVisitorsPage() {
                                           width: `${Math.min(sig.signal_strength, 100)}%`,
                                           height: '100%',
                                           background:
-                                            sig.signal_strength >= 40 ? '#e53e3e' :
-                                            sig.signal_strength >= 25 ? '#dd6b20' :
-                                            '#38a169',
+                                            sig.signal_strength >= 40 ? 'var(--status-danger)' :
+                                            sig.signal_strength >= 25 ? 'var(--status-warning)' :
+                                            'var(--status-success)',
                                           borderRadius: 3,
                                         }}
                                       />
@@ -1349,7 +1285,7 @@ function AdminVisitorsPage() {
                                       {new Date(evt.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                     </td>
                                     <td>
-                                      <span className="badge bg-light text-dark">{evt.event_type}</span>
+                                      <StatusBadge label={evt.event_type} tone="neutral" />
                                     </td>
                                     <td className="text-truncate" style={{ maxWidth: 200 }}>
                                       {evt.page_url || '-'}
@@ -1383,13 +1319,39 @@ function AdminVisitorsPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Visitors' }]} />
-
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Visitor Intelligence
-        </h1>
-      </div>
+      <PageHeader
+        title="Visitors"
+        icon="eye-line"
+        subtitle="Live sessions, identified visitors, intent scoring, and on-site chat — all first-party tracked."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Visitors' }]}
+        trust={trust}
+        actions={
+          <button
+            className="btn btn-outline-primary btn-sm"
+            onClick={() => { fetchLive(); fetchStats(); }}
+            disabled={loading}
+          >
+            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
+          </button>
+        }
+      >
+        {stats && (
+          <div className="row g-3">
+            <div className="col-6 col-lg-3">
+              <StatCard label="Live Now" value={stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Visitors Today" value={stats.todayVisitors ?? 0} icon="user-line" tone="primary" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Sessions Today" value={stats.todaySessions ?? 0} icon="time-line" tone="info" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Visitors (30d)" value={stats.visitors30d ?? 0} icon="group-line" tone="neutral" />
+            </div>
+          </div>
+        )}
+      </PageHeader>
 
       {/* Tab navigation */}
       <nav>
@@ -1456,8 +1418,8 @@ function AdminVisitorsPage() {
                 <button type="button" className="btn-close" onClick={() => { setSelectedConversation(null); setConversationMessages([]); }} />
               </div>
               <div className="modal-body">
-                <div className="d-flex gap-3 mb-3 flex-wrap">
-                  <span className={`badge bg-${selectedConversation.status === 'active' ? 'success' : 'secondary'}`}>{selectedConversation.status}</span>
+                <div className="d-flex gap-3 mb-3 flex-wrap align-items-center">
+                  <StatusBadge label={selectedConversation.status} tone={selectedConversation.status === 'active' ? 'success' : 'neutral'} />
                   <small className="text-muted">Started: {formatRelative(selectedConversation.started_at)}</small>
                   <small className="text-muted">Messages: {selectedConversation.message_count}</small>
                   <small className="text-muted">Trigger: {selectedConversation.trigger_type.replace(/_/g, ' ')}</small>
@@ -1475,7 +1437,7 @@ function AdminVisitorsPage() {
                         className="px-3 py-2 rounded"
                         style={{
                           maxWidth: '80%',
-                          backgroundColor: msg.role === 'visitor' ? '#e8f0fe' : msg.role === 'system' ? '#fff3cd' : '#f8f9fa',
+                          backgroundColor: msg.role === 'visitor' ? 'var(--status-info-bg)' : msg.role === 'system' ? 'var(--status-warning-bg)' : 'var(--surface-subtle)',
                           border: '1px solid var(--color-border)',
                           fontSize: '13px',
                         }}

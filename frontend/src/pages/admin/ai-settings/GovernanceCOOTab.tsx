@@ -35,11 +35,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const DEPT_COLORS: Record<string, string> = {
-  Intelligence: '#2b6cb0',
-  Operations: '#38a169',
-  Growth: '#805ad5',
-  Maintenance: '#718096',
-  Security: '#e53e3e',
+  Intelligence: 'var(--chart-1)',
+  Operations: 'var(--chart-3)',
+  Growth: 'var(--chart-5)',
+  Maintenance: 'var(--chart-8)',
+  Security: 'var(--chart-2)',
 };
 
 export default function GovernanceCOOTab() {
@@ -212,7 +212,7 @@ export default function GovernanceCOOTab() {
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <div
                     className="rounded-circle"
-                    style={{ width: 12, height: 12, background: DEPT_COLORS[dept.department] || '#718096' }}
+                    style={{ width: 12, height: 12, background: DEPT_COLORS[dept.department] || 'var(--chart-8)' }}
                   />
                   <span className="fw-semibold" style={{ fontSize: '0.82rem' }}>{dept.department}</span>
                   <span className="badge bg-light text-muted border ms-auto" style={{ fontSize: '0.6rem' }}>
@@ -239,7 +239,7 @@ export default function GovernanceCOOTab() {
                           style={{
                             width: 6,
                             height: 6,
-                            background: a.status === 'error' ? '#e53e3e' : a.enabled ? '#38a169' : '#d69e2e',
+                            background: a.status === 'error' ? 'var(--status-danger)' : a.enabled ? 'var(--status-success)' : 'var(--status-warning)',
                           }}
                         />
                         <span className="text-truncate">{a.agent_name}</span>

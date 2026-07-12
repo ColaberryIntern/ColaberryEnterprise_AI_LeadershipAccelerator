@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { verifyWebhookSignature } from '../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaign } from '../services/enrollmentService';
-import { Cohort } from '../models';
+import { Cohort, EnrollmentLead } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
 
 export async function handlePaySimpleWebhook(req: Request, res: Response): Promise<void> {
@@ -47,10 +47,31 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
         return;
       }
 
-      const enrollment = await markEnrollmentPaid(externalId);
+      const enrollment = await markEnrollmentPaid(externalId, {
+        paymentId: paymentId as number,
+        amount: amount as number,
+      });
 
       if (enrollment) {
         console.log(`[Webhook] Enrollment ${enrollment.id} marked as paid (payment: ${paymentId}, $${amount})`);
+
+        // Upsert EnrollmentLead — funnel tracking (non-blocking)
+        EnrollmentLead.findOrCreate({
+          where: { email: enrollment.email },
+          defaults: {
+            name: enrollment.full_name,
+            email: enrollment.email,
+            phone: enrollment.phone || undefined,
+            status: 'enrolled',
+            enrollment_id: enrollment.id,
+          },
+        }).then(([lead, created]) => {
+          if (!created && lead.status !== 'enrolled') {
+            lead.status = 'enrolled';
+            lead.enrollment_id = enrollment.id;
+            return lead.save();
+          }
+        }).catch((err) => console.error('[Webhook] EnrollmentLead upsert error:', err));
 
         const cohort = await Cohort.findByPk(enrollment.cohort_id);
         if (cohort) {

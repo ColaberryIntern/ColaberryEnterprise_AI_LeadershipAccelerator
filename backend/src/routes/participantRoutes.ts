@@ -2,9 +2,14 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { strategyPrepUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
+import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
+  handleFreeSignup, handleGetPoints,
+  handleGetOnboardingSchedule, handleRsvpOpenHouse,
+  handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
@@ -25,17 +30,39 @@ import {
   handleGetSessionChat, handlePostSessionChat,
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
+import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
+import {
+  handleOpenCard, handleMentor, handleReflection, handleVideoAugment, handlePromptLab,
+  handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
+} from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
+import studentOpsRoutes from './studentOpsRoutes';
+import workspaceRoutes from './workspaceRoutes';
 
 const router = Router();
 
 // Public auth endpoints
+router.post('/api/portal/free-signup', handleFreeSignup); // self-serve free/guest account
 router.post('/api/portal/request-link', handleRequestMagicLink);
 router.get('/api/portal/verify', handleVerifyMagicLink);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
+// Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
+router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
+router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
+// Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
+router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);
+router.get('/api/portal/runtime/notebook', requireParticipant, handleListNotes);
+router.post('/api/portal/runtime/notebook', requireParticipant, handleCreateNote);
+router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDeleteNote);
+router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCard);
+router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
+router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
+router.post('/api/portal/runtime/cards/:cardId/video-augment', requireParticipant, handleVideoAugment);
+router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
+router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
@@ -44,6 +71,11 @@ router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
+router.get('/api/portal/points', requireParticipant, handleGetPoints);
+router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
+router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
+router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
+router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);
@@ -109,8 +141,7 @@ router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requir
     const rawText = fs.readFileSync(file.path, 'utf-8').substring(0, 20000);
 
     // Summarize via OpenAI
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'participant_routes' });
     const response = await openai.chat.completions.create({
       model: process.env.AI_MODEL || 'gpt-4o-mini',
       messages: [
@@ -155,8 +186,13 @@ router.post('/api/portal/project-dna', requireParticipant, async (req, res) => {
     return;
   }
   try {
-    const record = await saveProjectDna(req.participant!.sub, parse.data);
+    const enrollmentId = req.participant!.sub;
+    const record = await saveProjectDna(enrollmentId, parse.data);
     res.status(201).json(record);
+    // Fire-and-forget: kick off requirements generation; does not block the response
+    startRequirementsGeneration(enrollmentId).catch(err =>
+      console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'requirements_gen_trigger_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message, enrollment_id: enrollmentId } }))
+    );
   } catch (err: any) {
     const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
     console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'project_dna_save_failed', correlation_id: correlationId, outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
@@ -179,9 +215,60 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
 // Project endpoints
 router.use(projectRoutes);
 
+// Per-student workspace repo endpoints (platform-provisioned GitHub repo + sync)
+router.use(workspaceRoutes);
+
+// Student CB-System operating model (priority queue, Run My Day, decisions)
+router.use(studentOpsRoutes);
+
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);
 router.get('/api/portal/mentor/history', requireParticipant, handleGetMentorHistory);
+
+// Mentor feedback on submissions
+router.get('/api/portal/submissions/:submissionId/mentor-feedback', requireParticipant, async (req, res) => {
+  try {
+    const { getFeedbackForSubmission } = await import('../services/mentorFeedbackService');
+    const feedback = await getFeedbackForSubmission(
+      req.params.submissionId as string,
+      req.participant!.sub
+    );
+    if (!feedback) return res.status(404).json({ error: 'No mentor feedback available yet' });
+    res.json(feedback);
+  } catch (err: any) {
+    console.error('[ParticipantRoutes] mentor-feedback error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve mentor feedback' });
+  }
+});
+
+// GitHub OAuth endpoints
+router.get('/api/portal/github/oauth/start', requireParticipant, async (req, res) => {
+  const { buildOAuthUrl } = await import('../services/githubIntegrationService');
+  res.redirect(buildOAuthUrl(req.participant!.sub));
+});
+
+// Returns the OAuth URL as JSON so SPA clients can redirect via JS (Bearer token auth)
+router.get('/api/portal/github/oauth/url', requireParticipant, async (req, res) => {
+  const { buildOAuthUrl } = await import('../services/githubIntegrationService');
+  res.json({ url: buildOAuthUrl(req.participant!.sub) });
+});
+
+// Callback from GitHub — no session cookie present, identity comes from state param
+router.get('/api/portal/github/oauth/callback', async (req, res) => {
+  const { code, state: enrollmentId } = req.query;
+  if (!code || !enrollmentId || typeof code !== 'string' || typeof enrollmentId !== 'string') {
+    res.status(400).json({ error: 'Missing code or state' });
+    return;
+  }
+  try {
+    const { handleOAuthCallback } = await import('../services/githubIntegrationService');
+    await handleOAuthCallback(code, enrollmentId);
+    res.redirect('/portal/home?github_connected=1');
+  } catch (err: any) {
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_oauth_callback_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'GitHub connection failed' });
+  }
+});
 
 // GitHub integration endpoints
 router.post('/api/portal/github/connect', requireParticipant, async (req, res) => {

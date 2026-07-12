@@ -10,8 +10,8 @@ interface Props {
 const LAYER_META: Record<string, { label: string; icon: string; color: string; description: string }> = {
   frontend: { label: 'Frontend', icon: 'bi-layout-wtf', color: '#10b981', description: 'User-facing React components and pages' },
   api: { label: 'API Routes', icon: 'bi-plug', color: '#3b82f6', description: 'Express route handlers that expose backend logic' },
-  services: { label: 'Services', icon: 'bi-gear', color: '#6366f1', description: 'Core business logic and data processing' },
-  agents: { label: 'Agents', icon: 'bi-cpu', color: '#8b5cf6', description: 'AI agents that automate decisions and actions' },
+  services: { label: 'Services', icon: 'bi-gear', color: '#FB2832', description: 'Core business logic and data processing' },
+  agents: { label: 'Agents', icon: 'bi-cpu', color: '#367895', description: 'AI agents that automate decisions and actions' },
   database: { label: 'Database', icon: 'bi-database', color: '#f59e0b', description: 'Sequelize models defining data schema' },
 };
 

@@ -3,6 +3,7 @@
 // then updates the Lead record and AdmissionsMemory with the extracted info.
 
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import { Lead } from '../models';
 import AdmissionsMemory from '../models/AdmissionsMemory';
@@ -14,7 +15,7 @@ function getClient(): OpenAI {
   if (!openaiClient) {
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = new OpenAI({ apiKey });
+    openaiClient = getInstrumentedOpenAI({ workflow_id: 'call_transcript' }, { apiKey });
   }
   return openaiClient;
 }

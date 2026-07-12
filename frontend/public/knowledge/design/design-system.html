@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colaberry — Design System</title>
+<link rel="icon" href="assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="styles.css">
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { margin: 0; }
+  .ds { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; }
+
+  /* Sidebar */
+  .ds-side { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border-subtle); background: var(--surface-subtle);
+    padding: 26px 20px; display: flex; flex-direction: column; gap: 22px; }
+  .ds-side__logo img { height: 30px; }
+  .ds-side__sub { font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.4; }
+  .ds-nav { display: flex; flex-direction: column; gap: 2px; }
+  .ds-nav a { font-size: 14px; color: var(--text-muted); text-decoration: none; padding: 8px 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 10px; }
+  .ds-nav a:hover { background: var(--surface-sunken); color: var(--text-strong); }
+  .ds-nav a.active { background: var(--surface-brand-subtle); color: var(--red-600); font-weight: var(--fw-medium); }
+  .ds-nav a .cb-i { font-size: 16px; }
+  .ds-dl { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; font-family: var(--font-body); font-size: 13px; font-weight: var(--fw-medium); color: var(--text-on-accent); background: var(--red-500); padding: 11px 14px; border-radius: var(--radius-pill); box-shadow: var(--shadow-brand); transition: background var(--dur-fast) var(--ease-out); }
+  .ds-dl:hover { background: var(--red-600); text-decoration: none; color: var(--text-on-accent); }
+  .ds-dl .cb-i { font-size: 16px; }
+  .ds-dl--alt { background: transparent; color: var(--text-strong); box-shadow: inset 0 0 0 1px var(--border-default); }
+  .ds-dl--alt .cb-i { color: var(--blue-500); }
+  .ds-dl--alt:hover { background: var(--surface-sunken); color: var(--text-strong); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .ds-theme { margin-top: 12px; display: flex; align-items: center; gap: 10px; background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-pill); padding: 4px; }
+  .ds-theme button { flex: 1; border: none; background: transparent; padding: 8px; border-radius: var(--radius-pill); cursor: pointer; color: var(--text-muted); font-family: var(--font-body); font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .ds-theme button.active { background: var(--surface-inverse); color: var(--text-on-inverse); }
+
+  /* Main */
+  .ds-main { min-width: 0; }
+  .ds-sec { padding: 72px 56px; border-bottom: 1px solid var(--border-subtle); max-width: 1080px; }
+  .ds-sec__eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: var(--ls-overline); text-transform: uppercase; color: var(--red-500); margin: 0 0 10px; }
+  .ds-sec h2 { font-size: var(--fs-h2); margin: 0 0 14px; }
+  .ds-sec__lead { font-size: var(--fs-body-lg); color: var(--text-muted); max-width: 60ch; margin: 0 0 36px; }
+  .ds-h3 { font-size: var(--fs-h4); margin: 36px 0 16px; color: var(--text-strong); }
+
+  /* Hero */
+  .ds-hero { padding: 0; border-bottom: 1px solid var(--border-subtle); }
+  .ds-hero__band { background: linear-gradient(135deg, var(--surface-subtle), var(--surface-page)); padding: 64px 56px 56px; }
+  .ds-hero__logo img { height: 64px; }
+  .ds-hero h1 { font-size: clamp(36px, 4vw, 52px); margin: 28px 0 14px; letter-spacing: var(--ls-tighter); }
+  .ds-hero p { font-size: var(--fs-body-lg); color: var(--text-muted); max-width: 56ch; margin: 0; }
+  .ds-meta { display: flex; gap: 28px; margin-top: 30px; flex-wrap: wrap; }
+  .ds-meta div { font-size: 13px; color: var(--text-muted); }
+  .ds-meta strong { display: block; font-family: var(--font-display); font-size: 22px; color: var(--text-strong); }
+
+  /* Color swatches */
+  .ds-ramp { display: grid; grid-template-columns: repeat(10, 1fr); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-subtle); margin-bottom: 10px; }
+  .ds-ramp.neutral { grid-template-columns: repeat(13, 1fr); }
+  .ds-sw { height: 76px; border: none; cursor: pointer; position: relative; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 7px; font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,.9); transition: transform var(--dur-fast) var(--ease-out); }
+  .ds-sw[data-dark="1"] { color: rgba(0,0,0,.6); }
+  .ds-sw:hover { transform: translateY(-3px); z-index: 1; box-shadow: var(--shadow-md); }
+  .ds-semantic { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  .ds-tok { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); cursor: pointer; background: var(--surface-card); }
+  .ds-tok:hover { border-color: var(--border-strong); }
+  .ds-tok__chip { width: 34px; height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); flex: none; }
+  .ds-tok__name { font-family: var(--font-mono); font-size: 12px; color: var(--text-strong); }
+  .ds-tok__val { font-size: 11px; color: var(--text-muted); }
+
+  /* Type */
+  .ds-type-row { display: flex; align-items: baseline; gap: 22px; padding: 14px 0; border-bottom: 1px dashed var(--border-subtle); }
+  .ds-type-row .meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); width: 132px; flex: none; }
+  .ds-type-row .spec { color: var(--text-strong); }
+
+  /* Spacing / radius */
+  .ds-flex { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; }
+  .ds-flex.top { align-items: flex-start; }
+  .ds-cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .ds-cell .v { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .ds-bar { background: var(--red-500); border-radius: 3px; }
+  .ds-rbox { width: 80px; height: 64px; background: var(--green-100); border: 2px solid var(--green-500); }
+  .ds-shbox { width: 92px; height: 64px; background: var(--surface-card); border-radius: var(--radius-lg); }
+
+  /* Components showcase */
+  .ds-demo { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: 28px; background: var(--surface-card); margin-bottom: 20px; }
+  .ds-demo h4 { margin: 0 0 18px; font-size: var(--fs-body); color: var(--text-strong); }
+  .ds-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .ds-row + .ds-row { margin-top: 16px; }
+  .ds-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+
+  /* Logo rules */
+  .ds-logo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .ds-logo-cell { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 28px; display: grid; place-items: center; min-height: 120px; }
+  .ds-logo-cell.dark { background: var(--neutral-900); }
+  .ds-logo-cell.red { background: var(--red-500); }
+  .ds-logo-cell img { max-height: 56px; max-width: 100%; }
+  .ds-dodont { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ds-rule { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); overflow: hidden; }
+  .ds-rule__head { padding: 10px 16px; font-weight: var(--fw-bold); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .ds-rule.do .ds-rule__head { background: var(--green-50); color: var(--green-800); }
+  .ds-rule.dont .ds-rule__head { background: var(--red-50); color: var(--red-800); }
+  .ds-rule ul { margin: 0; padding: 14px 18px 16px 34px; }
+  .ds-rule li { font-size: 14px; color: var(--text-body); margin-bottom: 8px; }
+  .ds-clearspace { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 30px; display: flex; justify-content: center; background: var(--surface-subtle); }
+  .ds-clearspace__box { position: relative; padding: 40px; outline: 2px dashed var(--blue-300); }
+  .ds-clearspace__box img { height: 48px; display: block; }
+
+  /* Accessibility table */
+  .ds-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .ds-table th, .ds-table td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border-subtle); }
+  .ds-table th { font-size: 12px; text-transform: uppercase; letter-spacing: var(--ls-wide); color: var(--text-muted); }
+  .ds-pair { display: inline-flex; align-items: center; gap: 8px; }
+  .ds-pair span { display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 30px; border-radius: var(--radius-sm); font-size: 12px; font-weight: var(--fw-bold); }
+  .ds-verdict { font-family: var(--font-mono); font-size: 12px; font-weight: var(--fw-bold); padding: 3px 9px; border-radius: var(--radius-pill); }
+  .ds-verdict.pass { background: var(--green-50); color: var(--green-800); }
+  .ds-verdict.large { background: var(--blue-50); color: var(--blue-700); }
+  .ds-verdict.fail { background: var(--red-50); color: var(--red-800); }
+
+  /* Assets / checklist */
+  .ds-assets { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 14px; }
+  .ds-asset { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-card); }
+  .ds-asset__prev { height: 64px; display: grid; place-items: center; background: var(--surface-subtle); border-radius: var(--radius-sm); }
+  .ds-asset__prev img { max-height: 44px; max-width: 80%; }
+  .ds-asset__name { font-family: var(--font-mono); font-size: 12px; color: var(--text-strong); }
+  .ds-asset__meta { font-size: 12px; color: var(--text-muted); }
+  .ds-check { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .ds-check li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; color: var(--text-body); }
+  .ds-check .cb-i { color: var(--green-600); margin-top: 2px; flex: none; }
+
+  /* Prompting / hand-off */
+  .ds-audience { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+  .ds-aud { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: 24px; background: var(--surface-card); display: flex; flex-direction: column; gap: 14px; }
+  .ds-aud__head { display: flex; align-items: center; gap: 12px; }
+  .ds-aud__ic { width: 42px; height: 42px; border-radius: var(--radius-md); display: grid; place-items: center; flex: none; }
+  .ds-aud__ic .cb-i { font-size: 22px; color: #fff; }
+  .ds-aud h3 { margin: 0; font-size: var(--fs-h4); }
+  .ds-aud__sub { font-size: 13px; color: var(--text-muted); margin: 0; }
+  .ds-prompt { position: relative; background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px 44px 14px 16px; font-size: 14px; line-height: 1.55; color: var(--text-body); cursor: pointer; transition: border-color var(--dur-fast); }
+  .ds-prompt:hover { border-color: var(--border-strong); }
+  .ds-prompt em { color: var(--text-strong); font-style: normal; font-weight: var(--fw-medium); }
+  .ds-prompt__copy { position: absolute; top: 10px; right: 10px; color: var(--text-subtle); }
+  .ds-prompt__copy .cb-i { font-size: 15px; }
+  .ds-aud ul { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .ds-aud li { font-size: 13.5px; color: var(--text-body); display: flex; gap: 9px; align-items: flex-start; }
+  .ds-aud li .cb-i { font-size: 15px; color: var(--green-600); margin-top: 1px; flex: none; }
+  .ds-give { margin-top: 8px; }
+
+  /* Data-viz swatches */
+  .ds-chart-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; margin-bottom: 22px; }
+  .ds-chart-sw { height: 64px; border-radius: var(--radius-md); border: none; cursor: pointer; position: relative; transition: transform var(--dur-fast) var(--ease-out); display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,.92); }
+  .ds-chart-sw:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  .ds-scales { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .ds-scale-lbl { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .ds-scale { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 44px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-subtle); }
+  .ds-scale button { border: none; cursor: pointer; padding: 0; }
+  @media (max-width: 900px) { .ds-chart-row { grid-template-columns: repeat(4, 1fr); } .ds-scales { grid-template-columns: 1fr; } }
+
+  /* Design principles */
+  .ds-princ { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .ds-princ__card { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface-card); padding: 24px; }
+  .ds-princ__ic { width: 44px; height: 44px; border-radius: var(--radius-lg); display: grid; place-items: center; color: #fff; margin-bottom: 16px; }
+  .ds-princ__ic .cb-i { font-size: 22px; }
+  .ds-princ__card h3 { margin: 0 0 8px; font-size: var(--fs-h4); }
+  .ds-princ__card p { margin: 0; font-size: 14px; color: var(--text-muted); line-height: 1.55; }
+  @media (max-width: 900px) { .ds-princ { grid-template-columns: 1fr; } }
+
+  /* Accessibility guideline grid */
+  .ds-a11y-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 28px 0 0; }
+  .ds-a11y-card { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 20px 22px; background: var(--surface-card); }
+  .ds-a11y-card h4 { margin: 0 0 12px; font-size: var(--fs-body); display: flex; align-items: center; gap: 10px; }
+  .ds-a11y-card h4 .cb-i { color: var(--green-600); font-size: 19px; }
+  .ds-a11y-card ul { margin: 0; padding-left: 18px; }
+  .ds-a11y-card li { font-size: 13.5px; color: var(--text-body); margin-bottom: 7px; line-height: 1.5; }
+  @media (max-width: 900px) { .ds-a11y-grid { grid-template-columns: 1fr; } }
+
+  /* In-page doc viewers */
+  .ds-docs { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .ds-doc { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-card); display: flex; flex-direction: column; min-width: 0; }
+  .ds-doc__head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); background: var(--surface-subtle); }
+  .ds-doc__head span { font-family: var(--font-mono); font-size: 12px; color: var(--text-strong); font-weight: var(--fw-bold); }
+  .ds-doc__copy { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-size: 12px; font-weight: var(--fw-medium); color: var(--text-on-accent); background: var(--red-500); border: none; border-radius: var(--radius-pill); padding: 5px 12px; cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+  .ds-doc__copy:hover { background: var(--red-600); }
+  .ds-doc__copy:active { transform: translateY(1px); }
+  .ds-doc__pre { margin: 0; padding: 14px 16px; max-height: 360px; overflow: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text-body); white-space: pre-wrap; word-break: break-word; }
+  @media (max-width: 900px) { .ds-docs { grid-template-columns: 1fr; } }
+
+  /* Getting started — local & Claude */
+  .ds-setup { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .ds-gs { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); overflow: hidden; background: var(--surface-card); display: flex; flex-direction: column; }
+  .ds-track__head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--border-subtle); }
+  .ds-track__ic { width: 38px; height: 38px; border-radius: var(--radius-md); display: grid; place-items: center; flex: none; color: #fff; }
+  .ds-track__ic .cb-i { font-size: 20px; }
+  .ds-track__head h3 { margin: 0; font-size: var(--fs-body-lg); line-height: 1.2; white-space: nowrap; }
+  .ds-track__tag { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); margin-top: 3px; }
+  .ds-track__body { padding: 22px; }
+  .ds-steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+  .ds-steps > li { counter-increment: step; position: relative; padding-left: 40px; }
+  .ds-steps > li::before { content: counter(step); position: absolute; left: 0; top: -2px; width: 26px; height: 26px; border-radius: 50%; background: var(--surface-sunken); color: var(--text-strong); font-family: var(--font-body); font-weight: var(--fw-bold); font-size: 13px; display: grid; place-items: center; }
+  .ds-steps strong { color: var(--text-strong); }
+  .ds-steps p { margin: 0; font-size: 14px; color: var(--text-muted); line-height: 1.55; }
+  .ds-code { margin: 10px 0 0; background: var(--neutral-950); border-radius: var(--radius-md); padding: 12px 14px; overflow-x: auto; }
+  .ds-code code { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; color: #E4E4E3; white-space: pre; display: block; }
+  .ds-code .c-key { color: #8AC759; } .ds-code .c-tag { color: #6F9DB6; } .ds-code .c-mut { color: #8C8C8C; }
+  .ds-note { display: flex; gap: 10px; align-items: flex-start; background: var(--surface-blue-subtle); border-radius: var(--radius-md); padding: 12px 14px; margin-top: 18px; font-size: 13px; color: var(--text-body); }
+  .ds-note .cb-i { color: var(--blue-600); font-size: 17px; flex: none; margin-top: 1px; }
+
+  /* Motion */
+  .ds-principles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 36px; }
+  .ds-principle { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 18px; background: var(--surface-card); }
+  .ds-principle .cb-i { font-size: 20px; color: var(--red-500); }
+  .ds-principle h4 { margin: 12px 0 6px; font-size: var(--fs-body-sm); color: var(--text-strong); }
+  .ds-principle p { margin: 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+  .ds-motion-panel { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: 24px; background: var(--surface-card); }
+  .ds-recipes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .ds-recipe { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 18px; background: var(--surface-card); }
+  .ds-recipe__tag { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--red-600); background: var(--surface-brand-subtle); padding: 3px 9px; border-radius: var(--radius-pill); margin-bottom: 12px; }
+  .ds-recipe b { display: block; font-size: var(--fs-body); color: var(--text-strong); margin-bottom: 6px; }
+  .ds-recipe p { margin: 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+  .ds-recipe code { font-family: var(--font-mono); font-size: .92em; color: var(--text-body); }
+  @media (max-width: 900px) { .ds-recipes { grid-template-columns: 1fr; } }
+  .ds-motion-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 16px; }
+  .ds-motion-head h4 { margin: 0; font-size: var(--fs-body); color: var(--text-strong); }
+  .ds-replay { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-body); font-size: 13px; font-weight: var(--fw-medium); color: var(--text-strong); background: var(--surface-sunken); border: 1px solid var(--border-default); border-radius: var(--radius-pill); padding: 7px 14px; cursor: pointer; transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+  .ds-replay:hover { background: var(--surface-page); border-color: var(--border-strong); }
+  .ds-replay:active { transform: translateY(1px); }
+  .ds-replay .cb-i { font-size: 14px; color: var(--red-500); }
+  .ds-track-row { display: grid; grid-template-columns: 132px 1fr; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .ds-track-row:last-child { margin-bottom: 0; }
+  .ds-track-lbl { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .ds-track-lbl b { display: block; color: var(--text-strong); font-family: var(--font-body); font-size: 13px; margin-bottom: 2px; }
+  .ds-track { position: relative; height: 34px; background: var(--surface-sunken); border-radius: var(--radius-pill); }
+  .ds-dot { position: absolute; top: 5px; left: 5px; width: 24px; height: 24px; border-radius: 50%; background: var(--red-500); }
+  .ds-dot.g { background: var(--green-600); } .ds-dot.b { background: var(--blue-500); }
+  .ds-states { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .ds-state { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 20px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; background: var(--surface-card); }
+  .ds-state__cap { font-size: 12px; color: var(--text-muted); margin-top: auto; line-height: 1.45; }
+  .ds-state__cap b { color: var(--text-strong); font-weight: var(--fw-medium); }
+  .ds-lift { width: 100%; height: 60px; border-radius: var(--radius-md); background: linear-gradient(135deg, var(--blue-500), var(--blue-700)); transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out); }
+  .ds-lift:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); }
+  .ds-demo-link { color: var(--text-link); font-weight: var(--fw-medium); position: relative; cursor: pointer; font-size: var(--fs-body); }
+  .ds-demo-link::after { content: ''; position: absolute; left: 0; bottom: -3px; width: 100%; height: 2px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform var(--dur-base) var(--ease-out); }
+  .ds-demo-link:hover::after { transform: scaleX(1); }
+  .ds-reveal { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ds-reveal > span { padding: 9px 16px; border-radius: var(--radius-pill); background: var(--surface-sunken); font-size: 13px; color: var(--text-body); opacity: 0; transform: translateY(14px); }
+  .ds-reveal.is-in > span { opacity: 1; transform: none; transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out); }
+  .ds-reveal.is-in > span:nth-child(1) { transition-delay: 0ms; }
+  .ds-reveal.is-in > span:nth-child(2) { transition-delay: 70ms; }
+  .ds-reveal.is-in > span:nth-child(3) { transition-delay: 140ms; }
+  .ds-reveal.is-in > span:nth-child(4) { transition-delay: 210ms; }
+  .ds-reveal.is-in > span:nth-child(5) { transition-delay: 280ms; }
+  @media (prefers-reduced-motion: reduce) {
+    .ds-dot, .ds-lift, .ds-reveal > span, .ds-demo-link::after { transition-duration: 0.001ms !important; }
+  }
+
+  /* Toast */
+  .ds-toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--neutral-900); color: #fff; padding: 12px 20px; border-radius: var(--radius-pill); font-size: 14px; box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none; transition: all var(--dur-base) var(--ease-out); z-index: var(--z-toast); display: flex; align-items: center; gap: 8px; }
+  .ds-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .ds-toast .cb-i { color: var(--green-400); }
+
+  .cb-i { display: inline-flex; align-items: center; justify-content: center; line-height: 0; font-size: 18px; }
+  .cb-i svg { width: 1em; height: 1em; display: block; stroke-width: 2; }
+
+  .ds-loading { padding: 40px; text-align: center; color: var(--text-subtle); font-family: var(--font-mono); font-size: 13px; }
+
+  /* Live component gallery */
+  .ds-gal { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  .ds-tile { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface-card); padding: 22px; min-width: 0; }
+  .ds-tile--wide { grid-column: 1 / -1; }
+  .ds-tile__name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-subtle); margin: 0 0 16px; }
+  .ds-tile .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .ds-tile .row + .row { margin-top: 14px; }
+  .ds-tile .stack { display: flex; flex-direction: column; gap: 14px; }
+
+  /* Example layouts */
+  .ds-ex { display: flex; flex-direction: column; gap: 28px; }
+  .ds-ex__frame { border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .ds-ex__bar { display: flex; align-items: center; gap: 7px; padding: 11px 16px; background: var(--surface-subtle); border-bottom: 1px solid var(--border-subtle); }
+  .ds-ex__dot { width: 11px; height: 11px; border-radius: 50%; background: var(--border-strong); }
+  .ds-ex__title { margin-left: 10px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .ds-ex__body { padding: 28px; background: var(--surface-page); }
+  .ds-ex__body .stack { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ---- embedded component styles (mirror of components/core) ---- */
+  .cb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-body); font-weight: var(--fw-bold); font-size: var(--fs-body-sm); line-height: 1.2; min-height: 48px; border: none; border-radius: var(--radius-pill); cursor: pointer; padding: 0 24px; text-decoration: none; white-space: nowrap; background: var(--action-bg); color: var(--action-fg); transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+  .cb-btn:hover { background: var(--action-bg-hover); }
+  .cb-btn:active { background: var(--action-bg-press); transform: translateY(1px); }
+  .cb-btn.primary { box-shadow: var(--shadow-brand); }
+  .cb-btn.green { background: var(--action-green-bg); } .cb-btn.green:hover { background: var(--action-green-bg-hover); }
+  .cb-btn.blue { background: var(--blue-500); } .cb-btn.blue:hover { background: var(--blue-600); }
+  .cb-btn.sm { font-size: var(--fs-caption); min-height: 38px; padding: 0 16px; }
+  .cb-btn.lg { font-size: var(--fs-body); min-height: 56px; padding: 0 32px; }
+  .cb-btn.outline { background: transparent; color: var(--text-strong); box-shadow: inset 0 0 0 2px var(--border-strong); }
+  .cb-btn.outline:hover { background: var(--surface-sunken); box-shadow: inset 0 0 0 2px var(--text-strong); }
+  .cb-btn.ghost { background: transparent; color: var(--text-strong); } .cb-btn.ghost:hover { background: var(--surface-sunken); }
+  .cb-btn.link { background: transparent; color: var(--text-link); padding: 4px 6px; min-height: 0; } .cb-btn.link:hover { text-decoration: underline; }
+  .cb-btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .cb-badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-weight: var(--fw-medium); font-size: var(--fs-caption); line-height: 1; padding: 5px 12px; border-radius: var(--radius-pill); background: var(--surface-sunken); color: var(--text-body); }
+  .cb-badge.solid { background: var(--red-500); color: #fff; }
+  .cb-badge.red { background: var(--status-danger-bg); color: var(--red-700); }
+  .cb-badge.green { background: var(--status-success-bg); color: var(--green-800); }
+  .cb-badge.blue { background: var(--status-info-bg); color: var(--blue-700); }
+  .cb-badge.outline { background: transparent; box-shadow: inset 0 0 0 1px var(--border-default); }
+  .cb-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .cb-card { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; }
+  .cb-card .body { padding: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+  .cb-card .media { height: 110px; display: grid; place-items: center; color: #fff; font-family: var(--font-display); font-weight: 700; }
+  .cb-card h3 { margin: 0; font-size: 20px; } .cb-card p { margin: 0; font-size: 14px; color: var(--text-muted); }
+  .cb-field { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-body); margin-bottom: 14px; }
+  .cb-field label { font-size: var(--fs-body-sm); font-weight: var(--fw-medium); color: var(--text-strong); }
+  .cb-input { font-family: var(--font-body); font-size: var(--fs-body); color: var(--text-strong); background: var(--surface-card); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: 12px 14px; width: 100%; }
+  .cb-input:focus { outline: none; border-color: var(--blue-500); box-shadow: var(--focus-ring); }
+  .cb-avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-family: var(--font-body); font-weight: var(--fw-bold); color: #fff; width: 48px; height: 48px; }
+</style>
+</head>
+<body data-screen-label="Design System">
+<a href="../index.html" style="position:fixed;top:14px;left:14px;z-index:9999;background:#FB2832;color:#fff;font:700 12px/1 Roboto,Arial,sans-serif;text-decoration:none;padding:9px 13px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.22)">&#8592; Colaberry Knowledge Base</a>
+<div class="ds">
+  <!-- SIDEBAR -->
+  <aside class="ds-side">
+    <div class="ds-side__logo">
+      <img src="assets/logo/colaberry-horizontal.png" alt="Colaberry" id="sideLogo">
+      <div class="ds-side__sub">Design System · v1.0</div>
+    </div>
+    <nav class="ds-nav" id="dsNav">
+      <a href="index.html"><span class="cb-i"><i data-lucide="sparkles"></i></span>Landing page</a>
+      <a href="#overview"><span class="cb-i"><i data-lucide="home"></i></span>Overview</a>
+      <a href="#principles"><span class="cb-i"><i data-lucide="compass"></i></span>Principles</a>
+      <a href="#setup"><span class="cb-i"><i data-lucide="rocket"></i></span>Get Started</a>
+      <a href="#logo"><span class="cb-i"><i data-lucide="cherry"></i></span>Logo</a>
+      <a href="#theme"><span class="cb-i"><i data-lucide="contrast"></i></span>Theme</a>
+      <a href="#color"><span class="cb-i"><i data-lucide="palette"></i></span>Color</a>
+      <a href="#type"><span class="cb-i"><i data-lucide="type"></i></span>Typography</a>
+      <a href="#space"><span class="cb-i"><i data-lucide="ruler"></i></span>Spacing &amp; Radius</a>
+      <a href="#motion"><span class="cb-i"><i data-lucide="wand-sparkles"></i></span>Motion</a>
+      <a href="#components"><span class="cb-i"><i data-lucide="component"></i></span>Components</a>
+      <a href="#examples"><span class="cb-i"><i data-lucide="layout-template"></i></span>Examples</a>
+      <a href="#a11y"><span class="cb-i"><i data-lucide="accessibility"></i></span>Accessibility</a>
+      <a href="#rules"><span class="cb-i"><i data-lucide="shield-check"></i></span>Logo Rules</a>
+      <a href="#assets"><span class="cb-i"><i data-lucide="download"></i></span>Assets</a>
+      <a href="#handoff"><span class="cb-i"><i data-lucide="check-check"></i></span>Hand-off</a>
+    </nav>
+    <a class="ds-dl" href="BRAND.md" download="BRAND.md"><span class="cb-i"><i data-lucide="file-down"></i></span>Download BRAND.md</a>
+    <a class="ds-dl ds-dl--alt" href="IMPLEMENTATION.md" download="IMPLEMENTATION.md"><span class="cb-i"><i data-lucide="code"></i></span>Dev install guide</a>
+    <div class="ds-theme">
+      <button data-set-theme="light" class="active"><span class="cb-i"><i data-lucide="sun"></i></span>Light</button>
+      <button data-set-theme="dark"><span class="cb-i"><i data-lucide="moon"></i></span>Dark</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="ds-main">
+    <!-- OVERVIEW -->
+    <section class="ds-sec ds-hero" id="overview">
+      <div class="ds-hero__band">
+        <div class="ds-hero__logo"><img src="assets/logo/colaberry-horizontal.png" alt="Colaberry" id="heroLogo"></div>
+        <h1>The Colaberry Design System</h1>
+        <p>The brand foundations, components and rules that power Colaberry — the School of Data Science &amp; Analytics building job-ready talent since 2012. Warm, inclusive, and confident.</p>
+        <div class="ds-meta">
+          <div><strong>3</strong>brand hues</div>
+          <div><strong>20</strong>components</div>
+          <div><strong>245</strong>design tokens</div>
+          <div><strong>WCAG 2.2</strong>audited</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRINCIPLES -->
+    <section class="ds-sec" id="principles">
+      <p class="ds-sec__eyebrow">Foundations</p>
+      <h2>Design principles</h2>
+      <p class="ds-sec__lead">Five beliefs that guide every decision in this system — the “why” behind the tokens and components. When a call is ambiguous, these break the tie.</p>
+      <div class="ds-princ">
+        <div class="ds-princ__card">
+          <span class="ds-princ__ic" style="background:var(--red-500)"><span class="cb-i"><i data-lucide="heart-handshake"></i></span></span>
+          <h3>Inclusive by default</h3>
+          <p>Built for every background and ability. Accessibility, plain language, and generous touch targets are requirements, not extras.</p>
+        </div>
+        <div class="ds-princ__card">
+          <span class="ds-princ__ic" style="background:var(--green-600)"><span class="cb-i"><i data-lucide="sprout"></i></span></span>
+          <h3>Warm, not loud</h3>
+          <p>Encouraging and human. Soft shapes, gentle motion, and friendly copy — confidence without hype or noise.</p>
+        </div>
+        <div class="ds-princ__card">
+          <span class="ds-princ__ic" style="background:var(--blue-500)"><span class="cb-i"><i data-lucide="bar-chart-3"></i></span></span>
+          <h3>Clarity over decoration</h3>
+          <p>We teach data — so we respect it. Content and numbers lead; ornament earns its place or it's cut.</p>
+        </div>
+        <div class="ds-princ__card">
+          <span class="ds-princ__ic" style="background:var(--blue-600)"><span class="cb-i"><i data-lucide="layers"></i></span></span>
+          <h3>One system, many makers</h3>
+          <p>Semantic tokens and reusable components mean a marketer, a developer, and an AI agent all produce the same brand.</p>
+        </div>
+        <div class="ds-princ__card">
+          <span class="ds-princ__ic" style="background:var(--red-600)"><span class="cb-i"><i data-lucide="anchor"></i></span></span>
+          <h3>Consistent &amp; constant</h3>
+          <p>The cherry accent never changes; foreground inverts with the background. Predictable rules make trustworthy products.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="ds-sec" id="setup">
+      <p class="ds-sec__eyebrow">Get started</p>
+      <h2>Use it locally &amp; in Claude</h2>
+      <p class="ds-sec__lead">Two ways to build with this system: chat with Claude for quick artifacts, or wire it into
+        your own project in VS Code. Grab the brand guide any time with <strong>Download BRAND.md</strong> in the sidebar.</p>
+
+      <div class="ds-setup">
+        <!-- Claude chat -->
+        <div class="ds-gs">
+          <div class="ds-track__head">
+            <span class="ds-track__ic" style="background:var(--green-600)"><span class="cb-i"><i data-lucide="message-square"></i></span></span>
+            <div><h3>Claude chat</h3><div class="ds-track__tag">no install · anyone</div></div>
+          </div>
+          <div class="ds-track__body">
+            <ol class="ds-steps">
+              <li><p><strong>Open this project in Claude</strong> — or download it and attach the folder to a new chat. (Teams can publish it as the <code>colaberry-design</code> skill so it's one click.)</p></li>
+              <li><p><strong>Ask in plain English</strong>, always starting with the magic words:</p>
+                <div class="ds-code"><code><span class="c-mut">"Using the Colaberry design system,</span>
+<span class="c-mut">make a 16:9 slide that announces our</span>
+<span class="c-mut">Spring Data Analytics cohort."</span></code></div>
+              </li>
+              <li><p><strong>Preview, refine, download.</strong> Claude returns a live HTML artifact. Tweak it in plain words ("make the headline bigger", "use green") and export when it's right.</p></li>
+            </ol>
+            <div class="ds-note"><span class="cb-i"><i data-lucide="info"></i></span><span>No hex codes or fonts needed — Claude reads them from this system. You bring the <strong>message</strong> and the <strong>format</strong>.</span></div>
+          </div>
+        </div>
+
+        <!-- Local dev -->
+        <div class="ds-gs">
+          <div class="ds-track__head">
+            <span class="ds-track__ic" style="background:var(--blue-500)"><span class="cb-i"><i data-lucide="terminal"></i></span></span>
+            <div><h3>Local dev</h3><div class="ds-track__tag">VS Code · developers</div></div>
+          </div>
+          <div class="ds-track__body">
+            <ol class="ds-steps">
+              <li><p><strong>Download the project</strong> and open the folder in <strong>VS Code</strong>.</p></li>
+              <li><p><strong>Serve it locally</strong> so fonts &amp; components load:</p>
+                <div class="ds-code"><code><span class="c-mut"># pick one</span>
+npx serve .
+python3 -m http.server 8000</code></div>
+              </li>
+              <li><p><strong>Link the system</strong> in your HTML, then use the tokens &amp; components:</p>
+                <div class="ds-code"><code><span class="c-tag">&lt;link</span> <span class="c-key">rel</span>=<span class="c-mut">"stylesheet"</span> <span class="c-key">href</span>=<span class="c-mut">"styles.css"</span><span class="c-tag">&gt;</span>
+<span class="c-tag">&lt;script</span> <span class="c-key">src</span>=<span class="c-mut">"_ds_bundle.js"</span><span class="c-tag">&gt;&lt;/script&gt;</span>
+<span class="c-mut">/* then: var(--brand-accent), window.ColaberryDesignSystem_098454 */</span></code></div>
+              </li>
+              <li><p><strong>Copy from the references</strong> — open <code>design-system.html</code> for tokens and <code>ui_kits/marketing-website/</code> for full screens.</p></li>
+            </ol>
+            <div class="ds-note"><span class="cb-i"><i data-lucide="bot"></i></span><span>Full install steps (plain HTML, React/Vite/Next, tokens, dark mode) are in <a href="IMPLEMENTATION.md" download="IMPLEMENTATION.md"><strong>IMPLEMENTATION.md</strong></a> — or point <strong>Claude Code</strong> at this folder and <code>BRAND.md</code>.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="ds-h3">Read the guides here</h3>
+      <p style="font-size:14px;color:var(--text-muted);margin:0 0 16px;max-width:60ch">The full brand &amp; developer guides, inline. Hit <strong>Copy</strong> to grab either one.</p>
+      <div class="ds-docs">
+        <div class="ds-doc">
+          <div class="ds-doc__head"><span>BRAND.md</span><button class="ds-doc__copy" data-doc="brand"><span class="cb-i"><i data-lucide="copy"></i></span>Copy</button></div>
+          <pre class="ds-doc__pre" id="doc-brand">Loading…</pre>
+        </div>
+        <div class="ds-doc">
+          <div class="ds-doc__head"><span>IMPLEMENTATION.md</span><button class="ds-doc__copy" data-doc="impl"><span class="cb-i"><i data-lucide="copy"></i></span>Copy</button></div>
+          <pre class="ds-doc__pre" id="doc-impl">Loading…</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOGO -->
+    <section class="ds-sec" id="logo">
+      <p class="ds-sec__eyebrow">Brand</p>
+      <h2>Logo</h2>
+      <p class="ds-sec__lead">Two cherries on a shared stem form the “C” of Colaberry — a warm, organic mark about growth, pairs, and collaboration. The wordmark sets “olaberry” in Quicksand with a green-to-blue gradient.</p>
+      <h3 class="ds-h3">Lockups &amp; mark</h3>
+      <div class="ds-logo-grid">
+        <div class="ds-logo-cell"><img src="assets/logo/colaberry-horizontal.png" alt="Default lockup"></div>
+        <div class="ds-logo-cell dark"><img src="assets/logo/colaberry-horizontal-white.png?v=2" alt="White lockup"></div>
+        <div class="ds-logo-cell red"><img src="assets/logo/colaberry-horizontal-white.png?v=2" alt="On cherry"></div>
+        <div class="ds-logo-cell"><img src="assets/logo/colaberry-mark.png" alt="Mark" style="max-height:72px"></div>
+        <div class="ds-logo-cell dark"><img src="assets/logo/colaberry-mark-white.png?v=2" alt="Mark white" style="max-height:72px"></div>
+        <div class="ds-logo-cell"><img src="assets/logo/colaberry-app-icon.png" alt="App icon" style="max-height:84px"></div>
+      </div>
+    </section>
+
+    <!-- THEME -->
+    <section class="ds-sec" id="theme">
+      <p class="ds-sec__eyebrow">Foundations</p>
+      <h2>Theme handling</h2>
+      <p class="ds-sec__lead">Every color is a semantic token that re-points between light and dark. The rule: <strong>foreground inverts with the background; the cherry accent stays constant.</strong> Toggle the theme in the sidebar to see it live.</p>
+      <div class="ds-grid3">
+        <div class="ds-demo"><h4>Surface</h4><p style="margin:0;color:var(--text-muted);font-size:14px">var(--surface-page) flips from white to near-black; cards, borders and sunken fills follow.</p></div>
+        <div class="ds-demo"><h4>Text</h4><p style="margin:0;color:var(--text-muted);font-size:14px">var(--text-strong) / --text-muted invert for contrast on either ground.</p></div>
+        <div class="ds-demo"><h4>Accent</h4><p style="margin:0;color:var(--text-muted);font-size:14px">var(--brand-accent) stays cherry red in both themes — the constant.</p></div>
+      </div>
+    </section>
+
+    <!-- COLOR -->
+    <section class="ds-sec" id="color">
+      <p class="ds-sec__eyebrow">Foundations</p>
+      <h2>Color</h2>
+      <p class="ds-sec__lead">Cherry, Leaf and Berry over a neutral ramp. Click any swatch or token to copy it.</p>
+
+      <h3 class="ds-h3">Cherry Red — primary</h3>
+      <div class="ds-ramp" data-ramp="red"></div>
+      <h3 class="ds-h3">Leaf Green — secondary</h3>
+      <div class="ds-ramp" data-ramp="green"></div>
+      <h3 class="ds-h3">Berry Blue — tertiary</h3>
+      <div class="ds-ramp" data-ramp="blue"></div>
+      <h3 class="ds-h3">Neutrals</h3>
+      <div class="ds-ramp neutral" data-ramp="neutral"></div>
+
+      <h3 class="ds-h3">Semantic tokens</h3>
+      <div class="ds-semantic" id="semanticTokens"></div>
+
+      <h3 class="ds-h3">Data visualization</h3>
+      <p style="font-size:14px;color:var(--text-muted);margin:0 0 16px;max-width:62ch">We teach data — so charts are first-class. An 8-series categorical palette (ordered for maximum adjacent separation and color-blind safety) plus single-hue sequential and cherry↔leaf diverging scales. Click any swatch to copy.</p>
+      <div class="ds-chart-row" id="chartCats"></div>
+      <div class="ds-scales">
+        <div>
+          <div class="ds-scale-lbl">Sequential</div>
+          <div class="ds-scale" id="seqScale"></div>
+        </div>
+        <div>
+          <div class="ds-scale-lbl">Diverging</div>
+          <div class="ds-scale" id="divScale"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TYPE -->
+    <section class="ds-sec" id="type">
+      <p class="ds-sec__eyebrow">Foundations</p>
+      <h2>Typography</h2>
+      <p class="ds-sec__lead">Roboto carries display and body; Roboto Mono handles code &amp; data; Quicksand is reserved for the logotype.</p>
+      <div>
+        <div class="ds-type-row"><span class="meta">H1 · 48 · 700</span><span class="spec" style="font-family:var(--font-display);font-weight:700;font-size:42px;letter-spacing:-.01em">Future-proof your career</span></div>
+        <div class="ds-type-row"><span class="meta">H2 · 36 · 700</span><span class="spec" style="font-family:var(--font-display);font-weight:700;font-size:32px">Learn data, with people</span></div>
+        <div class="ds-type-row"><span class="meta">H3 · 28 · 700</span><span class="spec" style="font-family:var(--font-display);font-weight:700;font-size:26px">Built on tenacity</span></div>
+        <div class="ds-type-row"><span class="meta">Body · 18 · 400</span><span class="spec" style="font-family:var(--font-body);font-size:18px;color:var(--text-body)">Colaberry nurtures an inclusive learning space for every background.</span></div>
+        <div class="ds-type-row"><span class="meta">Mono · 16 · 500</span><span class="spec" style="font-family:var(--font-mono);font-size:16px;color:var(--blue-600)">SELECT cohort, COUNT(*) FROM outcomes;</span></div>
+        <div class="ds-type-row"><span class="meta">Logotype</span><span class="spec" style="font-family:var(--font-logo);font-weight:600;font-size:34px;background:linear-gradient(90deg,var(--green-600),var(--blue-500));-webkit-background-clip:text;background-clip:text;color:transparent">Colaberry</span></div>
+      </div>
+    </section>
+
+    <!-- SPACE -->
+    <section class="ds-sec" id="space">
+      <p class="ds-sec__eyebrow">Foundations</p>
+      <h2>Spacing &amp; Radius</h2>
+      <p class="ds-sec__lead">A 4px base grid and a rounded radius scale that echoes the soft cherry mark.</p>
+      <h3 class="ds-h3">Spacing</h3>
+      <div class="ds-flex" id="spaceScale"></div>
+      <h3 class="ds-h3">Radius</h3>
+      <div class="ds-flex top" id="radiusScale"></div>
+      <h3 class="ds-h3">Elevation</h3>
+      <div class="ds-flex top">
+        <div class="ds-cell"><div class="ds-shbox" style="box-shadow:var(--shadow-sm)"></div><span class="v">sm</span></div>
+        <div class="ds-cell"><div class="ds-shbox" style="box-shadow:var(--shadow-md)"></div><span class="v">md</span></div>
+        <div class="ds-cell"><div class="ds-shbox" style="box-shadow:var(--shadow-lg)"></div><span class="v">lg</span></div>
+        <div class="ds-cell"><div class="ds-shbox" style="box-shadow:var(--shadow-xl)"></div><span class="v">xl</span></div>
+        <div class="ds-cell"><div class="ds-shbox" style="box-shadow:var(--shadow-brand)"></div><span class="v">brand</span></div>
+      </div>
+    </section>
+
+    <!-- MOTION -->
+    <section class="ds-sec" id="motion">
+      <p class="ds-sec__eyebrow">Foundations</p>
+      <h2>Motion</h2>
+      <p class="ds-sec__lead">Motion is functional, not decorative — it confirms an action, guides the eye, and softens change.
+        Gentle easing, quick durations, and always a graceful fallback for reduced motion.</p>
+
+      <div class="ds-principles">
+        <div class="ds-principle"><span class="cb-i"><i data-lucide="target"></i></span><h4>Purposeful</h4><p>Every animation explains a change — never motion for its own sake.</p></div>
+        <div class="ds-principle"><span class="cb-i"><i data-lucide="gauge"></i></span><h4>Quick</h4><p>140–360ms. Fast enough to feel responsive, slow enough to read.</p></div>
+        <div class="ds-principle"><span class="cb-i"><i data-lucide="waves"></i></span><h4>Gentle</h4><p>Ease-out by default; a soft spring only for affirmations. No linear, no harsh bounces.</p></div>
+        <div class="ds-principle"><span class="cb-i"><i data-lucide="accessibility"></i></span><h4>Accessible</h4><p>Honors <code>prefers-reduced-motion</code> — transitions collapse to instant.</p></div>
+      </div>
+
+      <h3 class="ds-h3">Easing</h3>
+      <div class="ds-motion-panel">
+        <div class="ds-motion-head"><h4>The easing scale</h4><button class="ds-replay" data-replay><span class="cb-i"><i data-lucide="rotate-cw"></i></span>Replay</button></div>
+        <div class="ds-ease">
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>ease-out</b>enter · hover · expand</div><div class="ds-track"><span class="ds-dot" data-ease="var(--ease-out)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>emphasized</b>hero reveals</div><div class="ds-track"><span class="ds-dot" data-ease="var(--ease-emphasized)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>spring</b>affirmations</div><div class="ds-track"><span class="ds-dot g" data-ease="var(--ease-spring)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>in</b>exits — accelerate</div><div class="ds-track"><span class="ds-dot b" data-ease="var(--ease-in)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>in-out</b>move &amp; return</div><div class="ds-track"><span class="ds-dot b" data-ease="var(--ease-in-out)"></span></div></div>
+        </div>
+        <div class="ds-note" style="margin-top:20px"><span class="cb-i"><i data-lucide="info"></i></span><span><b style="color:var(--text-strong)">ease-out</b> is the workhorse (enter, hover, expand) · <b style="color:var(--text-strong)">emphasized</b> for big hero moments · <b style="color:var(--text-strong)">spring</b> for confirmations (a check, a toggle) · <b style="color:var(--text-strong)">in</b> for exits · <b style="color:var(--text-strong)">in-out</b> for things that move and return. Never <code>linear</code> or hard bounces.</span></div>
+      </div>
+
+      <h3 class="ds-h3">Duration</h3>
+      <div class="ds-motion-panel">
+        <div class="ds-motion-head"><h4>Scaled to travel distance</h4><button class="ds-replay" data-replay><span class="cb-i"><i data-lucide="rotate-cw"></i></span>Replay</button></div>
+        <div class="ds-dur">
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>instant · 90ms</b>tick, ripple</div><div class="ds-track"><span class="ds-dot" data-dur="var(--dur-instant)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>fast · 140ms</b>hovers, toggles</div><div class="ds-track"><span class="ds-dot" data-dur="var(--dur-fast)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>base · 220ms</b>most transitions</div><div class="ds-track"><span class="ds-dot" data-dur="var(--dur-base)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>slow · 360ms</b>entrances, overlays</div><div class="ds-track"><span class="ds-dot" data-dur="var(--dur-slow)"></span></div></div>
+          <div class="ds-track-row"><div class="ds-track-lbl"><b>slower · 560ms</b>hero choreography</div><div class="ds-track"><span class="ds-dot" data-dur="var(--dur-slower)"></span></div></div>
+        </div>
+      </div>
+
+      <h3 class="ds-h3">Motion recipes</h3>
+      <p style="font-size:14px;color:var(--text-muted);margin:0 0 16px;max-width:62ch">Reusable patterns — the same building blocks every component and page uses, so motion feels like one hand drew it.</p>
+      <div class="ds-recipes">
+        <div class="ds-recipe"><span class="ds-recipe__tag">Enter</span><b>Fade &amp; rise</b><p>opacity 0→1 + translateY <code>--motion-rise</code>→0 · <code>--dur-slow</code> · ease-out</p></div>
+        <div class="ds-recipe"><span class="ds-recipe__tag">Sequence</span><b>Stagger</b><p>each child delayed <code>--stagger</code> (70ms) — lists, grids, hero lines</p></div>
+        <div class="ds-recipe"><span class="ds-recipe__tag">Overlay</span><b>Scrim + scale</b><p>scrim fades; panel scales 0.96→1 · <code>--dur-slow</code> · emphasized</p></div>
+        <div class="ds-recipe"><span class="ds-recipe__tag">Confirm</span><b>Spring pop</b><p>scale 0.6→1 with <code>--ease-spring</code> · checkmarks, toggles only</p></div>
+        <div class="ds-recipe"><span class="ds-recipe__tag">Loading</span><b>Shimmer</b><p>skeleton sweep, ~1.4s loop — the one allowed continuous motion</p></div>
+        <div class="ds-recipe"><span class="ds-recipe__tag">Exit</span><b>Fade &amp; fall</b><p>opacity 1→0 + slight translateY · <code>--dur-fast</code> · ease-in</p></div>
+      </div>
+
+      <h3 class="ds-h3">Interactive states — hover, press &amp; focus</h3>
+      <div class="ds-states">
+        <div class="ds-state">
+          <div class="ds-lift"></div>
+          <p class="ds-state__cap"><b>Hover · card</b><br>Lifts 6px with a deeper shadow over 220ms. Click-through cards only.</p>
+        </div>
+        <div class="ds-state">
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="cb-btn primary">Hover &amp; press</button></div>
+          <p class="ds-state__cap"><b>Hover · press · button</b><br>Fill darkens on hover; nudges down 1px on press.</p>
+        </div>
+        <div class="ds-state">
+          <div class="cb-field" style="margin:0;width:100%"><input class="cb-input" placeholder="Click to focus me"></div>
+          <p class="ds-state__cap"><b>Focus · input</b><br>Berry-blue border + 3px focus ring appears instantly.</p>
+        </div>
+        <div class="ds-state">
+          <span class="ds-demo-link">Hover this link</span>
+          <p class="ds-state__cap"><b>Hover · link</b><br>Underline wipes in from the left over 220ms.</p>
+        </div>
+        <div class="ds-state">
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="cb-btn outline">Outline</button><button class="cb-btn ghost">Ghost</button></div>
+          <p class="ds-state__cap"><b>Hover · quiet buttons</b><br>Fill in a soft sunken background — no jump.</p>
+        </div>
+        <div class="ds-state">
+          <div class="ds-reveal"><span>Reveal</span><span>fades</span><span>up</span><span>in</span><span>sequence</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:auto">
+            <p class="ds-state__cap" style="margin:0"><b>Entrance · stagger</b><br>70ms apart, fade + rise.</p>
+            <button class="ds-replay" data-replay><span class="cb-i"><i data-lucide="rotate-cw"></i></span>Replay</button>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="ds-h3">What moves on each interaction</h3>
+      <table class="ds-table">
+        <thead><tr><th>Interaction</th><th>What changes</th><th>Token</th></tr></thead>
+        <tbody>
+          <tr><td>Hover — solid button</td><td>Fill steps one shade darker (red-500 → 600)</td><td><code>140ms · ease-out</code></td></tr>
+          <tr><td>Hover — ghost / outline</td><td>Soft sunken background fills in</td><td><code>140ms · ease-out</code></td></tr>
+          <tr><td>Hover — card (clickable)</td><td>Lifts 6px, shadow deepens (sm → lg)</td><td><code>220ms · ease-out</code></td></tr>
+          <tr><td>Hover — link</td><td>Underline wipes in from the left</td><td><code>220ms · ease-out</code></td></tr>
+          <tr><td>Press — button</td><td>Fill darkens again + translateY(1px)</td><td><code>140ms · ease-out</code></td></tr>
+          <tr><td>Focus — any control</td><td>3px berry-blue focus ring appears</td><td><code>instant</code></td></tr>
+          <tr><td>Enter — content / overlay</td><td>Fade up 12–14px, stagger 70ms</td><td><code>360ms · ease-out</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- COMPONENTS -->
+    <section class="ds-sec" id="components">
+      <p class="ds-sec__eyebrow">Library</p>
+      <h2>Components</h2>
+      <p class="ds-sec__lead">Twenty token-driven React primitives — all live and interactive below, animated to the Motion spec. Hover, toggle, open and click them. Props live in each component's <code>.d.ts</code>.</p>
+      <div id="cmp-root" class="ds-loading">Loading live components…</div>
+    </section>
+
+    <!-- EXAMPLES -->
+    <section class="ds-sec" id="examples">
+      <p class="ds-sec__eyebrow">In practice</p>
+      <h2>Example layouts</h2>
+      <p class="ds-sec__lead">Real screens composed entirely from these tokens and components — what you get when you apply the system. Toggle dark mode to watch them adapt.</p>
+      <div id="lay-root" class="ds-loading">Loading example layouts…</div>
+    </section>
+
+    <!-- ACCESSIBILITY -->
+    <section class="ds-sec" id="a11y">
+      <p class="ds-sec__eyebrow">Foundations</p>
+      <h2>Accessibility</h2>
+      <p class="ds-sec__lead">WCAG 2.2 contrast audit of core pairings. <strong>Cherry red and leaf green are accent / large-text colors</strong> — for body text use red-600+, green-700+, or dark text on a tint.</p>
+      <table class="ds-table">
+        <thead><tr><th>Pairing</th><th>Sample</th><th>Ratio</th><th>Verdict</th></tr></thead>
+        <tbody id="a11yRows"></tbody>
+      </table>
+
+      <h3 class="ds-h3">Beyond contrast</h3>
+      <p style="font-size:14px;color:var(--text-muted);margin:0 0 4px;max-width:62ch">Contrast is necessary but not sufficient. Every component in this system is built to these four pillars — and you should hold your own UI to them too.</p>
+      <div class="ds-a11y-grid">
+        <div class="ds-a11y-card">
+          <h4><span class="cb-i"><i data-lucide="keyboard"></i></span>Keyboard</h4>
+          <ul>
+            <li>Everything interactive is reachable and operable with Tab / Shift+Tab / Enter / Space.</li>
+            <li>Dialogs &amp; drawers trap focus and restore it to the trigger on close.</li>
+            <li>Esc closes overlays; arrow keys drive the carousel and pagination.</li>
+            <li>No keyboard traps; logical, source-order focus.</li>
+          </ul>
+        </div>
+        <div class="ds-a11y-card">
+          <h4><span class="cb-i"><i data-lucide="focus"></i></span>Focus</h4>
+          <ul>
+            <li>A visible 3px berry-blue ring (<code>--focus-ring</code>) on every focusable element.</li>
+            <li>Shown on <code>:focus-visible</code> — keyboard users see it, mouse users aren't distracted.</li>
+            <li>Focus is never removed without an equally clear replacement.</li>
+          </ul>
+        </div>
+        <div class="ds-a11y-card">
+          <h4><span class="cb-i"><i data-lucide="pointer"></i></span>Touch &amp; targets</h4>
+          <ul>
+            <li>Interactive targets are at least <strong>44×44px</strong> (<code>--target-min</code>) — exceeds WCAG 2.2 (24px).</li>
+            <li>Buttons share a 48px control height; inputs match for tidy forms.</li>
+            <li>Adequate spacing so neighbouring targets aren't mis-tapped.</li>
+          </ul>
+        </div>
+        <div class="ds-a11y-card">
+          <h4><span class="cb-i"><i data-lucide="ear"></i></span>Semantics &amp; motion</h4>
+          <ul>
+            <li>Native elements first; ARIA roles/labels where needed (dialogs, switches, icon buttons).</li>
+            <li>State conveyed by more than color (icons, text, dots).</li>
+            <li>All motion respects <code>prefers-reduced-motion</code> and degrades to fades.</li>
+            <li>Images carry <code>alt</code>; decorative art is <code>aria-hidden</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOGO RULES -->
+    <section class="ds-sec" id="rules">
+      <p class="ds-sec__eyebrow">Brand</p>
+      <h2>Logo rules</h2>
+      <p class="ds-sec__lead">Protect the mark so it always reads as Colaberry.</p>
+      <h3 class="ds-h3">Clear space &amp; minimum size</h3>
+      <div class="ds-clearspace"><div class="ds-clearspace__box"><img src="assets/logo/colaberry-horizontal.png" alt="Clear space"></div></div>
+      <p style="font-size:13px;color:var(--text-muted);margin-top:10px">Keep clear space equal to the height of the cherry mark on all sides. Minimum width: 120px (horizontal lockup) / 24px (mark).</p>
+      <h3 class="ds-h3">Do &amp; Don't</h3>
+      <div class="ds-dodont">
+        <div class="ds-rule do"><div class="ds-rule__head"><span class="cb-i"><i data-lucide="check"></i></span>Do</div><ul><li>Use the full-color lockup on white or light surfaces.</li><li>Switch to the white lockup on photos, dark, or cherry backgrounds.</li><li>Keep the cherry red constant; invert only the wordmark/neutral.</li><li>Give the mark room — respect the clear space.</li></ul></div>
+        <div class="ds-rule dont"><div class="ds-rule__head"><span class="cb-i"><i data-lucide="x"></i></span>Don't</div><ul><li>Recolor the cherries or apply gradients to the mark.</li><li>Stretch, rotate, or add shadows / outlines.</li><li>Set the wordmark in any font other than Quicksand.</li><li>Place the color mark on a low-contrast or busy background.</li></ul></div>
+      </div>
+    </section>
+
+    <!-- ASSETS -->
+    <section class="ds-sec" id="assets">
+      <p class="ds-sec__eyebrow">Resources</p>
+      <h2>Asset downloads</h2>
+      <p class="ds-sec__lead">Production-ready logo and icon exports live in <code>assets/logo/</code>.</p>
+      <div class="ds-assets">
+        <div class="ds-asset"><div class="ds-asset__prev"><img src="assets/logo/colaberry-horizontal.png"></div><span class="ds-asset__name">horizontal.png</span><span class="ds-asset__meta">+ white / black</span></div>
+        <div class="ds-asset"><div class="ds-asset__prev"><img src="assets/logo/colaberry-mark.png"></div><span class="ds-asset__name">mark.png</span><span class="ds-asset__meta">+ white / black</span></div>
+        <div class="ds-asset"><div class="ds-asset__prev"><img src="assets/logo/export/icon-192.png"></div><span class="ds-asset__name">app-icon</span><span class="ds-asset__meta">180 / 192 / 512</span></div>
+        <div class="ds-asset"><div class="ds-asset__prev"><img src="assets/logo/export/favicon-48.png"></div><span class="ds-asset__name">favicon.ico</span><span class="ds-asset__meta">16 / 32 / 48</span></div>
+        <div class="ds-asset"><div class="ds-asset__prev"><img src="assets/logo/export/square-400.png"></div><span class="ds-asset__name">square</span><span class="ds-asset__meta">400 / 600</span></div>
+      </div>
+      <h3 class="ds-h3">Tokens for tooling</h3>
+      <p style="font-size:14px;color:var(--text-muted);margin:0 0 14px;max-width:60ch">All 245 tokens (+ dark overrides) as JSON — drop into Style Dictionary, Figma Tokens, or Tailwind. Plus the raw CSS token files.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <a class="ds-dl" style="margin:0" href="tokens.json" download="tokens.json"><span class="cb-i"><i data-lucide="braces"></i></span>tokens.json</a>
+        <a class="ds-dl ds-dl--alt" style="margin:0" href="styles.css" download="styles.css"><span class="cb-i"><i data-lucide="file-code"></i></span>styles.css</a>
+      </div>
+    </section>
+
+    <!-- HANDOFF -->
+    <section class="ds-sec" id="handoff" style="border-bottom:none">
+      <p class="ds-sec__eyebrow">Using the system</p>
+      <h2>Hand-off &amp; prompting</h2>
+      <p class="ds-sec__lead">However you make things — by prompting Claude or by writing code — start with
+        <strong>“Using the Colaberry design system, …”</strong> and describe the outcome. The system supplies the colors,
+        fonts, logo, voice and components. Full guide in <code>BRAND.md</code>.</p>
+
+      <div class="ds-audience">
+        <div class="ds-aud">
+          <div class="ds-aud__head">
+            <span class="ds-aud__ic" style="background:var(--green-600)"><span class="cb-i"><i data-lucide="megaphone"></i></span></span>
+            <div><h3>Marketing / non-technical</h3><p class="ds-aud__sub">Describe it in plain English → get a downloadable file. No code.</p></div>
+          </div>
+          <div class="ds-prompt" data-copytext="Using the Colaberry design system, create a [social post / flyer / email header / slide] at [size] for [topic]. Headline: [your headline]. Add a [call-to-action] button and the logo. Keep it warm and on-brand, no emoji — and give me 3 options.">
+            “Using the Colaberry design system, create a <em>[social post / flyer / email / slide]</em> at <em>[size]</em> for <em>[topic]</em>. Headline: <em>[your headline]</em>. Add a <em>[call-to-action]</em> button and the logo — give me <em>3 options</em>.”
+            <span class="ds-prompt__copy"><span class="cb-i"><i data-lucide="copy"></i></span></span>
+          </div>
+          <ul>
+            <li><span class="cb-i"><i data-lucide="check"></i></span>Say <strong>what</strong> (post, flyer, email header, slide) and the <strong>size</strong>.</li>
+            <li><span class="cb-i"><i data-lucide="check"></i></span>Give the <strong>words</strong> — headline, subtext, call-to-action.</li>
+            <li><span class="cb-i"><i data-lucide="check"></i></span>Name the <strong>vibe / program</strong>, and ask for <strong>“3 options.”</strong></li>
+          </ul>
+        </div>
+
+        <div class="ds-aud">
+          <div class="ds-aud__head">
+            <span class="ds-aud__ic" style="background:var(--blue-500)"><span class="cb-i"><i data-lucide="code"></i></span></span>
+            <div><h3>Developers</h3><p class="ds-aud__sub">Tokens &amp; components are machine-readable — Claude scaffolds on-brand UI.</p></div>
+          </div>
+          <div class="ds-prompt" data-copytext="Using the Colaberry design system, build [a page / a section / a component] — [describe what it does]. Use the Button, Card, Badge, Input components and semantic tokens, link styles.css, and support dark mode (data-theme='dark').">
+            “Using the Colaberry design system, build <em>[a page / a section / a component]</em> — <em>[describe what it does]</em>. Use the <em>components</em> and <em>semantic tokens</em>, link <em>styles.css</em>, and support dark mode.”
+            <span class="ds-prompt__copy"><span class="cb-i"><i data-lucide="copy"></i></span></span>
+          </div>
+          <ul>
+            <li><span class="cb-i"><i data-lucide="check"></i></span>Link <code>styles.css</code>; reference semantic tokens, never raw hex.</li>
+            <li><span class="cb-i"><i data-lucide="check"></i></span>Use the bundle components via <code>window.ColaberryDesignSystem_098454</code>.</li>
+            <li><span class="cb-i"><i data-lucide="check"></i></span>Copy full screens from <code>ui_kits/marketing-website/</code>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 class="ds-h3">Developer checklist</h3>
+      <ul class="ds-check">
+        <li><span class="cb-i"><i data-lucide="check"></i></span>Link <code>styles.css</code> — it imports tokens (color, type, spacing) + fonts.</li>
+        <li><span class="cb-i"><i data-lucide="check"></i></span>Reference semantic tokens (<code>--surface-page</code>, <code>--text-strong</code>, <code>--brand-accent</code>) — never raw ramp values.</li>
+        <li><span class="cb-i"><i data-lucide="check"></i></span>Set <code>data-theme="dark"</code> on <code>&lt;html&gt;</code> for dark mode; the accent stays constant.</li>
+        <li><span class="cb-i"><i data-lucide="check"></i></span>Use the React primitives from the bundle (Button, Badge, Card, Input, Checkbox, Avatar).</li>
+        <li><span class="cb-i"><i data-lucide="check"></i></span>Use red-600+/green-700+ for body text on white (see Accessibility).</li>
+        <li><span class="cb-i"><i data-lucide="check"></i></span>Roboto / Roboto Mono / Quicksand load from Google Fonts — self-host for production (see BRAND.md).</li>
+        <li><span class="cb-i"><i data-lucide="check"></i></span>Standardize icons on Lucide (2px stroke) to match the soft brand shape language.</li>
+      </ul>
+
+      <h3 class="ds-h3">What to give each person</h3>
+      <table class="ds-table ds-give">
+        <thead><tr><th>Hand this to…</th><th>What they need</th><th>Where they start</th></tr></thead>
+        <tbody>
+          <tr><td>Marketing / non-technical</td><td>This project (or the <code>colaberry-design</code> skill) + the prompt recipe</td><td>Describe the artifact → download the HTML file</td></tr>
+          <tr><td>A designer</td><td>This page + <code>assets/logo/</code></td><td>Skim the guide; reuse logos, color, type</td></tr>
+          <tr><td>A developer</td><td><code>styles.css</code>, <code>components/core/</code>, <code>ui_kits/</code>, <code>BRAND.md</code></td><td>Link <code>styles.css</code>, import components</td></tr>
+          <tr><td>Anyone, anywhere</td><td><code>BRAND.md</code> — it's self-contained</td><td>Read voice, color &amp; logo rules</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+</div>
+
+<div class="ds-toast" id="toast"><span class="cb-i"><i data-lucide="check"></i></span><span id="toastMsg">Copied</span></div>
+
+<script>
+const RAMPS = {
+  red: ['50','100','200','300','400','500','600','700','800','900'],
+  green: ['50','100','200','300','400','500','600','700','800','900'],
+  blue: ['50','100','200','300','400','500','600','700','800','900'],
+  neutral: ['0','50','100','200','300','400','500','600','700','800','900','950','1000'],
+};
+const LIGHT_STEPS = { red:['50','100','200','300'], green:['50','100','200','300','400','500'], blue:['50','100','200','300'], neutral:['0','50','100','200','300','400'] };
+function hexOf(varName){ const t=document.createElement('div'); t.style.color='var('+varName+')'; document.body.appendChild(t); const c=getComputedStyle(t).color; t.remove(); const m=c.match(/\d+/g); if(!m) return ''; return '#'+m.slice(0,3).map(n=>(+n).toString(16).padStart(2,'0')).join('').toUpperCase(); }
+Object.entries(RAMPS).forEach(([fam,steps])=>{
+  const el=document.querySelector('[data-ramp="'+fam+'"]'); if(!el) return;
+  steps.forEach(s=>{
+    const v='--'+fam+'-'+s; const b=document.createElement('button');
+    b.className='ds-sw'; b.style.background='var('+v+')'; b.textContent=s;
+    if(LIGHT_STEPS[fam] && LIGHT_STEPS[fam].includes(s)) b.dataset.dark='1';
+    b.dataset.copy=v; el.appendChild(b);
+  });
+});
+const SEM=[['--brand-accent','Accent'],['--surface-page','Surface'],['--surface-card','Card'],['--surface-sunken','Sunken'],['--text-strong','Text strong'],['--text-muted','Text muted'],['--border-default','Border'],['--text-link','Link'],['--status-success','Success'],['--status-danger','Danger'],['--status-info','Info'],['--status-warning','Warning']];
+const semWrap=document.getElementById('semanticTokens');
+SEM.forEach(([v,name])=>{
+  const d=document.createElement('button'); d.className='ds-tok'; d.dataset.copy=v;
+  d.innerHTML='<span class="ds-tok__chip" style="background:var('+v+')"></span><span><span class="ds-tok__name">'+v+'</span><br><span class="ds-tok__val">'+name+'</span></span>';
+  semWrap.appendChild(d);
+});
+// Data-viz swatches
+const chartWrap=document.getElementById('chartCats');
+for(let i=1;i<=8;i++){ const v='--chart-'+i; const b=document.createElement('button'); b.className='ds-chart-sw'; b.style.background='var('+v+')'; b.textContent=i; b.dataset.copy=v; chartWrap.appendChild(b); }
+const seqWrap=document.getElementById('seqScale');
+for(let i=1;i<=6;i++){ const v='--seq-'+i; const b=document.createElement('button'); b.style.background='var('+v+')'; b.dataset.copy=v; seqWrap.appendChild(b); }
+const divWrap=document.getElementById('divScale');
+['--div-neg-2','--div-neg-1','--div-mid','--div-pos-1','--div-pos-2'].forEach(v=>{ const b=document.createElement('button'); b.style.background='var('+v+')'; b.dataset.copy=v; divWrap.appendChild(b); });
+const SP=[['1','4'],['2','8'],['3','12'],['4','16'],['6','24'],['8','32'],['12','48'],['16','64'],['20','80'],['24','96']];
+const spWrap=document.getElementById('spaceScale');
+SP.forEach(([t,px])=>{ const c=document.createElement('div'); c.className='ds-cell'; c.innerHTML='<div class="ds-bar" style="width:'+px+'px;height:'+px+'px"></div><span class="v">'+px+'</span>'; spWrap.appendChild(c); });
+const RAD=[['xs','4'],['sm','8'],['md','12'],['lg','16'],['xl','24'],['2xl','32'],['pill','999']];
+const radWrap=document.getElementById('radiusScale');
+RAD.forEach(([n,px])=>{ const c=document.createElement('div'); c.className='ds-cell'; c.innerHTML='<div class="ds-rbox" style="border-radius:var(--radius-'+n+')"></div><span class="v">'+n+'</span>'; radWrap.appendChild(c); });
+
+const A11Y=[
+  {fg:'--neutral-800',bg:'#fff',fgc:'#fff',label:'Body / White',ratio:'13.6',v:'pass',txt:'Aa'},
+  {fg:'--text-muted',bg:'#fff',label:'Muted / White',ratio:'5.3',v:'pass',txt:'Aa'},
+  {fg:'--blue-600',bg:'#fff',label:'Link / White',ratio:'6.0',v:'pass',txt:'Aa'},
+  {fg:'--green-700',bg:'#fff',label:'Green-700 / White',ratio:'4.3',v:'pass',txt:'Aa'},
+  {fg:'#fff',bg:'--red-500',label:'White / Cherry',ratio:'3.9',v:'large',txt:'Aa'},
+  {fg:'#fff',bg:'--blue-500',label:'White / Berry',ratio:'5.0',v:'pass',txt:'Aa'},
+  {fg:'#fff',bg:'--green-600',label:'White / Green-600',ratio:'3.0',v:'large',txt:'Aa'},
+  {fg:'--red-500',bg:'#fff',label:'Cherry / White (text)',ratio:'3.9',v:'fail',txt:'Aa'},
+  {fg:'#fff',bg:'--neutral-900',label:'White / Near-black',ratio:'17.9',v:'pass',txt:'Aa'},
+];
+const VLAB={pass:'AA Pass',large:'AA Large',fail:'Body fail'};
+const rows=document.getElementById('a11yRows');
+A11Y.forEach(p=>{
+  const fg=p.fg.startsWith('--')?'var('+p.fg+')':p.fg;
+  const bg=p.bg.startsWith('--')?'var('+p.bg+')':p.bg;
+  const tr=document.createElement('tr');
+  tr.innerHTML='<td>'+p.label+'</td><td><div class="ds-pair"><span style="background:'+bg+';color:'+fg+'">'+p.txt+'</span></div></td><td style="font-family:var(--font-mono)">'+p.ratio+':1</td><td><span class="ds-verdict '+p.v+'">'+VLAB[p.v]+'</span></td>';
+  rows.appendChild(tr);
+});
+
+// copy
+function toast(msg){ const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1400); }
+document.addEventListener('click',e=>{
+  const pt=e.target.closest('[data-copytext]');
+  if(pt){ const t=pt.dataset.copytext; navigator.clipboard&&navigator.clipboard.writeText(t); toast('Prompt copied'); return; }
+  const el=e.target.closest('[data-copy]'); if(!el) return; const v=el.dataset.copy; const hex=hexOf(v); const text=hex||v; navigator.clipboard&&navigator.clipboard.writeText(text); toast('Copied '+text);
+});
+
+// theme
+document.querySelectorAll('[data-set-theme]').forEach(b=>b.addEventListener('click',()=>{
+  const th=b.dataset.setTheme; document.documentElement.setAttribute('data-theme',th);
+  document.querySelectorAll('[data-set-theme]').forEach(x=>x.classList.toggle('active',x===b));
+  const white=th==='dark'; ['sideLogo','heroLogo'].forEach(id=>{ const img=document.getElementById(id); if(img) img.src='assets/logo/colaberry-horizontal'+(white?'-white':'')+'.png?v=2'; });
+}));
+
+// scroll-spy
+const navLinks=[...document.querySelectorAll('.ds-nav a')];
+const obs=new IntersectionObserver(es=>{ es.forEach(en=>{ if(en.isIntersecting){ const id=en.target.id; navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id)); } }); },{rootMargin:'-45% 0px -50% 0px'});
+document.querySelectorAll('.ds-sec').forEach(s=>obs.observe(s));
+
+// Motion demos — replay buttons + auto-play on first view
+function dsReset(el){ el.style.transition='none'; el.style.left='5px'; void el.offsetWidth; }
+function dsPlayMotion(){
+  document.querySelectorAll('#motion .ds-dot').forEach(d=>{
+    dsReset(d);
+    const ease=d.dataset.ease||'var(--ease-out)';
+    const dur=d.dataset.dur||'1000ms';
+    requestAnimationFrame(()=>{ d.style.transition='left '+dur+' '+ease; d.style.left='calc(100% - 29px)'; });
+  });
+  const rev=document.querySelector('#motion .ds-reveal');
+  if(rev){ rev.classList.remove('is-in'); void rev.offsetWidth; requestAnimationFrame(()=>rev.classList.add('is-in')); }
+}
+document.querySelectorAll('[data-replay]').forEach(b=>b.addEventListener('click', dsPlayMotion));
+const motionSec=document.getElementById('motion');
+if(motionSec){ const mo=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ dsPlayMotion(); mo.disconnect(); } }); },{threshold:0.2}); mo.observe(motionSec); }
+
+// Robust downloads — the `download` attribute is blocked in the sandboxed
+// preview, so fetch the file and save it as a Blob instead.
+document.addEventListener('click', async (e) => {
+  const a = e.target.closest('a[download]');
+  if (!a) return;
+  const href = a.getAttribute('href');
+  if (!href || /^https?:/i.test(href)) return;
+  e.preventDefault();
+  try {
+    const r = await fetch(href);
+    if (!r.ok) throw new Error(r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const tmp = document.createElement('a');
+    tmp.href = url;
+    tmp.download = a.getAttribute('download') || href.split('/').pop();
+    document.body.appendChild(tmp); tmp.click(); tmp.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('Downloading ' + tmp.download);
+  } catch (_) { window.open(href, '_blank'); }
+});
+
+// In-page doc viewers (BRAND.md / IMPLEMENTATION.md) with copy
+const DOCS = { brand: 'BRAND.md', impl: 'IMPLEMENTATION.md' };
+const docText = {};
+Object.entries(DOCS).forEach(([k, f]) => {
+  const el = document.getElementById('doc-' + k);
+  fetch(f).then(r => r.text()).then(t => { docText[k] = t; if (el) el.textContent = t; })
+          .catch(() => { if (el) el.textContent = 'Could not load ' + f; });
+});
+document.querySelectorAll('.ds-doc__copy').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.doc; const t = docText[k] || '';
+  if (navigator.clipboard) navigator.clipboard.writeText(t);
+  toast('Copied ' + DOCS[k]);
+}));
+
+if(window.lucide) lucide.createIcons();
+</script>
+<!-- Live components + example layouts -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="components/core/_standalone.jsx"></script>
+<script type="text/babel" src="guidelines/showcase.jsx"></script>
+</body>
+</html>

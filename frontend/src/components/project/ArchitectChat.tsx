@@ -84,11 +84,11 @@ export default function ArchitectChat() {
     return (
       <button
         onClick={handleOpen}
-        className="btn btn-primary shadow-lg d-flex align-items-center gap-2"
+        className="btn shadow-lg d-flex align-items-center gap-2"
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 1050,
           height: 48, borderRadius: 24, padding: '0 20px 0 16px',
-          fontSize: 14, border: 'none',
+          fontSize: 14, border: 'none', background: '#FB2832', color: '#fff',
         }}
         title="AI Architect — Build & improve with guidance"
       >
@@ -108,7 +108,7 @@ export default function ArchitectChat() {
     }}>
       {/* Header */}
       <div style={{
-        padding: '12px 16px', background: 'var(--color-primary, #1a365d)', color: '#fff',
+        padding: '12px 16px', background: '#FB2832', color: '#fff',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <div className="d-flex align-items-center gap-2">
@@ -135,7 +135,7 @@ export default function ArchitectChat() {
             {/* Message bubble */}
             <div style={{
               padding: '10px 14px', borderRadius: 12, fontSize: 13, lineHeight: 1.5,
-              background: msg.role === 'user' ? 'var(--color-primary, #1a365d)' : 'var(--color-bg-alt, #f7fafc)',
+              background: msg.role === 'user' ? '#FB2832' : 'var(--color-bg-alt, #f7fafc)',
               color: msg.role === 'user' ? '#fff' : 'var(--color-text, #2d3748)',
               marginLeft: msg.role === 'user' ? 40 : 0,
               marginRight: msg.role === 'system' ? 40 : 0,
@@ -149,8 +149,8 @@ export default function ArchitectChat() {
               <div className="d-flex flex-wrap gap-1 mt-2" style={{ marginLeft: 4 }}>
                 {msg.options.map((opt, j) => (
                   <button key={j}
-                    className="btn btn-sm btn-outline-primary"
-                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20 }}
+                    className="btn btn-sm"
+                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, border: '1px solid #FB2832', color: '#FB2832', background: 'transparent' }}
                     onClick={() => sendMessage(opt.value)}
                     disabled={loading}
                   >
@@ -185,7 +185,7 @@ export default function ArchitectChat() {
             {/* Confirm buttons */}
             {msg.action_required === 'confirm' && (
               <div className="d-flex gap-2 mt-2" style={{ marginLeft: 4 }}>
-                <button className="btn btn-sm btn-primary" onClick={() => sendMessage('confirm')} disabled={loading} style={{ fontSize: 12 }}>
+                <button className="btn btn-sm" onClick={() => sendMessage('confirm')} disabled={loading} style={{ fontSize: 12, background: '#FB2832', color: '#fff', border: 'none' }}>
                   <i className="bi bi-check-lg me-1"></i>Confirm
                 </button>
                 <button className="btn btn-sm btn-outline-secondary" onClick={() => sendMessage('cancel')} disabled={loading} style={{ fontSize: 12 }}>
@@ -203,9 +203,9 @@ export default function ArchitectChat() {
                   </pre>
                 </div>
                 <button
-                  className={`btn btn-sm mt-1 ${copying ? 'btn-success' : 'btn-primary'}`}
+                  className={`btn btn-sm mt-1 ${copying ? 'btn-success' : ''}`}
                   onClick={() => copyPrompt(msg.prompt)}
-                  style={{ fontSize: 11 }}
+                  style={{ fontSize: 11, ...(copying ? {} : { background: '#FB2832', color: '#fff', border: 'none' }) }}
                 >
                   <i className={`bi ${copying ? 'bi-check-lg' : 'bi-clipboard'} me-1`}></i>
                   {copying ? 'Copied!' : `Copy Prompt (${(msg.prompt.prompt_text || '').length} chars)`}
@@ -246,10 +246,10 @@ export default function ArchitectChat() {
             style={{ fontSize: 12, borderRadius: 20 }}
           />
           <button
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm"
             onClick={() => sendMessage(input)}
             disabled={loading || !input.trim()}
-            style={{ borderRadius: 20, padding: '4px 14px' }}
+            style={{ borderRadius: 20, padding: '4px 14px', background: '#FB2832', color: '#fff', border: 'none' }}
           >
             <i className="bi bi-send"></i>
           </button>

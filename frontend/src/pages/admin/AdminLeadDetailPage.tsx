@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
 import ActivityTimeline from '../../components/admin/ActivityTimeline';
 import AddNoteForm from '../../components/admin/AddNoteForm';
 import AppointmentCard from '../../components/admin/AppointmentCard';
 import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointmentModal';
 import TemperatureBadge from '../../components/TemperatureBadge';
 import JourneyTimeline from '../../components/admin/JourneyTimeline';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface LeadDetail {
   id: number;
@@ -230,17 +231,17 @@ function AdminLeadDetailPage() {
     });
   };
 
-  const getScoreBadge = (score: number) => {
-    if (score > 80) return 'bg-danger';
-    if (score > 60) return 'bg-warning text-dark';
-    if (score > 30) return 'bg-info';
-    return 'bg-secondary';
+  const scoreTone = (score: number): 'danger' | 'warning' | 'info' | 'neutral' => {
+    if (score > 80) return 'danger';
+    if (score > 60) return 'warning';
+    if (score > 30) return 'info';
+    return 'neutral';
   };
 
-  const getTypeBadge = (type: string) => {
-    if (type === 'email') return 'bg-info';
-    if (type === 'alert') return 'bg-danger';
-    return 'bg-warning text-dark';
+  const getTypeTone = (type: string): 'info' | 'danger' | 'warning' => {
+    if (type === 'email') return 'info';
+    if (type === 'alert') return 'danger';
+    return 'warning';
   };
 
   const getTypeLabel = (type: string) => {
@@ -250,8 +251,34 @@ function AdminLeadDetailPage() {
   };
 
   const getStageBadgeColor = (stage: string) => {
-    return PIPELINE_STAGE_COLORS[stage] || '#6c757d';
+    return PIPELINE_STAGE_COLORS[stage] || 'var(--text-muted)';
   };
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from the live lead record.
+  // Built with safe fallbacks so it stays above the loading/not-found early returns.
+  const trust: TrustSignal = useMemo(() => {
+    const name = lead?.name || 'this lead';
+    const score = lead?.lead_score ?? 0;
+    const temp = lead?.lead_temperature || 'unknown';
+    return {
+      level: 'live',
+      score,
+      source: 'lead record',
+      updatedAt: new Date().toISOString(),
+      summary: `Live record for ${name} — score ${score}, temperature ${temp}.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Source',
+          status: 'live',
+          evidence: [
+            { label: 'Lead ID', value: lead ? String(lead.id) : '—' },
+            { label: 'Score', value: String(score) },
+          ],
+        },
+      ],
+    };
+  }, [lead]);
 
   if (loading) {
     return (
@@ -274,46 +301,54 @@ function AdminLeadDetailPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads', to: '/admin/leads' }, { label: lead.name }]} />
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <div className="d-flex align-items-center gap-3 mt-1">
-            <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-              {lead.name}
-              {lead.ghl_contact_id && (
-                <a
-                  href={ghlContactUrl(lead.ghl_contact_id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="View in GoHighLevel"
-                  className="ms-2"
-                  style={{ verticalAlign: 'middle' }}
-                >
-                  <img src="/ghl-logo.svg" alt="GHL" width="24" height="24" style={{ borderRadius: '4px' }} />
-                </a>
-              )}
-            </h1>
-            <TemperatureBadge temperature={lead.lead_temperature} size="md" />
-            {lead.lead_score > 0 && (
-              <span className={`badge rounded-pill ${getScoreBadge(lead.lead_score)} fs-6`}>
-                Score: {lead.lead_score}
-              </span>
+      <PageHeader
+        title={lead.name || 'Lead Detail'}
+        icon="user-line"
+        subtitle={lead.title ? `${lead.title}${lead.company ? ` at ${lead.company}` : ''}` : (lead.company || undefined)}
+        breadcrumb={[
+          { label: 'Admin', to: '/admin/dashboard' },
+          { label: 'Leads', to: '/admin/leads' },
+          { label: 'Detail' },
+        ]}
+        trust={trust}
+        actions={
+          <>
+            <Link to="/admin/leads" className="btn btn-outline-secondary btn-sm">
+              <i className="ri-arrow-left-line" aria-hidden="true" /> Back
+            </Link>
+            {lead.ghl_contact_id && (
+              <a
+                href={ghlContactUrl(lead.ghl_contact_id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View in GoHighLevel"
+                className="btn btn-outline-primary btn-sm"
+              >
+                <img src="/ghl-logo.svg" alt="GHL" width="18" height="18" style={{ borderRadius: '3px', verticalAlign: 'middle' }} />
+                <span className="ms-1">Open in GHL</span>
+              </a>
             )}
-          </div>
-          {lead.title && <div className="text-muted small mt-1">{lead.title}{lead.company ? ` at ${lead.company}` : ''}</div>}
+            <button
+              className="btn btn-outline-primary btn-sm"
+              onClick={() => setShowAppointmentModal(true)}
+            >
+              Schedule Appointment
+            </button>
+          </>
+        }
+      >
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <TemperatureBadge temperature={lead.lead_temperature} size="md" />
+          {lead.lead_score > 0 && (
+            <StatusBadge label={`Score: ${lead.lead_score}`} tone={scoreTone(lead.lead_score)} />
+          )}
         </div>
-        <button
-          className="btn btn-outline-primary btn-sm"
-          onClick={() => setShowAppointmentModal(true)}
-        >
-          Schedule Appointment
-        </button>
-      </div>
+      </PageHeader>
 
       {/* Pipeline Stage Bar */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-body py-2">
-          <div className="d-flex align-items-center gap-2">
+      <div className="mb-4">
+        <SectionCard>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             <span className="text-muted small fw-bold me-2">Pipeline:</span>
             {PIPELINE_STAGES.map((stage) => (
               <button
@@ -326,7 +361,7 @@ function AdminLeadDetailPage() {
               </button>
             ))}
           </div>
-        </div>
+        </SectionCard>
       </div>
 
       {/* Tabs */}
@@ -362,9 +397,8 @@ function AdminLeadDetailPage() {
         <div className="row g-4">
           <div className="col-lg-8">
             {/* Contact Info */}
-            <div className="card admin-table-card mb-4">
-              <div className="card-header fw-bold py-3">Contact Information</div>
-              <div className="card-body">
+            <div className="mb-4">
+              <SectionCard title="Contact Information">
                 <div className="row g-3">
                   <div className="col-md-6">
                     <div className="text-muted small">Email</div>
@@ -413,14 +447,13 @@ function AdminLeadDetailPage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </SectionCard>
             </div>
 
             {/* UTM / Tracking Data */}
             {(lead.utm_source || lead.utm_campaign || lead.page_url) && (
-              <div className="card admin-table-card mb-4">
-                <div className="card-header fw-bold py-3">Tracking Data</div>
-                <div className="card-body">
+              <div className="mb-4">
+                <SectionCard title="Tracking Data">
                   <div className="row g-3">
                     {lead.utm_source && (
                       <div className="col-md-6">
@@ -441,31 +474,30 @@ function AdminLeadDetailPage() {
                       </div>
                     )}
                   </div>
-                </div>
+                </SectionCard>
               </div>
             )}
 
             {/* Website Activity */}
             {visitor && (
-              <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-white fw-semibold py-3 d-flex justify-content-between align-items-center">
-                  <span>Website Activity</span>
-                  {visitor.intent_score != null && (
-                    <span className={`badge ${
-                      visitor.intent_level === 'very_high' ? 'bg-danger' :
-                      visitor.intent_level === 'high' ? 'bg-warning text-dark' :
-                      visitor.intent_level === 'medium' ? 'bg-info text-dark' :
-                      'bg-light text-dark'
-                    }`}>
-                      Intent: {visitor.intent_score}/100 ({
+              <div className="mb-4">
+                <SectionCard
+                  title="Website Activity"
+                  actions={visitor.intent_score != null ? (
+                    <StatusBadge
+                      label={`Intent: ${visitor.intent_score}/100 (${
                         visitor.intent_level === 'very_high' ? 'Very High' :
                         visitor.intent_level === 'high' ? 'High' :
                         visitor.intent_level === 'medium' ? 'Medium' : 'Low'
-                      })
-                    </span>
-                  )}
-                </div>
-                <div className="card-body">
+                      })`}
+                      tone={
+                        visitor.intent_level === 'very_high' ? 'danger' :
+                        visitor.intent_level === 'high' ? 'warning' :
+                        visitor.intent_level === 'medium' ? 'info' : 'neutral'
+                      }
+                    />
+                  ) : undefined}
+                >
                   <div className="row g-3 mb-3">
                     <div className="col-md-3">
                       <div className="text-muted small">Total Sessions</div>
@@ -493,14 +525,15 @@ function AdminLeadDetailPage() {
                         {visitor.signals.map((sig) => (
                           <span
                             key={sig.id}
-                            className={`badge ${
-                              sig.signal_strength >= 40 ? 'bg-danger' :
-                              sig.signal_strength >= 25 ? 'bg-warning text-dark' :
-                              'bg-light text-dark border'
-                            }`}
                             title={`Strength: ${sig.signal_strength} | ${formatDate(sig.detected_at)}`}
                           >
-                            {sig.signal_type.replace(/_/g, ' ')}
+                            <StatusBadge
+                              label={sig.signal_type.replace(/_/g, ' ')}
+                              tone={
+                                sig.signal_strength >= 40 ? 'danger' :
+                                sig.signal_strength >= 25 ? 'warning' : 'neutral'
+                              }
+                            />
                           </span>
                         ))}
                       </div>
@@ -553,18 +586,17 @@ function AdminLeadDetailPage() {
                   )}
 
                   <div className="mt-3">
-                    <Link to={`/admin/visitors/${visitor.id}`} className="small fw-medium" style={{ color: 'var(--color-primary-light)' }}>
+                    <Link to={`/admin/visitors/${visitor.id}`} className="small fw-medium" style={{ color: 'var(--red-500)' }}>
                       View Full Visitor Profile &rarr;
                     </Link>
                   </div>
-                </div>
+                </SectionCard>
               </div>
             )}
 
             {/* Status + Notes */}
-            <div className="card admin-table-card mb-4">
-              <div className="card-header fw-bold py-3">Status &amp; Notes</div>
-              <div className="card-body">
+            <div className="mb-4">
+              <SectionCard title="Status & Notes">
                 <div className="mb-3">
                   <label className="form-label small text-muted">Status</label>
                   <select
@@ -601,29 +633,28 @@ function AdminLeadDetailPage() {
                     </span>
                   )}
                 </div>
-              </div>
+              </SectionCard>
             </div>
           </div>
 
           {/* Right: Lead Score + Automation History */}
           <div className="col-lg-4">
             {lead.lead_score > 0 && (
-              <div className="card admin-table-card mb-4">
-                <div className="card-header fw-bold py-3">Lead Score</div>
-                <div className="card-body text-center">
-                  <div className={`badge ${getScoreBadge(lead.lead_score)} fs-3 px-4 py-2 mb-2`}>
-                    {lead.lead_score}
-                  </div>
-                  <div className="text-muted small">out of 105 possible</div>
-                </div>
+              <div className="mb-4">
+                <StatCard
+                  label="Lead Score"
+                  value={lead.lead_score}
+                  icon="bar-chart-box-line"
+                  tone={scoreTone(lead.lead_score)}
+                  hint="out of 105 possible"
+                />
               </div>
             )}
 
             {/* Temperature History */}
             {tempHistory.length > 0 && (
-              <div className="card admin-table-card mb-4">
-                <div className="card-header fw-bold py-3">Temperature History</div>
-                <div className="card-body p-0">
+              <div className="mb-4">
+                <SectionCard title="Temperature History" padded={false}>
                   {tempHistory.slice(0, 5).map((entry: any) => (
                     <div key={entry.id} className="px-3 py-2 border-bottom">
                       <div className="d-flex align-items-center gap-2">
@@ -647,13 +678,11 @@ function AdminLeadDetailPage() {
                       )}
                     </div>
                   ))}
-                </div>
+                </SectionCard>
               </div>
             )}
 
-            <div className="card admin-table-card">
-              <div className="card-header fw-bold py-3">Automation History</div>
-              <div className="card-body">
+            <SectionCard title="Automation History">
                 {automationHistory.length === 0 ? (
                   <p className="text-muted small mb-0">No automation events yet</p>
                 ) : (
@@ -661,13 +690,9 @@ function AdminLeadDetailPage() {
                     {automationHistory.map((entry) => (
                       <div key={entry.id} className="mb-3 pb-3 border-bottom">
                         <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <span className={`badge ${getTypeBadge(entry.type)} me-2`}>
-                              {getTypeLabel(entry.type)}
-                            </span>
-                            <span className={`badge ${entry.status === 'success' ? 'bg-success' : 'bg-danger'}`}>
-                              {entry.status}
-                            </span>
+                          <div className="d-flex gap-2">
+                            <StatusBadge label={getTypeLabel(entry.type)} tone={getTypeTone(entry.type)} />
+                            <StatusBadge label={entry.status} tone={entry.status === 'success' ? 'success' : 'danger'} />
                           </div>
                         </div>
                         <div className="text-muted small mt-1">
@@ -685,8 +710,7 @@ function AdminLeadDetailPage() {
                     ))}
                   </div>
                 )}
-              </div>
-            </div>
+            </SectionCard>
           </div>
         </div>
       )}
@@ -694,34 +718,30 @@ function AdminLeadDetailPage() {
       {activeTab === 'activity' && (
         <div className="row g-4">
           <div className="col-lg-8">
-            <div className="card admin-table-card mb-4">
-              <div className="card-header fw-bold py-3">Add Activity</div>
-              <div className="card-body">
+            <div className="mb-4">
+              <SectionCard title="Add Activity">
                 <AddNoteForm
                   leadId={lead.id}
                   onNoteAdded={() => setActivityRefreshKey((k) => k + 1)}
                 />
-              </div>
+              </SectionCard>
             </div>
 
-            <div className="card admin-table-card">
-              <div className="card-header fw-bold py-3">Activity Timeline</div>
-              <div className="card-body">
-                <ActivityTimeline leadId={lead.id} refreshKey={activityRefreshKey} />
-              </div>
-            </div>
+            <SectionCard title="Activity Timeline">
+              <ActivityTimeline leadId={lead.id} refreshKey={activityRefreshKey} />
+            </SectionCard>
           </div>
 
           <div className="col-lg-4">
             {lead.lead_score > 0 && (
-              <div className="card admin-table-card mb-4">
-                <div className="card-header fw-bold py-3">Lead Score</div>
-                <div className="card-body text-center">
-                  <div className={`badge ${getScoreBadge(lead.lead_score)} fs-3 px-4 py-2 mb-2`}>
-                    {lead.lead_score}
-                  </div>
-                  <div className="text-muted small">out of 105 possible</div>
-                </div>
+              <div className="mb-4">
+                <StatCard
+                  label="Lead Score"
+                  value={lead.lead_score}
+                  icon="bar-chart-box-line"
+                  tone={scoreTone(lead.lead_score)}
+                  hint="out of 105 possible"
+                />
               </div>
             )}
           </div>
@@ -731,33 +751,32 @@ function AdminLeadDetailPage() {
       {activeTab === 'appointments' && (
         <div className="row g-4">
           <div className="col-lg-8">
-            <div className="card admin-table-card">
-              <div className="card-header fw-bold py-3 d-flex justify-content-between align-items-center">
-                <span>Appointments</span>
+            <SectionCard
+              title="Appointments"
+              actions={
                 <button
                   className="btn btn-primary btn-sm"
                   onClick={() => setShowAppointmentModal(true)}
                 >
                   Schedule New
                 </button>
-              </div>
-              <div className="card-body">
-                {appointments.length === 0 ? (
-                  <p className="text-muted small mb-0">No appointments scheduled</p>
-                ) : (
-                  appointments.map((apt) => (
-                    <AppointmentCard
-                      key={apt.id}
-                      appointment={apt}
-                      onUpdated={() => {
-                        fetchAppointments();
-                        setActivityRefreshKey((k) => k + 1);
-                      }}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
+              }
+            >
+              {appointments.length === 0 ? (
+                <p className="text-muted small mb-0">No appointments scheduled</p>
+              ) : (
+                appointments.map((apt) => (
+                  <AppointmentCard
+                    key={apt.id}
+                    appointment={apt}
+                    onUpdated={() => {
+                      fetchAppointments();
+                      setActivityRefreshKey((k) => k + 1);
+                    }}
+                  />
+                ))
+              )}
+            </SectionCard>
           </div>
         </div>
       )}
@@ -765,11 +784,11 @@ function AdminLeadDetailPage() {
       {activeTab === 'strategy' && (
         <div>
           {strategyCalls.length === 0 ? (
-            <div className="card admin-table-card">
-              <div className="card-body text-center py-4">
+            <SectionCard>
+              <div className="text-center py-4">
                 <p className="text-muted mb-0">No strategy calls found for this lead</p>
               </div>
-            </div>
+            </SectionCard>
           ) : (
             strategyCalls.map((call: any) => {
               const intel = call.intelligence;
@@ -779,29 +798,30 @@ function AdminLeadDetailPage() {
               }
 
               return (
-                <div key={call.id} className="card admin-table-card mb-4">
-                  <div className="card-header fw-bold py-3 d-flex justify-content-between align-items-center">
-                    <span>
-                      Strategy Call &mdash;{' '}
-                      {new Date(call.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                    <div className="d-flex gap-2">
-                      <span className={`badge ${call.status === 'scheduled' ? 'bg-primary' : call.status === 'completed' ? 'bg-success' : call.status === 'no_show' ? 'bg-danger' : 'bg-secondary'}`}>
-                        {call.status}
-                      </span>
-                      {intel && (
-                        <span className={`badge ${intel.completion_score >= 60 ? 'bg-success' : intel.completion_score >= 30 ? 'bg-warning text-dark' : 'bg-secondary'}`}>
-                          Prep: {intel.completion_score}%
-                        </span>
-                      )}
-                      {intel?.ai_confidence_score !== null && intel?.ai_confidence_score !== undefined && (
-                        <span className={`badge ${intel.ai_confidence_score >= 70 ? 'bg-info' : 'bg-warning text-dark'}`}>
-                          AI: {intel.ai_confidence_score}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="card-body">
+                <div key={call.id} className="mb-4">
+                  <SectionCard
+                    title={`Strategy Call — ${new Date(call.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                    actions={
+                      <div className="d-flex gap-2">
+                        <StatusBadge
+                          label={call.status}
+                          tone={call.status === 'scheduled' ? 'primary' : call.status === 'completed' ? 'success' : call.status === 'no_show' ? 'danger' : 'neutral'}
+                        />
+                        {intel && (
+                          <StatusBadge
+                            label={`Prep: ${intel.completion_score}%`}
+                            tone={intel.completion_score >= 60 ? 'success' : intel.completion_score >= 30 ? 'warning' : 'neutral'}
+                          />
+                        )}
+                        {intel?.ai_confidence_score !== null && intel?.ai_confidence_score !== undefined && (
+                          <StatusBadge
+                            label={`AI: ${intel.ai_confidence_score}%`}
+                            tone={intel.ai_confidence_score >= 70 ? 'info' : 'warning'}
+                          />
+                        )}
+                      </div>
+                    }
+                  >
                     {!intel ? (
                       <p className="text-muted small mb-0">No prep form submitted yet</p>
                     ) : (
@@ -836,7 +856,7 @@ function AdminLeadDetailPage() {
                             <div className="text-muted small mb-1">Challenges</div>
                             <div className="d-flex flex-wrap gap-1">
                               {intel.primary_challenges.map((c: string) => (
-                                <span key={c} className="badge bg-light text-dark border">{c}</span>
+                                <StatusBadge key={c} label={c} tone="neutral" />
                               ))}
                             </div>
                           </div>
@@ -848,7 +868,7 @@ function AdminLeadDetailPage() {
                             <div className="text-muted small mb-1">Current Tools</div>
                             <div className="d-flex flex-wrap gap-1">
                               {intel.current_tools.map((t: string) => (
-                                <span key={t} className="badge bg-light text-dark border">{t}</span>
+                                <StatusBadge key={t} label={t} tone="neutral" />
                               ))}
                             </div>
                           </div>
@@ -860,7 +880,7 @@ function AdminLeadDetailPage() {
                             <div className="text-muted small">Budget</div>
                             <div>
                               {intel.budget_range ? intel.budget_range.replace(/_/g, ' ') : 'Not specified'}
-                              {intel.evaluating_consultants && <span className="badge bg-warning text-dark ms-2">Evaluating consultants</span>}
+                              {intel.evaluating_consultants && <span className="ms-2"><StatusBadge label="Evaluating consultants" tone="warning" /></span>}
                             </div>
                           </div>
                         )}
@@ -885,7 +905,7 @@ function AdminLeadDetailPage() {
                         {intel.uploaded_file_name && (
                           <div className="col-12">
                             <div className="text-muted small">Uploaded Document</div>
-                            <div className="badge bg-info">{intel.uploaded_file_name}</div>
+                            <StatusBadge label={intel.uploaded_file_name} tone="info" />
                           </div>
                         )}
 
@@ -934,7 +954,7 @@ function AdminLeadDetailPage() {
                                     <strong className="small">Focus Areas</strong>
                                     <div className="d-flex flex-wrap gap-1 mt-1">
                                       {intel.ai_recommended_focus.map((f: string) => (
-                                        <span key={f} className="badge bg-primary">{f}</span>
+                                        <StatusBadge key={f} label={f} tone="primary" />
                                       ))}
                                     </div>
                                   </div>
@@ -945,7 +965,7 @@ function AdminLeadDetailPage() {
                         )}
                       </div>
                     )}
-                  </div>
+                  </SectionCard>
                 </div>
               );
             })

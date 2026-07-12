@@ -258,29 +258,23 @@ export async function runOpenclawQualityGateAgent(
             continue;
           }
 
-          // Approve and create post task
+          // HITL (TBI audit P0-4): the quality gate is a deterministic SCORE, not a human
+          // reviewer. It must NOT auto-approve and auto-queue public posts. Route QA-passed
+          // content to a human approval queue instead — a person promotes it via
+          // POST /api/admin/openclaw/responses/:id/approve, which creates the posting task.
           await response.update({
-            post_status: 'approved',
+            post_status: 'pending_review',
+            reasoning: `Quality gate passed (score: ${quality.score}/100) — awaiting human approval before posting`,
             updated_at: new Date(),
-          });
-
-          // Create browser posting task
-          await OpenclawTask.create({
-            task_type: 'post_response',
-            priority: response.priority_score || 50,
-            status: 'pending',
-            signal_id: response.signal_id,
-            input_data: { response_id: response.id },
-            created_at: new Date(),
           });
 
           actions.push({
             campaign_id: '',
-            action: 'approve_response',
-            reason: `Quality gate passed (score: ${quality.score}/100) - approved for ${response.platform} browser posting`,
+            action: 'route_to_human_approval',
+            reason: `Quality gate passed (score: ${quality.score}/100) — queued for human approval (HITL) before ${response.platform} posting`,
             confidence: quality.score / 100,
             before_state: { post_status: response.post_status },
-            after_state: { post_status: 'approved' },
+            after_state: { post_status: 'pending_review' },
             result: 'success',
             entity_type: 'system',
             entity_id: response.id,

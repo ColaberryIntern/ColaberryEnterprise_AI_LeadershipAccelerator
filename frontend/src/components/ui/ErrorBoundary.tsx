@@ -36,7 +36,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
           <p className="text-muted mb-3">
             {this.state.error?.message || 'An unexpected error occurred.'}
           </p>
-          <button className="btn btn-primary btn-sm" onClick={this.handleRetry}>
+          <button className="btn btn-sm" style={{ background: '#FB2832', color: '#fff', border: 'none' }} onClick={this.handleRetry}>
             Try Again
           </button>
         </div>

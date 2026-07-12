@@ -109,7 +109,7 @@ const SuggestedAgents: React.FC<Props> = ({ capId, onUpdate }) => {
                     {s.nameStemBoost && (
                       <span style={{
                         marginLeft: 8, fontSize: 9.5, padding: '1px 6px',
-                        background: 'rgba(59,130,246,0.12)', color: 'var(--color-primary)',
+                        background: 'rgba(59,130,246,0.12)', color: '#FB2832',
                         borderRadius: 3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
                       }}>name match</span>
                     )}
@@ -143,8 +143,8 @@ const SuggestedAgents: React.FC<Props> = ({ capId, onUpdate }) => {
                     disabled={state?.status === 'attaching'}
                     style={{
                       padding: '3px 12px', fontSize: 11.5, fontWeight: 600,
-                      border: '1px solid var(--color-primary)', borderRadius: 4,
-                      background: 'var(--color-primary)', color: 'white',
+                      border: '1px solid #FB2832', borderRadius: 4,
+                      background: '#FB2832', color: 'white',
                       cursor: state?.status === 'attaching' ? 'wait' : 'pointer',
                       minHeight: 26,
                     }}

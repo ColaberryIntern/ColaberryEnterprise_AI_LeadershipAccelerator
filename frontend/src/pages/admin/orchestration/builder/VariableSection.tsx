@@ -40,13 +40,13 @@ export default function VariableSection({
 
       {/* Section Variables (inherited, read-only) */}
       <div className="mb-3">
-        <h6 className="small fw-semibold mb-1" style={{ fontSize: 11, color: '#553c9a' }}>
+        <h6 className="small fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--chart-5)' }}>
           <i className="bi bi-diagram-3 me-1"></i>Section Variables
-          <span className="badge ms-1" style={{ fontSize: 8, background: 'rgba(128,90,213,0.12)', color: '#553c9a' }}>inherited</span>
+          <span className="badge ms-1" style={{ fontSize: 8, background: 'color-mix(in srgb, var(--chart-5) 12%, transparent)', color: 'var(--chart-5)' }}>inherited</span>
         </h6>
         <div className="d-flex flex-wrap gap-1">
           {(sectionVariableKeys || []).map(k => (
-            <span key={k} className="badge" style={{ fontSize: 9, background: 'rgba(128,90,213,0.12)', color: '#553c9a', border: '1px solid rgba(128,90,213,0.2)' }}>
+            <span key={k} className="badge" style={{ fontSize: 9, background: 'color-mix(in srgb, var(--chart-5) 12%, transparent)', color: 'var(--chart-5)', border: '1px solid color-mix(in srgb, var(--chart-5) 20%, transparent)' }}>
               {k}
             </span>
           ))}

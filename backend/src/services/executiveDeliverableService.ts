@@ -1,11 +1,12 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { generatePortfolio, PortfolioStructure, ProjectMetadata, PortfolioArtifactEntry } from './portfolioGenerationService';
 import Project from '../models/Project';
 import { SkillMastery, Enrollment } from '../models';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'exec_deliverable' });
   return _openai;
 }
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';

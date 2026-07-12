@@ -12,6 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const ops = require('./launchPmoOps');
 const { TEAM, LAUNCH, provisioned, missing, getByPersonId } = require('./launchPmoTeam');
+const { approvalAwaitingDeliverable } = require('./approvalArtifactLink');
 
 const NURTURE_STATE_PATH = path.resolve(__dirname, '../../../../tmp/launch-pmo-nurture-state.json');
 
@@ -35,6 +36,14 @@ function stripHtml(s) {
   return (s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function stripEmDashes(s) { return (s || '').replace(/—/g, '-').replace(/–/g, '-'); }
+// Pure ISO(YYYY-MM-DD) -> "Jul 16" formatter. String-split (no Date) so it is
+// timezone-safe and cannot drift a day across UTC/local boundaries.
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function shortDate(ymd) {
+  const [y, m, d] = String(ymd || '').split('-').map(Number);
+  if (!y || !m || !d || m < 1 || m > 12) return String(ymd || '');
+  return `${SHORT_MONTHS[m - 1]} ${d}`;
+}
 
 // Mandrill preflight rejects "Ali Muwwakkil" appearing 3+ times (signature
 // duplicate detection). Both the HTML and text generators reference Ali by
@@ -120,6 +129,12 @@ async function pullProjectState() {
   const lists = await ops.bcGetAll(`/buckets/${LAUNCH.projectId}/todosets/${dock.todoset.id}/todolists.json`);
   const today = dateYMD();
   const daysToLaunch = daysBetween(LAUNCH.targetLaunchDate, today);
+  // Two launch milestones surfaced in the report header/subject: platform (site
+  // + Open House go-live) and program (Cohort 1 orientation / kickoff).
+  // daysToLaunch above stays anchored to targetLaunchDate (first teaching class)
+  // for feasibility scoring; these two are display-only countdowns.
+  const daysToPlatform = daysBetween(LAUNCH.platformLaunchDate, today);
+  const daysToProgram = daysBetween(LAUNCH.programLaunchDate, today);
   const cbDraftedIds = loadCbDraftedIds();
   const areas = [];
   for (const list of lists) {
@@ -194,7 +209,7 @@ async function pullProjectState() {
   const totalAi = areas.reduce((s, a) => s + a.aiCount, 0);
   const totalEither = areas.reduce((s, a) => s + a.eitherCount, 0);
   const totalOverdue = areas.reduce((s, a) => s + a.overdue.length, 0);
-  return { areas, totalAll, doneAll, overall, totalHuman, totalAi, totalEither, totalOverdue, daysToLaunch, today };
+  return { areas, totalAll, doneAll, overall, totalHuman, totalAi, totalEither, totalOverdue, daysToLaunch, daysToPlatform, daysToProgram, today };
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +227,9 @@ function buildEscalationList(state) {
   const escalations = [];
   for (const a of state.areas) {
     for (const t of a.overdue) {
+      // Plan Phase 1: never escalate an approval that has nothing to approve.
+      // An approval with no artifact wired is held until the deliverable lands.
+      if (approvalAwaitingDeliverable(t, a.listName)) continue;
       const cls = classifyEscalation(t.days_overdue);
       if (cls === 'NONE') continue;
       escalations.push({ area: a.listName, ...t, classification: cls });
@@ -233,11 +251,31 @@ function buildHumanActionQueue(state) {
       if (t.tier !== 'HUMAN' && t.tier !== 'EITHER') continue;
       if (!t.due_on) continue;
       if (t.cbDrafted) continue; // exclude already-drafted awaiting-review tasks
+      // Plan Phase 1: hold approvals whose artifact is not yet wired. They go
+      // to buildAwaitingDeliverableQueue() instead of the actionable queue, so
+      // the human is not asked to approve something that does not exist yet.
+      if (approvalAwaitingDeliverable(t, a.listName)) continue;
       queue.push({ area: a.listName, ...t });
     }
   }
   queue.sort((a, b) => a.due_on.localeCompare(b.due_on));
   return queue;
+}
+
+// Approval gates held back by the readiness gate: they are in the Approval
+// Queues list (or titled like an approval) but have no artifact-ready marker
+// yet. Surfaced separately (and logged) so a held approval is visible, just
+// not presented as actionable or escalated.
+function buildAwaitingDeliverableQueue(state) {
+  const q = [];
+  for (const a of state.areas) {
+    for (const t of a.openTodos) {
+      if (t.cbDrafted) continue;
+      if (approvalAwaitingDeliverable(t, a.listName)) q.push({ area: a.listName, ...t });
+    }
+  }
+  q.sort((a, b) => (a.due_on || '9999').localeCompare(b.due_on || '9999'));
+  return q;
 }
 
 function buildAiQueue(state) {
@@ -329,8 +367,8 @@ async function generateExecSummary(state, escalations, humanQueue, aiQueue) {
   if (!process.env.OPENAI_API_KEY) {
     return { exec_summary: '(OPENAI_API_KEY missing - skipping AI summary)', risks: [], next_human_actions: [] };
   }
-  const OpenAI = require(path.resolve(__dirname, '../../../../node_modules/openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './openaiInstrumented'));
+  const openai = getInstrumentedOpenAI({ workflow_id: 'launch_pmo_daily_update' });
 
   const context = {
     days_to_launch: state.daysToLaunch,
@@ -475,7 +513,9 @@ ${recentRows ? `<div style="margin-top:14px;font-size:10px;color:#64748b;text-tr
 // ---------------------------------------------------------------------------
 // Email to Ali (Mandrill)
 // ---------------------------------------------------------------------------
-async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog }) {
+// recipients (optional): { to, cc } override. Defaults to Ali + standard CC.
+// Pass { to: 'ali@colaberry.com', cc: [] } for a private verification send.
+async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog, recipients }) {
   if (!process.env.MANDRILL_API_KEY) return { skipped: 'no MANDRILL_API_KEY' };
   const nodemailer = require(path.resolve(__dirname, '../../../../node_modules/nodemailer'));
   const { validateBeforeSend } = require(path.resolve(__dirname, './mandrillPreflight'));
@@ -563,7 +603,7 @@ async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePost
 <tr><td style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:#fff;padding:28px 32px">
 <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">Launch PMO - Daily Update</div>
 <h1 style="margin:6px 0 8px;font-size:24px;font-weight:800;color:white">AI Systems Architect Accelerator &mdash; ${today}</h1>
-<div style="font-size:13px;color:#e2e8f0;line-height:1.6">${state.daysToLaunch} days to launch &middot; ${state.overall}% overall ready &middot; ${state.totalAi} AI-doable &middot; ${state.totalHuman} human-needed &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</div>
+<div style="font-size:13px;color:#e2e8f0;line-height:1.6">${state.daysToPlatform}d to platform launch (${shortDate(LAUNCH.platformLaunchDate)}) &middot; ${state.daysToProgram}d to program launch (${shortDate(LAUNCH.programLaunchDate)}) &middot; ${state.overall}% overall ready &middot; ${state.totalAi} AI-doable &middot; ${state.totalHuman} human-needed &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</div>
 </td></tr>
 
 <tr><td style="background:#1c1917;color:white;padding:18px 32px">
@@ -640,7 +680,7 @@ ${aiSummary.risks?.length ? `<h2 style="font-size:17px;color:#1a365d;border-bott
 
 </td></tr></table></td></tr></table></body></html>`;
 
-  const text = stripEmDashes(`Launch PMO Update ${state.today} - ${state.daysToLaunch} days to launch.
+  const text = stripEmDashes(`Launch PMO Update ${state.today} - ${state.daysToPlatform}d to platform launch (${shortDate(LAUNCH.platformLaunchDate)}), ${state.daysToProgram}d to program launch (${shortDate(LAUNCH.programLaunchDate)}).
 
 Overall readiness: ${state.overall}% | Open tasks: ${state.areas.reduce((s, a) => s + a.openCount, 0)} | Escalations: ${escalations.length}
 
@@ -667,94 +707,18 @@ Launch PMO for AI Systems Architect Accelerator`);
     host: 'smtp.mandrillapp.com', port: 587,
     auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
   });
+  const to = recipients?.to || 'ali@colaberry.com';
+  const cc = recipients?.cc !== undefined ? recipients.cc : ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
   const r = await transport.sendMail({
     from: '"CB System" <ali@colaberry.com>',
-    to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
-    subject: `[Launch PMO] ${state.today} - ${state.overall}% ready, ${state.daysToLaunch}d to launch`,
+    to,
+    cc,
+    subject: `[Launch PMO] ${state.today} - ${state.overall}% ready, platform ${state.daysToPlatform}d / program ${state.daysToProgram}d`,
     text: textClean,
     html: htmlClean,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
   });
   return { messageId: r.messageId };
-}
-
-// ---------------------------------------------------------------------------
-// MB post (HUMAN ACTION QUEUE)
-// ---------------------------------------------------------------------------
-async function postHumanActionQueue(state, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog) {
-  const today = state.today;
-  const aliTasks = humanQueue.filter((h) => (h.assignees || []).some((a) => /Ali Muwwakkil/i.test(a)));
-  const nextForAli = aliTasks[0] || humanQueue[0] || null;
-
-  const perAreaNextHumanRows = state.areas.map((a) => {
-    const nextH = a.openTodos.find((t) => (t.tier === 'HUMAN' || t.tier === 'EITHER') && !blockerMap.get(t.id)?.blocked);
-    if (!nextH) return null;
-    return `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${htmlEsc(a.listName)}</td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${duePill(nextH.due_on, today)}</td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${nextH.url}" style="color:#1a365d;text-decoration:none;font-weight:600">${htmlEsc(stripEmDashes(stripHtml(nextH.content))).slice(0, 100)}</a></td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc((nextH.assignees || []).join(', ').replace(/Ali Muwwakkil/g, 'Ali') || 'unassigned')}</td></tr>`;
-  }).filter(Boolean).join('');
-
-  const feasibilityRows = [...state.areas]
-    .sort((a, b) => (a.feasibility.score - b.feasibility.score))
-    .map((a) => `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1a365d;font-size:12px">${htmlEsc(a.listName)}</td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${scoreBadge(a.feasibility)}</td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">H ${a.humanCount} / AI ${a.aiCount}${a.eitherCount ? ` / E ${a.eitherCount}` : ''} - ${htmlEsc(a.feasibility.reason)}</td></tr>`).join('');
-
-  const aiCompletedRows = (aiLog?.recentCompleted || []).slice(0, 8).map((a) =>
-    `<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b">${(a.completed_at || '').slice(0, 16).replace('T', ' ')}</td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:12px"><a href="${a.url}" style="color:#1a365d">${htmlEsc(stripHtml(a.content)).slice(0, 90)}</a></td>
-<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${htmlEsc(a.area)}</td></tr>`).join('');
-
-  const escRows = escalations.slice(0, 5).map((e) =>
-    `<li><strong>${e.classification}</strong> (${e.days_overdue}d): ${e.area} - ${stripEmDashes(stripHtml(e.content)).slice(0, 110)}</li>`
-  ).join('');
-
-  const banner = nextForAli
-    ? `<div style="background:#1c1917;color:white;padding:14px 18px;margin:0 0 16px;border-left:4px solid #fbbf24">
-<div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fbbf24;font-weight:700">YOUR TURN ALI - next decision</div>
-<a href="${nextForAli.url}" style="display:block;color:white;text-decoration:none;font-weight:700;margin-top:4px">${stripEmDashes(stripHtml(nextForAli.content))}</a>
-<div style="margin-top:4px;font-size:12px;color:#cbd5e0">${nextForAli.area} &middot; due ${nextForAli.due_on}</div>
-</div>`
-    : '<div style="background:#dcfce7;padding:14px 18px;border-radius:6px;color:#14532d;font-weight:600">You are clear. No human action queued for Ali right now.</div>';
-
-  const content = `<div>
-<h3>Launch Readiness Dashboard - ${today}</h3>
-<p><strong>${state.daysToLaunch} days to launch</strong> &middot; ${state.overall}% overall &middot; ${state.totalHuman} human-needed &middot; ${state.totalAi} AI-doable &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</p>
-${banner}
-<h4>Next human step blocking each area</h4>
-${perAreaNextHumanRows ? `<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;border-collapse:collapse;border:1px solid #e2e8f0">
-<tr style="background:#1a365d;color:white"><th align="left" style="padding:8px 10px;font-size:10px;letter-spacing:1px">AREA</th><th align="left" style="padding:8px 10px;font-size:10px">DUE</th><th align="left" style="padding:8px 10px;font-size:10px">NEXT HUMAN STEP</th><th align="left" style="padding:8px 10px;font-size:10px">OWNER</th></tr>
-${perAreaNextHumanRows}
-</table>` : '<div>All areas unblocked on the human side. CB executes next.</div>'}
-
-<h4>Feasibility per area (lowest first)</h4>
-<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;border-collapse:collapse;border:1px solid #e2e8f0">
-<tr style="background:#1a365d;color:white"><th align="left" style="padding:8px 10px;font-size:10px">AREA</th><th align="center" style="padding:8px 10px;font-size:10px">SCORE</th><th align="left" style="padding:8px 10px;font-size:10px">REASON</th></tr>
-${feasibilityRows}
-</table>
-
-${aiCompletedRows ? `<h4>AI tasks marked complete (last 7 days)</h4>
-<table cellpadding="0" cellspacing="0" style="width:100%;font-size:12px;border-collapse:collapse;border:1px solid #e2e8f0">
-<tr style="background:#14532d;color:white"><th align="left" style="padding:8px 10px;font-size:10px">WHEN</th><th align="left" style="padding:8px 10px;font-size:10px">TASK</th><th align="left" style="padding:8px 10px;font-size:10px">AREA</th></tr>
-${aiCompletedRows}
-</table>` : ''}
-
-${escRows ? `<h4>Escalations</h4><ul>${escRows}</ul>` : ''}
-${blockedHumanTasks.length ? `<h4>Blocked tasks (waiting on upstream)</h4>
-<table cellpadding="6" cellspacing="0" style="width:100%;font-size:11px;border-collapse:collapse;border:1px solid #e2e8f0">
-<tr style="background:#1a365d;color:white"><th align="left">Task</th><th align="left">Owner</th><th align="left">Blocked on</th></tr>
-${blockedHumanTasks.slice(0, 6).map((b) => `<tr><td>${stripEmDashes(stripHtml(b.content)).slice(0, 80)}</td><td>${(b.assignees || []).join(', ') || 'unassigned'}</td><td>${b.blocker?.reason || ''}</td></tr>`).join('')}
-</table>` : ''}
-
-<p style="font-size:11px;color:#64748b">Auto-posted daily Mon-Fri 8am CST by CB System Launch PMO. Each task links to its Basecamp todo. Tag <code>@CB System</code> for help (artifacts, follow-ups, AI execution). Blocked tasks excluded.</p>
-</div>`;
-
-  return ops.postMessage({
-    subject: `Launch Readiness Dashboard - ${today}`,
-    content,
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -923,12 +887,29 @@ async function runNurtureCycle(state, projectId) {
 // ---------------------------------------------------------------------------
 // Main entry
 // ---------------------------------------------------------------------------
-async function runDailyUpdate({ force = false } = {}) {
+async function runDailyUpdate({ force = false, recipients } = {}) {
   if (!force && !isWeekday()) {
     return { skipped: 'weekend - daily PMO heartbeat is Mon-Fri only' };
   }
   const state = await pullProjectState();
   const escalations = buildEscalationList(state);
+  // Plan Phase 1 visibility: approvals held back because no artifact is wired.
+  // These are excluded from the human queue + escalations above; surface them
+  // as a structured log line so a held approval is never silently dropped.
+  const awaitingDeliverable = buildAwaitingDeliverableQueue(state);
+  if (awaitingDeliverable.length) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'launch-pmo',
+      event: 'approval_artifacts_awaiting',
+      outcome: 'partial',
+      context: {
+        count: awaitingDeliverable.length,
+        todos: awaitingDeliverable.map((t) => ({ id: t.id, title: t.content, area: t.area, due_on: t.due_on, url: t.url })),
+      },
+    }));
+  }
   const blockerMap = detectBlockedTasks(state);
   // Partition human queue into unblocked + blocked
   const humanQueueAll = buildHumanActionQueue(state);
@@ -942,8 +923,14 @@ async function runDailyUpdate({ force = false } = {}) {
   const aiSummary = await generateExecSummary(state, escalations, humanQueue, aiQueue);
   const aiLog = await buildAiCompletionLog(state);
   const nurturePosted = await runNurtureCycle(state, LAUNCH.projectId);
-  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog });
-  const mbResult = await postHumanActionQueue(state, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog);
+  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog, recipients });
+  // NOTE (2026-06-10): the daily HTML "Launch Readiness Dashboard - {date}" MB
+  // post was removed. It created a fresh Message Board thread every weekday,
+  // generating a redundant Basecamp notification that duplicated the polished
+  // PNG dashboard already posted to the persistent thread by
+  // weeklyLaunchPmoDashboardPost.js ("Launch Readiness Dashboard (visual)" in
+  // reportingRegistry.js). The PNG dashboard is now the single board surface;
+  // this job retains only the executive email to Ali.
   return {
     today: state.today,
     overall: state.overall,
@@ -953,8 +940,8 @@ async function runDailyUpdate({ force = false } = {}) {
     nurture_posted: nurturePosted.length,
     blocked_count: blockedHumanTasks.length,
     email_message_id: emailResult.messageId,
-    mb_message_id: mbResult.id,
+    mb_message_id: null, // MB text post retired in favor of the visual dashboard
   };
 }
 
-module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAiQueue, generateExecSummary, detectBlockedTasks };
+module.exports = { runDailyUpdate, pullProjectState, buildEscalationList, buildHumanActionQueue, buildAwaitingDeliverableQueue, buildAiQueue, generateExecSummary, detectBlockedTasks, shortDate };

@@ -12,6 +12,7 @@
 import { Op } from 'sequelize';
 import { Lead, CampaignLead, ScheduledEmail, UnsubscribeEvent } from '../models';
 import { logActivity } from './activityService';
+import { revokeConsent } from './consentService';
 
 // ---------------------------------------------------------------------------
 // STOP keyword detection
@@ -71,6 +72,18 @@ export async function processOptOut(
     reason: reason.substring(0, 500),
     source,
   } as any);
+
+  // 4b. Mirror the opt-out into the consent ledger as `revoked` (TBI P0-3, Phase 2 capture).
+  //     Belt-and-suspenders with suppression; the consent gate then blocks on this record too.
+  //     Swallow-safe — consent capture must never break the unsubscribe path. 'all'/unknown → all channels.
+  const revokeChannel = (['email', 'sms', 'voice'] as const).find((c) => c === channel);
+  await revokeConsent({
+    subjectType: 'lead',
+    subjectId: String(leadId),
+    channel: revokeChannel,
+    source: `unsubscribe:${source}`,
+    evidence: { reason: reason.substring(0, 200), channel_requested: channel },
+  }).catch((err) => console.warn('[Unsubscribe] consent revoke failed:', err.message));
 
   // 5. Log activity
   await logActivity({

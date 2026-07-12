@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import MiniSection from '../models/MiniSection';
 import SkillDefinition from '../models/SkillDefinition';
 import CurriculumLesson from '../models/CurriculumLesson';
@@ -6,7 +7,7 @@ import CurriculumModule from '../models/CurriculumModule';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'skill_recalc' });
   return _openai;
 }
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';

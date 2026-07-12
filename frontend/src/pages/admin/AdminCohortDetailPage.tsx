@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface CohortDetail {
   id: string;
@@ -31,6 +32,26 @@ interface Participant {
   created_at: string;
 }
 
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
+const PAYMENT_TONE: Record<string, BadgeTone> = {
+  paid: 'success',
+  pending_invoice: 'warning',
+  failed: 'danger',
+};
+
+const PAYMENT_LABEL: Record<string, string> = {
+  paid: 'Paid',
+  pending_invoice: 'Pending Invoice',
+  failed: 'Failed',
+};
+
+const STATUS_TONE: Record<string, BadgeTone> = {
+  open: 'success',
+  closed: 'danger',
+  completed: 'neutral',
+};
+
 function AdminCohortDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { showToast } = useToast();
@@ -50,6 +71,26 @@ function AdminCohortDetailPage() {
   useEffect(() => {
     fetchCohort();
   }, [id]); // eslint-disable-line
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from the cohort record.
+  const trust: TrustSignal = useMemo(() => ({
+    level: 'live',
+    source: 'cohort',
+    updatedAt: new Date().toISOString(),
+    summary: cohort
+      ? `${cohort.seats_taken}/${cohort.max_seats} seats filled · status ${cohort.status}.`
+      : 'Live cohort enrollment and roster.',
+    href: '/admin/trust',
+    pillars: [
+      {
+        name: 'Enrollment',
+        status: 'live',
+        evidence: [
+          { label: 'Seats filled', value: cohort ? `${cohort.seats_taken}/${cohort.max_seats}` : '—' },
+        ],
+      },
+    ],
+  }), [cohort]);
 
   const handleCloseEnrollment = async () => {
     setActionLoading(true);
@@ -103,37 +144,6 @@ function AdminCohortDetailPage() {
     });
   };
 
-  const paymentBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      paid: 'bg-success',
-      pending_invoice: 'bg-warning text-dark',
-      failed: 'bg-danger',
-    };
-    const labels: Record<string, string> = {
-      paid: 'Paid',
-      pending_invoice: 'Pending Invoice',
-      failed: 'Failed',
-    };
-    return (
-      <span className={`badge rounded-pill ${colors[status] || 'bg-secondary'}`}>
-        {labels[status] || status}
-      </span>
-    );
-  };
-
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      open: 'bg-success',
-      closed: 'bg-danger',
-      completed: 'bg-secondary',
-    };
-    return (
-      <span className={`badge rounded-pill ${colors[status] || 'bg-secondary'} fs-6`}>
-        {status}
-      </span>
-    );
-  };
-
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -159,103 +169,127 @@ function AdminCohortDetailPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: cohort.name }]} />
-
-      {/* Cohort Header */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-body p-4">
-          <div className="d-flex justify-content-between align-items-start flex-wrap gap-3">
-            <div>
-              <h1 className="h3 fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>
-                {cohort.name}
-              </h1>
-              <div className="d-flex gap-3 flex-wrap text-muted">
-                <span>📅 {formatDate(cohort.start_date)}</span>
-                <span>
-                  👥 {cohort.seats_taken} / {cohort.max_seats} enrolled
-                </span>
-                <span>{statusBadge(cohort.status)}</span>
-              </div>
-              <div className="text-muted mt-2">
-                <span>🕐 {cohort.core_day} at {cohort.core_time}</span>
-                {cohort.optional_lab_day && (
-                  <span className="ms-3">🔧 Optional lab: {cohort.optional_lab_day}</span>
-                )}
-              </div>
-            </div>
-            <div className="d-flex gap-2">
+      <PageHeader
+        title={cohort.name || 'Cohort Detail'}
+        icon="group-line"
+        subtitle={`${cohort.core_day} at ${cohort.core_time}${cohort.optional_lab_day ? ` · Optional lab: ${cohort.optional_lab_day}` : ''}`}
+        breadcrumb={[
+          { label: 'Admin', to: '/admin/dashboard' },
+          { label: 'Accelerator', to: '/admin/accelerator' },
+          { label: 'Cohort' },
+        ]}
+        trust={trust}
+        actions={
+          <>
+            <button
+              className="btn btn-outline-primary btn-sm"
+              onClick={handleExportCSV}
+              disabled={participants.length === 0}
+            >
+              <i className="ri-download-line" aria-hidden="true" /> Export CSV
+            </button>
+            {cohort.status === 'open' && (
               <button
-                className="btn btn-outline-primary btn-sm"
-                onClick={handleExportCSV}
-                disabled={participants.length === 0}
+                className="btn btn-outline-danger btn-sm"
+                onClick={() => setShowCloseConfirm(true)}
+                disabled={actionLoading}
               >
-                📥 Export CSV
+                <i className="ri-lock-line" aria-hidden="true" />{' '}
+                {actionLoading ? 'Closing...' : 'Close Enrollment'}
               </button>
-              {cohort.status === 'open' && (
-                <button
-                  className="btn btn-outline-danger btn-sm"
-                  onClick={() => setShowCloseConfirm(true)}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? 'Closing...' : '🔒 Close Enrollment'}
-                </button>
-              )}
-            </div>
+            )}
+          </>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Start Date" value={formatDate(cohort.start_date)} icon="calendar-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Enrolled"
+              value={`${cohort.seats_taken} / ${cohort.max_seats}`}
+              icon="group-line"
+              tone="primary"
+            />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Seats Remaining"
+              value={Math.max(0, cohort.max_seats - cohort.seats_taken)}
+              icon="user-add-line"
+              tone="success"
+            />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Status"
+              value={<StatusBadge label={cohort.status} tone={STATUS_TONE[cohort.status] || 'neutral'} />}
+              icon="checkbox-circle-line"
+              tone="neutral"
+            />
           </div>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Participants Table */}
-      <div className="card admin-table-card">
-        <div className="card-header fw-bold fs-5 py-3">
-          Participants ({participants.length})
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
+      <SectionCard
+        title={`Participants (${participants.length})`}
+        icon="team-line"
+        padded={false}
+      >
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Company</th>
+                <th>Title</th>
+                <th>Payment</th>
+                <th>Method</th>
+                <th>Enrolled</th>
+              </tr>
+            </thead>
+            <tbody>
+              {participants.length === 0 ? (
                 <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Company</th>
-                  <th>Title</th>
-                  <th>Payment</th>
-                  <th>Method</th>
-                  <th>Enrolled</th>
+                  <td colSpan={7} className="text-center text-muted py-4">
+                    No participants enrolled yet
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {participants.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center text-muted py-4">
-                      No participants enrolled yet
+              ) : (
+                participants.map((p) => (
+                  <tr key={p.id}>
+                    <td className="fw-medium">{p.full_name}</td>
+                    <td>
+                      <a href={`mailto:${p.email}`}>{p.email}</a>
+                    </td>
+                    <td>{p.company}</td>
+                    <td className="text-muted">{p.title || '—'}</td>
+                    <td>
+                      <StatusBadge
+                        label={PAYMENT_LABEL[p.payment_status] || p.payment_status}
+                        tone={PAYMENT_TONE[p.payment_status] || 'neutral'}
+                      />
+                    </td>
+                    <td className="text-muted small">
+                      <i
+                        className={`ri-${p.payment_method === 'credit_card' ? 'bank-card-line' : 'building-line'}`}
+                        aria-hidden="true"
+                      />{' '}
+                      {p.payment_method === 'credit_card' ? 'Card' : 'Invoice'}
+                    </td>
+                    <td className="text-muted small">
+                      {formatDateTime(p.created_at)}
                     </td>
                   </tr>
-                ) : (
-                  participants.map((p) => (
-                    <tr key={p.id}>
-                      <td className="fw-medium">{p.full_name}</td>
-                      <td>
-                        <a href={`mailto:${p.email}`}>{p.email}</a>
-                      </td>
-                      <td>{p.company}</td>
-                      <td className="text-muted">{p.title || '—'}</td>
-                      <td>{paymentBadge(p.payment_status)}</td>
-                      <td className="text-muted small">
-                        {p.payment_method === 'credit_card' ? '💳' : '🏢'}{' '}
-                        {p.payment_method === 'credit_card' ? 'Card' : 'Invoice'}
-                      </td>
-                      <td className="text-muted small">
-                        {formatDateTime(p.created_at)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </SectionCard>
 
       <ConfirmModal
         show={showCloseConfirm}

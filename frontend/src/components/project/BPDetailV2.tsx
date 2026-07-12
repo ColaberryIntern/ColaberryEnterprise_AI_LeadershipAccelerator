@@ -66,7 +66,7 @@ const MATURITY_LABELS: Record<number, { label: string; blurb: string }> = {
 
 function toast(msg: string) {
   const el = document.createElement('div');
-  el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:11px 18px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
+  el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#FB2832;color:#fff;padding:11px 18px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2800);
 }

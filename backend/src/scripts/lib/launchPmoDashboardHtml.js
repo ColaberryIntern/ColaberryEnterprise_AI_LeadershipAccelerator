@@ -50,6 +50,41 @@ function duePill(dueOn, today) {
 }
 function scoreTier(score) { return score >= 80 ? 's-high' : score >= 50 ? 's-mid' : 's-low'; }
 
+// Curriculum Readiness: completion percent of the "Curriculum" Basecamp todo
+// list. Computed identically to every other area's pct in pullProjectState
+// (round(done / total * 100)), so it uses the SAME units as the rest of the
+// dashboard - Basecamp todos (curriculum build tasks), not a separate data
+// source. completed = area.done, total = area.total.
+//
+// Divide-by-zero guard: if the Curriculum list is missing or empty (0/0), we
+// report 0% and flag hasData:false so the tile renders "no curriculum data"
+// instead of a misleading 0% that looks like real progress.
+function computeCurriculumReadiness(state) {
+  const area = (state.areas || []).find((a) => /curriculum/i.test(a.listName || ''));
+  const total = area ? area.total : 0;
+  const done = area ? area.done : 0;
+  if (!area || total === 0) {
+    return { pct: 0, done, total, present: !!area, hasData: false };
+  }
+  return { pct: Math.round((done / total) * 100), done, total, present: true, hasData: true };
+}
+
+// Generic per-list readiness, used for the Website (training) and Website
+// (enterprise) KPI tiles. Same units and the same divide-by-zero / missing-list
+// guard as computeCurriculumReadiness above; `matcher` is a RegExp tested
+// against area.listName. Curriculum keeps its own dedicated fn so this change
+// adds no refactor to a tested code path; a follow-up can collapse it onto this
+// helper.
+function computeListReadiness(state, matcher) {
+  const area = (state.areas || []).find((a) => matcher.test(a.listName || ''));
+  const total = area ? area.total : 0;
+  const done = area ? area.done : 0;
+  if (!area || total === 0) {
+    return { pct: 0, done, total, present: !!area, hasData: false };
+  }
+  return { pct: Math.round((done / total) * 100), done, total, present: true, hasData: true };
+}
+
 const ESC_LABEL = {
   REMINDER: 'Reminder', ESCALATE_LEAD: 'Escalate', NOTIFY_ALI: 'Notify Ali', CRITICAL_RISK: 'Critical',
 };
@@ -125,6 +160,9 @@ function buildView(state, extras = {}) {
     targetDate,
     daysToLaunch: state.daysToLaunch,
     overall: state.overall,
+    curriculum: computeCurriculumReadiness(state),
+    websiteTraining: computeListReadiness(state, /training\.colaberry/i),
+    websiteEnterprise: computeListReadiness(state, /enterprise\.colaberry/i),
     totalHuman: state.totalHuman,
     totalAi: state.totalAi,
     totalOverdue: state.totalOverdue,
@@ -157,7 +195,7 @@ const CSS = `
   .head .sub{margin-top:6px;font-size:13px;color:var(--muted)}
   .head .meta-block{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);line-height:1.7}
   .head .meta-block .dot{color:var(--green)}
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:32px;box-shadow:var(--shadow-sm)}
+  .kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:32px;box-shadow:var(--shadow-sm)}
   .kpi{background:var(--surface);padding:22px 24px 20px;display:flex;flex-direction:column;justify-content:space-between;min-height:124px}
   .kpi .label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600}
   .kpi .value{font-size:38px;font-weight:800;color:var(--ink);letter-spacing:-.025em;line-height:1;margin-top:14px}
@@ -285,6 +323,9 @@ function renderDashboardHtml(view) {
 <div class="kpis">
   <div class="kpi"><div><div class="label">Days to Launch</div><div class="value">${view.daysToLaunch}<span class="unit">d</span></div></div><div class="delta">${view.targetDate ? `target ${htmlEsc(view.targetDate)}` : 'launch window'}</div></div>
   <div class="kpi"><div><div class="label">Overall Readiness</div><div class="value">${view.overall}<span class="unit">%</span></div></div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.overall))}%"></div></div></div>
+  <div class="kpi"><div><div class="label">Curriculum Readiness</div><div class="value">${view.curriculum.pct}<span class="unit">%</span></div></div>${view.curriculum.hasData ? `<div class="delta" title="${view.curriculum.done} of ${view.curriculum.total} curriculum tasks complete">${view.curriculum.done} / ${view.curriculum.total} tasks ready</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.curriculum.pct))}%"></div></div>` : `<div class="delta">no curriculum data</div>`}</div>
+  <div class="kpi"><div><div class="label">Website (training) Readiness</div><div class="value">${view.websiteTraining.pct}<span class="unit">%</span></div></div>${view.websiteTraining.hasData ? `<div class="delta" title="${view.websiteTraining.done} of ${view.websiteTraining.total} website (training) tasks complete">${view.websiteTraining.done} / ${view.websiteTraining.total} tasks ready</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.websiteTraining.pct))}%"></div></div>` : `<div class="delta">no website (training) data</div>`}</div>
+  <div class="kpi"><div><div class="label">Website (enterprise) Readiness</div><div class="value">${view.websiteEnterprise.pct}<span class="unit">%</span></div></div>${view.websiteEnterprise.hasData ? `<div class="delta" title="${view.websiteEnterprise.done} of ${view.websiteEnterprise.total} website (enterprise) tasks complete">${view.websiteEnterprise.done} / ${view.websiteEnterprise.total} tasks ready</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, view.websiteEnterprise.pct))}%"></div></div>` : `<div class="delta">no website (enterprise) data</div>`}</div>
   <div class="kpi"><div><div class="label">Open · Human / AI</div><div class="value">${view.totalHuman}<span class="unit">/${view.totalAi}</span></div></div><div class="delta">${view.openTotal} open todos &middot; ${view.humanPct}% human</div></div>
   <div class="kpi urgent"><div><div class="label">Overdue</div><div class="value">${view.totalOverdue}</div></div><div class="delta">${view.escalationRows.length} reminders escalating</div></div>
 </div>

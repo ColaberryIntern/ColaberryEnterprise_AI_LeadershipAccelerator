@@ -10,6 +10,8 @@
  * - Capability breakdown
  */
 
+import { getInstrumentedOpenAI } from './openaiInstrumented';
+
 export interface AgentPreview {
   name: string;
   role: string;
@@ -65,8 +67,7 @@ const DEPT_COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06
 
 export async function generateSystemPreview(idea: string): Promise<SystemPreview> {
   try {
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'build_preview' });
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

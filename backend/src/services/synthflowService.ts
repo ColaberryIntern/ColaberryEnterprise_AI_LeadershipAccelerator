@@ -1,5 +1,6 @@
 import { env } from '../config/env';
 import { getTestOverrides } from './settingsService';
+import { isKillSwitchActive } from './launchSafety';
 
 interface VoiceCallParams {
   name: string;
@@ -30,6 +31,13 @@ interface SynthflowResponse {
 }
 
 export async function triggerVoiceCall(params: VoiceCallParams): Promise<SynthflowResponse> {
+  // SECURITY (TBI audit P0-2): the global kill switch must actually stop outbound voice calls,
+  // not merely flip a DB flag. Check it first so an emergency stop is effective.
+  if (await isKillSwitchActive()) {
+    console.warn('[Synthflow] BLOCKED by kill switch — not initiating voice call.');
+    return { success: true, data: { skipped: true, reason: 'kill_switch_active' } };
+  }
+
   if (!env.enableVoiceCalls) {
     console.log('[Synthflow] Voice calls disabled via ENABLE_VOICE_CALLS. Skipping.');
     return { success: true, data: { skipped: true, reason: 'feature_disabled' } };
