@@ -427,6 +427,26 @@ async function ensureOnboardingProfileSchema() {
   }
 }
 
+async function ensurePortalSettingsSchema() {
+  // Student Settings page: profile photo (base64 on the enrollment) + an
+  // uploaded resume FILE (base64 on the onboarding profile, so it survives
+  // container redeploys and needs no static serving). Idempotent/additive.
+  const statements = [
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS avatar_data_url TEXT`,
+    `ALTER TABLE onboarding_profiles ADD COLUMN IF NOT EXISTS resume_file_name VARCHAR(255)`,
+    `ALTER TABLE onboarding_profiles ADD COLUMN IF NOT EXISTS resume_mime VARCHAR(120)`,
+    `ALTER TABLE onboarding_profiles ADD COLUMN IF NOT EXISTS resume_data TEXT`,
+    `ALTER TABLE onboarding_profiles ADD COLUMN IF NOT EXISTS resume_uploaded_at TIMESTAMPTZ`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] portal-settings schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureOpenHouseSchema() {
   // Cohort-agnostic open house / info sessions (S3). Guests RSVP before joining.
   const statements = [
@@ -1232,6 +1252,8 @@ async function start(): Promise<void> {
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
   await ensureOnboardingProfileSchema();
+  // Student Settings: avatar photo + uploaded resume file columns (idempotent).
+  await ensurePortalSettingsSchema();
   // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.

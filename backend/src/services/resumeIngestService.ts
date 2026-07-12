@@ -175,6 +175,9 @@ export async function getOnboardingProfile(enrollmentId: string): Promise<{
   return {
     prefill: row.prefill || {},
     linkedin_url: row.linkedin_url || null,
-    has_resume: !!row.resume_text,
+    // True when the student has EITHER extracted resume text (onboarding paste)
+    // or an uploaded resume file (Settings), so the Today onboarding step and
+    // the Settings badge agree.
+    has_resume: !!(row.resume_text || row.resume_file_name),
   };
 }

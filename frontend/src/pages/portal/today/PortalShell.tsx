@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './TodayShell.css';
 import { fetchPoints, fetchSchedule, levelFor, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
+import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import BuildToast from '../projects/BuildToast';
 
@@ -75,6 +76,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
   const me = useMemo(readParticipant, []);
+  const [avatar, setAvatar] = useState<string | null>(() => readCachedAvatar());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try { return (localStorage.getItem('te-theme') as 'light' | 'dark') || 'light'; } catch { return 'light'; }
   });
@@ -102,6 +104,21 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
+  }, []);
+
+  // Profile photo for the topbar avatar. Read the per-session cache first for an
+  // instant paint; fetch once if it hasn't been populated yet this session.
+  useEffect(() => {
+    const sync = () => setAvatar(readCachedAvatar());
+    window.addEventListener('te-avatar-changed', sync);
+    window.addEventListener('storage', sync);
+    if (readCachedAvatar() === null) {
+      fetchSettings().then((s) => setAvatar(s.avatar_data_url)).catch(() => { /* non-fatal */ });
+    }
+    return () => {
+      window.removeEventListener('te-avatar-changed', sync);
+      window.removeEventListener('storage', sync);
+    };
   }, []);
 
   const total = points?.total ?? 0;
@@ -145,10 +162,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
             <div className="bar"><i style={{ width: `${lvl.pct}%` }} /></div>
             <div className="next">{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level'}</div>
           </div>
-          <button type="button" className="te-iconbtn" title="Settings" aria-label="Settings">
+          <Link to="/portal/settings" className={`te-iconbtn${active.startsWith('/portal/settings') ? ' active' : ''}`} title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 6.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 2.6h.09A1.65 1.65 0 0 0 11 1.09V1a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16.5 4.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21.4 11H21a2 2 0 0 1 0 4z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
-          </button>
-          <div className="te-avatar" title={me.email}>{me.initials}</div>
+          </Link>
+          <Link to="/portal/settings" className="te-avatar" title={me.email || 'Settings'}>
+            {avatar ? <img src={avatar} alt="Your profile" /> : me.initials}
+          </Link>
         </div>
       </header>
 

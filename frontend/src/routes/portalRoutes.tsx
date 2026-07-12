@@ -31,6 +31,7 @@ import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
 import ArchitectDashboard from '../pages/portal/ArchitectDashboard';
 import TodayShell from '../pages/portal/today/TodayShell';
+import SettingsPage from '../pages/portal/settings/SettingsPage';
 import PathPage from '../pages/portal/path/PathPage';
 import SchedulePage from '../pages/portal/schedule/SchedulePage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
@@ -50,6 +51,8 @@ const portalRoutes = (
       {/* Today shell (Design E onboarding experience) renders its own chrome,
           so it sits outside PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
+      {/* Settings renders its own PortalShell chrome, like Today. */}
+      <Route path="/portal/settings" element={<SettingsPage />} />
       {/* Path + Schedule share the Design E shell (PortalShell), like Today. */}
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />

@@ -38,6 +38,7 @@ export interface EnrollmentAttributes {
   portal_enabled?: boolean;
   active_project_id?: string | null;
   enrollment_type?: 'standard' | 'explorer';
+  avatar_data_url?: string | null;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -76,6 +77,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare portal_enabled: boolean;
   declare active_project_id: string | null;
   declare enrollment_type: 'standard' | 'explorer';
+  declare avatar_data_url: string | null;
   declare created_at: Date;
 }
 
@@ -241,6 +243,13 @@ Enrollment.init(
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: 'standard',
+    },
+    avatar_data_url: {
+      // Profile photo stored as a small (client-downscaled) base64 data URL.
+      // Kept in the DB rather than on disk so it survives container redeploys
+      // (uploads dir is ephemeral) and needs no static-file serving.
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,
