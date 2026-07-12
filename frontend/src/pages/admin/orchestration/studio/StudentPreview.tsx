@@ -16,11 +16,17 @@ interface Props {
   label: string;
   experience?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   videoUrl?: string;
+  presenter?: string;
+  poster?: string;
   parts?: string[] | null;
 }
 
-const StudentPreview: React.FC<Props> = ({ band, label, experience, videoUrl, parts }) => {
-  const card = adaptToFeedCard({ render_band: band, label, student_label: label, experience, videoUrl, capabilities: parts });
+const StudentPreview: React.FC<Props> = ({ band, label, experience, videoUrl, presenter, poster, parts }) => {
+  const card = adaptToFeedCard({
+    render_band: band, label, student_label: label, experience,
+    video: { url: videoUrl || null, presenter: presenter || null, poster: poster || null },
+    capabilities: parts,
+  });
   return (
     <div className="tl-de">
       <div className="tld-inlinepanel">
