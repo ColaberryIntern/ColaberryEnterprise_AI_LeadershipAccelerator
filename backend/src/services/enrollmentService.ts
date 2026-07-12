@@ -120,7 +120,43 @@ export async function markEnrollmentPaid(
   exitPaymentCampaign(enrollment.email)
     .catch(err => console.error('[Payment Campaign] Auto-exit failed:', err.message));
 
+  // A paying student may still hold a lingering free "Explorer" account from an
+  // earlier Open House visit (a separate row in the Explorer cohort). Now that
+  // they've paid, retire that redundant free row so they appear once — as a paid
+  // student — and not also as an active free prospect. Best-effort + idempotent;
+  // never touches the paid row, seats, or money. This is the observable
+  // "moved out of the free class once you pay and activate".
+  retireRedundantExplorerAccounts(enrollment.email, enrollment.id)
+    .catch(err => console.error('[Enrollment] Explorer reconcile failed (non-fatal):', err.message));
+
   return enrollment;
+}
+
+/**
+ * When someone becomes a paid student, withdraw any OTHER still-active Explorer
+ * (free Open House) enrollment they hold, so the same person is not counted as
+ * both a paid student and a free prospect. Idempotent: withdrawn rows are skipped
+ * on re-run, and the paid enrollment itself is never touched. enrollment_type is
+ * left as 'explorer' so dashboards keep excluding it; status='withdrawn' removes
+ * it from the active free-prospect view.
+ */
+export async function retireRedundantExplorerAccounts(email: string, paidEnrollmentId: string): Promise<void> {
+  const strays = await Enrollment.findAll({
+    where: {
+      email: email.toLowerCase().trim(),
+      enrollment_type: 'explorer',
+      status: 'active',
+    },
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  for (const stray of strays) {
+    if (stray.id === paidEnrollmentId) continue;
+    await stray.update({
+      status: 'withdrawn',
+      notes: `${stray.notes ? stray.notes + ' | ' : ''}Retired ${today}: superseded by paid enrollment ${paidEnrollmentId}`,
+    });
+    console.log(`[Enrollment] Retired redundant Explorer ${stray.id} (${email}) — now a paid student`);
+  }
 }
 
 export async function markEnrollmentFailed(externalId: string): Promise<Enrollment | null> {
@@ -196,9 +232,12 @@ export async function createAdminEnrollment(data: {
 /* ------------------------------------------------------------------ */
 
 // An "Explorer" is an Open House visitor who can log into the portal and explore
-// the app but has NOT paid or joined a class. They are placed under the current
-// (latest open) cohort, flagged enrollment_type='explorer', and — critically —
-// do NOT consume a paid seat and are excluded from student metrics.
+// the app but has NOT paid or joined a class. They are placed in the dedicated
+// Explorer cohort (a "free class of its own"), flagged enrollment_type='explorer',
+// and — critically — do NOT consume a paid seat and are excluded from student
+// metrics. Placement is deterministic (the explorer cohort), NOT start_date-based:
+// the old getLatestOpenCohort() routing filed prospects into whichever cohort
+// started soonest, which dumped real signups into a demo cohort.
 export async function createExplorerEnrollment(input: {
   name: string;
   email: string;
@@ -211,8 +250,8 @@ export async function createExplorerEnrollment(input: {
   const email = input.email.toLowerCase().trim();
   if (!email) throw new AppError('email is required', 400);
 
-  const { getLatestOpenCohort } = await import('./cohortService');
-  const cohort = await getLatestOpenCohort();
+  const { getOrCreateExplorerCohort } = await import('./cohortService');
+  const cohort = await getOrCreateExplorerCohort();
   if (!cohort) throw new AppError('No cohort available to place the Explorer under', 409);
 
   // Idempotent: reuse any existing enrollment for this email in the cohort —
