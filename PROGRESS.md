@@ -10,6 +10,20 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Student portal account Settings page (photo, resume/LinkedIn, points, passwordless security) (2026-07-12)
+- [x] **New `/portal/settings` surface + `/api/portal/settings/*` backend; wired the previously-dead settings gear**
+  - Date: 2026-07-12
+  - Session: CC-20260712-p7q4
+  - What changed:
+    - Backend model additions (idempotent, additive): `enrollments.avatar_data_url` (TEXT) and `onboarding_profiles.resume_file_name/resume_mime/resume_data/resume_uploaded_at`. Photo + resume are stored as base64 in Postgres (not on the ephemeral uploads disk) so they survive container redeploys and need no static serving. New `ensurePortalSettingsSchema()` in `server.ts` runs the `ADD COLUMN IF NOT EXISTS` ALTERs at boot, right after `ensureOnboardingProfileSchema()`.
+    - `backend/src/services/portalSettingsService.ts` (new): `getSettings`, `updateProfile`, `setAvatar`/`clearAvatar`, `setResume`/`getResumeFile`/`clearResume`, plus PURE validators (`validateAvatarDataUrl`, `validateResumeUpload`, `sanitizeProfilePatch`, `base64Bytes`). Resume capped at 3 MB (base64 rides the global 5mb `express.json` limit); avatar restricted to png/jpeg/webp/gif with a size ceiling; LinkedIn URL validated to `linkedin.com`. All writes are idempotent overwrites keyed on the authenticated enrollment id.
+    - `backend/src/controllers/portalSettingsController.ts` (new) + 7 routes in `participantRoutes.ts` under `requireParticipant`: `GET /settings`, `PUT /settings/profile`, `POST|DELETE /settings/avatar`, `POST|GET|DELETE /settings/resume` (GET streams the decoded file to its owner).
+    - `resumeIngestService.getOnboardingProfile`: `has_resume` now true when EITHER extracted resume text OR an uploaded resume file exists, so the Today onboarding step and the Settings badge agree.
+    - Frontend: `frontend/src/services/portalSettingsApi.ts` (new — typed client + client-side image downscale/crop and file→base64 helpers + per-session avatar cache); `frontend/src/pages/portal/settings/SettingsPage.tsx` + `.css` (new — photo, editable profile, resume/LinkedIn upload+download+replace, points & level with history, passwordless sign-in/security section with magic-link resend + sign-out, dark-mode preference); `/portal/settings` route added; the previously-dead settings gear in `PortalShell.tsx` now links to it and the top-bar avatar renders the uploaded photo (cache cleared on login/logout so shared devices never show a prior user's photo).
+  - Why: the portal had no student-facing account page — the gear was a no-op, there was no way to set a photo, and the "resume upload" on Today never actually stored a file. Ali asked for a settings page (photo, resume/LinkedIn, points, password). Platform is passwordless by design (magic-link); Ali chose to keep it passwordless, so the Security section is built on magic-link (no password system introduced).
+  - Verification: backend jest 12/12 pass (`portalSettingsService.test.ts` — pure validators: happy/failure/boundary/idempotency, run via ts-jest). Frontend `tsc --noEmit`: 0 errors in all touched source files (the only errors in a full run are pre-existing third-party `.d.ts` parse artifacts from workspace TS-version hoisting — d3-dispatch/zod — in node_modules, present on main too). Backend `tsc`: 0 errors in any project `src/` file. Not yet deployed.
+  - Notes: built in a worktree off `origin/main` on branch `workstream/portal-student-settings` (the Design-E Student Platform lives on main, not the session's original branch). PR to main opened; needs the usual 1 review + 4 Actions checks. Deploy is additive — the `ensurePortalSettingsSchema` migration runs on backend boot; no manual seed step.
+
 ### Explorer cohort placement: route new signups to the soonest upcoming cohort (2026-07-07)
 - [x] **`getLatestOpenCohort()` now picks the soonest upcoming open cohort, not the farthest-out**
   - Date: 2026-07-07

@@ -32,6 +32,10 @@ import {
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
 import {
+  handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
+  handleSetResume, handleGetResume, handleClearResume,
+} from '../controllers/portalSettingsController';
+import {
   handleOpenCard, handleMentor, handleReflection, handleVideoAugment, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
 } from '../controllers/runtimeController';
@@ -76,6 +80,17 @@ router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboa
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
 router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
 router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
+
+// Student account Settings — profile, photo, resume file, account read.
+// Photo + resume are base64 JSON bodies (they ride the global 5mb express.json
+// limit); the resume download streams the decoded file back to its owner.
+router.get('/api/portal/settings', requireParticipant, handleGetSettings);
+router.put('/api/portal/settings/profile', requireParticipant, handleUpdateProfile);
+router.post('/api/portal/settings/avatar', requireParticipant, handleSetAvatar);
+router.delete('/api/portal/settings/avatar', requireParticipant, handleClearAvatar);
+router.post('/api/portal/settings/resume', requireParticipant, handleSetResume);
+router.get('/api/portal/settings/resume', requireParticipant, handleGetResume);
+router.delete('/api/portal/settings/resume', requireParticipant, handleClearResume);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);

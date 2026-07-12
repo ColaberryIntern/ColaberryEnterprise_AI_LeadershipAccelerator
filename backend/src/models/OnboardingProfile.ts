@@ -8,6 +8,12 @@ export interface OnboardingProfileAttributes {
   linkedin_url?: string | null;
   prefill?: any;    // mapped Partial<ProjectDnaInput> that seeds the wizard
   extracted?: any;  // raw structured extraction from the resume/LinkedIn
+  // Uploaded resume FILE (kept for the student to view/download/replace from
+  // Settings). Stored as base64 in the DB — redeploy-safe, no static serving.
+  resume_file_name?: string | null;
+  resume_mime?: string | null;
+  resume_data?: string | null;        // base64-encoded file bytes
+  resume_uploaded_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -26,6 +32,10 @@ class OnboardingProfile extends Model<OnboardingProfileAttributes> implements On
   declare linkedin_url: string | null;
   declare prefill: any;
   declare extracted: any;
+  declare resume_file_name: string | null;
+  declare resume_mime: string | null;
+  declare resume_data: string | null;
+  declare resume_uploaded_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -38,6 +48,10 @@ OnboardingProfile.init(
     linkedin_url: { type: DataTypes.STRING(500), allowNull: true },
     prefill: { type: DataTypes.JSONB, allowNull: true },
     extracted: { type: DataTypes.JSONB, allowNull: true },
+    resume_file_name: { type: DataTypes.STRING(255), allowNull: true },
+    resume_mime: { type: DataTypes.STRING(120), allowNull: true },
+    resume_data: { type: DataTypes.TEXT, allowNull: true },
+    resume_uploaded_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,
