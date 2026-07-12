@@ -388,12 +388,17 @@ const ExperienceStudioTab: React.FC = () => {
                         </div>
                       ) : (sel.variable_keys || []).length === 0
                         ? <div className="es-muted">No variables — this activity reads the same for every student.</div>
-                        : (sel.variable_keys || []).map((k) => (
-                          <div key={k} style={{ marginBottom: 6 }}>
-                            <div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div>
-                            <input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} />
-                          </div>
-                        ))}
+                        : (
+                          <>
+                            <p className="es-muted" style={{ margin: '0 0 8px' }}>Sample values — just to render this preview. They're not saved on the component. Real values are supplied downstream (e.g. the Composer fills <span className="mono">week</span>, the Timeline binds the <span className="mono">cohort</span>).</p>
+                            {(sel.variable_keys || []).map((k) => (
+                              <div key={k} style={{ marginBottom: 6 }}>
+                                <div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div>
+                                <input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} />
+                              </div>
+                            ))}
+                          </>
+                        )}
                     </div>
                   </div>
                   <div className="es-arrow">↓ feeds</div>
@@ -515,17 +520,12 @@ const ExperienceStudioTab: React.FC = () => {
               {detailTab === 'versions' && <VersionCompare sel={sel} versions={versions} onRestore={restore} />}
             </div>
 
-            {/* RIGHT: variables + parts (the real controls); everything else under Advanced */}
+            {/* RIGHT: parts (the real controls); everything else under Advanced.
+                Variables are NOT configured at the Studio level — they're sample
+                values that live inside the preview Flow (Step 1) only. Real values
+                are bound downstream (the Composer fills week, the Timeline binds
+                the cohort), so there is no docked variables panel here. */}
             <aside>
-              {/* For a video the inputs live in the Flow (the card fields); the raw
-                  {{variables}} panel is only for non-video types that use them. */}
-              {!isVideo && (
-                <div className="es-panel"><div className="es-lab">Variables · the inputs</div>
-                  {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
-                    <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
-                  ))}</div>
-              )}
-
               <div className="es-panel">
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <div className="es-lab" style={{ margin: 0 }}>Parts · what the student gets</div>
