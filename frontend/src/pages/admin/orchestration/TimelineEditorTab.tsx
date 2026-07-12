@@ -233,7 +233,7 @@ const EditDrawer: React.FC<{
                   onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
                 <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
                   disabled={genBusy || isNew || !draft.title} title={isNew ? 'Save the card first, then generate its content' : !draft.title ? 'Give it a title first' : 'Generate the real content students see (summary, body, questions) and save it to this card'}
-                  onClick={onGenerate}>{genBusy ? '✦ Generating…' : content ? '↻ Regenerate content' : '✦ Generate content'}</button>
+                  onClick={onGenerate}>{genBusy ? '✦ Generating…' : previewCard.content ? '↻ Regenerate content' : '✦ Generate content'}</button>
               </div>
               {isNew && <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>Add the card first, then Generate content to write what students see.</div>}
             </div>
