@@ -133,15 +133,16 @@ const SchedulePage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [ssRes, evRes, koRes] = await Promise.allSettled([
-        portalApi.get('/api/portal/sessions'),
-        fetchPublicEvents(90),
-        fetchSchedule(),
+      // Each fetch resolves to its own fallback on error, so Promise.all never
+      // rejects and the calendar degrades gracefully (e.g. guests have no sessions).
+      const [ss, ev, ko] = await Promise.all([
+        portalApi.get('/api/portal/sessions').then((r) => (r.data.sessions || []) as SessionItem[]).catch(() => [] as SessionItem[]),
+        fetchPublicEvents(90).catch(() => [] as OpenHouseView[]),
+        fetchSchedule().then((s) => s.first_class?.start_date ?? null).catch(() => null),
       ]);
       if (cancelled) return;
-      setSessions(ssRes.status === 'fulfilled' ? (ssRes.value.data.sessions || []) : []);
-      setEvents(evRes.status === 'fulfilled' ? evRes.value : []);
-      const ko = koRes.status === 'fulfilled' ? koRes.value.first_class?.start_date : null;
+      setSessions(ss);
+      setEvents(ev);
       setKickoff(ko ? parseYmd(ko) : null);
       setLoading(false);
     })().catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
