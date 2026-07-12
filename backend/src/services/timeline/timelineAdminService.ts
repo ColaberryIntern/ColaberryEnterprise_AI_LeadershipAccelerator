@@ -38,6 +38,7 @@ export interface CreateCardInput {
   release_date?: string | Date | null;
   program_id?: string | null;
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
+  content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
 }
 
 /** PURE — normalize an author's video input into the stored metadata shape, or
@@ -47,6 +48,19 @@ export function buildVideoMeta(video: CreateCardInput['video']): { url: string; 
   if (!url) return null;
   const str = (s: any) => (typeof s === 'string' && s.trim() ? s.trim() : null);
   return { url, presenter: str(video?.presenter), poster: str(video?.poster) };
+}
+
+/** PURE — normalize author/AI content into the stored metadata shape, or null
+ *  when nothing usable is present (so an empty blob never clobbers real notes). */
+export function buildContentMeta(content: CreateCardInput['content']): Record<string, any> | null {
+  if (!content || typeof content !== 'object') return null;
+  const out: Record<string, any> = {};
+  if (typeof content.title === 'string' && content.title.trim()) out.title = content.title;
+  if (typeof content.summary === 'string' && content.summary.trim()) out.summary = content.summary;
+  if (typeof content.body_html === 'string' && content.body_html.trim()) out.body_html = content.body_html;
+  if (Array.isArray(content.questions) && content.questions.length) out.questions = content.questions.map(String);
+  if (typeof content.reflection === 'string' && content.reflection.trim()) out.reflection = content.reflection;
+  return Object.keys(out).length ? out : null;
 }
 
 /**
@@ -84,7 +98,11 @@ export function composeCardAttributes(
     cohort_id: null,                 // global — one curriculum for every batch
     program_id: input.program_id ?? null,
     order,
-    metadata: { authored: true, ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}) },
+    metadata: {
+      authored: true,
+      ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}),
+      ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content) } : {}),
+    },
   };
 }
 
@@ -146,12 +164,19 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   for (const f of EDITABLE_FIELDS) {
     if (f in patch) clean[f] = f === 'release_date' && patch[f] ? new Date(patch[f]) : patch[f];
   }
-  // Video lives in the metadata blob; merge it (setting/clearing the `video` key)
-  // without disturbing other metadata.
-  if ('video' in patch) {
+  // Video + content live in the metadata blob; merge them (setting/clearing each
+  // key) without disturbing other metadata. Start from the latest metadata (or
+  // whatever a prior branch already staged in clean.metadata).
+  if ('video' in patch || 'content' in patch) {
     const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
-    const v = buildVideoMeta(patch.video);
-    if (v) meta.video = v; else delete meta.video;
+    if ('video' in patch) {
+      const v = buildVideoMeta(patch.video);
+      if (v) meta.video = v; else delete meta.video;
+    }
+    if ('content' in patch) {
+      const c = buildContentMeta(patch.content);
+      if (c) meta.content = c; else delete meta.content;
+    }
     clean.metadata = meta;
   }
   await card.update(clean);
