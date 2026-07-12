@@ -62,7 +62,8 @@ const ExperienceStudioTab: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState({ category: '', difficulty: '', status: '', capability: '', domain: '', approval: '' });
+  // Default the library to APPROVED-only (the checkbox below); uncheck to see all.
+  const [filter, setFilter] = useState({ category: '', difficulty: '', status: '', capability: '', domain: '', approval: 'approved' });
   const [analytics, setAnalytics] = useState<any>(null);
   const [depGraph, setDepGraph] = useState<any>(null);
   const [sel, setSel] = useState<Cmp | null>(null);
@@ -263,7 +264,14 @@ const ExperienceStudioTab: React.FC = () => {
             <input className="es-in" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />
             <button className="es-btn pri" onClick={() => setGen({ open: true, desc: '', recipe: '', draft: null })}>✦ Generate component</button>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
+            {/* Default view = approved only; uncheck to show everything. The
+                dropdown still offers the explicit "Not approved" view. */}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#2B2B2B', cursor: 'pointer', whiteSpace: 'nowrap', padding: '0 4px' }}
+              title="Show only components approved for curriculum">
+              <input type="checkbox" checked={filter.approval === 'approved'} onChange={(e) => setFilter({ ...filter, approval: e.target.checked ? 'approved' : '' })} />
+              Approved only
+            </label>
             <select className="es-in" style={{ width: 'auto' }} value={filter.category} onChange={(e) => setFilter({ ...filter, category: e.target.value })}><option value="">All categories</option>{allCategories.map((c) => <option key={c}>{c}</option>)}</select>
             <select className="es-in" style={{ width: 'auto' }} value={filter.difficulty} onChange={(e) => setFilter({ ...filter, difficulty: e.target.value })}><option value="">All difficulty</option>{['intro', 'core', 'stretch'].map((c) => <option key={c}>{c}</option>)}</select>
             <select className="es-in" style={{ width: 'auto' }} value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}><option value="">All status</option>{['draft', 'ready', 'published', 'deprecated'].map((c) => <option key={c}>{c}</option>)}</select>
@@ -388,12 +396,17 @@ const ExperienceStudioTab: React.FC = () => {
                         </div>
                       ) : (sel.variable_keys || []).length === 0
                         ? <div className="es-muted">No variables — this activity reads the same for every student.</div>
-                        : (sel.variable_keys || []).map((k) => (
-                          <div key={k} style={{ marginBottom: 6 }}>
-                            <div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div>
-                            <input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} />
-                          </div>
-                        ))}
+                        : (
+                          <>
+                            <p className="es-muted" style={{ margin: '0 0 8px' }}>Sample values — just to render this preview. They're not saved on the component. Real values are supplied downstream (e.g. the Composer fills <span className="mono">week</span>, the Timeline binds the <span className="mono">cohort</span>).</p>
+                            {(sel.variable_keys || []).map((k) => (
+                              <div key={k} style={{ marginBottom: 6 }}>
+                                <div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div>
+                                <input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} />
+                              </div>
+                            ))}
+                          </>
+                        )}
                     </div>
                   </div>
                   <div className="es-arrow">↓ feeds</div>
@@ -515,17 +528,12 @@ const ExperienceStudioTab: React.FC = () => {
               {detailTab === 'versions' && <VersionCompare sel={sel} versions={versions} onRestore={restore} />}
             </div>
 
-            {/* RIGHT: variables + parts (the real controls); everything else under Advanced */}
+            {/* RIGHT: parts (the real controls); everything else under Advanced.
+                Variables are NOT configured at the Studio level — they're sample
+                values that live inside the preview Flow (Step 1) only. Real values
+                are bound downstream (the Composer fills week, the Timeline binds
+                the cohort), so there is no docked variables panel here. */}
             <aside>
-              {/* For a video the inputs live in the Flow (the card fields); the raw
-                  {{variables}} panel is only for non-video types that use them. */}
-              {!isVideo && (
-                <div className="es-panel"><div className="es-lab">Variables · the inputs</div>
-                  {(sel.variable_keys || []).length === 0 ? <div className="es-muted">None.</div> : (sel.variable_keys || []).map((k) => (
-                    <div key={k} style={{ marginBottom: 6 }}><div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{`{{${k}}}`}</div><input className="es-in" value={vars[k] ?? ''} onChange={(e) => setVars({ ...vars, [k]: e.target.value })} /></div>
-                  ))}</div>
-              )}
-
               <div className="es-panel">
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <div className="es-lab" style={{ margin: 0 }}>Parts · what the student gets</div>
