@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import portalApi from '../../../utils/portalApi';
-import { fetchSchedule, fetchPublicEvents, OpenHouseView } from '../../../services/onboardingApi';
+import { fetchSchedule, fetchPublicEvents, OpenHouseView, FirstClassView } from '../../../services/onboardingApi';
 import './SchedulePage.css';
 
 /**
@@ -77,7 +77,7 @@ function stateForSession(status: string, day: Date, today: Date): EvState {
   return day.getTime() < today.getTime() ? 'done' : 'up';
 }
 
-function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], today: Date): SchedMap {
+function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstClass: FirstClassView | null, today: Date): SchedMap {
   const sched: SchedMap = {};
   const add = (d: Date, ev: SchedEvent): void => { const k = dkey(d); (sched[k] = sched[k] || []).push(ev); };
 
@@ -101,9 +101,39 @@ function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], today: 
       href: e.registration_url || undefined, external: true, sub: 'Open House',
     });
   }
+  // Cohort kickoff: the countdown's "next class". Surface it on the calendar
+  // even when no per-session rows exist yet, so the class-start day is visible.
+  if (firstClass?.start_date) {
+    const d = parseYmd(firstClass.start_date);
+    if (d) {
+      const hasClass = (sched[dkey(d)] || []).some((e) => e.kind === 'class');
+      if (!hasClass) {
+        add(d, {
+          id: 'class-start', kind: 'class',
+          title: `Class starts · ${firstClass.cohort_name || 'Your cohort'}`,
+          time: '', hour: -1,
+          state: d.getTime() < today.getTime() ? 'done' : 'up',
+          sub: 'Cohort kickoff',
+        });
+      }
+    }
+  }
   Object.keys(sched).forEach((k) =>
     sched[k].sort((a, b) => (a.hour - b.hour) || a.title.localeCompare(b.title)));
   return sched;
+}
+
+/** Wrap a calendar item: external event -> new-tab link, session -> in-app Link, else a plain div. */
+function renderItem(ev: SchedEvent, className: string, inner: React.ReactNode, block?: boolean): React.ReactNode {
+  const style: React.CSSProperties = { textDecoration: 'none', color: 'inherit' };
+  if (block) style.display = 'block';
+  if (ev.href && ev.external) {
+    return <a key={ev.id} href={ev.href} target="_blank" rel="noopener noreferrer" className={className} title={ev.title} style={style}>{inner}</a>;
+  }
+  if (ev.href) {
+    return <Link key={ev.id} to={ev.href} className={className} title={ev.title} style={style}>{inner}</Link>;
+  }
+  return <div key={ev.id} className={className} title={ev.title}>{inner}</div>;
 }
 
 const slotForHour = (h: number): number => (h < 10 ? 0 : h < 13 ? 1 : h < 16 ? 2 : 3);
@@ -121,12 +151,11 @@ const TodoIcon: React.FC<{ w?: number; h?: number; stroke?: string }> = ({ w = 1
 );
 
 const SchedulePage: React.FC = () => {
-  const navigate = useNavigate();
   const today = useMemo(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }, []);
 
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [events, setEvents] = useState<OpenHouseView[]>([]);
-  const [kickoff, setKickoff] = useState<Date | null>(null);
+  const [firstClass, setFirstClass] = useState<FirstClassView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -138,27 +167,28 @@ const SchedulePage: React.FC = () => {
       const [ss, ev, ko] = await Promise.all([
         portalApi.get('/api/portal/sessions').then((r) => (r.data.sessions || []) as SessionItem[]).catch(() => [] as SessionItem[]),
         fetchPublicEvents(90).catch(() => [] as OpenHouseView[]),
-        fetchSchedule().then((s) => s.first_class?.start_date ?? null).catch(() => null),
+        fetchSchedule().then((s) => s.first_class ?? null).catch(() => null),
       ]);
       if (cancelled) return;
       setSessions(ss);
       setEvents(ev);
-      setKickoff(ko ? parseYmd(ko) : null);
+      setFirstClass(ko);
       setLoading(false);
     })().catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
     return () => { cancelled = true; };
   }, []);
 
-  const sched = useMemo(() => buildSchedule(sessions, events, today), [sessions, events, today]);
+  const sched = useMemo(() => buildSchedule(sessions, events, firstClass, today), [sessions, events, firstClass, today]);
   const totalItems = useMemo(() => Object.values(sched).reduce((n, arr) => n + arr.length, 0), [sched]);
 
   // Week numbering anchor: cohort kickoff, else earliest session, else today.
   const anchorMon = useMemo(() => {
+    const fcDate = firstClass?.start_date ? parseYmd(firstClass.start_date) : null;
     const ds = sessions.map((s) => parseYmd(s.session_date)).filter((d): d is Date => !!d);
     const earliest = ds.length ? ds.reduce((x, y) => (x.getTime() < y.getTime() ? x : y)) : null;
-    const a: Date = kickoff ?? earliest ?? today;
+    const a: Date = fcDate ?? earliest ?? today;
     return mondayOf(a);
-  }, [kickoff, sessions, today]);
+  }, [firstClass, sessions, today]);
 
   const weekNumFor = useCallback((d: Date): number | null => {
     const diff = Math.floor((mondayOf(d).getTime() - anchorMon.getTime()) / DAY_MS);
@@ -209,12 +239,6 @@ const SchedulePage: React.FC = () => {
 
   const isToday = useCallback((d: Date): boolean => dkey(d) === dkey(today), [today]);
 
-  const openItem = useCallback((ev: SchedEvent): void => {
-    if (!ev.href) return;
-    if (ev.external) window.open(ev.href, '_blank', 'noopener,noreferrer');
-    else navigate(ev.href);
-  }, [navigate]);
-
   // ── MONTH ──
   const renderMonth = (): React.ReactNode => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -227,15 +251,12 @@ const SchedulePage: React.FC = () => {
       const out = d.getMonth() !== cursor.getMonth();
       const evs = sched[dkey(d)] || [];
       const wk = weekNumFor(d);
-      const dots = evs.slice(0, 3).map((ev) => (
-        <div
-          key={ev.id}
-          className={`mdot ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`}
-          title={ev.title}
-        >
+      const dots = evs.slice(0, 3).map((ev) => renderItem(
+        ev, `mdot ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`,
+        <>
           <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</b>
           {ev.time ? <span className="mp">{ev.time}</span> : null}
-        </div>
+        </>,
       ));
       const more = evs.length > 3 ? <div className="mmore">+{evs.length - 3} more</div> : null;
       cells.push(
@@ -284,15 +305,13 @@ const SchedulePage: React.FC = () => {
                 const items = buckets[i + '-' + s] || [];
                 return (
                   <div key={i} className={`tg-cell${isToday(d) ? ' today' : ''}`}>
-                    {items.map((ev) => (
-                      <div
-                        key={ev.id}
-                        className={`tg-ev ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`}
-                        title={ev.title}
-                      >
+                    {items.map((ev) => renderItem(
+                      ev, `tg-ev ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`,
+                      <>
                         <b>{ev.title}</b>
                         <span className="tgp">{ev.time || ev.sub}{ev.time ? ' · ' + ev.sub : ''}</span>
-                      </div>
+                      </>,
+                      true,
                     ))}
                   </div>
                 );
@@ -316,8 +335,9 @@ const SchedulePage: React.FC = () => {
         <div key={dkey(d)}>
           <div className="agenda-day"><div className="dh">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}{isToday(d) ? ' — Today' : ''}</div></div>
           <div className="queue agenda-queue">
-            {evs.map((ev) => (
-              <button key={ev.id} className={`qtask${ev.state === 'done' ? ' done' : ''}`} type="button" onClick={ev.href ? () => openItem(ev) : undefined}>
+            {evs.map((ev) => renderItem(
+              ev, `qtask${ev.state === 'done' ? ' done' : ''}`,
+              <>
                 <span className="qrank">{ev.state === 'done' ? '✓' : ev.state === 'live' ? '●' : '·'}</span>
                 <span className="qbody">
                   <span className="qtitle">{ev.title}</span>
@@ -328,7 +348,7 @@ const SchedulePage: React.FC = () => {
                   </span>
                 </span>
                 {ev.href ? <svg className="qgo" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> : null}
-              </button>
+              </>,
             ))}
           </div>
         </div>
