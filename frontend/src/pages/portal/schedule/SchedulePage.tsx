@@ -98,7 +98,8 @@ function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstCl
     add(dateOnly(dt), {
       id: e.id, kind: 'event', title: e.title,
       time: fmtTime(null, dt), hour: hourOf(null, dt), state: 'up',
-      href: e.registration_url || undefined, external: true, sub: 'Open House',
+      href: e.registration_url || undefined, external: true,
+      sub: /open house/i.test(e.title) ? 'Open House' : 'Event',
     });
   }
   // Cohort kickoff: the countdown's "next class". Surface it on the calendar
