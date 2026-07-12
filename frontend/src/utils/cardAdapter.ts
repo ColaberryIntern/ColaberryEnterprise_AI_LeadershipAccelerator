@@ -1,0 +1,55 @@
+import { TimelineFeedCard } from '../components/timeline/TimelineCard';
+
+/**
+ * adaptToFeedCard — build a synthetic TimelineFeedCard from an Experience Studio
+ * component (or a Timeline editor draft) + the generated experience + inputs, so
+ * the admin previews can render the REAL <CardDetailBody> and never diverge from
+ * the student view.
+ */
+
+export interface AdaptInput {
+  slug?: string;
+  label?: string;
+  student_label?: string;
+  render_band?: string;
+  description?: string | null;
+  subtitle?: string | null;
+  difficulty?: string;
+  estimated_time?: number | null;
+  week?: number | null;
+  learning_xp?: number;
+  builder_xp?: number;
+  community_xp?: number;
+  points?: { learning?: number; builder?: number; community?: number };
+  video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
+  videoUrl?: string;
+  experience?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
+}
+
+export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
+  const exp = input.experience || {};
+  const url = (input.videoUrl || input.video?.url || '').trim();
+  const points = input.points || { learning: input.learning_xp || 0, builder: input.builder_xp || 0, community: input.community_xp || 0 };
+  const hasContent = !!(exp.summary || exp.body_html || (exp.questions && exp.questions.length) || exp.reflection);
+  return {
+    id: input.slug || 'preview',
+    type: input.slug || 'preview',
+    student_label: input.student_label || input.label || 'Activity',
+    render_band: input.render_band || 'overview',
+    title: exp.title || input.label || 'Untitled',
+    subtitle: input.subtitle ?? null,
+    description: input.description ?? null,
+    week: input.week ?? null,
+    bucket: 'learn',
+    order: 0,
+    difficulty: input.difficulty || 'core',
+    estimated_time: input.estimated_time ?? null,
+    points,
+    competencies: [],
+    status: 'available',
+    quiz_score: null,
+    completed_at: null,
+    video: url ? { url, presenter: input.video?.presenter || null, poster: input.video?.poster || null } : null,
+    content: hasContent ? { summary: exp.summary, body_html: exp.body_html, questions: exp.questions, reflection: exp.reflection } : null,
+  };
+}
