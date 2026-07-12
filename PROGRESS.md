@@ -10,6 +10,14 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Retire Dev 2 — consolidate to a single dev environment (2026-07-12)
+- [x] **Removed the Dev 2 stack (runtime + repo definitions); Dev 1 is now the only dev environment**
+  - Date: 2026-07-12
+  - Session: CC-20260712-p7q4
+  - What changed: deleted `docker-compose.dev2.yml` and `nginx/Dockerfile.dev2`; updated `docs/ACCELERATOR_PORTAL_FULL_DETAIL.md` ("two parallel dev stacks" → one dev stack, port 9999). Runtime side (on the VPS, not code): stopped + removed the `accelerator-dev2` containers (backend/intelligence/nginx) and the `accelerator-dev2_default` network, deleted the 3 dev2 images, and dropped the orphaned `accelerator_dev2` database (121 MB). Port 9998 is now free.
+  - Why: Ali — "we only need one Dev environment; the system was set up differently when we had Dev 1 and 2." Consolidates to Dev 1 (`accelerator-dev`, port 9999). Prod, Dev 1, and the shared `accelerator-db` were left untouched and verified healthy.
+  - Verification: `docker ps` shows prod (`accelerator-*`) + Dev 1 (`accelerator-dev-*`) + `accelerator-db` all Up; port 9998 refuses; remaining databases are `accelerator_prod` + `accelerator_dev1` only. Historical one-off scripts (already-sent Kes emails) still mention dev2 but are disposable records, deliberately left as-is.
+
 ### Enrollment schema drift guard: `ensureEnrollmentColumns()` boot-migration (2026-07-12)
 - [x] **Idempotent boot-migration ensures every extended `enrollments` column exists**
   - Date: 2026-07-12
