@@ -97,6 +97,22 @@ describe('publicEventsService', () => {
       expect(evs.map((e) => e.id)).toEqual(['1']);
     });
 
+    it('getNextPublicEvent prefers the Open House over a sooner non-open-house event', async () => {
+      sqlMock.__request.query.mockResolvedValue({ recordset: [
+        ccppRow('1', 'SQL After Dark', '2026-07-13T21:00:00Z'),
+        ccppRow('2', 'Accelerator Open House', '2026-07-16T18:30:00Z'),
+      ]});
+      expect((await getNextPublicEvent())!.id).toBe('2');
+    });
+
+    it('getNextPublicEvent falls back to the soonest event when no Open House', async () => {
+      sqlMock.__request.query.mockResolvedValue({ recordset: [
+        ccppRow('1', 'SQL After Dark', '2026-07-13T21:00:00Z'),
+        ccppRow('2', 'Interview Prep', '2026-07-14T22:00:00Z'),
+      ]});
+      expect((await getNextPublicEvent())!.id).toBe('1');
+    });
+
     it('validates ids with isKnownPublicEvent', async () => {
       sqlMock.__request.query.mockResolvedValue({ recordset: [ccppRow('42', 'X Open House', '2026-07-16T18:30:00Z')] });
       expect(await isKnownPublicEvent('42')).toBe(true);

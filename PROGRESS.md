@@ -10,6 +10,18 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Portal calendar: surface ALL live public CCPP events (countdown still highlights the Open House) (2026-07-12)
+- [x] **Broadened the public-events feed from Open-House-only to every live event**
+  - Date: 2026-07-12
+  - Session: CC-20260712-e3k7
+  - What changed:
+    - `backend/src/services/publicEventsService.ts`: dropped the `Name LIKE '%Open House%'` filter from the CCPP query — now returns every `Status='live'` future event (window 100d, TOP 400) for the calendar. `getNextPublicEvent()` (topbar "Next event" countdown) now PREFERS the flagship Open House by name (`/open house/i`) and falls back to the soonest event of any kind, so the chip keeps showing the Open House rather than a community session.
+    - `frontend/src/pages/portal/schedule/SchedulePage.tsx`: event `sub` label now reads "Open House" only for actual open houses, else "Event".
+    - `backend/src/services/__tests__/publicEventsService.test.ts`: added Open-House-preference + fallback tests for `getNextPublicEvent`.
+  - Why: Ali chose to show all live public CCPP events on the calendar (Interview Prep, SQL After Dark, Weekly Help Sessions, Power BI Meetup, etc.), not just Open Houses — while keeping the countdown focused on the Open House.
+  - Verification: CI (backend typecheck + backend unit tests + frontend typecheck) authoritative; not runnable locally. Manual review clean.
+  - Notes: these live CCPP events include legacy-bootcamp sessions (not Accelerator-specific) — that was the explicit choice. `getUpcomingPublicEvents` and `isKnownPublicEvent` now span all live events.
+
 ### Portal Schedule: show cohort class-start on the calendar + clickable events open link in new tab (2026-07-12)
 - [x] **Calendar now marks the cohort kickoff; event items link out in a new tab from every view**
   - Date: 2026-07-12
