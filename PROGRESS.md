@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Portal calendar: restrict to a public-event name allowlist (not all CCPP events) (2026-07-12)
+- [x] **CCPP query now filters to prospect-facing public events only**
+  - Date: 2026-07-12
+  - Session: CC-20260712-e3k7
+  - What changed: `backend/src/services/publicEventsService.ts` — added `PUBLIC_EVENT_LIKE` allowlist (`Open House`, `Competition`, `Talent Showcase`, `Financial Literacy`, `Good Life`) spliced into the CCPP `WHERE` as an OR of static `LIKE` literals. Dropped the "all live events" behavior. Window 180d / TOP 100 (public events are sparse). `getNextPublicEvent` still prefers the Open House.
+  - Why: Ali wanted only public events (Open House, CAP Competition, Data Talent Showcase, Financial Literacy Workshop, The Good Life Event) on the calendar — not the recurring bootcamp help sessions (SQL After Dark, Weekly Help Sessions, Interview Prep, IPBC Saturday, DA Bootcamp) or the internal COE meetups.
+  - Verification: CI (backend typecheck + unit tests) authoritative; live-verified against prod CCPP after deploy.
+  - Notes: backend-only (frontend already renders whatever events the feed returns). To add a public event type later, append a pattern to `PUBLIC_EVENT_LIKE`.
+
 ### Portal calendar: surface ALL live public CCPP events (countdown still highlights the Open House) (2026-07-12)
 - [x] **Broadened the public-events feed from Open-House-only to every live event**
   - Date: 2026-07-12

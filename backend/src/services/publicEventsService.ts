@@ -4,16 +4,19 @@ import { OpenHouseEvent } from '../models';
 import { OpenHouseView } from './openHouseTypes';
 
 /**
- * Public events for the portal: the calendar feed (all live events) and the
- * "Next event" countdown (the flagship Open House).
+ * Public events for the portal: the calendar feed and the "Next event" countdown
+ * (which highlights the flagship Open House).
  *
  * Source of truth is CCPP `EventBrite_Events` — the same live Eventbrite -> CCPP
- * pipeline that feeds attendees. One fact about that table drives the query:
+ * pipeline that feeds attendees. Two facts drive the query:
  *   - `Status` carries the Eventbrite lifecycle (live / deleted / completed /
  *     draft / ended / started / canceled). Deleted events share future dates, so
- *     we require `Status = 'live'` to mean "published & public".
- * There is no category / IsPublic column, so the calendar shows every live event
- * and the countdown singles out the Open House by name (see getNextPublicEvent).
+ *     we require `Status = 'live'`.
+ *   - There is no category / IsPublic column, so "public" is an explicit NAME
+ *     allowlist (see PUBLIC_EVENT_LIKE below): Open House, Competition, Talent
+ *     Showcase, Financial Literacy, Good Life. The recurring bootcamp help
+ *     sessions (Weekly Help Session, SQL After Dark, Interview Prep, IPBC
+ *     Saturday, DA Bootcamp) and internal COE meetups are intentionally excluded.
  *
  * CCPP is only reachable from inside the prod network, so this runs in the
  * backend container. Failure-First: on any CCPP error we fall back to the
@@ -22,14 +25,20 @@ import { OpenHouseView } from './openHouseTypes';
  * schedule endpoint is hit on every portal page load.
  */
 
-// The calendar surfaces ALL live public events; the "Next event" countdown
-// highlights the flagship Open House (see getNextPublicEvent). Match Open Houses
-// by name since CCPP has no category column.
+// The "Next event" countdown highlights the flagship Open House (see
+// getNextPublicEvent). Match Open Houses by name since CCPP has no category column.
 const OPEN_HOUSE_RE = /open house/i;
-// Fetch a generous window once (covers the calendar's ~90-day horizon incl. the
-// many weekly community events); callers slice to whatever window they render.
-const FETCH_WINDOW_DAYS = 100;
-const FETCH_LIMIT = 400;
+// Prospect-facing event types to surface. Static literals (no user input), spliced
+// into the CCPP WHERE as an OR of LIKE clauses. Add a pattern here to widen.
+const PUBLIC_EVENT_LIKE: string[] = [
+  '%Open House%',
+  '%Competition%',       // CAP Competition
+  '%Talent Showcase%',   // Data Talent Showcase
+  '%Financial Literacy%',
+  '%Good Life%',
+];
+const FETCH_WINDOW_DAYS = 180;
+const FETCH_LIMIT = 100;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
 
 interface CcppEventRow {
@@ -88,6 +97,8 @@ export function withinDays(events: OpenHouseView[], nowMs: number, days: number)
 async function fetchFromCcpp(): Promise<OpenHouseView[]> {
   const pool = await connectCcpp();
   try {
+    // OR of static LIKE literals (no user input) — the public-event allowlist.
+    const allowlist = PUBLIC_EVENT_LIKE.map((p) => `Name LIKE '${p}'`).join(' OR ');
     const res = await pool
       .request()
       .input('days', sql.Int, FETCH_WINDOW_DAYS)
@@ -98,6 +109,7 @@ async function fetchFromCcpp(): Promise<OpenHouseView[]> {
         WHERE Status = 'live'
           AND StartDate > GETUTCDATE()
           AND StartDate <= DATEADD(day, @days, GETUTCDATE())
+          AND (${allowlist})
         ORDER BY StartDate ASC
       `);
     return res.recordset.map(ccppRowToView);
