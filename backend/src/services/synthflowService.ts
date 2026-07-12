@@ -5,7 +5,7 @@ import { isKillSwitchActive } from './launchSafety';
 interface VoiceCallParams {
   name: string;
   phone: string;
-  callType: 'welcome' | 'interest';
+  callType: 'welcome' | 'interest' | 'callback';
   /** Dynamic prompt/instructions for the AI agent on this specific call */
   prompt?: string;
   /** Structured context passed as customer variables to the AI agent */
@@ -53,9 +53,14 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_api_key' } };
   }
 
+  // 'callback' (inbound "call me now") uses its own dedicated agent so it never
+  // conflates with Maya's proactive interest calls. Falls back to the interest
+  // agent when the callback slot is unset so the feature works with minimal config.
   const agentId = params.callType === 'welcome'
     ? env.synthflowWelcomeAgentId
-    : env.synthflowInterestAgentId;
+    : params.callType === 'callback'
+      ? (env.synthflowCallbackAgentId || env.synthflowInterestAgentId)
+      : env.synthflowInterestAgentId;
 
   if (!agentId) {
     console.warn(`[Synthflow] No agent ID configured for ${params.callType}. Skipping.`);

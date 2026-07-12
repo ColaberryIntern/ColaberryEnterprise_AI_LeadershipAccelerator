@@ -45,6 +45,18 @@ services:
       PREVIEW_CPU_LIMIT: "0.5"
       PREVIEW_MEM_LIMIT: "512m"
       PREVIEW_PROXY_HOST: host.docker.internal
+      # Synthflow voice AI — powers Maya proactive calls AND the inbound
+      # "call me now" callback (POST /api/v1/request-callback). Values resolve
+      # from the host .env (also loaded via env_file above); declared explicitly
+      # here so the voice wiring is visible and guaranteed on the backend service.
+      # ENABLE_VOICE_CALLS defaults false — a real dial also requires test mode OFF.
+      SYNTHFLOW_API_KEY: ${SYNTHFLOW_API_KEY:-}
+      SYNTHFLOW_WELCOME_AGENT_ID: ${SYNTHFLOW_WELCOME_AGENT_ID:-}
+      SYNTHFLOW_INTEREST_AGENT_ID: ${SYNTHFLOW_INTEREST_AGENT_ID:-}
+      SYNTHFLOW_CALLBACK_AGENT_ID: ${SYNTHFLOW_CALLBACK_AGENT_ID:-}
+      ENABLE_VOICE_CALLS: ${ENABLE_VOICE_CALLS:-false}
+      # Service-to-service token training.colaberry.com uses for /api/v1/* calls.
+      ENTERPRISE_CRM_TOKEN: ${ENTERPRISE_CRM_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
