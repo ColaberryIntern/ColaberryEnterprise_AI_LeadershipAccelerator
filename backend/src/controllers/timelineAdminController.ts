@@ -74,10 +74,11 @@ const updateSchema = z.object({
 // write the copy/content). Returned to the editor as a draft to review + save.
 const videoDraftSchema = z.object({
   type: z.string().min(1),
-  title: z.string().min(1).max(500),
+  title: z.string().max(500).nullable().optional(),
   subtitle: z.string().max(500).nullable().optional(),
   description: z.string().nullable().optional(),
   video: videoSchema,
+  anchor: z.enum(['title', 'video']).optional(),
 });
 
 const reorderSchema = z.object({
