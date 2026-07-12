@@ -139,10 +139,10 @@ export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc; padding:24px 0;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; font-family:'Segoe UI', system-ui, -apple-system, sans-serif;">
-        <!-- Header band -->
-        <tr><td style="background:#1a365d; padding:28px 32px;">
-          <div style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:0.3px;">Colaberry</div>
-          <div style="color:#90cdf4; font-size:13px; font-weight:500; margin-top:2px;">AI Training &amp; Career Acceleration</div>
+        <!-- Header band: white with the Colaberry logo -->
+        <tr><td style="background:#ffffff; padding:24px 32px 20px; border-bottom:3px solid #1a365d;">
+          <img src="https://enterprise.colaberry.ai/colaberry-logo-transparent.png" alt="Colaberry" width="150" style="display:block; width:150px; max-width:150px; height:auto; border:0;">
+          <div style="color:#1a365d; font-size:12px; font-weight:600; letter-spacing:0.5px; margin-top:10px; text-transform:uppercase;">AI Training &amp; Career Acceleration</div>
         </td></tr>
         <!-- Body -->
         <tr><td style="padding:32px;">
@@ -206,7 +206,11 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
     subject: r.subject,
     html,
     text: htmlToPlainText(html),
-    headers: emailHeaders('training-welcome'),
+    // Intentionally NO List-Unsubscribe header: this is a transactional welcome
+    // (a login link), not a bulk/marketing send. The header both misrepresents the
+    // message and trips inbox-manager "automation" hard rules that archive it out of
+    // the inbox. Just the Mandrill tag for reporting.
+    headers: { 'X-MC-Tags': 'training-welcome' },
   });
   // guardedSendMail returns an empty messageId when the global kill switch blocks
   // the send — treat that as not-sent so callers can log/retry instead of assuming
