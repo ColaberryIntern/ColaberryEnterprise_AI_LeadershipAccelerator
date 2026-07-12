@@ -29,6 +29,7 @@ export interface TimelineFeedCard {
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null } | null;
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
+  course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
 }
 

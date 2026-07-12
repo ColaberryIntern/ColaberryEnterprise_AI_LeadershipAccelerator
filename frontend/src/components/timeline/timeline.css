@@ -194,6 +194,26 @@
 .tl-de .tld-lessonframe{width:100%;height:340px;border:1px solid var(--border-subtle);border-radius:var(--r-12);background:#fff;display:block}
 .tl-de .tld-note{font-size:13px;color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border-subtle);
   border-radius:var(--r-12);padding:12px 14px}
+
+/* ===== Anthropic Skills Course (skills_jar) ===== */
+.tl-de .tld-skilljar{margin-bottom:16px}
+.tl-de .tld-jarcard{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  background:linear-gradient(135deg,var(--berry),var(--berry-hover));color:#fff;border-radius:var(--r-16);
+  padding:34px 20px 26px;text-align:center;overflow:hidden}
+.tl-de .tld-jarbadge{position:absolute;top:14px;left:14px;background:rgba(255,255,255,.94);color:var(--berry-hover);
+  font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:5px 10px;border-radius:999px}
+.tl-de .tld-jarcap{width:74px;height:74px;color:#fff;opacity:.96;margin-bottom:4px}
+.tl-de .tld-jartitle{font-size:21px;font-weight:800;color:#fff;line-height:1.2;max-width:86%}
+.tl-de .tld-jarsub{font-family:var(--mono);font-size:13px;letter-spacing:.04em;color:rgba(255,255,255,.86)}
+.tl-de .tld-jaropen{display:flex;width:100%;justify-content:center;margin:12px 0 4px;text-decoration:none}
+.tl-de .tld-upload{margin-top:12px;border:1.5px dashed var(--border-default);border-radius:var(--r-16);
+  padding:18px 16px;text-align:center;background:var(--surface-subtle)}
+.tl-de .tld-uplab{font-size:14px;font-weight:800;color:var(--text-strong);margin-bottom:6px}
+.tl-de .tld-choosecert{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.tl-de .tld-choosecert.busy{opacity:.7;cursor:default}
+.tl-de .tld-certmsg{margin-top:12px;font-size:13.5px;font-weight:600;border-radius:var(--r-12);padding:10px 12px}
+.tl-de .tld-certmsg.ok{color:var(--leaf-deep);background:rgba(91,166,60,.12);border:1px solid rgba(91,166,60,.3)}
+.tl-de .tld-certmsg.err{color:var(--cherry-deep);background:rgba(251,40,50,.08);border:1px solid rgba(251,40,50,.24)}
 .tl-de .tld-foot{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:15px 20px;
   border-top:1px solid var(--border-subtle);flex:none}
 
