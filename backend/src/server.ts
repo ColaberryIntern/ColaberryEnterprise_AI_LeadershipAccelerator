@@ -516,6 +516,48 @@ async function ensureFreeTierSchema() {
   }
 }
 
+async function ensureEnrollmentColumns() {
+  // Drift guard: the Enrollment model has been extended over time (paysimple
+  // tracking, intensives, referral, scores, portal token, enrollment_type, …)
+  // without a single migration keeping the table in sync, so older/other DBs
+  // silently miss columns and every Enrollment SELECT then 500s (e.g. dev1's
+  // free-signup was broken by exactly this). Idempotently ensure every non-core
+  // nullable model column exists. ADD COLUMN IF NOT EXISTS is a no-op where the
+  // column is already present. `tier`/`cohort_id` are handled by
+  // ensureFreeTierSchema and `avatar_data_url` by ensurePortalSettingsSchema.
+  const statements = [
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS paysimple_invoice_id VARCHAR(255)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS paysimple_customer_id VARCHAR(255)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS paysimple_external_id VARCHAR(255)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS paysimple_payment_id VARCHAR(255)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS intensives VARCHAR(500)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS industry_track VARCHAR(100)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS referral_channel VARCHAR(50)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS amount_paid DECIMAL(10,2)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrolled_at TIMESTAMPTZ`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS readiness_score DOUBLE PRECISION`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS prework_score DOUBLE PRECISION`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS attendance_score DOUBLE PRECISION`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS assignment_score DOUBLE PRECISION`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS maturity_level INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS intake_completed BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS intake_data_json JSONB`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS notes TEXT`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS portal_token UUID`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS portal_token_expires_at TIMESTAMPTZ`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS portal_enabled BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS active_project_id UUID`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] enrollment-columns schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureAiEventsSchema() {
   try {
     await sequelize.query(`
@@ -1246,6 +1288,8 @@ async function start(): Promise<void> {
   await ensureAiEventsSchema();
   // Free/guest tier: enrollments.tier column + nullable cohort_id (idempotent).
   await ensureFreeTierSchema();
+  // Drift guard: ensure every extended enrollments column exists (idempotent).
+  await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
   // Open house events (idempotent).

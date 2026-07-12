@@ -10,6 +10,14 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Enrollment schema drift guard: `ensureEnrollmentColumns()` boot-migration (2026-07-12)
+- [x] **Idempotent boot-migration ensures every extended `enrollments` column exists**
+  - Date: 2026-07-12
+  - Session: CC-20260712-p7q4
+  - What changed: `backend/src/server.ts` — new `ensureEnrollmentColumns()` (called right after `ensureFreeTierSchema()` in the boot sequence) runs `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS ...` for the model's extended nullable columns (paysimple tracking, intensives, industry_track, referral_channel, amount_paid, enrolled_at, the 4 scores, maturity_level, intake_*, notes, portal_token*, portal_enabled, active_project_id, enrollment_type). No-op where columns already exist.
+  - Why: the `Enrollment` model was extended over time without a single migration keeping the table in sync (only `tier` got one, via `ensureFreeTierSchema`). Drifted DBs silently miss columns and then EVERY `Enrollment` SELECT 500s — this is exactly what broke free-signup on Dev 1 (its `enrollments` table was missing 7 columns; had to hand-ALTER to unblock testing on 2026-07-12). Prod already had them (ALTER-added 2026-07-05), but a fresh/other DB would drift again. This guard makes it self-healing on every boot.
+  - Verification: prod/dev already carry these columns so the guard is a verified no-op there; the DDL mirrors the exact ALTERs that fixed Dev 1 live. Separate branch/PR off main (settings PR #200 already merged + deployed to prod).
+
 ### Student portal account Settings page (photo, resume/LinkedIn, points, passwordless security) (2026-07-12)
 - [x] **New `/portal/settings` surface + `/api/portal/settings/*` backend; wired the previously-dead settings gear**
   - Date: 2026-07-12
