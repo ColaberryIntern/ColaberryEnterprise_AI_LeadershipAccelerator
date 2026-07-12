@@ -10,6 +10,19 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Portal event times fixed to Central (CST/CDT) — CCPP stores Central-as-UTC (2026-07-12)
+- [x] **Corrected the CCPP time misinterpretation + render all event times in Central**
+  - Date: 2026-07-12
+  - Session: CC-20260712-e3k7
+  - What changed:
+    - `backend/src/services/publicEventsService.ts`: CCPP `EventBrite_Events.StartDate` stores **Central wall-clock** but the mssql driver reads it as **UTC** (ground-truthed: the Open House is really 6:30 PM CDT, stored `18:30`, arriving as `18:30Z`). New pure, DST-aware `centralWallClockToInstant()` reinterprets the naive wall-clock as `America/Chicago` and `ccppRowToView` now returns the **true instant** (e.g. `23:30Z` in summer) — fixing both the displayed time and the "Next event" countdown (which was firing ~5h early).
+    - `frontend/src/pages/portal/today/shellUtils.ts`: added `fmtCentralDateTime` / `fmtCentralTime` / `fmtCentralDate` / `centralParts` (Intl `timeZone: America/Chicago`) so every viewer sees the same Central time regardless of their own tz.
+    - `SchedulePage.tsx` (calendar): events bucketed by Central date + labelled in Central ("6:30 PM CDT"). `TodayShell.tsx` (open-house strip, x2) + `NextSessionStrip.tsx`: replaced browser-local `toLocaleString()` with the Central formatters.
+    - `publicEventsService.test.ts`: DST tests for `centralWallClockToInstant` (CDT -5 / CST -6) + updated the mapping test to expect the corrected instant.
+  - Why: Ali — "all times throughout the platform should be in CST … these event times are incorrect." Events were showing ~5–6h off and in the viewer's local tz.
+  - Verification: CI (backend typecheck + unit tests + frontend typecheck) authoritative; live-verified corrected instant against prod after deploy.
+  - Notes: class **session** times (from LiveSession.start_time strings) were NOT changed — their source tz is ambiguous (cohort has its own timezone field; one seed used "EST") and no sessions are seeded yet; revisit if sessions land.
+
 ### Portal calendar: restrict to a public-event name allowlist (not all CCPP events) (2026-07-12)
 - [x] **CCPP query now filters to prospect-facing public events only**
   - Date: 2026-07-12

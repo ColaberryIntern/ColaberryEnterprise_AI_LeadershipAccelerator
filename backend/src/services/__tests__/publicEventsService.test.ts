@@ -14,8 +14,8 @@ jest.mock('../../config/env', () => ({
 jest.mock('../../models', () => ({ OpenHouseEvent: { findAll: jest.fn() } }));
 
 import {
-  ccppRowToView, withinDays, getNextPublicEvent, getUpcomingPublicEvents,
-  isKnownPublicEvent, __resetPublicEventsCache,
+  ccppRowToView, centralWallClockToInstant, withinDays, getNextPublicEvent,
+  getUpcomingPublicEvents, isKnownPublicEvent, __resetPublicEventsCache,
 } from '../publicEventsService';
 import { OpenHouseEvent } from '../../models';
 
@@ -35,13 +35,15 @@ describe('publicEventsService', () => {
   afterEach(() => (console.error as jest.Mock).mockRestore());
 
   describe('ccppRowToView (pure)', () => {
-    it('maps a CCPP row onto the OpenHouseView contract', () => {
+    it('maps a CCPP row onto the OpenHouseView contract, correcting Central-as-UTC times', () => {
+      // CCPP stores 18:30 (6:30 PM Central); the driver hands it to us as 18:30Z.
+      // In July (CDT, UTC-5) the true instant is 23:30Z.
       const v = ccppRowToView(ccppRow('123', 'Colaberry Accelerator Open House', '2026-07-16T18:30:00Z'));
       expect(v).toEqual({
         id: '123',
         title: 'Colaberry Accelerator Open House',
         description: 'd',
-        starts_at: new Date('2026-07-16T18:30:00Z'),
+        starts_at: new Date('2026-07-16T23:30:00Z'),
         timezone: 'America/Chicago',
         registration_url: 'https://ev/123',
         meeting_link: null,
@@ -53,6 +55,15 @@ describe('publicEventsService', () => {
       expect(v.id).toBe('9');
       expect(v.description).toBeNull();
       expect(v.registration_url).toBeNull();
+    });
+  });
+
+  describe('centralWallClockToInstant (pure, DST-aware)', () => {
+    it('reads a summer wall-clock as CDT (UTC-5): 18:30 -> 23:30Z', () => {
+      expect(centralWallClockToInstant(new Date('2026-07-16T18:30:00Z')).toISOString()).toBe('2026-07-16T23:30:00.000Z');
+    });
+    it('reads a winter wall-clock as CST (UTC-6): 18:30 -> 00:30Z next day', () => {
+      expect(centralWallClockToInstant(new Date('2026-01-15T18:30:00Z')).toISOString()).toBe('2026-01-16T00:30:00.000Z');
     });
   });
 
