@@ -13,6 +13,7 @@ const fs = require('fs');
 const ops = require('./launchPmoOps');
 const { TEAM, LAUNCH, provisioned, missing, getByPersonId } = require('./launchPmoTeam');
 const { approvalAwaitingDeliverable } = require('./approvalArtifactLink');
+const { buildRiskView, renderRiskSectionHtml } = require('./launchPmoRiskView');
 
 const NURTURE_STATE_PATH = path.resolve(__dirname, '../../../../tmp/launch-pmo-nurture-state.json');
 
@@ -515,12 +516,18 @@ ${recentRows ? `<div style="margin-top:14px;font-size:10px;color:#64748b;text-tr
 // ---------------------------------------------------------------------------
 // recipients (optional): { to, cc } override. Defaults to Ali + standard CC.
 // Pass { to: 'ali@colaberry.com', cc: [] } for a private verification send.
-async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog, recipients }) {
+async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted = [], blockedHumanTasks = [], blockerMap, aiLog, riskView, recipients }) {
   if (!process.env.MANDRILL_API_KEY) return { skipped: 'no MANDRILL_API_KEY' };
   const nodemailer = require(path.resolve(__dirname, '../../../../node_modules/nodemailer'));
   const { validateBeforeSend } = require(path.resolve(__dirname, './mandrillPreflight'));
 
   const today = state.today;
+
+  // PMBOK risk + critical-path section. Defensive: a render failure logs and
+  // omits the section, never breaks the daily email.
+  let riskSectionHtml = '';
+  try { riskSectionHtml = renderRiskSectionHtml(riskView, { today }); }
+  catch (e) { console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'launch-pmo', event: 'risk_section_render_failed', error_class: e && e.name, context: { message: e && e.message } })); }
 
   const escRows = escalations.slice(0, 8).map((e) =>
     `<tr><td>${e.classification}</td><td>${e.days_overdue}d</td><td>${e.area}</td><td>${stripEmDashes(stripHtml(e.content)).slice(0, 80)}</td><td>${(e.assignees || []).join(', ') || 'unassigned'}</td></tr>`
@@ -626,6 +633,7 @@ ${nextBanner}
 <td style="text-align:center;padding:14px;background:#fee2e2;border-radius:8px;width:23%"><div style="font-size:26px;font-weight:800;color:#7f1d1d">${blockedHumanTasks.length}</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f1d1d;font-weight:700">Blocked</div></td>
 </tr></table>
 
+${riskSectionHtml}
 <h2 style="color:#1a365d;font-size:17px;margin:0 0 12px;border-bottom:2px solid #1a365d;padding-bottom:6px">Feasibility by area (lowest first)</h2>
 <table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;margin-bottom:24px">
 <thead><tr style="background:#1a365d;color:white"><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">AREA</th><th align="center" style="padding:10px 12px;font-size:10px;letter-spacing:1px">SCORE</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">WORK vs TIME</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">TIER MIX</th><th align="left" style="padding:10px 12px;font-size:10px;letter-spacing:1px">REASON</th></tr></thead>
@@ -911,6 +919,9 @@ async function runDailyUpdate({ force = false, recipients } = {}) {
     }));
   }
   const blockerMap = detectBlockedTasks(state);
+  // Phase 1 (PMBOK): per-task risk score + critical path derived from the
+  // blocker edges, for the "Top predicted risks" email section.
+  const riskView = buildRiskView(state, blockerMap, { todayIso: state.today, launchIso: LAUNCH.programLaunchDate });
   // Partition human queue into unblocked + blocked
   const humanQueueAll = buildHumanActionQueue(state);
   const humanQueue = humanQueueAll.filter((h) => !blockerMap.get(h.id)?.blocked);
@@ -923,7 +934,7 @@ async function runDailyUpdate({ force = false, recipients } = {}) {
   const aiSummary = await generateExecSummary(state, escalations, humanQueue, aiQueue);
   const aiLog = await buildAiCompletionLog(state);
   const nurturePosted = await runNurtureCycle(state, LAUNCH.projectId);
-  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog, recipients });
+  const emailResult = await emailAli({ state, aiSummary, humanQueue, escalations, nurturePosted, blockedHumanTasks, blockerMap, aiLog, riskView, recipients });
   // NOTE (2026-06-10): the daily HTML "Launch Readiness Dashboard - {date}" MB
   // post was removed. It created a fresh Message Board thread every weekday,
   // generating a redundant Basecamp notification that duplicated the polished
@@ -939,6 +950,8 @@ async function runDailyUpdate({ force = false, recipients } = {}) {
     escalations_count: escalations.length,
     nurture_posted: nurturePosted.length,
     blocked_count: blockedHumanTasks.length,
+    elevated_risk_count: riskView.elevated.length,
+    critical_path_len: riskView.criticalCount,
     email_message_id: emailResult.messageId,
     mb_message_id: null, // MB text post retired in favor of the visual dashboard
   };
