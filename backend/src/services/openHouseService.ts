@@ -1,35 +1,16 @@
 import { Op } from 'sequelize';
 import { Enrollment, Cohort, OpenHouseEvent } from '../models';
 import { award, hasAwarded } from './pointsService';
+import { getNextPublicEvent, isKnownPublicEvent } from './publicEventsService';
+import type { FirstClassView, OnboardingSchedule } from './openHouseTypes';
 
-export interface OpenHouseView {
-  id: string;
-  title: string;
-  description: string | null;
-  starts_at: Date;
-  timezone: string;
-  registration_url: string | null;
-  meeting_link: string | null;
-}
-
-export interface FirstClassView {
-  start_date: string;
-  core_day: string | null;
-  core_time: string | null;
-  timezone: string | null;
-  cohort_name: string | null;
-  source: 'my_cohort' | 'next_open_cohort';
-}
-
-export interface OnboardingSchedule {
-  next_open_house: OpenHouseView | null;
-  my_rsvp: boolean;
-  first_class: FirstClassView | null;
-}
+export type { OpenHouseView, FirstClassView, OnboardingSchedule } from './openHouseTypes';
 
 /**
  * Pick the soonest still-upcoming, scheduled open house (pure). Past and
- * non-scheduled (cancelled/completed) events are ignored.
+ * non-scheduled (cancelled/completed) events are ignored. Retained as a pure
+ * helper for the Postgres-seeded event shape; the live schedule now sources its
+ * next event from CCPP via `publicEventsService`.
  */
 export function selectNextOpenHouse<T extends { starts_at: Date | string; status: string }>(
   events: T[],
@@ -41,16 +22,14 @@ export function selectNextOpenHouse<T extends { starts_at: Date | string; status
   return upcoming[0] || null;
 }
 
-function toView(e: OpenHouseEvent): OpenHouseView {
-  return {
-    id: e.id,
-    title: e.title,
-    description: e.description,
-    starts_at: e.starts_at,
-    timezone: e.timezone,
-    registration_url: e.registration_url,
-    meeting_link: e.meeting_link,
-  };
+/**
+ * True for demo / test / sandbox cohorts (pure). These are fixtures and must
+ * never be shown to a prospect as the "next class". Guards the guest branch of
+ * the onboarding schedule against e.g. the "Timeline Demo Cohort".
+ */
+export function isDemoCohortName(name: string | null | undefined): boolean {
+  const n = (name || '').toLowerCase();
+  return n.includes('demo') || n.includes('test') || n.includes('sandbox');
 }
 
 /** Raw cohort scheduling fields the frontend needs to render a live countdown. */
@@ -79,8 +58,9 @@ export async function getOnboardingSchedule(enrollmentId: string): Promise<Onboa
     include: [{ model: Cohort, as: 'cohort' }],
   });
 
-  const events = await OpenHouseEvent.findAll({ where: { status: 'scheduled' } });
-  const next = selectNextOpenHouse(events, now);
+  // Next event = soonest live public Open House from the CCPP Eventbrite pipeline
+  // (publicEventsService caches and falls back to the seeded Postgres table).
+  const next = await getNextPublicEvent();
   const myRsvp = next ? await hasAwarded(enrollmentId, `open_house_rsvp:${next.id}`) : false;
 
   let firstClass: FirstClassView | null = null;
@@ -88,16 +68,20 @@ export async function getOnboardingSchedule(enrollmentId: string): Promise<Onboa
   if (ownCohort) {
     firstClass = firstClassFromCohort(ownCohort, 'my_cohort');
   } else {
+    // Guests get the next open cohort's start date — but never a demo/test
+    // fixture cohort, so fetch a small window and skip fixtures.
     const today = now.toISOString().slice(0, 10);
-    const nextOpen = await Cohort.findOne({
+    const openCohorts = await Cohort.findAll({
       where: { status: 'open', start_date: { [Op.gte]: today } },
       order: [['start_date', 'ASC']],
+      limit: 5,
     });
+    const nextOpen = openCohorts.find((c: any) => !isDemoCohortName(c.name)) || null;
     firstClass = firstClassFromCohort(nextOpen, 'next_open_cohort');
   }
 
   return {
-    next_open_house: next ? toView(next) : null,
+    next_open_house: next,
     my_rsvp: myRsvp,
     first_class: firstClass,
   };
@@ -112,8 +96,12 @@ export async function rsvpToOpenHouse(
   enrollmentId: string,
   eventId: string,
 ): Promise<{ ok: boolean; reason?: string; awarded?: boolean; points?: number }> {
+  // The event may live in the seeded Postgres table OR be a CCPP-sourced public
+  // event (Eventbrite id). Validate against both before awarding so we never
+  // award points for an arbitrary id.
   const event = await OpenHouseEvent.findByPk(eventId);
-  if (!event) return { ok: false, reason: 'not_found' };
+  const known = !!event || (await isKnownPublicEvent(eventId));
+  if (!known) return { ok: false, reason: 'not_found' };
 
   const res = await award(enrollmentId, {
     eventType: 'open_house_rsvp',
