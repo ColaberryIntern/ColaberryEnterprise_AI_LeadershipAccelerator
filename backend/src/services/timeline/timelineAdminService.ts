@@ -101,7 +101,7 @@ export function composeCardAttributes(
     metadata: {
       authored: true,
       ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}),
-      ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content) } : {}),
+      ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content), content_at: new Date().toISOString() } : {}),
     },
   };
 }
@@ -175,7 +175,9 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
     }
     if ('content' in patch) {
       const c = buildContentMeta(patch.content);
-      if (c) meta.content = c; else delete meta.content;
+      // Stamp content_at so the 30-day student-refresh clock starts at save time.
+      if (c) { meta.content = c; meta.content_at = new Date().toISOString(); }
+      else { delete meta.content; delete meta.content_at; }
     }
     clean.metadata = meta;
   }

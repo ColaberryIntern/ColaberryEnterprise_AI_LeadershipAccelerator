@@ -36,7 +36,7 @@ import {
   handleSetResume, handleGetResume, handleClearResume,
 } from '../controllers/portalSettingsController';
 import {
-  handleOpenCard, handleMentor, handleReflection, handleVideoAugment, handlePromptLab,
+  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
@@ -64,7 +64,7 @@ router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDele
 router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCard);
 router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
 router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
-router.post('/api/portal/runtime/cards/:cardId/video-augment', requireParticipant, handleVideoAugment);
+router.post('/api/portal/runtime/cards/:cardId/content', requireParticipant, handleEnsureContent);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);

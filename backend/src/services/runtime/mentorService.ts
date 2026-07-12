@@ -7,7 +7,6 @@
  */
 import { chatText, chatJson } from './runtimeAi';
 import MentorTurn from '../../models/MentorTurn';
-import TimelineCard from '../../models/TimelineCard';
 
 export type MentorMode = 'ask' | 'hint' | 'explain' | 'review';
 
@@ -46,43 +45,3 @@ export async function reflectionPrompts(card: CardCtx) {
   return { questions: qs, cost_usd: r.cost_usd };
 }
 const DEFAULT_REFLECTION = ['What surprised you most?', 'What would you build with this?', 'How would you explain it to a teammate?', 'How would you improve it, and why?'];
-
-/** Interactive video notes expire after 30 days so a stale copy re-generates
- *  on the next press (admin or student). Kept as ms for arithmetic. */
-export const AUGMENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-/**
- * Turn a passive video into an interactive experience: chapters, summary, quiz,
- * reflection. Generated on demand (admin or student presses "Make it
- * interactive") and cached class-wide on the card so the whole class shares one
- * copy — the first press pays the cost; everyone after gets it instantly, until
- * it expires after 30 days and the next press refreshes it. `force` always
- * regenerates (admin override).
- */
-export async function videoAugment(card: CardCtx, force = false) {
-  const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
-  const cached = meta.augment || null;
-  // A copy is fresh if within its 30-day TTL. A legacy copy with no timestamp is
-  // grandfathered as fresh (never a surprise re-gen or write) — only copies we
-  // stamp below carry the clock, so nothing pre-existing suddenly re-bills.
-  const cachedAt = typeof meta.augment_at === 'string' ? Date.parse(meta.augment_at) : null;
-  const fresh = !!cached && (cachedAt === null || Number.isNaN(cachedAt) || Date.now() - cachedAt <= AUGMENT_TTL_MS);
-  if (!force && fresh) return { augment: cached, cost_usd: 0, cached: true };
-
-  const system = 'You turn a course video into an interactive study experience for an AI Systems Architect student. Return STRICT json.';
-  // Only the fields the card actually renders (summary, chapters, quiz, flashcards,
-  // reflection). prompt_challenge/github_task were generated-then-hidden — dropped.
-  const user = `Video: "${card.title}". ${card.description || ''}\nReturn json { "summary": string, "chapters": [{"t": "mm:ss", "title": string}], ` +
-    `"quiz": [{"q": string, "options": string[], "answer": integer}], "flashcards": [{"front": string, "back": string}], "reflection": string[] }.`;
-  const r = await chatJson('runtime_video_augment', system, user, undefined, 1200);
-
-  // Persist to the shared card so every future student reuses it (class-wide cache).
-  // Stamp augment_at so the copy expires after 30 days (AUGMENT_TTL_MS).
-  // Non-transactional: concurrent first-views race but converge on an equivalent blob.
-  await TimelineCard.update(
-    { metadata: { ...meta, augment: r.parsed, augment_at: new Date().toISOString() } },
-    { where: { id: card.id } },
-  ).catch(() => {});
-
-  return { augment: r.parsed, cost_usd: r.cost_usd, cached: false };
-}
