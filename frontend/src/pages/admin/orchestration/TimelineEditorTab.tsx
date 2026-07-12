@@ -73,6 +73,7 @@ const TypeThumb: React.FC<{ band?: string; size?: number }> = ({ band, size = 34
 );
 
 interface CardVideo { url?: string | null; presenter?: string | null; poster?: string | null }
+interface CardCourse { name?: string | null; url?: string | null }   // Skills Course (skills_jar)
 interface Card {
   id: string; type: string; title: string; subtitle: string | null; description: string | null;
   week: number | null; bucket: Bucket; order: number; difficulty: string;
@@ -181,14 +182,16 @@ const BucketSection: React.FC<{
 // component the student drawer uses) via adaptToFeedCard, so the editor preview
 // is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
 const EditDrawer: React.FC<{
-  draft: Partial<Card> & { type?: string; video?: CardVideo }; types: TypeDef[]; isNew: boolean; saving: boolean;
+  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video'; onGenerate: (anchor: 'title' | 'video') => void;
-  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo }) => void; onSave: () => void; onClose: () => void;
+  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
 }> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
+  const isSkillsJar = band === 'skills_jar';
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
+  const setCourse = (patch: Partial<CardCourse>) => onChange({ course: { ...(draft.course || {}), ...patch } });
   // The preview IS the student drawer: build the same synthetic card the Studio
   // preview uses and render the shared <CardDetailBody preview/> — one renderer.
   const previewCard = adaptToFeedCard({
@@ -197,7 +200,7 @@ const EditDrawer: React.FC<{
     subtitle: draft.subtitle, description: draft.description,
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
-    capabilities: typeDef?.capabilities,
+    course: draft.course, capabilities: typeDef?.capabilities,
   });
   return (
     <div className="te-scrim" onClick={onClose}>
@@ -289,6 +292,20 @@ const EditDrawer: React.FC<{
             </div>
           )}
 
+          {isSkillsJar && (
+            <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
+                🎓 SkillsJar course <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· students open this, then upload their certificate</span>
+              </div>
+              <label style={lbl}>Class name
+                <input style={inp} value={draft.course?.name || ''} onChange={(e) => setCourse({ name: e.target.value })} placeholder={'e.g., Anthropic "Introduction to MCP"'} />
+              </label>
+              <label style={{ ...lbl, marginBottom: 0 }}>Class link
+                <input style={inp} value={draft.course?.url || ''} onChange={(e) => setCourse({ url: e.target.value })} placeholder="The SkillsJar course URL (https://anthropic.skilljar.com/…)" />
+              </label>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 10 }}>
             <label style={{ ...lbl, flex: 1 }}>Week
               <input type="number" style={inp} value={draft.week ?? ''} onChange={(e) => onChange({ week: e.target.value === '' ? null : Number(e.target.value) })} />
@@ -344,7 +361,7 @@ const TimelineEditorTab: React.FC = () => {
   const [week, setWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo }) | null>(null);
+  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -401,9 +418,9 @@ const TimelineEditorTab: React.FC = () => {
     setDraft({ type: def?.slug, title: '', bucket, week, difficulty: def?.difficulty || 'core',
       points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });
   };
-  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined }); };
+  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined }); };
 
-  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo }) => {
+  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => {
     setDraft((d) => {
       if (!d) return d;
       const next = { ...d, ...patch };
@@ -430,19 +447,20 @@ const TimelineEditorTab: React.FC = () => {
       // AI-generated (or authored) student content rides along in metadata.content
       // so "Generate content → Save" persists exactly what the preview showed.
       const contentPayload = (draft.metadata as any)?.content || null;
+      const coursePayload = draft.course && ((draft.course.name || '').trim() || (draft.course.url || '').trim()) ? draft.course : null;
       if (isNew) {
         await api.post('/api/admin/orchestration/timeline/cards', {
           type: draft.type, title: draft.title, subtitle: draft.subtitle || null,
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
-          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload,
+          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
           title: draft.title, subtitle: draft.subtitle || null, description: draft.description || null,
           week: draft.week ?? null, bucket: draft.bucket, difficulty: draft.difficulty,
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
-          video: videoPayload, content: contentPayload,
+          video: videoPayload, content: contentPayload, course: coursePayload,
         });
       }
       setDraft(null);

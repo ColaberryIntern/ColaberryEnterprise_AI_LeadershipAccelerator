@@ -24,6 +24,7 @@ export interface AdaptInput {
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   videoUrl?: string;
   experience?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
+  course?: { name?: string | null; url?: string | null } | null;   // Skills Course (skills_jar)
   capabilities?: string[] | null;   // the type's Parts — carried so the preview gates sections like the live render
 }
 
@@ -52,6 +53,8 @@ export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
     completed_at: null,
     video: url ? { url, presenter: input.video?.presenter || null, poster: input.video?.poster || null } : null,
     content: hasContent ? { summary: exp.summary, body_html: exp.body_html, questions: exp.questions, reflection: exp.reflection } : null,
+    course: input.course && (input.course.name || input.course.url)
+      ? { name: input.course.name || null, url: input.course.url || null } : null,
     capabilities: Array.isArray(input.capabilities) ? input.capabilities.filter((c) => typeof c === 'string') : [],
   };
 }

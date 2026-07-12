@@ -10,6 +10,7 @@ import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentor
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
+import { uploadCertificate } from '../services/runtime/certificateService';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -38,6 +39,16 @@ export async function handleReflection(req: Request, res: Response, next: NextFu
 // regenerates it once (class-wide); the fresh copy then lasts 30 days.
 export async function handleEnsureContent(req: Request, res: Response, next: NextFunction) {
   try { res.json(await ensureFreshContent(String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+
+// Anthropic Skills Course: verify the uploaded certificate is real (AI check).
+// Valid → the client completes the card; invalid → a clear reason to retry.
+export async function handleUploadCertificate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const file = (req as any).file;
+    if (!file) { res.status(400).json({ error: 'No certificate file uploaded.' }); return; }
+    res.json(await uploadCertificate(eid(req), String(req.params.cardId), file));
+  } catch (e) { fail(res, e, next); }
 }
 
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });

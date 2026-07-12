@@ -59,10 +59,34 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
   const source = parseVideoUrl(card.video?.url);
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
+  const isSkillsJar = card.render_band === 'skills_jar';
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
   const duration = card.estimated_time ? `${card.estimated_time} min` : null;
+  const course = card.course || null;
+
+  // Skills Course: upload a completion certificate → AI verifies it's real →
+  // marks the card complete. (The upload input is live-only.)
+  const [certBusy, setCertBusy] = useState(false);
+  const [certResult, setCertResult] = useState<{ valid: boolean; reason: string } | null>(null);
+  useEffect(() => { setCertResult(null); setCertBusy(false); }, [card.id]);
+  const onCertPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file after a failure
+    if (!file || preview) return;
+    setCertBusy(true); setCertResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await portalApi.post(`/api/portal/runtime/cards/${card.id}/certificate`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const d = r.data || {};
+      setCertResult({ valid: !!d.valid, reason: d.reason || (d.valid ? 'Certificate verified.' : 'That does not look like a valid certificate.') });
+      if (d.valid && onComplete) await onComplete(); // valid cert completes the card
+    } catch (err: any) {
+      setCertResult({ valid: false, reason: err?.response?.data?.error || 'Upload failed — please try again.' });
+    } finally { setCertBusy(false); }
+  };
 
   return (
     <>
@@ -93,6 +117,46 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {isVideo && (
           <div className="tld-player">
             <VideoEmbed source={source} title={card.title} poster={card.video?.poster || null} onEnded={done || preview ? undefined : onComplete} />
+          </div>
+        )}
+
+        {isSkillsJar && (
+          <div className="tld-skilljar">
+            {/* Branded course card (matches the Anthropic · SkillsJar design). */}
+            <div className="tld-jarcard">
+              <span className="tld-jarbadge">● SKILLSJAR COURSE</span>
+              <svg className="tld-jarcap" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 3l10 4.5-10 4.5L2 7.5z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <path d="M6 10v4.5c0 1.7 2.7 3 6 3s6-1.3 6-3V10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                <path d="M22 7.5v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+              <div className="tld-jartitle">{course?.name || card.title}</div>
+              <div className="tld-jarsub">Anthropic · SkillsJar</div>
+            </div>
+
+            {course?.url
+              ? <a className="tl-btn primary tld-jaropen" href={course.url} target="_blank" rel="noreferrer">Open in SkillsJar ↗</a>
+              : <div className="tld-note">No course link attached yet. An admin can add one from Orchestration → Timeline.</div>}
+
+            {!preview ? (
+              <div className="tld-upload">
+                <div className="tld-uplab">Upload your certificate to complete</div>
+                <p className="tld-desc muted" style={{ margin: '0 0 12px', fontSize: 13.5 }}>
+                  The course is delivered on SkillsJar. Take it there, then upload your completion certificate — we'll verify it and mark this complete{pts > 0 ? ` to earn +${pts} pts` : ''}.
+                </p>
+                {!done && (
+                  <label className={`tl-btn ghost tld-choosecert${certBusy ? ' busy' : ''}`}>
+                    {certBusy ? 'Checking your certificate…' : '⬆ Choose certificate'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={onCertPick} disabled={certBusy} style={{ display: 'none' }} />
+                  </label>
+                )}
+                {certResult && (
+                  <div className={`tld-certmsg ${certResult.valid ? 'ok' : 'err'}`}>{certResult.valid ? '✓ ' : '✗ '}{certResult.reason}</div>
+                )}
+              </div>
+            ) : (
+              <div className="tld-note">For students, this has <b>Open in SkillsJar</b> and a <b>certificate upload</b> that AI-verifies before completing the card.</div>
+            )}
           </div>
         )}
 

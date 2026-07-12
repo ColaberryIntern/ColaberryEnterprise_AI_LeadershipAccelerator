@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
-import { strategyPrepUpload } from '../config/upload';
+import { strategyPrepUpload, certificateUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
@@ -36,7 +36,7 @@ import {
   handleSetResume, handleGetResume, handleClearResume,
 } from '../controllers/portalSettingsController';
 import {
-  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handlePromptLab,
+  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
@@ -65,6 +65,8 @@ router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCa
 router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
 router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
 router.post('/api/portal/runtime/cards/:cardId/content', requireParticipant, handleEnsureContent);
+// Anthropic Skills Course — upload + AI-verify the completion certificate.
+router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, certificateUpload.single('file'), handleUploadCertificate);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
