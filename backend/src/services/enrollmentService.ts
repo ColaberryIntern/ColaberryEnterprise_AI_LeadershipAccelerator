@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
+import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
@@ -237,8 +239,9 @@ export async function createExplorerEnrollment(input: {
   // paying students and must never consume a paid seat.
 
   // Capture as a Lead for CRM visibility (best-effort — never block the account).
+  let leadId: number | null = null;
   try {
-    await Lead.findOrCreate({
+    const [lead] = await Lead.findOrCreate({
       where: { email },
       defaults: {
         name: enrollment.full_name,
@@ -252,19 +255,65 @@ export async function createExplorerEnrollment(input: {
         page_url: input.page_url,
       } as any,
     });
+    leadId = (lead as any)?.id ?? null;
   } catch (err: any) {
     console.error('[OpenHouse] Lead capture failed (non-fatal):', err.message);
   }
 
-  // Send the passwordless login link. Requires status=active + portal_enabled
-  // (both set above). Best-effort so an email hiccup never loses the account; the
-  // visitor can request a fresh link later. Only fires on first creation, so
-  // re-running onboarding never double-sends.
-  try {
-    const { requestMagicLink } = await import('./participantService');
-    await requestMagicLink(email);
-  } catch (err: any) {
-    console.error('[OpenHouse] Magic link send failed (non-fatal):', err.message);
+  // Send the branded welcome with a one-click portal magic link, targeting THIS
+  // specific new enrollment. We generate the token on `enrollment` directly rather
+  // than doing an email-keyed lookup, which previously (via requestMagicLink) could
+  // land the token on a stale enrollment when a person has several. Best-effort so
+  // an email hiccup never loses the account, but the outcome is recorded to
+  // CommunicationLog and any failure is surfaced — never silently swallowed. Only
+  // fires on first creation, so re-running onboarding never double-sends.
+  {
+    const subject = 'Welcome to Colaberry — your AI journey starts now';
+    let sent = false;
+    let messageId: string | null = null;
+    let errorMessage: string | null = null;
+    try {
+      const { sendTrainingWelcome } = await import('./emailService');
+      const ttlDays = Math.max(1, env.trainingWelcomeTokenTtlDays || 30);
+      const token = crypto.randomUUID();
+      await enrollment.update({
+        portal_token: token,
+        portal_token_expires_at: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+      });
+      const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
+      const result = await sendTrainingWelcome({
+        to: email,
+        fullName: enrollment.full_name,
+        portalLink: `${base}/portal/verify?token=${token}`,
+      });
+      sent = result.sent;
+      messageId = result.messageId || null;
+      if (!sent) errorMessage = 'welcome email not sent (kill switch active or SMTP unconfigured)';
+    } catch (err: any) {
+      errorMessage = err?.message || 'unknown error';
+    }
+    if (!sent) {
+      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${email}): ${errorMessage}`);
+    }
+    try {
+      const { logCommunication } = await import('./communicationLogService');
+      await logCommunication({
+        lead_id: leadId,
+        channel: 'email',
+        direction: 'outbound',
+        delivery_mode: 'live',
+        status: sent ? 'sent' : 'failed',
+        to_address: email,
+        from_address: env.trainingWelcomeFromEmail,
+        subject,
+        provider: 'mandrill',
+        provider_message_id: messageId,
+        error_message: errorMessage,
+        metadata: { event: 'open_house_welcome', enrollment_id: enrollment.id },
+      });
+    } catch (e: any) {
+      console.error('[OpenHouse] welcome comm-log failed (non-fatal):', e?.message);
+    }
   }
 
   return { enrollment, created: true, cohort_id: cohort.id };

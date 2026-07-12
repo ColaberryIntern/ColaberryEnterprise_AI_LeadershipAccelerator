@@ -199,7 +199,7 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
   const r = await resolveEmailRecipient(data.to, subject);
   const html = buildTrainingWelcomeHtml(data);
   const fromHeader = `"${env.trainingWelcomeFromName}" <${env.trainingWelcomeFromEmail}>`;
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: fromHeader,
     replyTo: fromHeader,
     to: r.to,
@@ -208,8 +208,12 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
     text: htmlToPlainText(html),
     headers: emailHeaders('training-welcome'),
   });
-  console.log(`[Email] Training welcome sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
-  return { sent: true, messageId: info.messageId };
+  // guardedSendMail returns an empty messageId when the global kill switch blocks
+  // the send — treat that as not-sent so callers can log/retry instead of assuming
+  // delivery.
+  const sent = Boolean(info.messageId);
+  console.log(`[Email] Training welcome ${sent ? 'sent' : 'BLOCKED (kill switch)'} to: ${r.to} | msgId: ${info.messageId} | rejected: ${info.rejected}`);
+  return { sent, messageId: info.messageId };
 }
 
 interface EnrollmentConfirmationData {

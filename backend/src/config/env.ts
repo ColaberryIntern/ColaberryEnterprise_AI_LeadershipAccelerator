@@ -114,17 +114,15 @@ export const env = {
   // Enterprise CRM service token (service-to-service auth for /api/v1/leads)
   enterpriseCrmToken: process.env.ENTERPRISE_CRM_TOKEN || '',
 
-  // Training signup onboarding (training.colaberry.com registration -> auto Explorer
-  // portal account + branded welcome email). Master switch is OFF by default so the
-  // flow ships dark and fires nothing until it is explicitly turned on in prod.
-  // The from-address stays on a Mandrill-verified domain (colaberry.com) but is
+  // Branded welcome email for Open House / training.colaberry.com Explorer signups.
+  // Sent by createExplorerEnrollment via emailService.sendTrainingWelcome. The
+  // from-address stays on a Mandrill-verified domain (colaberry.com) but is
   // training-branded; flip TRAINING_WELCOME_FROM_EMAIL to an @training.colaberry.com
-  // address only once that domain's SPF/DKIM is verified in Mandrill.
-  trainingWelcomeEnabled: process.env.TRAINING_WELCOME_ENABLED === 'true',
+  // address only once that domain's SPF/DKIM is verified in Mandrill. The token TTL
+  // is how long the emailed portal magic link stays valid.
   trainingWelcomeFromEmail: process.env.TRAINING_WELCOME_FROM_EMAIL || 'training@colaberry.com',
   trainingWelcomeFromName: process.env.TRAINING_WELCOME_FROM_NAME || 'Colaberry Training',
   trainingWelcomeTokenTtlDays: parseInt(process.env.TRAINING_WELCOME_TOKEN_TTL_DAYS || '30', 10),
-  explorerCohortName: process.env.EXPLORER_COHORT_NAME || 'Explorer — Prospects',
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
