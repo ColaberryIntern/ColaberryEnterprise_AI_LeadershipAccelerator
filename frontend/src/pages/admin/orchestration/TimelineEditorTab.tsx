@@ -234,10 +234,15 @@ const EditDrawer: React.FC<{
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
                   onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
                 <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
-                  disabled={genBusy || isNew || !draft.title} title={isNew ? 'Save the card first, then generate its content' : !draft.title ? 'Give it a title first' : 'Generate the real content students see (summary, body, questions) and save it to this card'}
-                  onClick={onGenerate}>{genBusy ? '✦ Generating…' : previewCard.content ? '↻ Regenerate content' : '✦ Generate content'}</button>
+                  disabled={genBusy || !draft.title}
+                  title={!draft.title ? 'Give it a title first' : isVideo ? 'Find a video for this title and fill everything — subtitle, description, poster, presenter, and the lesson. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
+                  onClick={onGenerate}>{genBusy ? (isVideo ? '✦ Finding video…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
               </div>
-              {isNew && <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>Add the card first, then Generate content to write what students see.</div>}
+              <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
+                {isVideo
+                  ? 'Just add a title and click Generate content — it finds a matching video and fills the rest. Then Save changes. (Or fill it all in yourself and paste your own video.)'
+                  : 'Add a title and click Generate content to write what students see. Then Save changes.'}
+              </div>
             </div>
           )}
 
@@ -409,19 +414,22 @@ const TimelineEditorTab: React.FC = () => {
       // Per-card "unique" data (the video/link) rides along as `video`; the API
       // merges it into metadata.video, which the student feed + Runtime read.
       const videoPayload = draft.video && (draft.video.url || '').trim() ? draft.video : null;
+      // AI-generated (or authored) student content rides along in metadata.content
+      // so "Generate content → Save" persists exactly what the preview showed.
+      const contentPayload = (draft.metadata as any)?.content || null;
       if (isNew) {
         await api.post('/api/admin/orchestration/timeline/cards', {
           type: draft.type, title: draft.title, subtitle: draft.subtitle || null,
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
-          points: draft.points, visibility: draft.visibility, video: videoPayload,
+          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
           title: draft.title, subtitle: draft.subtitle || null, description: draft.description || null,
           week: draft.week ?? null, bucket: draft.bucket, difficulty: draft.difficulty,
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
-          video: videoPayload,
+          video: videoPayload, content: contentPayload,
         });
       }
       setDraft(null);
@@ -456,17 +464,30 @@ const TimelineEditorTab: React.FC = () => {
     finally { setAiBusy(false); }
   };
 
-  // "Generate content" — run the card's type generation prompt on its real inputs,
-  // SAVE the result onto the card (metadata.content), and show it in the preview.
-  // This is what students actually see: preview == classroom.
+  // "Generate content" — the one-click. From just a Title, find a REAL video and
+  // write the subtitle/description/poster/presenter + the lesson content, all
+  // into the draft (nothing saved yet — the author reviews the live preview, then
+  // Save persists it). Works before the card exists; keeps any copy already typed.
   const genContent = async () => {
-    if (!draft?.id) return;
+    if (!draft?.type || !draft.title) return;
     setGenBusy(true); setError('');
     try {
-      const r = await api.post(`/api/admin/orchestration/timeline/cards/${draft.id}/generate`, {});
-      const content = r.data?.content || null;
-      setDraft((d) => d && ({ ...d, metadata: { ...(d.metadata || {}), content } }));
-      loadBoard();
+      const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
+        type: draft.type, title: draft.title,
+        subtitle: draft.subtitle || null, description: draft.description || null,
+        video: draft.video || null,
+      });
+      const g = r.data || {};
+      setDraft((d) => d && ({
+        ...d,
+        subtitle: g.subtitle ?? d.subtitle,
+        description: g.description ?? d.description,
+        video: g.video || d.video,
+        metadata: { ...(d.metadata || {}), content: g.content || (d.metadata as any)?.content },
+      }));
+      if (g.video && g.video_verified === false) {
+        setError('Heads up: could not verify the suggested video plays — check it in the preview or paste your own URL.');
+      }
     } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
     finally { setGenBusy(false); }
   };
