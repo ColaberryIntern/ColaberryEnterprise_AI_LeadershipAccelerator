@@ -71,6 +71,13 @@ const ExperienceStudioTab: React.FC = () => {
   const [stageTest, setStageTest] = useState<any>(null);
   const [preview, setPreview] = useState<any>(null);
   const [videoUrl, setVideoUrl] = useState('');
+  // Card-field inputs for a Video type — the SAME fields as the Timeline editor,
+  // so the two surfaces match. (Non-video types still use {{variables}} below.)
+  const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [presenter, setPresenter] = useState('');
+  const [poster, setPoster] = useState('');
   const [coDesign, setCoDesign] = useState<any>(null);
   const [busy, setBusy] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -97,6 +104,7 @@ const ExperienceStudioTab: React.FC = () => {
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
       setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('preview'); setPreview(null); setVideoUrl('');
+      setTitle(''); setSubtitle(''); setDescription(''); setPresenter(''); setPoster('');
       setVars(Object.fromEntries((r.data.variable_keys || []).map((k: string) => [k, sampleFor(k)])));
       api.get(`/api/admin/components/${slug}/analytics`).then((a) => setAnalytics(a.data)).catch(() => {});
       api.get(`/api/admin/components/${slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {});
@@ -146,6 +154,24 @@ const ExperienceStudioTab: React.FC = () => {
     if (!sel) return; setBusy('preview'); setPreview(null); setError('');
     try { const r = await api.post(`/api/admin/components/${sel.slug}/preview`, { variables: vars }); setPreview(r.data); }
     catch (e: any) { setError(e?.response?.data?.error || 'Preview failed'); } finally { setBusy(''); }
+  };
+  // Video one-click — the SAME engine the Timeline editor uses: from a title,
+  // find a real video and fill the copy + content. Keeps the two surfaces in sync.
+  const runVideoFlow = async () => {
+    if (!sel) return; setBusy('preview'); setPreview(null); setError(''); setNotice('');
+    try {
+      const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
+        type: sel.slug, title: title || sel.label,
+        subtitle: subtitle || null, description: description || null,
+        video: { url: videoUrl || null, presenter: presenter || null, poster: poster || null },
+      });
+      const g = r.data || {};
+      if (g.video?.url) { setVideoUrl(g.video.url); setPresenter(g.video.presenter || ''); setPoster(g.video.poster || ''); }
+      if (g.subtitle) setSubtitle(g.subtitle);
+      if (g.description) setDescription(g.description);
+      setPreview({ experience: { title: title || sel.label, ...(g.content || {}) }, cost_usd: 0, runtime_ms: 0 });
+      if (g.video && g.video_verified === false) setNotice('Could not verify the suggested video plays — check it in the preview or paste your own URL.');
+    } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); } finally { setBusy(''); }
   };
   const runCoDesign = async () => {
     if (!sel) return; setBusy('codesign'); setCoDesign(null); setError('');
@@ -310,11 +336,13 @@ const ExperienceStudioTab: React.FC = () => {
               {detailTab === 'preview' && (
                 <div>
                   <div className="es-lab">The flow · inputs → prompt → content → the student's card</div>
-                  <p className="es-help">Follow <b>one example</b> all the way through. Set the inputs, see the <b>Generation</b> prompt that turns them into content, then watch <b>that exact content</b> become the card a student sees. Press <b>▶ Run the whole flow</b> and steps 3 and 4 come from the same run — so they always match.</p>
+                  <p className="es-help">Follow <b>one example</b> all the way through. {isVideo ? <>These are the <b>same fields as the Timeline card editor</b> — add a <b>Title</b> and press <b>✦ Generate content</b> to find a matching video and fill the rest. Steps 3 and 4 come from that run, so they always match.</> : <>Set the inputs, see the <b>Generation</b> prompt that turns them into content, then watch <b>that exact content</b> become the card a student sees. Press <b>▶ Run the whole flow</b> and steps 3 and 4 come from the same run — so they always match.</>}</p>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 16px', flexWrap: 'wrap' }}>
-                    <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>
-                    {!sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
-                    {preview && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
+                    {isVideo
+                      ? <button className="es-btn pri" disabled={busy === 'preview' || !title} title={!title ? 'Add a title first' : 'Find a video for this title and fill everything — subtitle, description, poster, presenter, and the lesson'} onClick={runVideoFlow}>{busy === 'preview' ? '✦ Finding video…' : preview ? '↻ Regenerate' : '✦ Generate content'}</button>
+                      : <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>}
+                    {isVideo ? <span className="es-muted">Just add a title — Generate finds a matching video and fills the rest.</span> : !sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
+                    {preview && !isVideo && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
                   </div>
 
                   {/* STEP 1 — inputs */}
@@ -322,14 +350,26 @@ const ExperienceStudioTab: React.FC = () => {
                     <div className="es-flownum">1</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="es-lab" style={{ marginTop: 0 }}>The inputs · this example</div>
-                      {isVideo && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div className="es-sublab">Video link</div>
-                          <input className="es-in" placeholder="Paste a YouTube / Vimeo / Loom / Wistia / .mp4 link…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-                          {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={sel.label} /></div>}
+                      {isVideo ? (
+                        // The SAME fields as the Timeline card editor, so the two match.
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          <div><div className="es-sublab">Title</div>
+                            <input className="es-in" placeholder="e.g., Video: anatomy of an AI operating system" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+                          <div><div className="es-sublab">Subtitle</div>
+                            <input className="es-in" placeholder="(optional)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} /></div>
+                          <div><div className="es-sublab">Description</div>
+                            <textarea className="es-in" style={{ minHeight: 54 }} placeholder="(optional)" value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                          <div><div className="es-sublab">Video URL</div>
+                            <input className="es-in" placeholder="Paste a link — or leave blank and Generate finds one" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+                            {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={title || sel.label} poster={poster || null} /></div>}</div>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <div style={{ flex: 1 }}><div className="es-sublab">Presenter</div>
+                              <input className="es-in" placeholder="(optional)" value={presenter} onChange={(e) => setPresenter(e.target.value)} /></div>
+                            <div style={{ flex: 1 }}><div className="es-sublab">Poster image URL</div>
+                              <input className="es-in" placeholder="(auto)" value={poster} onChange={(e) => setPoster(e.target.value)} /></div>
+                          </div>
                         </div>
-                      )}
-                      {(sel.variable_keys || []).length === 0
+                      ) : (sel.variable_keys || []).length === 0
                         ? <div className="es-muted">No variables — this activity reads the same for every student.</div>
                         : (sel.variable_keys || []).map((k) => (
                           <div key={k} style={{ marginBottom: 6 }}>
@@ -385,7 +425,7 @@ const ExperienceStudioTab: React.FC = () => {
                             {([['🖥 Desktop', false], ['📱 Phone', true]] as [string, boolean][]).map(([name, phone]) => (
                               <div key={name} className="es-device" style={phone ? { flex: 'none', width: 340 } : {}}>
                                 <div className="es-devlabel">{name}</div>
-                                <StudentPreview band={String(sel.render_band || '')} label={sel.label} experience={preview?.experience || null} videoUrl={videoUrl} parts={sel.capabilities} />
+                                <StudentPreview band={String(sel.render_band || '')} label={isVideo ? (title || sel.label) : sel.label} experience={preview?.experience || null} videoUrl={videoUrl} presenter={presenter} poster={poster} parts={sel.capabilities} />
                               </div>
                             ))}
                           </div>
